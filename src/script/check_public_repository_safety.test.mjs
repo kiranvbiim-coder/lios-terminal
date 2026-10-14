@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { unsafeTrackedPath, unsafeWorkflow } from "./check_public_repository_safety.mjs";
+import { unsafeContent, unsafeTrackedPath, unsafeWorkflow } from "./check_public_repository_safety.mjs";
 
 test("permits declared environment templates and ordinary source files", () => {
   for (const path of [".env.example", "src/.env.example", "src/.env.production.template",
@@ -16,6 +16,32 @@ test("rejects credentials, private key material and runtime databases", () => {
     "keys/signing.p12", "customer.sqlite", "backup.dump", "service-account.json"]) {
     assert.ok(unsafeTrackedPath(path), path);
   }
+});
+
+test("detects high-confidence credential material inside ordinary text files", () => {
+  const fixtures = [
+    "-----BEGIN " + "PRIVATE KEY-----\nredacted\n-----END PRIVATE KEY-----",
+    "token=" + "sk-" + "proj-" + "AbCdEf0123456789AbCdEf0123456789",
+    "token=" + "sk-" + "ant-api03-" + "AbCdEf0123456789AbCdEf0123456789",
+    "token=" + "ghp_" + "AbCdEf0123456789AbCdEf0123456789AbCd",
+    "token=" + "github_pat_" + "11AA22BB33CC44DD55EE66FF77GG88HH99II",
+    "aws=" + "AKIA" + "ABCDEFGHIJKLMNOP",
+    "slack=" + "xoxb-" + "123456789012-123456789012-AbCdEfGhIjKlMnOp",
+    "google=" + "AIza" + "AbCdEfGhIjKlMnOpQrStUvWxYz012345678",
+    "stripe=" + "sk_" + "live_" + "AbCdEf0123456789AbCdEf0123456789",
+  ];
+  for (const fixture of fixtures) assert.ok(unsafeContent(fixture), fixture.slice(0, 18));
+});
+
+test("does not flag documentation-style placeholders or harmless text", () => {
+  for (const fixture of [
+    "OPENAI_API_KEY=your-key-here",
+    "GITHUB_TOKEN=<token>",
+    "postgresql://user:password@localhost:5432/example",
+    "-----BEGIN PUBLIC KEY-----",
+    "sk-proj-example",
+    "AKIAEXAMPLE",
+  ]) assert.equal(unsafeContent(fixture), null, fixture);
 });
 
 test("accepts unprivileged hosted source workflows", () => {
