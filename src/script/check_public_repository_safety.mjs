@@ -33,6 +33,24 @@ export function unsafeTrackedPath(path) {
   return null;
 }
 
+const CONTENT_SIGNATURES = [
+  [/(?:-----BEGIN )(?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/, "private key material"],
+  [new RegExp("\\bsk-" + "(?:proj|svcacct)-[A-Za-z0-9_-]{20,}\\b"), "OpenAI API token"],
+  [new RegExp("\\bsk-" + "ant-[A-Za-z0-9_-]{20,}\\b"), "Anthropic API token"],
+  [new RegExp("\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\\b"), "GitHub token"],
+  [/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, "AWS access key"],
+  [new RegExp("\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b"), "Slack token"],
+  [/\bAIza[0-9A-Za-z_-]{35}\b/, "Google API key"],
+  [new RegExp("\\b(?:sk|rk)_" + "live_[A-Za-z0-9]{16,}\\b"), "Stripe live secret key"],
+];
+
+export function unsafeContent(source) {
+  for (const [pattern, hazard] of CONTENT_SIGNATURES) {
+    if (pattern.test(source)) return hazard;
+  }
+  return null;
+}
+
 export function unsafeWorkflow(source) {
   // Ignore full-line comments; inspect actionable workflow declarations.
   const active = source.replace(/^[ \t]*#.*$/gm, "");
@@ -65,6 +83,7 @@ export function checkRepository(rootDir = root) {
   }).toString("utf8");
   const records = index.split("\0").filter(Boolean);
   const paths = [];
+  const symlinks = new Set();
   for (const record of records) {
     const divider = record.indexOf("\t");
     if (divider < 0) throw new Error("Unexpected git index record");
@@ -73,7 +92,27 @@ export function checkRepository(rootDir = root) {
     paths.push(path);
     const hazard = unsafeTrackedPath(path);
     if (hazard) errors.push({ path, hazard });
-    if (mode === "120000") errors.push({ path, hazard: "symlink in public source" });
+    if (mode === "120000") {
+      symlinks.add(path);
+      errors.push({ path, hazard: "symlink in public source" });
+    }
+  }
+
+  let scannedTextFiles = 0;
+  let skippedBinaryFiles = 0;
+  for (const path of paths) {
+    if (symlinks.has(path)) continue;
+    const bytes = readFileSync(join(rootDir, path));
+    // NUL is a conservative cross-platform signal for binary content. We scan
+    // every other tracked file, regardless of extension, so secrets hidden in
+    // ordinary source/docs/config files cannot bypass a filename-only gate.
+    if (bytes.includes(0)) {
+      skippedBinaryFiles += 1;
+      continue;
+    }
+    scannedTextFiles += 1;
+    const hazard = unsafeContent(bytes.toString("utf8"));
+    if (hazard) errors.push({ path, hazard });
   }
 
   for (const required of [
@@ -90,7 +129,7 @@ export function checkRepository(rootDir = root) {
     const hazard = unsafeWorkflow(readFileSync(join(rootDir, path), "utf8"));
     if (hazard) errors.push({ path, hazard });
   }
-  return { scannedPaths: paths.length, errors };
+  return { scannedPaths: paths.length, scannedTextFiles, skippedBinaryFiles, errors };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -103,6 +142,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }
     process.exitCode = 1;
   } else {
-    process.stdout.write("Public-source file and workflow guard passed (" + result.scannedPaths + " tracked files).\n");
+    process.stdout.write(
+      "Public-source file, content and workflow guard passed (" + result.scannedPaths +
+      " tracked files; " + result.scannedTextFiles + " text files scanned; " +
+      result.skippedBinaryFiles + " binary files skipped).\n",
+    );
   }
 }
