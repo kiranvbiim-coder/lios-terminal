@@ -31,7 +31,7 @@ export type P13PluginFileReadAuthorizer = (input: {
   scope: "project" | "user_selected";
   root: string;
   rootIndex: number;
-}) => boolean;
+}) => boolean | Promise<boolean>;
 
 export interface PluginNodeLaunchPlan {
   command: string;
