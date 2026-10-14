@@ -190,7 +190,11 @@ test("P11 sidecar force-kills a worker that ignores SIGTERM and waits for exit b
       payload: { neverRespond: true, ignoreSigterm: true },
       deadlineMs: 20,
     }), /timed out/i);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Windows has no ignorable SIGTERM and stops the worker with asynchronous taskkill; poll for the real outcome.
+    const stopDeadline = Date.now() + 10_000;
+    while (supervisor.diagnosticsSnapshot().running && Date.now() < stopDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     assert.equal(supervisor.diagnosticsSnapshot().running, false);
     assert.ok(supervisor.diagnosticsSnapshot().crashCount >= 1);
 

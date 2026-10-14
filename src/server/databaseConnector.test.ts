@@ -54,15 +54,20 @@ test("SQLite and DuckDB adapters execute read-only queries and discovery", async
   assert.equal((await discoverDatabaseSchema({ endpoint: `sqlite://${sqlitePath}`, databaseType: "sqlite" }, null)).length, 2);
 
   const duckPath = path.join(directory, "fixture.duckdb");
-  const instance = await DuckDBInstance.create(duckPath);
-  const connection = await instance.connect();
-  await connection.run("CREATE TABLE financials (period VARCHAR, revenue DOUBLE)");
-  await connection.run("INSERT INTO financials VALUES ('FY2025', 42)");
-  connection.closeSync();
-  const duckResult = await executeReadOnlyQuery({ endpoint: `duckdb://${duckPath}`, databaseType: "duckdb" }, null, "SELECT * FROM financials");
-  assert.equal(String(duckResult.rows[0].period), "FY2025");
-  assert.equal(Number(duckResult.rows[0].revenue), 42);
-  fs.rmSync(directory, { recursive: true, force: true });
+  try {
+    const instance = await DuckDBInstance.create(duckPath);
+    const connection = await instance.connect();
+    await connection.run("CREATE TABLE financials (period VARCHAR, revenue DOUBLE)");
+    await connection.run("INSERT INTO financials VALUES ('FY2025', 42)");
+    connection.closeSync();
+    // The instance, not just its connection, holds the database file lock; Windows enforces it across handles.
+    instance.closeSync();
+    const duckResult = await executeReadOnlyQuery({ endpoint: `duckdb://${duckPath}`, databaseType: "duckdb" }, null, "SELECT * FROM financials");
+    assert.equal(String(duckResult.rows[0].period), "FY2025");
+    assert.equal(Number(duckResult.rows[0].revenue), 42);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 
