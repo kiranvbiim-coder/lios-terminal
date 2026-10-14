@@ -20,12 +20,12 @@ test("rejects credentials, private key material and runtime databases", () => {
 
 test("detects high-confidence credential material inside ordinary text files", () => {
   const fixtures = [
-    "-----BEGIN " + "PRIVATE KEY-----\nredacted\n-----END PRIVATE KEY-----",
+    "-----BEGIN " + "PRIVATE KEY-----\n" + "QUJD".repeat(20) + "\n-----END PRIVATE KEY-----",
     "token=" + "sk-" + "proj-" + "AbCdEf0123456789AbCdEf0123456789",
     "token=" + "sk-" + "ant-api03-" + "AbCdEf0123456789AbCdEf0123456789",
     "token=" + "ghp_" + "AbCdEf0123456789AbCdEf0123456789AbCd",
     "token=" + "github_pat_" + "11AA22BB33CC44DD55EE66FF77GG88HH99II",
-    "aws=" + "AKIA" + "ABCDEFGHIJKLMNOP",
+    "AWS_ACCESS_KEY_ID=" + "AKIA" + "ABCDEFGHIJKLMNOP",
     "slack=" + "xoxb-" + "123456789012-123456789012-AbCdEfGhIjKlMnOp",
     "google=" + "AIza" + "AbCdEfGhIjKlMnOpQrStUvWxYz012345678",
     "stripe=" + "sk_" + "live_" + "AbCdEf0123456789AbCdEf0123456789",
