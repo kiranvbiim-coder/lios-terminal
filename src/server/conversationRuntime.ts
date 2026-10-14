@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
+import { deadlineSignal } from "./deadlineSignal";
 import { checkClaims } from "./claimChecker";
 import { looksLikeNamedSecurityRequest, parsePlannerChoice, PLANNER_CATALOG, plannerMessages, routedRequest } from "./aiPlannerFallback";
 import crypto from "crypto";
@@ -4648,6 +4649,7 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
   if (!input.agentLoop && !controller.signal.aborted && plan.capabilities.length === 1 && plan.capabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct"
     && request.transmissionPolicy.mode !== "local_only" && looksLikeNamedSecurityRequest(request.message)
     && !privateAiContentReason(runtimeInput, plan) && !request.attachments.length) {
+    const plannerDeadline = deadlineSignal(controller.signal, 8_000);
     try {
       const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
       const messages = plannerMessages(request.message);
@@ -4657,7 +4659,7 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
         maxTokens: 80,
         preferredProvider: input.preferredProvider,
         preferredModel: input.preferredModel,
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8_000)]),
+        signal: plannerDeadline.signal,
         dataClassification: request.transmissionPolicy.dataClassification === "public" ? "public" : "organization",
         providerPolicy: {
           localOnly: false,
@@ -4679,10 +4681,15 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
       }
     } catch {
       // The planner is an optional accelerator; any failure keeps the ordinary AI answer path.
+    } finally {
+      plannerDeadline.dispose();
     }
   }
   const context = buildConversationContext(runtimeInput);
-  const budgetSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(plan.budget.maxDurationMs)]);
+  // An explicit timer, not AbortSignal.any([..., AbortSignal.timeout()]): that timeout signal is weakly held and can be
+  // garbage-collected before it fires, silently dropping the run's wall-clock budget.
+  const runtimeBudget = deadlineSignal(controller.signal, plan.budget.maxDurationMs);
+  const budgetSignal = runtimeBudget.signal;
   try {
     // A run cancelled before it starts must not spend a model call.
     assertNotAborted(budgetSignal);
@@ -4762,6 +4769,7 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
     throw error;
   } finally {
     detachRegistrySignal();
+    runtimeBudget.dispose();
   }
 }
 
