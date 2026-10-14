@@ -7,8 +7,9 @@ dist-app/
 !**/.env.example
 *.log
 .DS_Store
-data/
-data/pgdata/
+/data/
+/src/data/
+/data/pgdata/
 .worktrees/
 
 
