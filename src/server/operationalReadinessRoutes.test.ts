@@ -70,16 +70,22 @@ test("published evidence files resolve, while privately withheld workflows remai
     [],
     "All non-withheld operational evidence must exist as a repository file",
   );
-  // Lock the actual exception surface; extending it requires an explicit
-  // review of the public distribution and V4 evidence contract.
-  assert.deepEqual(
-    [...new Set(missing.map(({ relativePath }) => relativePath))].sort(),
-    [
-      ".github/workflows/lios-hardening.yml",
-      ".github/workflows/production-release-readiness.yml",
-      ".github/workflows/windows-release.yml",
-    ],
+  // Lock the inventory's reference to private-only evidence regardless of
+  // whether a given test fixture makes the relative files appear present.
+  // Every missing non-withheld file is already a hard failure above.
+  const citedWithheld = new Set(
+    V4_OPERATIONAL_ITEMS.flatMap((item) => item.evidence)
+      .filter((relativePath) => withheld.has(relativePath)),
   );
+  assert.deepEqual([...citedWithheld].sort(), [
+    ".github/workflows/lios-hardening.yml",
+    ".github/workflows/production-release-readiness.yml",
+    ".github/workflows/windows-release.yml",
+  ]);
+  for (const relativePath of citedWithheld) {
+    assert.equal(fs.existsSync(path.join(repositoryRoot, relativePath)), false,
+      `Private evidence must not be published: ${relativePath}`);
+  }
 });
 
 test("V4-25 through V4-29 expose read-only readiness and support surfaces", () => {
