@@ -31,9 +31,10 @@ interface ResolveCommunityPythonOptions {
 }
 
 function runtimePythonPath(state: ManagedRuntimeState, platform: NodeJS.Platform): string {
+  const paths = platform === "win32" ? path.win32 : path.posix;
   return platform === "win32"
-    ? path.join(state.runtimePath, "Scripts", "python.exe")
-    : path.join(state.runtimePath, "bin", "python3");
+    ? paths.join(state.runtimePath, "Scripts", "python.exe")
+    : paths.join(state.runtimePath, "bin", "python3");
 }
 
 function packagedRetailRuntime(env: NodeJS.ProcessEnv): boolean {

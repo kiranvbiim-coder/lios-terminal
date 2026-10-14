@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const validator = path.join(root, "script/validate_p1b_identity_acceptance.ts");
@@ -20,7 +21,7 @@ function check(mutate) {
       fs.copyFileSync(path.join(root, file), destination);
     }
     mutate?.(fixture);
-    return spawnSync(process.execPath, ["--import", path.join(root, "node_modules/tsx/dist/loader.mjs"), validator], {
+    return spawnSync(process.execPath, ["--import", pathToFileURL(path.join(root, "node_modules/tsx/dist/loader.mjs")).href, validator], {
       cwd: fixture, encoding: "utf8", timeout: 30_000,
     });
   } finally {

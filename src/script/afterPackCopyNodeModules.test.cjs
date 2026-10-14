@@ -137,18 +137,18 @@ test("rebuilds a real ASAR with root rights, case-variant dependency notices and
     await afterPack(fixture.context);
 
     for (const [relativePath, bytes] of Object.entries(fixture.legalBytes)) {
-      assert.deepEqual(asar.extractFile(fixture.asarPath, relativePath), Buffer.from(bytes));
+      assert.deepEqual(asar.extractFile(fixture.asarPath, path.normalize(relativePath)), Buffer.from(bytes));
     }
     for (const [relativePath, bytes] of Object.entries(dependencyBytes)) {
       const archivePath = `node_modules/@fixture/runtime/${relativePath}`;
-      assert.deepEqual(asar.extractFile(fixture.asarPath, archivePath), Buffer.from(bytes));
+      assert.deepEqual(asar.extractFile(fixture.asarPath, path.normalize(archivePath)), Buffer.from(bytes));
       assert.deepEqual(fs.readFileSync(path.join(fixture.resourcesDir, "app.asar.unpacked", archivePath)), Buffer.from(bytes));
     }
-    assert.throws(() => asar.statFile(fixture.asarPath, "node_modules/@fixture/runtime/README.md"));
+    assert.throws(() => asar.statFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/README.md")));
     assert.match(asar.extractFile(fixture.asarPath, "main.cjs").toString(), /original app/);
-    assert.match(asar.extractFile(fixture.asarPath, "dist/server.cjs").toString(), /bundled server/);
-    assert.match(asar.extractFile(fixture.asarPath, "node_modules/dev-tool/index.js").toString(), /dev-tool/);
-    assert.match(asar.extractFile(fixture.asarPath, "node_modules/@fixture/runtime/node_modules/nested/index.js").toString(), /nested/);
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("dist/server.cjs")).toString(), /bundled server/);
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/dev-tool/index.js")).toString(), /dev-tool/);
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/node_modules/nested/index.js")).toString(), /nested/);
     const expectedHash = crypto.createHash("sha256").update(asar.getRawHeader(fixture.asarPath).headerString).digest("hex");
     const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
     assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, expectedHash);
