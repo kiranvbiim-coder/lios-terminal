@@ -66,9 +66,10 @@ export function createP13PluginFileAuxiliaryHandler(options:P13PluginFileAuxilia
       ? (request.rootIndex===0?options.grant.projectRoot:null)
       : options.grant.userSelectedReadRoots[request.rootIndex];
     if(!root)return deny(request.requestId,"filesystem_root_not_granted");
-    const authorize = () => {
+    // Awaited: production ownership is a live database check, evaluated before the read and again before bytes return.
+    const authorize = async () => {
       try {
-        return options.authorizeFileRead?.({
+        return await options.authorizeFileRead?.({
           context: execution.context,
           componentId: request.componentId,
           scope: request.scope,
@@ -79,7 +80,7 @@ export function createP13PluginFileAuxiliaryHandler(options:P13PluginFileAuxilia
         return false;
       }
     };
-    if (!authorize()) return deny(request.requestId,"filesystem_execution_scope_invalid");
+    if (!(await authorize())) return deny(request.requestId,"filesystem_execution_scope_invalid");
     try {
       authorizeBrokeredFilePath(path.join(root,request.relativePath),"read",options.manifest,{
         ...options.grant,
@@ -89,7 +90,7 @@ export function createP13PluginFileAuxiliaryHandler(options:P13PluginFileAuxilia
       const file=readWorkspaceRegularFile({
         root,relativePath:request.relativePath,maxFileBytes:request.maxBytes,
       });
-      if(options.lookupExecution(request.executionRequestId)!==execution || !authorize())
+      if(options.lookupExecution(request.executionRequestId)!==execution || !(await authorize()))
         return deny(request.requestId,"filesystem_execution_revoked");
       return {protocol:"lios-plugin-broker/1",kind:"filesystem.response",
         requestId:request.requestId,size:file.size,sha256:file.sha256,
