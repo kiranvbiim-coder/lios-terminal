@@ -5,13 +5,10 @@ import { loadControlledForkInputs, validateControlledForkUtilization } from "./v
 const original = loadControlledForkInputs();
 const copy = () => structuredClone(original);
 
-test("ten observed controlled forks map to the exact canonical baseline without importing", () => {
+test("recorded forks preserve the canonical baseline and never treat observed fork HEADs as approved pins", () => {
   const result = validateControlledForkUtilization(copy());
-  assert.equal(result.controlledMirrors, 10);
   assert.equal(result.baselineDonors, 92);
-  assert.equal(result.partiallyIntegrated, 1);
-  assert.equal(result.documentedOnly, 3);
-  assert.equal(result.mirrorOnly, 6);
+  assert.equal(result.pinnedMirrors, 0);
 });
 
 test("rejects duplicate identity and non-SHA fork observations", () => {
@@ -42,12 +39,23 @@ test("rejects false baseline evidence or donor-integration claim", () => {
   wrongCount.inventory.baselineDonorCount = 93;
   assert.throws(() => validateControlledForkUtilization(wrongCount), /92-donor baseline/);
   const wrongUse = copy();
-  wrongUse.inventory.mirrors.find((x) => x.id === "qlib").status = "partially_integrated_pinned_paths";
-  assert.throws(() => validateControlledForkUtilization(wrongUse), /partially_integrated/);
+  const qlibComponent = wrongUse.components.components.find((component) => component.id === "qlib");
+  qlibComponent.commitSha = "0".repeat(40);
+  assert.throws(() => validateControlledForkUtilization(wrongUse), /exact approved pin/);
 });
 
 test("unplanned phases cannot be silently mapped to SI-05", () => {
   const wrong = copy();
   wrong.inventory.mirrors[0].si05Workstreams = ["SI-05.99"];
   assert.throws(() => validateControlledForkUtilization(wrong), /Unknown SI-05 workstream/);
+});
+
+test("supplemental imports require exact upstream component, path and pin evidence without expanding the baseline", () => {
+  const data = copy();
+  const component = data.components.components.find((entry) => entry.id === "FinRobot");
+  component.repository = "unrelated/FinRobot";
+  assert.throws(() => validateControlledForkUtilization(data), /exact supplemental component/);
+  const missingPaths = copy();
+  missingPaths.components.components.find((entry) => entry.id === "FinRobot").destinationPaths = [];
+  assert.throws(() => validateControlledForkUtilization(missingPaths), /exact supplemental component/);
 });

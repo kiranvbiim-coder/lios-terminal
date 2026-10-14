@@ -33,6 +33,8 @@ Original LiOS material is **proprietary, publicly viewable source**, not general
 
 Standard GitHub-hosted Linux, macOS and Windows source-validation jobs are defined in `.github/workflows/source-cross-platform.yml`. They do not require production credentials and do not publish releases. Public-repository standard-runner compute is free under GitHub's applicable terms, not unlimited: concurrency, runtime, storage and fair-use limits still apply. Source CI does not establish native packaged Shipping Point or signed-release acceptance.
 
+Required platform checks and independent/code-owner review protect `main`; the PR author cannot approve their own changes and administrator bypass is not used. A failed clean-checkout/platform result remains a failure. The initial hosted run exposed a broad `data/` ignore rule that omitted UI source; runtime dataset exclusions must stay path-specific. Donor validation accepts supplemental source adaptations only with matching upstream, exact approved component pin and imported/destination-path provenance, without expanding the canonical baseline or promoting fork HEAD into import authority.
+
 Before changing visibility, review **all public branches and Git history**, issues/PR discussions, existing logs/artifacts/releases, data/asset rights and runner access. Rotate any exposed real credentials; deleting a current file does not remove historical exposure. Never run untrusted pull-request code on persistent/self-hosted machines. See [SECURITY.md](SECURITY.md).
 
 ## Source of truth

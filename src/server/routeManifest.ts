@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { isDeepStrictEqual } from "node:util";
 
 /**
  * Route manifest (GM-08c, D-01): every HTTP route the Home registers and who can reach its handler.
@@ -22,6 +23,58 @@ export interface RouteManifestEntry {
   reachableBy: ProbeIdentity[];
   /** True when a guard could not be evaluated synthetically (for example a body/stream parser); review manually. */
   unprobed: boolean;
+}
+
+export interface RouteManifestDocument {
+  generatedBy: string;
+  routes: RouteManifestEntry[];
+}
+
+// Code-unit ordering is independent of the host's locale/ICU configuration.
+function compareRouteIdentity(a: RouteManifestEntry, b: RouteManifestEntry): number {
+  if (a.path !== b.path) return a.path < b.path ? -1 : 1;
+  return a.method === b.method ? 0 : a.method < b.method ? -1 : 1;
+}
+
+/**
+ * Compare the stored snapshot without treating JSON whitespace, object-key order, route order or role order
+ * as authorization changes. Keep every entry/role (including duplicates) and every field: only presentation
+ * is normalized. The separate anonymous-route allowlist in the CLI still gates live probe results.
+ */
+export function compareStoredRouteManifest(storedJson: string, current: RouteManifestDocument): string | undefined {
+  let stored: unknown;
+  try {
+    stored = JSON.parse(storedJson);
+  } catch {
+    return "Stored route manifest is missing or invalid JSON.";
+  }
+  if (!stored || typeof stored !== "object" || !("routes" in stored) || !Array.isArray(stored.routes)) {
+    return "Stored route manifest must contain a routes array.";
+  }
+  for (const entry of stored.routes) {
+    if (!entry || typeof entry !== "object" || typeof entry.method !== "string" || typeof entry.path !== "string"
+      || typeof entry.unprobed !== "boolean" || !Array.isArray(entry.reachableBy)
+      || !entry.reachableBy.every((role: unknown) => PROBE_IDENTITIES.includes(role as ProbeIdentity))) {
+      return "Stored route manifest contains an invalid route, reachability or unprobed value.";
+    }
+  }
+  const storedRoutes = (stored.routes as RouteManifestEntry[])
+    .map((entry) => ({ ...entry, reachableBy: [...entry.reachableBy].sort() }))
+    .sort(compareRouteIdentity);
+  const currentRoutes = current.routes
+    .map((entry) => ({ ...entry, reachableBy: [...entry.reachableBy].sort() }))
+    .sort(compareRouteIdentity);
+  if (isDeepStrictEqual({ ...stored, routes: storedRoutes }, { ...current, routes: currentRoutes })) return undefined;
+
+  for (let index = 0; index < Math.max(storedRoutes.length, currentRoutes.length); index += 1) {
+    if (!isDeepStrictEqual(storedRoutes[index], currentRoutes[index])) {
+      const descriptions = [storedRoutes[index], currentRoutes[index]].map((entry) => entry
+        ? `${entry.method} ${entry.path} reachableBy=${JSON.stringify(entry.reachableBy)} unprobed=${entry.unprobed}`
+        : "(no route)");
+      return `First route difference: stored ${descriptions[0]}; current ${descriptions[1]}.`;
+    }
+  }
+  return "Route manifest metadata differs from the generated document.";
 }
 
 interface MatchResult {
@@ -156,5 +209,5 @@ export async function buildRouteManifest(app: Express): Promise<RouteManifestEnt
       }
     }
   }
-  return entries.sort((a, b) => (a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)));
+  return entries.sort(compareRouteIdentity);
 }
