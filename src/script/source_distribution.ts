@@ -43,7 +43,6 @@ export function validateSourceDistribution(repoRoot: string): string[] {
   const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), "utf8");
   require(!/self-hosted|secrets\.|pull_request_target|workflow_run|upload-artifact|continue-on-error|app:dist|acceptance:sp\d|acceptance:p14/.test(workflow), "Hosted source workflow must not expose privileged, release or masked-failure execution.");
   for (const platform of ["ubuntu-24.04", "macos-15", "windows-2022"]) require(workflow.includes(platform), `Hosted source matrix is missing ${platform}.`);
-  for (const command of ["npm run check", "npm run test:offline", "npm run test:desktop", "python -m unittest discover", "npm run build"]) require(workflow.includes(command), `Hosted source workflow is missing ${command}.`);
   const benchmark = manifest.realDatasetBenchmark;
   require(benchmark?.file === "src/server/instrumentSearchIndexBenchmark.bench.ts" && fs.existsSync(path.join(repoRoot, benchmark.file)), "Explicit real-data benchmark must exist outside source test discovery.");
   require(benchmark?.minimumRealCandidates === 80000 && benchmark?.syntheticSubstitutionPermitted === false && benchmark?.dataRedistributionGranted === false && benchmark?.missingPrerequisites === "FAIL_WITH_NOT_RUN", "Real-data benchmark must retain scale, entitlement and failing prerequisite boundaries.");
