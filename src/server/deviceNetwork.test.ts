@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { once } from "node:events";
+import { once, EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
@@ -21,6 +21,7 @@ import { GatewayHub } from "./gatewayHub";
 import type { GatewayAuthenticator } from "./gatewayHub";
 import { createPinnedDeviceSocket } from "./pinnedDeviceSocket";
 import { DeviceMdnsAdvertiser } from "./deviceMdnsAdvertiser";
+import type { BonjourFactory } from "./deviceMdnsAdvertiser";
 
 async function fixture(t: TestContext, options: Partial<DeviceNetworkOptions> = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "lios-device-network-"));
@@ -227,15 +228,104 @@ test("the listener caps all incoming sockets at 64 and shutdown closes incomplet
   assert.ok(sockets.every((socket) => socket.destroyed));
 });
 
+/** A controlled multicast transport: the real publication state machine runs, but no UDP packet leaves the host. */
+function controlledBonjour(options: { autoUp?: boolean } = {}) {
+  const published: Array<{ name: string; port: number; txt: Record<string, unknown> }> = [];
+  const services: Array<EventEmitter & { published: boolean; activated: boolean; destroyed: boolean }> = [];
+  const transports: Array<EventEmitter & { respond: (packet: unknown, callback: (error?: Error) => void) => void }> = [];
+  let destroyed = 0;
+  const factory: BonjourFactory = () => {
+    const mdns = Object.assign(new EventEmitter(), {
+      respond: (_packet: unknown, callback: (error?: Error) => void) => callback(),
+    });
+    transports.push(mdns);
+    const fake = {
+      server: { mdns },
+      publish(config: { name: string; port: number; txt: Record<string, unknown> }) {
+        published.push(config);
+        const service = Object.assign(new EventEmitter(), { published: false, activated: false, destroyed: false });
+        services.push(service);
+        if (options.autoUp !== false) queueMicrotask(() => up(service));
+        return service;
+      },
+      unpublishAll: (callback: (error?: Error) => void) => callback(),
+      destroy: (callback: () => void) => { destroyed += 1; callback(); },
+    };
+    return fake as unknown as Bonjour;
+  };
+  const up = (service: (typeof services)[number]) => {
+    service.published = true;
+    service.activated = true;
+    service.emit("up");
+  };
+  return { factory, published, services, transports, up, destroyedCount: () => destroyed };
+}
+
 test("discoverable opt-in toggles mDNS publisher state with device networking", { timeout: 10_000 }, async (t) => {
-  const { network } = await fixture(t);
+  const wire = controlledBonjour();
+  const { network } = await fixture(t, { createBonjour: wire.factory });
   const enabled = await network.update({ enabled: true, discoverable: true, name: "Discoverable Home" });
   assert.equal(enabled.discovering, true);
   assert.equal(enabled.discoverable, true);
+  assert.equal(wire.published.length, 1);
+  assert.equal(wire.published[0]!.port, enabled.port);
   await network.update({ enabled: true, discoverable: false, name: "Discoverable Home" });
   assert.equal(network.status().discovering, false);
+  assert.equal(wire.destroyedCount(), 1, "opting out tears the transport down");
+  await network.update({ enabled: true, discoverable: true, name: "Discoverable Home" });
+  assert.equal(network.status().discovering, true);
   await network.stop();
   assert.equal(network.status().discovering, false);
+  assert.equal(wire.destroyedCount(), 2);
+});
+
+test("a multicast send failure is reported and never leaves a publication marked live", { timeout: 10_000 }, async (t) => {
+  const wire = controlledBonjour({ autoUp: false });
+  const advertiser = new DeviceMdnsAdvertiser(wire.factory);
+  t.after(() => advertiser.stop());
+  const advertisement = {
+    name: "Unreachable Home", homeId: randomUUID(), fingerprint: "d".repeat(64), port: 5052,
+    methods: Object.keys(GATEWAY_METHODS), events: Object.keys(GATEWAY_EVENTS),
+  };
+  const publishing = advertiser.sync(advertisement);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const failure = Object.assign(new Error("send EHOSTUNREACH 224.0.0.251:5353"), { code: "EHOSTUNREACH" });
+  publishing.catch(() => undefined);
+  wire.transports[0]!.emit("error", failure);
+  await assert.rejects(publishing, /LiOS LAN discovery failed: send EHOSTUNREACH/);
+  assert.equal(advertiser.isPublishing(), false);
+  assert.match(advertiser.error() ?? "", /UDP 5353/);
+  assert.equal(wire.destroyedCount(), 1);
+});
+
+test("mDNS publication state waits for probing and capability changes with unchanged counts republish", { timeout: 10_000 }, async (t) => {
+  const wire = controlledBonjour({ autoUp: false });
+  const advertiser = new DeviceMdnsAdvertiser(wire.factory);
+  t.after(() => advertiser.stop());
+  const advertisement = {
+    name: "Signature Home", homeId: randomUUID(), fingerprint: "c".repeat(64), port: 5052,
+    methods: Object.keys(GATEWAY_METHODS), events: Object.keys(GATEWAY_EVENTS),
+  };
+  const changedMethods = [...advertisement.methods.slice(0, -1), "wire.updated"];
+  assert.equal(changedMethods.length, advertisement.methods.length, "the capability count is unchanged");
+  const publishing = advertiser.sync(advertisement);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(advertiser.isPublishing(), false, "an allocated/pending service is not a live advertisement");
+  wire.up(wire.services[0]!);
+  await publishing;
+  assert.equal(advertiser.isPublishing(), true);
+  await advertiser.sync(advertisement);
+  assert.equal(wire.published.length, 1, "an unchanged live advertisement is not republished");
+  const republishing = advertiser.sync({ ...advertisement, methods: changedMethods });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(advertiser.isPublishing(), false, "the replacement is pending until it is announced");
+  wire.up(wire.services[1]!);
+  await republishing;
+  assert.equal(wire.published.length, 2);
+  assert.notDeepEqual(wire.published[1]!.txt, wire.published[0]!.txt);
+  assert.equal(advertiser.isPublishing(), true);
+  await advertiser.stop();
+  assert.equal(advertiser.isPublishing(), false);
 });
 
 test("discoverable opt-in publishes LiOS Home mDNS on the LAN", {
@@ -305,7 +395,10 @@ test("discoverable opt-in publishes LiOS Home mDNS on the LAN", {
   }).length, 0);
 });
 
-test("mDNS publication state waits for probing and capability changes with unchanged counts republish", { timeout: 20_000 }, async (t) => {
+test("mDNS capability changes are observed by a real LAN browser", {
+  timeout: 20_000,
+  skip: process.env.GITHUB_ACTIONS === "true",
+}, async (t) => {
   const advertiser = new DeviceMdnsAdvertiser();
   const mdns = new Bonjour();
   t.after(async () => {
@@ -335,15 +428,9 @@ test("mDNS publication state waits for probing and capability changes with uncha
     }
   });
   t.after(() => browser.stop());
-  const publishing = advertiser.sync(advertisement);
-  assert.equal(advertiser.isPublishing(), false, "an allocated/pending service is not a live advertisement");
-  await publishing;
-  assert.equal(advertiser.isPublishing(), true);
+  await advertiser.sync(advertisement);
   await advertiser.sync({ ...advertisement, methods: changedMethods });
   const changed = await seen.promise;
   assert.deepEqual(changed.methods, changedMethods);
   assert.deepEqual(changed.events, advertisement.events);
-  assert.equal(advertiser.isPublishing(), true);
-  await advertiser.stop();
-  assert.equal(advertiser.isPublishing(), false);
 });
