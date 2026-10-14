@@ -1,10 +1,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const path = require("node:path");
 const { resolveMacPackAppPath, signAdHocMacPack } = require("./desktopMacPackSigning.cjs");
 
 test("macOS local pack resolves the target architecture and product bundle", () => {
-  assert.equal(resolveMacPackAppPath({ rootDir: "/lios", arch: "arm64", productName: "LiOS" }), "/lios/dist-app/mac-arm64/LiOS.app");
-  assert.equal(resolveMacPackAppPath({ rootDir: "/lios", arch: "x64", productName: "LiOS" }), "/lios/dist-app/mac/LiOS.app");
+  // resolveMacPackAppPath uses path.join, so the expected values are built the same way (backslashes on Windows).
+  assert.equal(resolveMacPackAppPath({ rootDir: "/lios", arch: "arm64", productName: "LiOS" }), path.join("/lios", "dist-app", "mac-arm64", "LiOS.app"));
+  assert.equal(resolveMacPackAppPath({ rootDir: "/lios", arch: "x64", productName: "LiOS" }), path.join("/lios", "dist-app", "mac", "LiOS.app"));
 });
 
 test("macOS local pack ad-hoc signs and verifies the final bundle", () => {

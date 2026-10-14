@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { launcherPidFromEnvironment, processIsAlive } from "./parentWatch";
 
 const WATCH_MODULE = fileURLToPath(new URL("./parentWatch.ts", import.meta.url));
@@ -18,7 +18,7 @@ function spawnLauncher(): ChildProcess {
 
 /** A real process that watches `pid` and exits with ORPHANED_EXIT_CODE when it disappears. */
 function spawnWatcher(pid: number): ChildProcess {
-  const script = `import(${JSON.stringify(WATCH_MODULE)}).then(({ watchLauncher }) => {
+  const script = `import(${JSON.stringify(pathToFileURL(WATCH_MODULE).href)}).then(({ watchLauncher }) => {
     watchLauncher(${pid}, () => process.exit(${ORPHANED_EXIT_CODE}), 50);
     process.stdout.write("watching\\n");
     setInterval(() => {}, 1000);

@@ -15,7 +15,7 @@ test("scoped history storage uses an opaque deterministic namespace", () => {
 
   assert.equal(first, second);
   assert.notEqual(first, other);
-  assert.match(first, /^scoped\/[0-9a-f]{32}$/);
+  assert.match(first, /^scoped[\\/][0-9a-f]{32}$/);
   assert.equal(first.includes("scope:abc"), false);
 });
 

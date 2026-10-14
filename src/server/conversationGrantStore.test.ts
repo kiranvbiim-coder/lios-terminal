@@ -669,15 +669,22 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       target: process.env.LIOS_EXECUTION_SANDBOX_TARGET,
       image: process.env.LIOS_EXECUTION_SANDBOX_IMAGE,
       base64: process.env.LIOS_EXECUTION_SANDBOX_BASE64,
+      path: process.env.PATH,
     };
     process.env.LIOS_EXECUTION_ISOLATION = "strict";
+    const engineBin = fs.mkdtempSync(path.join(os.tmpdir(), "lios-denied-engine-"));
+    t.after(() => fs.rmSync(engineBin, { recursive: true, force: true }));
+    // This real executable is only hashed for a denial; it must never be launched.
+    // The fixture proves approval custody, not Docker availability or isolation.
+    fs.copyFileSync(process.execPath, path.join(engineBin, process.platform === "win32" ? "docker.exe" : "docker"));
+    process.env.PATH = [engineBin, old.path].filter(Boolean).join(path.delimiter);
     process.env.LIOS_EXECUTION_SANDBOX_ENGINE = "docker";
     process.env.LIOS_EXECUTION_SANDBOX_TARGET = "unix:///var/run/docker.sock";
     process.env.LIOS_EXECUTION_SANDBOX_IMAGE = "alpine@sha256:" + "a".repeat(64);
     process.env.LIOS_EXECUTION_SANDBOX_BASE64 = "/bin/base64";
-    const chat = await createProjectChat(ownerCtx, { projectId: projectA.id, scope: "project" });
-    const proposal = await proposeSandboxTerminalSession(owner, projectA.id, chat.id);
     try {
+      const chat = await createProjectChat(ownerCtx, { projectId: projectA.id, scope: "project" });
+      const proposal = await proposeSandboxTerminalSession(owner, projectA.id, chat.id);
       await assert.rejects(
         () => reviewSandboxTerminalSession({
           user: stranger,
@@ -719,6 +726,8 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       assert.equal(receipt?.trust?.decision, "denied");
       assert.equal(receipt?.trust?.operationDigest, proposal.operationDigest);
     } finally {
+      if (old.path === undefined) delete process.env.PATH;
+      else process.env.PATH = old.path;
       if (old.isolation === undefined) delete process.env.LIOS_EXECUTION_ISOLATION;
       else process.env.LIOS_EXECUTION_ISOLATION = old.isolation;
       if (old.engine === undefined) delete process.env.LIOS_EXECUTION_SANDBOX_ENGINE;

@@ -12,6 +12,7 @@ import type { DeviceNetworkSettings, DeviceNetworkStatus } from "@shared/deviceN
 import { GATEWAY_EVENTS, GATEWAY_METHODS } from "@shared/gatewayProtocol";
 import { stateDir } from "./dataRoot";
 import { DeviceMdnsAdvertiser } from "./deviceMdnsAdvertiser";
+import type { BonjourFactory } from "./deviceMdnsAdvertiser";
 import { loadOrCreateDeviceTlsIdentity } from "./deviceTls";
 import type { DeviceTlsIdentity } from "./deviceTls";
 import type { GatewayAuthenticator, GatewayHub } from "./gatewayHub";
@@ -24,6 +25,8 @@ export interface DeviceNetworkOptions {
   host?: string;
   port?: number;
   addresses?: () => string[];
+  /** Multicast transport factory; defaults to real Bonjour. Tests inject a controlled transport. */
+  createBonjour?: BonjourFactory;
 }
 
 interface DeviceListener {
@@ -42,7 +45,7 @@ const SHUTDOWN_GRACE_MS = 250;
 export class DeviceNetwork {
   private readonly settingsFile: string;
   private readonly identityDirectory: string;
-  private readonly mdns = new DeviceMdnsAdvertiser();
+  private readonly mdns: DeviceMdnsAdvertiser;
   private settings: DeviceNetworkSettings = { enabled: false, discoverable: false, name: hostname().slice(0, 80).trim() || "LiOS Home" };
   private listener: DeviceListener | null = null;
   private queue: Promise<void> = Promise.resolve();
@@ -51,6 +54,7 @@ export class DeviceNetwork {
   constructor(private readonly options: DeviceNetworkOptions) {
     this.settingsFile = options.settingsFile ?? path.join(stateDir(), "device-network.json");
     this.identityDirectory = options.identityDirectory ?? path.join(stateDir(), "device-tls");
+    this.mdns = new DeviceMdnsAdvertiser(options.createBonjour);
   }
 
   readSettings(): DeviceNetworkSettings {

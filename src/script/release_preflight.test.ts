@@ -392,7 +392,7 @@ test("packaged migration preflight blocks a resource tree missing the journal la
     },
     cwd: "/repo/src",
     platform: "win32",
-    existsSync: (target) => !String(target).includes("/packaged/Resources/migrations/"),
+    existsSync: (target) => !String(target).replaceAll("\\", "/").includes("/packaged/Resources/migrations/"),
     readFileSync: () => CURRENT_JOURNAL,
     execFile: (file) => {
       if (file === "python3") return "Python 3.12.6";

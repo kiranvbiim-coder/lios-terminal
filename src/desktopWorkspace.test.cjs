@@ -13,7 +13,8 @@ test("local workspace bootstrap creates isolated directories and metadata", () =
   for (const directory of [workspace.paths.root, workspace.paths.connectors, workspace.paths.datasets, workspace.paths.exports]) assert.equal(fs.statSync(directory).isDirectory(), true);
   const metadata = JSON.parse(fs.readFileSync(workspace.paths.metadata, "utf8"));
   assert.equal(metadata.workspaceId, workspace.workspaceId);
-  assert.equal(fs.statSync(workspace.paths.metadata).mode & 0o777, 0o600);
+  // Windows has no POSIX mode bits to assert; its protection is ACL-based.
+  if (process.platform !== "win32") assert.equal(fs.statSync(workspace.paths.metadata).mode & 0o777, 0o600);
 });
 
 test("local workspace bootstrap is idempotent and preserves identity", () => {

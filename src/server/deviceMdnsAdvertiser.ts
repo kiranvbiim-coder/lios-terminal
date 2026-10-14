@@ -28,12 +28,18 @@ interface BonjourTransport {
 
 const PUBLICATION_DEADLINE_MS = 5_000;
 
+/** Creates the multicast transport; tests inject a controlled one, production uses real Bonjour. */
+export type BonjourFactory = (onError: (error: Error) => void) => Bonjour;
+const realBonjour: BonjourFactory = (onError) => new Bonjour({}, onError);
+
 /** Publishes a LiOS Home on the LAN. No secrets are advertised; pairing still requires owner approval. */
 export class DeviceMdnsAdvertiser {
   private bonjour: Bonjour | null = null;
   private service: Service | null = null;
   private signature: string | null = null;
   private lastError: string | null = null;
+
+  constructor(private readonly createBonjour: BonjourFactory = realBonjour) {}
 
   isPublishing(): boolean {
     return this.service?.published === true && this.service.activated && !this.service.destroyed && this.lastError === null;
@@ -68,7 +74,7 @@ export class DeviceMdnsAdvertiser {
         });
       }
     };
-    const bonjour = new Bonjour({}, onError);
+    const bonjour = this.createBonjour(onError);
     this.bonjour = bonjour;
     const transport = (bonjour as unknown as BonjourTransport).server.mdns;
     const respond = transport.respond;

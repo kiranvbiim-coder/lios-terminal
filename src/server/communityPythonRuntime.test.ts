@@ -45,6 +45,19 @@ test("packaged retail community helpers use the selected managed runtime only", 
   });
 });
 
+test("managed Windows runtime uses Scripts/python.exe and never the ambient interpreter", () => {
+  const runtimePath = "C:\\LiOS Home\\python-runtimes\\current";
+  const executable = "C:\\LiOS Home\\python-runtimes\\current\\Scripts\\python.exe";
+  const resolved = resolveCommunityPythonExecutable({
+    env: packagedRetailEnv,
+    platform: "win32",
+    state: state({ runtimePath }),
+    existsSync: (candidate) => candidate === executable,
+  });
+  assert.equal(resolved.executable, executable);
+  assert.equal(resolved.authority, "managed_runtime");
+});
+
 test("packaged retail fails closed when community-yahoo is unselected", () => {
   assert.throws(
     () => resolveCommunityPythonExecutable({

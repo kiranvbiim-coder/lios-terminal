@@ -3,13 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { createServer } from "node:http";
+import { buildRouteManifest, compareStoredRouteManifest } from "../server/routeManifest";
 
 // Registering the routes opens the data root; use a throwaway one so the check never touches a real install.
 process.env.LIOS_DATA_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "lios-routes-"));
 process.env.LIMURIA_VAULT_SECRET ??= "route-manifest-check-secret-0000000000";
 delete process.env.DATABASE_URL;
+// Routes/DB read the data-root environment during module initialization, so they must load after isolation.
 const { registerRoutes } = await import("../server/routes");
-const { buildRouteManifest } = await import("../server/routeManifest");
 const { initDb } = await import("../server/db");
 
 const MANIFEST_PATH = path.resolve(import.meta.dirname, "../../docs/technical/ROUTE_MANIFEST.json");
@@ -39,7 +40,8 @@ await initDb();
 const app = express();
 await registerRoutes(createServer(app), app);
 const entries = await buildRouteManifest(app);
-const json = JSON.stringify({ generatedBy: "npm run routes:manifest", routes: entries }, null, 1) + "\n";
+const manifest = { generatedBy: "npm run routes:manifest", routes: entries };
+const json = JSON.stringify(manifest, null, 1) + "\n";
 
 const anonymous = entries.filter((entry) => entry.reachableBy.includes("anonymous")).map((entry) => `${entry.method} ${entry.path}`);
 const unexpected = anonymous.filter((route) => !(route in ANONYMOUS_ROUTES));
@@ -52,8 +54,10 @@ if (process.argv.includes("--check")) {
     process.exit(1);
   }
   const current = fs.existsSync(MANIFEST_PATH) ? fs.readFileSync(MANIFEST_PATH, "utf8") : "";
-  if (current !== json) {
+  const difference = compareStoredRouteManifest(current, manifest);
+  if (difference) {
     console.error("docs/technical/ROUTE_MANIFEST.json is out of date. Run `npm run routes:manifest` and review the diff (a new public route needs an owner decision).");
+    console.error(difference);
     process.exit(1);
   }
   console.log(`Route manifest up to date (${entries.length} routes).`);

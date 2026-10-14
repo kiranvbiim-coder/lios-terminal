@@ -105,7 +105,8 @@ test("governed launch persists trust and output before completion is visible aft
   assert.equal((await reopened.read(REQUEST_ID, OTHER_OWNER)), null);
 });
 
-test("interactive sandbox intent rejects arbitrary input and persists only approved input digests", { timeout: 15_000 }, async (t) => {
+// The read-only console is a POSIX shell session (process.getuid, /bin/sh); the product runs it inside a Linux sandbox image, never on a Windows host.
+test("interactive sandbox intent rejects arbitrary input and persists only approved input digests", { timeout: 15_000, skip: process.platform === "win32" }, async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-governed-interactive-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const supervisor = createProcessSupervisor();

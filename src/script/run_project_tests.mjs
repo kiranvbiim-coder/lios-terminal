@@ -55,20 +55,26 @@ export function partitionTestFiles(files) {
 export function runProjectTests(selected = []) {
   const files = discoverTests(selected);
   const batches = partitionTestFiles(files);
-  console.log(`Running ${files.length} project-owned test files in ${batches.length} batch(es); file concurrency 2.`);
+  console.log(`Running ${files.length} project-owned test files in ${batches.length} batch(es); file concurrency 2; file deadline 5 minutes.`);
   console.log("Scope: source regression only. Entitled real-data benchmarks and packaged SP/P14 qualification: NOT_RUN.");
+  // Run every batch even after one fails, so a single hosted run reports all failures instead of one per ~20-minute run.
+  // The exit code is still non-zero if any batch failed or was terminated; nothing is masked.
+  let exitCode = 0;
   for (const batch of batches) {
-    const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=2", ...batch], {
+    // Fail a stuck file with its filename rather than losing every diagnostic
+    // when the hosted workflow eventually kills the entire 30-minute step.
+    const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=2", "--test-timeout=300000", ...batch], {
       cwd: root, stdio: "inherit", env: process.env,
     });
     if (result.error) throw result.error;
     if (result.signal) {
       console.error(`Project tests terminated by ${result.signal}.`);
-      return 1;
+      exitCode ||= 1;
+    } else if (result.status !== 0) {
+      exitCode ||= result.status ?? 1;
     }
-    if (result.status !== 0) return result.status ?? 1;
   }
-  return 0;
+  return exitCode;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

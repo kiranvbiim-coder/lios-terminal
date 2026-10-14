@@ -122,18 +122,20 @@ describe("process supervisor output and deadlines", () => {
     await supervisor.shutdown();
   });
 
-  it("escalates overall timeout from SIGTERM to SIGKILL without replacing its reason", T, async () => {
+  it("escalates overall timeout from SIGTERM to SIGKILL without replacing its reason (Windows forces SIGKILL at once)", T, async () => {
+    // Windows has no catchable SIGTERM: the supervisor skips the grace window and force-terminates the tree immediately.
+    const windows = process.platform === "win32";
     mock.timers.enable({ apis: ["setTimeout"] });
     const adapter = createStubChildAdapter({ onKill: (signal, current) => { if (signal === "SIGKILL") { current.settle(null, signal); } } });
     const { supervisor } = createStubSupervisor([adapter]);
     const run = await spawnChild(supervisor, { timeoutMs: 20, gracefulCancelMs: 30 });
     await advanceMockTimers(20);
     await advanceMockTimers(0);
-    assert.deepEqual(killSignals(adapter), ["SIGTERM"]);
+    assert.deepEqual(killSignals(adapter), windows ? ["SIGKILL"] : ["SIGTERM"]);
     run.cancel("manual-cancel");
     await advanceMockTimers(30);
     const exit = await run.wait();
-    assert.deepEqual(killSignals(adapter), ["SIGTERM", "SIGKILL"]);
+    assert.deepEqual(killSignals(adapter), windows ? ["SIGKILL"] : ["SIGTERM", "SIGKILL"]);
     assert.equal(exit.reason, "overall-timeout");
     assert.equal(exit.timedOut, true);
     assert.equal(exit.noOutputTimedOut, false);

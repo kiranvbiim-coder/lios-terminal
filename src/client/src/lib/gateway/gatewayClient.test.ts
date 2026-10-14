@@ -1,4 +1,4 @@
-import test, { beforeEach } from "node:test";
+import test, { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { GatewayClient, type GatewayClientOptions, type GatewaySocketConstructor } from "./gatewayClient";
 import { GatewayClosedError, GatewayNotReadyError, GatewayRequestError, GatewayResultError, GatewayTimeoutError } from "./gatewayErrors";
@@ -16,14 +16,18 @@ function hello(bootId = "boot-1", tickIntervalMs = 15_000) {
   };
 }
 
+const clients = new Set<GatewayClient>();
+
 function makeClient(overrides: Partial<GatewayClientOptions> = {}) {
-  return new GatewayClient({
+  const client = new GatewayClient({
     url: "ws://test/gateway",
     clientInfo: { id: "t", version: "1", platform: "node", mode: "test" },
     WebSocketImpl: FakeWebSocket as unknown as GatewaySocketConstructor,
     reconnect: { initialMs: 5, maxMs: 40, multiplier: 2, jitter: 0 },
     ...overrides,
   });
+  clients.add(client);
+  return client;
 }
 
 /** Opens the latest socket and answers its connect request. */
@@ -38,6 +42,10 @@ async function connectOk(client: GatewayClient, bootId = "boot-1", tickIntervalM
 }
 
 beforeEach(() => FakeWebSocket.reset());
+afterEach(() => {
+  for (const client of clients) client.stop();
+  clients.clear();
+});
 
 test("handshake sends the protocol range and becomes ready with hello", async () => {
   const client = makeClient({ scopes: ["read"] });
@@ -86,24 +94,28 @@ test("unexpected close reconnects with backoff and onReady fires each time, rest
   client.stop();
 });
 
-test("non-terminal connect failure backs off exponentially and keeps retrying", async () => {
-  const delays: number[] = [];
+test("non-terminal connect failure backs off exponentially, caps delay and keeps retrying", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const client = makeClient({ reconnect: { initialMs: 20, maxMs: 1000, multiplier: 2, jitter: 0 } });
+  t.after(() => client.stop());
   client.start();
-  let last = Date.now();
-  for (let i = 0; i < 3; i++) {
+  for (const delay of [20, 40, 80, 160, 320, 640, 1000, 1000]) {
     const ws = FakeWebSocket.last;
     ws.open();
     ws.serverSend({ type: "res", id: ws.sent[0].id, ok: false, error: { code: "UNAVAILABLE", message: "busy" } });
-    last = Date.now();
+    await Promise.resolve();
+    assert.equal(client.state, "reconnecting");
+    assert.equal(ws.closed, true);
     const before = FakeWebSocket.instances.length;
-    while (FakeWebSocket.instances.length === before) await sleep(2);
-    delays.push(Date.now() - last);
+    t.mock.timers.tick(delay - 1);
+    assert.equal(FakeWebSocket.instances.length, before, "no retry before the backoff deadline");
+    t.mock.timers.tick(1);
+    assert.equal(FakeWebSocket.instances.length, before + 1, "exactly one retry at the backoff deadline");
   }
-  assert.ok(delays[0] >= 15 && delays[0] < 38, String(delays[0]));
-  assert.ok(delays[1] >= 35 && delays[1] < 70, String(delays[1]));
-  assert.ok(delays[2] >= 75, String(delays[2]));
   client.stop();
+  const stoppedCount = FakeWebSocket.instances.length;
+  t.mock.timers.tick(10_000);
+  assert.equal(FakeWebSocket.instances.length, stoppedCount, "stopping prevents further retries");
 });
 
 test("request resolves and validates the typed result", async () => {

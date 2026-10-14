@@ -22,7 +22,7 @@ const context: RuntimeExecutionContext = {
 
 test("P13 Node broker executes through supervised LEP process without inheriting secrets or raw network", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-p13-broker-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // Removal is registered together with broker disposal below so the child is stopped before its directory goes away.
   const entrypoint = path.join(root, "plugin.mjs");
   fs.copyFileSync(path.resolve("server/fixtures/p13PluginFixture.mjs"), entrypoint);
 
@@ -69,7 +69,11 @@ test("P13 Node broker executes through supervised LEP process without inheriting
     },
     requestTimeoutMs: 5_000,
   });
-  t.after(() => broker.dispose());
+  // Windows cannot delete a directory that a live child holds as its cwd: stop it first, then remove with retries.
+  t.after(async () => {
+    broker.dispose();
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
+  });
 
   const result = await broker.invoke({
     pluginId: manifest.id,
@@ -100,7 +104,7 @@ test("P13 Node broker executes through supervised LEP process without inheriting
 
 test("P13 supervised read-only plugin receives only owner-authorized bytes and cannot open Project paths directly", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-p13-brokered-read-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // Removal is registered together with broker disposal below so the child is stopped before its directory goes away.
   const installDirectory = path.join(root, "plugin");
   const projectRoot = path.join(root, "project");
   const outsideRoot = path.join(root, "outside");
@@ -129,7 +133,11 @@ test("P13 supervised read-only plugin receives only owner-authorized bytes and c
       && caller.projectId === allowedProject && chosen === projectRoot && scope === "project",
     requestTimeoutMs: 5_000,
   });
-  t.after(() => broker.dispose());
+  // Windows cannot delete a directory that a live child holds as its cwd: stop it first, then remove with retries.
+  t.after(async () => {
+    broker.dispose();
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
+  });
   const invoke = (projectId: number, relativePath: string) => broker.invoke({
     pluginId: manifest.id, componentId: "plugin.readonly.echo", operation: "tool.invoke",
     payload: { probeRawFileRead: true, rawFilePath: path.join(projectRoot, "input.txt"),

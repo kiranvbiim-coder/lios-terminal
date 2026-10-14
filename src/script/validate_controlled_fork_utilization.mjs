@@ -53,13 +53,27 @@ export function validateControlledForkUtilization({ inventory, registry, pins, c
       assert.ok(plan.includes("**" + workstream + " "), "Unknown SI-05 workstream " + workstream);
     }
     assert.ok(typeof mirror.nextAction === "string" && mirror.nextAction.length >= 60);
+    const pinnedComponents = components.components.filter((component) =>
+      component.repository?.toLowerCase() === mirror.upstreamRepository.toLowerCase() &&
+      component.bundled === true &&
+      Array.isArray(component.importedPaths) && component.importedPaths.length > 0 &&
+      Array.isArray(component.destinationPaths) && component.destinationPaths.length > 0 &&
+      pins.locks.some((lock) => lock.id === component.id &&
+        lock.repository?.toLowerCase() === component.repository.toLowerCase() &&
+        /^[0-9a-f]{40}$/.test(lock.commitSha) && lock.commitSha === component.commitSha));
     if (mirror.baselineDonorId === null) {
-      assert.equal(mirror.status, "mirror_observed_no_runtime_claim",
-        "Unregistered mirror cannot claim a runtime or an import");
-      assert.ok(!registry.donors.some((d) =>
-        d.repository?.toLowerCase() === mirror.upstreamRepository.toLowerCase()),
-        "The mirror has an exact upstream registry match; it needs an explicit baseline id");
-      mirrorOnly++;
+      if (mirror.status === "partially_integrated_pinned_paths") {
+        assert.ok(pinnedComponents.length > 0,
+          "Unregistered mirror cannot claim an import without exact supplemental component/path/pin provenance");
+        partiallyIntegrated++;
+      } else {
+        assert.equal(mirror.status, "mirror_observed_no_runtime_claim",
+          "Unregistered mirror cannot claim a runtime or an import");
+        assert.ok(!registry.donors.some((d) =>
+          d.repository?.toLowerCase() === mirror.upstreamRepository.toLowerCase()),
+          "The mirror has an exact upstream registry match; it needs an explicit baseline id");
+        mirrorOnly++;
+      }
       continue;
     }
     const donor = registry.donors.find((d) => d.id === mirror.baselineDonorId);
@@ -71,10 +85,9 @@ export function validateControlledForkUtilization({ inventory, registry, pins, c
       "Approved import pin must reference the canonical upstream, not fork HEAD");
     if (mirror.status === "partially_integrated_pinned_paths") {
       assert.equal(donor.currentTruthStatus, "partially_integrated");
-      assert.ok(components.components.some((component) =>
-        component.id === donor.id && component.bundled === true &&
-        Array.isArray(component.importedPaths) && component.importedPaths.length > 0),
-      "Partial integration must have actual imported-path provenance in components.json");
+      assert.ok(pinnedComponents.some((component) =>
+        component.id === donor.id || component.baselineDonorId === donor.id),
+        "Partial integration must have actual imported-path provenance and an exact approved pin");
       partiallyIntegrated++;
     } else {
       assert.equal(mirror.status, "documented_only");

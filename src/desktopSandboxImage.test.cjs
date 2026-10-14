@@ -1,13 +1,21 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { defaultLocalDockerSocket, packagedSandboxEnvironment, verifyPackagedSandboxRelease } = require('./desktopSandboxImage.cjs');
 
+// An explicit local engine socket: the default is built from the host's path separators and is not meaningful off macOS.
+const SANDBOX_ENV = { LIOS_EXECUTION_SANDBOX_TARGET: 'unix:///var/run/docker.sock' };
+
 function releaseFixture(t) {
+  // Exercise the qualified platform's integrity contract on every CI host.
+  // This changes only the test process, not the production platform/architecture gate.
+  const restore = ['platform', 'arch'].map((name) => [name, Object.getOwnPropertyDescriptor(process, name)]);
+  Object.defineProperty(process, 'platform', { ...restore[0][1], value: 'darwin' });
+  Object.defineProperty(process, 'arch', { ...restore[1][1], value: 'arm64' });
+  t.after(() => { for (const [name, descriptor] of restore) Object.defineProperty(process, name, descriptor); });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lios-sandbox-package-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const directory = path.join(root, 'sandbox-image-dist');
@@ -51,27 +59,32 @@ function releaseFixture(t) {
 test('packaged image pins the exact digest and rejects downgraded isolation or altered archive', (t) => {
   const { root, directory, release } = releaseFixture(t);
   assert.equal(verifyPackagedSandboxRelease(root), release.image);
-  assert.equal(packagedSandboxEnvironment(root, {}).LIOS_EXECUTION_SANDBOX_IMAGE, release.image);
+  assert.equal(packagedSandboxEnvironment(root, SANDBOX_ENV).LIOS_EXECUTION_SANDBOX_IMAGE, release.image);
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_ISOLATION: 'legacy-host' }), /downgraded/);
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_SANDBOX_IMAGE: 'sha256:' + 'c'.repeat(64) }), /differs/);
-  assert.equal(packagedSandboxEnvironment(root, {}).LIOS_EXECUTION_BROWSER_CHROMIUM, '/opt/lios/browser/chromium');
+  assert.equal(packagedSandboxEnvironment(root, SANDBOX_ENV).LIOS_EXECUTION_BROWSER_CHROMIUM, '/opt/lios/browser/chromium');
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_BROWSER_CHROMIUM: '/usr/bin/google-chrome' }), /browser paths differ/);
   fs.writeFileSync(path.join(directory, 'sandbox-image.tar.gz'), 'tampered');
   assert.throws(() => verifyPackagedSandboxRelease(root), /checksum differs/);
 });
 
-test('packaged sandbox prefers an existing local Docker socket and supports Colima without remote contexts', async (t) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'lios-sandbox-socket-'));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+test('packaged sandbox prefers socket files and supports Colima without remote contexts', (t) => {
+  const home = path.join(os.tmpdir(), 'lios-sandbox-socket-selection');
   const colima = path.join(home, '.colima', 'default', 'docker.sock');
   const desktop = path.join(home, '.docker', 'run', 'docker.sock');
-  fs.mkdirSync(path.dirname(colima), { recursive: true });
-  fs.mkdirSync(path.dirname(desktop), { recursive: true });
+  const sockets = new Set();
+  const originalStat = fs.statSync;
+  t.mock.method(fs, 'statSync', (filename, ...args) => {
+    if (filename !== colima && filename !== desktop) return originalStat(filename, ...args);
+    return { isSocket: () => sockets.has(filename) };
+  });
   assert.equal(defaultLocalDockerSocket(home), `unix://${desktop}`);
-  const server = net.createServer();
-  await new Promise((resolve, reject) => server.once('error', reject).listen(colima, resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  sockets.add(colima);
   assert.equal(defaultLocalDockerSocket(home), `unix://${colima}`);
+  sockets.add(desktop);
+  assert.equal(defaultLocalDockerSocket(home), `unix://${desktop}`);
+  sockets.delete(desktop);
+  assert.equal(defaultLocalDockerSocket(home), `unix://${colima}`, 'a regular file cannot shadow the actual socket');
 });
 
 test('packaging refuses an unqualified browser, an old image, or altered browser inventory', (t) => {
@@ -95,4 +108,18 @@ test('packaging refuses an unqualified browser, an old image, or altered browser
   rewrite();
   fs.writeFileSync(path.join(directory, 'browser-dependency-inventory.json'), '[\"tampered\"]');
   assert.throws(() => packagedSandboxEnvironment(root, {}), /inventory differs/);
+});
+
+test('a packaged sandbox rejects an unqualified architecture or platform before returning execution settings', (t) => {
+  const { root } = releaseFixture(t);
+  const set = (name, value) => Object.defineProperty(process, name, { ...Object.getOwnPropertyDescriptor(process, name), value });
+  set('arch', 'x64');
+  assert.throws(() => packagedSandboxEnvironment(root, SANDBOX_ENV), /qualified only for macOS arm64/);
+  assert.throws(() => verifyPackagedSandboxRelease(root), /qualified only for macOS arm64/);
+  set('arch', 'arm64');
+  for (const platform of ['win32', 'linux']) {
+    set('platform', platform);
+    assert.throws(() => packagedSandboxEnvironment(root, SANDBOX_ENV), /qualified only for macOS arm64/, platform);
+    assert.throws(() => verifyPackagedSandboxRelease(root), /qualified only for macOS arm64/, platform);
+  }
 });

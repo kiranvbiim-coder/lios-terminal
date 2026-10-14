@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { quantRunEnvelopeSchema } from "@shared/quantModelRegistry";
 import {
@@ -8,7 +11,7 @@ import {
   QUANT_MODEL_REGISTRY,
   summarizeQuantRegistry,
 } from "./quantModelRegistry";
-import { runQuantTruthAudit } from "./quantTruthAudit";
+import { runQuantTruthAudit, withheldDatasetPaths } from "./quantTruthAudit";
 
 test("quant truth audit classifies every current engine, model export and stochastic source", () => {
   const audit = runQuantTruthAudit();
@@ -29,6 +32,19 @@ test("quant truth audit classifies every current engine, model export and stocha
     audit.counts.providerSourceFiles,
     new Set(Object.values(QUANT_DATA_PROVIDER_SOURCES).flat()).size,
   );
+});
+
+test("only datasets the source manifest declares withheld are exempt from the provider-source check", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "lios-withheld-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const app = path.join(base, "src");
+  fs.mkdirSync(app);
+  assert.deepEqual([...withheldDatasetPaths(app)], [], "no manifest means nothing is exempt");
+  fs.mkdirSync(path.join(base, "third_party"));
+  fs.writeFileSync(path.join(base, "third_party", "source-distribution.json"), JSON.stringify({
+    withheldDatasets: ["src/server/data/a.json", "docs/not-app.json", 7],
+  }));
+  assert.deepEqual([...withheldDatasetPaths(app)], ["server/data/a.json"]);
 });
 
 test("quant registry exposes limitations and a next validation action for every entry", () => {

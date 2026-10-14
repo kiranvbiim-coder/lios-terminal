@@ -126,14 +126,14 @@ test("runtime capability inventory distinguishes executable presence from govern
   const root = await mkdtemp(path.join(os.tmpdir(), "lios-acp-inventory-"));
   try {
     const noModule = () => { throw new Error("Authorization: Bearer private-host-secret"); };
-    const absent = await inspectCodingRuntimeCapabilities({ PATH: root }, "darwin", noModule);
+    const absent = await inspectCodingRuntimeCapabilities({ PATH: root }, process.platform, noModule);
     assert.equal(absent.reason, "runtime_not_installed");
-    const binary = path.join(root, "acpx");
+    const binary = path.join(root, process.platform === "win32" ? "acpx.cmd" : "acpx");
     await writeFile(binary, "not-executed");
     await chmod(binary, 0o600);
-    assert.equal((await inspectCodingRuntimeCapabilities({ PATH: root }, "darwin", noModule)).installations[0].executableInstalled, false);
+    assert.equal((await inspectCodingRuntimeCapabilities({ PATH: root }, process.platform, noModule)).installations[0].executableInstalled, process.platform === "win32", "Windows uses file presence; Unix requires execute permission");
     await chmod(binary, 0o700);
-    const installed = await inspectCodingRuntimeCapabilities({ PATH: root }, "darwin", noModule);
+    const installed = await inspectCodingRuntimeCapabilities({ PATH: root }, process.platform, noModule);
     assert.equal(installed.installations[0].executableInstalled, true);
     assert.equal(installed.reason, "governed_transport_unavailable");
     assert.equal(installed.governedCodingAvailable, false);
@@ -141,7 +141,7 @@ test("runtime capability inventory distinguishes executable presence from govern
     assert.deepEqual(installed.controls, []);
     assert.equal(JSON.stringify(installed).includes(root), false);
     assert.equal(JSON.stringify(installed).includes("private-host-secret"), false);
-    assert.equal((await inspectCodingRuntimeCapabilities({ PATH: "" }, "darwin", () => "resolved" )).acpxRuntimeModuleInstalled, true);
+    assert.equal((await inspectCodingRuntimeCapabilities({ PATH: "" }, process.platform, () => "resolved" )).acpxRuntimeModuleInstalled, true);
     const adapter = createCodingRuntimeAdapter({ PATH: root });
     assert.deepEqual(adapter.descriptor.capabilities, ["coding:runtime-inventory"]);
     assert.equal((await adapter.health!()).state, "disabled");

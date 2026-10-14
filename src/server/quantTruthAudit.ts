@@ -51,6 +51,15 @@ function discoverAdvancedPythonEndpoints(root: string): string[] {
 
 export type QuantTruthAuditResult = ReturnType<typeof runQuantTruthAudit>;
 
+/** Dataset paths (relative to the app root) that the source-only distribution manifest declares as withheld. */
+export function withheldDatasetPaths(root: string): Set<string> {
+  const manifestPath = path.join(root, "..", "third_party", "source-distribution.json");
+  if (!fs.existsSync(manifestPath)) return new Set();
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { withheldDatasets?: unknown };
+  const entries = Array.isArray(manifest.withheldDatasets) ? manifest.withheldDatasets : [];
+  return new Set(entries.filter((entry): entry is string => typeof entry === "string" && entry.startsWith("src/")).map((entry) => entry.slice(4)));
+}
+
 export function runQuantTruthAudit(root = process.cwd()) {
   const issues: string[] = [];
   const ids = QUANT_MODEL_REGISTRY.map((entry) => entry.id);
@@ -136,7 +145,8 @@ export function runQuantTruthAudit(root = process.cwd()) {
   const clientRoot = path.join(root, "client/src");
   const randomSources = walk(clientRoot)
     .filter((file) => /\.(ts|tsx)$/.test(file) && fs.readFileSync(file, "utf8").includes("Math.random"))
-    .map((file) => path.relative(root, file))
+    // Registry keys are POSIX-style repository paths; path.relative yields backslashes on Windows.
+    .map((file) => path.relative(root, file).split(path.sep).join("/"))
     .sort();
   for (const source of randomSources) {
     if (!KNOWN_STOCHASTIC_OR_SYNTHETIC_SOURCES[source]) issues.push(`Unclassified stochastic or synthetic source: ${source}`);
@@ -147,10 +157,14 @@ export function runQuantTruthAudit(root = process.cwd()) {
   }
 
   const providerSourceFiles = Object.values(QUANT_DATA_PROVIDER_SOURCES).flat();
+  const withheld = withheldDatasetPaths(root);
   for (const [provider, sources] of Object.entries(QUANT_DATA_PROVIDER_SOURCES)) {
     if (sources.length === 0) issues.push(`Provider has no registered source: ${provider}`);
     for (const relative of sources) {
-      if (!fs.existsSync(path.join(root, relative))) issues.push(`Registered provider source is missing: ${provider} (${relative})`);
+      if (fs.existsSync(path.join(root, relative))) continue;
+      // A dataset the source-only distribution declares as withheld is an explicit NOT_RUN, never a silent pass.
+      if (withheld.has(relative)) continue;
+      issues.push(`Registered provider source is missing: ${provider} (${relative})`);
     }
   }
 
