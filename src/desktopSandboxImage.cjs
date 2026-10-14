@@ -16,13 +16,14 @@ function defaultLocalDockerSocket(home = os.homedir()) {
   });
   return socket ? `unix://${socket}` : `unix://${candidates[0]}`;
 }
-function packagedSandboxEnvironment(resourcesPath, env = process.env) {
+function packagedSandboxEnvironment(resourcesPath, env = process.env, { resolveSocket = true } = {}) {
   const manifest = path.join(resourcesPath, 'sandbox-image-dist', 'sandbox-image.json');
   if (!fs.existsSync(manifest)) return null;
   const manifestStat = fs.lstatSync(manifest);
   if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error('Packaged sandbox manifest is not a regular file.');
   const release = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-  if (process.arch !== 'arm64') throw new Error('Packaged sandbox is qualified only for macOS arm64.');
+  // The packaged sandbox image and its unix-socket engine are qualified for macOS on Apple silicon only.
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Packaged sandbox is qualified only for macOS arm64.');
   if (release.schemaVersion !== 1 || release.platform !== 'linux/arm64' || !/^sha256:[a-f0-9]{64}$/.test(release.image) || release.archive !== 'sandbox-image.tar.gz' || !/^[a-f0-9]{64}$/.test(release.archiveSha256)) {
     throw new Error('Packaged sandbox manifest is invalid or incompatible with this Mac.');
   }
@@ -54,6 +55,7 @@ function packagedSandboxEnvironment(resourcesPath, env = process.env) {
   if (env.LIOS_EXECUTION_SANDBOX_IMAGE && env.LIOS_EXECUTION_SANDBOX_IMAGE !== release.image) {
     throw new Error('Configured sandbox image differs from the packaged immutable digest.');
   }
+  if (!resolveSocket) return { LIOS_EXECUTION_SANDBOX_IMAGE: release.image };
   const socket = env.LIOS_EXECUTION_SANDBOX_TARGET || defaultLocalDockerSocket();
   const engine = env.LIOS_EXECUTION_SANDBOX_ENGINE || 'docker';
   if (!['docker', 'podman'].includes(engine) || !socket.startsWith('unix:///') || socket.includes('\0')) {
@@ -69,7 +71,8 @@ function packagedSandboxEnvironment(resourcesPath, env = process.env) {
   };
 }
 function verifyPackagedSandboxRelease(resourcesPath) {
-  const environment = packagedSandboxEnvironment(resourcesPath, {});
+  // Archive integrity is independent of which local container engine socket the user runs.
+  const environment = packagedSandboxEnvironment(resourcesPath, {}, { resolveSocket: false });
   if (!environment) throw new Error('Signed macOS release requires sandbox-image-dist/sandbox-image.json.');
   const directory = path.join(resourcesPath, 'sandbox-image-dist');
   const release = JSON.parse(fs.readFileSync(path.join(directory, 'sandbox-image.json'), 'utf8'));

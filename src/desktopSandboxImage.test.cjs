@@ -6,12 +6,16 @@ const path = require('node:path');
 const test = require('node:test');
 const { defaultLocalDockerSocket, packagedSandboxEnvironment, verifyPackagedSandboxRelease } = require('./desktopSandboxImage.cjs');
 
+// An explicit local engine socket: the default is built from the host's path separators and is not meaningful off macOS.
+const SANDBOX_ENV = { LIOS_EXECUTION_SANDBOX_TARGET: 'unix:///var/run/docker.sock' };
+
 function releaseFixture(t) {
-  // Exercise the qualified architecture's integrity contract on every CI host.
-  // This changes only the test process, not the production architecture gate.
-  const architecture = Object.getOwnPropertyDescriptor(process, 'arch');
-  Object.defineProperty(process, 'arch', { ...architecture, value: 'arm64' });
-  t.after(() => Object.defineProperty(process, 'arch', architecture));
+  // Exercise the qualified platform's integrity contract on every CI host.
+  // This changes only the test process, not the production platform/architecture gate.
+  const restore = ['platform', 'arch'].map((name) => [name, Object.getOwnPropertyDescriptor(process, name)]);
+  Object.defineProperty(process, 'platform', { ...restore[0][1], value: 'darwin' });
+  Object.defineProperty(process, 'arch', { ...restore[1][1], value: 'arm64' });
+  t.after(() => { for (const [name, descriptor] of restore) Object.defineProperty(process, name, descriptor); });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lios-sandbox-package-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const directory = path.join(root, 'sandbox-image-dist');
@@ -55,10 +59,10 @@ function releaseFixture(t) {
 test('packaged image pins the exact digest and rejects downgraded isolation or altered archive', (t) => {
   const { root, directory, release } = releaseFixture(t);
   assert.equal(verifyPackagedSandboxRelease(root), release.image);
-  assert.equal(packagedSandboxEnvironment(root, {}).LIOS_EXECUTION_SANDBOX_IMAGE, release.image);
+  assert.equal(packagedSandboxEnvironment(root, SANDBOX_ENV).LIOS_EXECUTION_SANDBOX_IMAGE, release.image);
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_ISOLATION: 'legacy-host' }), /downgraded/);
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_SANDBOX_IMAGE: 'sha256:' + 'c'.repeat(64) }), /differs/);
-  assert.equal(packagedSandboxEnvironment(root, {}).LIOS_EXECUTION_BROWSER_CHROMIUM, '/opt/lios/browser/chromium');
+  assert.equal(packagedSandboxEnvironment(root, SANDBOX_ENV).LIOS_EXECUTION_BROWSER_CHROMIUM, '/opt/lios/browser/chromium');
   assert.throws(() => packagedSandboxEnvironment(root, { LIOS_EXECUTION_BROWSER_CHROMIUM: '/usr/bin/google-chrome' }), /browser paths differ/);
   fs.writeFileSync(path.join(directory, 'sandbox-image.tar.gz'), 'tampered');
   assert.throws(() => verifyPackagedSandboxRelease(root), /checksum differs/);
@@ -106,9 +110,16 @@ test('packaging refuses an unqualified browser, an old image, or altered browser
   assert.throws(() => packagedSandboxEnvironment(root, {}), /inventory differs/);
 });
 
-test('a packaged sandbox rejects an unqualified architecture before returning execution settings', (t) => {
+test('a packaged sandbox rejects an unqualified architecture or platform before returning execution settings', (t) => {
   const { root } = releaseFixture(t);
-  Object.defineProperty(process, 'arch', { ...Object.getOwnPropertyDescriptor(process, 'arch'), value: 'x64' });
-  assert.throws(() => packagedSandboxEnvironment(root, {}), /qualified only for macOS arm64/);
+  const set = (name, value) => Object.defineProperty(process, name, { ...Object.getOwnPropertyDescriptor(process, name), value });
+  set('arch', 'x64');
+  assert.throws(() => packagedSandboxEnvironment(root, SANDBOX_ENV), /qualified only for macOS arm64/);
   assert.throws(() => verifyPackagedSandboxRelease(root), /qualified only for macOS arm64/);
+  set('arch', 'arm64');
+  for (const platform of ['win32', 'linux']) {
+    set('platform', platform);
+    assert.throws(() => packagedSandboxEnvironment(root, SANDBOX_ENV), /qualified only for macOS arm64/, platform);
+    assert.throws(() => verifyPackagedSandboxRelease(root), /qualified only for macOS arm64/, platform);
+  }
 });
