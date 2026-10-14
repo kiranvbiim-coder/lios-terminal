@@ -113,22 +113,27 @@ jobs:
         run: npm run check
 
       - name: Offline Node, server, shared, client and script contracts
+        if: ${{ !cancelled() }}
         timeout-minutes: 30
         run: npm run test:offline
 
       - name: Desktop source and syntax contracts
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: npm run test:desktop
 
       - name: Deterministic Python engine tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
         # Pytest collects unittest.TestCase suites and function-style known answers.
         # unittest discovery alone imports but does not run pytest functions.
         run: python -m pytest python-service -v
 
       - name: Build client, server and desktop restore worker
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
         run: npm run build
 
       # No uploads, release assets, signing, deployment or credentialed live tests.
       # A failed install/typecheck/test/build remains a failed platform job.
+      # Later steps use !cancelled() so one run reports every failing step; the job still fails if any step fails.
