@@ -1,0 +1,63 @@
+@import "./terminal-panel-density.css";
+
+/* `scrollbar-none` is used throughout the terminal for intentionally
+   swipe/trackpad-scrollable ribbons. Tailwind does not provide it by default,
+   so define the utility explicitly instead of leaving native desktop bars. */
+.terminal-root .scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.terminal-root .scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* LV3-UX-03 — intelligence-depth refinements.
+   Keep density; improve reading endurance by reserving the dimmest tones for
+   genuinely tertiary metadata instead of analytical evidence. */
+
+[data-workstation-toolbar] .text-muted-foreground,
+[data-analytical-role="evidence"] .text-muted-foreground,
+[data-analytical-role="output"] .text-muted-foreground,
+.lios-evidence-copy,
+.lios-trust-copy {
+  color: hsl(var(--muted-foreground) / 0.9);
+}
+
+[data-analytical-role="evidence"] {
+  --lios-evidence-min: 8.5px;
+}
+
+[data-analytical-role="evidence"] .text-\[7px\],
+[data-analytical-role="evidence"] .text-\[7\.5px\] {
+  font-size: var(--lios-evidence-min);
+  line-height: 1.35;
+}
+
+[data-analytical-role="output"] .text-\[7px\],
+[data-analytical-role="output"] .text-\[7\.5px\] {
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+/* Dense tables remain compact, but primary evidence should never be hidden by
+   extreme low contrast. */
+[data-analytical-row] .text-muted-foreground,
+.lios-story-context,
+.lios-story-context span {
+  color: hsl(var(--muted-foreground) / 0.88);
+}
+
+/* Trust/provenance controls need to read as metadata, not primary actions. */
+[aria-haspopup="dialog"][title^="Inspect provenance"] {
+  min-height: 19px;
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  [data-analytical-role="evidence"] {
+    --lios-evidence-min: 8px;
+  }
+}

@@ -1,0 +1,341 @@
+/* LiOS analytical panel density layer.
+   Imported by workstation-v7 so both production and visual-smoke harnesses
+   inherit it without creating a second styling path. These rules respond to
+   the pane container, not the browser viewport. */
+
+/* Market tracker/filter bands are intentionally horizontally navigable, but
+   native desktop scrollbars are louder than the data itself. Preserve wheel,
+   trackpad, touch and keyboard scrolling while removing that chrome. */
+.terminal-root [data-view='market'] .lios-pane-content .overflow-x-auto {
+  scrollbar-width: none;
+}
+
+.terminal-root [data-view='market'] .lios-pane-content .overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+
+/* Shared institutional workstation shell: Portfolio, Economics, Quant and
+   other composed workstations keep navigation but progressively remove prose
+   when a pane becomes supporting context. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-institutional-header] {
+    padding: 6px 10px !important;
+  }
+
+  .terminal-root [data-institutional-header] > div {
+    align-items: center !important;
+    gap: 7px !important;
+  }
+
+  .terminal-root [data-institutional-subtitle] {
+    display: none !important;
+  }
+
+  .terminal-root [data-institutional-stage] {
+    padding: 2px 5px !important;
+    font-size: 6.5px !important;
+  }
+
+  .terminal-root [data-institutional-nav] > div:first-child {
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
+  }
+
+  .terminal-root [data-institutional-nav-item] {
+    padding: 5px 8px !important;
+  }
+
+  .terminal-root [data-institutional-description] {
+    display: none !important;
+  }
+
+  .terminal-root [data-workstation-overview] {
+    padding: 10px !important;
+  }
+
+  .terminal-root [data-workstation-overview] > div {
+    gap: 10px !important;
+  }
+
+  .terminal-root [data-workstation-overview-hero] {
+    padding: 11px !important;
+  }
+
+  .terminal-root [data-workstation-overview-hero] .text-lg {
+    font-size: .92rem !important;
+    line-height: 1.28 !important;
+  }
+
+  .terminal-root [data-workstation-overview-grid] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-workstation-overview-grid] > button {
+    padding: 9px !important;
+  }
+
+  .terminal-root [data-workstation-overview-grid] > button > div:nth-child(2) {
+    min-height: 0 !important;
+  }
+
+  .terminal-root [data-workstation-trust] {
+    padding: 10px !important;
+  }
+}
+
+@container lios-pane (max-width: 520px) {
+  .terminal-root [data-institutional-header] [data-institutional-stage] {
+    display: none !important;
+  }
+
+  .terminal-root [data-institutional-nav-item] {
+    padding: 5px 7px !important;
+  }
+
+  .terminal-root [data-institutional-nav-item] .font-mono {
+    display: none !important;
+  }
+
+  .terminal-root [data-workstation-overview-grid] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-workstation-overview-hero] > div:last-child {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
+  .terminal-root [data-workstation-trust] > div:last-child {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Economics macro mode has its own xl two-column split. A narrow Economics
+   pane should never preserve that browser-width split. */
+@container lios-pane (max-width: 900px) {
+  .terminal-root [data-view='economics'] [data-institutional-body] .xl\:grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-view='economics'] [data-institutional-body] .xl\:border-r {
+    border-right-width: 0 !important;
+    border-bottom-width: 1px !important;
+  }
+
+  .terminal-root [data-view='economics'] [data-institutional-body] .min-h-\[420px\] {
+    min-height: 320px !important;
+  }
+}
+
+/* ENTITY — keep ticker, price and primary actions, but prevent the desktop
+   8-column stat rail and four-up LIOS view from surviving inside a narrow pane. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header {
+    padding: 8px 10px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:first-child {
+    gap: 8px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:first-child .text-xl {
+    font-size: 1rem !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:first-child .text-2xl {
+    font-size: 1.15rem !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:last-child {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    gap: 5px !important;
+    margin-top: 7px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:last-child button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 5px 8px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section.grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section > header {
+    padding: 6px 10px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section > header span {
+    font-size: 8px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] button .w-28 {
+    width: 84px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] a.group {
+    padding: 8px 10px !important;
+  }
+}
+
+@container lios-pane (max-width: 540px) {
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > header > div:first-child > div:last-child {
+    text-align: left !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section.grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] > div > section > .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] button .w-28 {
+    width: 70px !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] button .sm\:block,
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] a .line-clamp-2 {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='entity'] [data-testid='entity-workspace'] a.group {
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+}
+
+/* VALUATION — the legacy surface has 16 methods, provenance controls and an
+   eight-KPI strip. Keep all capability, but turn top chrome into scrollable
+   bands and collapse KPI density by actual pane width. */
+@container lios-pane (max-width: 980px) {
+  .terminal-root [data-view='valuation'] .lios-pane-content > div > div:first-child {
+    padding: 5px 9px !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content > div > div:first-child > div {
+    gap: 5px !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content > div > div:first-child > div > span.text-muted-foreground {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content :has(> [data-testid='valuation-capture-snapshots']) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    padding: 5px 8px !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content :has(> [data-testid='valuation-capture-snapshots']) > .min-w-\[320px\] {
+    min-width: 220px !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-8 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@container lios-pane (max-width: 700px) {
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-8 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-6,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-5,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-4,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content :where(.px-4) {
+    padding-left: 9px !important;
+    padding-right: 9px !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content :where(.p-4) {
+    padding: 10px !important;
+  }
+}
+
+@container lios-pane (max-width: 480px) {
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-8,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-6,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-5,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-4,
+  .terminal-root [data-view='valuation'] .lios-pane-content .grid.grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-view='valuation'] .lios-pane-content :has(> [data-testid='valuation-capture-snapshots']) > .min-w-\[320px\] {
+    display: none !important;
+  }
+}
+
+
+/* PHASE 1 FUSION — new rich surfaces must respond to the analytical pane,
+   not the browser viewport. These attributes are intentionally narrow so
+   existing workstation layouts retain their own tuned container rules. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-fusion-responsive-grid='six'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-fusion-responsive-grid='four'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-fusion-responsive-grid='three'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-fusion-portfolio-chart-grid] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-fusion-portfolio-chart-main] {
+    grid-column: auto !important;
+  }
+
+  .terminal-root [data-fusion-portfolio-add] {
+    flex-wrap: wrap !important;
+  }
+}
+
+@container lios-pane (max-width: 520px) {
+  .terminal-root [data-fusion-responsive-grid='six'],
+  .terminal-root [data-fusion-responsive-grid='four'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-fusion-responsive-grid='three'] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-fusion-portfolio-add] > input {
+    flex: 1 1 96px;
+    width: auto !important;
+    min-width: 0;
+  }
+}

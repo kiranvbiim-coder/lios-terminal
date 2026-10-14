@@ -1,0 +1,4283 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-12",
+  "program": "CA+GM universal donor and controlled fork adoption",
+  "policyAuthority": "docs/technical/LIOS_DONOR_IMPORT_REUSE_POLICY.md",
+  "truthAuthority": "third_party/capability-assimilation.json",
+  "scope": "92_baseline_plus_10_controlled_forks_policy_execution_not_runtime_installation",
+  "baselineDonorCount": 92,
+  "controlledForkCount": 10,
+  "sourceSnapshot": {
+    "baselineSha": "8a926a0e8aab78d0db8eb7236e5f0147688d9117",
+    "componentsSha": "ca59f123fb0d7531703b23731305d8271c12b3cb",
+    "upstreamPinsSha": "01685f2631b7370c6f080af0e3ec91b737791c95",
+    "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
+  },
+  "releaseClaims": {
+    "allDonorsIntegrated": false,
+    "allForksIntegrated": false,
+    "allDonorsFullyExhausted": false,
+    "shippingPointsAcceptedByThisRecord": false
+  },
+  "universalGate": [
+    "inspect_current_lios_authority_and_find_user_journey_gap",
+    "inspect_primary_openclaw_then_secondary_and_specialist_donors",
+    "identify_complete_useful_package_or_cross_package_subsystem",
+    "pin_exact_upstream_source_and_verify_path_licenses_external_rights",
+    "itemize_each_source_path_and_adopt_defer_replace_with_reason",
+    "map_dependencies_licensing_native_assets_and_substitute_canonical_lios_authorities",
+    "reuse_adapt_combine_modify_before_building_new",
+    "port_applicable_upstream_tests_and_add_ownership_cancel_security_truth_negative_tests",
+    "prove_native_target_runner_then_installer_package_health_rollback_and_customer_journey",
+    "update_machine_truth_only_after_merge_and_packaged_acceptance_evidence"
+  ],
+  "blockers": [
+    "fork_exists_is_not_approved_source_import",
+    "registry_status_is_not_proof_of_fully_exhausted_donor",
+    "cannot_auto_fork_license_blocked_or_package_dependencies",
+    "model_weights_market_data_licenses_external_services_require_separate_rights",
+    "do_not_bypass_owner_grants_tenant_scope_or_override_canonical_runtime",
+    "do_not_merge_active_P11_or_SI05_dependent_PR_stacks_while_owner_conflicts_or_security_stop"
+  ],
+  "baselineDonors": [
+    {
+      "id": "antv-g6",
+      "upstreamRepository": "antvis/G6",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for entity-relationship-graph; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "apache-echarts",
+      "upstreamRepository": "apache/echarts",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "runtime_integrated_optional",
+      "declaredDecision": "adapt",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "client/src/components/terminal/EChartsArtifactPlot.tsx",
+        "client/src/lib/artifactEChartsOption.ts"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "p4-artifact-adapter",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages",
+            "src"
+          ],
+          "integrationRequirements": [
+            "LiOS Artifact contracts remain canonical",
+            "benchmark packaged desktop footprint before bundling",
+            "load lazily/optionally where adopted"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "connect existing LiOS contract to the verified backend and prove real integration plus target packaging",
+      "nextExecutionPhase": "turn_bridge_into_real_runtime",
+      "priorityBand": "P1_FINISH_GAP",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "arelle",
+      "upstreamRepository": "Arelle/Arelle",
+      "licenseAsRecorded": "Apache-2.0 core with separate included notices",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "24b6f2c1da5b7b94a267c96c06a5db49f01305e5",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "arrow",
+      "upstreamRepository": "apache/arrow",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "contract_only_deferred",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "P11 capability data.columnar.arrow is explicitly deferred; DuckDB+Parquet is the real high-volume path.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "c400f72eb66087604f7e0a6af4d976562971cf1a",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "connect existing LiOS contract to the verified backend and prove real integration plus target packaging",
+      "nextExecutionPhase": "qualify_backend_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "assistant-ui",
+      "upstreamRepository": "assistant-ui/assistant-ui",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P2 Conversation Runtime / GM-23",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Components and imported-OSS regression records document LiOS-owned thread navigation, composer, mentions and slash-action pattern adaptation in ProjectExperienceShell.tsx. No assistant-ui package/runtime or Assistant Cloud state is integrated; documented_only remains the donor-runtime truth level.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "0587eab05b5038df80d8b39489a65084f193c6d7",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "client/src/components/terminal/ProjectExperienceShell.tsx"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "thread-list-and-composer-patterns",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/react/src/primitives/threadList",
+            "packages/react/src/primitives/composer"
+          ],
+          "integrationRequirements": [
+            "pattern-level reimplementation only",
+            "LiOS Project/Chat persistence remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "mentions-and-slash-command-patterns",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/react/src/primitives",
+            "apps/docs"
+          ],
+          "integrationRequirements": [
+            "LiOS-owned implementation",
+            "no Assistant Cloud dependency"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "backtest-kit",
+      "upstreamRepository": "tripolskypetr/backtest-kit",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "599d990204cd7bfb44ba61c973cc3f742ea43861",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "core-backtest-runtime",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src",
+            "build"
+          ],
+          "integrationRequirements": [
+            "validate fills/order semantics, look-ahead protection, transaction costs, point-in-time inputs and deterministic reproducibility"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "strategy-risk-schemas",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "docs/design/25_Strategy_Schemas.md",
+            "docs/design/28_Risk_Schemas.md",
+            "docs/design/67_Risk_Management.md"
+          ],
+          "integrationRequirements": [
+            "normalize into LiOS BacktestEngine/StrategyArtifact contracts"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "backtest-adapters-state-session",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "docs/classes/MemoryBacktestAdapter.md",
+            "docs/classes/SessionBacktestAdapter.md",
+            "docs/classes/StorageBacktestAdapter.md"
+          ],
+          "integrationRequirements": [
+            "LiOS Session/Ledger remains canonical state"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "mcp-and-ai-strategy-workflows",
+          "classification": "stub",
+          "upstreamPaths": [
+            "packages/mcp",
+            "docs/design/90_AI-Powered_Strategy_Optimization.md",
+            "docs/design/94_Strategy_Code_Generation.md"
+          ],
+          "integrationRequirements": [
+            "use LiOS MCP/Agent/permission boundary"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "front-demo-cli-integrations",
+          "classification": "stub",
+          "upstreamPaths": [
+            "packages/front",
+            "cli",
+            "demo"
+          ],
+          "integrationRequirements": [
+            "do not import demo/branding or unrelated runtime services into core"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "live-broker-execution",
+          "classification": "reject",
+          "upstreamPaths": [
+            "demo/broker",
+            "demo/live"
+          ],
+          "integrationRequirements": [
+            "No brokerage execution or order writes are in current LiOS scope; review simulation, lifecycle, replay and safety-test mechanisms separately for non-brokerage reuse behind P11/GM authority"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "backtesting-py",
+      "upstreamRepository": "kernc/backtesting.py",
+      "licenseAsRecorded": "AGPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "rejected",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "do_not_fork_blocked_by_recorded_decision",
+      "ownerReviewGate": "no new import; only re-open with concrete legal/security fit evidence",
+      "nextExecutionPhase": "retain_evidence_and_compare_alternatives",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "backtrader",
+      "upstreamRepository": "mementum/backtrader",
+      "licenseAsRecorded": "GPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "rejected",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "do_not_fork_blocked_by_recorded_decision",
+      "ownerReviewGate": "no new import; only re-open with concrete legal/security fit evidence",
+      "nextExecutionPhase": "retain_evidence_and_compare_alternatives",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "brue",
+      "upstreamRepository": "londonstrategicedge/brue",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "vendor",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 vendor/launch intent is not current integration. Components and the LSE release inventory record Brue strategy/runtime/conformance reference use only, with no bundled upstream source. Suitable assimilation remains deferred behind P11 Strategy & Backtest / CA-04 until the strategy contract, sandbox and conformance acceptance are ready; launch=true is not evidence.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "brue-language",
+      "upstreamRepository": "londonstrategicedge/brue",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Pinned Brue strategy/runtime/conformance reference only, as recorded in components and the LSE release inventory; no Brue source is bundled. Evaluate with the overlapping brue ID behind one P11 Strategy & Backtest / CA-04 authority when the strategy contract, sandbox and conformance acceptance are ready.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "a846522fe8af0e11ee7739ef8b6b8a4c0f7922cb",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "parser-runtime-strategy",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "brue/tokenizer.py",
+            "brue/parser.py",
+            "brue/runtime.py",
+            "brue/strategy.py",
+            "brue/builtins.py"
+          ],
+          "integrationRequirements": [
+            "map behind LiOS Strategy/Formula execution contracts",
+            "sandbox review"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "indicators",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "brue/indicators.py"
+          ],
+          "integrationRequirements": [
+            "parity tests",
+            "registry decision against existing LiOS indicators"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "historical-execution",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "brue/runtime.py",
+            "brue/output.py",
+            "brue/data.py"
+          ],
+          "integrationRequirements": [
+            "validate fill timing/cost semantics",
+            "normalize to LiOS BacktestResult/Artifact"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "conformance",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "conformance"
+          ],
+          "integrationRequirements": [
+            "port goldens relevant to adopted behavior"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "live-broker-connection",
+          "classification": "reject",
+          "upstreamPaths": [
+            "brue/live.py",
+            "brue/auth.py"
+          ],
+          "integrationRequirements": [
+            "do not depend on unverified Brue Connect implementation/source",
+            "broker credentials remain outside strategy source"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "bt",
+      "upstreamRepository": "pmorissette/bt",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "camelot",
+      "upstreamRepository": "camelot-dev/camelot",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "ccxt",
+      "upstreamRepository": "ccxt/ccxt",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Broker & Execution",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "connector",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "cvxpy",
+      "upstreamRepository": "cvxpy/cvxpy",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Portfolio",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "01992f50f3023d1325bda8aff560de2c5f2ca138",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "datafusion",
+      "upstreamRepository": "apache/datafusion",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "deck-gl",
+      "upstreamRepository": "visgl/deck.gl",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for large-geo-visualization; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "dexter",
+      "upstreamRepository": "virattt/dexter",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "ecaed3011f24ea24ef687ab536aa7f22f7294038",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "agent-loop-tool-executor",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/agent",
+            "src/controllers/agent-runner.ts"
+          ],
+          "integrationRequirements": [
+            "LiOS permission/context runtime remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "skills-registry",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/skills"
+          ],
+          "integrationRequirements": [
+            "map into future LiOS skill/tool contracts rather than copying prompts blindly"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "permissions",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/permissions"
+          ],
+          "integrationRequirements": [
+            "compare with stronger existing LiOS permission broker before import"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "memory-and-session-files",
+          "classification": "stub",
+          "upstreamPaths": [
+            "src/memory",
+            "src/gateway/sessions"
+          ],
+          "integrationRequirements": [
+            "LiOS Project/Session/Ledger persistence remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "finance-tools",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/tools/finance"
+          ],
+          "integrationRequirements": [
+            "replace provider-specific calls with LiOS Data Fabric",
+            "deterministic finance engines remain authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "browser-search-bash-filesystem-tools",
+          "classification": "stub",
+          "upstreamPaths": [
+            "src/tools/browser",
+            "src/tools/search",
+            "src/tools/bash",
+            "src/tools/filesystem"
+          ],
+          "integrationRequirements": [
+            "use existing LiOS isolation/Playwright/permission boundaries"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "gateway-messaging",
+          "classification": "reject",
+          "upstreamPaths": [
+            "src/gateway"
+          ],
+          "integrationRequirements": [
+            "Historical P0-P10 finance-desktop exclusion is superseded as a suitability reason; assess Gateway reliability/session/messaging mechanisms behind GM-08/09/18 without a second Gateway or vendor customer runtime"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "dockview",
+      "upstreamRepository": "dockview/dockview",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS / GM-23",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "production",
+      "declaredPosture": "bundled",
+      "evidenceAsRecorded": "Direct package dependency; current Living/Expanded Workspace renderer.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "3b519454178f203d41acd49bd2733b5cdcd0f9be",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "packages/dockview-react",
+        "packages/dockview",
+        "packages/dockview-core"
+      ],
+      "registeredDestinationPaths": [
+        "npm:dockview-react@8.3.1",
+        "npm:dockview@8.3.1",
+        "npm:dockview-core@8.3.1",
+        "client/src/components/terminal/DockviewWorkspaceGrid.tsx",
+        "client/src/lib/dockviewWorkspaceState.ts"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "react-docking-core",
+          "classification": "production",
+          "upstreamPaths": [
+            "packages/dockview-react",
+            "packages/dockview"
+          ],
+          "integrationRequirements": [
+            "Current main integration remains behind WorkspaceAdapter",
+            "preserve LiOS Session/Project state as canonical"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "serialization-layout-model",
+          "classification": "production",
+          "upstreamPaths": [
+            "packages/dockview-core",
+            "packages/dockview"
+          ],
+          "integrationRequirements": [
+            "round-trip LiOS workspace/session envelope in packaged desktop acceptance",
+            "migration test across restart"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "enterprise-package",
+          "classification": "reject",
+          "upstreamPaths": [
+            "packages/dockview-enterprise"
+          ],
+          "integrationRequirements": [
+            "not part of OSS selection or LiOS dependency assumptions"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "docling",
+      "upstreamRepository": "docling-project/docling",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "runtime_integrated_optional",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Managed optional research-docs pack; p7DocumentIntelligence.ts invokes DocumentConverter.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "14789f2c2c542f8d127a0aac85eb779d5bba554e",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "docling==2.129.0 (pinned PyPI wheel and model inventory)"
+      ],
+      "registeredDestinationPaths": [
+        "src/sandbox-image/Dockerfile",
+        "src/sandbox-image/source-lock.json"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "provisioning_and_packaging",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "duckdb",
+      "upstreamRepository": "duckdb/duckdb",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "echarts",
+      "upstreamRepository": "apache/echarts",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "runtime_integrated_optional",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "client/src/components/terminal/EChartsArtifactPlot.tsx",
+        "client/src/lib/artifactEChartsOption.ts"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "connect existing LiOS contract to the verified backend and prove real integration plus target packaging",
+      "nextExecutionPhase": "turn_bridge_into_real_runtime",
+      "priorityBand": "P1_FINISH_GAP",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "edgartools",
+      "upstreamRepository": "dgunning/edgartools",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Managed Python runtime package edgartools==5.51.0; sec_search.py executes it.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "4e817de7bf3efae44024e168754e8f5d53b1a227",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "edgar/urls.py",
+        "tests/core/test_urls.py"
+      ],
+      "registeredDestinationPaths": [
+        "server/edgartoolsSecUrls.ts",
+        "server/secEdgarData.ts",
+        "server/secEdgarFinancials.ts"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "SEC-CIK-accession-archive-URL-boundary",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "edgar/urls.py",
+            "tests/core/test_urls.py"
+          ],
+          "integrationRequirements": [
+            "pin EdgarTools original MIT source and license",
+            "use fixed official SEC HTTPS host; no donor mirror/env override",
+            "normalize SEC CIK/accession and reject archive path traversal and provider-supplied unsafe XML filenames before fetch",
+            "preserve canonical LiOS source/caching, SEC descriptive user-agent and fair access; no new data entitlements",
+            "do not import EdgarTools Python requests/runtime, separate stores or XBRL numeric parsing"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "exchange-calendars",
+      "upstreamRepository": "gerrymanoim/exchange_calendars",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "fin-agent",
+      "upstreamRepository": "YUHAI0/fin-agent",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P5 Research Workflows / P11 Finance",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "b99686296357f37487edd42a261c153104248c9a",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "agent-core-tools",
+          "classification": "stub",
+          "upstreamPaths": [
+            "fin_agent/agent",
+            "fin_agent/tools"
+          ],
+          "integrationRequirements": [
+            "LiOS Agent/Tool Runtime remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "backtest-engine-registry-strategies",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "fin_agent/backtest"
+          ],
+          "integrationRequirements": [
+            "benchmark against Backtest Kit and existing LiOS engines before importing"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "data-provider-normalization",
+          "classification": "stub",
+          "upstreamPaths": [
+            "fin_agent/datasources"
+          ],
+          "integrationRequirements": [
+            "Tushare/AkShare rights and market coverage reviewed separately",
+            "LiOS Data Fabric remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "portfolio-session-scheduler",
+          "classification": "stub",
+          "upstreamPaths": [
+            "fin_agent/portfolio.py",
+            "fin_agent/session_store.py",
+            "fin_agent/scheduler.py"
+          ],
+          "integrationRequirements": [
+            "use as workflow reference, not canonical persistence"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "llm-factory",
+          "classification": "reject",
+          "upstreamPaths": [
+            "fin_agent/llm"
+          ],
+          "integrationRequirements": [
+            "LiOS BYOAI remains singular and authoritative; compare routing/failure/typed-interface mechanisms for complementary or repurposed reuse before final rejection"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "finance-database",
+      "upstreamRepository": "JerBouma/FinanceDatabase",
+      "licenseAsRecorded": "MIT repository; dataset rights/provenance separate",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "finance-toolkit",
+      "upstreamRepository": "JerBouma/FinanceToolkit",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Core Finance",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "flexlayout",
+      "upstreamRepository": "caplin/FlexLayout",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "rejected",
+      "declaredDecision": "reject",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Historical P0 docking comparison selected Dockview as the sole workspace implementation; FlexLayout is not installed and this is not a license rejection. Broader mechanism/repurposing/challenger analysis remains pending before a final SI rejection disposition; no competing workspace authority is permitted.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "92c9d67c2cba18b1fe6731af25f287e7abe30b2f",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "model-driven-docking",
+          "classification": "stub",
+          "upstreamPaths": [
+            "src"
+          ],
+          "integrationRequirements": [
+            "reference only unless Dockview fails P1 acceptance"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "demo-examples",
+          "classification": "reject",
+          "upstreamPaths": [
+            "demo",
+            "examples"
+          ],
+          "integrationRequirements": [
+            "not product code"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "do_not_fork_blocked_by_recorded_decision",
+      "ownerReviewGate": "no new import; only re-open with concrete legal/security fit evidence",
+      "nextExecutionPhase": "retain_evidence_and_compare_alternatives",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "freqtrade",
+      "upstreamRepository": "freqtrade/freqtrade",
+      "licenseAsRecorded": "GPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "rejected",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "do_not_fork_blocked_by_recorded_decision",
+      "ownerReviewGate": "no new import; only re-open with concrete legal/security fit evidence",
+      "nextExecutionPhase": "retain_evidence_and_compare_alternatives",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "hqtui",
+      "upstreamRepository": "profullstack/hqtui",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "Goldmine GM-21",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "6f6f70fa7a0307ed6948df75205e37dd0a0928c7",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "typescript-tui-core",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/hqtui/src",
+            "packages/hqtui/bin"
+          ],
+          "integrationRequirements": [
+            "CLI/diagnostics only; never replace React desktop renderer"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "testing-primitives",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/hqtui/src/testing.ts",
+            "packages/hqtui/test"
+          ],
+          "integrationRequirements": [
+            "useful for future CLI diagnostics acceptance tests"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "multi-language-ports",
+          "classification": "reject",
+          "upstreamPaths": [
+            "ports"
+          ],
+          "integrationRequirements": [
+            "Historical desktop-domain exclusion is not sufficient; assess testing/portability/diagnostic mechanisms for user-owned server/native/automation targets behind GM-21/24, without a second product shell"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "demo-web-benchmark-apps",
+          "classification": "reject",
+          "upstreamPaths": [
+            "apps",
+            "examples"
+          ],
+          "integrationRequirements": [
+            "do not import donor demos/branding"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "hummingbot",
+      "upstreamRepository": "hummingbot/hummingbot",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Broker & Execution",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "ib-async",
+      "upstreamRepository": "ib-api-reloaded/ib_async",
+      "licenseAsRecorded": "BSD-2-Clause",
+      "canonicalOwner": "P11 Broker & Execution",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "connector",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "ibis",
+      "upstreamRepository": "ibis-project/ibis",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "langalpha",
+      "upstreamRepository": "ginlix-ai/LangAlpha",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "db8f8c2dee948c9c6f77805558898c3abb637328",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "workspace-persistence",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src",
+            "migrations/versions/004_add_workspace_artifacts.py",
+            "migrations/versions/016_add_workspace_spec_and_always_on.py"
+          ],
+          "integrationRequirements": [
+            "borrow patterns only; LiOS Project/Session schemas remain authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "mcp-plugin-tool-binding",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "mcp_servers",
+            "plugins",
+            "migrations/versions/025_mcp_connectors.py",
+            "migrations/versions/041_tool_binding.py"
+          ],
+          "integrationRequirements": [
+            "map to LiOS MCP/Plugin/Permission contracts"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "skills-finance-research",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "plugins/langalpha_research/skills"
+          ],
+          "integrationRequirements": [
+            "review each skill's data assumptions and third-party notices"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "deliverable-skills",
+          "classification": "stub",
+          "upstreamPaths": [
+            "plugins/langalpha_deliverables/skills"
+          ],
+          "integrationRequirements": [
+            "LiOS Artifact/Export contracts remain authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "market-data-plugins",
+          "classification": "stub",
+          "upstreamPaths": [
+            "plugins/langalpha_market_data"
+          ],
+          "integrationRequirements": [
+            "replace yfinance/provider assumptions with LiOS Data Fabric"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "desktop-shell",
+          "classification": "stub",
+          "upstreamPaths": [
+            "desktop"
+          ],
+          "integrationRequirements": [
+            "LiOS Electron shell/security already stronger and remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "agent-checkpoint-subagent-ledger",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src",
+            "migrations/versions/020_subagent_run_ledger.py"
+          ],
+          "integrationRequirements": [
+            "normalize into LiOS Agent Runtime and Conversation Ledger"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": "kiranvbiim-coder/LangAlpha",
+      "forkDecision": "controlled_fork_exists_verify_approved_pin",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "langgraphjs",
+      "upstreamRepository": "langchain-ai/langgraphjs",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "GM-12 / P2 Conversation Runtime",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "0284323b2d8457bd830ea987e93f03ebee8370ce",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "lean",
+      "upstreamRepository": "QuantConnect/Lean",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "985ef30ad3ac774218c5ac516b4cb0aa2655730f",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "lightgbm",
+      "upstreamRepository": "microsoft/LightGBM",
+      "licenseAsRecorded": "verification_required",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "llama-cpp",
+      "upstreamRepository": "ggml-org/llama.cpp",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "Goldmine GM-22",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for local-ai-runtime; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "lse-data",
+      "upstreamRepository": "londonstrategicedge/lse-data",
+      "licenseAsRecorded": "MIT client; hosted data rights separate",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "baselineTruthStatus": "runtime_integrated_connector",
+      "declaredDecision": "connector",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Real governed LSE provider adapter with catalog/history/streaming/export/entitlement tests.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "564c63dd99e3b447777cb396314ec6c4342f82ff",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "server/lseDataProvider.ts",
+        "server/lseRoutes.ts",
+        "client/src/lib/useLse.ts",
+        "client/src/components/panels/LiveLseOptionsChain.tsx",
+        "client/src/lib/lseDatasetBrowser.ts"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "python-client",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse"
+          ],
+          "integrationRequirements": [
+            "wrap behind LiOS Provider SDK",
+            "user-owned key/local secret custody",
+            "no central redistribution"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "catalogue-and-capability-discovery",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse"
+          ],
+          "integrationRequirements": [
+            "map provider symbols to LiOS canonical identity/OpenFIGI where applicable"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "streaming-and-history",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse"
+          ],
+          "integrationRequirements": [
+            "generic LiOS stream/bulk-data contracts",
+            "quota/health/provenance"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "hosted-data",
+          "classification": "reject",
+          "upstreamPaths": [
+            "README.md"
+          ],
+          "integrationRequirements": [
+            "not covered by MIT library license",
+            "must not be redistributed/resold by LiOS",
+            "production connector subject to provider terms/entitlement review"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "source_rights_and_connector_journey",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "lse-terminal",
+      "upstreamRepository": "londonstrategicedge/lse-terminal",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "vendor",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Current release uses LSE Terminal as architecture/test/reference material only, with no bundled upstream source or branding. P11 vendor intent is a target, not runtime proof. P11 Strategy & Backtest / CA-04 assimilation remains deferred until the BacktestEngine contract and known-answer/look-ahead/fill/slippage benchmarks support a bounded import.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "62c48a5ce6de37a1c115d6270dfd0eee75166d8b",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "provider-contracts-and-adapters",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/providers",
+            "lse_terminal/contracts"
+          ],
+          "integrationRequirements": [
+            "Map behind LiOS Provider SDK/Data Fabric",
+            "External LSE data/service rights remain separate"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "local-engine",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/engine"
+          ],
+          "integrationRequirements": [
+            "LiOS runtime contracts remain authoritative",
+            "Benchmark before replacement"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "backtest",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/backtest"
+          ],
+          "integrationRequirements": [
+            "LiOS BacktestEngine remains authoritative",
+            "known-answer/look-ahead/fill/slippage tests"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "indicators",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/indicators"
+          ],
+          "integrationRequirements": [
+            "numerical parity tests",
+            "avoid duplicate competing implementations"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "ml",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/ml"
+          ],
+          "integrationRequirements": [
+            "optional Quant/ML pack posture",
+            "heavy deep-learning dependencies stay optional unless justified"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "ui-and-frontend",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "lse_terminal/ui",
+            "frontend/src"
+          ],
+          "integrationRequirements": [
+            "LiOS UX/theme/Projects/Artifacts remain authoritative",
+            "no upstream branding/assets"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "desktop-packaging",
+          "classification": "stub",
+          "upstreamPaths": [
+            "desktop"
+          ],
+          "integrationRequirements": [
+            "compare with existing LiOS Electron security/update/recovery before adoption"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "tests",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tests"
+          ],
+          "integrationRequirements": [
+            "port tests relevant to imported behavior"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "maplibre-gl-js",
+      "upstreamRepository": "maplibre/maplibre-gl-js",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for geo-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "mermaid",
+      "upstreamRepository": "mermaid-js/mermaid",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for diagram-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "mlx",
+      "upstreamRepository": "ml-explore/mlx",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "Goldmine GM-22",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for apple-silicon-local-ai; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "monaco-editor",
+      "upstreamRepository": "microsoft/monaco-editor",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "d620ca0c03d24a51c05ae4dca8a9d5923a4aeb9c",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "browser-editor-core",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/editor.ts",
+            "src/features/codeEditor",
+            "src/features/diffEditor"
+          ],
+          "integrationRequirements": [
+            "editor is UI only; execution/sandbox remains LiOS-owned"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "typescript-javascript-language-workers",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/deprecated/language/typescript",
+            "src/internal/common/workers.ts"
+          ],
+          "integrationRequirements": [
+            "load only languages needed by Strategy/Formula Studio to control bundle/runtime cost"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "lsp-client",
+          "classification": "stub",
+          "upstreamPaths": [
+            "monaco-lsp-client"
+          ],
+          "integrationRequirements": [
+            "not required for initial Strategy Studio; evaluate only if semantic language-server features are needed"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "samples-website-build-tooling",
+          "classification": "reject",
+          "upstreamPaths": [
+            "samples",
+            "website",
+            "build"
+          ],
+          "integrationRequirements": [
+            "do not ship donor samples/branding/build system"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "nautilus-trader",
+      "upstreamRepository": "nautechsystems/nautilus_trader",
+      "licenseAsRecorded": "LGPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "ollama",
+      "upstreamRepository": "ollama/ollama",
+      "licenseAsRecorded": "MIT (exact version/path must be pinned before bundling)",
+      "canonicalOwner": "Goldmine GM-22",
+      "baselineTruthStatus": "provider_integrated_external_runtime",
+      "declaredDecision": "external_provider_adapter",
+      "declaredPosture": "current_implementation_not_bundled",
+      "evidenceAsRecorded": "byoaiRouter.ts exposes Ollama and byoaiTransport.ts implements /api/chat; LiOS does not currently install/manage the Ollama runtime.",
+      "sourceRegistries": [
+        "current implementation audit"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "external_runtime_install_and_fallback",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "opa",
+      "upstreamRepository": "open-policy-agent/opa",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "GM-11 / P13 governance",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "8cb390243358936dca23cc3c2822266587ded08f",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "openclaw",
+      "upstreamRepository": "openclaw/openclaw",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "Goldmine GM-00..GM-25",
+      "baselineTruthStatus": "partially_integrated",
+      "declaredDecision": "adapt",
+      "declaredPosture": "major_donor",
+      "evidenceAsRecorded": "Components and blueprint sections 46-48 and 51-52 record actual pinned OpenClaw utility, Gateway/device/execution, retry-timing, ACP-helper, placement-binding and CUA-policy imports/adaptations. Exact imported and destination paths, modifications and rights boundaries are in third_party/components.json and THIRD_PARTY_NOTICES.md. GM-13 ACP helpers bind metadata to already-admitted GM-11 runs and report read-only installation health; they do not provide ACP transport, patch execution, automatic resume or governed availability. L5 timing imports provide no retry runner or dispatch authority. Placement adaptation binds current owner/node/generation to existing backends and adds no remote executor or donor state store. CUA is assessment-only with nativeAvailable=false and no native binary. The L3 kernel in server/agentLoop.ts is LiOS-owned, with no agent-core loop source import: pinned agent-core loop/admission/steering mechanisms informed cancellation/admission ordering, while LiOS independently owns goal-plan-act-inspect-revise, enforced step/AI/revision budgets, durable ledger events, exact approval pause/resume and outcome-unknown handling. At this commit OpenClaw browser source is not imported; the donor-first L12 disposition selects bounded UTF-8 diagnostics for direct import when provenance lands, adapts lifecycle/page-ownership/navigation/framed-transport mechanisms, and declines donor control/profile/auth/storage/plugin authorities. Browser/computer native execution, complete coding transport, remote nodes, memory/skills breadth and release qualification remain open; no listed tests or Shipping Point acceptance are implied.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "packages/acp-core/src/runtime/types.ts",
+        "packages/acp-core/src/runtime/session-identity.ts",
+        "packages/acp-core/src/types.ts",
+        "packages/acp-core/src/session-lineage-meta.ts",
+        "packages/acp-core/src/error-format.ts",
+        "packages/acp-core/src/structured-auth-redaction.ts",
+        "packages/normalization-core/src/string-coerce.ts",
+        "packages/normalization-core/src/number-coercion.ts",
+        "extensions/cua-computer/src/actions.ts",
+        "extensions/cua-computer/src/frame.ts",
+        "extensions/cua-computer/src/driver-artifact-verification.ts",
+        "extensions/cua-computer/src/node-invoke-policy.ts",
+        "extensions/cua-computer/src/node-invoke-policy.test.ts",
+        "extensions/cua-computer/src/driver-artifacts.test.ts",
+        "extensions/cua-computer/package.json",
+        "src/plugins/computer-use-contract.ts",
+        "src/security/secret-equal.ts",
+        "src/security/secret-equal.test.ts",
+        "src/infra/backup-archive-path-policy.ts",
+        "src/secrets/ref-contract.ts",
+        "packages/net-policy/src/ip.ts",
+        "packages/net-policy/src/ip.test.ts",
+        "packages/net-policy/src/ip-test-fixtures.ts",
+        "packages/gateway-protocol/src/schema/frames.ts",
+        "packages/gateway-client/src/pending-request.ts",
+        "packages/gateway-client/src/event-listeners.ts",
+        "packages/gateway-client/src/timeouts.ts",
+        "packages/gateway-client/src/protocol-client.ts",
+        "packages/gateway-client/src/device-auth.ts",
+        "src/shared/bounded-buffer.ts",
+        "src/shared/deferred.ts",
+        "packages/agent-core/src/harness/env/kill-tree.ts",
+        "src/process/process-deadline.ts",
+        "src/process/pipe-output.ts",
+        "src/utils/utf8-truncate.ts",
+        "src/gateway/terminal/backend.ts",
+        "src/gateway/terminal/output-ring.ts",
+        "src/gateway/terminal/output-coalescer.ts",
+        "src/gateway/terminal/output-flow-control.ts",
+        "src/process/supervisor/supervisor.ts",
+        "src/process/supervisor/types.ts",
+        "src/process/supervisor/cancellation-policy.ts",
+        "src/process/supervisor/adapters/child.ts",
+        "src/process/supervisor/adapters/child-stdin.ts",
+        "src/process/supervisor/adapters/env.ts",
+        "src/process/supervisor/adapters/process-events.ts",
+        "src/process/decoded-output.ts",
+        "src/shared/bounded-buffer.test.ts",
+        "src/utils/utf8-truncate.test.ts",
+        "src/process/pipe-output.test.ts",
+        "src/gateway/terminal/session-manager.output-ring.test.ts",
+        "src/process/supervisor/supervisor.test.ts",
+        "src/process/supervisor/supervisor.queued-cancellation.test.ts",
+        "src/process/supervisor/supervisor.scope-extinction.test.ts",
+        "src/process/supervisor/supervisor.rejection.test.ts",
+        "src/process/supervisor/supervisor.cancellation-reason.test.ts",
+        "src/process/supervisor/supervisor.output-fence.test.ts",
+        "src/process/supervisor/supervisor.timeout-overflow.test.ts",
+        "src/process/supervisor/supervisor.output-activity.real.test.ts",
+        "src/process/supervisor/adapters/child.test.ts",
+        "src/process/supervisor/adapters/child.events.test.ts",
+        "src/process/supervisor/adapters/child.test-support.ts",
+        "src/gateway/node-invoke-placement-grant.ts",
+        "src/gateway/operator-approval-placement-grants.ts",
+        "src/gateway/operator-approval-placement-grants.test.ts",
+        "src/process/terminal-pty.ts",
+        "src/process/pty-terminal-name.ts",
+        "src/process/terminal-pty.test.ts",
+        "packages/retry/src/index.ts",
+        "packages/retry/src/index.test.ts",
+        "extensions/browser/src/browser/bounded-utf8-tail.ts",
+        "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
+      ],
+      "registeredDestinationPaths": [
+        "server/acp/runtime-types.ts",
+        "server/acp/session-identity.ts",
+        "server/acp/identity-types.ts",
+        "server/acp/session-lineage-meta.ts",
+        "server/acp/error-format.ts",
+        "server/acp/structured-auth-redaction.ts",
+        "server/acp/normalization.ts",
+        "server/computer/actions.ts",
+        "server/computer/frame.ts",
+        "server/computer/driver-artifact-verification.ts",
+        "server/computer/driver-artifacts.json",
+        "server/computer/risk-policy.ts",
+        "server/computer/computer-policy.test.ts",
+        "server/safeEqualSecret.ts",
+        "server/safeEqualSecret.test.ts",
+        "server/tarFormat.ts",
+        "shared/secretRef.ts",
+        "server/netPolicy/ip.ts",
+        "server/netPolicy/ip.test.ts",
+        "server/netPolicy/ipTestFixtures.ts",
+        "shared/gatewayProtocol.ts",
+        "client/src/lib/gateway/pendingRequests.ts",
+        "client/src/lib/gateway/eventListeners.ts",
+        "client/src/lib/gateway/timeouts.ts",
+        "client/src/lib/gateway/gatewayClient.ts",
+        "shared/devicePairing.ts",
+        "server/exec/bounded-buffer.ts",
+        "server/exec/deferred.ts",
+        "server/exec/kill-tree.ts",
+        "server/exec/process-deadline.ts",
+        "server/exec/pipe-output.ts",
+        "server/exec/utf8-truncate.ts",
+        "server/exec/backend.ts",
+        "server/exec/output-ring.ts",
+        "server/exec/output-coalescer.ts",
+        "server/exec/output-flow-control.ts",
+        "server/exec/supervisor.ts",
+        "server/exec/types.ts",
+        "server/exec/cancellation-policy.ts",
+        "server/exec/child.ts",
+        "server/exec/child-stdin.ts",
+        "server/exec/env.ts",
+        "server/exec/process-events.ts",
+        "server/exec/decoded-output.ts",
+        "server/exec/bounded-buffer.test.ts",
+        "server/exec/utf8-truncate.test.ts",
+        "server/exec/pipe-output.test.ts",
+        "server/exec/output-ring.test.ts",
+        "server/exec/supervisor.scope.test.ts",
+        "server/exec/supervisor.output.test.ts",
+        "server/exec/supervisor.real.test.ts",
+        "server/exec/child.test.ts",
+        "server/exec/child.test-support.ts",
+        "server/exec/decoded-output.test.ts",
+        "server/exec/placement-grant.ts",
+        "server/exec/placement-grant.test.ts",
+        "server/exec/terminal-pty.ts",
+        "server/exec/pty-terminal-name.ts",
+        "server/exec/terminal-pty.test.ts",
+        "server/exec/retry-timing.ts",
+        "server/exec/retry-timing.test.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browserRuntimePack.ts",
+        "sandbox-image/browser-artifact-inventory.json",
+        "sandbox-image/browser-dependency-inventory.json",
+        "sandbox-image/install-browser.py"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "terminal-process-and-execution-session-kernel",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/process/terminal-pty.ts",
+            "src/process",
+            "src/gateway/terminal",
+            "src/gateway/server-methods/terminal.ts",
+            "packages/terminal-core"
+          ],
+          "integrationRequirements": [
+            "LiOS execution authority and project/user ownership remain authoritative",
+            "port reconnect/backpressure/process-tree/Windows tests",
+            "Electron native-module packaging/signing verification"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "gateway-protocol-and-client",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/gateway-protocol",
+            "packages/gateway-client"
+          ],
+          "integrationRequirements": [
+            "fork/adapt into LiOS device/session protocol",
+            "do not make OpenClaw project/conversation stores canonical",
+            "version TypeScript/Swift/Kotlin compatibility"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "native-mobile-watch-device-nodes",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "apps/ios",
+            "apps/android",
+            "apps/shared"
+          ],
+          "integrationRequirements": [
+            "remove donor branding/assets",
+            "map to LiOS Gateway and canonical conversation/project contracts",
+            "preserve offline/outbox/pairing/permission behavior",
+            "no LiOS-hosted runtime dependency"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "agent-runtime-codex-acp",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "packages/agent-core",
+            "packages/acp-core",
+            "extensions/acpx"
+          ],
+          "integrationRequirements": [
+            "LiOS Conversation Runtime/policy/artifacts remain authoritative",
+            "separate model providers from agent runtimes",
+            "execute on user-owned nodes"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "browser-runtime",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "extensions/browser"
+          ],
+          "integrationRequirements": [
+            "canonical LiOS isolated browser transport and Project egress policy remain authoritative",
+            "do not import donor control-server, profile/config/storage/auth or plugin/MCP authorities",
+            "preserve run-owned page lifecycle, cancellation and trust receipts"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "computer-use",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "extensions/cua-computer",
+            "src/plugins/computer-use-contract.ts",
+            "src/gateway/node-computer-use-descriptor.ts"
+          ],
+          "integrationRequirements": [
+            "user-owned isolated native transport only",
+            "explicit capture/action/file permissions",
+            "native driver rights, hashes, signing and TCC must be qualified before execution"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "session-placement-and-node-policy",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/gateway/node-invoke-placement-grant.ts",
+            "src/gateway/operator-approval-placement-grants.ts",
+            "src/gateway/node-command-policy.ts",
+            "src/gateway/node-browser-proxy-policy.ts",
+            "src/gateway/node-agent-cli-runtime.ts",
+            "src/gateway/node-catalog.ts"
+          ],
+          "integrationRequirements": [
+            "user-owned execution only",
+            "exact owner/node/generation and current-policy binding",
+            "no donor SQLite state authority or ambient-host fallback"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "memory-skills-system-agent-diagnostics",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/memory",
+            "src/skills",
+            "src/agents"
+          ],
+          "integrationRequirements": [
+            "merge into existing LiOS memory/P13/MCP/doctor authorities",
+            "no duplicate canonical store or plugin ecosystem"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "visible-openclaw-product-ui-and-branding",
+          "classification": "reject",
+          "upstreamPaths": [
+            "ui",
+            "docs/screenshots",
+            "branding"
+          ],
+          "integrationRequirements": [
+            "LiOS UX/brand remains authoritative",
+            "individual terminal implementation pieces may be evaluated separately"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": "kiranvbiim-coder/openclaw",
+      "forkDecision": "controlled_fork_exists_verify_approved_pin",
+      "ownerReviewGate": "audit unassimilated useful subsystems, run upstream regression and packaged product acceptance",
+      "nextExecutionPhase": "complete_subsystem_and_acceptance",
+      "priorityBand": "P0_PRIMARY",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "openlineage",
+      "upstreamRepository": "OpenLineage/OpenLineage",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P5 Data Lineage / P10 interoperability",
+      "baselineTruthStatus": "standard_compatible_not_library",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "LiOS emits OpenLineage-compatible events itself; donor library is not integrated.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "a2b7ed7961225c6020a7534b368dc99984378c96",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "server/p10OpenLineage.ts",
+        "server/dataLineageService.ts"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "verify current protocol/runtime truth, rights and end-user acceptance",
+      "nextExecutionPhase": "prove_protocol_contract",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "opentelemetry-js",
+      "upstreamRepository": "open-telemetry/opentelemetry-js",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P10 Runtime Observability",
+      "baselineTruthStatus": "standard_compatible_not_library",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "LiOS emits OTLP-compatible observability itself; OpenTelemetry JS SDK is not a direct dependency.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "bbaec14660b04c229629ddf282776bdea072b51f",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "server/p10Observability.ts"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "verify current protocol/runtime truth, rights and end-user acceptance",
+      "nextExecutionPhase": "prove_protocol_contract",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "openterminal",
+      "upstreamRepository": "ErTasselli/OpenTerminal",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "Terminal Convergence / P2-P4",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "6feb4869489c8ac9537b1405547983591e1d3263",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "provider-registry-and-fallback",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "server/src/providers/registry.ts",
+            "server/src/providers"
+          ],
+          "integrationRequirements": [
+            "review each upstream service terms"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "cache-concurrency-rate-limit",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "server/src/cache.ts",
+            "server/src/concurrency.test.ts",
+            "server/src/rateLimit.test.ts"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "workspace-command-widgets",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "web/components/Workspace.tsx",
+            "web/components/CommandPalette.tsx",
+            "web/components/widgets"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "sqlite-local-storage",
+          "classification": "stub",
+          "upstreamPaths": [
+            "server/src/db.test.ts"
+          ],
+          "integrationRequirements": [
+            "LiOS existing PGlite/DuckDB/local storage remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "provider-implementations",
+          "classification": "stub",
+          "upstreamPaths": [
+            "server/src/providers"
+          ],
+          "integrationRequirements": [
+            "service/data rights and reliability must be independently verified"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "branding-assets",
+          "classification": "reject",
+          "upstreamPaths": [
+            "docs/screenshots"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "openterminalui",
+      "upstreamRepository": "Hitheshkaranth/OpenTerminalUI",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "Terminal Convergence / P2-P4",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "3e0756432da9c6afd5f0bf6f7aa6e62b7b2c1906",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "workspace-command-saved-views-linked-panels",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "frontend/src",
+            "backend/api/routes/user_layouts.py"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "provider-contracts-registry-cache-streaming",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "backend/adapters/provider_contracts.py",
+            "backend/services/provider_registry.py",
+            "backend/services/cache.py",
+            "backend/api/routes/stream.py"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "plugin-and-agent-tool-registry",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "backend/plugins",
+            "backend/agent/tools/registry.py"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "backtest-risk-portfolio-options",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "backend/core/backtester.py",
+            "backend/risk_engine",
+            "backend/portfolio_lab",
+            "backend/core/option_greeks.py"
+          ],
+          "integrationRequirements": [
+            "known-answer tests",
+            "data-rights review",
+            "LiOS engine contracts"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "research-agent-workflows",
+          "classification": "stub",
+          "upstreamPaths": [
+            "backend/research_autopilot",
+            "backend/agent"
+          ],
+          "integrationRequirements": [
+            "LiOS Agent Runtime remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "execution-oms-paper-trading",
+          "classification": "reject",
+          "upstreamPaths": [
+            "backend/tests/test_oms.py",
+            "backend/tests/test_paper_trading_guardrail.py"
+          ],
+          "integrationRequirements": [
+            "No brokerage execution or order-write import is permitted in current LiOS scope; separately review paper-simulation, guardrail and test mechanisms for non-brokerage reuse behind P11/GM authority"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "branding-assets-screenshots",
+          "classification": "reject",
+          "upstreamPaths": [
+            "assets",
+            "frontend/public/landing/assets"
+          ],
+          "integrationRequirements": [],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "tests",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "backend/tests",
+            "frontend/src/__tests__"
+          ],
+          "integrationRequirements": [
+            "port only tests relevant to imported behavior"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "optuna",
+      "upstreamRepository": "optuna/optuna",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "ore",
+      "upstreamRepository": "OpenSourceRisk/Engine",
+      "licenseAsRecorded": "BSD-style permissive",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "pandera",
+      "upstreamRepository": "unionai-oss/pandera",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "pdfplumber",
+      "upstreamRepository": "jsvine/pdfplumber",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "perspective",
+      "upstreamRepository": "perspective-dev/perspective",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "bridge_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Artifact projection/renderer family exists; Perspective packages are not present in src/package.json.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "1fc0c8373574a478195ebc69302cafeb924f7876",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "connect existing LiOS contract to the verified backend and prove real integration plus target packaging",
+      "nextExecutionPhase": "turn_bridge_into_real_runtime",
+      "priorityBand": "P1_FINISH_GAP",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "polars",
+      "upstreamRepository": "pola-rs/polars",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "d5be1f6f86df7889d3087a671c68f3199b33c8c3",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "prophet",
+      "upstreamRepository": "facebook/prophet",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "py-vollib",
+      "upstreamRepository": "vollib/py_vollib",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "pydantic-ai",
+      "upstreamRepository": "pydantic/pydantic-ai",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "GM-12 / P2 Conversation Runtime",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "c4898abb54dc25ae6f6aef208a4c0661b30a455e",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "pyportfolioopt",
+      "upstreamRepository": "PyPortfolio/PyPortfolioOpt",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Portfolio",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "python-docx",
+      "upstreamRepository": "python-openxml/python-docx",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "python-pptx",
+      "upstreamRepository": "scanny/python-pptx",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "qlib",
+      "upstreamRepository": "microsoft/qlib",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "partially_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "Bounded MIT adaptation of qlib/contrib/evaluate.py risk_analysis at exact upstream pin be725493eb1a6bbb42bf11b37aa7669f59610ff1 is registered as lios.quant.qlib_risk_challenger. LiOS includes adapted sum/product formulas only, not the Qlib Python package, trained model, dataset or provider. Agent-submitted returns are truth-class unknown until separately source-bound; experimental numerical challenger; SP-05 and native/package qualification not accepted. Imported paths and modifications are recorded in third_party/components.json.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "qlib/contrib/evaluate.py (risk_analysis function semantics only)"
+      ],
+      "registeredDestinationPaths": [
+        "server/qlibRiskChallenger.mjs",
+        "server/qlibRiskChallenger.d.mts",
+        "server/qlibRiskChallengerTool.ts",
+        "server/qlibRiskChallenger.test.mjs",
+        "server/qlibRiskChallengerTool.test.ts",
+        "server/conversationRuntime.ts"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": "kiranvbiim-coder/qlib",
+      "forkDecision": "controlled_fork_exists_verify_approved_pin",
+      "ownerReviewGate": "Reconcile original Qlib source and Python known answers against LiOS P11 tool, classify remaining whole packages and model/data rights; prove native V1, downstream V2 and packaged SP-05 before claiming full adoption",
+      "nextExecutionPhase": "complete_subsystem_and_acceptance",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "quantlib",
+      "upstreamRepository": "lballabio/QuantLib",
+      "licenseAsRecorded": "QuantLib License",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Managed Python runtime package QuantLib==1.43; fixed_income.py imports and executes QuantLib.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "cb8894faa0eba62416e6549c80dfc68f3ace871a",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "quantstats",
+      "upstreamRepository": "ranaroussi/quantstats",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Portfolio",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "react-pdf",
+      "upstreamRepository": "diegomura/react-pdf",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for pdf-report-renderer; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "riskfolio-lib",
+      "upstreamRepository": "dcajasn/Riskfolio-Lib",
+      "licenseAsRecorded": "BSD-3-Clause",
+      "canonicalOwner": "P11 Portfolio",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "scikit-learn",
+      "upstreamRepository": "scikit-learn/scikit-learn",
+      "licenseAsRecorded": "BSD-3-Clause",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "skfolio",
+      "upstreamRepository": "skfolio/skfolio",
+      "licenseAsRecorded": "BSD-3-Clause",
+      "canonicalOwner": "P11 Portfolio",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": "eb73a4cfe3136d5615a6047060705695d4462588",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "src/skfolio/measures/_measures.py",
+        "tests/test_measures/test_measures.py"
+      ],
+      "registeredDestinationPaths": [
+        "server/skfolioEffectiveDiversification.ts",
+        "server/portfolioAnalytics.ts",
+        "client/src/lib/finance.ts",
+        "client/src/components/panels/PortfolioHoldingsPanel.tsx"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "effective-number-of-assets-recorded-close",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src/skfolio/measures/_measures.py",
+            "tests/test_measures/test_measures.py"
+          ],
+          "integrationRequirements": [
+            "licensed original BSD-3-Clause source and notice retained",
+            "only historic aligned same-day long holdings, no stale carry-forward or short leverage",
+            "P6 read-only analytics route remains authoritative; no donor Python package/runtime or optimizer",
+            "P11 portfolio/accounting/source valuation remains authoritative, no fabricated live pricing",
+            "reject nonfinite, zero-mass and incomplete market observations"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "sktime",
+      "upstreamRepository": "sktime/sktime",
+      "licenseAsRecorded": "BSD-3-Clause",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "splink",
+      "upstreamRepository": "moj-analytical-services/splink",
+      "licenseAsRecorded": "MIT (verified 2026-10-03: GitHub licence API and PyPI splink 5.0.0 License-Expression; upstream commit c9f571239e5c19032d0d825c06e404f1b08b75c3)",
+      "canonicalOwner": "P5 Universal Data Fabric",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "bake_off_run_not_pinned_not_integrated",
+      "evidenceAsRecorded": "CA-03 bake-off (#148 Task A, 5,000 real-name entities x 440 queries, splink 5.0.0 + DuckDB in a throw-away venv, not a repo dependency): Splink is a batch Fellegi-Sunter record-linkage library. It tolerated single-character typos (79/80 vs 0/80 for the GIM name scorer) but picked a wrong entity on 5/80 dropped-token queries (GIM: 1/80), returned a second candidate within 0.05 match probability of the top for 169 of 399 answered queries (34/80 even for exact names) and has no ambiguity/abstain contract of its own, and it needs an unsupervised-trained model, a Python+DuckDB+pandas runtime (about 300 MB venv) and cannot express namespaced registry identifiers or LiOS ids. It does not replace the scored Global Instrument Master name/identifier resolver; no P5 identity state is delegated to it. Deferred, not rejected: reconsider for bulk reconciliation of provider catalogs / holdings imports (S4) behind the same P5 candidate contract, with ambiguity surfaced by LiOS, after the labelled no-ticker corpus (roadmap 0.0.13 F) exists.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "sqlglot",
+      "upstreamRepository": "tobymao/sqlglot",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "sqlite-vec",
+      "upstreamRepository": "asg017/sqlite-vec",
+      "licenseAsRecorded": "MIT OR Apache-2.0",
+      "canonicalOwner": "P5/P11 Research & Data Lab",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "04d28bd21773981e2d266bbf6aa4efbd011eb4f6",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "statsforecast",
+      "upstreamRepository": "Nixtla/statsforecast",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "statsmodels",
+      "upstreamRepository": "statsmodels/statsmodels",
+      "licenseAsRecorded": "BSD-3-Clause",
+      "canonicalOwner": "P11 Core Finance",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "strata",
+      "upstreamRepository": "OpenGamma/Strata",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "tanstack-table",
+      "upstreamRepository": "TanStack/table",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "21d713fc4947d2a08cc2136bb055889a61412ded",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "tanstack-virtual",
+      "upstreamRepository": "TanStack/virtual",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "78371e851e90fd74e984deeb0c3fd8098e2cd4f3",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "tiptap",
+      "upstreamRepository": "ueberdosis/tiptap",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "runtime_integrated",
+      "declaredDecision": "adapt",
+      "declaredPosture": "major_donor",
+      "evidenceAsRecorded": "Pinned MIT Tiptap OSS 3.31.4 lazy rich editor integration behind canonical P4 blocks/versions; native rich-edit and packaged SP-04 qualification remain distinct.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "d9af9c6a16e17438b06b2266765b9c1a21a3d7a0",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "packages/react",
+        "packages/core",
+        "packages/pm",
+        "packages/starter-kit"
+      ],
+      "registeredDestinationPaths": [
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx",
+        "src/shared/artifactBridges.ts",
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx",
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "regression_and_packaging",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "tool-ui",
+      "upstreamRepository": "assistant-ui/tool-ui",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P2 Conversation Runtime / GM-23",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Components and imported-OSS regression records document LiOS-owned progress/result/Artifact/approval-card interaction patterns in ConversationRuntimeTrace.tsx. No upstream source is copied verbatim and no tool-ui package/runtime is integrated; documented_only remains the donor-runtime truth level.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "49a870286facdbf28160cd647f0d337ebdc9b275",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [
+        "client/src/components/terminal/ConversationRuntimeTrace.tsx"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "tradingagents",
+      "upstreamRepository": "TauricResearch/TradingAgents",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "baselineTruthStatus": "partially_integrated",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Merged PR #633 commit 5aa2f455b1e7f4cf85285e85ee868d7c6112732c integrates bounded Apache-2.0 TradingAgents rating, bull/bear and three-risk-perspective mechanisms as governed LiOS read-only tool. Native macOS V1 PASS run 38150791824. Nine imported source paths recorded with separate complete 75-path disposition, full license and 20 upstream tests. Source-unverified model inputs never become verified market evidence; no LangGraph/Python runtime, trading, brokerage, provider datasets or packaged SP-05 accepted.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "tradingagents/agents/researchers/bear_researcher.py",
+        "tradingagents/agents/researchers/bull_researcher.py",
+        "tradingagents/agents/risk_mgmt/aggressive_debator.py",
+        "tradingagents/agents/risk_mgmt/conservative_debator.py",
+        "tradingagents/agents/risk_mgmt/neutral_debator.py",
+        "tradingagents/agents/utils/agent_utils.py",
+        "tradingagents/agents/utils/rating.py",
+        "tradingagents/graph/conditional_logic.py",
+        "tradingagents/graph/signal_processing.py"
+      ],
+      "registeredDestinationPaths": [
+        "server/tradingAgentsResearchGate.mjs",
+        "server/tradingAgentsResearchGate.d.mts",
+        "server/tradingAgentsResearchTool.ts",
+        "server/tradingAgentsResearchTool.test.ts",
+        "server/tradingAgentsResearchGate.test.mjs",
+        "server/conversationRuntime.ts"
+      ],
+      "componentSubsystems": [
+        {
+          "name": "specialist-finance-agents",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tradingagents/agents/analysts",
+            "tradingagents/agents/researchers",
+            "tradingagents/agents/risk_mgmt",
+            "tradingagents/agents/managers"
+          ],
+          "integrationRequirements": [
+            "normalize outputs into LiOS Agent/Artifact contracts"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "structured-agent-schemas",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tradingagents/agents/schemas.py",
+            "tradingagents/agents/utils/structured.py"
+          ],
+          "integrationRequirements": [
+            "preserve LiOS schema/version authority"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "checkpoint-resume-graph",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tradingagents/graph/checkpointer.py",
+            "tradingagents/graph/trading_graph.py"
+          ],
+          "integrationRequirements": [
+            "Project/Session Ledger remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "point-in-time-and-market-validation",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tradingagents/dataflows/date_window.py",
+            "tradingagents/dataflows/market_data_validator.py",
+            "tests/test_fundamentals_lookahead.py",
+            "tests/test_news_lookahead.py",
+            "tests/test_memory_pointintime.py"
+          ],
+          "integrationRequirements": [
+            "port tests before relying on historical/backtest research"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "provider-and-data-vendor-routing",
+          "classification": "stub",
+          "upstreamPaths": [
+            "tradingagents/llm_clients",
+            "tradingagents/dataflows"
+          ],
+          "integrationRequirements": [
+            "LiOS BYOAI/Data Fabric remain authoritative",
+            "upstream API/data rights reviewed separately"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "backtest-portfolio-reporting",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "tradingagents/backtest.py",
+            "tradingagents/portfolio.py",
+            "tradingagents/reporting.py"
+          ],
+          "integrationRequirements": [
+            "wrap behind LiOS BacktestEngine/Artifact contracts",
+            "known-answer tests"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": "kiranvbiim-coder/TradingAgents",
+      "forkDecision": "controlled_fork_exists_verify_approved_pin",
+      "ownerReviewGate": "Remaining 66 of 75 TradingAgents source paths and 20 upstream test mappings need qualified package-by-package reuse decisions, dependency/data rights, owner grants, native V2 and packaged SP-05 acceptance before full donor exhaustion.",
+      "nextExecutionPhase": "complete_subsystem_and_acceptance",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "univer",
+      "upstreamRepository": "dream-num/univer",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "partially_integrated",
+      "declaredDecision": "library",
+      "declaredPosture": "bundled",
+      "evidenceAsRecorded": "Univer OSS presets (@univerjs/presets and preset-sheets-core 1.0.0-rc.0) render/edit canonical P4 spreadsheet projections and save through the P4 revision API. Recorded browser load/edit/save/reload/formula checks are supplemented by blueprint section 48.8's 2026-10-03 macOS arm64 unsigned/ad-hoc packaged-shell smoke: real desktop CSP, ribbon/canvas/formula and revision 2 save, zero CSP violations. This is bounded local smoke, not signed/notarized clean-install or SP-04 acceptance. Packaged size/startup/RSS, Windows qualification, full professional-work round trip and stable re-pin remain open.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "360c5ccb5e40e48be95b213a19527ac5afe9909a",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [
+        "packages/presets",
+        "packages/preset-sheets-core"
+      ],
+      "registeredDestinationPaths": [
+        "npm:@univerjs/presets@1.0.0-rc.0",
+        "npm:@univerjs/preset-sheets-core@1.0.0-rc.0",
+        "client/src/components/terminal/UniverSpreadsheetEditor.tsx",
+        "shared/univerArtifact.ts"
+      ],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "audit unassimilated useful subsystems, run upstream regression and packaged product acceptance",
+      "nextExecutionPhase": "complete_subsystem_and_acceptance",
+      "priorityBand": "P1_STRATEGIC",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "unstructured",
+      "upstreamRepository": "Unstructured-IO/unstructured",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Research & Documents",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "vectorbt",
+      "upstreamRepository": "polakowo/vectorbt",
+      "licenseAsRecorded": "Apache-2.0 with Commons Clause",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "rejected",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "do_not_fork_blocked_by_recorded_decision",
+      "ownerReviewGate": "no new import; only re-open with concrete legal/security fit evidence",
+      "nextExecutionPhase": "retain_evidence_and_compare_alternatives",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "vis-timeline",
+      "upstreamRepository": "visjs/vis-timeline",
+      "licenseAsRecorded": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "discovered",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "evidenceAsRecorded": "New CA exploration target for timeline-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "pin original source and component licensing; review full subsystem/dependency closure before implementation",
+      "nextExecutionPhase": "verify_license_pin_and_subsystems",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "vnpy",
+      "upstreamRepository": "vnpy/vnpy",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P11 Broker & Execution",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "whisper-cpp",
+      "upstreamRepository": "ggml-org/whisper.cpp",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P12 Voice & Multimodal",
+      "baselineTruthStatus": "runtime_integrated_optional",
+      "declaredDecision": "stub",
+      "declaredPosture": "runtime_candidate",
+      "evidenceAsRecorded": "P12 optional local voice pack resolves whisper-cli/model/ffmpeg and routes transcription through LiOS.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "307869af285d7f6f689ba100b3515e2d1b3feb05",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [
+        {
+          "name": "core-inference-library",
+          "classification": "adapt",
+          "upstreamPaths": [
+            "src",
+            "include",
+            "ggml"
+          ],
+          "integrationRequirements": [
+            "optional Voice Pack only",
+            "native build matrix and packaged binary signing required"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "node-binding-example",
+          "classification": "stub",
+          "upstreamPaths": [
+            "examples/addon.node"
+          ],
+          "integrationRequirements": [
+            "evaluate wrapper approach; do not inherit example packaging blindly"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "stream-command-server-demos",
+          "classification": "reject",
+          "upstreamPaths": [
+            "examples/stream",
+            "examples/command",
+            "examples/server"
+          ],
+          "integrationRequirements": [
+            "LiOS voice UX/runtime remains authoritative"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        },
+        {
+          "name": "model-download-conversion",
+          "classification": "stub",
+          "upstreamPaths": [
+            "models"
+          ],
+          "integrationRequirements": [
+            "model weight license/size/hash tracked separately from MIT inference code"
+          ],
+          "status": "requires_path_level_implementation_evidence"
+        }
+      ],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "validate deployed caller, provenance, target packaging, installer health and rollback; existing runtime is not proof of full donor exhaustion",
+      "nextExecutionPhase": "provisioning_and_packaging",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "xgboost",
+      "upstreamRepository": "dmlc/xgboost",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "xlsxwriter",
+      "upstreamRepository": "jmcnamara/XlsxWriter",
+      "licenseAsRecorded": "BSD-2-Clause",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "prefer_pinned_package_or_managed_runtime_no_fork_by_default",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "xyflow",
+      "upstreamRepository": "xyflow/xyflow",
+      "licenseAsRecorded": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "baselineTruthStatus": "documented_only",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "evidenceAsRecorded": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ],
+      "sourcePin": "0a1f9575b25679f2880175de8d3eae21aedde921",
+      "sourcePinState": "registered_pin_not_automatically_approved_for_new_paths",
+      "componentRegistered": true,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "select_coherent_package_then_fork_if_sustained_patching_needed",
+      "ownerReviewGate": "inspect upstream source/tests as a whole useful package, choose exact paths and replace LiOS authority seams before importing",
+      "nextExecutionPhase": "inspect_and_select_coherent_package",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    },
+    {
+      "id": "zipline-reloaded",
+      "upstreamRepository": "stefan-jansen/zipline-reloaded",
+      "licenseAsRecorded": "Apache-2.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "baselineTruthStatus": "reference_only",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "evidenceAsRecorded": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ],
+      "sourcePin": null,
+      "sourcePinState": "pin_required_before_source_import",
+      "componentRegistered": false,
+      "registeredSourcePaths": [],
+      "registeredDestinationPaths": [],
+      "componentSubsystems": [],
+      "linkedControlledFork": null,
+      "forkDecision": "defer_fork_until_pin_rights_and_package_scope",
+      "ownerReviewGate": "benchmark as challenger against LiOS incumbent; promote only if improvement and rights are evidenced",
+      "nextExecutionPhase": "compare_challenger_before_import",
+      "priorityBand": "P2_DEPENDENCY_DRIVEN",
+      "fullPackageSourceAuditComplete": false,
+      "donorFullyExhausted": false,
+      "packagedShippingPointAccepted": false
+    }
+  ],
+  "supplementalControlledForks": [
+    {
+      "id": "cua",
+      "upstreamRepository": "trycua/cua",
+      "forkRepository": "kiranvbiim-coder/cua",
+      "mirrorObservedCommit": "a7524cfd1d3e959963b43954d43f27c4bd260f08",
+      "nextAction": "Evaluate controlled-computer model-maintenance interactions behind existing GM-14 and user-approved native permissions; no direct Project data or filesystem authority.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    },
+    {
+      "id": "FinRobot",
+      "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+      "forkRepository": "kiranvbiim-coder/FinRobot",
+      "mirrorObservedCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "nextAction": "Three bounded Production-V2 packages are now integrated at the exact approved source pin with native V1 evidence: zero-I/O financial audit, result-contract validation, and semantic Artifact decision/change diff. Next inspect coherent equity-research, IC-memo and professional-report composition packages plus canonical consumer wiring, while keeping FinRobot provider, store, agent, server, report-runtime, finance-engine and broker authorities excluded unless separately approved.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    },
+    {
+      "id": "FinGPT",
+      "upstreamRepository": "AI4Finance-Foundation/FinGPT",
+      "forkRepository": "kiranvbiim-coder/FinGPT",
+      "mirrorObservedCommit": "fdb04c9a273d1ccc3764b09b8e3ed1e708e57566",
+      "nextAction": "Evaluate finance text/model benchmarks in opt-in user-managed AI runtime; independently verify model-weight, data and redistribution rights.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    },
+    {
+      "id": "dexter-js",
+      "upstreamRepository": "rodionlim/dexter-js",
+      "forkRepository": "kiranvbiim-coder/dexter-js",
+      "mirrorObservedCommit": "d2efa875c4f7e27f2f11bc59f20db72037725736",
+      "nextAction": "Treat as a separate upstream from the registry's virattt/dexter; inspect license and source independently before reconciling any reusable planner/finance workflow.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    },
+    {
+      "id": "browser-use",
+      "upstreamRepository": "browser-use/browser-use",
+      "forkRepository": "kiranvbiim-coder/browser-use",
+      "mirrorObservedCommit": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "nextAction": "Evaluate browser research mechanisms under LiOS GM-14 governed browser/session, entitlements, screenshots and source lineage; no unmanaged browser process.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    },
+    {
+      "id": "graphrag",
+      "upstreamRepository": "microsoft/graphrag",
+      "forkRepository": "kiranvbiim-coder/graphrag",
+      "mirrorObservedCommit": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "nextAction": "Continue coherent GraphRAG source-context evidence exploration behind existing P7/P5 while evaluating remaining package paths, Microsoft upstream dependencies, AI-use rights and packaged SP-03; currently only selected two MIT source paths are adapted, not full graph runtime.",
+      "baselineMember": false,
+      "sourcePinApprovedForLiOS": false,
+      "donorCodeIntegratedByForkAlone": false,
+      "legalGate": "exact source path and component license/rights verification before code import",
+      "integrationGate": "canonical LiOS GM/P5/P7/P11/P4 authorities; no duplicate runtime, store, broker or provider",
+      "forkDecision": "already_forked_no_duplicate"
+    }
+  ],
+  "forkWorkQueue": [
+    {
+      "id": "openclaw",
+      "forkRepository": "kiranvbiim-coder/openclaw",
+      "upstreamRepository": "openclaw/openclaw",
+      "observedCommit": "0be750916b123c328b8962117213f8c4fd1b2a0a",
+      "baselineDonorId": "openclaw",
+      "truthStatus": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.37",
+        "SI-05.30"
+      ],
+      "nextAction": "Reuse already approved GM-11/GM-12 execution, approval and tool subsystems; compare fork changes to the separately approved upstream pin before any new import.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "cua",
+      "forkRepository": "kiranvbiim-coder/cua",
+      "upstreamRepository": "trycua/cua",
+      "observedCommit": "a7524cfd1d3e959963b43954d43f27c4bd260f08",
+      "baselineDonorId": null,
+      "truthStatus": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.30"
+      ],
+      "nextAction": "Evaluate controlled-computer model-maintenance interactions behind existing GM-14 and user-approved native permissions; no direct Project data or filesystem authority.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "TradingAgents",
+      "forkRepository": "kiranvbiim-coder/TradingAgents",
+      "upstreamRepository": "TauricResearch/TradingAgents",
+      "observedCommit": "1394a3f72aa4393e1a98f51b382434c4b4c2d972",
+      "baselineDonorId": "tradingagents",
+      "truthStatus": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.26",
+        "SI-05.27",
+        "SI-05.29"
+      ],
+      "nextAction": "Existing approved TradingAgents source pin contributes bounded verified GM-12 risk-review mechanics; next qualify source-backed analyst/team workflow, full licensed dependency and packaged SP-05, not fork HEAD or live brokerage.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "FinRobot",
+      "forkRepository": "kiranvbiim-coder/FinRobot",
+      "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+      "observedCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "baselineDonorId": null,
+      "truthStatus": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.24",
+        "SI-05.25",
+        "SI-05.28",
+        "SI-05.40",
+        "SI-05.34",
+        "SI-05.27"
+      ],
+      "nextAction": "Three bounded Production-V2 packages are now integrated at the exact approved source pin with native V1 evidence: zero-I/O financial audit, result-contract validation, and semantic Artifact decision/change diff. Next inspect coherent equity-research, IC-memo and professional-report composition packages plus canonical consumer wiring, while keeping FinRobot provider, store, agent, server, report-runtime, finance-engine and broker authorities excluded unless separately approved.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "FinGPT",
+      "forkRepository": "kiranvbiim-coder/FinGPT",
+      "upstreamRepository": "AI4Finance-Foundation/FinGPT",
+      "observedCommit": "fdb04c9a273d1ccc3764b09b8e3ed1e708e57566",
+      "baselineDonorId": null,
+      "truthStatus": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.26",
+        "SI-05.39"
+      ],
+      "nextAction": "Evaluate finance text/model benchmarks in opt-in user-managed AI runtime; independently verify model-weight, data and redistribution rights.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "LangAlpha",
+      "forkRepository": "kiranvbiim-coder/LangAlpha",
+      "upstreamRepository": "ginlix-ai/LangAlpha",
+      "observedCommit": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "baselineDonorId": "langalpha",
+      "truthStatus": "documented_only",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.28"
+      ],
+      "nextAction": "Inspect coherent research workspace/skills subsystem and adapt permitted portions behind LiOS Project, governed tools and Artifact authority.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "dexter-js",
+      "forkRepository": "kiranvbiim-coder/dexter-js",
+      "upstreamRepository": "rodionlim/dexter-js",
+      "observedCommit": "d2efa875c4f7e27f2f11bc59f20db72037725736",
+      "baselineDonorId": null,
+      "truthStatus": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.27"
+      ],
+      "nextAction": "Treat as a separate upstream from the registry's virattt/dexter; inspect license and source independently before reconciling any reusable planner/finance workflow.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "browser-use",
+      "forkRepository": "kiranvbiim-coder/browser-use",
+      "upstreamRepository": "browser-use/browser-use",
+      "observedCommit": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "baselineDonorId": null,
+      "truthStatus": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.27"
+      ],
+      "nextAction": "Evaluate browser research mechanisms under LiOS GM-14 governed browser/session, entitlements, screenshots and source lineage; no unmanaged browser process.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "qlib",
+      "forkRepository": "kiranvbiim-coder/qlib",
+      "upstreamRepository": "microsoft/qlib",
+      "observedCommit": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "baselineDonorId": "qlib",
+      "truthStatus": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.12",
+        "SI-05.13",
+        "SI-05.16",
+        "SI-05.23"
+      ],
+      "nextAction": "Bounded Qlib risk_analysis formula challenger behind P11/GM-12; qualify source-bound returns, remaining Qlib package/model/dataset rights and packaged SP-05 before claiming broader adoption.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    },
+    {
+      "id": "graphrag",
+      "forkRepository": "kiranvbiim-coder/graphrag",
+      "upstreamRepository": "microsoft/graphrag",
+      "observedCommit": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "baselineDonorId": null,
+      "truthStatus": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.31"
+      ],
+      "nextAction": "Continue coherent GraphRAG source-context evidence exploration behind existing P7/P5 while evaluating remaining package paths, Microsoft upstream dependencies, AI-use rights and packaged SP-03; currently only selected two MIT source paths are adapted, not full graph runtime.",
+      "adoptionStatus": "source_or_mirror_observed_not_a_new_integration_claim"
+    }
+  ],
+  "executionPriorities": [
+    {
+      "wave": 1,
+      "donors": [
+        "openclaw",
+        "qlib",
+        "tradingagents",
+        "langalpha"
+      ],
+      "mode": "finish_canonical_in_flight_adaptations",
+      "gate": "GM owner, P11 math, P5/P7 permission and model rights; no overlapping branch merges"
+    },
+    {
+      "wave": 2,
+      "donors": [
+        "FinRobot",
+        "FinGPT",
+        "graphrag",
+        "browser-use",
+        "cua"
+      ],
+      "mode": "verify_existent_forks_and_select_complete_packages",
+      "gate": "source path licenses/model and market data rights; no alternate execution or knowledge authority"
+    },
+    {
+      "wave": 3,
+      "donors": [
+        "dexter-js",
+        "dexter",
+        "fin-agent",
+        "pydantic-ai",
+        "docling",
+        "univer"
+      ],
+      "mode": "compare_overlap_and_select_specialized_mechanics",
+      "gate": "fork lineage, source license, donor dependency closure, canonical user journey"
+    },
+    {
+      "wave": 4,
+      "donors": [
+        "all_other_registered_donors"
+      ],
+      "mode": "work_through_remaining_92_by_canonical_owner_and_shipping_point",
+      "gate": "no adoption by quota; preserve rejected/optional/reference-only with evidence"
+    }
+  ],
+  "supplementalSelectedSourceAdoptions": [
+    {
+      "id": "graphrag",
+      "componentId": "graphrag",
+      "canonicalOwner": "P7",
+      "sourcePin": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "sourceMechanismImported": true,
+      "fullUpstreamRuntimeInstalled": false,
+      "packagedShippingPointAccepted": false,
+      "mergedPR": 591,
+      "mergeCommit": "23c22c1a3ef1cd28a0bbb3938c36074734459bf7"
+    },
+    {
+      "id": "FinRobot",
+      "componentId": "FinRobot",
+      "canonicalOwner": "P4",
+      "sourcePin": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "sourceMechanismImported": true,
+      "fullUpstreamRuntimeInstalled": false,
+      "packagedShippingPointAccepted": false,
+      "mergedPR": 594,
+      "mergeCommit": "d58f2f8ffce82b652c129a77a5f91bb34740c1fc"
+    },
+    {
+      "id": "browser-use",
+      "componentId": "browser-use",
+      "canonicalOwner": "GM-14",
+      "sourcePin": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "sourceMechanismImported": true,
+      "fullUpstreamRuntimeInstalled": false,
+      "packagedShippingPointAccepted": false,
+      "mergedPR": 599,
+      "mergeCommit": "551318bee8b13cb1844643454772028728dfee85"
+    }
+  ],
+  "selectedBaselineSourceAdoptions": [
+    {
+      "id": "langalpha-gm-response",
+      "componentId": "langalpha-gm-response",
+      "canonicalOwner": "GM-12",
+      "sourcePin": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "sourceMechanismImported": true,
+      "fullUpstreamRuntimeInstalled": false,
+      "packagedShippingPointAccepted": false,
+      "mergedPR": 603,
+      "mergeCommit": "7317da714eb4e4f491aebf4386b302e816af3e4a",
+      "baselineDonorId": "langalpha",
+      "underlyingBaselinePinPreserved": "db8f8c2dee948c9c6f77805558898c3abb637328"
+    }
+  ]
+}

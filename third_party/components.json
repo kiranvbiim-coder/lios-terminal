@@ -1,0 +1,2737 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-10-05",
+  "policy": {
+    "purpose": "Track major OSS donors/runtimes independently from package-lock dependency inventory.",
+    "importRule": "ANALYZE -> DECOMPOSE -> REUSE -> ADAPT -> REPURPOSE -> COMBINE -> GENERALIZE -> INNOVATE -> WRAP -> BUILD LAST -> REJECT ONLY WITH EVIDENCE; imports still require exact license/path/pin verification, tests and hardening",
+    "codeRightsSeparateFromExternalRights": true,
+    "allowedCoreLicenses": [
+      "MIT",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "ISC",
+      "QuantLib License",
+      "MIT OR Apache-2.0"
+    ],
+    "executionAuthority": "docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md",
+    "shippingPointContract": "docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md",
+    "evidenceRule": "SI phases are strategic; S0-S10 are validation journeys and CP records are historical evidence. Bundled/classification/roles record package accounting or intended use, not complete subsystem or Shipping Point acceptance. SP-01-SP-07 require real MSJs, applicable target execution, no fake success, regression protection and exact build/target/journey/checks/limitations evidence.",
+    "legacyRejectionReview": "A retained reject classification based only on historical domain, initial scope or overlap is a historical decision under review, not a completed SI REJECT_WITH_EVIDENCE disposition. Review mechanisms, repurposing, combination and challenger roles behind singular GM/TC/CA/P owners; licensing/branding restrictions and no brokerage writes remain unchanged.",
+    "zeroSetupTarget": "LiOS must provision/verify internal components without ordinary-user donor-runtime/Python/server/renderer setup; heavy optional assets require visible size/rights/consent. External Ollama, optional missing browser runtime and unintegrated engine/output/renderer candidates remain delivery gaps, not final manual-install policy.",
+    "truthLadder": "contract locked -> code integrated -> tests passed -> packaged/provisioned -> user accessible -> vertical flagship passed -> shipping point accepted -> release proven",
+    "copyleftCorePolicy": "Strong-copyleft source is not vendored into proprietary LiOS core without an explicit distribution/licensing decision."
+  },
+  "components": [
+    {
+      "id": "openclaw",
+      "name": "OpenClaw",
+      "repository": "openclaw/openclaw",
+      "releaseTag": "v2026.9.7",
+      "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "license": "MIT",
+      "posture": "major_donor",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "gateway-protocol",
+        "gateway-client",
+        "device-node-fabric",
+        "terminal-pty",
+        "execution-sessions",
+        "native-ios",
+        "native-android",
+        "watch-wear",
+        "agent-core",
+        "codex-acp",
+        "browser-computer-use",
+        "session-placement",
+        "memory",
+        "skills",
+        "diagnostics",
+        "tests"
+      ],
+      "subsystems": [
+        {
+          "name": "terminal-process-and-execution-session-kernel",
+          "classification": "adapt",
+          "paths": [
+            "src/process/terminal-pty.ts",
+            "src/process",
+            "src/gateway/terminal",
+            "src/gateway/server-methods/terminal.ts",
+            "packages/terminal-core"
+          ],
+          "requirements": [
+            "LiOS execution authority and project/user ownership remain authoritative",
+            "port reconnect/backpressure/process-tree/Windows tests",
+            "Electron native-module packaging/signing verification"
+          ]
+        },
+        {
+          "name": "gateway-protocol-and-client",
+          "classification": "adapt",
+          "paths": [
+            "packages/gateway-protocol",
+            "packages/gateway-client"
+          ],
+          "requirements": [
+            "fork/adapt into LiOS device/session protocol",
+            "do not make OpenClaw project/conversation stores canonical",
+            "version TypeScript/Swift/Kotlin compatibility"
+          ]
+        },
+        {
+          "name": "native-mobile-watch-device-nodes",
+          "classification": "adapt",
+          "paths": [
+            "apps/ios",
+            "apps/android",
+            "apps/shared"
+          ],
+          "requirements": [
+            "remove donor branding/assets",
+            "map to LiOS Gateway and canonical conversation/project contracts",
+            "preserve offline/outbox/pairing/permission behavior",
+            "no LiOS-hosted runtime dependency"
+          ]
+        },
+        {
+          "name": "agent-runtime-codex-acp",
+          "classification": "adapt",
+          "paths": [
+            "packages/agent-core",
+            "packages/acp-core",
+            "extensions/acpx"
+          ],
+          "requirements": [
+            "LiOS Conversation Runtime/policy/artifacts remain authoritative",
+            "separate model providers from agent runtimes",
+            "execute on user-owned nodes"
+          ]
+        },
+        {
+          "name": "browser-runtime",
+          "classification": "adapt",
+          "paths": [
+            "extensions/browser"
+          ],
+          "requirements": [
+            "canonical LiOS isolated browser transport and Project egress policy remain authoritative",
+            "do not import donor control-server, profile/config/storage/auth or plugin/MCP authorities",
+            "preserve run-owned page lifecycle, cancellation and trust receipts"
+          ]
+        },
+        {
+          "name": "computer-use",
+          "classification": "adapt",
+          "paths": [
+            "extensions/cua-computer",
+            "src/plugins/computer-use-contract.ts",
+            "src/gateway/node-computer-use-descriptor.ts"
+          ],
+          "requirements": [
+            "user-owned isolated native transport only",
+            "explicit capture/action/file permissions",
+            "native driver rights, hashes, signing and TCC must be qualified before execution"
+          ]
+        },
+        {
+          "name": "session-placement-and-node-policy",
+          "classification": "adapt",
+          "paths": [
+            "src/gateway/node-invoke-placement-grant.ts",
+            "src/gateway/operator-approval-placement-grants.ts",
+            "src/gateway/node-command-policy.ts",
+            "src/gateway/node-browser-proxy-policy.ts",
+            "src/gateway/node-agent-cli-runtime.ts",
+            "src/gateway/node-catalog.ts"
+          ],
+          "requirements": [
+            "user-owned execution only",
+            "exact owner/node/generation and current-policy binding",
+            "no donor SQLite state authority or ambient-host fallback"
+          ]
+        },
+        {
+          "name": "memory-skills-system-agent-diagnostics",
+          "classification": "adapt",
+          "paths": [
+            "src/memory",
+            "src/skills",
+            "src/agents"
+          ],
+          "requirements": [
+            "merge into existing LiOS memory/P13/MCP/doctor authorities",
+            "no duplicate canonical store or plugin ecosystem"
+          ]
+        },
+        {
+          "name": "visible-openclaw-product-ui-and-branding",
+          "classification": "reject",
+          "paths": [
+            "ui",
+            "docs/screenshots",
+            "branding"
+          ],
+          "requirements": [
+            "LiOS UX/brand remains authoritative",
+            "individual terminal implementation pieces may be evaluated separately"
+          ]
+        }
+      ],
+      "importedPaths": [
+        "packages/acp-core/src/runtime/types.ts",
+        "packages/acp-core/src/runtime/session-identity.ts",
+        "packages/acp-core/src/types.ts",
+        "packages/acp-core/src/session-lineage-meta.ts",
+        "packages/acp-core/src/error-format.ts",
+        "packages/acp-core/src/structured-auth-redaction.ts",
+        "packages/normalization-core/src/string-coerce.ts",
+        "packages/normalization-core/src/number-coercion.ts",
+        "extensions/cua-computer/src/actions.ts",
+        "extensions/cua-computer/src/frame.ts",
+        "extensions/cua-computer/src/driver-artifact-verification.ts",
+        "extensions/cua-computer/src/node-invoke-policy.ts",
+        "extensions/cua-computer/src/node-invoke-policy.test.ts",
+        "extensions/cua-computer/src/driver-artifacts.test.ts",
+        "extensions/cua-computer/package.json",
+        "src/plugins/computer-use-contract.ts",
+        "src/security/secret-equal.ts",
+        "src/security/secret-equal.test.ts",
+        "src/infra/backup-archive-path-policy.ts",
+        "src/secrets/ref-contract.ts",
+        "packages/net-policy/src/ip.ts",
+        "packages/net-policy/src/ip.test.ts",
+        "packages/net-policy/src/ip-test-fixtures.ts",
+        "packages/gateway-protocol/src/schema/frames.ts",
+        "packages/gateway-client/src/pending-request.ts",
+        "packages/gateway-client/src/event-listeners.ts",
+        "packages/gateway-client/src/timeouts.ts",
+        "packages/gateway-client/src/protocol-client.ts",
+        "packages/gateway-client/src/device-auth.ts",
+        "src/shared/bounded-buffer.ts",
+        "src/shared/deferred.ts",
+        "packages/agent-core/src/harness/env/kill-tree.ts",
+        "src/process/process-deadline.ts",
+        "src/process/pipe-output.ts",
+        "src/utils/utf8-truncate.ts",
+        "src/gateway/terminal/backend.ts",
+        "src/gateway/terminal/output-ring.ts",
+        "src/gateway/terminal/output-coalescer.ts",
+        "src/gateway/terminal/output-flow-control.ts",
+        "src/process/supervisor/supervisor.ts",
+        "src/process/supervisor/types.ts",
+        "src/process/supervisor/cancellation-policy.ts",
+        "src/process/supervisor/adapters/child.ts",
+        "src/process/supervisor/adapters/child-stdin.ts",
+        "src/process/supervisor/adapters/env.ts",
+        "src/process/supervisor/adapters/process-events.ts",
+        "src/process/decoded-output.ts",
+        "src/shared/bounded-buffer.test.ts",
+        "src/utils/utf8-truncate.test.ts",
+        "src/process/pipe-output.test.ts",
+        "src/gateway/terminal/session-manager.output-ring.test.ts",
+        "src/process/supervisor/supervisor.test.ts",
+        "src/process/supervisor/supervisor.queued-cancellation.test.ts",
+        "src/process/supervisor/supervisor.scope-extinction.test.ts",
+        "src/process/supervisor/supervisor.rejection.test.ts",
+        "src/process/supervisor/supervisor.cancellation-reason.test.ts",
+        "src/process/supervisor/supervisor.output-fence.test.ts",
+        "src/process/supervisor/supervisor.timeout-overflow.test.ts",
+        "src/process/supervisor/supervisor.output-activity.real.test.ts",
+        "src/process/supervisor/adapters/child.test.ts",
+        "src/process/supervisor/adapters/child.events.test.ts",
+        "src/process/supervisor/adapters/child.test-support.ts",
+        "src/gateway/node-invoke-placement-grant.ts",
+        "src/gateway/operator-approval-placement-grants.ts",
+        "src/gateway/operator-approval-placement-grants.test.ts",
+        "src/process/terminal-pty.ts",
+        "src/process/pty-terminal-name.ts",
+        "src/process/terminal-pty.test.ts",
+        "packages/retry/src/index.ts",
+        "packages/retry/src/index.test.ts",
+        "extensions/browser/src/browser/bounded-utf8-tail.ts",
+        "extensions/browser/src/browser/bounded-utf8-tail.test.ts"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/acp/runtime-types.ts",
+        "server/acp/session-identity.ts",
+        "server/acp/identity-types.ts",
+        "server/acp/session-lineage-meta.ts",
+        "server/acp/error-format.ts",
+        "server/acp/structured-auth-redaction.ts",
+        "server/acp/normalization.ts",
+        "server/computer/actions.ts",
+        "server/computer/frame.ts",
+        "server/computer/driver-artifact-verification.ts",
+        "server/computer/driver-artifacts.json",
+        "server/computer/risk-policy.ts",
+        "server/computer/computer-policy.test.ts",
+        "server/safeEqualSecret.ts",
+        "server/safeEqualSecret.test.ts",
+        "server/tarFormat.ts",
+        "shared/secretRef.ts",
+        "server/netPolicy/ip.ts",
+        "server/netPolicy/ip.test.ts",
+        "server/netPolicy/ipTestFixtures.ts",
+        "shared/gatewayProtocol.ts",
+        "client/src/lib/gateway/pendingRequests.ts",
+        "client/src/lib/gateway/eventListeners.ts",
+        "client/src/lib/gateway/timeouts.ts",
+        "client/src/lib/gateway/gatewayClient.ts",
+        "shared/devicePairing.ts",
+        "server/exec/bounded-buffer.ts",
+        "server/exec/deferred.ts",
+        "server/exec/kill-tree.ts",
+        "server/exec/process-deadline.ts",
+        "server/exec/pipe-output.ts",
+        "server/exec/utf8-truncate.ts",
+        "server/exec/backend.ts",
+        "server/exec/output-ring.ts",
+        "server/exec/output-coalescer.ts",
+        "server/exec/output-flow-control.ts",
+        "server/exec/supervisor.ts",
+        "server/exec/types.ts",
+        "server/exec/cancellation-policy.ts",
+        "server/exec/child.ts",
+        "server/exec/child-stdin.ts",
+        "server/exec/env.ts",
+        "server/exec/process-events.ts",
+        "server/exec/decoded-output.ts",
+        "server/exec/bounded-buffer.test.ts",
+        "server/exec/utf8-truncate.test.ts",
+        "server/exec/pipe-output.test.ts",
+        "server/exec/output-ring.test.ts",
+        "server/exec/supervisor.scope.test.ts",
+        "server/exec/supervisor.output.test.ts",
+        "server/exec/supervisor.real.test.ts",
+        "server/exec/child.test.ts",
+        "server/exec/child.test-support.ts",
+        "server/exec/decoded-output.test.ts",
+        "server/exec/placement-grant.ts",
+        "server/exec/placement-grant.test.ts",
+        "server/exec/terminal-pty.ts",
+        "server/exec/pty-terminal-name.ts",
+        "server/exec/terminal-pty.test.ts",
+        "server/exec/retry-timing.ts",
+        "server/exec/retry-timing.test.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browserRuntimePack.ts",
+        "sandbox-image/browser-artifact-inventory.json",
+        "sandbox-image/browser-dependency-inventory.json",
+        "sandbox-image/install-browser.py"
+      ],
+      "pathMappingNote": "All destinationPaths are relative to the LiOS src/ directory; importedPaths retain upstream repository-relative paths. GM-10 flattens donor namespaces into server/exec under that destination base. Multiple supervisor lifecycle test files are consolidated into supervisor.scope.test.ts and supervisor.output.test.ts; ring cases from the session-manager suite exercise output-ring directly. New LiOS command-entry/runtime integration files are not donor copies. The browser destination server/browserRuntimePack.ts is a LiOS-owned consumer/pattern adaptation, not imported donor source; server/browser-runtime-pack/bounded-utf8-tail.ts is the actual pinned browser source import and its test is ported. Per-file source headers and the modification list retain exact source lineage.",
+      "modifications": [
+        "SI-02.13/GM-14 browser donor import: extensions/browser/src/browser/bounded-utf8-tail.ts was byte-verified against pinned raw c074824a (SHA-256 96f185682672dd849d1e4c909681fa8edad8c3a933d9e38cd209a6066207b28b) and copied with provenance only; its test (pinned SHA-256 990555c19b88be78921b45c867c1ecba13f3de8fb0e1c756233fba8c553f0f51) is ported from Vitest to node:test. The helper bounds broker subprocess diagnostics without corrupting UTF-8.",
+        "SI-02.13/GM-14 browser adaptation: complete useful pinned worker/session/tab/navigation/transport paths were inspected, including runtime-lifecycle.ts, pw-session*.ts, session-tab-*.ts, navigation-guard.ts, client-actions*.ts, browser control/bridge routes and extensions/browser/package.json. LiOS preserves their bounded transport, one-page ownership, request interception, close/join and cancellation mechanics behind the existing ExecutionBackend, supervisor, BrowserConnectorPolicy, P13 DNS-pinned broker and governed conversation registry. LiOS worker/stdio protocol code is new because the donor runtime launches or attaches networked host Chromium/CDP and cannot enforce a physically --network=none child whose every resource crosses LiOS's canonical P13 broker.",
+        "SI-02.13/GM-14 browser dependency/decline evidence: pinned extensions/browser/package.json requires playwright-core 1.63.0 plus Express, MCP, chrome-devtools-mcp, TypeBox, yargs-parser and donor plugin SDK. Only playwright-core/Chromium are runtime-pack prerequisites; other closure is declined as unused duplicate control/plugin authority. Donor host Chrome/CDP launch, HTTP control server, extension relay, profiles/config/storage/auth, cookies/uploads/evaluate and MCP/plugin authority are not imported because they either create duplicate LiOS authority or permit host/raw-network browser paths incompatible with the deny-network/P13 boundary. Integration difficulty is not the rejection reason. Root MIT LICENSE was byte-verified at the pin (SHA-256 73571b25326281d369087f469842c02444fe39faaecebda4d82ed21ff3a1c29d).",
+        "SI-02 browser provisioning closure: canonical sandbox-image/source-lock.json pins approved playwright-core 1.63.0 npm tarball (published SHA-512 SRI verified), its browsers.json SHA-256 and Chromium revision 1243/version 153.0.8010.12. The matching open Playwright linux-arm64 Chromium archive is SHA-256 locked (f144b7f58b61c6bea2c192c4c178faa9b606bdf758e2d47ca99fa03f759a13e4); binary version metadata matches and archive has no Widevine. Proprietary Chrome for Testing was inspected and rejected from distribution due to all-rights-reserved ABOUT/Widevine, not integration difficulty. Complete Debian native dependency SHA-256 values matched signed APT metadata; exact source-package/version/copyright references are in browser-dependency-inventory.json. Existing offline image assembler installs/verifies locked artifacts, retains Playwright LICENSE/NOTICE, Chromium BSD license/embedded credits and Debian notices. Existing installer exports and provisions that image with exact in-image browser paths; no second owner, host fallback, browser authority or readiness claim. releaseStatus remains inputs-locked, verifiedImageId null, browser qualification pending real parent build/navigation/cancellation/extinction.",
+        "GM-13 SI-02.10: actual ACP runtime types, identity merge, lineage and complete structured-auth/error redaction imported at the approved pin. Local imports replace normalization-core; only identity type declarations and used normalization functions retained. error-format drops unused stringifyNonErrorCause re-export (no error-coercion dependency). No acpx process/runtime authority, donor session store or approve-all native path imported. LiOS session-binding uses authenticated canonical context and already-admitted GM-11 ManagedRun custody; inventory consumer registers read-only installation health in existing P13 registry. Ownership/drift/cancel/redaction/inventory tests in server/acpRuntime.test.ts are not real ACP workflow evidence.",
+        "SI-02.14/GM-14: complete actions.ts copied with attribution; scalePoint additionally rejects negative/non-finite coordinates. Complete frame.ts generation/reference/frame lifecycle copied with attribution header only. Native references are ephemeral session capabilities, not replacements for LiOS entity identity.",
+        "SI-02.14/GM-14: complete driver-artifact-verification.ts imported; OpenClaw fs-safe/string helpers replaced with bounded Node streaming SHA-256 and local record guards, regular-file/O_NOFOLLOW checks, unsafe filenames rejected. macOS no longer returns donor non-applicable success; it requires a separately verified app-owned daemon. package.json 0.28.2 dependency version and artifact hash metadata retained in driver-artifacts.json; no SDK or binaries copied.",
+        "SI-02.14/GM-14: complete node-invoke-policy.ts risk-family/observation tables and computer-use-contract.ts 40-action vocabulary imported into risk-policy.ts. LiOS assessment-only strict Zod schema replaces donor plugin/node dispatch; every consequential input requires user_confirm. Raw native-control/self-approval fields rejected. LiOS-owned governed-computer.ts injects computer.assess into an existing L1 registry, never creates a registry or GUI execution route; native-boundary.ts reuses canonical GM-14 ExecutionBackend isolation and explicitly refuses unavailable native transport.",
+        "SI-02.14/GM-14 dependency rights: imported helpers add no dependencies beyond Node and existing LiOS Zod. OpenClaw MIT copyright/permission notice retained in THIRD_PARTY_NOTICES.md. Unimported runtime closure (@trycua/cua-driver 0.28.2, @openclaw/fs-safe 0.21.1, rastermill 0.3.3, donor Zod 4 and plugin SDK) is not installed/bundled by this lane. Driver 0.28.2 source/npm MIT metadata verified, Copyright 2025 Cua AI Inc.; prebuilt binary transitive redistribution rights/notices and actual archive/executable hash remain unqualified. No binary download or redistribution and no unrestricted/bypass-approval donor launcher imported.",
+        "SI-02.14/GM-14 regression lineage: node-invoke-policy.test.ts high-risk tables/raw-control denial and driver-artifacts.test.ts package/version/digest cases ported into computer-policy.test.ts with LiOS capture-scope, reconnect/frame, coordinate and denied invocation cases. Tests added but not exercised by donor lane; no native GUI cancellation/extinction/persisted-receipt or SP-02 acceptance claimed. Imported/inspected source byte-compared against pinned raw GitHub files; extracted source package version alone not used as identity proof.",
+        "secret-equal.ts copied verbatim with an attribution header",
+        "secret-equal.test.ts ported from vitest to node:test",
+        "normalizeArchivePath adapted into tarFormat.ts (drops the @openclaw/fs-safe dependency; adds NUL/empty-segment/normalization checks); the rest of backup-* is OpenClaw-config/tar-library specific and was rewritten for the LiOS database + data root",
+        "ref-contract.ts adapted into shared/secretRef.ts: LiOS env ids are restricted to LIOS_SECRET_*, sources are env/file/vault, a bare vault name stays valid; resolver, allow-listed directories and vault integration are LiOS code",
+        "net-policy ip.ts copied with its two @openclaw/normalization-core string helpers inlined; test ported vitest -> node:test via a small shim; the egress policy, redirect-aware guarded fetch and configuration are LiOS code (server/egressPolicy.ts)",
+        "GM-08a: gateway-protocol frames and gateway-client (pending requests, event listeners, timeouts, protocol client state machine) rewritten as the LiOS-owned Gateway protocol v1: zod instead of TypeBox, LiOS method/event catalogue, session-cookie authentication, no device auth/pairing/tailscale/control-UI/suspension logic, no wire compatibility with OpenClaw. Only the envelope design and client reliability ideas are carried over; the server hub is LiOS code.",
+        "GM-09a: device-auth.ts payload design (versioned delimiter-joined string binding device id, client, mode, scopes, signing time, server nonce) adapted into buildDeviceProofPayload; LiOS signs with Ed25519 over WebCrypto/node:crypto, binds the pairing token, caps paired-device scopes below admin, and implements pairing, approval, storage and revocation itself (no OpenClaw device-pair plugin code).",
+        "GM-10a: ten leaf utilities copied unchanged except provenance headers and flattened extensionless imports: bounded-buffer, deferred, kill-tree, process-deadline, pipe-output, utf8-truncate, backend, output-ring, output-coalescer and output-flow-control. Supervisor/adapters retain donor cancellation, scope, output-fence, timeout and drain semantics; private normalization-core helpers replaced by a minimal local coerce module.",
+        "GM-10a historical slice: child-only execution omitted unconsumed cleanup-budget/awaited-output branches, spawn broker, service-child relays, Windows Job ownership and Bun/PTY adapters; no fake adapters or wire endpoints replaced them. Subsequent GM-10b adds the encrypted interrupted-history journal and GM-10c part 1 adds a native PTY backend only. Interactive sessions, attach/replay and uploads remain open.",
+        "GM-10a: inherited child environment is allow-listed; explicit overlays are deliberate, undefined removes values, Windows keys overlay case-insensitively. Cancellation retains POSIX group ownership after root exit, joins decoder/output tails and every signal delivery before reporting extinction. A Darwin EPERM group probe falls back to bounded explicit ps enumeration, never assumes success on permission errors.",
+        "GM-10a: Vitest module mocks replaced by injected native adapters plus node:test mocks/assertions for supervisor/child lifecycle ports. Output-ring cases exercise the imported ring directly; session-manager unknown-session behavior awaits that later subsystem. Donor mocked proc/taskkill tests were not ported; real POSIX process/grandchild cleanup is exercised instead. Windows taskkill/Job certification is not claimed.",
+        "GM-10a: LiOS-owned runCommand wraps the adapted supervisor for bounded one-shot commands; existing Python/provider/voice/LEP call sites migrate without changing canonical finance, plugin permissions or chat state. Process-wide shutdown closes admission and joins owned children.",
+        "SI-02.15/GM-14: node-invoke-placement-grant.ts and operator-approval-placement-grants.ts adapted into exec/placement-grant.ts with exact owner/node/generation binding and irreversible invalidation. Existing restricted sandbox terminal consumes container placement; selected node, explicit endpoint, trust/locality and policy enter the approval digest. No donor worker store or remote executor is imported; paired/remote targets remain unavailable.",
+        "GM-10c: terminal-pty.ts and pty-terminal-name.ts adapt the donor's Node PTY path; Bun worker PTY and the Windows wrapper/shell policy are removed, .bat/.cmd launch is rejected, and the native module loads lazily with a real pipe fallback (terminal-backend.ts is LiOS-owned). The backend has no Gateway or REST exposure yet.",
+        "SI-02 L5 donor timing (#287): packages/retry/src/index.ts timing subset (BackoffPolicy, computeBackoff, computeBackoffSchedule, resolveSleepDelayMs, sleepWithAbort) copied into server/exec/retry-timing.ts with pinned provenance and full root MIT notice. Arithmetic/schedule/delay behavior is retained; cancellation emits fixed AbortError without reading or copying AbortSignal.reason; Node timer typing/cleanup simplified. RetrySupervisor, retryAsync/createRetryRunner, configuration and thrown-error conversion are not imported: they must not create retry admission authority.",
+        "SI-02 L5 donor tests: packages/retry/src/index.test.ts capped schedule, exponential cap, cancellation and unref cases adapted from Vitest to node:test in server/exec/retry-timing.test.ts; raw-cause expectation replaced with secret-safe cancellation assertions. LiOS adds initial/cap/jitter bounds, delay normalization/native overflow, listener/timer cleanup and hostile reason-getter tests. No tests were executed in this import slice; no upstream runner/supervisor or SP-02 pass is claimed.",
+        "SI-02 timing consumer: existing server/exec/backends/container-lifecycle.ts private delay helper removed in favor of sleepWithAbort for already-admitted positive integer 1..5000ms extinction cleanup waits. No abort signal is passed and timers remain referenced, preserving mandatory cleanup after caller cancellation. Existing attempts and authoritative absence proof are unchanged; backends/container-lifecycle.test.ts adds exact delay/attempt coverage. No L5 tool-dispatch or ledger runtime activation is claimed."
+      ],
+      "notes": "Major MIT donor pinned at v2026.9.7; partially integrated, not a complete donor runtime. Blueprint sections 46-48 and 51-52 record LiOS Gateway/device/execution imports plus actual pinned retry timing, ACP helper, placement-binding and CUA policy imports. Gateway reconnect/reload is not app-restart run resume; PTY packaged-layout evidence is probe-only because there is no shipped-server caller. The L3 agent loop is LiOS-owned code informed by pinned agent-core mechanism review, not an agent-core code import; it independently owns plan/revise budgets, the durable ledger seam and exact approval pause/resume. The pinned browser subsystem is disposed donor-first in blueprint section 52, but no OpenClaw browser source is imported at this commit. Remote execution nodes, native browser/computer execution, complete coding transport, memory/skills breadth and release qualification remain open. Privileged exec.* remains governed by GM-11."
+    },
+    {
+      "id": "openterminalui",
+      "name": "OpenTerminalUI",
+      "repository": "Hitheshkaranth/OpenTerminalUI",
+      "commitSha": "3e0756432da9c6afd5f0bf6f7aa6e62b7b2c1906",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "workspace",
+        "provider-registry",
+        "streaming",
+        "plugins",
+        "tool-registry",
+        "finance-reference",
+        "tests"
+      ],
+      "subsystems": [
+        {
+          "name": "workspace-command-saved-views-linked-panels",
+          "classification": "adapt",
+          "paths": [
+            "frontend/src",
+            "backend/api/routes/user_layouts.py"
+          ]
+        },
+        {
+          "name": "provider-contracts-registry-cache-streaming",
+          "classification": "adapt",
+          "paths": [
+            "backend/adapters/provider_contracts.py",
+            "backend/services/provider_registry.py",
+            "backend/services/cache.py",
+            "backend/api/routes/stream.py"
+          ]
+        },
+        {
+          "name": "plugin-and-agent-tool-registry",
+          "classification": "adapt",
+          "paths": [
+            "backend/plugins",
+            "backend/agent/tools/registry.py"
+          ]
+        },
+        {
+          "name": "backtest-risk-portfolio-options",
+          "classification": "adapt",
+          "paths": [
+            "backend/core/backtester.py",
+            "backend/risk_engine",
+            "backend/portfolio_lab",
+            "backend/core/option_greeks.py"
+          ],
+          "requirements": [
+            "known-answer tests",
+            "data-rights review",
+            "LiOS engine contracts"
+          ]
+        },
+        {
+          "name": "research-agent-workflows",
+          "classification": "stub",
+          "paths": [
+            "backend/research_autopilot",
+            "backend/agent"
+          ],
+          "requirements": [
+            "LiOS Agent Runtime remains authoritative"
+          ]
+        },
+        {
+          "name": "execution-oms-paper-trading",
+          "classification": "reject",
+          "dispositionReview": "pending_mechanism_repurposing_combination_analysis; reject retained as historical scope decision, not final SI disposition",
+          "paths": [
+            "backend/tests/test_oms.py",
+            "backend/tests/test_paper_trading_guardrail.py"
+          ],
+          "requirements": [
+            "No brokerage execution or order-write import is permitted in current LiOS scope; separately review paper-simulation, guardrail and test mechanisms for non-brokerage reuse behind P11/GM authority"
+          ]
+        },
+        {
+          "name": "branding-assets-screenshots",
+          "classification": "reject",
+          "paths": [
+            "assets",
+            "frontend/public/landing/assets"
+          ]
+        },
+        {
+          "name": "tests",
+          "classification": "adapt",
+          "paths": [
+            "backend/tests",
+            "frontend/src/__tests__"
+          ],
+          "requirements": [
+            "port only tests relevant to imported behavior"
+          ]
+        }
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Major donor. Import substantial MIT-licensed subsystems only after exact path verification; provider/data/API rights remain separate."
+    },
+    {
+      "id": "openterminal",
+      "name": "OpenTerminal",
+      "repository": "ErTasselli/OpenTerminal",
+      "commitSha": "6feb4869489c8ac9537b1405547983591e1d3263",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "provider-patterns",
+        "cache",
+        "local-runtime",
+        "workspace-reference",
+        "tests"
+      ],
+      "subsystems": [
+        {
+          "name": "provider-registry-and-fallback",
+          "classification": "adapt",
+          "paths": [
+            "server/src/providers/registry.ts",
+            "server/src/providers"
+          ],
+          "requirements": [
+            "review each upstream service terms"
+          ]
+        },
+        {
+          "name": "cache-concurrency-rate-limit",
+          "classification": "adapt",
+          "paths": [
+            "server/src/cache.ts",
+            "server/src/concurrency.test.ts",
+            "server/src/rateLimit.test.ts"
+          ]
+        },
+        {
+          "name": "workspace-command-widgets",
+          "classification": "adapt",
+          "paths": [
+            "web/components/Workspace.tsx",
+            "web/components/CommandPalette.tsx",
+            "web/components/widgets"
+          ]
+        },
+        {
+          "name": "sqlite-local-storage",
+          "classification": "stub",
+          "paths": [
+            "server/src/db.test.ts"
+          ],
+          "requirements": [
+            "LiOS existing PGlite/DuckDB/local storage remains authoritative"
+          ]
+        },
+        {
+          "name": "provider-implementations",
+          "classification": "stub",
+          "paths": [
+            "server/src/providers"
+          ],
+          "requirements": [
+            "service/data rights and reliability must be independently verified"
+          ]
+        },
+        {
+          "name": "branding-assets",
+          "classification": "reject",
+          "paths": [
+            "docs/screenshots"
+          ]
+        }
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Smaller donor; useful for simple provider isolation, caching and workspace patterns. Do not replace stronger LiOS data/runtime contracts."
+    },
+    {
+      "id": "tradingagents",
+      "name": "TradingAgents",
+      "repository": "TauricResearch/TradingAgents",
+      "commitSha": "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "finance-agents",
+        "structured-outputs",
+        "checkpoint-resume",
+        "point-in-time-patterns",
+        "backtest-patterns"
+      ],
+      "importedPaths": ["tradingagents/agents/researchers/bear_researcher.py","tradingagents/agents/researchers/bull_researcher.py","tradingagents/agents/risk_mgmt/aggressive_debator.py","tradingagents/agents/risk_mgmt/conservative_debator.py","tradingagents/agents/risk_mgmt/neutral_debator.py","tradingagents/agents/utils/agent_utils.py","tradingagents/agents/utils/rating.py","tradingagents/graph/conditional_logic.py","tradingagents/graph/signal_processing.py"],
+      "destinationPaths": ["server/tradingAgentsResearchGate.mjs","server/tradingAgentsResearchGate.d.mts","server/tradingAgentsResearchTool.ts","server/tradingAgentsResearchTool.test.ts","server/tradingAgentsResearchGate.test.mjs","server/conversationRuntime.ts"],
+      "modifications": ["Adapted 9 approved upstream rating, signal, bull/bear and risk-debate source paths into bounded fail-closed parser/state logic, not the Python LangGraph agent runtime.","Registered read-only Project and tenant-scoped governed conversation tool; invalid/contradictory rating requires human review, no brokerage, provider or unverified source citations.","Replaced upstream model, checkpoint, market data and trading authority with canonical LiOS GM-12, P5/P7, P11 and P4 seams; remaining upstream source paths are audited but not imported."],
+      "notes": "Only the 9-path bounded source mechanics for merged PR #633 are adapted behind GM-12, with native V1 38150791824. Original 75-path audit and full Apache license on disk; full TradingAgents Python runtime, market/provider models, trading and packaged SP-05 are NOT adopted or approved.",
+      "subsystems": [
+        {
+          "name": "specialist-finance-agents",
+          "classification": "adapt",
+          "paths": [
+            "tradingagents/agents/analysts",
+            "tradingagents/agents/researchers",
+            "tradingagents/agents/risk_mgmt",
+            "tradingagents/agents/managers"
+          ],
+          "requirements": [
+            "normalize outputs into LiOS Agent/Artifact contracts"
+          ]
+        },
+        {
+          "name": "structured-agent-schemas",
+          "classification": "adapt",
+          "paths": [
+            "tradingagents/agents/schemas.py",
+            "tradingagents/agents/utils/structured.py"
+          ],
+          "requirements": [
+            "preserve LiOS schema/version authority"
+          ]
+        },
+        {
+          "name": "checkpoint-resume-graph",
+          "classification": "adapt",
+          "paths": [
+            "tradingagents/graph/checkpointer.py",
+            "tradingagents/graph/trading_graph.py"
+          ],
+          "requirements": [
+            "Project/Session Ledger remains authoritative"
+          ]
+        },
+        {
+          "name": "point-in-time-and-market-validation",
+          "classification": "adapt",
+          "paths": [
+            "tradingagents/dataflows/date_window.py",
+            "tradingagents/dataflows/market_data_validator.py",
+            "tests/test_fundamentals_lookahead.py",
+            "tests/test_news_lookahead.py",
+            "tests/test_memory_pointintime.py"
+          ],
+          "requirements": [
+            "port tests before relying on historical/backtest research"
+          ]
+        },
+        {
+          "name": "provider-and-data-vendor-routing",
+          "classification": "stub",
+          "paths": [
+            "tradingagents/llm_clients",
+            "tradingagents/dataflows"
+          ],
+          "requirements": [
+            "LiOS BYOAI/Data Fabric remain authoritative",
+            "upstream API/data rights reviewed separately"
+          ]
+        },
+        {
+          "name": "backtest-portfolio-reporting",
+          "classification": "adapt",
+          "paths": [
+            "tradingagents/backtest.py",
+            "tradingagents/portfolio.py",
+            "tradingagents/reporting.py"
+          ],
+          "requirements": [
+            "wrap behind LiOS BacktestEngine/Artifact contracts",
+            "known-answer tests"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "Python >=3.10",
+        "Depends on LangGraph/LangChain providers and yfinance by default; do not import its cloud/provider assumptions wholesale.",
+        "Bedrock is optional upstream."
+      ]
+    },
+    {
+      "id": "dexter",
+      "name": "Dexter",
+      "repository": "virattt/dexter",
+      "commitSha": "ecaed3011f24ea24ef687ab536aa7f22f7294038",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "research-planning",
+        "tool-selection",
+        "iterative-research"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Research/agent donor candidate; cloud-specific data/model dependencies must map behind LiOS adapters. Historical finance-desktop-only exclusions are pending SI mechanism/repurposing/combination review, not final dispositions.",
+      "subsystems": [
+        {
+          "name": "agent-loop-tool-executor",
+          "classification": "adapt",
+          "paths": [
+            "src/agent",
+            "src/controllers/agent-runner.ts"
+          ],
+          "requirements": [
+            "LiOS permission/context runtime remains authoritative"
+          ]
+        },
+        {
+          "name": "skills-registry",
+          "classification": "adapt",
+          "paths": [
+            "src/skills"
+          ],
+          "requirements": [
+            "map into future LiOS skill/tool contracts rather than copying prompts blindly"
+          ]
+        },
+        {
+          "name": "permissions",
+          "classification": "adapt",
+          "paths": [
+            "src/permissions"
+          ],
+          "requirements": [
+            "compare with stronger existing LiOS permission broker before import"
+          ]
+        },
+        {
+          "name": "memory-and-session-files",
+          "classification": "stub",
+          "paths": [
+            "src/memory",
+            "src/gateway/sessions"
+          ],
+          "requirements": [
+            "LiOS Project/Session/Ledger persistence remains authoritative"
+          ]
+        },
+        {
+          "name": "finance-tools",
+          "classification": "adapt",
+          "paths": [
+            "src/tools/finance"
+          ],
+          "requirements": [
+            "replace provider-specific calls with LiOS Data Fabric",
+            "deterministic finance engines remain authoritative"
+          ]
+        },
+        {
+          "name": "browser-search-bash-filesystem-tools",
+          "classification": "stub",
+          "paths": [
+            "src/tools/browser",
+            "src/tools/search",
+            "src/tools/bash",
+            "src/tools/filesystem"
+          ],
+          "requirements": [
+            "use existing LiOS isolation/Playwright/permission boundaries"
+          ]
+        },
+        {
+          "name": "gateway-messaging",
+          "classification": "reject",
+          "dispositionReview": "pending_mechanism_repurposing_combination_analysis; reject retained as historical domain decision, not final SI disposition",
+          "paths": [
+            "src/gateway"
+          ],
+          "requirements": [
+            "Historical P0-P10 finance-desktop exclusion is superseded as a suitability reason; assess Gateway reliability/session/messaging mechanisms behind GM-08/09/18 without a second Gateway or vendor customer runtime"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "TypeScript/Bun-oriented upstream.",
+        "Postinstall installs Playwright Chromium; do not inherit this side effect into LiOS core.",
+        "Hosted search/LLM providers and WhatsApp gateway dependencies require independent rights, privacy and footprint review; their original domain does not alone reject reusable mechanisms."
+      ]
+    },
+    {
+      "id": "langalpha",
+      "name": "LangAlpha",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "db8f8c2dee948c9c6f77805558898c3abb637328",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "research-workspaces",
+        "skills",
+        "subagents",
+        "tool-discovery",
+        "file-context"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Workspace/agent donor; LiOS Project/Session/Artifact contracts remain authoritative.",
+      "subsystems": [
+        {
+          "name": "workspace-persistence",
+          "classification": "adapt",
+          "paths": [
+            "src",
+            "migrations/versions/004_add_workspace_artifacts.py",
+            "migrations/versions/016_add_workspace_spec_and_always_on.py"
+          ],
+          "requirements": [
+            "borrow patterns only; LiOS Project/Session schemas remain authoritative"
+          ]
+        },
+        {
+          "name": "mcp-plugin-tool-binding",
+          "classification": "adapt",
+          "paths": [
+            "mcp_servers",
+            "plugins",
+            "migrations/versions/025_mcp_connectors.py",
+            "migrations/versions/041_tool_binding.py"
+          ],
+          "requirements": [
+            "map to LiOS MCP/Plugin/Permission contracts"
+          ]
+        },
+        {
+          "name": "skills-finance-research",
+          "classification": "adapt",
+          "paths": [
+            "plugins/langalpha_research/skills"
+          ],
+          "requirements": [
+            "review each skill's data assumptions and third-party notices"
+          ]
+        },
+        {
+          "name": "deliverable-skills",
+          "classification": "stub",
+          "paths": [
+            "plugins/langalpha_deliverables/skills"
+          ],
+          "requirements": [
+            "LiOS Artifact/Export contracts remain authoritative"
+          ]
+        },
+        {
+          "name": "market-data-plugins",
+          "classification": "stub",
+          "paths": [
+            "plugins/langalpha_market_data"
+          ],
+          "requirements": [
+            "replace yfinance/provider assumptions with LiOS Data Fabric"
+          ]
+        },
+        {
+          "name": "desktop-shell",
+          "classification": "stub",
+          "paths": [
+            "desktop"
+          ],
+          "requirements": [
+            "LiOS Electron shell/security already stronger and remains authoritative"
+          ]
+        },
+        {
+          "name": "agent-checkpoint-subagent-ledger",
+          "classification": "adapt",
+          "paths": [
+            "src",
+            "migrations/versions/020_subagent_run_ledger.py"
+          ],
+          "requirements": [
+            "normalize into LiOS Agent Runtime and Conversation Ledger"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "Upstream core requires Python >=3.13, while current LiOS managed Python supports >=3.11,<3.14; do not make LangAlpha a mandatory sidecar.",
+        "Very large dependency surface including LangGraph, browser tooling, PostgreSQL/Redis, yfinance and sandbox services; selective assimilation only.",
+        "Uses private upstream modules in places; avoid importing brittle private-API dependencies."
+      ]
+    },
+    {
+      "id": "fin-agent",
+      "name": "Fin-Agent",
+      "repository": "YUHAI0/fin-agent",
+      "commitSha": "b99686296357f37487edd42a261c153104248c9a",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "natural-language-finance",
+        "portfolio-patterns",
+        "backtest-ux",
+        "alerts"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Finance workflow/desktop reference; assimilate only verified production behavior.",
+      "subsystems": [
+        {
+          "name": "agent-core-tools",
+          "classification": "stub",
+          "paths": [
+            "fin_agent/agent",
+            "fin_agent/tools"
+          ],
+          "requirements": [
+            "LiOS Agent/Tool Runtime remains authoritative"
+          ]
+        },
+        {
+          "name": "backtest-engine-registry-strategies",
+          "classification": "adapt",
+          "paths": [
+            "fin_agent/backtest"
+          ],
+          "requirements": [
+            "benchmark against Backtest Kit and existing LiOS engines before importing"
+          ]
+        },
+        {
+          "name": "data-provider-normalization",
+          "classification": "stub",
+          "paths": [
+            "fin_agent/datasources"
+          ],
+          "requirements": [
+            "Tushare/AkShare rights and market coverage reviewed separately",
+            "LiOS Data Fabric remains authoritative"
+          ]
+        },
+        {
+          "name": "portfolio-session-scheduler",
+          "classification": "stub",
+          "paths": [
+            "fin_agent/portfolio.py",
+            "fin_agent/session_store.py",
+            "fin_agent/scheduler.py"
+          ],
+          "requirements": [
+            "use as workflow reference, not canonical persistence"
+          ]
+        },
+        {
+          "name": "llm-factory",
+          "classification": "reject",
+          "dispositionReview": "pending_mechanism_repurposing_combination_analysis; reject retained as historical overlap decision, not final SI disposition",
+          "paths": [
+            "fin_agent/llm"
+          ],
+          "requirements": [
+            "LiOS BYOAI remains singular and authoritative; compare routing/failure/typed-interface mechanisms for complementary or repurposed reuse before final rejection"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "Python dependency set is relatively small but centered on Tushare/AkShare/OpenAI.",
+        "Do not create a second AI router; broader BYOAI coverage alone does not reject all reusable llm-factory mechanisms. Mechanism review remains pending."
+      ]
+    },
+    {
+      "id": "backtest-kit",
+      "name": "Backtest Kit",
+      "repository": "tripolskypetr/backtest-kit",
+      "commitSha": "599d990204cd7bfb44ba61c973cc3f742ea43861",
+      "license": "MIT",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "standard-backtest-runtime",
+        "strategy-research"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Candidate standard BacktestEngine; benchmark correctness, point-in-time semantics, fees/slippage, footprint and Electron integration before adoption.",
+      "subsystems": [
+        {
+          "name": "core-backtest-runtime",
+          "classification": "adapt",
+          "paths": [
+            "src",
+            "build"
+          ],
+          "requirements": [
+            "validate fills/order semantics, look-ahead protection, transaction costs, point-in-time inputs and deterministic reproducibility"
+          ]
+        },
+        {
+          "name": "strategy-risk-schemas",
+          "classification": "adapt",
+          "paths": [
+            "docs/design/25_Strategy_Schemas.md",
+            "docs/design/28_Risk_Schemas.md",
+            "docs/design/67_Risk_Management.md"
+          ],
+          "requirements": [
+            "normalize into LiOS BacktestEngine/StrategyArtifact contracts"
+          ]
+        },
+        {
+          "name": "backtest-adapters-state-session",
+          "classification": "adapt",
+          "paths": [
+            "docs/classes/MemoryBacktestAdapter.md",
+            "docs/classes/SessionBacktestAdapter.md",
+            "docs/classes/StorageBacktestAdapter.md"
+          ],
+          "requirements": [
+            "LiOS Session/Ledger remains canonical state"
+          ]
+        },
+        {
+          "name": "mcp-and-ai-strategy-workflows",
+          "classification": "stub",
+          "paths": [
+            "packages/mcp",
+            "docs/design/90_AI-Powered_Strategy_Optimization.md",
+            "docs/design/94_Strategy_Code_Generation.md"
+          ],
+          "requirements": [
+            "use LiOS MCP/Agent/permission boundary"
+          ]
+        },
+        {
+          "name": "front-demo-cli-integrations",
+          "classification": "stub",
+          "paths": [
+            "packages/front",
+            "cli",
+            "demo"
+          ],
+          "requirements": [
+            "do not import demo/branding or unrelated runtime services into core"
+          ]
+        },
+        {
+          "name": "live-broker-execution",
+          "classification": "reject",
+          "dispositionReview": "brokerage writes remain prohibited; non-brokerage mechanism/repurposing review pending",
+          "paths": [
+            "demo/broker",
+            "demo/live"
+          ],
+          "requirements": [
+            "No brokerage execution or order writes are in current LiOS scope; review simulation, lifecycle, replay and safety-test mechanisms separately for non-brokerage reuse behind P11/GM authority"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "Core package has a small TypeScript dependency surface and TypeScript peer dependency.",
+        "Repository is large because it includes demos/docs/add-on packages; evaluate the published core package rather than vendoring the entire repository.",
+        "MCP/CCXT/Ollama/front-end integrations are separate packages/demos and are not prerequisites for the core backtest engine."
+      ]
+    },
+    {
+      "id": "lean",
+      "name": "QuantConnect LEAN",
+      "repository": "QuantConnect/Lean",
+      "commitSha": "985ef30ad3ac774218c5ac516b4cb0aa2655730f",
+      "license": "Apache-2.0",
+      "posture": "runtime_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "advanced-quant-runtime",
+        "multi-asset-backtesting"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Optional Advanced Quant Runtime Pack only after BacktestEngine contract stabilizes."
+    },
+    {
+      "id": "dockview",
+      "name": "Dockview",
+      "repository": "dockview/dockview",
+      "commitSha": "3b519454178f203d41acd49bd2733b5cdcd0f9be",
+      "license": "MIT",
+      "posture": "bundled",
+      "classification": "production",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "living-workspace-layout"
+      ],
+      "importedPaths": [
+        "packages/dockview-react",
+        "packages/dockview",
+        "packages/dockview-core"
+      ],
+      "destinationPaths": [
+        "npm:dockview-react@8.3.1",
+        "npm:dockview@8.3.1",
+        "npm:dockview-core@8.3.1",
+        "client/src/components/terminal/DockviewWorkspaceGrid.tsx",
+        "client/src/lib/dockviewWorkspaceState.ts"
+      ],
+      "pathMappingNote": "The three upstream package directories map to three pinned npm packages; the two LiOS adapter/state files are local integration destinations, not additional one-to-one vendored copies.",
+      "modifications": [
+        "No upstream source files are edited in place; packages are consumed through npm.",
+        "Dockview is wrapped by LiOS DockviewWorkspaceGrid and WorkspaceAdapter so LiOS Project/Session/pane state remains canonical.",
+        "Native Dockview close controls are hidden because LiOS owns pane close semantics; Dockview owns geometry, docking, floating and serialized layout only."
+      ],
+      "notes": "Current main Living Workspace renderer behind the replaceable LiOS adapter. Packaged desktop/release qualification remains open; Dockview Enterprise remains excluded.",
+      "dependencyNotes": [
+        "dockview-react is pinned to 8.3.1; npm overrides pin dockview and dockview-core to 8.3.1.",
+        "MIT open-source packages only. dockview-enterprise is not installed, imported or required.",
+        "React 18.3.1 is within the upstream React 16.8-19 compatibility range.",
+        "Serialized Dockview state contains layout geometry only; credentials and canonical analytical state remain outside the donor model."
+      ],
+      "subsystems": [
+        {
+          "name": "react-docking-core",
+          "classification": "production",
+          "paths": [
+            "packages/dockview-react",
+            "packages/dockview"
+          ],
+          "requirements": [
+            "Current main integration remains behind WorkspaceAdapter",
+            "preserve LiOS Session/Project state as canonical"
+          ]
+        },
+        {
+          "name": "serialization-layout-model",
+          "classification": "production",
+          "paths": [
+            "packages/dockview-core",
+            "packages/dockview"
+          ],
+          "requirements": [
+            "round-trip LiOS workspace/session envelope in packaged desktop acceptance",
+            "migration test across restart"
+          ]
+        },
+        {
+          "name": "enterprise-package",
+          "classification": "reject",
+          "paths": [
+            "packages/dockview-enterprise"
+          ],
+          "requirements": [
+            "not part of OSS selection or LiOS dependency assumptions"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flexlayout",
+      "name": "FlexLayout",
+      "repository": "caplin/FlexLayout",
+      "commitSha": "92c9d67c2cba18b1fe6731af25f287e7abe30b2f",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "reject",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "living-workspace-layout"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Historical P0 comparison did not select FlexLayout for docking; preserve the exact pin and one Dockview workspace authority. This is not a license rejection. Mechanism/repurposing/challenger review remains pending before final SI rejection; no production dependency is added by that review.",
+      "dependencyNotes": [
+        "flexlayout-react observed version 0.11.0; MIT; React 18-19 compatibility.",
+        "Model-driven docking is viable, but P0 selects Dockview for the single P1 POC to avoid parallel layout systems."
+      ],
+      "subsystems": [
+        {
+          "name": "model-driven-docking",
+          "classification": "stub",
+          "paths": [
+            "src"
+          ],
+          "requirements": [
+            "reference only unless Dockview fails P1 acceptance"
+          ]
+        },
+        {
+          "name": "demo-examples",
+          "classification": "reject",
+          "paths": [
+            "demo",
+            "examples"
+          ],
+          "requirements": [
+            "not product code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "monaco-editor",
+      "name": "Monaco Editor",
+      "repository": "microsoft/monaco-editor",
+      "commitSha": "d620ca0c03d24a51c05ae4dca8a9d5923a4aeb9c",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "strategy-editor",
+        "formula-editor",
+        "sql-editor"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Editor only; execution remains in sandboxed LiOS runtimes.",
+      "subsystems": [
+        {
+          "name": "browser-editor-core",
+          "classification": "adapt",
+          "paths": [
+            "src/editor.ts",
+            "src/features/codeEditor",
+            "src/features/diffEditor"
+          ],
+          "requirements": [
+            "editor is UI only; execution/sandbox remains LiOS-owned"
+          ]
+        },
+        {
+          "name": "typescript-javascript-language-workers",
+          "classification": "adapt",
+          "paths": [
+            "src/deprecated/language/typescript",
+            "src/internal/common/workers.ts"
+          ],
+          "requirements": [
+            "load only languages needed by Strategy/Formula Studio to control bundle/runtime cost"
+          ]
+        },
+        {
+          "name": "lsp-client",
+          "classification": "stub",
+          "paths": [
+            "monaco-lsp-client"
+          ],
+          "requirements": [
+            "not required for initial Strategy Studio; evaluate only if semantic language-server features are needed"
+          ]
+        },
+        {
+          "name": "samples-website-build-tooling",
+          "classification": "reject",
+          "paths": [
+            "samples",
+            "website",
+            "build"
+          ],
+          "requirements": [
+            "do not ship donor samples/branding/build system"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "MIT browser editor; observed upstream package version 0.56.0.",
+        "Keep editor rendering separate from strategy execution, validation, filesystem and secret permissions.",
+        "Prefer ESM/worker lazy loading and only the language features LiOS actually exposes."
+      ]
+    },
+    {
+      "id": "whisper-cpp",
+      "name": "whisper.cpp",
+      "repository": "ggml-org/whisper.cpp",
+      "commitSha": "307869af285d7f6f689ba100b3515e2d1b3feb05",
+      "license": "MIT",
+      "posture": "runtime_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "optional-local-voice-pack"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Voice Pack candidate. Model file licenses/weights are separate from code license.",
+      "subsystems": [
+        {
+          "name": "core-inference-library",
+          "classification": "adapt",
+          "paths": [
+            "src",
+            "include",
+            "ggml"
+          ],
+          "requirements": [
+            "optional Voice Pack only",
+            "native build matrix and packaged binary signing required"
+          ]
+        },
+        {
+          "name": "node-binding-example",
+          "classification": "stub",
+          "paths": [
+            "examples/addon.node"
+          ],
+          "requirements": [
+            "evaluate wrapper approach; do not inherit example packaging blindly"
+          ]
+        },
+        {
+          "name": "stream-command-server-demos",
+          "classification": "reject",
+          "paths": [
+            "examples/stream",
+            "examples/command",
+            "examples/server"
+          ],
+          "requirements": [
+            "LiOS voice UX/runtime remains authoritative"
+          ]
+        },
+        {
+          "name": "model-download-conversion",
+          "classification": "stub",
+          "paths": [
+            "models"
+          ],
+          "requirements": [
+            "model weight license/size/hash tracked separately from MIT inference code"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "Core source is MIT, but model weights are separate artifacts with separate licenses/redistribution obligations.",
+        "Native C/C++/ggml runtime can use platform-specific acceleration; Voice Pack must remain optional and must not inflate the core installer.",
+        "No model weights are approved for default bundling in P0."
+      ]
+    },
+    {
+      "id": "hqtui",
+      "name": "HQTUI",
+      "repository": "profullstack/hqtui",
+      "commitSha": "6f6f70fa7a0307ed6948df75205e37dd0a0928c7",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "cli-diagnostics"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "CLI/diagnostic TUI only; not the React desktop renderer.",
+      "subsystems": [
+        {
+          "name": "typescript-tui-core",
+          "classification": "adapt",
+          "paths": [
+            "packages/hqtui/src",
+            "packages/hqtui/bin"
+          ],
+          "requirements": [
+            "CLI/diagnostics only; never replace React desktop renderer"
+          ]
+        },
+        {
+          "name": "testing-primitives",
+          "classification": "adapt",
+          "paths": [
+            "packages/hqtui/src/testing.ts",
+            "packages/hqtui/test"
+          ],
+          "requirements": [
+            "useful for future CLI diagnostics acceptance tests"
+          ]
+        },
+        {
+          "name": "multi-language-ports",
+          "classification": "reject",
+          "dispositionReview": "pending_mechanism_repurposing_combination_analysis; reject retained as historical desktop-domain decision, not final SI disposition",
+          "paths": [
+            "ports"
+          ],
+          "requirements": [
+            "Historical desktop-domain exclusion is not sufficient; assess testing/portability/diagnostic mechanisms for user-owned server/native/automation targets behind GM-21/24, without a second product shell"
+          ]
+        },
+        {
+          "name": "demo-web-benchmark-apps",
+          "classification": "reject",
+          "paths": [
+            "apps",
+            "examples"
+          ],
+          "requirements": [
+            "do not import donor demos/branding"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "MIT; @profullstack/hqtui observed version 0.6.3 with zero runtime dependencies.",
+        "Upstream declares Node >=22.6/Bun >=1.1; verify compatibility before any CLI adoption.",
+        "Role is optional diagnostics/automation CLI only, not product shell/UI."
+      ]
+    },
+    {
+      "id": "assistant-ui",
+      "name": "assistant-ui",
+      "repository": "assistant-ui/assistant-ui",
+      "commitSha": "0587eab05b5038df80d8b39489a65084f193c6d7",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "conversation-ui",
+        "thread-composer",
+        "tool-rendering"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectExperienceShell.tsx"
+      ],
+      "modifications": [
+        "P1 assimilates interaction patterns for thread navigation, composer, mentions and slash actions into LiOS-owned components; assistant-ui runtime/cloud state is not bundled."
+      ],
+      "notes": "Recorded pattern-level adaptation in ProjectExperienceShell only; no assistant-ui package/runtime or Assistant Cloud state is bundled. LiOS Project/Chat persistence and runtime remain authoritative; local adapter intent is not donor-runtime proof.",
+      "subsystems": [
+        {
+          "name": "thread-list-and-composer-patterns",
+          "classification": "adapt",
+          "paths": [
+            "packages/react/src/primitives/threadList",
+            "packages/react/src/primitives/composer"
+          ],
+          "requirements": [
+            "pattern-level reimplementation only",
+            "LiOS Project/Chat persistence remains authoritative"
+          ]
+        },
+        {
+          "name": "mentions-and-slash-command-patterns",
+          "classification": "adapt",
+          "paths": [
+            "packages/react/src/primitives",
+            "apps/docs"
+          ],
+          "requirements": [
+            "LiOS-owned implementation",
+            "no Assistant Cloud dependency"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tool-ui",
+      "name": "tool-ui",
+      "repository": "assistant-ui/tool-ui",
+      "commitSha": "49a870286facdbf28160cd647f0d337ebdc9b275",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "tool-results",
+        "approval-ui",
+        "interactive-cards"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "client/src/components/terminal/ConversationRuntimeTrace.tsx"
+      ],
+      "modifications": [
+        "P2 implements LiOS-owned progress, result, artifact and approval cards using the reviewed tool-ui interaction model; no upstream source file is copied verbatim.",
+        "ConversationRuntimeTrace renders only LiOS typed runtime events and never makes tool-ui or Assistant Cloud authoritative."
+      ],
+      "notes": "Pattern-level P2 adaptation only. No tool-ui package/runtime is bundled; LiOS contracts, persistence, permissions and theming remain authoritative."
+    },
+    {
+      "id": "univer",
+      "name": "Univer",
+      "repository": "dream-num/univer",
+      "commitSha": "360c5ccb5e40e48be95b213a19527ac5afe9909a",
+      "license": "Apache-2.0",
+      "posture": "bundled",
+      "classification": "production",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "spreadsheet-artifact"
+      ],
+      "importedPaths": [
+        "packages/presets",
+        "packages/preset-sheets-core"
+      ],
+      "destinationPaths": [
+        "npm:@univerjs/presets@1.0.0-rc.0",
+        "npm:@univerjs/preset-sheets-core@1.0.0-rc.0",
+        "client/src/components/terminal/UniverSpreadsheetEditor.tsx",
+        "shared/univerArtifact.ts"
+      ],
+      "pathMappingNote": "The two upstream preset packages map to two pinned npm packages (their OSS transitive @univerjs/* dependencies resolve through the lockfile); the two LiOS files are local adapter destinations, not vendored copies.",
+      "modifications": [
+        "No upstream source file is edited; packages are consumed through npm and lazy-loaded only when a spreadsheet Artifact selects the Univer renderer.",
+        "shared/univerArtifact.ts projects the canonical P4 spreadsheet content (A1-keyed raw text/formats) into Univer's row/column workbook data and serializes edits back; formulas are stored as source text, never as cached results.",
+        "Saving goes through the existing immutable P4 revision API; Univer holds only the editable projection and is never the authority for Artifact state, permissions or history."
+      ],
+      "notes": "CA-01 renderer behind canonical P4 Artifact contracts; only OSS presets, no Pro/commercial plugin, collaboration server or cloud requirement. Blueprint section 48.8 records 2026-10-03 macOS arm64 unsigned/ad-hoc packaged-shell smoke under real desktop CSP: lazy chunk, ribbon/canvas/formula and P4 revision 2 save, zero CSP violations. This bounded local smoke is not signed/notarized clean-install or SP-04 acceptance. Packaged size/startup/RSS, Windows and full professional round-trip qualification remain open.",
+      "dependencyNotes": [
+        "@univerjs/presets and @univerjs/preset-sheets-core are pinned to 1.0.0-rc.0 (Apache-2.0). This is a release candidate; it must be re-pinned to the stable 1.0.0 release when published."
+      ]
+    },
+    {
+      "id": "lydell-node-pty",
+      "name": "@lydell/node-pty",
+      "repository": "lydell/node-pty",
+      "commitSha": "e1212da80b2b1e7f9b03efb97addb97ecf27a2d4",
+      "license": "MIT",
+      "baselineAccounting": "Additional component outside the exact 92 donor IDs; separately recorded in capability-assimilation.json additionalComponentAccounting, not a 93rd baseline donor.",
+      "posture": "bundled",
+      "classification": "production",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "native-pty"
+      ],
+      "importedPaths": [
+        "package.json"
+      ],
+      "destinationPaths": [
+        "npm:@lydell/node-pty@1.2.0-beta.15",
+        "server/exec/terminal-pty.ts",
+        "server/exec/terminal-backend.ts"
+      ],
+      "pathMappingNote": "Filesystem destinationPaths are relative to the LiOS src/ directory; the npm: destination preserves exact package provenance, not a filesystem path. Consumed unmodified as an exact-pinned npm optionalDependency; the per-platform prebuilt packages (darwin/linux/win32, x64/arm64) resolve through the lockfile at the same version. The two LiOS filesystem destinations are dependency consumers/adapters, not copied node-pty source; terminal-pty.ts donor adaptation and its test port lineage belong to OpenClaw.",
+      "modifications": [
+        "No upstream source is edited. The lazy server/exec/terminal-pty.ts loader uses the equivalent app.asar path (nativePtyLoadPath) to avoid node-pty double-rewriting an already-unpacked spawn-helper path. Real supervised pipes are used only when the native module is unavailable, with mode pipe and unsupported resize reported; spawn/authorization errors never trigger bypass fallback."
+      ],
+      "notes": "Exact optional beta dependency for GM-10's backend only. Blueprint sections 48.7-48.8 record macOS arm64 source native smoke and an unsigned/ad-hoc packaged-layout probe using the packaged runtime (mode pty, TTY=yes, 25x90). There is no shipped-server caller: esbuild tree-shakes the backend from dist/index.cjs, so this is not a shipped interactive terminal or SP-01 acceptance. GM-11 exact-operation authority gates privileged exec.*; GM-10c consumer/session integration, signed/notarized hardened-runtime loading, Windows ConPTY, Linux packaged behavior and stable re-pin remain open.",
+      "dependencyNotes": [
+        "Do not omit optional dependencies in release installs and do not copy node_modules between platforms."
+      ]
+    },
+    {
+      "id": "perspective",
+      "name": "Perspective",
+      "repository": "perspective-dev/perspective",
+      "commitSha": "1fc0c8373574a478195ebc69302cafeb924f7876",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "streaming-data-artifact",
+        "pivot-grid"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Adopt only if packaged Electron performance/footprint gates pass."
+    },
+    {
+      "id": "echarts",
+      "name": "Apache ECharts",
+      "repository": "apache/echarts",
+      "commitSha": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "advanced-visualization"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "client/src/components/terminal/EChartsArtifactPlot.tsx",
+        "client/src/lib/artifactEChartsOption.ts"
+      ],
+      "modifications": [
+        "Production ECharts 5.6.0 full runtime installed from exact npm integrity; LiOS adapts its SVG core+selected charts behind native P4 lazy Chart Artifact projection, not a copied Git tree or second Artifact authority."
+      ],
+      "notes": "Opt-in Apache ECharts v5.6.0 runtime under LiOS-owned Chart Artifacts; native macOS V1 production build emitted one 474269-byte (~160.25 kB gzip) lazy chunk; Recharts/Lightweight Charts remain existing defaults. Git review pin is not identical to independently locked npm artifact. SP-04 packaged/target P10/P14 startup and memory acceptance remain open."
+    },
+    {
+      "id": "tanstack-table",
+      "name": "TanStack Table",
+      "repository": "TanStack/table",
+      "commitSha": "21d713fc4947d2a08cc2136bb055889a61412ded",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "large-table"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Headless table primitive only where existing tables are insufficient."
+    },
+    {
+      "id": "tanstack-virtual",
+      "name": "TanStack Virtual",
+      "repository": "TanStack/virtual",
+      "commitSha": "78371e851e90fd74e984deeb0c3fd8098e2cd4f3",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "virtualization"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Virtualize large artifacts instead of loading large datasets into renderer state."
+    },
+    {
+      "id": "tiptap",
+      "name": "Tiptap OSS",
+      "repository": "ueberdosis/tiptap",
+      "commitSha": "d9af9c6a16e17438b06b2266765b9c1a21a3d7a0",
+      "license": "MIT",
+      "posture": "major_donor",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "report-artifact",
+        "research-artifact"
+      ],
+      "importedPaths": [
+        "packages/react",
+        "packages/core",
+        "packages/pm",
+        "packages/starter-kit"
+      ],
+      "destinationPaths": [
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx",
+        "src/shared/artifactBridges.ts",
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx",
+        "src/client/src/components/terminal/RichArtifactDocumentEditor.tsx"
+      ],
+      "modifications": [
+        "Lazy OSS editor runtime; canonical P4 block identity/metadata round-trip; local formatting projection; no cloud/collaboration store or paid extensions."
+      ],
+      "notes": "OSS packages pinned to 3.31.4 in package-lock, upstream v3.31.4. Copyright 2025 Tiptap GmbH MIT. Source integration is not packaged SP-04 or Office fidelity qualification."
+    },
+    {
+      "id": "xyflow",
+      "name": "React Flow / xyflow",
+      "repository": "xyflow/xyflow",
+      "commitSha": "0a1f9575b25679f2880175de8d3eae21aedde921",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "research-graph",
+        "workflow-editor"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Advanced graph/editor only after simple workflow UX is complete."
+    },
+    {
+      "id": "skfolio",
+      "name": "skfolio",
+      "repository": "skfolio/skfolio",
+      "commitSha": "eb73a4cfe3136d5615a6047060705695d4462588",
+      "license": "BSD-3-Clause",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "portfolio-optimization",
+        "risk",
+        "model-evaluation"
+      ],
+      "importedPaths": [
+        "src/skfolio/measures/_measures.py",
+        "tests/test_measures/test_measures.py"
+      ],
+      "destinationPaths": [
+        "server/skfolioEffectiveDiversification.ts",
+        "server/portfolioAnalytics.ts",
+        "client/src/lib/finance.ts",
+        "client/src/components/panels/PortfolioHoldingsPanel.tsx"
+      ],
+      "modifications": [
+        "Adapt skfolio effective_number_assets 1/sum(w**2) to a bounded pure TypeScript concentration helper.",
+        "Normalize from recorded exact-date security closes and long shares, consolidate duplicate symbols, fail closed for short/invalid/incomplete/stale prices.",
+        "Expose effectiveNumberOfAssets and recorded diversificationAsOf in existing /api/finance/portfolio-analytics response only; no new store or provider.",
+        "Known-answer and missing/ambiguous price tests included; native qualification pending."
+      ],
+      "notes": "Small deterministic source-pinned skfolio risk metric within existing portfolio analytics. No upstream Python runtime, optimization, holdings mutation, full donor exhaustion or SP-05 acceptance.",
+      "destinationPathBase": "src/",
+      "subsystems": [
+        {
+          "name": "effective-number-of-assets-recorded-close",
+          "classification": "adapt",
+          "paths": [
+            "src/skfolio/measures/_measures.py",
+            "tests/test_measures/test_measures.py"
+          ],
+          "requirements": [
+            "licensed original BSD-3-Clause source and notice retained",
+            "only historic aligned same-day long holdings, no stale carry-forward or short leverage",
+            "P6 read-only analytics route remains authoritative; no donor Python package/runtime or optimizer",
+            "P11 portfolio/accounting/source valuation remains authoritative, no fabricated live pricing",
+            "reject nonfinite, zero-mass and incomplete market observations"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cvxpy",
+      "name": "CVXPY",
+      "repository": "cvxpy/cvxpy",
+      "commitSha": "01992f50f3023d1325bda8aff560de2c5f2ca138",
+      "license": "Apache-2.0",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "optimization"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Optimization engine helper; solver licenses/dependencies require separate review."
+    },
+    {
+      "id": "quantlib",
+      "name": "QuantLib",
+      "repository": "lballabio/QuantLib",
+      "commitSha": "cb8894faa0eba62416e6549c80dfc68f3ace871a",
+      "license": "QuantLib License",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "fixed-income",
+        "derivatives",
+        "curves",
+        "pricing"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Existing managed runtime package remains authoritative; upstream pin is research/traceability metadata."
+    },
+    {
+      "id": "edgartools",
+      "name": "EdgarTools",
+      "repository": "dgunning/edgartools",
+      "commitSha": "4e817de7bf3efae44024e168754e8f5d53b1a227",
+      "license": "MIT",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "sec-filings",
+        "xbrl-research"
+      ],
+      "importedPaths": [
+        "edgar/urls.py",
+        "tests/core/test_urls.py"
+      ],
+      "destinationPaths": [
+        "server/edgartoolsSecUrls.ts",
+        "server/secEdgarData.ts",
+        "server/secEdgarFinancials.ts"
+      ],
+      "modifications": [
+        "Adapted upstream SEC centralized URL construction and CIK zero-padding as a pure TS LiOS builder.",
+        "Extended donor path formatting with fail-closed accession/file-name checking before P0/P7 SEC fetch, preventing SEC submissions/index metadata from selecting a different path.",
+        "Existing SEC Form 4 insider and all-company filings use exact accession URLs; existing XBRL company-facts uses one validated CIK builder. No fetch transport, provider entitlement, model, numerical finance or cache changes.",
+        "Upstream test vectors and hostile accession/URL-path regression fixtures adapted into native tests. Native CI pending."
+      ],
+      "notes": "Bounded source-pinned EdgarTools MIT URL-builder adaptation; actual SEC ingestion remains in existing LiOS connector using fair-access User-Agent/caching. No donor Python installation, full XBRL parser or SP-05 acceptance.",
+      "noticeHeading": "EdgarTools",
+      "destinationPathBase": "src/",
+      "subsystems": [
+        {
+          "name": "SEC-CIK-accession-archive-URL-boundary",
+          "classification": "adapt",
+          "paths": [
+            "edgar/urls.py",
+            "tests/core/test_urls.py"
+          ],
+          "requirements": [
+            "pin EdgarTools original MIT source and license",
+            "use fixed official SEC HTTPS host; no donor mirror/env override",
+            "normalize SEC CIK/accession and reject archive path traversal and provider-supplied unsafe XML filenames before fetch",
+            "preserve canonical LiOS source/caching, SEC descriptive user-agent and fair access; no new data entitlements",
+            "do not import EdgarTools Python requests/runtime, separate stores or XBRL numeric parsing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "arelle",
+      "name": "Arelle",
+      "repository": "Arelle/Arelle",
+      "commitSha": "24b6f2c1da5b7b94a267c96c06a5db49f01305e5",
+      "license": "Apache-2.0",
+      "posture": "runtime_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "xbrl-validation",
+        "taxonomy-semantics"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Arelle includes subcomponents with separate notices; inspect exact imported/runtime distribution."
+    },
+    {
+      "id": "docling",
+      "name": "Docling",
+      "repository": "docling-project/docling",
+      "commitSha": "14789f2c2c542f8d127a0aac85eb779d5bba554e",
+      "license": "MIT",
+      "posture": "bundled",
+      "classification": "production",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "approved",
+      "roles": [
+        "document-parsing",
+        "pdf-tables"
+      ],
+      "importedPaths": [
+        "docling==2.129.0 (pinned PyPI wheel and model inventory)"
+      ],
+      "destinationPaths": [
+        "src/sandbox-image/Dockerfile",
+        "src/sandbox-image/source-lock.json"
+      ],
+      "pathMappingNote": "Docling is shipped as an isolated, immutable offline linux/arm64 image inside the macOS app; no upstream source is copied into LiOS TypeScript Core.",
+      "modifications": [
+        "Offline pinned Docling 2.129.0 wheel and resolved dependency wheelhouse are bundled only in the strict sandbox image.",
+        "Default local PDF pipeline uses per-file hashed model weights with no network, no host mounts and non-root execution.",
+        "LiOS Project Intelligence remains the canonical index/state owner; Docling only parses permitted local documents."
+      ],
+      "notes": "SP-01 sandbox image bundles Docling 2.129.0 under MIT; separately pinned Hugging Face and RapidOCR weights have CDLA-Permissive-2.0, MIT and Apache-2.0 terms documented in src/sandbox-image/source-lock.json. Dataset/hosted-provider rights remain separate."
+    },
+    {
+      "id": "sqlite-vec",
+      "name": "sqlite-vec",
+      "repository": "asg017/sqlite-vec",
+      "commitSha": "04d28bd21773981e2d266bbf6aa4efbd011eb4f6",
+      "license": "MIT OR Apache-2.0",
+      "posture": "runtime_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "local-vector-search"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Prefer embedded semantic search before adding a standalone vector service."
+    },
+    {
+      "id": "polars",
+      "name": "Polars",
+      "repository": "pola-rs/polars",
+      "commitSha": "d5be1f6f86df7889d3087a671c68f3199b33c8c3",
+      "license": "MIT",
+      "posture": "runtime_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "dataframe-compute"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Add only when DuckDB/pandas paths show measured need."
+    },
+    {
+      "id": "arrow",
+      "name": "Apache Arrow",
+      "repository": "apache/arrow",
+      "commitSha": "c400f72eb66087604f7e0a6af4d976562971cf1a",
+      "license": "Apache-2.0",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "columnar-interchange"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Interchange format between local analytical engines/artifacts."
+    },
+    {
+      "id": "opentelemetry-js",
+      "name": "OpenTelemetry JS",
+      "repository": "open-telemetry/opentelemetry-js",
+      "commitSha": "bbaec14660b04c229629ddf282776bdea072b51f",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "local-observability",
+        "execution-tracing"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "server/p10Observability.ts"
+      ],
+      "modifications": [
+        "P10 implements a LiOS-owned OTLP/JSON-compatible trace/metric/log adapter; the OpenTelemetry JS runtime package is not bundled.",
+        "Local redacted storage is the default; remote OTLP export requires explicit redacted-only opt-in."
+      ],
+      "notes": "Protocol-compatible adaptation only. No OpenTelemetry runtime dependency or surveillance telemetry requirement."
+    },
+    {
+      "id": "openlineage",
+      "name": "OpenLineage",
+      "repository": "OpenLineage/OpenLineage",
+      "commitSha": "a2b7ed7961225c6020a7534b368dc99984378c96",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "data-lineage-schema"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "server/p10OpenLineage.ts",
+        "server/dataLineageService.ts"
+      ],
+      "modifications": [
+        "P10 maps canonical LiOS P5 DataLineageReceipt records into fingerprinted OpenLineage-style COMPLETE events.",
+        "LiOS P5 lineage remains authoritative; remote export is optional and disabled by default."
+      ],
+      "notes": "Schema/protocol adaptation only; no OpenLineage runtime package is bundled."
+    },
+    {
+      "id": "opa",
+      "name": "Open Policy Agent",
+      "repository": "open-policy-agent/opa",
+      "commitSha": "8cb390243358936dca23cc3c2822266587ded08f",
+      "license": "Apache-2.0",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "policy-engine-candidate"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Only if existing permission/entitlement policy becomes insufficient."
+    },
+    {
+      "id": "pydantic-ai",
+      "name": "Pydantic AI",
+      "repository": "pydantic/pydantic-ai",
+      "commitSha": "c4898abb54dc25ae6f6aef208a4c0661b30a455e",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "typed-python-agent-helper"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Implementation helper only; LiOS Agent Runtime remains authoritative."
+    },
+    {
+      "id": "langgraphjs",
+      "name": "LangGraph JS",
+      "repository": "langchain-ai/langgraphjs",
+      "commitSha": "0284323b2d8457bd830ea987e93f03ebee8370ce",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "stub",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "agent-graph-helper",
+        "checkpoint-patterns"
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [],
+      "notes": "Optional orchestration helper; never canonical Project/permission state."
+    },
+    {
+      "id": "apache-echarts",
+      "name": "Apache ECharts",
+      "repository": "apache/echarts",
+      "commitSha": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "license": "Apache-2.0",
+      "roles": [
+        "optional-advanced-visualization"
+      ],
+      "notes": "Opt-in Apache ECharts v5.6.0 runtime under LiOS-owned Chart Artifacts; native macOS V1 production build emitted one 474269-byte (~160.25 kB gzip) lazy chunk; Recharts/Lightweight Charts remain existing defaults. Git review pin is not identical to independently locked npm artifact. SP-04 packaged/target P10/P14 startup and memory acceptance remain open.",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "importedPaths": [],
+      "destinationPaths": [
+        "client/src/components/terminal/EChartsArtifactPlot.tsx",
+        "client/src/lib/artifactEChartsOption.ts"
+      ],
+      "modifications": [
+        "Production ECharts 5.6.0 full runtime installed from exact npm integrity; LiOS adapts its SVG core+selected charts behind native P4 lazy Chart Artifact projection, not a copied Git tree or second Artifact authority."
+      ],
+      "subsystems": [
+        {
+          "name": "p4-artifact-adapter",
+          "classification": "adapt",
+          "paths": [
+            "packages",
+            "src"
+          ],
+          "requirements": [
+            "LiOS Artifact contracts remain canonical",
+            "benchmark packaged desktop footprint before bundling",
+            "load lazily/optionally where adopted"
+          ]
+        }
+      ],
+      "dependencyNotes": [
+        "echarts@5.6.0 npm package is present in the dependency graph and pinned in package-lock; ONLY the rendererPreference=echarts path loads the Vite emitted 474269-byte lazy chunk. Packaged startup/RSS not yet qualified."
+      ]
+    },
+    {
+      "id": "lse-terminal",
+      "name": "London Strategic Edge Terminal",
+      "repository": "londonstrategicedge/lse-terminal",
+      "commitSha": "62c48a5ce6de37a1c115d6270dfd0eee75166d8b",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "provider-runtime",
+        "local-engine",
+        "backtesting",
+        "indicators",
+        "ml",
+        "workspace-reference",
+        "desktop-packaging-reference",
+        "tests"
+      ],
+      "subsystems": [
+        {
+          "name": "provider-contracts-and-adapters",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/providers",
+            "lse_terminal/contracts"
+          ],
+          "requirements": [
+            "Map behind LiOS Provider SDK/Data Fabric",
+            "External LSE data/service rights remain separate"
+          ]
+        },
+        {
+          "name": "local-engine",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/engine"
+          ],
+          "requirements": [
+            "LiOS runtime contracts remain authoritative",
+            "Benchmark before replacement"
+          ]
+        },
+        {
+          "name": "backtest",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/backtest"
+          ],
+          "requirements": [
+            "LiOS BacktestEngine remains authoritative",
+            "known-answer/look-ahead/fill/slippage tests"
+          ]
+        },
+        {
+          "name": "indicators",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/indicators"
+          ],
+          "requirements": [
+            "numerical parity tests",
+            "avoid duplicate competing implementations"
+          ]
+        },
+        {
+          "name": "ml",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/ml"
+          ],
+          "requirements": [
+            "optional Quant/ML pack posture",
+            "heavy deep-learning dependencies stay optional unless justified"
+          ]
+        },
+        {
+          "name": "ui-and-frontend",
+          "classification": "adapt",
+          "paths": [
+            "lse_terminal/ui",
+            "frontend/src"
+          ],
+          "requirements": [
+            "LiOS UX/theme/Projects/Artifacts remain authoritative",
+            "no upstream branding/assets"
+          ]
+        },
+        {
+          "name": "desktop-packaging",
+          "classification": "stub",
+          "paths": [
+            "desktop"
+          ],
+          "requirements": [
+            "compare with existing LiOS Electron security/update/recovery before adoption"
+          ]
+        },
+        {
+          "name": "tests",
+          "classification": "adapt",
+          "paths": [
+            "tests"
+          ],
+          "requirements": [
+            "port tests relevant to imported behavior"
+          ]
+        }
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [
+        "Current release uses LSE Terminal as architecture/test/reference material only; no upstream source file or branding asset is bundled."
+      ],
+      "notes": "Pinned architecture/test/reference use only today, with no bundled upstream source; P11 vendor intent is a future target. P11 Strategy & Backtest / CA-04 assimilation remains deferred until the BacktestEngine contract and known-answer/look-ahead/fill/slippage benchmarks support a bounded import, with exact paths, notices and regression accounting."
+    },
+    {
+      "id": "lse-data",
+      "name": "London Strategic Edge Data SDK",
+      "repository": "londonstrategicedge/lse-data",
+      "commitSha": "564c63dd99e3b447777cb396314ec6c4342f82ff",
+      "license": "MIT",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "market-data-provider",
+        "streaming",
+        "historical-data",
+        "bulk-parquet",
+        "catalogue",
+        "macro",
+        "fundamentals",
+        "options",
+        "provider-usage"
+      ],
+      "subsystems": [
+        {
+          "name": "python-client",
+          "classification": "adapt",
+          "paths": [
+            "lse"
+          ],
+          "requirements": [
+            "wrap behind LiOS Provider SDK",
+            "user-owned key/local secret custody",
+            "no central redistribution"
+          ]
+        },
+        {
+          "name": "catalogue-and-capability-discovery",
+          "classification": "adapt",
+          "paths": [
+            "lse"
+          ],
+          "requirements": [
+            "map provider symbols to LiOS canonical identity/OpenFIGI where applicable"
+          ]
+        },
+        {
+          "name": "streaming-and-history",
+          "classification": "adapt",
+          "paths": [
+            "lse"
+          ],
+          "requirements": [
+            "generic LiOS stream/bulk-data contracts",
+            "quota/health/provenance"
+          ]
+        },
+        {
+          "name": "hosted-data",
+          "classification": "reject",
+          "paths": [
+            "README.md"
+          ],
+          "requirements": [
+            "not covered by MIT library license",
+            "must not be redistributed/resold by LiOS",
+            "production connector subject to provider terms/entitlement review"
+          ]
+        }
+      ],
+      "importedPaths": [],
+      "destinationPaths": [
+        "server/lseDataProvider.ts",
+        "server/lseRoutes.ts",
+        "client/src/lib/useLse.ts",
+        "client/src/components/panels/LiveLseOptionsChain.tsx",
+        "client/src/lib/lseDatasetBrowser.ts"
+      ],
+      "modifications": [
+        "LiOS implements a Provider SDK-native REST/WebSocket/Parquet adapter using a user-owned LSE credential; no upstream source file is copied verbatim.",
+        "Hosted LSE data/API rights remain separate from the MIT client-code license; hosted redistribution and central multi-user caching are denied.",
+        "The provider remains optional and generic provider fallback/health/quota/entitlement contracts remain authoritative."
+      ],
+      "notes": "Protocol-compatible LiOS-owned connector. MIT client library is a donor/reference; hosted provider rights remain independently gated."
+    },
+    {
+      "id": "brue-language",
+      "name": "Brue Language",
+      "repository": "londonstrategicedge/brue",
+      "commitSha": "a846522fe8af0e11ee7739ef8b6b8a4c0f7922cb",
+      "license": "MIT",
+      "posture": "donor_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": [
+        "strategy-language",
+        "strategy-runtime",
+        "indicators",
+        "historical-simulation",
+        "conformance-tests"
+      ],
+      "subsystems": [
+        {
+          "name": "parser-runtime-strategy",
+          "classification": "adapt",
+          "paths": [
+            "brue/tokenizer.py",
+            "brue/parser.py",
+            "brue/runtime.py",
+            "brue/strategy.py",
+            "brue/builtins.py"
+          ],
+          "requirements": [
+            "map behind LiOS Strategy/Formula execution contracts",
+            "sandbox review"
+          ]
+        },
+        {
+          "name": "indicators",
+          "classification": "adapt",
+          "paths": [
+            "brue/indicators.py"
+          ],
+          "requirements": [
+            "parity tests",
+            "registry decision against existing LiOS indicators"
+          ]
+        },
+        {
+          "name": "historical-execution",
+          "classification": "adapt",
+          "paths": [
+            "brue/runtime.py",
+            "brue/output.py",
+            "brue/data.py"
+          ],
+          "requirements": [
+            "validate fill timing/cost semantics",
+            "normalize to LiOS BacktestResult/Artifact"
+          ]
+        },
+        {
+          "name": "conformance",
+          "classification": "adapt",
+          "paths": [
+            "conformance"
+          ],
+          "requirements": [
+            "port goldens relevant to adopted behavior"
+          ]
+        },
+        {
+          "name": "live-broker-connection",
+          "classification": "reject",
+          "paths": [
+            "brue/live.py",
+            "brue/auth.py"
+          ],
+          "requirements": [
+            "do not depend on unverified Brue Connect implementation/source",
+            "broker credentials remain outside strategy source"
+          ]
+        }
+      ],
+      "importedPaths": [],
+      "destinationPaths": [],
+      "modifications": [
+        "Current release keeps Brue as a pinned strategy/runtime/conformance donor reference only; no Brue source is bundled."
+      ],
+      "notes": "Verified MIT strategy/runtime/conformance reference only today; P11 vendor intent does not prove integration. Evaluate brue and brue-language together behind one P11 Strategy & Backtest / CA-04 authority when strategy contracts, sandbox and conformance acceptance are ready; future import requires exact paths/notices/goldens."
+    },
+    {
+      "id": "pptxgenjs",
+      "name": "PptxGenJS",
+      "repository": "gitbrent/PptxGenJS",
+      "releaseTag": "v4.0.1",
+      "commitSha": "3c9ec1b687c174952166f6a34b5e87ebf69fa469",
+      "license": "MIT",
+      "posture": "major_donor",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "native-pptx-chart-table-generation"
+      ],
+      "importedPaths": [
+        "src/gen-charts.ts",
+        "src/gen-tables.ts",
+        "src/pptxgen.ts"
+      ],
+      "destinationPaths": [
+        "src/client/src/lib/exportPptx.ts",
+        "src/client/src/lib/exportPptx.ts",
+        "src/client/src/lib/exportPptx.ts"
+      ],
+      "modifications": [
+        "Library reuse only; canonical P4 semantic projections and provenance, safe local inputs, bounded layouts and deterministic generated ZIP metadata."
+      ],
+      "notes": "Supplemental donor outside historical 92 baseline. npm pptxgenjs4.0.1 integrity locked. MIT Copyright2015-2022BrentEly. No upstream source modification/store/remoteasset fetch. Native/package qualification is separately recorded."
+    },
+    {
+      "id": "graphrag",
+      "name": "GraphRAG source-evidence links (bounded)",
+      "repository": "microsoft/graphrag",
+      "commitSha": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "license": "MIT",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Microsoft GraphRAG",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P7-source-rights",
+        "P5-entity-refs",
+        "read-only-graph-relationships"
+      ],
+      "importedPaths": [
+        "packages/graphrag/graphrag/query/input/retrieval/relationships.py",
+        "packages/graphrag/graphrag/query/context_builder/source_context.py"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/graphragPermittedEvidenceLinks.ts"
+      ],
+      "subsystems": [
+        {
+          "name": "source-scoped-in-network-relationship-rank",
+          "classification": "adapt",
+          "paths": [
+            "packages/graphrag/graphrag/query/input/retrieval/relationships.py",
+            "packages/graphrag/graphrag/query/context_builder/source_context.py"
+          ],
+          "requirements": [
+            "P7 allowed source and AI rights first",
+            "no duplicate database/provider/model runtime",
+            "links are co-mentions not causal finance truth",
+            "bounded stable deterministic output"
+          ]
+        }
+      ],
+      "modifications": [
+        "Donor Python network relation selection/sorting and bounded source-context mechanics adapted into typed TS; no random shuffling, pandas/tokenizers, or donor prompt assembly.",
+        "Canonical researchSourceCompositionTool retrieves only entitled Project source documents before derived links; no imported GraphRAG index, cache, model or provider.",
+        "Native macOS V1 golden, malformed/bounded and P7 restricted-source isolation regressions passed run 38139645612; merged PR #591 at 23c22c1a3ef1cd28a0bbb3938c36074734459bf7.",
+      "GraphRAG relationship candidate/in-network ranking and source_context incidence adapted into deterministic P7 permitted evidence neighborhoods with direct and two-hop co-mention navigation; not a causal/finance fact or full graph runtime."
+      ],
+      "notes": "Two exact MIT-approved GraphRAG source paths power bounded P7 read-only co-mention links and source neighborhoods, behind AI-use rights and canonical P5 entity identity. Full GraphRAG Python/vector/community/model runtime, model/data assets and SP-03/05 packaging remain unaccepted. Original license: third_party/licenses/graphrag-MIT.txt; provenance: docs/technical/CA_GRAPHRAG_P7_ADOPTION.md."
+    },
+    {
+      "id": "FinRobot",
+      "name": "FinRobot immutable P4 report provenance review",
+      "repository": "AI4Finance-Foundation/FinRobot",
+      "commitSha": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "license": "Apache-2.0",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "FinRobot",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P4-Artifact-review",
+        "financial-report-source-vintage",
+        "read-only-provenance"
+      ],
+      "importedPaths": [
+        "finrobot_desktop/desktop/src/components/SourcedNumber.tsx",
+        "finrobot_desktop/desktop/src/pages/artifact-detail/reportData.ts",
+        "finrobot_desktop/desktop/src/export/reportExportQueries.ts",
+        "finrobot_desktop/finrobot/artifact/field_registry.py",
+        "finrobot_desktop/tests/artifact/test_field_registry.py",
+        "finrobot_desktop/finrobot/artifact/summary_extractor.py",
+        "finrobot_desktop/tests/artifact/test_summary_text.py"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/finrobotReportSnapshot.ts",
+        "server/finrobotFieldCaliber.ts",
+        "server/artifactDiff.ts",
+        "client/src/lib/artifactSemanticComparisonSummary.ts",
+        "client/src/components/terminal/ArtifactPane.tsx",
+        "server/finrobotValuationHeadline.ts",
+        "server/artifactReviewPackage.ts"
+      ],
+      "subsystems": [
+        {
+          "name": "immutable-report-snapshot-provenance",
+          "classification": "adapt",
+          "paths": [
+            "finrobot_desktop/desktop/src/components/SourcedNumber.tsx",
+            "finrobot_desktop/desktop/src/pages/artifact-detail/reportData.ts",
+            "finrobot_desktop/desktop/src/export/reportExportQueries.ts"
+          ],
+          "requirements": [
+            "P4 ArtifactStore owns immutable version and Project rights",
+            "no live refetch of financial values",
+            "timestamp semantic as-of not fetched-at",
+            "warnings/unknown numeric truth survive into review",
+            "no donor trademark/product UI"
+          ]
+        },
+        {
+          "name": "field-caliber-immutable-artifact-version-comparability",
+          "classification": "adapt",
+          "paths": [
+            "finrobot_desktop/finrobot/artifact/field_registry.py",
+            "finrobot_desktop/tests/artifact/test_field_registry.py"
+          ],
+          "requirements": [
+            "P4 recorded Artifact versions remain comparison and Project authority",
+            "known per-share versus absolute metric identities, no fuzzy path matching",
+            "quote/reporting currency and fiscal period change suppress noncomparable numeric deltas",
+            "net-income sign flip withholds misleading percent changes",
+            "P11 remains sole math/FX engine and P7 sole source-rights authority",
+            "no donor Python or report/provider runtime"
+          ]
+        },
+        {
+          "name": "saved-valuation-target-withhold-safety",
+          "classification": "adapt",
+          "paths": [
+            "finrobot_desktop/finrobot/artifact/summary_extractor.py",
+            "finrobot_desktop/tests/artifact/test_summary_text.py"
+          ],
+          "requirements": [
+            "explicit FinRobot thesis withhold overrides raw implied-price fallback",
+            "canonical P4 immutable version and Project rights remain authoritative",
+            "recorded positive finite DCF/DDM headlines only; no target-date invention",
+            "no donor market-data, financial-model, agent or report runtime",
+            "review output explicitly says unverified and not investment advice"
+          ]
+        }
+      ],
+      "modifications": [
+        "FinRobot persisted report and provenance/vintage/visible warning mechanics adapted into bounded typed P4 immutable snapshot audit; direct React/FinRobot API/DB layers removed.",
+        "LiOS artifactReviewPackage adds version/hash-scoped provenance diagnostic to canonical P4 professional package without model calculation or provider refresh.",
+        "Native self-hosted Mac V1 run 38139927854 and combined GraphRAG/P4/P7 V2 38140392262 passed; merged PR #594 at d58f2f8ffce82b652c129a77a5f91bb34740c1fc."
+      ],
+      "notes": "Exact partial source mechanism integrated under P4, not full FinRobot agent or desktop/runtime; Apache-2.0 license and trademark NOTICE verbatim in third_party/licenses, provenance documented in CA_FINROBOT_P4_ADOPTION.md. No SP-05 packaged acceptance."
+    },
+    {
+      "id": "browser-use",
+      "name": "browser-use GM-14 Project download containment",
+      "repository": "browser-use/browser-use",
+      "commitSha": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "license": "MIT",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "browser-use",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "GM-14-browser-download-guard",
+        "project-scoped-path-safety",
+        "isolated-Playwright-file-sink"
+      ],
+      "importedPaths": [
+        "browser_use/browser/watchdogs/downloads_watchdog.py",
+        "tests/ci/security/test_download_filename_sanitization.py",
+        "tests/ci/security/test_upload_file_containment.py"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/browserDownloadSafety.ts",
+        "server/browserConnectorRuntime.ts",
+        "server/playwrightBrowserAdapter.ts"
+      ],
+      "subsystems": [
+        {
+          "name": "governed-browser-download-filename-and-path-containment",
+          "classification": "adapt",
+          "paths": [
+            "browser_use/browser/watchdogs/downloads_watchdog.py",
+            "tests/ci/security/test_download_filename_sanitization.py",
+            "tests/ci/security/test_upload_file_containment.py"
+          ],
+          "requirements": [
+            "all downloads remain gated by GM-14 Project/user/sandbox and broker network policy",
+            "sanitize attacker-controlled browser-provided Unix/Windows mixed path filenames",
+            "deny root sibling-prefix and symlink escape paths",
+            "deny overwrite and invalid byte accounting",
+            "no new host browser or independent Python browser-use runtime"
+          ]
+        }
+      ],
+      "modifications": [
+        "Donor Python DownloadsWatchdog basename, realpath containment and adversarial tests adapted into typed TS browserDownloadSafety with native negative corpus.",
+        "Existing BrowserConnector sanitizes request filenames before any download adapter dispatch and checks response relative path against exact approved filesystem roots, not vulnerable string startsWith.",
+        "Existing optional Playwright file sink now denies direct symlink root and uses exclusive write, allowing ordinary macOS /tmp symlinked ancestors.",
+        "Native Mac GM-14/browser package regression and TS PASS run 38142163821; feature PR #599 squash merged at 551318bee8b13cb1844643454772028728dfee85."
+      ],
+      "notes": "Bounded source mechanic merged, not upstream browser-use CDP/browser-agent distribution. Full MIT license in third_party/licenses/browser-use-MIT.txt; path scope and limitations in docs/technical/CA_BROWSER_USE_GM14_DOWNLOAD_SAFETY.md. GM-14 strict isolated worker must independently enforce pre-write file containment. No SP/GM acceptance inferred."
+    },
+    {
+      "id": "langalpha-p7-excerpt-fingerprint",
+      "name": "LangAlpha exact Project research excerpt provenance",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "db8f8c2dee948c9c6f77805558898c3abb637328",
+      "license": "Apache-2.0",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "LangAlpha",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P7-exact-evidence-quote-provenance",
+        "P4-ResearchArtifact-revision-audit",
+        "source-fingerprint-tamper-detection"
+      ],
+      "importedPaths": [
+        "src/ptc_agent/agent/provenance/types.py",
+        "tests/unit/ptc_agent/agent/provenance/test_types.py"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/langalphaExcerptProvenance.ts",
+        "server/projectEvidenceArtifactTool.ts",
+        "server/webResearchArtifactTool.ts",
+        "server/researchRevisionTool.ts"
+      ],
+      "subsystems": [
+        {
+          "name": "deterministic-UTF8-quote-fingerprint",
+          "classification": "adapt",
+          "paths": [
+            "src/ptc_agent/agent/provenance/types.py",
+            "tests/unit/ptc_agent/agent/provenance/test_types.py"
+          ],
+          "requirements": [
+            "use only approved upstream pin and Apache-2.0 notice",
+            "hash exact rendered P7 quote bytes with bounded 64KiB transport",
+            "do not store duplicate provider/body data",
+            "P4 owns immutable Artifact versions, P7 owns evidence rights and acquisition",
+            "no LangAlpha agent/DB/stream/LLM/tool credential surfaces"
+          ]
+        }
+      ],
+      "modifications": [
+        "Adapted only LangAlpha fingerprint_result SHA-256/UTF-8 byte-count identity and independent tamper-check to TypeScript, not upstream event streaming/storage or snippet logging.",
+        "Mapped exact fingerprint to existing Project evidence, governed browser capture, and owner-approved research revision quote attrs; no new permissions or sourceRefs.",
+        "Upstream regression concepts: byte size for multibyte Unicode, changed text detection, structural deny on malformed metadata, 64 KiB bounded quote gate. Native CI qualification pending."
+      ],
+      "notes": "Three canonical P7 ResearchArtifact consumers reuse source-bound SHA-256/UTF-8 metadata; source truth, licensing, content proof, user approval and Project custody are separate. No full LangAlpha runtime or SP-03 acceptance.",
+      "baselineDonorId": "langalpha"
+    },
+    {
+      "id": "langalpha-gm-response",
+      "name": "LangAlpha bounded model response parser for GM",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "license": "Apache-2.0",
+      "posture": "supplemental_bounded_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "LangAlpha",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "GM-agent-plan-json",
+        "GM-agent-review-json",
+        "bounded-model-reply-security"
+      ],
+      "importedPaths": [
+        "src/ptc_agent/agent/middleware/background_subagent/workflow/validation.py",
+        "tests/unit/middleware/workflow/test_validate_dispatch.py"
+      ],
+      "destinationPathBase": "src/",
+      "destinationPaths": [
+        "server/langAlphaModelReplyParser.ts",
+        "server/agentLoop.ts"
+      ],
+      "subsystems": [
+        {
+          "name": "bounded-model-workflow-response-selection",
+          "classification": "adapt",
+          "paths": [
+            "src/ptc_agent/agent/middleware/background_subagent/workflow/validation.py",
+            "tests/unit/middleware/workflow/test_validate_dispatch.py"
+          ],
+          "requirements": [
+            "keep canonical GM agent planner/review and Zod schemas authoritative",
+            "enforce bounded model text size and JSON attempts/nesting",
+            "do not expose raw model output in correction prompts",
+            "no alternative model provider, Python runner, QuickJS, storage or grant authority"
+          ]
+        }
+      ],
+      "modifications": [
+        "Source-pinned LangAlpha JSON reply candidate scan/secret-safe validation semantics adapted into typed TS agent response parser with object and depth bounds, not full donor JSON schema runtime.",
+        "Canonical src/server/agentLoop.ts invokes bounded candidate selector before existing plan/review schema checks and approval/ledger/budget logic.",
+        "Native macOS parser, actual GM agent-loop, conversationRuntime and TS PASS run 38145225773; merged PR #603 at 7317da714eb4e4f491aebf4386b302e816af3e4a."
+      ],
+      "notes": "Bounded parsed response code in LiOS GM runtime; no upstream LangAlpha Python/QuickJS/agent framework installed. Full Apache license third_party/licenses/langalpha-Apache-2.0.txt and THIRD_PARTY_NOTICES.md. Full packaged GM/SP-05 owner acceptance is not implied.",
+      "baselineDonorId": "langalpha"
+    },
+    {
+      "id": "qlib",
+      "name": "Qlib risk_analysis formulas (bounded LiOS adaptation, NOT Python Qlib runtime)",
+      "repository": "microsoft/qlib",
+      "commitSha": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Qlib risk-analysis formula adaptation",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "quantitative-risk-analysis",
+        "numerical-challenger",
+        "deterministic-user-supplied-series"
+      ],
+      "importedPaths": [
+        "qlib/contrib/evaluate.py (risk_analysis function semantics only)"
+      ],
+      "destinationPaths": [
+        "server/qlibRiskChallenger.mjs",
+        "server/qlibRiskChallenger.d.mts",
+        "server/qlibRiskChallengerTool.ts",
+        "server/qlibRiskChallenger.test.mjs",
+        "server/qlibRiskChallengerTool.test.ts",
+        "server/conversationRuntime.ts"
+      ],
+      "modifications": [
+        "Translated the bounded Qlib risk_analysis sum/product series formulas from Python/Pandas to dependency-free JavaScript with explicit annualization sessions and sample standard deviation.",
+        "Rejected invalid and -100% returns, nonfinite compounding, unbounded arrays and unknown accumulation modes; undefined information ratio is null rather than infinite success.",
+        "Wrapped in existing authenticated, Project-owned, read-only governed conversation tool with manual-input truth class and unknown-truth agent-submitted inputs and bounded output; no new calculator-of-record, Python service, provider connector, data store, broker order or permissions authority."
+      ],
+      "notes": "Only the formulas are adapted. No Qlib Python package, trained models, provider datasets or dataset rights are imported; source pin and MIT notice in THIRD_PARTY_NOTICES.md. V1 and V3 packaged user acceptance are separate gates; SP-05 unaccepted."
+    }
+  ]
+}

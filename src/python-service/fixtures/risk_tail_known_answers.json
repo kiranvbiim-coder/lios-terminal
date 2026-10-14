@@ -1,0 +1,44 @@
+{
+  "case": "two_asset_30_observation_tail_risk",
+  "conventions": {
+    "returns_matrix_unit": "percent",
+    "portfolio_value_unit": "currency_units",
+    "confidence_pct": 95.0,
+    "historical_quantile": "higher",
+    "gaussian_volatility": "sample_standard_deviation_ddof_1",
+    "component_gaussian_var": "z_alpha * marginal_portfolio_sd * portfolio_value * asset_weight; mean term excluded from component allocation",
+    "drawdown": "compounded portfolio wealth from sequential returns; percentile interpolation matches numpy.percentile default linear method"
+  },
+  "input": {
+    "assets": ["ALPHA", "BETA"],
+    "returnsMatrixPct": [
+      [0.8, 0.4], [-0.6, -0.2], [1.2, 0.7], [-1.1, -0.5], [0.4, 0.3],
+      [-0.3, -0.1], [1.5, 0.9], [-1.4, -0.8], [0.7, 0.2], [-0.8, -0.6],
+      [0.2, 0.1], [-0.1, 0.0], [1.0, 0.5], [-0.9, -0.4], [0.5, 0.6],
+      [-0.4, -0.3], [1.3, 0.8], [-1.2, -0.7], [0.6, 0.4], [-0.7, -0.5],
+      [0.3, 0.2], [-0.2, -0.1], [1.1, 0.6], [-1.0, -0.9], [0.9, 0.7],
+      [-0.5, -0.2], [1.4, 1.0], [-1.3, -1.1], [0.1, 0.1], [-1.6, -1.4]
+    ],
+    "weights": [0.6, 0.4],
+    "portfolioValue": 1000000.0,
+    "confidencePct": 95.0,
+    "monteCarloSims": 2000,
+    "seed": 1729
+  },
+  "expected": {
+    "historicalVaR": 12200.0,
+    "historicalES": 13700.0,
+    "gaussianVaR": 13252.293266863713,
+    "gaussianES": 16603.6679811976,
+    "marginalGaussianVaR": {
+      "ALPHA": 15262.154046820422,
+      "BETA": 10087.502096928645
+    },
+    "componentGaussianVaR": {
+      "ALPHA": 9157.292428092253,
+      "BETA": 4035.0008387714583
+    },
+    "drawdownAtRiskPct": 1.336670296213312,
+    "maxDrawdownPct": 2.624177456000021
+  }
+}

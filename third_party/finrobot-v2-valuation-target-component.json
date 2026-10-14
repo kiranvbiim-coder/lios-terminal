@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-valuation-target-withhold",
+  "status": "source_adapted_native_qualification_pending",
+  "asOfDate": "2026-10-12",
+  "canonicalOwner": "P4 immutable Artifact review",
+  "siWorkstreams": [
+    "SI-05.25",
+    "SI-05.28",
+    "SI-05.40"
+  ],
+  "shippingPoint": "SP-05 enabler only; acceptance not claimed",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledFork": "kiranvbiim-coder/FinRobot",
+    "approvedPin": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "notice": "third_party/licenses/finrobot-NOTICE.txt",
+    "licensePath": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "sourcePaths": [
+      {
+        "path": "finrobot_desktop/finrobot/artifact/summary_extractor.py",
+        "blobSha": "66cf3d36be189ee8bb1e8c95599dc85da9dc6b31"
+      }
+    ],
+    "upstreamReferenceTests": [
+      {
+        "path": "finrobot_desktop/tests/artifact/test_summary_text.py",
+        "blobSha": "24c4fde66f406a8c2fbce59fb55882df09799861"
+      }
+    ]
+  },
+  "reuseDisposition": [
+    "ADAPT",
+    "COMBINE",
+    "REFERENCE_VALIDATOR"
+  ],
+  "destinationPaths": [
+    "src/server/finrobotValuationHeadline.ts",
+    "src/server/finrobotValuationHeadline.test.ts",
+    "src/server/artifactReviewPackage.ts"
+  ],
+  "adaptedMechanisms": [
+    "Saved synthesis thesis is authoritative for the published target headline; withheld thesis cannot fall through to untrusted model implied price.",
+    "Explicit valuation-withheld marker suppresses even a positive-looking target.",
+    "Without a thesis, flat DCF implied_price and DDM equity_value_per_share may be shown only as unverified positive finite recorded values.",
+    "Malicious strings, malformed gate metadata and nonfinite price values fail closed.",
+    "Existing P4 Project-owned review package presents the gate and never promotes a recommendation or new target date."
+  ],
+  "authorityBoundaries": [
+    "Existing P4 tenant-bound ArtifactStore controls revisions and content hash; no second store or route.",
+    "P11 financial calculation/valuation and FX authority is not affected.",
+    "P7 rights/source evidence and origin metadata remain authoritative; the adapter does not verify market data.",
+    "No donor Python/runtime/providers/LLM/report store/trading or user content added.",
+    "No approval, investment advice, automated action or Shipping Point release claim."
+  ],
+  "testing": {
+    "nativeV1": "pending",
+    "nativeV2": "pending",
+    "packagedV3": "not_attempted"
+  }
+}

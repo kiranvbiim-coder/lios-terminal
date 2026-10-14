@@ -1,0 +1,36 @@
+node_modules/
+dist/
+dist-app/
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.log
+.DS_Store
+data/
+data/pgdata/
+.worktrees/
+
+
+# This public source distribution never commits provider/academic datasets.
+# User-provisioned permitted local observations remain private runtime inputs.
+src/server/data/
+
+# P2 frozen Python sidecar build outputs (release-generated)
+src/python-sidecar-dist/
+src/.pyinstaller-work/
+src/.pyinstaller-spec/
+
+# SP-01 pinned sandbox payload and built archive are release-generated, never source.
+src/sandbox-image-inputs/
+src/sandbox-image-dist/
+
+# Private runtime custody and audit outputs are not publication artifacts.
+**/.sp02-qualification/
+**/credential-vault*.json
+**/vault-master-key*
+**/session-secret
+**/*-private.pem
+**/.credentials*
+gitleaks-report*
+*-redacted.json

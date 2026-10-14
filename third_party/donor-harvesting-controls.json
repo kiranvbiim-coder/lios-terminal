@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "status": "canonical_harvesting_control_vocabulary_not_donor_registry",
+  "policyAuthority": "docs/technical/LIOS_DONOR_IMPORT_REUSE_POLICY.md",
+  "identityTruthSources": [
+    "third_party/capability-assimilation.json",
+    "third_party/universal-donor-adoption.json",
+    "third_party/controlled-fork-utilization.json",
+    "third_party/components.json",
+    "third_party/upstream-lock.json"
+  ],
+  "sourceAuditStates": [
+    "not_started",
+    "metadata_reviewed",
+    "partial_source_audit",
+    "full_useful_package_audit"
+  ],
+  "forkReviewStates": [
+    "not_applicable",
+    "controlled_fork_reviewed",
+    "ecosystem_screened",
+    "material_forks_deep_reviewed"
+  ],
+  "forkDeltaDispositions": [
+    "pending_capability_slice_review",
+    "partial_source_imports_recorded_continue_capability_slice_review",
+    "baseline_source_import_recorded_fork_delta_not_imported",
+    "supplemental_source_import_recorded_fork_delta_not_imported"
+  ],
+  "pathDispositions": [
+    "DIRECT_REUSE",
+    "IMPORT",
+    "ADAPT",
+    "REPURPOSE",
+    "COMBINE",
+    "GENERALIZE",
+    "INNOVATE",
+    "REFERENCE_VALIDATOR",
+    "DEFER_WITH_TRIGGER",
+    "EXCLUDE_DUPLICATE_AUTHORITY",
+    "EXCLUDE_UNUSED_SCOPE",
+    "EXCLUDE_RIGHTS_BLOCK",
+    "EXCLUDE_SECURITY_RISK",
+    "EXCLUDE_PLATFORM_MISMATCH",
+    "REJECT_WITH_EVIDENCE"
+  ],
+  "requiredExhaustionRecordFields": [
+    "relevantDonorsInspected",
+    "controlledForksInspected",
+    "communityForkScreening",
+    "upstreamTestsInspected",
+    "crossDonorCompositionConsidered",
+    "buildNewRemainder",
+    "buildNewReason"
+  ],
+  "forbiddenScratchBuildReasons": [
+    "easier_to_rewrite",
+    "different_domain",
+    "not_designed_for_lios",
+    "integration_is_difficult"
+  ],
+  "metrics": {
+    "fullUsefulPackageAuditRequiresCompleteMaterialPathDisposition": true,
+    "fullUsefulPackageAuditRequiresCompleteMechanismDisposition": true,
+    "fullUsefulPackageAuditRequiresCompleteUpstreamTestDisposition": true,
+    "donorExhaustionRequiresFullUsefulPackageAudit": true,
+    "forkObservationIsNotImportApproval": true,
+    "shippingTruthRemainsOutsideThisControlFile": true
+  },
+  "notes": [
+    "This file defines allowed harvesting states and evidence rules only; it does not create donor identity or integration truth.",
+    "The frozen 92-donor baseline and 10 controlled-fork identities remain owned by existing canonical ledgers.",
+    "Community fork discovery remains evidence-only until exact source pin, paths, rights, canonical owner, tests and provenance are recorded through existing component/lock mechanisms."
+  ]
+}

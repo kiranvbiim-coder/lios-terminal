@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-09-22",
+  "phase": "P4",
+  "documentationReconciledOn": "2026-10-04",
+  "executionAuthority": "docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md",
+  "shippingPointContract": "docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md",
+  "evidenceScope": "Retains historical build measurements and planned benchmark inputs; no fresh benchmark was executed during documentation reconciliation. P4/CA-01 remain canonical owners; SI-04 is the strategic phase and S3 is validation coverage only.",
+  "decision": "heavy_renderers_stay_out_of_startup_bundle; a renderer may ship only as a lazily loaded chunk with a recorded measurement, otherwise it stays optional",
+  "baseDesktop": {
+    "heavyRendererPackagesInStartupBundle": 0,
+    "reusedProductionEngines": [
+      "@duckdb/node-api",
+      "lightweight-charts",
+      "recharts",
+      "xlsx"
+    ],
+    "boundedRendering": {
+      "spreadsheetVisibleRows": 30,
+      "spreadsheetVisibleColumns": 12,
+      "tableRowsPerPane": 500,
+      "dataQueryRowsPerRequestMax": 500,
+      "chartPointsRenderedInCompactPane": 80
+    }
+  },
+  "lazyRenderers": [
+    {
+      "id": "univer",
+      "purpose": "spreadsheet renderer",
+      "packages": [
+        "@univerjs/presets@1.0.0-rc.0",
+        "@univerjs/preset-sheets-core@1.0.0-rc.0"
+      ],
+      "loading": "dynamic import from ArtifactPane; selected per spreadsheet Artifact by rendererPreference",
+      "measuredOn": "2026-10-03, macOS arm64, Vite production build",
+      "measurementScope": "Recorded Vite chunk/stylesheet sizes and startup import references only, not packaged installer size, elapsed startup, interaction latency or RSS.",
+      "chunkRawBytes": 6583693,
+      "chunkGzipBytes": 1657772,
+      "stylesheetRawBytes": 118622,
+      "startupChunkReferences": 0,
+      "fallback": "LiOS SpreadsheetGrid",
+      "recordedPackagedSmoke": "Blueprint section 48.8, 2026-10-03 macOS arm64 unsigned/ad-hoc local pack: real Electron desktop CSP (script-src self, no unsafe-eval), lazy chunk, ribbon/canvas/formula, P4 revision 2 save with formula source, zero CSP violations. Bounded local smoke, not signed/notarized clean-install or SP-04 acceptance.",
+      "openQualification": "P10 owns packaged Electron size, startup and memory measurements, including Windows; P4/CA-01 still require full professional-work round-trip/revision evidence and stable re-pin, with P14 final release authority"
+    }
+  ],
+  "optionalAdapters": [
+    {
+      "id": "tiptap",
+      "purpose": "research/report editor",
+      "bundled": false,
+      "fallback": "LiOS block document editor"
+    },
+    {
+      "id": "apache-echarts",
+      "purpose": "advanced visualization",
+      "bundled": true,
+      "fallback": "Recharts/Lightweight Charts",
+      "runtimeVersion": "5.6.0",
+      "loading": "P4 Chart Artifact rendererPreference=echarts, two-stage lazy import from ArtifactPane/ArtifactChart",
+      "chunkRawBytes": 474269,
+      "chunkGzipApproxBytes": 160250,
+      "measuredOn": "2026-10-12 macOS arm64, Vite production build",
+      "nativeV1": "GitHub Actions 38201743707 (source and P4 tests, TypeScript, Vite/server build, explicit isolated chunk check, cleanup)",
+      "acceptance": "NOT P10 packaged startup/RSS/Windows/installer nor SP-04 acceptance; Recharts remains default and runtime failure is explicit."
+    },
+    {
+      "id": "perspective",
+      "purpose": "large-data visualization",
+      "bundled": false,
+      "fallback": "DuckDB paging + bounded native table"
+    },
+    {
+      "id": "tanstack-virtual",
+      "purpose": "large-table virtualization",
+      "bundled": false,
+      "fallback": "DuckDB paging + bounded native table"
+    }
+  ],
+  "ciMicrobenchmarks": {
+    "evidenceStatus": "targets_not_recorded_timing_results",
+    "spreadsheetCells": 10000,
+    "spreadsheetChangedCells": 100,
+    "chartPoints": 50000,
+    "dataPreviewRows": 10000,
+    "perBenchmarkBudgetMs": 10000
+  },
+  "releaseBoundary": "P4 prevents an unmeasured heavy renderer dependency from entering the base desktop. P10 owns packaged Electron size/startup/memory qualification; P14 remains final release authority. SP-04 and SP-07 require real integrated MSJs, applicable packaged/target execution, no fake success, regression protection and exact build/target/journey/checks/limitations evidence. These recorded sizes and unsigned smoke do not establish Shipping Point acceptance."
+}

@@ -1,0 +1,37 @@
+{
+  "idio_only_minimum_risk": {
+    "input": {
+      "assets": ["LOW_IDIO", "HIGH_IDIO"],
+      "expectedReturnsPct": [0.0, 0.0],
+      "factorLoadings": [[0.0], [0.0]],
+      "factorCovMatrix": [[1.0]],
+      "idiosyncraticVariancePct2": [0.04, 0.09],
+      "riskAversion": 1.0
+    },
+    "expected": {
+      "weights": {"LOW_IDIO": 0.6923076923076923, "HIGH_IDIO": 0.3076923076923077},
+      "factorExposures": [0.0],
+      "expectedReturnPct": 0.0,
+      "volatilityPct": 0.16641005886756874
+    },
+    "derivation": "Zero expected returns and zero factor loadings reduce the objective to minimum idiosyncratic variance. Inverse variances 25 and 11.11111111111111 normalize to 9/13 and 4/13; portfolio variance is 0.027692307692307693."
+  },
+  "active_factor_cap": {
+    "input": {
+      "assets": ["FACTOR_ASSET", "DIVERSIFIER"],
+      "expectedReturnsPct": [10.0, 0.0],
+      "factorLoadings": [[1.0], [0.0]],
+      "factorCovMatrix": [[0.0]],
+      "idiosyncraticVariancePct2": [1.0, 1.0],
+      "maxFactorExposureAbs": [0.4],
+      "riskAversion": 1.0
+    },
+    "expected": {
+      "weights": {"FACTOR_ASSET": 0.4, "DIVERSIFIER": 0.6},
+      "factorExposures": [0.4],
+      "expectedReturnPct": 4.0,
+      "volatilityPct": 0.7211102550927979
+    },
+    "derivation": "Without the factor cap, the 10 percentage-point return signal pushes the first asset to its upper bound. Its single loading is 1, so |factor exposure| <= 0.4 implies w1 <= 0.4; the constrained optimum is therefore [0.4, 0.6]."
+  }
+}

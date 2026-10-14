@@ -1,0 +1,441 @@
+/* LiOS V4 immersive visual layer.
+   This file intentionally loads after index.css so V4 can evolve visual
+   hierarchy without destabilising the core Tailwind/theme contract. */
+
+:root {
+  --lios-void: 225 11% 4%;
+  --lios-canvas: 222 10% 6%;
+  --lios-raised: 220 9% 8%;
+  --lios-overlay: 220 10% 10%;
+  --lios-hover: 220 10% 13%;
+  --lios-hairline: 215 13% 17%;
+  --lios-hairline-strong: 215 14% 22%;
+  --lios-text: 40 8% 91%;
+  --lios-text-soft: 35 5% 68%;
+  --lios-text-dim: 215 6% 47%;
+  --lios-amber: 39 94% 58%;
+  --lios-cyan: 188 79% 60%;
+  --lios-violet: 264 75% 68%;
+  --lios-emerald: 151 62% 54%;
+  --lios-red: 2 77% 61%;
+  --lios-shadow-soft: 0 18px 50px rgb(0 0 0 / 0.28);
+  --lios-shadow-deep: 0 24px 80px rgb(0 0 0 / 0.52);
+  --lios-ease: cubic-bezier(.2,.8,.2,1);
+}
+
+
+  .font-ui {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  }
+
+  .font-data,
+  .font-mono-num {
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace !important;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+  }
+
+  .lios-v4-surface {
+    background: hsl(var(--lios-canvas) / .96);
+    border-color: hsl(var(--lios-hairline) / .82);
+  }
+
+  .lios-v4-raised {
+    background: linear-gradient(180deg, hsl(var(--lios-raised) / .98), hsl(var(--lios-canvas) / .98));
+    border: 1px solid hsl(var(--lios-hairline) / .78);
+    box-shadow: 0 1px 0 rgb(255 255 255 / .018) inset, var(--lios-shadow-soft);
+  }
+
+  .lios-v4-overlay {
+    background: linear-gradient(180deg, hsl(var(--lios-overlay) / .97), hsl(var(--lios-raised) / .98));
+    border: 1px solid hsl(var(--lios-hairline-strong) / .88);
+    box-shadow: 0 1px 0 rgb(255 255 255 / .035) inset, var(--lios-shadow-deep);
+    backdrop-filter: blur(18px) saturate(115%);
+  }
+
+  .lios-v4-chip {
+    border: 1px solid hsl(var(--lios-hairline) / .85);
+    background: hsl(var(--lios-raised) / .72);
+    border-radius: 999px;
+  }
+
+  .lios-v4-focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 1px hsl(var(--lios-amber) / .38), 0 0 0 4px hsl(var(--lios-amber) / .055);
+  }
+
+
+/* Dual-type system: UI reads in Inter, data/code stays mono. */
+.terminal-root {
+  --terminal-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
+  isolation: isolate;
+  font-family: var(--terminal-font-family);
+  color: hsl(var(--lios-text));
+  background:
+    radial-gradient(900px 520px at 8% -12%, hsl(var(--lios-amber) / .055), transparent 62%),
+    radial-gradient(780px 560px at 92% 108%, hsl(var(--lios-cyan) / .045), transparent 60%),
+    hsl(var(--lios-void));
+}
+
+.terminal-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image:
+    linear-gradient(rgb(255 255 255 / .012) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / .009) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / .5), transparent 48%);
+}
+
+.terminal-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 120px rgb(0 0 0 / .36);
+}
+
+.terminal-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+.terminal-root :where(button, input, select, textarea) {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.terminal-root :where(.font-sans) {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.terminal-root :where(.font-terminal, .font-mono, .font-mono-num, .font-data) {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace !important;
+}
+
+/* Readability: do not shrink explanatory copy to unreadable terminal sizes. */
+.terminal-root[data-experience='guided'] :where(.text-\[7px\], .text-\[7\.5px\]) {
+  font-size: .5625rem;
+}
+
+/* V4 chrome — matte, quiet, and visually separated from the canvas. */
+.terminal-root > header,
+.terminal-root [data-testid='terminal-tab-bar'],
+.terminal-root [data-testid='context-ribbon'] {
+  background: linear-gradient(180deg, hsl(var(--lios-raised) / .97), hsl(var(--lios-void) / .94));
+  border-color: hsl(var(--lios-hairline) / .78);
+  box-shadow: 0 1px 0 rgb(255 255 255 / .018) inset;
+}
+
+.terminal-root [data-testid='terminal-tab-bar'] {
+  min-height: 38px;
+  scrollbar-color: hsl(var(--lios-hairline-strong)) transparent;
+}
+
+/* Analytical panes become spatial objects instead of flat rectangles. */
+.terminal-root [data-testid^='workspace-pane-'] {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / .011), transparent 54px),
+    hsl(var(--lios-canvas) / .965);
+  border-color: hsl(var(--lios-hairline) / .76);
+  transition:
+    border-color 160ms var(--lios-ease),
+    box-shadow 180ms var(--lios-ease),
+    opacity 180ms var(--lios-ease),
+    filter 180ms var(--lios-ease),
+    transform 180ms var(--lios-ease);
+}
+
+.terminal-root [data-testid^='workspace-pane-'][data-focused='true'] {
+  z-index: 2;
+  border-color: hsl(var(--lios-amber) / .29);
+  box-shadow:
+    0 0 0 1px hsl(var(--lios-amber) / .075) inset,
+    0 12px 38px rgb(0 0 0 / .18);
+}
+
+.terminal-root [data-testid^='workspace-pane-'][data-focused='true']::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  z-index: 4;
+  background: linear-gradient(90deg, transparent, hsl(var(--lios-amber) / .62), transparent);
+  pointer-events: none;
+}
+
+.terminal-root [data-testid^='workspace-pane-'][data-focused='false'] {
+  opacity: .955;
+  filter: saturate(.92) contrast(.985);
+}
+
+.terminal-root[data-focus='true'] [data-testid^='workspace-pane-'][data-focused='false'] {
+  opacity: .72;
+  filter: saturate(.72) brightness(.82);
+}
+
+.lios-pane-header {
+  min-height: 34px;
+  background: linear-gradient(180deg, hsl(var(--lios-raised) / .92), hsl(var(--lios-canvas) / .9));
+  border-bottom-color: hsl(var(--lios-hairline) / .66) !important;
+}
+
+.lios-pane-title {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.lios-pane-code,
+.lios-symbol,
+.lios-number {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Premium tab treatment: active identity is shape/depth + restrained accent,
+   not a bright block of colour. */
+.lios-tab-v4 {
+  border-right-color: hsl(var(--lios-hairline) / .72) !important;
+  transition: background 120ms var(--lios-ease), box-shadow 160ms var(--lios-ease), transform 120ms var(--lios-ease), opacity 120ms ease;
+}
+
+.lios-tab-v4[data-active='true'] {
+  background: linear-gradient(180deg, hsl(var(--lios-hover) / .86), hsl(var(--lios-raised) / .7)) !important;
+  box-shadow: 0 -1px 0 hsl(var(--lios-amber) / .52) inset, 0 1px 0 rgb(255 255 255 / .022) inset;
+}
+
+.lios-tab-v4[data-active='false']:hover {
+  background: hsl(var(--lios-hover) / .5) !important;
+}
+
+.lios-tab-title {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: .66rem;
+  font-weight: 500;
+  letter-spacing: -.005em;
+}
+
+/* Overlay/dialog quality. Existing fixed overlays automatically become less
+   flat while remaining compatible with their own Tailwind classes. */
+.terminal-root .fixed.inset-0 > section,
+.terminal-root .fixed.inset-0 > div > section {
+  border-color: hsl(var(--lios-hairline-strong) / .9);
+}
+
+/* Inputs should feel like analytical controls, not web-form boxes. */
+.terminal-root :where(input, select, textarea) {
+  caret-color: hsl(var(--lios-amber));
+}
+
+.terminal-root :where(input, select, textarea):focus-visible,
+.terminal-root button:focus-visible {
+  outline: 1px solid hsl(var(--lios-amber) / .7);
+  outline-offset: 2px;
+}
+
+/* Research tray / immersive dock */
+.lios-immersive-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  z-index: 58;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(760px, calc(100vw - 28px));
+  padding: 5px;
+  border: 1px solid hsl(var(--lios-hairline-strong) / .86);
+  border-radius: 14px;
+  background: linear-gradient(180deg, hsl(var(--lios-overlay) / .88), hsl(var(--lios-raised) / .92));
+  box-shadow: 0 18px 60px rgb(0 0 0 / .42), 0 1px 0 rgb(255 255 255 / .045) inset;
+  backdrop-filter: blur(22px) saturate(118%);
+  transition: opacity 160ms var(--lios-ease), transform 180ms var(--lios-ease);
+}
+
+.lios-immersive-dock:hover,
+.lios-immersive-dock:focus-within {
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.lios-dock-action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: hsl(var(--lios-text-soft));
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: .625rem;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, transform 100ms ease;
+}
+
+.lios-dock-action:hover {
+  color: hsl(var(--lios-text));
+  background: hsl(var(--lios-hover) / .72);
+  border-color: hsl(var(--lios-hairline-strong) / .8);
+}
+
+.lios-dock-action:active {
+  transform: translateY(1px);
+}
+
+.lios-dock-context {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 10px;
+  color: hsl(var(--lios-text));
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: .64rem;
+  font-weight: 600;
+}
+
+.lios-dock-symbol {
+  color: hsl(var(--lios-amber));
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+/* Research tray */
+.lios-research-tray {
+  position: fixed;
+  right: 12px;
+  bottom: 54px;
+  z-index: 64;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 100px));
+  overflow: hidden;
+  border: 1px solid hsl(var(--lios-hairline-strong) / .9);
+  border-radius: 14px;
+  background: linear-gradient(180deg, hsl(var(--lios-overlay) / .96), hsl(var(--lios-raised) / .98));
+  box-shadow: var(--lios-shadow-deep);
+  backdrop-filter: blur(20px) saturate(115%);
+  animation: liosTrayIn 180ms var(--lios-ease);
+}
+
+@keyframes liosTrayIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Micro-interactions are state communication only. */
+@keyframes liosSettle {
+  from { box-shadow: 0 0 0 1px hsl(var(--lios-cyan) / .45) inset, 0 0 30px hsl(var(--lios-cyan) / .08); }
+  to { box-shadow: 0 0 0 1px transparent inset, 0 0 0 transparent; }
+}
+
+.lios-state-changed {
+  animation: liosSettle 620ms var(--lios-ease);
+}
+
+/* Long-session comfort mode is opt-in and deliberately subtle. */
+.terminal-root[data-comfort='true'] {
+  --lios-text: 40 6% 84%;
+  --lios-text-soft: 35 4% 63%;
+  --lios-amber: 39 78% 55%;
+  --lios-cyan: 188 58% 57%;
+  filter: saturate(.91);
+}
+
+/* Presentation mode should feel like a clean briefing canvas. */
+.terminal-root[data-presentation='true'] [data-testid^='workspace-pane-'] {
+  border-radius: 10px;
+  margin: 3px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / .18);
+}
+
+/* Do not let premium motion undermine accessibility. */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-root *,
+  .terminal-root *::before,
+  .terminal-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+.terminal-root[data-reduced-motion='true'] *,
+.terminal-root[data-reduced-motion='true'] *::before,
+.terminal-root[data-reduced-motion='true'] *::after {
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+}
+
+@media (max-width: 767px) {
+  .lios-immersive-dock {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .lios-immersive-dock:hover,
+  .lios-immersive-dock:focus-within {
+    transform: none;
+  }
+
+  .lios-dock-context {
+    max-width: 150px;
+  }
+}
+
+
+/* P1 Living Workspace — keep Dockview geometry inside the native LiOS dark visual system. */
+.lios-dockview-workspace.dockview-theme-dark,
+.lios-dockview-workspace .dockview-theme-dark {
+  --dv-group-view-background-color: #050505;
+  --dv-tabs-and-actions-container-background-color: #080808;
+  --dv-activegroup-visiblepanel-tab-background-color: #050505;
+  --dv-activegroup-hiddenpanel-tab-background-color: #0b0b0b;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #070707;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #090909;
+  --dv-activegroup-visiblepanel-tab-color: rgba(255, 255, 255, 0.96);
+  --dv-activegroup-hiddenpanel-tab-color: rgba(255, 255, 255, 0.55);
+  --dv-inactivegroup-visiblepanel-tab-color: rgba(255, 255, 255, 0.58);
+  --dv-inactivegroup-hiddenpanel-tab-color: rgba(255, 255, 255, 0.34);
+  --dv-tab-divider-color: rgba(255, 255, 255, 0.06);
+  --dv-separator-border: rgba(255, 255, 255, 0.10);
+  --dv-paneview-header-border-color: rgba(255, 255, 255, 0.08);
+  --dv-paneview-active-outline-color: rgba(252, 211, 77, 0.58);
+  --dv-active-sash-color: rgba(252, 211, 77, 0.42);
+  --dv-drag-over-background-color: rgba(252, 211, 77, 0.08);
+  --dv-drag-over-border-color: rgba(252, 211, 77, 0.30);
+  --dv-edge-dock-indicator-color: rgba(252, 211, 77, 0.72);
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 10px;
+  --dv-tab-font-size: 10px;
+  --dv-border-radius: 0px;
+  --dv-floating-border: 1px solid rgba(255, 255, 255, 0.10);
+  --dv-floating-box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.lios-dockview-workspace .dv-default-tab {
+  font-family: var(--font-ui, Inter, sans-serif);
+  letter-spacing: 0.01em;
+}
+
+.lios-dockview-workspace .dv-sash:hover,
+.lios-dockview-workspace .dv-sash.dv-active-sash {
+  background-color: rgba(252, 211, 77, 0.28);
+}

@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { registerWaveDRoutes } from "./waveDRoutes";
+
+test("Wave D registers readiness, Pulse, Signals, stateful-intelligence, event and output surfaces", () => {
+  const routes: string[] = [];
+  const app = {
+    get(path: string) { routes.push(`GET ${path}`); return this; },
+    post(path: string) { routes.push(`POST ${path}`); return this; },
+    patch(path: string) { routes.push(`PATCH ${path}`); return this; },
+    delete(path: string) { routes.push(`DELETE ${path}`); return this; },
+  };
+  registerWaveDRoutes(app as never);
+  for (const expected of [
+    "GET /api/readiness/wave-d",
+    "GET /api/wave-d/pulse",
+    "GET /api/wave-d/signals",
+    "GET /api/wave-d/action-inbox",
+    "POST /api/wave-d/signals/propose",
+    "POST /api/wave-d/thesis/evaluate",
+    "POST /api/wave-d/what-changed",
+    "POST /api/wave-d/event-room",
+    "POST /api/wave-d/reports/reconcile",
+    "POST /api/wave-d/communications/plan",
+    "GET /api/wave-d/state",
+    "POST /api/wave-d/signals",
+    "PATCH /api/wave-d/signals/:id",
+    "DELETE /api/wave-d/signals/:id",
+    "POST /api/wave-d/action-inbox/:id",
+    "GET /api/wave-d/theses",
+    "POST /api/wave-d/theses",
+    "POST /api/wave-d/theses/:id/evaluate",
+    "GET /api/wave-d/event-rooms",
+    "POST /api/wave-d/event-rooms",
+    "GET /api/wave-d/reports",
+    "POST /api/wave-d/reports",
+    "POST /api/wave-d/reports/:id/reconcile",
+    "GET /api/wave-d/communications/connections",
+    "POST /api/wave-d/communications/connections",
+    "DELETE /api/wave-d/communications/connections/:id",
+    "GET /api/wave-d/briefs/:mode",
+    "POST /api/wave-d/pulse/ask",
+    "POST /api/wave-d/pulse/cards",
+    "DELETE /api/wave-d/pulse/cards/:id",
+    "GET /api/wave-d/schedules",
+    "GET /api/wave-d/schedules/due",
+    "POST /api/wave-d/schedules",
+    "DELETE /api/wave-d/schedules/:id",
+    "GET /api/wave-d/theses/impact-links",
+    "POST /api/wave-d/theses/impact-links",
+    "GET /api/wave-d/memory",
+    "POST /api/wave-d/memory",
+    "GET /api/wave-d/journal",
+    "POST /api/wave-d/journal",
+    "POST /api/wave-d/what-changed/detect",
+    "GET /api/wave-d/event-rooms/:id/comparison",
+    "POST /api/wave-d/event-rooms/:id/action",
+    "GET /api/wave-d/report-templates",
+    "POST /api/wave-d/reports/render",
+    "POST /api/wave-d/exports/reconcile",
+    "GET /api/wave-d/notifications",
+    "POST /api/wave-d/notifications",
+    "POST /api/wave-d/notifications/:id/deliver",
+  ]) assert.ok(routes.includes(expected), `missing ${expected}`);
+});

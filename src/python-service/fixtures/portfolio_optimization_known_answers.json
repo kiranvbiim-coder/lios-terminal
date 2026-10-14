@@ -1,0 +1,42 @@
+{
+  "hrp_two_asset_diagonal": {
+    "input": {
+      "assets": ["LOW_VOL", "HIGH_VOL"],
+      "covMatrix": [[0.04, 0.0], [0.0, 0.09]]
+    },
+    "expectedWeights": {
+      "LOW_VOL": 0.6923076923076923,
+      "HIGH_VOL": 0.3076923076923077
+    },
+    "derivation": "For two independent assets, HRP recursive bisection reduces to inverse-variance cluster allocation: inverse variances 25 and 11.11111111111111 normalize to 9/13 and 4/13."
+  },
+  "equal_risk_budget_two_asset_diagonal": {
+    "input": {
+      "assets": ["LOW_VOL", "HIGH_VOL"],
+      "covMatrix": [[0.04, 0.0], [0.0, 0.09]],
+      "riskBudgets": [0.5, 0.5],
+      "allowShort": false
+    },
+    "expectedWeights": {
+      "LOW_VOL": 0.6,
+      "HIGH_VOL": 0.4
+    },
+    "expectedRiskContributions": {
+      "LOW_VOL": 0.5,
+      "HIGH_VOL": 0.5
+    },
+    "derivation": "With diagonal covariance and equal percentage risk contributions, w_i is proportional to inverse volatility. Volatilities 0.2 and 0.3 give normalized inverse-vol weights 0.6 and 0.4."
+  },
+  "regime_blend": {
+    "input": {
+      "assets": ["A", "B"],
+      "regimeProbabilities": [0.25, 0.75],
+      "regimeWeights": [[0.8, 0.2], [0.2, 0.8]]
+    },
+    "expectedWeights": {
+      "A": 0.35,
+      "B": 0.65
+    },
+    "derivation": "Probability-weighted blend: 0.25*[0.8,0.2] + 0.75*[0.2,0.8] = [0.35,0.65]."
+  }
+}

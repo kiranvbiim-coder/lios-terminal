@@ -1,0 +1,2 @@
+ALTER TABLE "dataset_snapshots" ADD COLUMN "expires_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "dataset_snapshot_expiry_idx" ON "dataset_snapshots" USING btree ("data_class","expires_at");

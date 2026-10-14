@@ -1,0 +1,43 @@
+{
+  "annual_flat_par_curve": {
+    "input": {
+      "maturitiesYears": [1.0, 2.0],
+      "parYieldsPct": [5.0, 5.0],
+      "frequency": 1
+    },
+    "expected": {
+      "discountFactors": [0.9523809523809523, 0.9070294784580498],
+      "zeroRatesPct": [4.879016416943205, 4.879016416943204],
+      "forwardRatesPct": [4.879016416943205, 4.879016416943205]
+    },
+    "derivation": "DF1 = 1/1.05. DF2 = (1 - 0.05*DF1)/1.05. Continuous zero rates are -ln(DF_t)/t and forwards are -ln(DF2/DF1)/(2-1)."
+  },
+  "one_year_zero_coupon_z_spread": {
+    "input": {
+      "cashFlows": [{"timeYears": 1.0, "amount": 100.0}],
+      "curve": [{"maturityYears": 1.0, "zeroRatePct": 5.0}],
+      "marketPrice": 94.17645335842487
+    },
+    "expected": {
+      "zSpreadBps": 100.0,
+      "modelPrice": 95.1229424500714,
+      "spreadDurationYears": 1.0000000016666666,
+      "dv01": 0.009417645351538563
+    },
+    "derivation": "Market price is 100*exp(-0.06), so the spread over a 5% continuous zero rate is exactly 1%=100bp. The engine's symmetric 1bp duration is sinh(1e-4)/1e-4 and DV01 is marketPrice*sinh(1e-4)."
+  },
+  "two_asset_duration_immunization": {
+    "input": {
+      "assets": [
+        {"name": "SHORT", "price": 100.0, "durationYears": 2.0},
+        {"name": "LONG", "price": 100.0, "durationYears": 6.0}
+      ],
+      "targetDurationYears": 3.0
+    },
+    "expected": {
+      "weights": {"SHORT": 0.75, "LONG": 0.25},
+      "achievedDurationYears": 3.0
+    },
+    "derivation": "Solve w_short+w_long=1 and 2*w_short+6*w_long=3, giving 0.75 and 0.25."
+  }
+}

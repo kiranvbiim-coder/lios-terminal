@@ -1,0 +1,221 @@
+/* LiOS V6 workstation refinement.
+   This layer is intentionally narrow: reclaim viewport, strengthen hierarchy,
+   and make density a real workstation preference without changing LiOS identity. */
+
+.terminal-root {
+  --lios-shell-height: 32px;
+  --lios-context-height: 34px;
+  --lios-row-block: 36px;
+  --lios-control-pad-x: 8px;
+  --lios-panel-pad: 12px;
+  --limuria-text-dim: 35 7% 58%;
+  --limuria-text-soft: 38 8% 72%;
+  --muted-foreground: 35 7% 60%;
+}
+
+.terminal-root[data-density='compact'] {
+  --lios-shell-height: 29px;
+  --lios-context-height: 30px;
+  --lios-row-block: 30px;
+  --lios-control-pad-x: 6px;
+  --lios-panel-pad: 9px;
+}
+
+.terminal-root[data-density='comfortable'] {
+  --lios-shell-height: 36px;
+  --lios-context-height: 38px;
+  --lios-row-block: 42px;
+  --lios-control-pad-x: 10px;
+  --lios-panel-pad: 15px;
+}
+
+/* Reclaim vertical viewport. Standard is deliberately tighter than the old
+   36px + 40px header/context stack; Compact is roughly 20% tighter. */
+.terminal-root > header {
+  height: var(--lios-shell-height) !important;
+  min-height: var(--lios-shell-height) !important;
+}
+
+.terminal-root > header > div:first-child {
+  width: 172px !important;
+  min-width: 172px !important;
+  background-size: 156px auto !important;
+}
+
+.terminal-root [data-testid='context-ribbon'] {
+  min-height: var(--lios-context-height) !important;
+  height: var(--lios-context-height) !important;
+}
+
+.terminal-root [data-testid='terminal-tab-bar'] {
+  min-height: var(--lios-context-height) !important;
+}
+
+.terminal-root [data-testid='active-symbol'],
+.terminal-root [data-testid='cmd-open'],
+.terminal-root [data-testid='nav-alerts'] {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+  height: calc(100% - 4px) !important;
+}
+
+/* Navigation hierarchy: workspace chrome is quieter than analytical content;
+   the selected entity and command affordance remain visually authoritative. */
+.terminal-root [data-testid='context-ribbon'],
+.terminal-root [data-testid='terminal-tab-bar'] {
+  background: #080808;
+}
+
+.terminal-root [data-testid='context-ribbon'] button:not([aria-current='page']) {
+  color: hsl(var(--limuria-text-dim));
+}
+
+.terminal-root [data-testid='active-symbol'] {
+  border-color: hsl(var(--limuria-amber) / .22) !important;
+}
+
+/* The dock remains an action surface, not another navigation bar. When the
+   current capability is symbol-aware, one restrained underline makes the
+   persisted analytical object explicit without adding another label row. */
+.lios-v5-command-dock[data-object-context='true'] .lios-dock-context {
+  border-color: hsl(var(--limuria-amber) / .24);
+  box-shadow: inset 0 -1px 0 hsl(var(--limuria-amber) / .42);
+}
+
+/* Secondary information must remain readable during long analytical sessions. */
+.terminal-root .text-muted-foreground {
+  color: hsl(var(--limuria-text-dim));
+}
+
+.terminal-root :where(.panel-label, th, [role='columnheader']) {
+  letter-spacing: .095em;
+}
+
+/* Density primitives used by analytical grids and panels. */
+.terminal-root [data-analytical-row] {
+  min-height: var(--lios-row-block);
+}
+
+.terminal-root[data-density='compact'] [data-analytical-row] {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+.terminal-root[data-density='comfortable'] [data-analytical-row] {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.terminal-root [data-workstation-toolbar] {
+  min-height: var(--lios-context-height);
+  padding-inline: var(--lios-control-pad-x);
+}
+
+.terminal-root [data-workstation-panel] {
+  padding: var(--lios-panel-pad);
+}
+
+/* Resize handles stay almost invisible at rest, but become easy to acquire. */
+.terminal-root [data-panel-resize-handle-id] {
+  position: relative;
+  z-index: 8;
+  opacity: .38;
+}
+
+.terminal-root [data-panel-resize-handle-id]::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
+.terminal-root [data-panel-resize-handle-id]:hover,
+.terminal-root [data-panel-resize-handle-id]:focus-visible,
+.terminal-root [data-panel-resize-handle-id][data-resize-handle-active] {
+  opacity: 1;
+  background: hsl(var(--limuria-amber) / .55) !important;
+}
+
+/* Analytical grid presets. */
+.lios-grid-preset {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid hsl(var(--border));
+  background: #080808;
+  color: hsl(var(--limuria-text-dim));
+  font-size: .48rem;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.lios-grid-preset:hover {
+  color: hsl(var(--limuria-text));
+  border-color: hsl(var(--limuria-line-strong));
+}
+
+.lios-grid-preset[data-active='true'] {
+  color: hsl(var(--limuria-amber-soft));
+  border-color: hsl(var(--limuria-amber) / .38);
+  background: hsl(var(--limuria-amber) / .055);
+  box-shadow: inset 0 -1px 0 hsl(var(--limuria-amber) / .45);
+}
+
+.lios-analytical-grid-header {
+  background: #0b0b0b;
+  box-shadow: inset 0 -1px 0 hsl(var(--limuria-line));
+}
+
+.lios-analytical-grid-row {
+  transition: background 90ms ease, box-shadow 90ms ease;
+}
+
+.lios-analytical-grid-row:hover {
+  background: hsl(var(--limuria-amber) / .025);
+}
+
+/* Read-through split and evidence context. */
+.lios-readthrough-handle {
+  background: hsl(var(--border));
+}
+
+.lios-story-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid hsl(var(--border) / .7);
+}
+
+.lios-story-context > span {
+  border: 1px solid hsl(var(--border));
+  background: #090909;
+  padding: 3px 6px;
+  color: hsl(var(--limuria-text-dim));
+  font-size: .48rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.lios-story-context > span[data-emphasis='object'] {
+  color: hsl(var(--limuria-cyan));
+  border-color: hsl(var(--limuria-cyan) / .28);
+}
+
+.lios-story-context > span[data-emphasis='positive'] { color: hsl(var(--limuria-green)); }
+.lios-story-context > span[data-emphasis='negative'] { color: hsl(var(--limuria-red)); }
+
+/* TerminalUxOverlays already persists this preference and writes data-ambient. */
+.terminal-root[data-ambient='false'] {
+  background: #050505 !important;
+}
+
+@media (max-width: 900px) {
+  .terminal-root > header > div:first-child {
+    width: 48px !important;
+    min-width: 48px !important;
+    background-size: 116px auto !important;
+    background-position: left 8px center !important;
+  }
+}

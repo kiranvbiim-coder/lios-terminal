@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-ic-memo-review-gate",
+  "status": "implementation_complete_pending_exact_head_v1",
+  "asOfDate": "2026-10-12",
+  "canonicalOwners": [
+    "P4",
+    "P7",
+    "P11"
+  ],
+  "siWorkstreams": [
+    "SI-05.24",
+    "SI-05.25",
+    "SI-05.40"
+  ],
+  "shippingTarget": "SP-05 direct enabler only; no Shipping Point or packaged acceptance",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledMirror": "kiranvbiim-coder/FinRobot",
+    "sourcePin": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "licenseDestination": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "noticeDestination": "third_party/licenses/finrobot-NOTICE.txt",
+    "sourcePath": "finrobot_desktop/finrobot/engine/pipelines/ic_memo.py",
+    "sourceBlobSha": "2a7585e9849570e0591ed52bf9fd8bb50ac32d1e",
+    "upstreamTestPath": "finrobot_desktop/tests/artifact/test_numeric_audit_gate.py",
+    "upstreamTestBlobSha": "4e396172a46125607c1de38bdd187537ed44ffc3"
+  },
+  "reuseDisposition": [
+    "ADAPT",
+    "REPURPOSE",
+    "COMBINE",
+    "PORT_TESTS"
+  ],
+  "selectedMechanics": [
+    "committee-review stages require explicit recommendation, thesis/rationale and risk/counter-case structure",
+    "deterministic numerical/evidence blockers remain critical and cannot be overridden by model-authored recommendation prose",
+    "missing or caveated numerical/provenance support degrades visibly to human review instead of fabricated success",
+    "immutable review output carries source and execution-receipt support without live refetch",
+    "decision-linked source references must intersect the exact immutable Artifact version source-reference set; unrelated version evidence cannot satisfy the gate",
+    "review-package diagnostics are composed through one pure version-bound helper so P4 integration cannot silently bypass the IC gate"
+  ],
+  "destinationPaths": [
+    "src/server/finrobotIcMemoGate.ts",
+    "src/server/finrobotIcMemoGate.test.ts",
+    "src/server/artifactReviewPackage.ts",
+    "src/server/artifactReviewPackage.finrobotIcGate.test.ts"
+  ],
+  "authoritySubstitutions": [
+    "P4 remains sole Artifact/version/review-package authority",
+    "P11 remains sole deterministic finance calculation and valuation authority",
+    "P7 remains sole evidence, provenance, rights and source-reference authority",
+    "Existing Decision Artifact linked-receipt approval inspection remains sole review approval authority",
+    "FinRobot PydanticAI agents, providers, pipeline runtime, stores, routes and broker paths are not installed",
+    "FinRobot's sponsor IRR hurdle is donor-specific and is not adopted as a LiOS investment policy"
+  ],
+  "nativeValidation": {
+    "redRunId": 38207605455,
+    "redExpectedFailure": "ERR_MODULE_NOT_FOUND for src/server/finrobotIcMemoGate before implementation",
+    "focusedGreenRunId": 38207976980,
+    "focusedGreenStatus": "focused_gate_test_passed; job was later cancelled during post-action cleanup",
+    "compositionRegression": "tests-first seam added before the pure helper; its queued RED execution was superseded under same-workflow concurrency during shared-runner contention, so no executed RED claim is made for this secondary seam",
+    "latestExactHeadQueuedRunId": 38211546116,
+    "v1Status": "pending_exact_head_self_hosted_qualification",
+    "plannedCommands": [
+      "cd src && node --import tsx --test server/finrobotIcMemoGate.test.ts server/artifactReviewPackage.finrobotIcGate.test.ts server/finrobotReportSnapshot.test.ts server/professionalWorkPackage.test.ts",
+      "cd src && npm run check",
+      "parse this provenance manifest and verify diff hygiene"
+    ],
+    "packagedV3": "not_qualified"
+  },
+  "exclusions": [
+    "FinRobot DCF/LBO operators and seed policy",
+    "FinRobot 15 percent sponsor IRR threshold as LiOS policy",
+    "FinRobot PydanticAI agent/runtime/provider/data layer",
+    "new Artifact, approval, evidence, model or finance-engine authority",
+    "live market/data refresh",
+    "generated investment recommendation",
+    "automatic trade, broker or external side effect",
+    "SP-05/release claims"
+  ]
+}

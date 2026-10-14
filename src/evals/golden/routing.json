@@ -1,0 +1,736 @@
+{
+  "version": 1,
+  "description": "Golden routing set: intended capability, entity and readiness for natural-language prompts. Expectations describe intended behavior, not current behavior. known_gap cases document a real defect and must be promoted to must_pass once fixed.",
+  "cases": [
+    {
+      "id": "R01",
+      "category": "research",
+      "prompt": "Research Apple",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "Apple",
+        "availability": {
+          "company.research": "ready"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R02",
+      "category": "research",
+      "prompt": "research apple",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "apple",
+        "availability": {
+          "company.research": "ready"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R03",
+      "category": "research",
+      "prompt": "Research AAPL",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "AAPL"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R04",
+      "category": "research",
+      "prompt": "Research Apple Inc.",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entityPrefix": "Apple"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R05",
+      "category": "research",
+      "prompt": "Give me a research report on Microsoft",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "research.report"
+        ],
+        "entityPrefix": "Microsoft"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R06",
+      "category": "research",
+      "prompt": "Tell me about Nvidia",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "security.overview",
+          "company.fundamentals"
+        ],
+        "entity": "Nvidia"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R07",
+      "category": "research",
+      "prompt": "What's going on with Tesla?",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "security.overview",
+          "company.fundamentals"
+        ],
+        "entity": "Tesla"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R08",
+      "category": "research",
+      "prompt": "Look into Amazon",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "security.overview"
+        ],
+        "entity": "Amazon"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R09",
+      "category": "research",
+      "prompt": "Analyze Apple: key fundamentals, technicals and a valuation",
+      "expect": {
+        "includes": [
+          "company.research",
+          "company.valuation"
+        ],
+        "entity": "Apple",
+        "availability": {
+          "company.valuation": "needs_input"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R10",
+      "category": "research",
+      "prompt": "Research Apple and build a valuation",
+      "expect": {
+        "includes": [
+          "company.research",
+          "company.valuation"
+        ],
+        "entity": "Apple",
+        "availability": {
+          "company.valuation": "needs_input"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R11",
+      "category": "research",
+      "prompt": "Deep dive on Alphabet",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "security.overview"
+        ],
+        "entity": "Alphabet"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "R12",
+      "category": "research",
+      "prompt": "Is Apple overvalued?",
+      "expect": {
+        "includesAny": [
+          "company.valuation",
+          "company.research"
+        ],
+        "entity": "Apple"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T01",
+      "category": "technical",
+      "prompt": "give me chart of apple",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "apple",
+        "availability": {
+          "market.technical": "ready"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T02",
+      "category": "technical",
+      "prompt": "Show RSI and MACD for MSFT",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "MSFT"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T03",
+      "category": "technical",
+      "prompt": "technicals for Nvidia",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "Nvidia",
+        "availability": {
+          "market.technical": "ready"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T04",
+      "category": "technical",
+      "prompt": "Run technical analysis and show momentum",
+      "expect": {
+        "only": [
+          "market.technical"
+        ],
+        "noEntity": true,
+        "availability": {
+          "market.technical": "needs_input"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T05",
+      "category": "technical",
+      "prompt": "chart AAPL",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "AAPL"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T06",
+      "category": "technical",
+      "prompt": "What is the RSI of Tesla?",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "Tesla"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T07",
+      "category": "technical",
+      "prompt": "Backtest an RSI strategy on AAPL",
+      "expect": {
+        "includes": [
+          "strategy.backtest"
+        ],
+        "entity": "AAPL",
+        "availability": {
+          "strategy.backtest": "needs_approval"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T08",
+      "category": "technical",
+      "prompt": "support and resistance levels for Amazon",
+      "expect": {
+        "includes": [
+          "market.technical"
+        ],
+        "entity": "Amazon"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "T09",
+      "category": "technical",
+      "prompt": "price of Tesla",
+      "expect": {
+        "includesAny": [
+          "market.technical",
+          "security.overview",
+          "company.research"
+        ],
+        "entity": "Tesla"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "V01",
+      "category": "valuation",
+      "prompt": "Value AAPL",
+      "expect": {
+        "only": [
+          "company.valuation"
+        ],
+        "entity": "AAPL",
+        "availability": {
+          "company.valuation": "needs_input"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "V02",
+      "category": "valuation",
+      "prompt": "Build a DCF for Microsoft",
+      "expect": {
+        "includes": [
+          "company.valuation"
+        ],
+        "entity": "Microsoft",
+        "availability": {
+          "company.valuation": "needs_input"
+        }
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "V03",
+      "category": "valuation",
+      "prompt": "Run a reverse DCF",
+      "expect": {
+        "includes": [
+          "company.valuation"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "V04",
+      "category": "valuation",
+      "prompt": "What is Apple worth?",
+      "expect": {
+        "includesAny": [
+          "company.valuation",
+          "company.research"
+        ],
+        "entity": "Apple"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "V05",
+      "category": "valuation",
+      "prompt": "Compare Apple and Microsoft",
+      "expect": {
+        "includesAny": [
+          "company.research",
+          "security.overview",
+          "company.valuation"
+        ],
+        "entityPrefix": "Apple"
+      },
+      "status": "known_gap",
+      "gapReason": "Multi-entity comparison is unsupported: there is no comparison capability."
+    },
+    {
+      "id": "V06",
+      "category": "valuation",
+      "prompt": "Build a deterministic DCF for [company or ticker]. Show sourced inputs, assumptions, and missing data; ask me before estimating anything that is unavailable.",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P01",
+      "category": "portfolio",
+      "prompt": "Review [my portfolio file or connected source] for concentration, exposures, and downside risks. Ask me to select the file or source before using private data.",
+      "expect": {
+        "includesAny": [
+          "portfolio.risk",
+          "ai.answer"
+        ],
+        "forbids": [
+          "security.overview"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P02",
+      "category": "portfolio",
+      "prompt": "How risky is my portfolio?",
+      "expect": {
+        "includesAny": [
+          "portfolio.risk",
+          "ai.answer"
+        ],
+        "forbids": [
+          "security.overview"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P03",
+      "category": "portfolio",
+      "prompt": "Stress test my portfolio against a 2008-style crash",
+      "expect": {
+        "includesAny": [
+          "portfolio.risk",
+          "ai.answer"
+        ],
+        "forbids": [
+          "security.overview"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P04",
+      "category": "portfolio",
+      "prompt": "What is my net worth trend?",
+      "expect": {
+        "includes": [
+          "personal_finance.snapshot"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P05",
+      "category": "portfolio",
+      "prompt": "Plan my retirement savings",
+      "expect": {
+        "includes": [
+          "personal_finance.snapshot"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "P06",
+      "category": "portfolio",
+      "prompt": "Optimize my portfolio for minimum variance",
+      "expect": {
+        "includesAny": [
+          "portfolio.risk",
+          "deterministic.engine",
+          "ai.answer"
+        ],
+        "forbids": [
+          "security.overview"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "M01",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "What is the current US yield curve?",
+      "expect": {
+        "includesAny": [
+          "fixed_income.analytics",
+          "macro_fx.analytics",
+          "ai.answer"
+        ],
+        "forbids": [
+          "security.overview"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "M02",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "Price a 5 year bond with a 4% coupon",
+      "expect": {
+        "includes": [
+          "fixed_income.analytics"
+        ]
+      },
+      "status": "known_gap",
+      "gapReason": "Bond-pricing phrasing falls through to ai.answer instead of fixed_income.analytics."
+    },
+    {
+      "id": "M03",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "Black-Scholes greeks for a call option",
+      "expect": {
+        "includes": [
+          "derivatives.analytics"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "M04",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "How does EUR/USD look?",
+      "expect": {
+        "includesAny": [
+          "macro_fx.analytics",
+          "market.technical",
+          "security.overview"
+        ],
+        "entityPrefix": "EUR"
+      },
+      "status": "known_gap",
+      "gapReason": "FX-pair phrasing falls through to ai.answer although FX data capabilities exist."
+    },
+    {
+      "id": "M05",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "Explain how inflation affects interest rates",
+      "expect": {
+        "only": [
+          "ai.answer"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "M06",
+      "category": "macro_fixed_income_derivatives",
+      "prompt": "Explain why operating leverage matters",
+      "expect": {
+        "only": [
+          "ai.answer"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "J01",
+      "category": "project",
+      "prompt": "Search this project for refinancing risk",
+      "expect": {
+        "includes": [
+          "project.search"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "J02",
+      "category": "project",
+      "prompt": "What changed in this project?",
+      "expect": {
+        "includes": [
+          "project.changes"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "J03",
+      "category": "project",
+      "prompt": "Resume this project",
+      "expect": {
+        "includesAny": [
+          "project.continuity"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "J04",
+      "category": "project",
+      "prompt": "Summarize the decisions we made so far",
+      "expect": {
+        "includesAny": [
+          "project.insight_lens",
+          "project.continuity",
+          "ai.answer"
+        ]
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A01",
+      "category": "ambiguity_and_safety",
+      "prompt": "Research",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A02",
+      "category": "ambiguity_and_safety",
+      "prompt": "hi",
+      "expect": {
+        "only": [
+          "ai.answer"
+        ],
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A03",
+      "category": "ambiguity_and_safety",
+      "prompt": "Research [company or ticker] using available, cited sources.",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A04",
+      "category": "ambiguity_and_safety",
+      "prompt": "Analyze this",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A05",
+      "category": "ambiguity_and_safety",
+      "prompt": "Research the company",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A06",
+      "category": "ambiguity_and_safety",
+      "prompt": "chart of it",
+      "expect": {
+        "noEntity": true
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "A07",
+      "category": "ambiguity_and_safety",
+      "prompt": "Research Zzzqx Holdings",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entityPrefix": "Zzzqx"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S01",
+      "category": "symbols_and_names",
+      "prompt": "Research $TSLA",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "TSLA"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S02",
+      "category": "symbols_and_names",
+      "prompt": "Research BRK.B",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "BRK.B"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S03",
+      "category": "symbols_and_names",
+      "prompt": "Research Bank of America",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "Bank of America"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S04",
+      "category": "symbols_and_names",
+      "prompt": "Research Tata Motors",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "Tata Motors"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S05",
+      "category": "symbols_and_names",
+      "prompt": "Research 7203.T",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "7203.T"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S06",
+      "category": "symbols_and_names",
+      "prompt": "Research Reliance Industries and show technicals",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entity": "Reliance Industries"
+      },
+      "status": "must_pass"
+    },
+    {
+      "id": "S07",
+      "category": "symbols_and_names",
+      "prompt": "Research Apple vs Microsoft",
+      "expect": {
+        "includes": [
+          "company.research"
+        ],
+        "entityPrefix": "Apple"
+      },
+      "status": "must_pass"
+    }
+  ]
+}

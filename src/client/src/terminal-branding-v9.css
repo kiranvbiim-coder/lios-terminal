@@ -1,0 +1,55 @@
+/* LiOS terminal branding: text-only identity in the existing amber treatment.
+   This intentionally defeats the legacy V5 background-image wordmark. */
+.terminal-root > header.h-9 > div:first-child {
+  position: relative;
+  width: 146px !important;
+  min-width: 146px !important;
+  padding: 0 12px !important;
+  background: hsl(38 95% 50%) !important;
+  border-right: 1px solid hsl(38 95% 60% / 0.32) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.terminal-root > header.h-9 > div:first-child > * {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.terminal-root > header.h-9 > div:first-child::before {
+  display: none !important;
+  content: none !important;
+}
+
+.terminal-root > header.h-9 > div:first-child::after {
+  content: "LiOS Terminal" !important;
+  position: static !important;
+  inset: auto !important;
+  display: inline-flex !important;
+  width: auto !important;
+  height: auto !important;
+  align-items: center;
+  background: none !important;
+  box-shadow: none !important;
+  color: #050505 !important;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.09em !important;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .terminal-root > header.h-9 > div:first-child {
+    width: 118px !important;
+    min-width: 118px !important;
+    padding-inline: 9px !important;
+  }
+
+  .terminal-root > header.h-9 > div:first-child::after {
+    font-size: 0.64rem !important;
+    letter-spacing: 0.06em !important;
+  }
+}

@@ -1,0 +1,335 @@
+{
+  "version": 2,
+  "product": "LiOS",
+  "artDirection": "premium intelligence atmosphere + analytical discipline + unmistakable LiOS identity",
+  "renderStates": [
+    "immersive",
+    "contextual",
+    "focus"
+  ],
+  "environments": [
+    {
+      "id": "neutral",
+      "name": "LiOS Intelligence",
+      "accent": "amber",
+      "contexts": [
+        "general"
+      ],
+      "file": "neutral.svg",
+      "path": "/visual-environments/neutral.svg",
+      "desktopAssetPath": "/visual-environments/neutral.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/neutral.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/neutral.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "global-intelligence",
+      "name": "Global Intelligence",
+      "accent": "cyan",
+      "contexts": [
+        "general",
+        "macro"
+      ],
+      "file": "global-intelligence.svg",
+      "path": "/visual-environments/global-intelligence.svg",
+      "desktopAssetPath": "/visual-environments/global-intelligence.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/global-intelligence.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/global-intelligence.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "company-intelligence",
+      "name": "Company Intelligence",
+      "accent": "amber",
+      "contexts": [
+        "company",
+        "research"
+      ],
+      "file": "company-intelligence.svg",
+      "path": "/visual-environments/company-intelligence.svg",
+      "desktopAssetPath": "/visual-environments/company-intelligence.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/company-intelligence.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/company-intelligence.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "markets",
+      "name": "Markets",
+      "accent": "cyan",
+      "contexts": [
+        "markets"
+      ],
+      "file": "markets.svg",
+      "path": "/visual-environments/markets.svg",
+      "desktopAssetPath": "/visual-environments/markets.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/markets.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/markets.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "valuation",
+      "name": "Valuation & Modeling",
+      "accent": "indigo",
+      "contexts": [
+        "valuation"
+      ],
+      "file": "valuation.svg",
+      "path": "/visual-environments/valuation.svg",
+      "desktopAssetPath": "/visual-environments/valuation.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/valuation.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/valuation.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "portfolio-risk",
+      "name": "Portfolio & Risk",
+      "accent": "amber",
+      "contexts": [
+        "portfolio",
+        "risk"
+      ],
+      "file": "portfolio-risk.svg",
+      "path": "/visual-environments/portfolio-risk.svg",
+      "desktopAssetPath": "/visual-environments/portfolio-risk.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/portfolio-risk.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/portfolio-risk.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "quant-strategy",
+      "name": "Quant & Strategy",
+      "accent": "indigo",
+      "contexts": [
+        "quant"
+      ],
+      "file": "quant-strategy.svg",
+      "path": "/visual-environments/quant-strategy.svg",
+      "desktopAssetPath": "/visual-environments/quant-strategy.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/quant-strategy.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/quant-strategy.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "research-knowledge",
+      "name": "Research & Knowledge",
+      "accent": "cyan",
+      "contexts": [
+        "research"
+      ],
+      "file": "research-knowledge.svg",
+      "path": "/visual-environments/research-knowledge.svg",
+      "desktopAssetPath": "/visual-environments/research-knowledge.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/research-knowledge.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/research-knowledge.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "personal-finance",
+      "name": "Personal Finance & Wealth",
+      "accent": "amber",
+      "contexts": [
+        "personal-finance"
+      ],
+      "file": "personal-finance.svg",
+      "path": "/visual-environments/personal-finance.svg",
+      "desktopAssetPath": "/visual-environments/personal-finance.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/personal-finance.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/personal-finance.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    },
+    {
+      "id": "economic-intelligence",
+      "name": "Economic Intelligence",
+      "accent": "indigo",
+      "contexts": [
+        "macro"
+      ],
+      "file": "economic-intelligence.svg",
+      "path": "/visual-environments/economic-intelligence.svg",
+      "desktopAssetPath": "/visual-environments/economic-intelligence.svg",
+      "lowResourceAssetPath": "/visual-environments/low-resource/economic-intelligence.svg",
+      "masterSourceRepoPath": "assets/visual-environments/masters/economic-intelligence.svg",
+      "composition": {
+        "canvas": "1920x1080",
+        "centralSafeZone": {
+          "x": 430,
+          "y": 120,
+          "width": 1060,
+          "height": 820
+        },
+        "peripheralDetail": true,
+        "embeddedText": false
+      },
+      "provenance": {
+        "owner": "Limuria Intelligence LLP / LiOS",
+        "method": "LiOS-authored vector scene system",
+        "thirdPartyAssets": false,
+        "license": "proprietary project asset",
+        "created": "2026-09-23",
+        "version": "2.0.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "LiOS V4 Development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "user": "ubuntu",
+  "install": "bash .cursor/scripts/cloud-agent-install.sh",
+  "terminals": [
+    {
+      "name": "lios-dev",
+      "command": "cd src && npm run dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "LiOS Terminal",
+      "port": 5052
+    }
+  ]
+}

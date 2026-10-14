@@ -1,0 +1,71 @@
+.lios-project-experience-shell { position: relative; overflow: hidden; font-size: 14px; }
+.lios-authenticated-navigation { display:flex; flex-direction:row; flex-shrink:0; width:264px; min-height:0; background:var(--lios-bg-shell); border-right:1px solid var(--lios-border-default); }
+.lios-primary-navigation { flex-shrink:0; padding:16px 12px 12px; border-bottom:1px solid var(--lios-border-default); }
+.lios-primary-navigation button { display:flex; align-items:center; gap:12px; width:100%; min-height:36px; padding:8px 12px; border-radius:6px; font-size:13px; text-align:left; color:var(--lios-text-secondary); }
+.lios-primary-navigation button:hover { background:var(--lios-bg-hover); color:var(--lios-text-primary); }
+.lios-primary-navigation button[aria-current] { background:var(--lios-bg-selected); color:var(--lios-brand); }
+.lios-primary-navigation .lios-new-chat { margin-bottom:4px; border:0; color:var(--lios-text-primary); }
+.lios-shortcut { margin-left:auto; font-size:10px; }
+.lios-navigation-history { min-height:0; flex:1; overflow-y:auto; scrollbar-gutter:stable; }
+.lios-account-trigger { display:flex; align-items:center; gap:10px; min-height:56px; width:100%; padding:10px 12px; border-top:1px solid var(--lios-border-default); text-align:left; font-size:13px; }
+.lios-account-trigger > span:nth-child(2) { flex:1; min-width:0; }
+.lios-account-trigger strong,.lios-account-trigger small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lios-account-trigger small { font-size:11px; color:var(--lios-text-secondary); margin-top:3px; }
+.lios-account-avatar { display:grid; place-items:center; width:32px; height:32px; border-radius:8px; background:var(--lios-bg-selected); color:var(--lios-brand); }
+.lios-project-experience-shell :focus-visible,.lios-navigation-sheet :focus-visible { outline:2px solid var(--lios-brand); outline-offset:3px; }
+.lios-project-experience-shell button:disabled { opacity:.45; cursor:not-allowed; }
+.lios-project-experience-shell > main { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.lios-project-experience-shell .lios-conversation-header { min-height:44px; height:44px; padding:0 16px; flex-wrap:nowrap; }
+.lios-project-experience-shell .lios-conversation-header > div:first-child { min-width:120px; }
+.lios-project-experience-shell .lios-context-strip { padding:8px 24px; }
+.lios-project-experience-shell .text-muted-foreground { color:var(--lios-text-secondary) !important; }
+.lios-project-experience-shell textarea[aria-label="Ask LiOS"] { font-size:15px; line-height:1.55; }
+.lios-project-context { width:320px; flex-shrink:0; display:flex; flex-direction:column; overflow-y:auto; min-height:0; border-left:1px solid var(--lios-border-default); background:var(--lios-bg-panel); }
+.lios-section-surface { overflow-y:auto; min-height:0; flex:1; padding:32px clamp(20px,4vw,64px); }
+.lios-section-surface > header { display:flex; align-items:start; justify-content:space-between; gap:16px; border-bottom:1px solid var(--lios-border-default); padding-bottom:24px; margin-bottom:24px; }
+.lios-section-surface h1 { font-size:28px; font-weight:600; letter-spacing:-.025em; }
+.lios-section-surface p { font-size:14px; line-height:1.7; color:var(--lios-text-secondary); }
+.lios-section-surface button,.lios-section-surface select,.lios-section-surface input { font-size:13px; }
+.lios-directory-list { display:grid; gap:8px; margin-top:20px; }
+.lios-directory-list > button { display:flex; flex-direction:column; gap:5px; text-align:left; padding:16px; border:1px solid var(--lios-border-default); border-radius:8px; }
+.lios-directory-list > button:hover { background:var(--lios-bg-hover); }
+.lios-directory-list small { color:var(--lios-text-secondary); font-size:12px; }
+.lios-section-action { padding:8px 12px; border:1px solid var(--lios-border-default); border-radius:6px; }
+.lios-project-tools [class*="text-["] { font-size:12px; }
+.lios-mobile-navigation { display:none; }
+.lios-navigation-sheet { display:flex; flex-direction:column; padding:36px 0 0; width:min(320px,90vw); background:var(--lios-bg-shell); }
+@media (max-width:1199px) { .lios-project-experience-shell[data-context-open="true"] > main { display:none; } .lios-project-context { flex:1; width:auto; } }
+@media (max-width:767px) {
+  .lios-project-experience-shell { flex-direction:column; }
+  .lios-authenticated-navigation { display:none; }
+  .lios-mobile-navigation { display:flex; align-items:center; gap:12px; min-height:44px; padding:8px 16px; border-bottom:1px solid var(--lios-border-default); font-size:13px; flex-shrink:0; }
+  .lios-project-experience-shell .lios-conversation-header { padding:12px 16px; }
+  .lios-project-experience-shell .lios-context-strip { padding:8px 16px; }
+  .lios-section-surface { padding:24px 16px; }
+}
+@media (prefers-reduced-motion:reduce) { .lios-project-experience-shell * { animation:none !important; transition:none !important; } }
+
+.lios-project-experience-shell button,.lios-navigation-sheet button { cursor:pointer; }
+.lios-project-experience-shell .lios-conversation-header button { font-size:12px; }
+.lios-project-experience-shell .lios-project-home-surface { flex:1; min-height:0; }
+.lios-navigation-sheet .lios-primary-navigation { padding-top:4px; }
+.lios-navigation-sheet .lios-navigation-history { min-height:80px; }
+
+
+/* Fit the two work surfaces to the available shell width, including the sidebar. */
+.lios-project-chat-surface { container-type: inline-size; container-name: conversation; }
+.terminal-root .lios-project-experience-shell :where(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--lios-brand) !important;
+  outline-offset: 2px !important;
+}
+@container conversation (min-width: 900px) {
+  .lios-artifact-sidecar { display: block; }
+}
+
+.lios-project-experience-shell .lios-conversation-composer {
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.24);
+}
+.lios-project-experience-shell .lios-conversation-composer-actions {
+  border-top: 0 !important;
+}

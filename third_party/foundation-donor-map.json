@@ -1,0 +1,507 @@
+{
+  "schemaVersion": "1",
+  "status": "f0_foundation_donor_execution_map",
+  "effectiveDate": "2026-10-07",
+  "taskIssue": 449,
+  "baseMainSha": "a086349fb2a6b1874648987e6cae46e503f60d39",
+  "authority": "docs/technical/LIOS_FOUNDATION_LOCK_DONOR_EXECUTION_AMENDMENT.md",
+  "supportingTruth": "third_party/capability-assimilation.json",
+  "historicalBaselineDonorCount": 92,
+  "historicalBaselineCountPreserved": true,
+  "purpose": "Map controlled mirrors and the highest-leverage 92-baseline donors to SP-01 through SP-04 without changing canonical LiOS ownership or treating donor presence as implementation/shipping proof.",
+  "rules": {
+    "layersArePermissionBoundaries": false,
+    "documentedDonorsMayBeForkedOrUsed": true,
+    "newSuitableDonorsMayBeDiscoveredUsedOrForkedWithoutSeparateOwnerApprovalInsideAuthorizedWorkstreams": true,
+    "materialDonorUseMustBeRecorded": true,
+    "buildNewLast": true,
+    "shippingPointAcceptanceRequiresIntegratedMSJ": true,
+    "newDonorsSilentlyCountInsideHistorical92": false
+  },
+  "activeOwnershipCollision": {
+    "issue": 233,
+    "scope": "GM-10c/GM-11 core and SP-01 packaged macOS shared chat-terminal journey",
+    "rule": "F0 provides donor guidance only and must not duplicate this implementation ownership."
+  },
+  "controlledMirrors": [
+    {
+      "mirror": "kiranvbiim-coder/openclaw",
+      "upstream": "openclaw/openclaw",
+      "defaultBranch": "main",
+      "mirrorHead": "0be750916b123c328b8962117213f8c4fd1b2a0a",
+      "licensePosture": "MIT; exact imported paths/pin/notices still required",
+      "baselineDonorId": "openclaw",
+      "canonicalOwner": "GM-00..GM-25",
+      "foundationRole": ["SP-01", "SP-02"],
+      "disposition": ["DIRECT_REUSE", "ADAPT", "COMBINE"],
+      "priority": "foundation_critical",
+      "notes": "Primary structural donor. Reuse Gateway/session/execution/approval/receipt/recovery/agent/browser mechanisms behind existing GM authorities; mirror head is analysis input and does not automatically replace the repo's approved donor pin."
+    },
+    {
+      "mirror": "kiranvbiim-coder/cua",
+      "upstream": "trycua/cua",
+      "defaultBranch": "main",
+      "mirrorHead": "a7524cfd1d3e959963b43954d43f27c4bd260f08",
+      "licensePosture": "root GitHub metadata reports MIT, but repository/component rights are path-sensitive; verify the exact component license before reuse, including source-available areas",
+      "baselineDonorId": null,
+      "canonicalOwner": "GM-14 computer-use / GM-11 permission-isolation seams",
+      "foundationRole": ["SP-01", "SP-02"],
+      "disposition": ["REFERENCE_VALIDATOR", "ADAPT"],
+      "priority": "foundation_triggered",
+      "notes": "Use driver/isolation/evaluation mechanisms only behind canonical GM execution and permission authority. No CUA control plane or second computer-use authority."
+    },
+    {
+      "mirror": "kiranvbiim-coder/TradingAgents",
+      "upstream": "TauricResearch/TradingAgents",
+      "defaultBranch": "main",
+      "mirrorHead": "1394a3f72aa4393e1a98f51b382434c4b4c2d972",
+      "licensePosture": "Apache-2.0",
+      "baselineDonorId": "tradingagents",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration / P11 Finance",
+      "foundationRole": ["SP-03"],
+      "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+      "priority": "post_foundation_first",
+      "notes": "Parallel analyst/debate/checkpoint/point-in-time patterns are valuable. Deep finance assimilation belongs primarily to SI-05 unless a concrete SP-03 blocker justifies earlier adaptation."
+    },
+    {
+      "mirror": "kiranvbiim-coder/FinRobot",
+      "upstream": "AI4Finance-Foundation/FinRobot",
+      "defaultBranch": "master",
+      "mirrorHead": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "licensePosture": "Apache-2.0 root verified in donor audit; re-check exact paths before import",
+      "baselineDonorId": null,
+      "canonicalOwner": "P11 deterministic Finance / P5 research / P4 professional outputs",
+      "foundationRole": ["SP-03", "SP-04"],
+      "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+      "priority": "post_foundation_first",
+      "notes": "Strong deterministic-compute/provenance/research-report patterns. P11 remains calculation authority; use early only if it closes a concrete research/professional-work gap."
+    },
+    {
+      "mirror": "kiranvbiim-coder/FinGPT",
+      "upstream": "AI4Finance-Foundation/FinGPT",
+      "defaultBranch": "master",
+      "mirrorHead": "fdb04c9a273d1ccc3764b09b8e3ed1e708e57566",
+      "licensePosture": "MIT root verified in donor audit; model/data rights are separate",
+      "baselineDonorId": null,
+      "canonicalOwner": "P11/P5 finance intelligence with GM-22 model-runtime seams where applicable",
+      "foundationRole": [],
+      "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+      "priority": "post_foundation_first",
+      "notes": "Finance NLP/sentiment/model/evaluation donor. Primarily SI-05; models/datasets require separate rights review."
+    },
+    {
+      "mirror": "kiranvbiim-coder/LangAlpha",
+      "upstream": "ginlix-ai/LangAlpha",
+      "defaultBranch": "main",
+      "mirrorHead": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "licensePosture": "Apache-2.0 per upstream project metadata/audit; exact paths still verified before import",
+      "baselineDonorId": "langalpha",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration / P4 output UX",
+      "foundationRole": ["SP-03", "SP-04"],
+      "disposition": ["REFERENCE_VALIDATOR", "ADAPT", "DEFER_WITH_TRIGGER"],
+      "priority": "foundation_triggered",
+      "notes": "Living-thesis/workspace continuity and professional-output mechanisms are valuable. Do not import its app/workspace authority; adapt only bounded mechanisms behind P4/P5/GM."
+    },
+    {
+      "mirror": "kiranvbiim-coder/dexter-js",
+      "upstream": "rodionlim/dexter-js",
+      "defaultBranch": "main",
+      "mirrorHead": "d2efa875c4f7e27f2f11bc59f20db72037725736",
+      "licensePosture": "GitHub repository metadata exposes no root license; direct code import blocked until exact license is established",
+      "baselineDonorId": null,
+      "relatedBaselineDonorId": "dexter",
+      "relatedBaselineUpstream": "virattt/dexter",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "foundationRole": ["SP-02"],
+      "disposition": ["REFERENCE_VALIDATOR"],
+      "priority": "foundation_triggered",
+      "notes": "Do not equate this mirror with the baseline virattt/dexter donor. Planning/self-check/loop-bound patterns may be studied; direct transplant requires provenance and license reconciliation."
+    },
+    {
+      "mirror": "kiranvbiim-coder/browser-use",
+      "upstream": "browser-use/browser-use",
+      "defaultBranch": "main",
+      "mirrorHead": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "licensePosture": "MIT",
+      "baselineDonorId": null,
+      "canonicalOwner": "GM-14 browser intelligence",
+      "foundationRole": ["SP-02"],
+      "disposition": ["ADAPT", "REFERENCE_VALIDATOR", "COMBINE"],
+      "priority": "foundation_triggered",
+      "notes": "Use navigation/page-state/tool/evaluation mechanisms behind the existing LiOS/OpenClaw browser authority. Never ship a parallel browser-agent control plane."
+    },
+    {
+      "mirror": "kiranvbiim-coder/qlib",
+      "upstream": "microsoft/qlib",
+      "defaultBranch": "main",
+      "mirrorHead": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "licensePosture": "MIT",
+      "baselineDonorId": "qlib",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "foundationRole": [],
+      "disposition": ["DEFER_WITH_TRIGGER", "REFERENCE_VALIDATOR"],
+      "priority": "post_foundation_first",
+      "notes": "High-value SI-05 quant/ML/backtest/portfolio research donor. Pull forward only for a concrete Foundation blocker; P11 remains authoritative."
+    },
+    {
+      "mirror": "kiranvbiim-coder/graphrag",
+      "upstream": "microsoft/graphrag",
+      "defaultBranch": "main",
+      "mirrorHead": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "licensePosture": "MIT",
+      "baselineDonorId": null,
+      "canonicalOwner": "P7 research/knowledge with P5 entity identity",
+      "foundationRole": ["SP-03"],
+      "disposition": ["REFERENCE_VALIDATOR", "ADAPT"],
+      "priority": "foundation_triggered",
+      "notes": "Use graph indexing/retrieval/summarization/relationship mechanisms only when benchmarks improve P7. No second graph store, entity authority, Project knowledge store or citation authority."
+    }
+  ],
+  "shippingPointExecution": {
+    "SP-01": {
+      "objective": "Secure Local Alpha: packaged shared chat-terminal governed execution, receipts, persistence and restart/restore.",
+      "implementationOwner": "Existing GM-10c/GM-11 ownership, including issue #233 and bounded child issues.",
+      "donors": [
+        {
+          "source": "openclaw",
+          "disposition": ["DIRECT_REUSE", "ADAPT"],
+          "use": "Gateway/session lifecycle, exact approval patterns, execution receipts, cancellation/reconnect/recovery mechanisms. Inspect current mirror/upstream before greenfield implementation and import only behind GM authority."
+        },
+        {
+          "source": "lydell-node-pty",
+          "baselineMembership": "outside_92_existing_accounting",
+          "disposition": ["DIRECT_REUSE"],
+          "use": "Existing pinned PTY backend candidate for shared terminal execution; finish canonical GM consumer/session integration rather than adding a second terminal runtime."
+        },
+        {
+          "source": "opa",
+          "baselineDonorId": "opa",
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Policy semantics/challenger only unless a concrete GM-11 policy gap proves a bounded integration is better. Never replace canonical GM-11 permission authority."
+        },
+        {
+          "source": "openterminal / openterminalui / hqtui",
+          "disposition": ["REFERENCE_VALIDATOR"],
+          "use": "Terminal UX/control/session patterns only; no second terminal authority."
+        },
+        {
+          "source": "cua",
+          "disposition": ["REFERENCE_VALIDATOR"],
+          "use": "Isolation/driver/evaluation mechanisms only after exact path license check."
+        }
+      ]
+    },
+    "SP-02": {
+      "objective": "Agentic Alpha: plan, governed tools, inspect/revise, recovery/checkpoint/cancel, durable result and receipts.",
+      "donors": [
+        {
+          "source": "openclaw",
+          "disposition": ["DIRECT_REUSE", "ADAPT", "COMBINE"],
+          "use": "Agent/tool/session/delegation/recovery/browser mechanisms behind canonical GM-12/13/14/P13 contracts."
+        },
+        {
+          "source": "browser-use",
+          "disposition": ["ADAPT", "REFERENCE_VALIDATOR"],
+          "use": "Browser navigation/page-state/action/evaluation patterns behind GM-14; no separate browser runtime authority."
+        },
+        {
+          "source": "cua",
+          "disposition": ["REFERENCE_VALIDATOR", "ADAPT"],
+          "use": "Computer-use driver/evaluation patterns after path-license verification."
+        },
+        {
+          "source": "pydantic-ai / langgraphjs",
+          "baselineDonorIds": ["pydantic-ai", "langgraphjs"],
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Compare planning/state/recovery/tool patterns only where current LiOS agent contracts have a measured gap. Do not create another agent stack."
+        },
+        {
+          "source": "dexter + dexter-js mirror",
+          "baselineDonorId": "dexter",
+          "disposition": ["REFERENCE_VALIDATOR"],
+          "use": "Planning/self-validation/loop-limit patterns. Baseline virattt/dexter and mirror rodionlim/dexter-js are distinct provenance; direct mirror code import remains blocked pending license/lineage reconciliation."
+        },
+        {
+          "source": "assistant-ui / tool-ui",
+          "baselineDonorIds": ["assistant-ui", "tool-ui"],
+          "disposition": ["ADAPT", "REFERENCE_VALIDATOR"],
+          "use": "Agent action/progress/approval presentation patterns only; TC/P2 remains visible experience authority."
+        }
+      ]
+    },
+    "SP-03": {
+      "objective": "Research Alpha: permitted multi-source evidence, rights/freshness/as-of, contradiction/unknown handling, durable cited Research Artifact and restart/reopen.",
+      "donors": [
+        {
+          "source": "docling",
+          "baselineDonorId": "docling",
+          "disposition": ["DIRECT_REUSE"],
+          "use": "Already runtime-integrated optional document conversion; qualify its real user path rather than replacing it."
+        },
+        {
+          "source": "edgartools",
+          "baselineDonorId": "edgartools",
+          "disposition": ["DIRECT_REUSE"],
+          "use": "Already runtime-integrated SEC document/search path; include in representative research qualification where applicable."
+        },
+        {
+          "source": "graphrag",
+          "disposition": ["REFERENCE_VALIDATOR", "ADAPT"],
+          "use": "Benchmark graph-aware retrieval/relationship/community-summary mechanisms against current P7/P5. Assimilate only mechanisms that measurably improve research without introducing parallel stores/identity."
+        },
+        {
+          "source": "sqlite-vec",
+          "baselineDonorId": "sqlite-vec",
+          "disposition": ["DEFER_WITH_TRIGGER", "REFERENCE_VALIDATOR"],
+          "use": "Consider only if a retrieval benchmark exposes a local-vector capability gap."
+        },
+        {
+          "source": "camelot / pdfplumber / unstructured",
+          "baselineDonorIds": ["camelot", "pdfplumber", "unstructured"],
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Document/table extraction challengers and fallbacks only when the SP-03 corpus demonstrates a concrete extraction gap beyond existing Docling paths."
+        },
+        {
+          "source": "splink",
+          "baselineDonorId": "splink",
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Bulk entity reconciliation challenger only; never replace P5 identity/ambiguity authority."
+        },
+        {
+          "source": "langalpha / tradingagents",
+          "baselineDonorIds": ["langalpha", "tradingagents"],
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Living-thesis, persistent workspace, parallel analyst and point-in-time research patterns; deeper assimilation primarily SI-05 after SP-03 qualification."
+        }
+      ]
+    },
+    "SP-04": {
+      "objective": "Professional Work Alpha: real source import, canonical Artifact edit/analysis, professional export, reopen/round-trip, revision and lineage/citation preservation.",
+      "donors": [
+        {
+          "source": "univer",
+          "baselineDonorId": "univer",
+          "disposition": ["DIRECT_REUSE", "ADAPT"],
+          "use": "Deepen/qualify the already partially integrated P4 spreadsheet editor and round-trip path."
+        },
+        {
+          "source": "dockview",
+          "baselineDonorId": "dockview",
+          "disposition": ["DIRECT_REUSE"],
+          "use": "Keep existing integrated workspace renderer; do not add another workspace authority."
+        },
+        {
+          "source": "tiptap",
+          "baselineDonorId": "tiptap",
+          "disposition": ["ADAPT", "IMPORT", "DEFER_WITH_TRIGGER"],
+          "use": "Promote bridge to real document editor only if the SP-04 MSJ requires structured editing beyond current document path."
+        },
+        {
+          "source": "apache-echarts / echarts",
+          "baselineDonorIds": ["apache-echarts", "echarts"],
+          "disposition": ["ADAPT", "IMPORT", "DEFER_WITH_TRIGGER"],
+          "use": "One canonical P4 chart runtime only. Promote bridge when the MSJ needs chart depth not already supplied."
+        },
+        {
+          "source": "perspective",
+          "baselineDonorId": "perspective",
+          "disposition": ["ADAPT", "DEFER_WITH_TRIGGER"],
+          "use": "Large interactive data-table/exploration engine only if professional-work benchmarks justify the runtime footprint."
+        },
+        {
+          "source": "tanstack-table / tanstack-virtual",
+          "baselineDonorIds": ["tanstack-table", "tanstack-virtual"],
+          "disposition": ["ADAPT", "DEFER_WITH_TRIGGER"],
+          "use": "Large-table UX/performance mechanisms when current P4 table rendering demonstrates a measured gap."
+        },
+        {
+          "source": "xlsxwriter / python-docx / python-pptx",
+          "baselineDonorIds": ["xlsxwriter", "python-docx", "python-pptx"],
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Use as fidelity/challenger/fallback implementations only if current deterministic LiOS exporters fail concrete format/round-trip requirements. Do not duplicate working exporters simply to integrate donors."
+        },
+        {
+          "source": "react-pdf",
+          "baselineDonorId": "react-pdf",
+          "disposition": ["REFERENCE_VALIDATOR", "DEFER_WITH_TRIGGER"],
+          "use": "Only evaluate after exact license/pin verification and only if current PDF publishing has a reproduced rendering/fidelity gap."
+        },
+        {
+          "source": "langalpha",
+          "baselineDonorId": "langalpha",
+          "disposition": ["REFERENCE_VALIDATOR"],
+          "use": "Professional report/PDF/workspace interaction patterns; P4 remains Artifact/version authority."
+        }
+      ]
+    }
+  },
+  "postFoundationFirst": [
+    {
+      "source": "qlib",
+      "target": "SI-05/SP-05",
+      "reason": "Quant/ML/alpha/backtest/portfolio research depth behind P11."
+    },
+    {
+      "source": "FinRobot",
+      "target": "SI-05/SP-05",
+      "reason": "Deterministic finance operators, provenance and finance research/report orchestration."
+    },
+    {
+      "source": "TradingAgents",
+      "target": "SI-05/SP-05",
+      "reason": "Parallel specialist analyst/debate/point-in-time and portfolio-aware workflows."
+    },
+    {
+      "source": "FinGPT",
+      "target": "SI-05/SP-05",
+      "reason": "Finance NLP/sentiment/specialized model and evaluation mechanisms."
+    },
+    {
+      "source": "LangAlpha",
+      "target": "SI-05/SP-06",
+      "reason": "Living Thesis, research continuity, monitoring and automation."
+    },
+    {
+      "source": "CUA + browser-use",
+      "target": "SI-06/SP-06",
+      "reason": "Deeper computer/browser automation, environments and autonomous workflows after generic agentic behavior is accepted."
+    }
+  ],
+  "immediateExecutionQueue": [
+    {
+      "order": 1,
+      "target": "SP-01",
+      "action": "Current owner of #233 audits OpenClaw mirror/upstream plus existing pinned OpenClaw imports, node-pty, OPA and terminal donors before any greenfield execution/terminal work; close only the exact packaged MSJ gaps."
+    },
+    {
+      "order": 2,
+      "target": "SP-02",
+      "action": "After SP-01 acceptance, converge existing GM agent/tool contracts and benchmark OpenClaw + browser-use + CUA + PydanticAI/LangGraphJS/Dexter mechanisms only where measured gaps remain."
+    },
+    {
+      "order": 3,
+      "target": "SP-03",
+      "action": "Qualify current P7/P5/P4 research stack first; use GraphRAG and extraction donors as challengers/enhancements only after the real SP-03 corpus exposes a measurable gap."
+    },
+    {
+      "order": 4,
+      "target": "SP-04",
+      "action": "Qualify current P4 spreadsheet/document/export system; deepen Univer and selectively promote Tiptap/ECharts/Perspective only when required by the professional-work MSJ."
+    },
+    {
+      "order": 5,
+      "target": "FOUNDATION_LOCK",
+      "action": "Protect R-SP01 through R-SP04, reconcile donor notices/provenance and remove duplicate/superseded experiments before aggressive SI-05 expansion."
+    }
+  ],
+  "truthBoundaries": [
+    "This map is execution guidance, not proof that a donor is integrated, packaged, user-accessible or shipped.",
+    "Controlled mirror head SHAs are inspection snapshots; product imports require an explicit approved pin/path and provenance record in LiOS.",
+    "Donor selection never transfers canonical LiOS ownership.",
+    "SP acceptance remains governed by the Shipping Point contract and exact real-user MSJ evidence."
+  ],
+  "baselinePriorities": {
+    "sourceSnapshot": "2026-10-07 #450 historical review (reconciled into canonical #449 map)",
+    "status": "triage_not_implementation_truth",
+    "supportingTruth": "third_party/capability-assimilation.json",
+    "rules": [
+      "The 92 records map priority/Shipping Point only and must never override live donor license, pin, status or canonical ownership.",
+      "Before material use, revalidate exact source/path license, rights, commit pin, environment and currently integrated LiOS capability.",
+      "Do not bulk-import donors or treat a mapped target as SP acceptance."
+    ],
+    "donors": [
+      {"id":"antv-g6","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03","SP-04"]},
+      {"id":"apache-echarts","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"arelle","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"arrow","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"assistant-ui","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02"]},
+      {"id":"backtest-kit","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"backtesting-py","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"backtrader","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"brue","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"brue-language","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"bt","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"camelot","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"ccxt","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"cvxpy","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"datafusion","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"deck-gl","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"dexter","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02","SP-03"]},
+      {"id":"dockview","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"docling","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"duckdb","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"echarts","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"edgartools","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"exchange-calendars","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"fin-agent","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"finance-database","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"finance-toolkit","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"flexlayout","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"freqtrade","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"hqtui","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"hummingbot","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"ib-async","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"ibis","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"langalpha","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"langgraphjs","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02"]},
+      {"id":"lean","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"lightgbm","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"llama-cpp","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"lse-data","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"lse-terminal","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"maplibre-gl-js","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"mermaid","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"mlx","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"monaco-editor","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"nautilus-trader","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"ollama","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"opa","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-01"]},
+      {"id":"openclaw","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-01","SP-02"]},
+      {"id":"openlineage","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"opentelemetry-js","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"openterminal","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-01"]},
+      {"id":"openterminalui","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-01"]},
+      {"id":"optuna","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"ore","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"pandera","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"pdfplumber","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"perspective","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"polars","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"prophet","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"py-vollib","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"pydantic-ai","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02"]},
+      {"id":"pyportfolioopt","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"python-docx","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"python-pptx","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"qlib","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"quantlib","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"quantstats","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"react-pdf","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"riskfolio-lib","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"scikit-learn","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"skfolio","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"sktime","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"splink","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"sqlglot","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"sqlite-vec","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"statsforecast","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"statsmodels","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"strata","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"tanstack-table","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"tanstack-virtual","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"tiptap","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"tool-ui","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02"]},
+      {"id":"tradingagents","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-02","SP-03"]},
+      {"id":"univer","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"unstructured","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-03"]},
+      {"id":"vectorbt","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"vis-timeline","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"vnpy","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"whisper-cpp","foundationPosture":"foundation_secondary_or_challenger","targetShippingPoints":[]},
+      {"id":"xgboost","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]},
+      {"id":"xlsxwriter","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"xyflow","foundationPosture":"foundation_immediate_candidate","targetShippingPoints":["SP-04"]},
+      {"id":"zipline-reloaded","foundationPosture":"post_foundation_or_triggered","targetShippingPoints":[]}
+    ]
+  }
+}

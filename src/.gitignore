@@ -1,0 +1,15 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+python-service/.venv
+python-service/__pycache__
+python-service/**/__pycache__
+script/__pycache__
+script/**/__pycache__
+visual-smoke-artifacts
+analytical-visual-smoke-artifacts
+valuation-smoke-artifacts
+dist-app

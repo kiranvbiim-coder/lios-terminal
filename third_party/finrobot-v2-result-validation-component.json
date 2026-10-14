@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-result-contract-validators",
+  "status": "partially_integrated_native_v1",
+  "asOfDate": "2026-10-11",
+  "canonicalOwners": ["P7", "P4", "P11"],
+  "siWorkstreams": ["SI-05.22", "SI-05.24", "SI-05.25", "SI-05.40"],
+  "shippingTarget": "SP-05 direct enabler; no Shipping Point acceptance",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledMirror": "kiranvbiim-coder/FinRobot",
+    "approvedSourceCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "licenseBlobSha": "6cc0d28c44e482825bba73c84761e3d65f138f42",
+    "noticeBlobSha": "4ad1671f14994630695c91b14ee7cfa14cacb6af",
+    "licenseDestination": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "noticeDestination": "third_party/licenses/finrobot-NOTICE.txt"
+  },
+  "selectedPackage": "finrobot_desktop/finrobot/engine/pipelines/validators.py result-contract subset",
+  "reuseDisposition": ["ADAPT", "REFERENCE_VALIDATOR"],
+  "sourcePaths": [
+    {
+      "path": "finrobot_desktop/finrobot/engine/pipelines/validators.py",
+      "blobSha": "2ae8cc5bc97737825e10c7ef6560e3de9eaddaa7"
+    }
+  ],
+  "upstreamTestsAdapted": [
+    {
+      "path": "finrobot_desktop/tests/unit/test_validators.py",
+      "blobSha": "471c85fcc6e45be4e323dafb858957eeb8d312b5"
+    }
+  ],
+  "destinationPaths": [
+    "src/python-service/finrobot_result_validators.py",
+    "src/python-service/test_finrobot_result_validators.py"
+  ],
+  "selectedMechanics": [
+    "non-empty and required-field structural validation",
+    "peer ticker candidate checks with finance-acronym exclusions",
+    "thesis argument completeness",
+    "language-agnostic Markdown report structure with CJK-safe character counting",
+    "comps table structure and statistical-term presence",
+    "DCF output component completeness",
+    "financial snapshot sanity bands",
+    "honest technical-analysis degraded-state handling",
+    "ownership/governance data-or-explicit-degradation handling"
+  ],
+  "authoritySubstitutions": [
+    "FinRobot Pydantic ValidationResult and finance/domain models are not imported; immutable LiOS-owned stdlib dataclasses are used.",
+    "P7 remains the source/evidence/entitlement truth authority; text keywords, ticker-like tokens and numeric presence are only completeness signals.",
+    "P4 remains Artifact identity/store/version/publish authority; a passing result validator cannot publish or mutate an Artifact.",
+    "P11 remains deterministic finance authority; financial bands and DCF text checks are challenger/reference checks only.",
+    "GM-12 remains runner/tool/orchestration authority; no pipeline retries, execution state, agents or LLM calls are imported."
+  ],
+  "dependencyDisposition": {
+    "retained": ["Python standard library only: dataclasses, math, re, typing"],
+    "removed": [
+      "Pydantic BaseModel",
+      "FinRobot FinancialData/PeerComps/DCFResult/ThesisResult/LBO/DDM/Catalyst models",
+      "FinRobot compute-layer sanity constants as a competing P11 authority",
+      "logging side effects",
+      "pipeline runner/retries/step state",
+      "LLM prompts and agent runtime",
+      "providers/cache/data collection",
+      "routes/server/auth/stores/persistence",
+      "Artifact/report runtime",
+      "broker/backtest/action execution"
+    ],
+    "newRuntimeDependencies": []
+  },
+  "materialModifications": [
+    "Converted donor logging-only thin-report signal into an explicit immutable warning returned to the caller.",
+    "Added a permanent warning that numeric presence is structural completeness only and never source/evidence verification.",
+    "Added fail-closed finite-number validation for revenue, market cap, EBITDA and P/E inputs.",
+    "Represented technical and ownership/governance degraded states with bounded LiOS-owned status dataclasses rather than donor pipeline/domain models.",
+    "Rejected negative ownership/governance observation counts instead of allowing them to appear populated.",
+    "Kept the CJK-safe Markdown-header/character-count report strategy from the donor."
+  ],
+  "explicitExclusions": [
+    "FinRobot pipeline runner and retry policy",
+    "agent factory/orchestrator and LLM calls/prompts",
+    "provider/cache/data collection and entitlement authority",
+    "FinRobot domain/Pydantic models",
+    "peer multiple numerical engine/ranges as a competing P11 authority",
+    "Artifact/report persistence or rendering authority",
+    "routes/server/auth/secret stores",
+    "backtest/broker/live execution",
+    "automatic publication or Shipping Point acceptance based on validator pass"
+  ],
+  "validation": {
+    "riskClass": "R2",
+    "v1": {
+      "status": "passed",
+      "runner": "self-hosted macOS",
+      "workflowRunId": 38154732135,
+      "evidenceHead": "3402586c25778d5e044ca019ba099a490e8036c8",
+      "tests": "21/21 focused upstream-derived and LiOS-hardening tests passed",
+      "compile": "python3 -m py_compile passed",
+      "sourceBoundary": "exact donor repository/commit/path assertions and no-I/O/no-runtime-authority smoke passed",
+      "diffHygiene": "passed"
+    },
+    "v2": "deferred until canonical P7/P4/P11 consumer wiring is justified",
+    "v3": "deferred to packaged SP-05",
+    "truthBoundary": "native-qualified source adaptation only; no user-accessible/runtime/shipped claim"
+  }
+}

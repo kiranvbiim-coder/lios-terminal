@@ -1,0 +1,108 @@
+/* LiOS operational analytical content.
+ * Global header/sidebar/ticker/context geometry lives in terminal-shell.css.
+ * This layer only owns workstation internals and pane-responsive behavior.
+ */
+
+.terminal-root [data-operational='true'] > .lios-v5-hero-bar {
+  display: none !important;
+}
+
+.terminal-root [data-institutional-shell] [data-institutional-header] {
+  min-height: 27px;
+  padding: 4px 10px !important;
+  background: #060606 !important;
+}
+
+.terminal-root [data-institutional-nav] {
+  min-height: 32px;
+  background: #080808 !important;
+  border-bottom-color: hsl(var(--lios-hairline-strong) / .78) !important;
+}
+
+.terminal-root [data-institutional-nav-item] {
+  position: relative;
+  min-height: 32px;
+  padding: 0 12px !important;
+  border-bottom: 2px solid transparent;
+}
+
+.terminal-root [data-institutional-nav-item][aria-current='page'] {
+  background: hsl(var(--limuria-amber) / .055) !important;
+  border-bottom-color: hsl(var(--limuria-amber) / .9) !important;
+  color: hsl(var(--limuria-amber)) !important;
+}
+
+.terminal-root [data-institutional-nav-item]:hover {
+  background: rgb(255 255 255 / .025) !important;
+}
+
+.terminal-root [data-workstation-overview] {
+  padding: 12px !important;
+}
+
+.terminal-root [data-workstation-overview-hero] {
+  min-height: 28px;
+}
+
+.terminal-root [data-workstation-overview-grid] > button {
+  min-height: 66px;
+  background: #070707 !important;
+}
+
+@media (min-width: 1600px) {
+  .terminal-root [data-workstation-overview-grid] {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 2100px) {
+  .terminal-root [data-workstation-overview-grid] {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+}
+
+.terminal-root [data-view='valuation'] [data-valuation-source-gate]:not(:has(> :nth-child(2))) {
+  display: none !important;
+}
+
+@container lios-pane (max-width: 1400px) and (min-width: 901px) {
+  .terminal-root [data-view='valuation'] .w-72.shrink-0 {
+    width: 240px !important;
+  }
+}
+
+@container lios-pane (max-width: 1180px) and (min-width: 901px) {
+  .terminal-root [data-view='valuation'] .w-72.shrink-0 {
+    width: 210px !important;
+  }
+}
+
+@container lios-pane (max-width: 1180px) {
+  .terminal-root [data-quote-analytical-grid] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@container lios-pane (max-width: 680px) {
+  .terminal-root [data-quote-analytical-grid] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-quote-sparkline] {
+    width: 96px !important;
+  }
+}
+
+@container lios-pane (max-width: 440px) {
+  .terminal-root [data-quote-sparkline] {
+    display: none !important;
+  }
+}
+
+.terminal-root [data-operational='true'] .lios-pane-content table {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.terminal-root [data-operational='true'] .lios-pane-content :is(.overflow-x-auto, .overflow-auto):has(> table) {
+  scrollbar-gutter: stable;
+}

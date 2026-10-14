@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-10-02",
+  "softwareCode": {
+    "sourceOfTruth": "third_party/components.json + third_party/upstream-lock.json + locked package graphs",
+    "releaseRule": "Every bundled or materially adapted donor must have a reviewed software license, exact upstream pin, destination/adaptation record, notices and regression evidence.",
+    "highObligationBlockedByDefault": true,
+    "candidateMetadataBoundary": "Candidate modes/launch flags and research observed commits do not authorize imports or prove shipped capability; exact locked source/package/path reconciliation remains mandatory.",
+    "lseSdkBoundary": "LSE connector is LiOS-owned protocol adaptation with no copied SDK source; LSE Terminal/Brue target reuse is not bundled in the current release.",
+    "brueConnectBoundary": "Source/license unverified; not approved for copying or bundling."
+  },
+  "externalDataAndApis": {
+    "softwareLicenseDoesNotGrantDataRights": true,
+    "userOwnedCredentialPreferred": true,
+    "centralRedistributionAssumed": false,
+    "providerEntitlementAndTermsRequired": true,
+    "lseReleasePosture": "optional_provider_fail_closed",
+    "lseTermsGate": "Local user entitlement does not permit central cache, redistribution, resale or a competing feed; public connector/marketing terms compatibility must be reviewed and incompatible production use disabled.",
+    "brokerWritePolicy": "Brokerage execution and order writes are prohibited in current product scope, including through candidate packs/plugins/connectors; USER_CONFIRM/ADMIN or manifest side-effect permission is not an exception.",
+    "customerRuntime": "No LiOS-operated normal customer intelligence/data runtime cloud is permitted; user-owned Home/server/cloud remains the runtime boundary."
+  },
+  "modelWeights": {
+    "bundledInCoreRelease": false,
+    "localAiMode": "General-purpose Local AI model weights remain BYO/external. The SP-01 macOS arm64 sandbox image bundles only the pinned offline Docling document-layout, table, figure/code-formula and RapidOCR weights enumerated in src/sandbox-image/source-lock.json and docling-model-inventory.json.",
+    "sp01SandboxImageOnly": true,
+    "separateWeightLicenseRequiredBeforeBundling": true,
+    "sp01SandboxWeightReview": {
+      "scope": "Docling 2.129.0 offline PDF parsing models; no provider datasets or general-purpose Local AI weights",
+      "doclingModels": "CDLA-Permissive-2.0; include the full agreement text with the packaged model data",
+      "layoutAndFigure": "Layout Apache-2.0; document figure classifier MIT; preserve per-repository README/NOTICE",
+      "rapidOcr": "RapidAI/RapidOCR ModelScope Apache-2.0 model repository; exact artifact hashes verified against rapidocr 3.9.2 default_models.yaml",
+      "provenance": "src/sandbox-image/source-lock.json; src/sandbox-image/docling-model-inventory.json",
+      "releaseBoundary": "LiOS-owned offline parser image only; no external data redistribution or model-service endpoints"
+    }
+  },
+  "datasets": {
+    "thirdPartyProviderDatasetsBundledInCoreRelease": false,
+    "userConnectedDataRedistributedByLiOS": false,
+    "separateDatasetLicenseRequiredBeforeBundling": true,
+    "publicSourceRedistributionClearance": "dataset_payloads_omitted_from_sanitized_snapshot",
+    "trackedDatasetReview": [
+      {
+        "path": "src/server/data/shillerCape.json",
+        "origin": "Robert J. Shiller academic dataset; NOT INCLUDED in this public source snapshot",
+        "termsUrl": "https://shillerdata.com/",
+        "redistributionGrantRecorded": false,
+        "publicSourcePayloadIncluded": false
+      },
+      {
+        "path": "src/server/data/provider_ingested_universe.json",
+        "origins": ["coingecko", "nasdaq_trader", "sec_edgar"],
+        "recordedRowsByProvider": {"coingecko": 14665, "nasdaq_trader": 109, "sec_edgar": 818},
+        "termsUrls": ["https://www.coingecko.com/en/api_terms", "https://www.nasdaqtrader.com/trader.aspx?id=copydisclaimmain"],
+        "redistributionGrantRecorded": false,
+        "publicSourcePayloadIncluded": false,
+        "boundary": "Dataset bytes and original private Git history are omitted. Provider-specific rights differ; permitted local acquisitions remain user-owned and are not committed by this source distribution."
+      }
+    ]
+  },
+  "trademarksAndAssets": {
+    "donorBrandingBundled": false,
+    "donorLogosBundled": false,
+    "packagedAssetRoots": [
+      "src/client/public",
+      "src/client/src/assets"
+    ],
+    "forbiddenDonorBrandTokens": [
+      "bloomberg",
+      "openbb",
+      "londonstrategicedge",
+      "lse-terminal",
+      "lse-data",
+      "brue",
+      "opentelemetry",
+      "openlineage",
+      "openclaw"
+    ],
+    "forbiddenDevelopmentArtifacts": [
+      ".Rhistory",
+      ".DS_Store",
+      ".env"
+    ]
+  }
+}

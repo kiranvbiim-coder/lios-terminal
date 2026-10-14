@@ -1,0 +1,11 @@
+# Effective enforcement requires protected-branch code-owner review settings.
+/.github/ @kiranvbiim-coder
+/SECURITY.md @kiranvbiim-coder
+/LICENSE @kiranvbiim-coder
+/THIRD_PARTY_NOTICES.md @kiranvbiim-coder
+/third_party/ @kiranvbiim-coder
+/src/script/afterPackCopyNodeModules.cjs @kiranvbiim-coder
+/src/script/audit_supply_chain.ts @kiranvbiim-coder
+/src/server/auth.ts @kiranvbiim-coder
+/src/server/exec/ @kiranvbiim-coder
+/src/server/p13Plugin* @kiranvbiim-coder

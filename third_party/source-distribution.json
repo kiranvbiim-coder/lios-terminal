@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1",
+  "distribution": "sanitized_proprietary_source_only",
+  "sourceWorkflow": ".github/workflows/source-cross-platform.yml",
+  "sourcePlatforms": ["ubuntu-24.04", "macos-15", "windows-2022"],
+  "withheldWorkflows": [
+    ".github/workflows/production-release-readiness.yml",
+    ".github/workflows/windows-release.yml",
+    ".github/workflows/desktop-website-release.yml",
+    ".github/workflows/p14-release-certification.yml",
+    ".github/workflows/analytical-visual-smoke.yml",
+    ".github/workflows/lios-hardening.yml",
+    ".github/workflows/p11-cross-platform.yml",
+    ".github/workflows/rls-integration.yml",
+    ".github/workflows/si-01-09-device-capabilities-validation.yml",
+    ".github/workflows/si-01-10-shared-session-validation.yml",
+    ".github/workflows/si-01-12-container-backend-v1.yml",
+    ".github/workflows/si-01-12-node-permission-validation.yml",
+    ".github/workflows/si-01-13-resource-controls-validation.yml",
+    ".github/workflows/si-01-14-trust-receipts-validation.yml",
+    ".github/workflows/si-01-15-offline-rebase-validation.yml",
+    ".github/workflows/si-01-16-provisioning-validation.yml",
+    ".github/workflows/si02-acp-coding-validation.yml",
+    ".github/workflows/ux-visual-smoke.yml",
+    ".github/workflows/valuation-visual-smoke.yml"
+  ],
+  "withheldDatasets": [
+    "src/server/data/tickers.json",
+    "src/server/data/provider_ingested_universe.json",
+    "src/server/data/crypto_coingecko_ids.json",
+    "src/server/data/shillerCape.json"
+  ],
+  "qualification": {
+    "binaryRelease": "NOT_RUN",
+    "signedInstallers": "NOT_RUN",
+    "packagedShippingPoints": "NOT_RUN",
+    "nativeHardware": "NOT_RUN",
+    "realDatasetBenchmark": "NOT_RUN"
+  },
+  "realDatasetBenchmark": {
+    "command": "npm run benchmark:instrument-search:real",
+    "file": "src/server/instrumentSearchIndexBenchmark.bench.ts",
+    "minimumRealCandidates": 80000,
+    "entitlementAttestation": "LIOS_REAL_DATA_BENCHMARK_ENTITLED=1",
+    "catalogRoot": "ELECTRON_RESOURCES_PATH",
+    "requiredRelativeFiles": ["server/data/tickers.json", "server/data/provider_ingested_universe.json"],
+    "missingPrerequisites": "FAIL_WITH_NOT_RUN",
+    "syntheticSubstitutionPermitted": false,
+    "dataRedistributionGranted": false
+  },
+  "evidenceBoundary": "Source CI validates portable source regressions and builds only. Existing hardware/environment skips remain visible and unqualified; no source pass establishes native, real-data, SP or P14 release qualification. Withheld private workflows are not runnable from this distribution."
+}

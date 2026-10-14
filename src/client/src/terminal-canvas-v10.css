@@ -1,0 +1,115 @@
+/* LiOS deep-work content refinements.
+ * Global shell geometry moved to terminal-shell.css. This file only changes
+ * content inside analytical panes when Intelligent Calm is active.
+ */
+
+.terminal-root[data-intelligent-calm='true'] :is(
+  [data-view='financialstatements'],
+  [data-view='valuation'],
+  [data-view='peercomp'],
+  [data-view='advancedrisk'],
+  [data-view='quantworkbench'],
+  [data-view='spreadsheet'],
+  [data-view='integratedmodel'],
+  [data-view='quantlab'],
+  [data-view='indicatorworkbench'],
+  [data-view='econpolicyquant'],
+  [data-view='supplychainquant'],
+  [data-view='environmentquant'],
+  [data-view='research']
+) > .lios-pane-header {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding-inline: 8px !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] :is(
+  [data-view='financialstatements'],
+  [data-view='valuation'],
+  [data-view='peercomp'],
+  [data-view='advancedrisk'],
+  [data-view='quantworkbench'],
+  [data-view='spreadsheet'],
+  [data-view='integratedmodel'],
+  [data-view='quantlab'],
+  [data-view='indicatorworkbench'],
+  [data-view='econpolicyquant'],
+  [data-view='supplychainquant'],
+  [data-view='environmentquant'],
+  [data-view='research']
+) > .lios-pane-header > svg:first-child,
+.terminal-root[data-intelligent-calm='true'] :is(
+  [data-view='financialstatements'],
+  [data-view='valuation'],
+  [data-view='peercomp'],
+  [data-view='advancedrisk'],
+  [data-view='quantworkbench'],
+  [data-view='spreadsheet'],
+  [data-view='integratedmodel'],
+  [data-view='quantlab'],
+  [data-view='indicatorworkbench'],
+  [data-view='econpolicyquant'],
+  [data-view='supplychainquant'],
+  [data-view='environmentquant'],
+  [data-view='research']
+) > .lios-pane-header > .lios-pane-code,
+.terminal-root[data-intelligent-calm='true'] :is(
+  [data-view='financialstatements'],
+  [data-view='valuation'],
+  [data-view='peercomp'],
+  [data-view='advancedrisk'],
+  [data-view='quantworkbench'],
+  [data-view='spreadsheet'],
+  [data-view='integratedmodel'],
+  [data-view='quantlab'],
+  [data-view='indicatorworkbench'],
+  [data-view='econpolicyquant'],
+  [data-view='supplychainquant'],
+  [data-view='environmentquant'],
+  [data-view='research']
+) > .lios-pane-header > span.font-ui {
+  display: none !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] :is(
+  [data-view='financialstatements'],
+  [data-view='valuation'],
+  [data-view='peercomp'],
+  [data-view='advancedrisk'],
+  [data-view='quantworkbench'],
+  [data-view='spreadsheet'],
+  [data-view='integratedmodel'],
+  [data-view='quantlab'],
+  [data-view='indicatorworkbench'],
+  [data-view='econpolicyquant'],
+  [data-view='supplychainquant'],
+  [data-view='environmentquant'],
+  [data-view='research']
+) .lios-v5-hero-bar {
+  display: none !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-institutional-header] {
+  padding: 6px 10px !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-institutional-subtitle],
+.terminal-root[data-intelligent-calm='true'] [data-institutional-description] {
+  display: none !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-institutional-nav-item] {
+  padding: 6px 10px !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-institutional-stage] {
+  padding: 3px 7px !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-view='valuation'] [data-valuation-source-gate] {
+  padding: 4px 10px !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] [data-view='valuation'] [data-valuation-source-detail] {
+  display: none !important;
+}

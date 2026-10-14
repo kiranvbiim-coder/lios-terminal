@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1",
+  "source": "Independent hand-worked financial identities: (1200/1000 - 1)*100=20; margins 480/1200=40, 240/1200=20, 180/1200=15, 144/1200=12; current 600/300=2; debt=100+300=400; net debt=400-80=320; leverage 400/400=1 and 320/400=0.8. Synthetic inputs, not market observations.",
+  "request": {
+    "current": {
+      "periodId": "FY2025", "periodType": "fiscal_year", "comparablePriorPeriodId": "FY2024",
+      "facts": {
+        "revenue": {"value": "1200", "unit": "USD_millions", "inputClass": "source_cited", "sourceRef": "fixture:revenue-current"},
+        "grossProfit": {"value": "480", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "operatingIncome": {"value": "240", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "netIncome": {"value": "180", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "freeCashFlow": {"value": "144", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "currentAssets": {"value": "600", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "currentLiabilities": {"value": "300", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "shortTermDebt": {"value": "100", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "longTermDebt": {"value": "300", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "cashAndEquivalents": {"value": "80", "unit": "USD_millions", "inputClass": "user_assumption"},
+        "ebitda": {"value": "400", "unit": "USD_millions", "inputClass": "user_assumption"}
+      }
+    },
+    "prior": {
+      "periodId": "FY2024", "periodType": "fiscal_year",
+      "facts": {"revenue": {"value": "1000", "unit": "USD_millions", "inputClass": "source_cited", "sourceRef": "fixture:revenue-prior"}}
+    }
+  },
+  "expected": {
+    "revenueGrowthPct": ["20", "percent"],
+    "grossMarginPct": ["40", "percent"],
+    "operatingMarginPct": ["20", "percent"],
+    "netMarginPct": ["15", "percent"],
+    "freeCashFlowMarginPct": ["12", "percent"],
+    "currentRatio": ["2", "ratio"],
+    "netDebt": ["320", "USD_millions"],
+    "grossDebtToEbitda": ["1", "ratio"],
+    "netDebtToEbitda": ["0.8", "ratio"]
+  }
+}

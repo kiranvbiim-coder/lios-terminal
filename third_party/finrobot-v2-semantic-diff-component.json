@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-semantic-artifact-diff",
+  "status": "partially_integrated_native_v1",
+  "asOfDate": "2026-10-11",
+  "canonicalOwners": ["P4", "P7", "P11"],
+  "siWorkstreams": ["SI-05.25", "SI-05.28", "SI-05.40"],
+  "shippingTarget": "SP-05 direct enabler; no Shipping Point acceptance",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledMirror": "kiranvbiim-coder/FinRobot",
+    "approvedSourceCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "licenseBlobSha": "6cc0d28c44e482825bba73c84761e3d65f138f42",
+    "noticeBlobSha": "4ad1671f14994630695c91b14ee7cfa14cacb6af",
+    "licenseDestination": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "noticeDestination": "third_party/licenses/finrobot-NOTICE.txt"
+  },
+  "selectedPackage": "finrobot_desktop/finrobot/artifact/semantic_diff.py semantic comparison subset",
+  "reuseDisposition": ["ADAPT", "COMBINE", "REFERENCE_VALIDATOR"],
+  "sourcePaths": [
+    {
+      "path": "finrobot_desktop/finrobot/artifact/semantic_diff.py",
+      "blobSha": "8d45bc53b354fa839cd402a11ca6cddd9b9d92b5"
+    }
+  ],
+  "upstreamTestsAdapted": [
+    {
+      "path": "finrobot_desktop/tests/artifact/test_semantic_diff.py",
+      "blobSha": "5f8430a7af75543b62c1aa4b374a178c1d857746"
+    }
+  ],
+  "destinationPaths": [
+    "src/shared/artifactSemanticDiffContracts.ts",
+    "src/server/artifactDiff.ts",
+    "src/server/artifactDiff.test.ts"
+  ],
+  "validatedDestinationBlobs": {
+    "src/shared/artifactSemanticDiffContracts.ts": "99cf98457b7851a27baf74416e26fc6ee8ff3fb7",
+    "src/server/artifactDiff.ts": "2976b479660afb6ed9116cd548affdb84532d10b",
+    "src/server/artifactDiff.test.ts": "607c6d13449ab4c7db927161646a40f781fd16f8"
+  },
+  "selectedMechanics": [
+    "curated semantic comparison instead of noisy whole-tree schema diff",
+    "finite before/after numeric deltas with stable direction and zero-baseline percentage suppression",
+    "explicit comparability blockers when valuation method/model changes",
+    "stable keyed collection additions, removals and content changes independent of list order",
+    "material-change posture that separates small numeric drift from decision-relevant change",
+    "explicit attribution unavailability/residual posture rather than invented causal contribution",
+    "deterministic sorted semantic output suitable for Living Artifact version review"
+  ],
+  "authoritySubstitutions": [
+    "FinRobot Artifact/Pydantic models are not imported; canonical LiOS ArtifactContent remains the only P4 content authority.",
+    "FinRobot artifact store/routes/version identity are excluded; existing LiOS artifactDiff/artifactStore remain the only comparison and persistence authority.",
+    "FinRobot DCF single-factor re-pricer is excluded; P11 remains the only deterministic finance calculation authority.",
+    "Semantic attribution is explicitly unavailable unless authoritative P11 contribution inputs are supplied by a future canonical consumer.",
+    "P7 remains evidence/source/rights authority; this semantic result does not create or infer sourceRefs."
+  ],
+  "dependencyDisposition": {
+    "retained": [
+      "existing LiOS Zod dependency",
+      "existing P4 ArtifactContent contracts",
+      "existing LiOS hashLedgerValue deterministic hashing"
+    ],
+    "removed": [
+      "FinRobot Pydantic Artifact models",
+      "FinRobot field registry and display formatting",
+      "FinRobot DCF re-pricer and financial compute models",
+      "FinRobot provider/cache/data collection",
+      "FinRobot SQLite/store/routes/server/auth",
+      "FinRobot LLM/agent/report runtime",
+      "FinRobot broker/backtest/action execution"
+    ],
+    "newRuntimeDependencies": []
+  },
+  "materialModifications": [
+    "Mapped donor semantic version-diff concepts to canonical LiOS valuation, portfolio, research, decision and thesis Artifact kinds.",
+    "Used bounded numeric traversal only inside known semantic containers rather than recursively diffing arbitrary Artifact metadata.",
+    "Converted donor peer/method comparability concepts to LiOS model/kind/missing-value/collection-identity flags available in current P4 contracts.",
+    "Used stable keyed-id hashing for thesis, decision and research collections so pure ordering changes do not fabricate semantic change.",
+    "Applied the donor 3 percent material-drift concept to comparable numeric changes while treating structural collection and model changes as material.",
+    "Removed donor-generated attribution math entirely; no semantic comparison performs valuation recalculation.",
+    "Kept the existing raw P4 hash/top-level/spreadsheet comparison output unchanged and added semantic evidence only at the server comparison result boundary."
+  ],
+  "explicitExclusions": [
+    "FinRobot Artifact identity/store/version/routes",
+    "FinRobot DCF or other finance calculation/re-pricing",
+    "provider/cache/data collection and entitlement authority",
+    "field/display formatting registry as a competing UI contract",
+    "LLM prompts, agents, pipeline runner or retries",
+    "report persistence/rendering runtime",
+    "broker/backtest/live execution",
+    "automatic source/evidence inference",
+    "automatic publication or Shipping Point acceptance"
+  ],
+  "validation": {
+    "riskClass": "R2",
+    "tddRed": {
+      "status": "passed_expected_failure",
+      "workflowRunId": 38157984490,
+      "testHead": "29491c18b94d5be9fe4f34df6729d110811c9653",
+      "result": "6/6 semantic tests failed because current P4 comparison had no semantic layer; first failure was the explicit missing-semantic assertion; diff hygiene passed"
+    },
+    "v1": {
+      "status": "passed",
+      "runner": "self-hosted macOS",
+      "workflowRunId": 38158287143,
+      "wrapperHead": "ac641dec6228537b2fd0b627ff3874b8a3868f73",
+      "featureHead": "7b35e3edd3335eac89f8441580cdd89c77acca70",
+      "validatedMergeRef": "f3593c4e675e695386c9d7480057a15d075b2127",
+      "validatedMain": "287e8a827e3090ddb407139766d83b0b72345dc7",
+      "focusedTests": "6/6 semantic Artifact diff tests passed",
+      "p4Regression": "20/20 existing artifactContracts + artifactStore tests passed",
+      "typeScript": "npm run check passed",
+      "diffHygiene": "passed"
+    },
+    "v2": "deferred until a canonical P4/P7/P11 consumer requires cross-service integration evidence",
+    "v3": "deferred to packaged SP-05",
+    "truthBoundary": "native-qualified semantic comparison adaptation only; no FinRobot runtime, no user-facing packaged acceptance, no finance recalculation authority"
+  }
+}

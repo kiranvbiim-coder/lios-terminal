@@ -1,0 +1,207 @@
+import { useMemo, useState, type CSSProperties } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
+import type { ViewMode } from "@/lib/terminalTypes";
+import type { Quote } from "@/lib/finance";
+import type { MarketBreadthResult } from "@/lib/useFinance";
+import { useIndexSparklines } from "@/lib/useFinance";
+import { formatPrice, getCurrencySymbol, INDICES, pctClass } from "@/lib/finance";
+import { cn } from "@/lib/utils";
+import { FusionSparkline } from "./FusionPrimitives";
+
+interface Props {
+  breadth?: MarketBreadthResult;
+  gainers: Quote[];
+  losers: Quote[];
+  onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+}
+
+type Range = "1W" | "1M" | "3M";
+
+function shortDate(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(date);
+}
+
+function moveColor(value: number) {
+  const intensity = Math.min(1, Math.max(0.18, Math.abs(value) / 5));
+  return value >= 0
+    ? `hsl(145 70% ${16 + intensity * 15}% / ${0.5 + intensity * 0.3})`
+    : `hsl(2 78% ${17 + intensity * 15}% / ${0.5 + intensity * 0.3})`;
+}
+
+function MoveTile({ quote, onOpen }: { quote: Quote; onOpen: Props["onOpen"] }) {
+  const move = Number.isFinite(quote.changePercent) ? quote.changePercent : 0;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen("quote", "current", quote.symbol)}
+      className="fusion-market-tile group"
+      style={{ background: moveColor(move) }}
+      title={`${quote.name} · ${move >= 0 ? "+" : ""}${move.toFixed(2)}%`}
+    >
+      <span className="truncate font-terminal text-[8px] font-bold text-white/95">{quote.symbol.replace(/\.(NS|BO|T|HK)$/, "")}</span>
+      <span className="mt-1 font-terminal text-[10px] font-bold tabular-nums text-white">{move >= 0 ? "+" : ""}{move.toFixed(2)}%</span>
+      <span className="mt-1 truncate font-terminal text-[6px] text-white/65">{getCurrencySymbol(quote.symbol)}{formatPrice(quote.price)}</span>
+    </button>
+  );
+}
+
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-white/10 bg-[#0a0d0d]/95 px-2.5 py-2 shadow-xl">
+      <div className="font-terminal text-[7px] tracking-wider text-white/55">{label}</div>
+      {payload.map((item) => (
+        <div key={item.name} className="mt-1 flex items-center justify-between gap-3 font-terminal text-[8px]">
+          <span className="text-white/60">{item.name}</span>
+          <span className={item.name === "NET FLOW" ? "text-amber-200" : "text-white"}>{typeof item.value === "number" ? `${item.value > 0 ? "+" : ""}${item.value.toFixed(1)}%` : "—"}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }: Props) {
+  const [range, setRange] = useState<Range>("1M");
+  const { data: indexSparklines = {} } = useIndexSparklines();
+  const series = breadth?.series ?? [];
+  const points = range === "1W" ? 7 : range === "3M" ? 90 : 30;
+
+  const flowData = useMemo(() => series.slice(-points).map((item) => {
+    const total = Math.max(1, item.advances + item.declines + item.unchanged);
+    return {
+      date: shortDate(item.date),
+      advances: (item.advances / total) * 100,
+      declines: -(item.declines / total) * 100,
+      net: (item.netAdvances / total) * 100,
+    };
+  }), [points, series]);
+
+  const latest = breadth?.latest ?? null;
+  const latestTotal = latest ? Math.max(1, latest.advances + latest.declines + (latest.unchanged ?? 0)) : 1;
+  const advancePct = latest ? latest.advances / latestTotal * 100 : 0;
+  const declinePct = latest ? latest.declines / latestTotal * 100 : 0;
+  const unchangedPct = Math.max(0, 100 - advancePct - declinePct);
+
+  const moverData = useMemo(() => [...gainers.slice(0, 4), ...losers.slice(0, 4)]
+    .filter((quote) => Number.isFinite(quote.changePercent))
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+    .map((quote) => ({ symbol: quote.symbol.replace(/\.(NS|BO|T|HK)$/, ""), move: Number(quote.changePercent.toFixed(2)) })), [gainers, losers]);
+
+  const tiles = useMemo(() => [...gainers.slice(0, 6), ...losers.slice(0, 6)]
+    .filter((quote) => Number.isFinite(quote.changePercent))
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)), [gainers, losers]);
+
+  const indexTape = useMemo(() => INDICES.slice(0, 8).map((index) => {
+    const values = (indexSparklines[index.symbol] ?? []).filter((value) => Number.isFinite(value));
+    const first = values[0];
+    const last = values.at(-1);
+    const move = first && last ? ((last - first) / Math.abs(first)) * 100 : null;
+    return { ...index, values, move };
+  }), [indexSparklines]);
+
+  return (
+    <section className="fusion-market-canvas" aria-label="Visual market canvas">
+      <header className="fusion-canvas-header">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="fusion-canvas-orb" aria-hidden="true"><span /></div>
+          <div className="min-w-0">
+            <div className="fusion-section-eyebrow text-cyan-200/75">VISUAL MARKET MAP · LIVE EVIDENCE</div>
+            <div className="fusion-canvas-title">Market canvas</div>
+            <div className="fusion-canvas-subtitle">Breadth flow, momentum and market movers in one glance.</div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {(["1W", "1M", "3M"] as const).map((item) => (
+            <button key={item} type="button" onClick={() => setRange(item)} aria-pressed={range === item} className={cn("fusion-range-button", range === item && "fusion-range-button-active")}>{item}</button>
+          ))}
+          <button type="button" onClick={() => onOpen("heatmap", "current")} className="fusion-canvas-action">FULL MAP ↗</button>
+        </div>
+      </header>
+
+      <div className="fusion-index-strip" aria-label="Global index tape">
+        {indexTape.map((index) => (
+          <button key={index.symbol} type="button" onClick={() => onOpen("quote", "current", index.symbol)} className="fusion-index-card">
+            <span className="truncate font-terminal text-[7px] tracking-wider text-white/58">{index.label}</span>
+            <span className={cn("font-terminal text-[10px] font-bold tabular-nums", index.move == null ? "text-white/45" : pctClass(index.move))}>{index.move == null ? "—" : `${index.move >= 0 ? "+" : ""}${index.move.toFixed(2)}%`}</span>
+            <FusionSparkline values={index.values} height={22} label={`${index.label} trend`} className={cn("h-[22px] w-full", index.move != null && pctClass(index.move))} />
+          </button>
+        ))}
+      </div>
+
+      <div className="fusion-canvas-grid">
+        <div className="fusion-canvas-panel fusion-flow-panel">
+          <div className="fusion-canvas-panel-head"><span>ADVANCE / DECLINE FLOW</span><span className="text-cyan-200/75">{latest?.date ?? "AWAITING DATA"}</span></div>
+          {flowData.length ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={flowData} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="fusionAdvanceFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(145 70% 47%)" stopOpacity={0.3} /><stop offset="100%" stopColor="hsl(145 70% 47%)" stopOpacity={0.015} /></linearGradient>
+                  <linearGradient id="fusionDeclineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(2 78% 56%)" stopOpacity={0.015} /><stop offset="100%" stopColor="hsl(2 78% 56%)" stopOpacity={0.3} /></linearGradient>
+                </defs>
+                <CartesianGrid stroke="hsl(0 0% 100% / .07)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: "hsl(0 0% 100% / .42)", fontSize: 8 }} tickLine={false} axisLine={false} minTickGap={24} />
+                <YAxis domain={[-100, 100]} tick={{ fill: "hsl(0 0% 100% / .34)", fontSize: 8 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                <ReferenceLine y={0} stroke="hsl(0 0% 100% / .18)" />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "hsl(186 80% 65% / .25)" }} />
+                <Area type="monotone" dataKey="advances" name="ADVANCERS" stroke="hsl(145 70% 47%)" fill="url(#fusionAdvanceFill)" strokeWidth={1.5} isAnimationActive={false} />
+                <Area type="monotone" dataKey="declines" name="DECLINERS" stroke="hsl(2 78% 56%)" fill="url(#fusionDeclineFill)" strokeWidth={1.5} isAnimationActive={false} />
+                <Area type="monotone" dataKey="net" name="NET FLOW" stroke="hsl(38 100% 50%)" fill="none" strokeWidth={2} dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <div className="fusion-visual-empty">Waiting for breadth history to draw the market.</div>}
+          <div className="fusion-chart-legend"><span><i className="bg-emerald-300" />ADVANCERS</span><span><i className="bg-rose-300" />DECLINERS</span><span><i className="bg-amber-300" />NET FLOW</span></div>
+        </div>
+
+        <div className="fusion-canvas-panel fusion-breadth-panel">
+          <div className="fusion-canvas-panel-head"><span>MARKET BREADTH</span><span>{breadth?.universeSize ? `${breadth.universeSize.toLocaleString()} NAMES` : "—"}</span></div>
+          <div className="fusion-breadth-ring" style={{ "--advance": `${advancePct}%`, "--decline": `${declinePct}%` } as CSSProperties}>
+            <div><strong>{latest ? `${Math.round(advancePct)}%` : "—"}</strong><span>ADVANCING</span></div>
+          </div>
+          <div className="fusion-stack-bar" aria-label="Market breadth split"><span className="bg-emerald-300" style={{ width: `${advancePct}%` }} /><span className="bg-rose-300" style={{ width: `${declinePct}%` }} /><span className="bg-white/20" style={{ width: `${unchangedPct}%` }} /></div>
+          <div className="grid grid-cols-3 gap-2 pt-3 text-center"><div><strong className="text-emerald-300">{latest?.advances ?? "—"}</strong><span>ADV</span></div><div><strong className="text-rose-300">{latest?.declines ?? "—"}</strong><span>DEC</span></div><div><strong className="text-white/65">{latest?.unchanged ?? "—"}</strong><span>FLAT</span></div></div>
+          <div className="fusion-breadth-stat"><span>NEW HIGHS / LOWS</span><strong>{latest ? `${latest.newHighs} / ${latest.newLows}` : "—"}</strong></div>
+          <div className="fusion-breadth-stat"><span>McCLELLAN</span><strong className={latest?.mcClellanOscillator && latest.mcClellanOscillator >= 0 ? "text-emerald-300" : "text-rose-300"}>{latest?.mcClellanOscillator == null ? "—" : latest.mcClellanOscillator.toFixed(2)}</strong></div>
+        </div>
+
+        <div className="fusion-canvas-panel fusion-momentum-panel">
+          <div className="fusion-canvas-panel-head"><span>MOMENTUM LEADERS</span><button type="button" onClick={() => onOpen("market", "current")} className="text-cyan-200/75 hover:text-cyan-100">OPEN TAPE ↗</button></div>
+          {moverData.length ? (
+              <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={moverData} layout="vertical" margin={{ top: 6, right: 8, left: 6, bottom: 0 }}>
+                <CartesianGrid stroke="hsl(0 0% 100% / .06)" horizontal={false} />
+                <XAxis type="number" domain={[-Math.max(5, ...moverData.map((item) => Math.abs(item.move))), Math.max(5, ...moverData.map((item) => Math.abs(item.move)))]} tick={{ fill: "hsl(0 0% 100% / .34)", fontSize: 8 }} tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="symbol" width={42} tick={{ fill: "hsl(0 0% 100% / .58)", fontSize: 8 }} tickLine={false} axisLine={false} />
+                <ReferenceLine x={0} stroke="hsl(0 0% 100% / .2)" />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(0 0% 100% / .04)" }} />
+                <Bar dataKey="move" name="MOVE" radius={[2, 2, 2, 2]} isAnimationActive={false}>
+                  {moverData.map((item) => <Cell key={item.symbol} fill={item.move >= 0 ? "hsl(145 70% 47%)" : "hsl(2 78% 56%)"} fillOpacity={0.82} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <div className="fusion-visual-empty">No live mover data available.</div>}
+        </div>
+
+        <div className="fusion-canvas-panel fusion-map-panel">
+          <div className="fusion-canvas-panel-head"><span>LIVE MOVER MAP</span><span className="text-amber-200/75">CLICK TO DRILL IN</span></div>
+          {tiles.length ? <div className="fusion-market-map">{tiles.map((quote) => <MoveTile key={quote.symbol} quote={quote} onOpen={onOpen} />)}</div> : <div className="fusion-visual-empty">No live mover data available.</div>}
+          <div className="mt-auto border-t border-white/[0.07] pt-2 font-terminal text-[6.5px] leading-relaxed text-white/40">Tile color shows observed move intensity. Data stays tied to the visible provider universe and keeps its source state in the detail view.</div>
+        </div>
+      </div>
+    </section>
+  );
+}

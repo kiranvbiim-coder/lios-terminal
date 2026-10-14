@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-field-caliber-compare",
+  "status": "implementation_pending_native_qualification",
+  "asOfDate": "2026-10-12",
+  "canonicalOwners": [
+    "P4",
+    "P7",
+    "P11"
+  ],
+  "siWorkstreams": [
+    "SI-05.25",
+    "SI-05.28",
+    "SI-05.40"
+  ],
+  "shippingTarget": "SP-05 enabler only; no Shipping Point or packaged acceptance",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledMirror": "kiranvbiim-coder/FinRobot",
+    "sourcePin": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "licenseDestination": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "noticeDestination": "third_party/licenses/finrobot-NOTICE.txt",
+    "sourcePath": "finrobot_desktop/finrobot/artifact/field_registry.py",
+    "sourceBlobSha": "1b3b41103226bbdd60b5766bb3c66344acbe809",
+    "upstreamTestPath": "finrobot_desktop/tests/artifact/test_field_registry.py",
+    "upstreamTestBlobSha": "e19f89b65e62b5ae973aebbe60f9e5926bfd25ce"
+  },
+  "reuseDisposition": [
+    "ADAPT",
+    "REPURPOSE",
+    "REFERENCE_VALIDATOR"
+  ],
+  "selectedMechanics": [
+    "exact per-share/absolute/ratio caliber keys instead of substring inference",
+    "separate quote versus reporting currency comparability metadata",
+    "block like-for-like change math across recorded fiscal-period changes",
+    "suppress percent change on negative-to-positive net income",
+    "preserve raw finite saved values while refusing invented FX conversions or valuation re-pricing"
+  ],
+  "destinationPaths": [
+    "src/server/finrobotFieldCaliber.ts",
+    "src/shared/artifactSemanticDiffContracts.ts",
+    "src/server/artifactDiff.ts",
+    "src/server/artifactDiff.test.ts",
+    "src/client/src/lib/useArtifacts.ts",
+    "src/client/src/lib/artifactSemanticComparisonSummary.ts",
+    "src/client/src/lib/artifactSemanticComparisonSummary.test.ts",
+    "src/client/src/components/terminal/ArtifactPane.tsx"
+  ],
+  "authoritySubstitutions": [
+    "Canonical LiOS P4 stored Artifact and comparison API remain sole owner of revision truth",
+    "No donor field registry, Python runtime, providers, reports, SQLite, routes, agents or finance engines are installed",
+    "P11 is sole authority for derived financial values, currency conversions and risk/investment computations",
+    "P7 remains sole rights, evidence and source reference authority; comparison creates no new sourceRefs",
+    "Only metadata explicitly recorded in both saved versions may support a caliber comparison; missing/conflicting tags fail closed",
+    "Legacy wholly untagged version comparisons remain supported and must not falsely claim verified accounting comparability"
+  ],
+  "nativeValidation": {
+    "status": "pending",
+    "testCommands": [
+      "cd src && node --import tsx --test server/artifactDiff.test.ts client/src/lib/artifactSemanticComparisonSummary.test.ts",
+      "cd src && node --import tsx --test server/artifactContracts.test.ts server/artifactStore.test.ts",
+      "cd src && npm run check"
+    ],
+    "packagedV3": "not_qualified"
+  },
+  "exclusions": [
+    "full donor Artifact/report/agent runtime",
+    "donor data providers",
+    "P11 math/FX conversion",
+    "new store/version authority",
+    "per-field currency invention",
+    "automatic financial recommendations",
+    "SP-05/release claims"
+  ]
+}

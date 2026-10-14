@@ -1,0 +1,99 @@
+/* LiOS canonical terminal identity.
+   Loaded last so every newer UX surface keeps the original LiOS visual DNA:
+   dark-only surfaces, JetBrains Mono everywhere, restrained amber/cyan semantic accents.
+   This is an identity contract, not a theme option. */
+
+:root {
+  color-scheme: dark;
+  --font-sans: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+
+  /* Canonical LiOS dark surface hierarchy. */
+  --lios-void: 0 0% 2%;
+  --lios-canvas: 0 0% 4%;
+  --lios-raised: 0 0% 6%;
+  --lios-overlay: 0 0% 7%;
+  --lios-hover: 0 0% 10%;
+  --lios-hairline: 0 0% 13%;
+  --lios-hairline-strong: 0 0% 18%;
+  --lios-text: 40 10% 85%;
+  --lios-text-soft: 0 0% 62%;
+  --lios-text-dim: 0 0% 46%;
+  --lios-amber: 38 95% 50%;
+  --lios-cyan: 186 80% 50%;
+}
+
+html,
+body,
+#root {
+  color-scheme: dark;
+  background: #030303 !important;
+}
+
+body {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace !important;
+}
+
+/* One typeface across the complete terminal. This intentionally overrides
+   V4's former Inter/UI split so navigation, headings, menus, research,
+   models, tabs and data all share the same terminal character. */
+.font-ui,
+.font-sans,
+.font-terminal,
+.font-data,
+.font-mono,
+.font-mono-num,
+.terminal-root,
+.terminal-root *,
+.terminal-root button,
+.terminal-root input,
+.terminal-root select,
+.terminal-root textarea,
+.terminal-root .lios-pane-title,
+.terminal-root .lios-tab-title,
+.terminal-root .lios-dock-action,
+.terminal-root .lios-dock-context,
+.terminal-root > header > div:first-child span {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace !important;
+}
+
+.terminal-root {
+  --terminal-font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  background: hsl(var(--lios-void)) !important;
+  color: hsl(var(--lios-text));
+}
+
+/* Dark means dark: no alternate light canvas and no atmospheric wash that
+   changes the terminal's core black identity. Advanced V4 interactions stay
+   intact, while the surface returns to the original LiOS look. */
+.terminal-root::before {
+  opacity: 0 !important;
+  background: none !important;
+}
+
+.terminal-root::after {
+  box-shadow: inset 0 0 90px rgb(0 0 0 / .20) !important;
+}
+
+.lios-v4-surface {
+  background: hsl(var(--lios-canvas) / .985) !important;
+}
+
+.lios-v4-raised,
+.lios-v4-overlay,
+.lios-pane-header,
+.lios-immersive-dock,
+.lios-research-tray {
+  background-color: hsl(var(--lios-raised) / .985) !important;
+}
+
+/* Preserve LiOS's semantic terminal palette: amber identity, cyan evidence,
+   green up, red down. These colors communicate state; they are not themes. */
+.terminal-root ::selection {
+  background: hsl(var(--lios-amber) / .22);
+  color: hsl(var(--lios-text));
+}
+
+.terminal-root :where(input, select, textarea) {
+  caret-color: hsl(var(--lios-amber));
+}

@@ -1,0 +1,73 @@
+/* V4 state alignment and shell spacing. Loaded after immersive-terminal.css. */
+
+.terminal-root[data-experience-mode='guided'] :where(.text-\[7px\], .text-\[7\.5px\]) {
+  font-size: .5625rem;
+}
+
+.terminal-root[data-focus-mode='true'] [data-testid^='workspace-pane-'][data-focused='false'] {
+  opacity: .72;
+  filter: saturate(.72) brightness(.82);
+}
+
+.terminal-root[data-presentation-mode='true'] [data-testid^='workspace-pane-'] {
+  border-radius: 10px;
+  margin: 3px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / .18);
+}
+
+.terminal-root[data-ambient='false'] {
+  background: hsl(var(--lios-void));
+}
+
+.terminal-root[data-ambient='false']::before {
+  opacity: 0;
+}
+
+.terminal-root[data-ambient='false']::after {
+  box-shadow: inset 0 0 90px rgb(0 0 0 / .22);
+}
+
+/* Leave clear room for the macro/function bars instead of covering them. */
+.lios-immersive-dock {
+  bottom: 48px;
+}
+
+.lios-research-tray {
+  bottom: 94px;
+  max-height: min(620px, calc(100vh - 145px));
+}
+
+.terminal-root[data-focus-mode='true'] .lios-immersive-dock {
+  bottom: 12px;
+}
+
+/* Low-noise bottom chrome. It becomes fully legible on hover/focus. */
+.terminal-root [data-testid='function-bar'] {
+  opacity: .72;
+  transition: opacity 140ms var(--lios-ease), background 140ms var(--lios-ease);
+}
+
+.terminal-root [data-testid='function-bar']:hover,
+.terminal-root [data-testid='function-bar']:focus-within {
+  opacity: 1;
+}
+
+/* The analytical canvas gets a small breathing zone above floating controls. */
+.terminal-root:not([data-presentation-mode='true']) main {
+  scroll-padding-bottom: 58px;
+}
+
+@media (max-width: 767px) {
+  .lios-immersive-dock {
+    bottom: 42px;
+  }
+
+  .lios-research-tray {
+    bottom: 88px;
+    max-height: min(580px, calc(100vh - 140px));
+  }
+
+  .terminal-root[data-focus-mode='true'] .lios-immersive-dock {
+    bottom: 8px;
+  }
+}

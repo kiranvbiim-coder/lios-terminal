@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0d0d0d" />
+    <!-- Fonts are self-hosted (see client/src/index.css's @fontsource
+         imports) rather than loaded from Google Fonts at runtime -- this
+         used to pull ~25 font families that were never referenced by any
+         actual CSS (only Inter and JetBrains Mono are used), and made page
+         load depend on network access to fonts.googleapis.com/gstatic.com,
+         which a desktop app shouldn't need. -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

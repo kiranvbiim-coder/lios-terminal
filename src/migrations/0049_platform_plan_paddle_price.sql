@@ -1,0 +1,21 @@
+-- LV4-03-03: platform_plans needs a mapping from LiOS's own plan code to
+-- Paddle's own price catalog entry (Paddle's pri_... IDs) before hosted
+-- checkout can know what to actually charge for a given plan.
+--
+-- Pre-existing tooling note, not introduced by this migration: migrations
+-- 0043-0048 were written without matching drizzle-kit meta/*_snapshot.json
+-- files, so `drizzle-kit generate` has no accurate "last applied" baseline
+-- newer than 0042_snapshot.json and will redundantly re-emit 0043-0048's
+-- DDL (CREATE TABLE "securities", "instrument_relationships", etc.) on its
+-- next invocation. This does not affect runtime correctness -- the actual
+-- migrator (drizzle-orm/*/migrator, used by server/db.ts and every
+-- dbMigration.test.ts case) applies migrations sequentially from
+-- meta/_journal.json + these numbered .sql files directly and never reads
+-- snapshot.json at all. This file's own 0049_snapshot.json is a correct
+-- full-schema-state dump (verified: includes securities,
+-- instrument_relationships, and the new paddle_price_id column below) --
+-- only the auto-generated SQL statement list was wrong, hand-corrected
+-- here to contain just the one genuinely new statement. Backfilling
+-- 0043-0048's missing snapshots so `generate` produces a clean diff again
+-- is real but separate cleanup work, not done here to stay in scope.
+ALTER TABLE "platform_plans" ADD COLUMN "paddle_price_id" text;

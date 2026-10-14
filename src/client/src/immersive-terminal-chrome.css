@@ -1,0 +1,120 @@
+/* V4 chrome refinement. Precision accents replace large saturated blocks. */
+
+/* Top bar brand: graphite capsule with an amber identity rail, not a solid slab. */
+.terminal-root > header > div:first-child {
+  position: relative;
+  min-width: 154px;
+  background: linear-gradient(180deg, hsl(var(--lios-raised) / .98), hsl(var(--lios-canvas) / .98)) !important;
+  border-right-color: hsl(var(--lios-hairline) / .75) !important;
+  padding-left: 14px !important;
+}
+
+.terminal-root > header > div:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, hsl(var(--lios-amber) / .95), hsl(var(--lios-amber) / .3));
+  box-shadow: 0 0 14px hsl(var(--lios-amber) / .14);
+}
+
+.terminal-root > header > div:first-child :where(svg, span) {
+  color: hsl(var(--lios-text)) !important;
+}
+
+.terminal-root > header > div:first-child svg {
+  color: hsl(var(--lios-amber) / .88) !important;
+}
+
+.terminal-root > header > div:first-child span {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: .62rem !important;
+  font-weight: 650 !important;
+  letter-spacing: .08em !important;
+}
+
+/* Active entity becomes a context capsule. */
+.terminal-root [data-testid='active-symbol'] {
+  margin: 4px 4px 4px 0;
+  height: calc(100% - 8px) !important;
+  border: 1px solid hsl(var(--lios-hairline) / .72) !important;
+  border-radius: 9px;
+  background: hsl(var(--lios-raised) / .62);
+}
+
+.terminal-root [data-testid='active-symbol']:hover {
+  background: hsl(var(--lios-hover) / .62) !important;
+  border-color: hsl(var(--lios-cyan) / .2) !important;
+}
+
+.terminal-root [data-testid='active-symbol'] span:last-child {
+  color: hsl(var(--lios-amber) / .92) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  letter-spacing: .01em;
+}
+
+/* The old ticker input remains available, but visually recedes behind Omnibox. */
+.terminal-root [data-testid='ticker-search'] {
+  color: hsl(var(--lios-text)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+.terminal-root [data-testid='cmd-open'] {
+  margin: 4px;
+  height: calc(100% - 8px) !important;
+  border: 1px solid hsl(var(--lios-amber) / .17) !important;
+  border-radius: 9px;
+  background: hsl(var(--lios-amber) / .025);
+}
+
+.terminal-root [data-testid='cmd-open']:hover {
+  color: hsl(var(--lios-text)) !important;
+  background: hsl(var(--lios-amber) / .065) !important;
+  border-color: hsl(var(--lios-amber) / .28) !important;
+}
+
+/* Notification and status controls keep visible hit targets without looking boxed. */
+.terminal-root [data-testid='nav-alerts'] {
+  border-radius: 9px;
+  margin: 4px 2px;
+  height: calc(100% - 8px) !important;
+}
+
+/* Context ribbon: chips rather than a row of hard rectangles. */
+.terminal-root [data-testid='context-ribbon'] {
+  min-height: 40px;
+  padding-inline: 3px;
+}
+
+.terminal-root [data-testid='context-ribbon'] button {
+  border-radius: 8px;
+}
+
+.terminal-root [data-testid='context-hero-actions'] button,
+.terminal-root [data-testid='context-next-action'] {
+  border-radius: 7px;
+}
+
+/* Pane divider handles appear on intent rather than permanently shouting. */
+.terminal-root [data-panel-resize-handle-id] {
+  opacity: .5;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.terminal-root [data-panel-resize-handle-id]:hover {
+  opacity: 1;
+}
+
+/* Side navigation is deliberately subordinate to the active canvas. */
+.terminal-root nav[aria-label*='workspace'] {
+  box-shadow: 0 1px 0 rgb(255 255 255 / .012) inset;
+}
+
+/* Long-session text selection should not create a large browser-blue flash. */
+.terminal-root ::selection {
+  background: hsl(var(--lios-amber) / .2);
+  color: hsl(var(--lios-text));
+}

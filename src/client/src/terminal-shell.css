@@ -1,0 +1,1387 @@
+/*
+ * LiOS canonical terminal shell.
+ *
+ * This is the only global shell arbitration layer. Historical V4/V5/V6/V9
+ * shell skins are no longer imported. Feature-specific styles may define
+ * charts, analytical panels and specialist surfaces, but app chrome, palette,
+ * typography, panes, Dockview, navigation, overlays and Project readability
+ * are owned here.
+ */
+
+:root,
+.dark,
+html[data-theme='dark'],
+html[data-theme='light'],
+html[data-theme='navy'],
+html[data-theme='bloomberg'] {
+  color-scheme: dark;
+
+  --lios-bg-app: #09090b;
+  --lios-bg-shell: #07070a;
+  --lios-bg-panel: #111115;
+  --lios-bg-panel-2: #0d0d10;
+  --lios-bg-elevated: #16161c;
+  --lios-bg-hover: #16161c;
+  --lios-bg-active: #1f1f28;
+  --lios-bg-selected: #1a1507;
+
+  --lios-border-subtle: #1f1f28;
+  --lios-border-default: #1f1f28;
+  --lios-border-strong: #2e2e3a;
+
+  --lios-text-primary: #ede9e0;
+  --lios-text-secondary: #b5b0ba;
+  --lios-text-muted: #a09ca6;
+
+  --lios-brand: #d4a017;
+  --lios-brand-hover: #e6b829;
+  --lios-brand-muted: #1a1507;
+  --lios-market-up: #2d9cdb;
+  --lios-market-down: #d4511a;
+  --lios-success: #1fcb84;
+  --lios-analytical: #8b5cf6;
+
+  --background: 240.00 10.00% 3.92%;
+  --foreground: 41.54 26.53% 90.39%;
+  --card: 240.00 10.53% 7.45%;
+  --card-foreground: 41.54 26.53% 90.39%;
+  --card-border: 240.00 12.68% 13.92%;
+  --sidebar: 240.00 17.65% 3.33%;
+  --sidebar-foreground: 41.54 26.53% 90.39%;
+  --sidebar-border: 240.00 12.68% 13.92%;
+  --sidebar-primary: 43.49 80.43% 46.08%;
+  --sidebar-primary-foreground: 240.00 10.00% 3.92%;
+  --sidebar-accent: 240.00 12.00% 9.80%;
+  --sidebar-accent-foreground: 41.54 26.53% 90.39%;
+  --sidebar-ring: 43.49 80.43% 46.08%;
+  --popover: 240.00 12.00% 9.80%;
+  --popover-foreground: 41.54 26.53% 90.39%;
+  --popover-border: 240.00 11.54% 20.39%;
+  --primary: 43.49 80.43% 46.08%;
+  --primary-foreground: 240.00 10.00% 3.92%;
+  --secondary: 240.00 10.34% 5.69%;
+  --secondary-foreground: 41.54 26.53% 90.39%;
+  --muted: 240.00 12.00% 9.80%;
+  --muted-foreground: 264.00 5.32% 63.14%;
+  --accent: 240.00 12.00% 9.80%;
+  --accent-foreground: 41.54 26.53% 90.39%;
+  --input: 240.00 11.54% 20.39%;
+  --ring: 43.49 80.43% 46.08%;
+
+  --lios-void: 0 0% 1.96%;
+  --lios-canvas: 0 0% 3.14%;
+  --lios-raised: 0 0% 3.92%;
+  --lios-overlay: 0 0% 5.1%;
+  --lios-hover: 0 0% 7.06%;
+  --lios-hairline: 0 0% 8.24%;
+  --lios-hairline-strong: 0 0% 12.55%;
+  --lios-text: 0 0% 94.9%;
+  --lios-text-soft: 0 0% 66%;
+  --lios-text-dim: 210 4.67% 47%;
+  --lios-amber: 43.49 80.43% 46.08%;
+  --lios-cyan: 201.72 70.73% 51.76%;
+  --lios-emerald: 155.23 73.5% 45.88%;
+  --lios-red: 17.74 78.15% 46.67%;
+  --lios-ease: cubic-bezier(.2,.8,.2,1);
+  --lios-shadow-soft: 0 12px 34px rgb(0 0 0 / .32);
+  --lios-shadow-deep: 0 22px 58px rgb(0 0 0 / .55);
+
+  --limuria-ink: 0 0% 1.96%;
+  --limuria-graphite-0: 0 0% 2.35%;
+  --limuria-graphite-1: 0 0% 3.14%;
+  --limuria-graphite-2: 0 0% 3.92%;
+  --limuria-graphite-3: 0 0% 5.1%;
+  --limuria-line: 0 0% 8.24%;
+  --limuria-line-strong: 0 0% 12.55%;
+  --limuria-text: 0 0% 94.9%;
+  --limuria-text-soft: 0 0% 66%;
+  --limuria-text-dim: 210 4.67% 47%;
+  --limuria-amber: 43.49 80.43% 46.08%;
+  --limuria-amber-hot: 45.71 79.33% 53.14%;
+  --limuria-amber-soft: 45.71 79.33% 53.14%;
+  --limuria-cyan: 201.72 70.73% 51.76%;
+  --limuria-green: 155.23 73.5% 45.88%;
+  --limuria-red: 17.74 78.15% 46.67%;
+
+  --up: 201.72 70.73% 51.76%;
+  --up-fg: 201.72 70.73% 51.76%;
+  --down: 17.74 78.15% 46.67%;
+  --down-fg: 17.74 78.15% 46.67%;
+  --amber: 43.49 80.43% 46.08%;
+  --cyan: 201.72 70.73% 51.76%;
+  --purple: 258.31 89.53% 66.27%;
+}
+
+html,
+body,
+#root {
+  background: var(--lios-bg-app);
+  color: var(--lios-text-primary);
+}
+
+/* Typography is semantic and terminal-scoped: Inter for interface/conversation, mono for data. */
+.terminal-root :where(.font-ui, .font-sans) {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.terminal-root :where(.font-terminal, .font-data, .font-mono, .font-mono-num, .lios-pane-code, .lios-symbol, .lios-number) {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+.terminal-root :where(
+  [class~="text-[6px]"],
+  [class~="text-[6.5px]"],
+  [class~="text-[7px]"],
+  [class~="text-[7.5px]"]
+) {
+  font-size: var(--lios-micro-font-size) !important;
+}
+
+.terminal-root :where(
+  [class~="text-[8px]"],
+  [class~="text-[8.5px]"]
+) {
+  font-size: var(--lios-small-font-size) !important;
+}
+
+.terminal-root {
+  --terminal-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --lios-shell-height: 32px;
+  --lios-context-height: 34px;
+  --lios-row-block: 36px;
+  --lios-control-pad-x: 8px;
+  --lios-panel-pad: 12px;
+  --lios-type-scale: 1;
+  --lios-micro-font-size: .5625rem;
+  --lios-small-font-size: .59375rem;
+  --lios-surface-0: hsl(var(--limuria-ink));
+  --lios-surface-1: hsl(var(--limuria-graphite-0));
+  --lios-surface-2: hsl(var(--limuria-graphite-1));
+  --lios-surface-3: hsl(var(--limuria-graphite-2));
+  --lios-surface-4: hsl(var(--limuria-graphite-3));
+  --lios-line: hsl(var(--limuria-line));
+  --lios-line-strong: hsl(var(--limuria-line-strong));
+  --lios-amber: hsl(var(--limuria-amber));
+  --lios-amber-soft: hsl(var(--limuria-amber-soft));
+  --lios-cyan: hsl(var(--limuria-cyan));
+  --lios-green: hsl(var(--limuria-green));
+  --lios-red: hsl(var(--limuria-red));
+  --lios-text: hsl(var(--limuria-text));
+  --lios-text-soft: hsl(var(--limuria-text-soft));
+  --lios-text-dim: hsl(var(--limuria-text-dim));
+  --lios-panel-radius: 2px;
+  --lios-panel-gap: 8px;
+
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  color: var(--lios-text-primary);
+  background: var(--lios-bg-app);
+}
+
+.terminal-root::before,
+.terminal-root::after {
+  content: none !important;
+  display: none !important;
+}
+
+.terminal-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+.terminal-root[data-density='terminal'] {
+  --lios-shell-height: 28px;
+  --lios-context-height: 29px;
+  --lios-row-block: 25px;
+  --lios-control-pad-x: 5px;
+  --lios-panel-pad: 8px;
+  --lios-micro-font-size: .46875rem;
+  --lios-small-font-size: .5rem;
+}
+
+.terminal-root[data-density='compact'] {
+  --lios-shell-height: 29px;
+  --lios-context-height: 30px;
+  --lios-row-block: 30px;
+  --lios-control-pad-x: 6px;
+  --lios-panel-pad: 9px;
+  --lios-micro-font-size: .5rem;
+  --lios-small-font-size: .53125rem;
+}
+
+.terminal-root[data-density='comfortable'] {
+  --lios-shell-height: 36px;
+  --lios-context-height: 38px;
+  --lios-row-block: 42px;
+  --lios-control-pad-x: 10px;
+  --lios-panel-pad: 15px;
+  --lios-micro-font-size: .625rem;
+  --lios-small-font-size: .65625rem;
+}
+
+.terminal-root[data-text-scale='small'] { --lios-type-scale: .94; }
+.terminal-root[data-text-scale='normal'] { --lios-type-scale: 1; }
+.terminal-root[data-text-scale='large'] { --lios-type-scale: 1.08; }
+
+.terminal-root[data-comfort-mode='true'] {
+  filter: saturate(.92);
+}
+
+.terminal-root > header,
+.terminal-root > header.h-9 {
+  height: var(--lios-shell-height) !important;
+  min-height: var(--lios-shell-height) !important;
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root > header > div:first-child,
+.terminal-root > header.h-9 > div:first-child {
+  position: relative;
+  width: 146px !important;
+  min-width: 146px !important;
+  padding: 0 12px !important;
+  background: var(--lios-brand) !important;
+  background-image: none !important;
+  border-right: 1px solid rgb(246 159 10 / .35) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.terminal-root > header.h-9 > div:first-child :is(svg, span) {
+  color: var(--lios-bg-app) !important;
+}
+
+.terminal-root [data-testid='context-ribbon'],
+.terminal-root [data-testid='terminal-tab-bar'],
+.terminal-root > div:has(> [aria-label='Analytical history']) {
+  min-height: var(--lios-context-height) !important;
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root [data-testid='context-ribbon'] {
+  height: var(--lios-context-height) !important;
+}
+
+.terminal-root [data-testid='terminal-tab-bar'] {
+  scrollbar-color: var(--lios-border-strong) transparent;
+}
+
+.terminal-root [data-testid='active-symbol'],
+.terminal-root [data-testid='cmd-open'],
+.terminal-root [data-testid='nav-alerts'] {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+  height: calc(100% - 4px) !important;
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] {
+  min-width: 0;
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] nav > div > div.mb-1 {
+  margin-top: 3px;
+  margin-bottom: 5px;
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] nav > div > div.mb-1 > button {
+  min-height: 30px;
+  border: 1px solid var(--lios-border-subtle);
+  background: var(--lios-bg-panel);
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] nav > div > div.mb-1 > button:hover {
+  border-color: rgb(45 156 219 / .35);
+  background: rgb(45 156 219 / .05);
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] nav > div > div.mb-1 > button + button {
+  margin-top: 2px;
+}
+
+.terminal-root aside[aria-label='LIOS advanced workspace navigation'] nav > div > div.mb-1 > button + button[aria-current='true'] {
+  border-left-color: var(--lios-brand);
+}
+
+@media (min-width: 768px) {
+  .terminal-root aside[aria-label='LIOS advanced workspace navigation'][data-operational='true'][data-collapsed='true'] {
+    width: 48px !important;
+  }
+}
+
+.terminal-root main,
+.terminal-root .lios-pane-content {
+  min-width: 0;
+  background-color: var(--lios-bg-app);
+}
+
+/* Workspace panes are the only spatial analytical surface. */
+.terminal-root [data-testid^='workspace-pane-'] {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .012) !important;
+  transition: border-color 140ms ease, opacity 140ms ease, filter 140ms ease;
+}
+
+.terminal-root [data-testid^='workspace-pane-'][data-focused='true'] {
+  z-index: 2;
+  border-color: rgb(246 159 10 / .34) !important;
+  box-shadow: inset 0 0 0 1px rgb(246 159 10 / .035) !important;
+}
+
+.terminal-root[data-focus-mode='true'] [data-testid^='workspace-pane-'][data-focused='false'] {
+  opacity: .72;
+  filter: saturate(.72) brightness(.82);
+}
+
+.terminal-root[data-presentation-mode='true'] [data-testid^='workspace-pane-'] {
+  margin: 3px;
+  border-radius: 4px;
+}
+
+.lios-pane-header,
+.terminal-root [data-institutional-header],
+.terminal-root [data-workstation-toolbar] {
+  min-height: 30px;
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.lios-pane-title,
+.lios-tab-title {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-weight: 600;
+}
+
+.lios-tab-v4 {
+  border-right-color: var(--lios-border-subtle) !important;
+  transition: background 100ms ease, opacity 100ms ease;
+}
+
+.lios-tab-v4[data-active='true'] {
+  background: var(--lios-bg-active) !important;
+  box-shadow: inset 0 -1px 0 var(--lios-brand) !important;
+}
+
+.lios-tab-v4[data-active='false']:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+.terminal-root .lios-tab-group-marker {
+  display: flex;
+  min-width: 108px;
+  max-width: 156px;
+  align-items: center;
+  gap: 6px;
+  border-inline: 1px solid var(--lios-border-subtle);
+  background: var(--lios-bg-panel);
+  padding: 0 8px;
+  color: var(--lios-text-secondary);
+}
+
+.terminal-root .lios-tab-group-marker-kicker {
+  color: var(--lios-brand-hover);
+  font-size: calc(.42rem * var(--lios-type-scale));
+  letter-spacing: .14em;
+}
+
+.terminal-root .lios-tab-group-marker-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: 'Inter', sans-serif;
+  font-size: calc(.55rem * var(--lios-type-scale));
+  font-weight: 600;
+}
+
+.terminal-root .lios-tab-group-marker-count {
+  flex: 0 0 auto;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 999px;
+  padding: 2px 5px;
+  color: var(--lios-market-up);
+  font-size: calc(.42rem * var(--lios-type-scale));
+}
+
+@media (max-width: 900px) {
+  .terminal-root .lios-tab-group-marker { min-width: 92px; padding: 0 6px; }
+  .terminal-root .lios-tab-group-marker-kicker { display: none; }
+}
+
+/* Shared surfaces and overlays. */
+.lios-v4-surface,
+.terminal-root .lios-v4-surface {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.lios-v4-raised,
+.terminal-root .lios-v4-raised {
+  background: var(--lios-bg-panel-2) !important;
+  border: 1px solid var(--lios-border-default);
+  box-shadow: none !important;
+}
+
+.lios-v4-overlay,
+.terminal-root .lios-v4-overlay,
+.terminal-root .lios-research-tray,
+.terminal-root .lios-immersive-dock,
+.terminal-root [role='dialog'],
+.terminal-root [data-radix-popper-content-wrapper] > * {
+  background: var(--lios-bg-elevated) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: var(--lios-shadow-deep) !important;
+  backdrop-filter: none !important;
+}
+
+.lios-v4-chip {
+  border: 1px solid var(--lios-border-default);
+  background: var(--lios-bg-panel-2);
+  border-radius: 999px;
+}
+
+.lios-v4-focus-ring {
+  outline: 1px solid rgb(246 159 10 / .75);
+  outline-offset: 2px;
+}
+
+/* Optional advanced dock. It never owns layout geometry. */
+.lios-immersive-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  z-index: 58;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(760px, calc(100vw - 28px));
+  padding: 5px;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 10px;
+}
+
+.lios-immersive-dock:hover,
+.lios-immersive-dock:focus-within {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.terminal-root[data-focus-mode='true'] .lios-immersive-dock {
+  bottom: 12px;
+}
+
+.lios-dock-action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--lios-text-secondary);
+  font-family: 'Inter', sans-serif !important;
+  font-size: .625rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lios-dock-action:hover {
+  color: var(--lios-text-primary);
+  background: var(--lios-bg-hover);
+  border-color: var(--lios-border-strong);
+}
+
+.lios-dock-context {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline: 10px;
+  color: var(--lios-text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: .64rem;
+  font-weight: 600;
+}
+
+.lios-dock-symbol {
+  color: var(--lios-brand-hover);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+.lios-research-tray {
+  position: fixed;
+  right: 12px;
+  bottom: 94px;
+  z-index: 64;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 145px));
+  overflow: hidden;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 10px;
+}
+
+@media (max-width: 767px) {
+  .lios-immersive-dock {
+    left: 8px;
+    right: 8px;
+    bottom: 42px;
+    transform: none;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .lios-immersive-dock:hover,
+  .lios-immersive-dock:focus-within { transform: none; }
+
+  .lios-dock-context { max-width: 150px; }
+
+  .lios-research-tray {
+    bottom: 88px;
+    max-height: min(580px, calc(100vh - 140px));
+  }
+}
+
+/* Dockview is the canonical desktop workspace geometry engine. */
+.lios-dockview-workspace.dockview-theme-dark,
+.lios-dockview-workspace .dockview-theme-dark {
+  --dv-group-view-background-color: #09090b;
+  --dv-tabs-and-actions-container-background-color: #111115;
+  --dv-activegroup-visiblepanel-tab-background-color: #09090b;
+  --dv-activegroup-hiddenpanel-tab-background-color: #0b0b0b;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #070707;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #090909;
+  --dv-activegroup-visiblepanel-tab-color: rgba(255,255,255,.96);
+  --dv-activegroup-hiddenpanel-tab-color: rgba(255,255,255,.55);
+  --dv-inactivegroup-visiblepanel-tab-color: rgba(255,255,255,.58);
+  --dv-inactivegroup-hiddenpanel-tab-color: rgba(255,255,255,.34);
+  --dv-tab-divider-color: rgba(255,255,255,.06);
+  --dv-separator-border: rgba(255,255,255,.10);
+  --dv-paneview-header-border-color: rgba(255,255,255,.08);
+  --dv-paneview-active-outline-color: rgba(246,159,10,.58);
+  --dv-active-sash-color: rgba(246,159,10,.42);
+  --dv-drag-over-background-color: rgba(246,159,10,.08);
+  --dv-drag-over-border-color: rgba(246,159,10,.30);
+  --dv-edge-dock-indicator-color: rgba(246,159,10,.72);
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 10px;
+  --dv-tab-font-size: 10px;
+  --dv-border-radius: 0px;
+}
+
+.lios-dockview-workspace .dv-default-tab {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: .01em;
+}
+
+.lios-dockview-workspace .dv-sash:hover,
+.lios-dockview-workspace .dv-sash.dv-active-sash {
+  background-color: rgba(246,159,10,.28);
+}
+
+/* Analytical density primitives retained from the workstation generation. */
+.terminal-root [data-analytical-row] {
+  min-height: var(--lios-row-block);
+}
+
+.terminal-root[data-density='compact'] [data-analytical-row] {
+  padding-block: 4px !important;
+}
+
+.terminal-root[data-density='comfortable'] [data-analytical-row] {
+  padding-block: 10px !important;
+}
+
+.terminal-root [data-workstation-toolbar] {
+  min-height: var(--lios-context-height);
+  padding-inline: var(--lios-control-pad-x);
+}
+
+.terminal-root [data-workstation-panel] {
+  padding: var(--lios-panel-pad);
+}
+
+.terminal-root [data-panel-resize-handle-id] {
+  position: relative;
+  z-index: 8;
+  opacity: .38;
+}
+
+.terminal-root [data-panel-resize-handle-id]::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
+.terminal-root [data-panel-resize-handle-id]:hover,
+.terminal-root [data-panel-resize-handle-id]:focus-visible,
+.terminal-root [data-panel-resize-handle-id][data-resize-handle-active] {
+  opacity: 1;
+  background: rgb(246 159 10 / .55) !important;
+}
+
+.lios-grid-preset {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--lios-border-default);
+  background: var(--lios-bg-panel);
+  color: var(--lios-text-muted);
+  font-size: .48rem;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.lios-grid-preset:hover {
+  color: var(--lios-text-primary);
+  border-color: var(--lios-border-strong);
+}
+
+.lios-grid-preset[data-active='true'] {
+  color: var(--lios-brand-hover);
+  border-color: rgb(246 159 10 / .38);
+  background: rgb(246 159 10 / .055);
+  box-shadow: inset 0 -1px 0 rgb(246 159 10 / .45);
+}
+
+.lios-analytical-grid-header {
+  background: var(--lios-bg-panel-2);
+  box-shadow: inset 0 -1px 0 var(--lios-border-subtle);
+}
+
+.lios-analytical-grid-row {
+  transition: background 90ms ease;
+}
+
+.lios-analytical-grid-row:hover {
+  background: rgb(246 159 10 / .025);
+}
+
+.lios-readthrough-handle {
+  background: var(--lios-border-default);
+}
+
+.lios-story-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--lios-border-subtle);
+}
+
+.lios-story-context > span {
+  border: 1px solid var(--lios-border-default);
+  background: var(--lios-bg-panel-2);
+  padding: 3px 6px;
+  color: var(--lios-text-muted);
+  font-size: .48rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.lios-story-context > span[data-emphasis='object'] {
+  color: var(--lios-market-up);
+  border-color: rgb(45 156 219 / .28);
+}
+
+.lios-story-context > span[data-emphasis='positive'] { color: var(--lios-success); }
+.lios-story-context > span[data-emphasis='negative'] { color: var(--lios-market-down); }
+
+/* Experience and Fusion surfaces inherit one flat structural language. */
+.terminal-root [data-testid='experience-shell'] {
+  background: var(--lios-bg-app) !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root [data-testid='experience-shell'] > header,
+.terminal-root [data-testid='experience-shell'] > nav {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.terminal-root .lios-phase1-panel,
+.terminal-root [data-testid='experience-shell'] section,
+.terminal-root .lios-phase2-explore-results,
+.terminal-root .lios-phase2-explore-selection,
+.terminal-root .lios-phase2-explore-quick {
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root .lios-phase2-explore-hero {
+  background: var(--lios-bg-app) !important;
+  border-color: var(--lios-border-default) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+.terminal-root .lios-phase2-explore-search {
+  background: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-default) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+.terminal-root .lios-phase2-explore-result,
+.terminal-root .lios-phase2-explore-quick-action {
+  background: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.terminal-root .lios-phase2-explore-result:hover,
+.terminal-root .lios-phase2-explore-quick-action:hover:not(:disabled) {
+  background: var(--lios-bg-hover) !important;
+  border-color: var(--lios-border-strong) !important;
+}
+
+.terminal-root .lios-phase2-explore-result[data-selected='true'],
+.terminal-root .lios-phase2-explore-result[data-active='true'] {
+  background: var(--lios-bg-selected) !important;
+  border-color: rgb(246 159 10 / .48) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+.terminal-root :is(
+  .fusion-market-hero,
+  .fusion-hero-main,
+  .fusion-hero-side,
+  .fusion-market-canvas,
+  .fusion-canvas-header,
+  .fusion-canvas-panel,
+  .fusion-section,
+  .fusion-metric,
+  .fusion-index-card,
+  .fusion-continuity-card,
+  .fusion-pulse-card
+) {
+  background-image: none !important;
+}
+
+.terminal-root :is(.fusion-market-hero, .fusion-market-canvas) {
+  background: var(--lios-bg-app) !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root :is(.fusion-hero-main, .fusion-hero-side, .fusion-canvas-header) {
+  background: var(--lios-bg-shell) !important;
+}
+
+.terminal-root :is(
+  .fusion-section,
+  .fusion-metric,
+  .fusion-canvas-panel,
+  .fusion-index-card,
+  .fusion-continuity-card,
+  .fusion-pulse-card
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+/* Project/conversation surfaces deliberately escape terminal micro-copy. */
+.terminal-root .lios-project-experience-shell {
+  min-width: 0;
+  font-size: calc(.6875rem * var(--lios-type-scale));
+}
+
+.terminal-root .lios-project-experience-shell :is(button, input, select, textarea) {
+  min-height: 28px;
+}
+
+.lios-project-experience-shell [class~="text-[5px]"],
+.lios-project-experience-shell [class~="text-[6px]"] {
+  font-size: max(.625rem, calc(.625rem * var(--lios-type-scale))) !important;
+  line-height: 1.4;
+}
+
+.lios-project-experience-shell [class~="text-[7px]"] {
+  font-size: max(.6875rem, calc(.6875rem * var(--lios-type-scale))) !important;
+  line-height: 1.45;
+}
+
+.lios-project-experience-shell [class~="text-[8px]"] {
+  font-size: max(.75rem, calc(.75rem * var(--lios-type-scale))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-[9px]"] {
+  font-size: max(.8125rem, calc(.8125rem * var(--lios-type-scale))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-[10px]"] {
+  font-size: max(.875rem, calc(.875rem * var(--lios-type-scale))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-muted-foreground"] {
+  color: var(--lios-text-secondary) !important;
+}
+
+.lios-project-experience-shell > aside:first-child {
+  flex-basis: clamp(15rem, 22vw, 18.75rem);
+  width: clamp(15rem, 22vw, 18.75rem) !important;
+}
+
+.lios-project-experience-shell > aside:first-child button,
+.lios-project-experience-shell .lios-conversation-composer button,
+.lios-project-experience-shell .lios-project-create-button {
+  min-height: 2.25rem;
+}
+
+.lios-project-experience-shell .lios-project-sidebar-search {
+  min-height: 2.5rem;
+}
+
+.lios-project-experience-shell .lios-project-chat-content,
+.lios-project-experience-shell .lios-conversation-composer {
+  max-width: 56rem;
+}
+
+.lios-project-experience-shell .lios-conversation-composer {
+  overflow: hidden;
+}
+
+.lios-project-experience-shell .lios-conversation-composer textarea {
+  min-height: 5.5rem;
+  font-size: max(.875rem, calc(.875rem * var(--lios-type-scale))) !important;
+  line-height: 1.55;
+}
+
+.lios-project-experience-shell .lios-composer-toolbar {
+  row-gap: .5rem;
+}
+
+.lios-project-experience-shell .lios-composer-toolbar > span {
+  flex: 1 1 12rem;
+  text-align: right;
+}
+
+.lios-project-experience-shell .lios-chat-empty-state {
+  text-wrap: pretty;
+}
+
+.terminal-root .lios-conversation-empty-state {
+  padding: clamp(18px, 4vw, 44px) 12px;
+}
+
+.lios-project-experience-shell .lios-chat-starter {
+  min-height: 5.75rem;
+}
+
+@media (max-width: 1120px) {
+  .terminal-root .lios-project-sidebar { width: 236px !important; }
+  .terminal-root .lios-conversation-header { gap: 8px; padding-inline: 12px; }
+  .terminal-root .lios-conversation-composer-actions { flex-wrap: wrap; row-gap: 6px; }
+  .terminal-root .lios-conversation-composer-actions > span.ml-auto {
+    flex-basis: 100%;
+    margin-left: 0;
+    order: 20;
+  }
+}
+
+@media (max-width: 900px) {
+  .lios-project-experience-shell > aside:first-child {
+    flex-basis: 15rem;
+    width: 15rem !important;
+  }
+  .lios-project-experience-shell .lios-project-chat-content { max-width: 48rem; }
+  .lios-project-experience-shell .lios-composer-toolbar > span { text-align: left; }
+}
+
+@media (max-width: 760px) {
+  .terminal-root .lios-project-experience-shell { flex-direction: column; }
+  .terminal-root .lios-project-sidebar {
+    width: 100% !important;
+    max-height: min(32vh, 230px);
+    border-right: 0;
+    border-bottom: 1px solid var(--lios-border-default);
+  }
+  .terminal-root .lios-project-experience-shell > main { min-height: 0; }
+  .terminal-root .lios-conversation-header {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding-block: 8px;
+  }
+  .terminal-root .lios-conversation-composer-actions { padding-inline: 10px; }
+  .terminal-root .lios-conversation-composer-actions select { max-width: min(100%, 190px); }
+}
+
+/* Shell-owned state framing. */
+.terminal-root[data-intelligent-calm='true'] [data-testid^='workspace-pane-'][data-focused='false'] {
+  opacity: .86;
+  filter: saturate(.72) brightness(.9);
+}
+
+.terminal-root[data-presentation-mode='true'] .lios-pane-header {
+  min-height: 38px;
+}
+
+.terminal-root[data-data-state='stale'] [data-testid^='workspace-pane-'][data-focused='true'],
+.terminal-root[data-data-state='offline'] [data-testid^='workspace-pane-'][data-focused='true'] {
+  border-color: rgb(212 81 26 / .34) !important;
+  box-shadow: inset 0 0 0 1px rgb(212 81 26 / .08) !important;
+}
+
+.terminal-root[data-data-state='point-in-time'] [data-testid^='workspace-pane-'][data-focused='true'] {
+  border-color: rgb(45 156 219 / .34) !important;
+  box-shadow: inset 0 0 0 1px rgb(45 156 219 / .09) !important;
+}
+
+@media (min-width: 1280px) {
+  .terminal-root aside[aria-label='Context intelligence rail'] {
+    position: relative !important;
+    inset: auto !important;
+    z-index: 20 !important;
+    width: clamp(300px, 24vw, 360px) !important;
+    height: 100% !important;
+    max-height: none !important;
+    flex: 0 0 clamp(300px, 24vw, 360px);
+    border-top: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-left: 1px solid var(--lios-border-default) !important;
+    box-shadow: none !important;
+  }
+}
+
+/* News read-through responds to the Dockview pane, not viewport width. */
+.terminal-root [data-news-readthrough-layout='responsive'] {
+  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+}
+
+@container lios-pane (max-width: 760px) {
+  .terminal-root [data-news-readthrough-layout='responsive'] {
+    grid-template-columns: none;
+    grid-template-rows: minmax(0, 44fr) minmax(0, 56fr);
+  }
+
+  .terminal-root [data-news-list='true'] {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--lios-border-default);
+  }
+}
+
+/* Screener radar responds to its Dockview pane width. */
+@container lios-pane (max-width: 900px) {
+  .terminal-root [data-screener-radar-controls='true'] {
+    flex-wrap: wrap;
+  }
+
+  .terminal-root [data-screener-radar-controls='true'] input {
+    width: auto !important;
+    flex: 1 1 180px;
+  }
+
+  .terminal-root [data-screener-radar-body='true'] {
+    flex-direction: column;
+  }
+
+  .terminal-root [data-screener-radar-detail='true'] {
+    width: 100% !important;
+    max-height: min(38%, 260px);
+    flex: 0 0 auto;
+    border-left: 0 !important;
+    border-top: 1px solid var(--lios-border-default);
+  }
+}
+
+@container lios-pane (max-width: 620px) {
+  .terminal-root [data-screener-radar='true'] > div:first-child > span {
+    display: none;
+  }
+
+  .terminal-root [data-screener-radar-detail='true'] {
+    max-height: min(34%, 220px);
+  }
+}
+
+/* Workspaces responds to its Dockview pane width, not the browser viewport. */
+.terminal-root [data-workspaces-manager='true'] {
+  container-type: inline-size;
+  container-name: lios-workspaces-manager;
+}
+
+@container lios-workspaces-manager (max-width: 620px) {
+  .terminal-root [data-workspaces-toolbar='true'] {
+    align-items: stretch;
+  }
+
+  .terminal-root [data-workspaces-search='true'] {
+    order: 10;
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .terminal-root [data-workspaces-body='true'] {
+    flex-direction: column;
+  }
+
+  .terminal-root [data-workspaces-list='true'] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-height: min(34%, 220px);
+    flex: 0 0 auto;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--lios-border-default);
+  }
+
+  .terminal-root [data-workspaces-detail='true'] {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .terminal-root [data-workspaces-create='true'] > div:first-child {
+    flex-direction: column;
+  }
+
+  .terminal-root [data-workspaces-create='true'] > div:first-child > input {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@container lios-workspaces-manager (max-width: 420px) {
+  .terminal-root [data-workspaces-toolbar='true'] > button {
+    flex: 1 1 auto;
+    justify-content: center;
+    margin-left: 0 !important;
+  }
+
+  .terminal-root [data-workspaces-list='true'] {
+    max-height: min(30%, 170px);
+  }
+
+  .terminal-root [data-workspaces-detail='true'] {
+    padding: 10px;
+  }
+}
+
+/* Adaptive shell chrome. Global geometry has exactly one owner here. */
+.terminal-root[data-intelligent-calm='true'] [data-testid='equity-ticker-tape'],
+.terminal-root[data-intelligent-calm='true'] [data-testid='macro-ticker-tape'],
+.terminal-root[data-intelligent-calm='true'] [data-testid='function-bar'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) [data-testid='pwa-install-banner'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) [data-testid='equity-ticker-tape'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) [data-testid='macro-ticker-tape'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) [data-testid='function-bar'] {
+  display: none !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] > div:has(> [aria-label='Analytical history']) > div:has(> [data-testid='context-ribbon']),
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true'])
+  > div:has(> div > [data-testid='context-ribbon'])
+  > div:has(> [data-testid='context-ribbon']) {
+  display: none !important;
+}
+
+.terminal-root[data-intelligent-calm='true'] > div:has(> [aria-label='Analytical history']) [data-testid='terminal-tab-bar'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true'])
+  > div:has([data-testid='terminal-tab-bar']) [data-testid='terminal-tab-bar'] {
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  height: 30px !important;
+  min-height: 30px !important;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) > header.h-9 {
+  height: 31px !important;
+  min-height: 31px !important;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) > header.h-9 > div:nth-child(3),
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) [data-testid='active-symbol'],
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) > header.h-9 > div:has(> #terminal-persona-switcher) {
+  display: none !important;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) > header.h-9 > div:first-child {
+  width: 120px !important;
+  min-width: 120px !important;
+  padding-inline: 10px !important;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) > header.h-9 > div:first-child::after {
+  font-size: .66rem !important;
+  letter-spacing: .065em !important;
+}
+
+@media (min-width: 768px) {
+  .terminal-root[data-intelligent-calm='true'] aside[aria-label='LIOS advanced workspace navigation'],
+  .terminal-root aside[aria-label='LIOS advanced workspace navigation'][data-operational='true'][data-collapsed='true'],
+  .terminal-root aside[aria-label='LIOS advanced workspace navigation'][data-operational='true'][data-collapsed='true']:hover {
+    width: 48px !important;
+    box-shadow: none !important;
+  }
+
+  .terminal-root[data-intelligent-calm='true'] aside[aria-label='LIOS advanced workspace navigation'] [data-testid^='product-nav-'],
+  .terminal-root aside[aria-label='LIOS advanced workspace navigation'][data-operational='true'][data-collapsed='true'] [data-testid^='product-nav-'] {
+    justify-content: center !important;
+    padding-inline: 0 !important;
+  }
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) button[aria-label='Open context intelligence rail'] {
+  opacity: .48;
+  border-color: var(--lios-border-default) !important;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) button[aria-label='Open context intelligence rail']:hover,
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) button[aria-label='Open context intelligence rail']:focus-visible {
+  opacity: 1;
+}
+
+.terminal-root:has([data-testid^='workspace-pane-'][data-focused='true'][data-operational='true']) button[aria-label='Open context intelligence rail'] span {
+  display: none !important;
+}
+
+.terminal-root .lios-dock-expand {
+  border-color: rgb(246 159 10 / .28) !important;
+  background: rgb(246 159 10 / .055) !important;
+  color: var(--lios-brand) !important;
+  font-weight: 700 !important;
+  letter-spacing: .07em;
+}
+
+.terminal-root[data-intelligent-calm='true'] .lios-immersive-dock:not(:hover):not(:focus-within) .lios-dock-action:not(.lios-dock-expand) {
+  display: none !important;
+}
+
+.terminal-root[data-focus-mode='true'] > header,
+.terminal-root[data-focus-mode='true'] aside[aria-label='LIOS advanced workspace navigation'],
+.terminal-root[data-focus-mode='true'] button[aria-label='Open context intelligence rail'],
+.terminal-root[data-focus-mode='true'] .lios-v5-hero-bar {
+  display: none !important;
+}
+
+.terminal-root[data-focus-mode='true'] > div:has(> [aria-label='Analytical history']) > :not([data-testid='terminal-tab-bar']) {
+  display: none !important;
+}
+
+.terminal-root[data-focus-mode='true'] > div:has(> [aria-label='Analytical history']) [data-testid='terminal-tab-bar'] {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  border-left: 0 !important;
+}
+
+.terminal-root[data-focus-mode='true'] .lios-immersive-dock:not(:hover):not(:focus-within) {
+  bottom: 0 !important;
+  opacity: .18 !important;
+  transform: translateX(-50%) translateY(calc(100% - 10px)) !important;
+}
+
+.terminal-root[data-focus-mode='true'] .lios-immersive-dock:hover,
+.terminal-root[data-focus-mode='true'] .lios-immersive-dock:focus-within {
+  bottom: 8px !important;
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0) !important;
+}
+
+@media (max-width: 767px) {
+  .terminal-root[data-intelligent-calm='true'] .lios-immersive-dock:not(:hover):not(:focus-within) .lios-dock-action:not(.lios-dock-expand) {
+    display: inline-flex !important;
+  }
+}
+
+/* Tables, controls and semantics. */
+.terminal-root table thead th {
+  background: var(--lios-bg-panel-2) !important;
+  color: var(--lios-text-secondary) !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: inset 0 -1px 0 var(--lios-border-subtle) !important;
+}
+
+.terminal-root table tbody tr:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+.terminal-root table :is(td, th),
+.terminal-root .tabular-nums,
+.terminal-root [data-financial-value] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.terminal-root :where(input, textarea, select) {
+  background-color: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary) !important;
+  caret-color: var(--lios-brand);
+}
+
+.terminal-root :where(input, textarea, select):hover {
+  border-color: var(--lios-border-strong) !important;
+}
+
+.terminal-root :where(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 1px solid var(--lios-brand) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgb(246 159 10 / .10) !important;
+}
+
+.terminal-root .text-foreground { color: var(--lios-text-primary) !important; }
+.terminal-root .text-muted-foreground { color: var(--lios-text-muted) !important; }
+.terminal-root :is(.text-up, .text-cyan-300, .text-cyan-200) { color: var(--lios-market-up) !important; }
+.terminal-root .text-down { color: var(--lios-market-down) !important; }
+.terminal-root :is(.text-amber-300, .text-amber-200) { color: var(--lios-brand-hover) !important; }
+.terminal-root :is(.text-emerald-300, .text-green-300) { color: var(--lios-success) !important; }
+
+.terminal-root :where(.panel-label, th, [role='columnheader']) {
+  letter-spacing: .095em;
+}
+
+.terminal-root,
+.terminal-root * {
+  scrollbar-color: var(--lios-border-strong) var(--lios-bg-app);
+}
+
+.terminal-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-root ::-webkit-scrollbar-track { background: var(--lios-bg-app); }
+
+.terminal-root ::-webkit-scrollbar-thumb {
+  background: var(--lios-border-strong);
+  border: 2px solid var(--lios-bg-app);
+}
+
+.terminal-root ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+.terminal-root button:not(:disabled),
+.terminal-root a,
+.terminal-root input,
+.terminal-root select,
+.terminal-root textarea {
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+
+@keyframes liosSettle {
+  from { box-shadow: 0 0 0 1px rgb(45 156 219 / .45) inset, 0 0 30px rgb(45 156 219 / .08); }
+  to { box-shadow: 0 0 0 1px transparent inset, 0 0 0 transparent; }
+}
+
+.lios-state-changed {
+  animation: liosSettle 620ms var(--lios-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-root *,
+  .terminal-root *::before,
+  .terminal-root *::after,
+  .lios-project-experience-shell .lios-chat-starter {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+.terminal-root[data-reduced-motion='true'] *,
+.terminal-root[data-reduced-motion='true'] *::before,
+.terminal-root[data-reduced-motion='true'] *::after {
+  transition-duration: .01ms !important;
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+
+/* User-supplied Figma Make reference: one graphite/gold product shell. */
+.terminal-root .lios-authenticated-navigation { width:264px; flex-direction:row; border-color:var(--lios-border-default); }
+.lios-reference-navigation-rail { display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:44px; padding:8px 4px; gap:4px; background:var(--lios-bg-shell); border-right:1px solid var(--lios-border-default); }
+.lios-reference-navigation-rail button { display:grid; place-items:center; min-width:34px; min-height:36px; color:var(--lios-text-muted); border-left:2px solid transparent; }
+.lios-reference-navigation-rail button:hover { color:var(--lios-text-primary); background:var(--lios-bg-hover); }
+.lios-reference-navigation-rail button[aria-current] { color:var(--lios-brand); background:var(--lios-bg-selected); border-left-color:var(--lios-brand); }
+.lios-reference-navigation-rail .lios-reference-rail-settings { margin-top:auto; }
+.lios-reference-navigation-projects { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; background:var(--lios-bg-panel-2); }
+.lios-reference-navigation-brand { display:flex; align-items:center; min-height:44px; padding:8px 14px; border-bottom:1px solid var(--lios-border-default); }
+.lios-reference-navigation-projects .lios-primary-navigation { padding:10px 8px; }
+.lios-reference-navigation-projects .lios-primary-navigation button { border-radius:2px; font-size:12px; }
+.lios-reference-navigation-projects .lios-primary-navigation .lios-new-chat { border:1px solid var(--lios-border-strong); background:transparent; color:var(--lios-brand); }
+.lios-reference-navigation-projects .lios-navigation-history { padding:8px; }
+.lios-reference-navigation-projects .lios-account-trigger { border-radius:0; border-top:1px solid var(--lios-border-default); margin:0; padding:12px; }
+.terminal-root .lios-project-experience-shell .lios-conversation-header { background:var(--lios-bg-shell); min-height:44px; height:auto; }
+.terminal-root .lios-project-experience-shell .lios-context-strip { background:var(--lios-bg-panel-2); }
+.terminal-root .lios-project-experience-shell .lios-conversation-composer { background:var(--lios-bg-panel); border:1px solid var(--lios-border-strong); border-radius:3px; box-shadow:none; }
+.terminal-root .lios-project-experience-shell .lios-conversation-composer textarea { background:transparent !important; min-height:72px; }
+.terminal-root .lios-project-experience-shell .lios-chat-starter { border-radius:2px; background:var(--lios-bg-panel); }
+.terminal-root .lios-artifact-frame { border-radius:0; border-color:var(--lios-border-default); background:var(--lios-bg-panel); box-shadow:none; }
+.lios-reference-artifact-tabs { display:flex; border-bottom:1px solid var(--lios-border-default); background:var(--lios-bg-shell); }
+.lios-reference-artifact-tabs button { flex:1; min-height:36px; border-bottom:2px solid transparent; font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--lios-text-muted); }
+.lios-reference-artifact-tabs button[aria-selected='true'] { color:var(--lios-brand); border-bottom-color:var(--lios-brand); background:var(--lios-bg-panel); }
+.lios-reference-artifact-tabs button:focus-visible, .lios-reference-navigation-rail button:focus-visible { outline:2px solid var(--lios-brand); outline-offset:-3px; }
+@media(max-width:767px) { .terminal-root .lios-authenticated-navigation { display:none; } .lios-navigation-sheet .lios-reference-navigation-brand { margin-top:12px; } }
+
+.terminal-root .lios-project-experience-shell button.bg-amber-400 { background:var(--lios-brand); color:var(--lios-bg-app); }
+.terminal-root .lios-project-experience-shell :is(.text-amber-300,.text-amber-200) { color:var(--lios-brand); }
+
+.terminal-root .lios-artifact-frame button.bg-amber-300 { background:var(--lios-brand); color:var(--lios-bg-app); }
+.terminal-root .lios-artifact-frame textarea { border-radius:2px; }
+
+/* Source reference dimensions, with existing data/actions kept inside the same shell. */
+.terminal-root:has(.lios-project-experience-shell) { --lios-shell-height:36px; }
+.terminal-root .lios-authenticated-navigation { width:260px !important; flex-basis:260px !important; min-width:0; border-right:0; }
+.lios-reference-navigation-projects { width:216px; flex:none; box-sizing:border-box; background:#0a0a0d; border-right:1px solid #1a1a22; }
+.lios-reference-navigation-projects[hidden] { display:none; }
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed='true'] { width:60px !important; flex-basis:60px !important; }
+.lios-reference-expand-sidebar { width:16px; background:#0a0a0d; color:#6b6870; border-right:1px solid #1a1a22; }
+.lios-reference-navigation-brand { justify-content:space-between; height:44px; min-height:44px; padding:0 12px; font-size:9px; letter-spacing:.1em; color:#6b6870; }
+.lios-reference-navigation-brand button { padding:4px; }
+.lios-reference-navigation-rail { gap:2px; border-color:#1a1a22; }
+.lios-reference-navigation-rail button { min-height:32px; }
+.lios-reference-navigation-projects .lios-primary-navigation { padding:8px 10px; }
+.lios-reference-navigation-projects .lios-primary-navigation button { min-height:30px; padding:6px 8px; font-size:11px; }
+.lios-reference-navigation-projects .lios-primary-navigation .lios-new-chat { border-style:dashed; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+.lios-reference-navigation-projects .lios-account-trigger { min-height:48px; padding:8px 10px; font-size:11px; }
+.lios-reference-navigation-projects .lios-account-avatar { width:24px; height:24px; border-radius:0; background:#1f1f28; }
+.lios-reference-navigation-projects .lios-account-trigger small { font-size:9px; }
+.terminal-root .lios-project-experience-shell .lios-conversation-header { min-height:44px; padding:8px 16px; }
+.terminal-root .lios-project-experience-shell .lios-conversation-composer { border-radius:0; }
+.terminal-root .lios-project-experience-shell .lios-artifact-sidecar { width:348px; padding:0; background:#0a0a0d; border-color:#1a1a22; }
+
+.lios-reference-titlebar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; flex-shrink:0; height:36px; background:#07070a; border-bottom:1px solid #1a1a22; padding:0 12px; }
+.lios-reference-titlebar > div:last-child { justify-self:end; }
+.lios-reference-window-dots { display:flex; gap:6px; }
+.lios-reference-window-dots i { display:block; width:10px; height:10px; border-radius:50%; opacity:.55; background:#ef4444; }
+.lios-reference-window-dots i:nth-child(2) { background:#eab308; }
+.lios-reference-window-dots i:nth-child(3) { background:#22c55e; }
+.lios-reference-titlebar-brand .lios-reference-brand { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:400; gap:8px; color:#6b6870; }
+.lios-reference-titlebar-brand .lios-reference-mark { width:16px; height:16px; font-size:8px; }
+.lios-reference-titlebar-brand .lios-reference-brand small { display:none; }
+.lios-reference-titlebar button { font-size:9px; padding-block:3px; border-color:#1f1f28; color:#6b6870; background:transparent; }
+@media(max-width:767px) { .lios-reference-window-dots { visibility:hidden; } .lios-reference-titlebar { grid-template-columns:32px 1fr auto; } .lios-reference-titlebar-brand { justify-self:start; } }
+
+.lios-reference-titlebar-brand .font-display { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:400; }
+
+.lios-reference-navigation-rail, .lios-reference-expand-sidebar { box-sizing:border-box; }

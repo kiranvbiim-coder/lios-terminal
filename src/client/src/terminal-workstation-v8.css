@@ -1,0 +1,454 @@
+/* LiOS V8 panel usability layer.
+   Purpose: keep analytical surfaces readable when the workspace is split.
+   This is intentionally a shell-level contract so individual panels do not
+   need one-off viewport fixes. */
+
+/* Every pane is its own responsive environment. Browser viewport breakpoints
+   are not enough because a 1600px screen can still contain a 350px pane. */
+.terminal-root [data-testid^='workspace-pane-'] {
+  container-type: inline-size;
+  container-name: lios-pane;
+}
+
+/* The pane body is the canonical scroll owner. Previously the shell clipped
+   content with overflow:hidden, making tables/cards appear missing. */
+.terminal-root .lios-pane-content {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.terminal-root .lios-pane-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Wide analytical tables should scroll instead of compressing columns until
+   labels overlap or values become unreadable. */
+.terminal-root .lios-pane-content table {
+  min-width: 100%;
+}
+
+.terminal-root .lios-pane-content :where(.overflow-x-auto, .overflow-auto) {
+  scrollbar-width: thin;
+}
+
+/* Split-pane chrome: one title, one object, essential controls only. */
+.terminal-root [data-pane-compact='true'] .lios-pane-header {
+  min-height: 28px !important;
+  height: 28px !important;
+  gap: 5px;
+  padding-inline: 7px !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .018) !important;
+}
+
+.terminal-root [data-pane-compact='true'] .lios-pane-title {
+  font-size: 9px !important;
+  font-weight: 650;
+}
+
+.terminal-root [data-pane-compact='true'] .lios-symbol {
+  max-width: 84px;
+  padding-inline: 5px;
+}
+
+.terminal-root [data-pane-compact='true'] .lios-pane-tool {
+  width: 22px;
+  min-width: 22px;
+  min-height: 20px;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+}
+
+/* The focused pane keeps intelligence context but starts collapsed in split
+   mode. Trust/evidence remain visible; secondary actions are one click away. */
+.terminal-root .lios-v5-hero-bar[data-hero-compact='true'] {
+  background: #080808;
+  box-shadow: inset 0 -1px 0 hsl(var(--border) / .55);
+}
+
+.terminal-root .lios-v5-hero-bar[data-hero-compact='true'] .lios-v5-hero-action,
+.terminal-root .lios-v5-hero-bar[data-hero-compact='true'] .lios-v5-hero-status {
+  min-height: 20px;
+  height: 20px;
+  padding-inline: 5px;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+/* Resize targets are visually quiet but easier to acquire than a literal
+   1px line. The pseudo-element supplies the hit area without stealing space. */
+.terminal-root .lios-workspace-resize-handle {
+  position: relative;
+  z-index: 9;
+  opacity: .48;
+}
+
+.terminal-root .lios-workspace-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.terminal-root .lios-workspace-resize-handle:hover,
+.terminal-root .lios-workspace-resize-handle:focus-visible,
+.terminal-root .lios-workspace-resize-handle[data-resize-handle-active] {
+  opacity: 1;
+}
+
+/* Pane-sized responsiveness. This fixes the common failure where a dashboard
+   remains 4–6 columns wide simply because the browser itself is desktop-sized. */
+@container lios-pane (max-width: 760px) {
+  .lios-pane-content :where(.grid.grid-cols-4, .grid.grid-cols-5, .grid.grid-cols-6) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .lios-pane-content :where([data-workstation-toolbar], .lios-story-context) {
+    flex-wrap: wrap;
+  }
+
+  .lios-pane-content [data-workstation-toolbar] {
+    height: auto !important;
+    min-height: 30px;
+    row-gap: 4px;
+  }
+}
+
+@container lios-pane (max-width: 520px) {
+  .lios-pane-content :where(.grid.grid-cols-3, .grid.grid-cols-4, .grid.grid-cols-5, .grid.grid-cols-6) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .lios-pane-content :where(.gap-4, .gap-5, .gap-6) {
+    gap: 10px;
+  }
+
+  .lios-pane-content :where(.p-5, .p-6) {
+    padding: 12px;
+  }
+}
+
+/* A narrow device gets a pane switcher rather than four unusably small panes. */
+.lios-mobile-pane-switcher {
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+
+.lios-mobile-pane-switcher::-webkit-scrollbar {
+  display: none;
+}
+
+/* Keep fixed/absolute panel internals from escaping their pane when they use
+   the pane as a positioning context. */
+.terminal-root [data-testid^='workspace-pane-'] .lios-pane-content {
+  position: relative;
+  isolation: isolate;
+}
+
+/* -------------------------------------------------------------------------
+   PANEL DECLUTTER PASS
+   The rules below are view-specific on purpose. They keep each panel's core
+   analytical job visible while removing repeated chrome when the pane itself
+   is narrow. The viewport can stay desktop-sized; the pane decides.
+   ------------------------------------------------------------------------- */
+
+/* Shared narrow-panel rhythm. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-view] .lios-pane-content :where(.panel-header, [data-workstation-toolbar]) {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .terminal-root [data-view] .lios-pane-content :where(.px-6) {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .terminal-root [data-view] .lios-pane-content :where(.py-4) {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+}
+
+/* MARKET — session clocks become a concise status strip in split panes, and
+   the tracker band no longer consumes 30% of every supporting pane. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child {
+    min-height: 30px;
+    gap: 8px !important;
+    padding: 4px 8px !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child > div:last-child {
+    gap: 5px !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child > div:last-child > div {
+    min-width: 72px !important;
+    padding: 3px 6px !important;
+    border-radius: 3px !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child > div:last-child > div > div:nth-child(2),
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child > div:last-child > div > div:nth-child(3) {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:nth-child(2) {
+    height: 148px !important;
+    min-height: 120px;
+    max-height: 168px;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:nth-child(3) > div:first-child > div:first-child > div:nth-child(2) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:nth-child(3) button {
+    white-space: nowrap;
+  }
+}
+
+@container lios-pane (max-width: 520px) {
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:first-child > div:first-child {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:nth-child(2) {
+    height: 126px !important;
+  }
+
+  .terminal-root [data-view='market'] .lios-pane-content > div > div:nth-child(3) .w-48 {
+    width: 130px !important;
+  }
+}
+
+/* QUOTE — the order book is supporting context, not a second hero. In a
+   narrow pane it moves below the price block and grids collapse early. */
+@container lios-pane (max-width: 900px) {
+  .terminal-root [data-view='quote'] .lios-pane-content > div > div:first-child {
+    flex-direction: column !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content > div > div:first-child > div:last-child {
+    width: 100% !important;
+    max-height: 150px;
+    overflow: hidden;
+    border-left: 0 !important;
+    border-top: 1px solid hsl(var(--border) / .55) !important;
+    padding-left: 0 !important;
+    padding-top: 8px !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .text-4xl {
+    font-size: 2rem !important;
+    line-height: 1.05 !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .text-xl {
+    font-size: 1rem !important;
+  }
+}
+
+@container lios-pane (max-width: 620px) {
+  .terminal-root [data-view='quote'] .lios-pane-content .grid.grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .col-span-2 {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content > div > div:first-child > div:last-child {
+    max-height: 124px;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content .text-4xl {
+    font-size: 1.65rem !important;
+  }
+
+  .terminal-root [data-view='quote'] .lios-pane-content :where(.p-4) {
+    padding: 10px !important;
+  }
+}
+
+/* NEWS — a News pane inside a split workspace must not create another tiny
+   side-by-side workspace. Below 820px, list and read-through stack vertically. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-view='news'] .lios-pane-content [data-panel-group] {
+    flex-direction: column !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content [data-panel] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content .lios-readthrough-handle {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 1px !important;
+    min-height: 1px !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content > div > div:first-child > div:nth-child(2) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    gap: 5px !important;
+    padding: 4px 8px !important;
+    scrollbar-width: thin;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content > div > div:first-child > div:nth-child(3) {
+    padding: 4px 8px !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content [data-testid^='news-item-'] {
+    padding: 10px !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content article {
+    padding: 12px !important;
+  }
+}
+
+@container lios-pane (max-width: 520px) {
+  .terminal-root [data-view='news'] .lios-pane-content [data-testid^='news-item-'] .line-clamp-3 {
+    -webkit-line-clamp: 1;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content article h2 {
+    font-size: .9rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .terminal-root [data-view='news'] .lios-pane-content article .lios-story-context {
+    gap: 4px;
+    padding: 6px 0 8px;
+  }
+}
+
+/* WATCHLIST — keep the grid presets accessible, but move them out of the title
+   row when the pane is narrow. The optional name field yields to the ticker. */
+@container lios-pane (max-width: 680px) {
+  .terminal-root [data-view='watchlist'] .lios-pane-content > div > div:first-child [aria-label='Watchlist view preset'] {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='watchlist'] .lios-pane-content > div > div[aria-label='Watchlist view preset'] {
+    display: flex !important;
+  }
+
+  .terminal-root [data-view='watchlist'] .lios-pane-content > div > :where(div, form) {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+@container lios-pane (max-width: 480px) {
+  .terminal-root [data-view='watchlist'] .lios-pane-content form input:nth-of-type(2) {
+    display: none !important;
+  }
+
+  .terminal-root [data-view='watchlist'] .lios-pane-content .lios-analytical-grid-header,
+  .terminal-root [data-view='watchlist'] .lios-pane-content .lios-analytical-grid-row {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+/* FINANCIAL STATEMENTS — preserve the spreadsheet model, but turn the four
+   stacked toolbars into compact scrollable control bands in supporting panes. */
+@container lios-pane (max-width: 820px) {
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div:first-child,
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div:nth-of-type(4),
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div:nth-of-type(5) {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div:first-child {
+    padding: 6px 10px !important;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content table th:first-child {
+    min-width: 170px !important;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div.flex-1.overflow-auto {
+    padding: 10px !important;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div:last-child {
+    display: none !important;
+  }
+}
+
+@container lios-pane (max-width: 560px) {
+  .terminal-root [data-view='financialstatements'] .lios-pane-content table th:first-child {
+    min-width: 145px !important;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content table :where(th, td) {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .terminal-root [data-view='financialstatements'] .lios-pane-content > div > div[role='status'] {
+    max-height: 30px;
+    overflow: hidden;
+    padding: 5px 10px !important;
+  }
+}
+
+/* Dense model/risk/portfolio tools frequently contain two-column parameter
+   cards that become unreadable around 500px. Collapse only these analytical
+   families instead of globally flattening every two-column layout. */
+@container lios-pane (max-width: 520px) {
+  .terminal-root :is(
+    [data-view='portfolio'],
+    [data-view='portfoliostress'],
+    [data-view='riskcalc'],
+    [data-view='advancedrisk'],
+    [data-view='quantworkbench'],
+    [data-view='assetpricing'],
+    [data-view='backtesting'],
+    [data-view='montecarlo'],
+    [data-view='correlation'],
+    [data-view='options']
+  ) .lios-pane-content .grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Very short workspaces (small laptop + browser chrome) need every pixel. */
+@media (max-height: 760px) {
+  .terminal-root [data-pane-compact='true'] .lios-pane-header {
+    min-height: 26px !important;
+    height: 26px !important;
+  }
+
+  .terminal-root .lios-v5-hero-bar[data-hero-compact='true'] {
+    min-height: 25px !important;
+    height: 25px !important;
+  }
+}

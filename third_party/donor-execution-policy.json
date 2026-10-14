@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "1",
+  "status": "owner_approved_canonical_execution_amendment",
+  "effectiveDate": "2026-10-07",
+  "authorityDocument": "docs/technical/LIOS_FOUNDATION_LOCK_DONOR_EXECUTION_AMENDMENT.md",
+  "canonicalParents": [
+    "docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md",
+    "docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md",
+    "docs/technical/LIOS_DONOR_IMPORT_REUSE_POLICY.md",
+    "docs/technical/CAPABILITY_ASSIMILATION_WORKSTREAM.md",
+    "AGENTS.md",
+    "GitHub issue #192"
+  ],
+  "program": {
+    "phases": ["SI-01", "SI-02", "SI-03", "SI-04", "SI-05", "SI-06", "SI-07"],
+    "foundationEpoch": ["SI-01", "SI-02", "SI-03", "SI-04"],
+    "expansionEpoch": ["SI-05", "SI-06", "SI-07"],
+    "foundationLockRequires": ["SP-01", "SP-02", "SP-03", "SP-04"],
+    "defaultPriorityOverlay": [
+      "F0",
+      "SP-01",
+      "SP-02",
+      "SP-03",
+      "SP-04",
+      "FOUNDATION_LOCK",
+      "SP-05",
+      "SP-06",
+      "SP-07",
+      "V4",
+      "P14",
+      "PRODUCTION"
+    ]
+  },
+  "donorDirective": {
+    "baselineDonorCount": 92,
+    "baselineAccountingMustRemainStable": true,
+    "baselineIsAnalysisObligation": true,
+    "baselineIsOpportunitySet": true,
+    "installationQuota": false,
+    "useSuitableBaselineDonorsAggressively": true,
+    "continuousNewDonorDiscoveryAuthorized": true,
+    "priorOwnerPermissionRequiredForNewDonorDiscovery": false,
+    "priorOwnerPermissionRequiredForUsingNewSuitableDonorInAuthorizedWorkstream": false,
+    "priorOwnerPermissionRequiredForForkingSuitableDonorInAuthorizedWorkstream": false,
+    "priorOwnerPermissionRequiredForUsingSuitableDocumentedDonor": false,
+    "repositoryRecordingRequiredForMaterialUse": true,
+    "buildNewLast": true,
+    "rejectOnlyWithEvidence": true,
+    "forkCountLimit": null,
+    "layerClassificationIsPermissionBoundary": false
+  },
+  "layers": {
+    "controlledMirrors": {
+      "description": "Forked or deliberately maintained donor repositories used for stable inspection, modification, synchronization, patching, experimentation or strategic multi-phase reuse.",
+      "useRestricted": false,
+      "examples": [
+        "OpenClaw",
+        "browser-use",
+        "CUA",
+        "GraphRAG",
+        "Qlib",
+        "FinRobot",
+        "TradingAgents",
+        "FinGPT",
+        "LangAlpha",
+        "dexter-js"
+      ]
+    },
+    "documentedOnDemand": {
+      "description": "All other documented donors. They may be inspected, cloned, forked, imported, adapted, modified, repurposed, combined, used as runtimes, validators or challengers whenever useful and compliant.",
+      "useRestricted": false,
+      "mayFork": true,
+      "mayPromoteToControlledMirror": true
+    }
+  },
+  "tiers": {
+    "A": "strategic_or_controlled_mirror",
+    "B": "approved_or_ready_donor",
+    "C": "specialist_or_triggered_donor",
+    "D": "reference_validator_or_challenger",
+    "E": "restricted_or_rejected_with_evidence"
+  },
+  "reuseDepths": [
+    "idea_or_pattern",
+    "algorithm",
+    "library",
+    "component",
+    "runtime",
+    "challenger_or_validator"
+  ],
+  "mandatorySearchOrder": [
+    "inspect_current_lios",
+    "search_controlled_mirrors",
+    "search_92_baseline",
+    "search_additional_external_donors",
+    "analyze",
+    "decompose",
+    "direct_reuse",
+    "import",
+    "adapt",
+    "modify",
+    "repurpose",
+    "combine",
+    "generalize",
+    "innovate",
+    "wrap",
+    "build_new_last"
+  ],
+  "mandatorySafeguards": [
+    "exact_license_and_rights_check_before_import",
+    "provenance_and_required_notices",
+    "canonical_lios_authority_preserved",
+    "security_privacy_permission_and_secret_policy_preserved",
+    "lios_product_identity_preserved",
+    "lios_validation_required_beyond_upstream_tests"
+  ],
+  "forbiddenDuplicateAuthorities": [
+    "gateway",
+    "runtime",
+    "router",
+    "database_or_persistence_authority",
+    "project_authority",
+    "conversation_authority",
+    "working_context_authority",
+    "durable_memory_authority",
+    "artifact_authority",
+    "entity_or_instrument_authority",
+    "provider_registry",
+    "deterministic_finance_engine",
+    "permission_or_authentication_authority",
+    "plugin_mcp_or_skills_authority"
+  ],
+  "materialDonorRecordRequires": [
+    "donor_name",
+    "upstream_repository",
+    "mirror_repository_if_created",
+    "exact_commit_tag_or_version",
+    "relevant_paths",
+    "license_and_rights_posture",
+    "capability",
+    "canonical_lios_owner",
+    "reuse_method_or_disposition",
+    "material_modifications",
+    "dependencies",
+    "security_privacy_implications",
+    "packaging_provisioning_implications",
+    "validation_evidence",
+    "si_workstream_contribution",
+    "shipping_point_contribution_if_applicable"
+  ],
+  "foundationRegressionJourneys": [
+    "R-SP01_secure_runtime",
+    "R-SP02_agentic_operation",
+    "R-SP03_research_intelligence",
+    "R-SP04_professional_work"
+  ],
+  "registryRelationship": {
+    "supplements": [
+      "third_party/capability-assimilation.json",
+      "third_party/components.json",
+      "third_party/p11-candidates.json"
+    ],
+    "replacesExistingRegistries": false,
+    "newDonorsMustBeRecorded": true,
+    "newDonorsSilentlyCountedInsideHistorical92": false
+  }
+}

@@ -1,0 +1,740 @@
+{
+  "schemaVersion": "1",
+  "status": "governed_candidate_inventory_non_bundled",
+  "effectiveDate": "2026-09-23",
+  "branch": "main",
+  "policy": {
+    "decisions": [
+      "library",
+      "vendor",
+      "sidecar",
+      "connector",
+      "reference",
+      "reject"
+    ],
+    "noAdaptLater": true,
+    "donorNamesHiddenFromNormalUX": true,
+    "coreStateOwnedByLiOS": true,
+    "exactReleasePinRequiredBeforeBundling": true,
+    "codeRightsSeparateFromDataApiModelAssetTrademarkRights": true,
+    "inventoryDoesNotImplyBundling": true,
+    "optionalDonorRequiresSignedPackGate": true,
+    "decisionMeaning": "Target candidate integration mode, not current imported/bundled status. Current donor truth remains in capability-assimilation.json, components.json and release inventories; this inventory bundles zero P11 donors.",
+    "launchMeaning": "Target launch candidacy only, not installed, provisioned, user-accessible, numerically qualified or Shipping Point accepted.",
+    "observedCommitMeaning": "Historical research observation, not an approved import/release pin. Preserve upstream-lock.json pins; reconcile exact selected package/release source, paths and rights before import, especially skfolio, LEAN, EdgarTools, Arelle, Docling, Arrow and Polars.",
+    "brokerWrites": "Prohibited in current product scope; user confirmation, candidate connector mode and manifest permission declarations do not unlock orders.",
+    "shippingEvidence": "SP-01 through SP-07 require a real MSJ, target execution where applicable, no fake success, regression protection and exact evidence under SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md; no acceptance is inferred here."
+  },
+  "packs": [
+    {
+      "id": "finance",
+      "name": "Core Finance Pack"
+    },
+    {
+      "id": "portfolio",
+      "name": "Portfolio Pack"
+    },
+    {
+      "id": "pricing-risk",
+      "name": "Pricing & Risk Pack"
+    },
+    {
+      "id": "quant-forecast",
+      "name": "Quant & Forecast Pack"
+    },
+    {
+      "id": "strategy-backtest",
+      "name": "Strategy & Backtest Pack"
+    },
+    {
+      "id": "research-documents",
+      "name": "Research & Documents Pack"
+    },
+    {
+      "id": "data-lab",
+      "name": "Data Lab Pack"
+    },
+    {
+      "id": "market-data",
+      "name": "Market Data Pack"
+    },
+    {
+      "id": "broker-execution",
+      "name": "Broker & Execution Pack"
+    },
+    {
+      "id": "reporting-modeling",
+      "name": "Reporting & Modeling Pack"
+    },
+    {
+      "id": "local-ai",
+      "name": "Local AI Pack"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "finance-toolkit",
+      "repository": "JerBouma/FinanceToolkit",
+      "observedCommit": "9fa19f9e97fee229dad4d65cf9c1448597af5df5",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "finance",
+      "launch": true,
+      "roles": [
+        "fundamentals",
+        "ratios",
+        "valuation",
+        "performance",
+        "risk",
+        "econometrics"
+      ],
+      "notes": "LiOS Data Fabric supplies canonical data; upstream provider assumptions are not authoritative."
+    },
+    {
+      "id": "statsmodels",
+      "repository": "statsmodels/statsmodels",
+      "observedCommit": "2cb70c2ce39740b9b8fd848578ee97a0fdd06573",
+      "license": "BSD-3-Clause",
+      "decision": "library",
+      "pack": "finance",
+      "launch": true,
+      "roles": [
+        "statistics",
+        "econometrics",
+        "time-series"
+      ]
+    },
+    {
+      "id": "skfolio",
+      "repository": "skfolio/skfolio",
+      "observedCommit": "5e7191c4795880de9d2d28c3db7c92f5dd711f91",
+      "license": "BSD-3-Clause",
+      "decision": "library",
+      "pack": "portfolio",
+      "launch": true,
+      "roles": [
+        "portfolio-optimization",
+        "risk",
+        "model-evaluation"
+      ]
+    },
+    {
+      "id": "riskfolio-lib",
+      "repository": "dcajasn/Riskfolio-Lib",
+      "observedCommit": "cea390ca45db5a971207b867f6e8c3534d8c3048",
+      "license": "BSD-3-Clause",
+      "decision": "library",
+      "pack": "portfolio",
+      "launch": true,
+      "roles": [
+        "portfolio-optimization",
+        "risk-measures"
+      ]
+    },
+    {
+      "id": "pyportfolioopt",
+      "repository": "PyPortfolio/PyPortfolioOpt",
+      "observedCommit": "a6638d2e06dae6f444fd022cfd4b3c528902a85b",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "portfolio",
+      "launch": true,
+      "roles": [
+        "efficient-frontier",
+        "black-litterman",
+        "hrp"
+      ]
+    },
+    {
+      "id": "quantstats",
+      "repository": "ranaroussi/quantstats",
+      "observedCommit": "fbd10daed0227aa0d10da6513f1b15e7e98d7fae",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "portfolio",
+      "launch": true,
+      "roles": [
+        "performance",
+        "risk-metrics"
+      ]
+    },
+    {
+      "id": "cvxpy",
+      "repository": "cvxpy/cvxpy",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "portfolio",
+      "launch": true,
+      "roles": [
+        "optimization"
+      ],
+      "notes": "Solver licenses are reviewed separately."
+    },
+    {
+      "id": "quantlib",
+      "repository": "lballabio/QuantLib",
+      "license": "QuantLib License",
+      "decision": "library",
+      "pack": "pricing-risk",
+      "launch": true,
+      "roles": [
+        "fixed-income",
+        "derivatives",
+        "curves",
+        "pricing"
+      ]
+    },
+    {
+      "id": "ore",
+      "repository": "OpenSourceRisk/Engine",
+      "observedCommit": "3d75a69087911a7e2cf1e6882da7bc27135c0762",
+      "license": "BSD-style permissive",
+      "decision": "sidecar",
+      "pack": "pricing-risk",
+      "launch": true,
+      "roles": [
+        "simulation",
+        "scenario-risk",
+        "xva",
+        "institutional-pricing"
+      ],
+      "notes": "Native/C++ sidecar; exact submodule/third-party audit required."
+    },
+    {
+      "id": "strata",
+      "repository": "OpenGamma/Strata",
+      "observedCommit": "87a3f72f910425e9c39f7ff63833ec7d7050e2aa",
+      "license": "Apache-2.0",
+      "decision": "sidecar",
+      "pack": "pricing-risk",
+      "launch": true,
+      "roles": [
+        "pricing",
+        "curves",
+        "sensitivities",
+        "risk"
+      ],
+      "notes": "JVM sidecar for selected capabilities only."
+    },
+    {
+      "id": "py-vollib",
+      "repository": "vollib/py_vollib",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "pricing-risk",
+      "launch": true,
+      "roles": [
+        "options",
+        "implied-volatility",
+        "greeks"
+      ]
+    },
+    {
+      "id": "qlib",
+      "repository": "microsoft/qlib",
+      "observedCommit": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "quant-forecast",
+      "launch": true,
+      "roles": [
+        "quant-research",
+        "ml",
+        "factor-workflows"
+      ],
+      "notes": "Isolated heavy environment; LiOS owns data/state."
+    },
+    {
+      "id": "statsforecast",
+      "repository": "Nixtla/statsforecast",
+      "observedCommit": "99f2408c20b9f0bd44d5e43f303b784f7851f900",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "quant-forecast",
+      "launch": true,
+      "roles": [
+        "forecasting"
+      ]
+    },
+    {
+      "id": "scikit-learn",
+      "repository": "scikit-learn/scikit-learn",
+      "observedCommit": "a5046923f202f84cc1617f4ea555431194c52836",
+      "license": "BSD-3-Clause",
+      "decision": "library",
+      "pack": "quant-forecast",
+      "launch": true,
+      "roles": [
+        "machine-learning"
+      ]
+    },
+    {
+      "id": "xgboost",
+      "repository": "dmlc/xgboost",
+      "observedCommit": "da00e541ee5d833bf3cc19735724b543e9e30c50",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "quant-forecast",
+      "launch": true,
+      "roles": [
+        "gradient-boosting"
+      ]
+    },
+    {
+      "id": "optuna",
+      "repository": "optuna/optuna",
+      "observedCommit": "7d08bfa1824606d7caedb80abfd8558bc63826d7",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "quant-forecast",
+      "launch": true,
+      "roles": [
+        "hyperparameter-optimization"
+      ]
+    },
+    {
+      "id": "lightgbm",
+      "repository": "microsoft/LightGBM",
+      "license": "verification_required",
+      "decision": "reference",
+      "pack": "quant-forecast",
+      "launch": false,
+      "roles": [
+        "gradient-boosting"
+      ],
+      "notes": "Not bundled in P11 launch; XGBoost covers initial capability."
+    },
+    {
+      "id": "prophet",
+      "repository": "facebook/prophet",
+      "license": "MIT",
+      "decision": "reference",
+      "pack": "quant-forecast",
+      "launch": false,
+      "roles": [
+        "forecasting"
+      ]
+    },
+    {
+      "id": "sktime",
+      "repository": "sktime/sktime",
+      "license": "BSD-3-Clause",
+      "decision": "reference",
+      "pack": "quant-forecast",
+      "launch": false,
+      "roles": [
+        "time-series-framework"
+      ]
+    },
+    {
+      "id": "lse-terminal",
+      "repository": "londonstrategicedge/lse-terminal",
+      "license": "MIT",
+      "decision": "vendor",
+      "pack": "strategy-backtest",
+      "launch": true,
+      "roles": [
+        "backtesting",
+        "indicators",
+        "local-engine"
+      ],
+      "notes": "Target vendor reuse under CA-04/P11 and existing P6-17–22/LSE assimilation ownership; current release is reference_only with no imported/adapted source paths. Revisit on a measured capability gap plus exact-path rights, upstream/conformance tests and signed-pack/product-journey evidence; target launch=true is not shipping."
+    },
+    {
+      "id": "brue",
+      "repository": "londonstrategicedge/brue",
+      "license": "MIT",
+      "decision": "vendor",
+      "pack": "strategy-backtest",
+      "launch": true,
+      "roles": [
+        "strategy-language",
+        "runtime",
+        "conformance"
+      ],
+      "notes": "Target strategy-language/runtime reuse under CA-04/P11 and P6-19–22; current brue-language release record is reference_only and no Brue source is bundled. Revisit on a measured strategy/conformance gap and qualified governed adapter. Brue Connect remains source/license-unverified and is not approved for copying or bundling; broker writes remain prohibited."
+    },
+    {
+      "id": "lean",
+      "repository": "QuantConnect/Lean",
+      "observedCommit": "b2a01cc15b09c1d448920f4af81c73f8b07ec7d4",
+      "license": "Apache-2.0",
+      "decision": "sidecar",
+      "pack": "strategy-backtest",
+      "launch": true,
+      "roles": [
+        "advanced-backtesting",
+        "multi-asset-quant"
+      ]
+    },
+    {
+      "id": "zipline-reloaded",
+      "repository": "stefan-jansen/zipline-reloaded",
+      "observedCommit": "943010b9da848e317fc520de87edade2b884d329",
+      "license": "Apache-2.0",
+      "decision": "reference",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "event-driven-backtesting"
+      ]
+    },
+    {
+      "id": "bt",
+      "repository": "pmorissette/bt",
+      "observedCommit": "b6ce09619c9b1f0a526cbe8ef79c0d47421911a7",
+      "license": "MIT",
+      "decision": "reference",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "portfolio-backtesting"
+      ]
+    },
+    {
+      "id": "edgartools",
+      "repository": "dgunning/edgartools",
+      "observedCommit": "3a468575a6d4a70d610ffe40fcf59f22906432ab",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "research-documents",
+      "launch": true,
+      "roles": [
+        "sec-filings",
+        "xbrl"
+      ]
+    },
+    {
+      "id": "arelle",
+      "repository": "Arelle/Arelle",
+      "observedCommit": "ac1d3a18c0131b51b8d781d97051f629fd8e645a",
+      "license": "Apache-2.0 core with separate included notices",
+      "decision": "library",
+      "pack": "research-documents",
+      "launch": true,
+      "roles": [
+        "xbrl-validation",
+        "taxonomy"
+      ]
+    },
+    {
+      "id": "docling",
+      "repository": "docling-project/docling",
+      "observedCommit": "52e52fd738fc04f73b4566d2a4ce0dee7cbd848e",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "research-documents",
+      "launch": true,
+      "roles": [
+        "document-parsing",
+        "pdf-tables"
+      ]
+    },
+    {
+      "id": "unstructured",
+      "repository": "Unstructured-IO/unstructured",
+      "observedCommit": "0ca5563220683953afdd47619b72a5d55ea4ddde",
+      "license": "Apache-2.0",
+      "decision": "reference",
+      "pack": "research-documents",
+      "launch": false,
+      "roles": [
+        "document-ingestion"
+      ]
+    },
+    {
+      "id": "camelot",
+      "repository": "camelot-dev/camelot",
+      "observedCommit": "a68bb9f2d1cf0cf7abbdef26a0c497ab7ded8ce8",
+      "license": "MIT",
+      "decision": "reference",
+      "pack": "research-documents",
+      "launch": false,
+      "roles": [
+        "pdf-table-extraction"
+      ]
+    },
+    {
+      "id": "pdfplumber",
+      "repository": "jsvine/pdfplumber",
+      "observedCommit": "4c64b92d5caccd71c645e98e0fabb0c4dba7ff45",
+      "license": "MIT",
+      "decision": "reference",
+      "pack": "research-documents",
+      "launch": false,
+      "roles": [
+        "pdf-extraction"
+      ]
+    },
+    {
+      "id": "duckdb",
+      "repository": "duckdb/duckdb",
+      "observedCommit": "4d95776fd7774793d7d4a8d47eca9f6d9089da09",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "data-lab",
+      "launch": true,
+      "roles": [
+        "sql",
+        "local-analytics"
+      ]
+    },
+    {
+      "id": "arrow",
+      "repository": "apache/arrow",
+      "observedCommit": "0fea33b5d2337296f742f5bc5733089560412f90",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "data-lab",
+      "launch": true,
+      "roles": [
+        "columnar-interchange",
+        "data-plane"
+      ]
+    },
+    {
+      "id": "polars",
+      "repository": "pola-rs/polars",
+      "observedCommit": "91823d4e7c70b06b1a3f520cbfe28e03a99d9167",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "data-lab",
+      "launch": true,
+      "roles": [
+        "dataframe-compute"
+      ],
+      "notes": "Activate for benchmarked workloads."
+    },
+    {
+      "id": "sqlglot",
+      "repository": "tobymao/sqlglot",
+      "observedCommit": "285f6077a4196063eb1c6c9c8fca1c56480452f0",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "data-lab",
+      "launch": true,
+      "roles": [
+        "sql-parser",
+        "transpiler"
+      ]
+    },
+    {
+      "id": "pandera",
+      "repository": "unionai-oss/pandera",
+      "observedCommit": "a16b3401e588df4a158c06cec1c672164d3e0865",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "data-lab",
+      "launch": true,
+      "roles": [
+        "schema-validation",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "ibis",
+      "repository": "ibis-project/ibis",
+      "observedCommit": "05d2b293344e86cb41c1a426071734f7e270335a",
+      "license": "Apache-2.0",
+      "decision": "reference",
+      "pack": "data-lab",
+      "launch": false,
+      "roles": [
+        "backend-neutral-analytics"
+      ]
+    },
+    {
+      "id": "datafusion",
+      "repository": "apache/datafusion",
+      "observedCommit": "a948ff63807a10dd61c3d20fd78f84ebb3e71461",
+      "license": "Apache-2.0",
+      "decision": "reference",
+      "pack": "data-lab",
+      "launch": false,
+      "roles": [
+        "arrow-query-engine"
+      ]
+    },
+    {
+      "id": "lse-data",
+      "repository": "londonstrategicedge/lse-data",
+      "license": "MIT client; hosted data rights separate",
+      "decision": "connector",
+      "pack": "market-data",
+      "launch": true,
+      "roles": [
+        "market-data",
+        "macro",
+        "options",
+        "reference"
+      ]
+    },
+    {
+      "id": "finance-database",
+      "repository": "JerBouma/FinanceDatabase",
+      "observedCommit": "d0b95bd51f9c594c81bac0b20c7ab6cbd084c51e",
+      "license": "MIT repository; dataset rights/provenance separate",
+      "decision": "reference",
+      "pack": "market-data",
+      "launch": false,
+      "roles": [
+        "universe-reference"
+      ]
+    },
+    {
+      "id": "exchange-calendars",
+      "repository": "gerrymanoim/exchange_calendars",
+      "observedCommit": "bbda29fed902374bdb75acab008f421fbd567823",
+      "license": "Apache-2.0",
+      "decision": "library",
+      "pack": "market-data",
+      "launch": true,
+      "roles": [
+        "market-calendars"
+      ]
+    },
+    {
+      "id": "ib-async",
+      "repository": "ib-api-reloaded/ib_async",
+      "observedCommit": "ab629f34c1823ea4c1542f32f07377208a86bdfd",
+      "license": "BSD-2-Clause",
+      "decision": "connector",
+      "pack": "broker-execution",
+      "launch": true,
+      "roles": [
+        "interactive-brokers"
+      ],
+      "notes": "IB API/service/data terms are separate. Read/inspect integration is a target candidate, currently unbundled; order writes are prohibited, not approval-unlocked."
+    },
+    {
+      "id": "ccxt",
+      "repository": "ccxt/ccxt",
+      "observedCommit": "3b36cf9c4e0edc530eb4c0e03765062a2dd598a9",
+      "license": "MIT",
+      "decision": "connector",
+      "pack": "broker-execution",
+      "launch": true,
+      "roles": [
+        "exchange-adapters"
+      ],
+      "notes": "Exchange API/service/data rights require separate review. Read/inspect integration is a target candidate, currently unbundled; order writes are prohibited."
+    },
+    {
+      "id": "vnpy",
+      "repository": "vnpy/vnpy",
+      "observedCommit": "fa5206fe63836f3f8cd1ebd7168fbd19a5e2ff09",
+      "license": "MIT",
+      "decision": "reference",
+      "pack": "broker-execution",
+      "launch": false,
+      "roles": [
+        "gateway-architecture"
+      ]
+    },
+    {
+      "id": "hummingbot",
+      "repository": "hummingbot/hummingbot",
+      "observedCommit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+      "license": "Apache-2.0",
+      "decision": "reference",
+      "pack": "broker-execution",
+      "launch": false,
+      "roles": [
+        "exchange-connector-architecture"
+      ]
+    },
+    {
+      "id": "xlsxwriter",
+      "repository": "jmcnamara/XlsxWriter",
+      "observedCommit": "5d4606d89a955226d2d0825a0f44309043ae7251",
+      "license": "BSD-2-Clause",
+      "decision": "library",
+      "pack": "reporting-modeling",
+      "launch": true,
+      "roles": [
+        "xlsx-export"
+      ]
+    },
+    {
+      "id": "python-docx",
+      "repository": "python-openxml/python-docx",
+      "observedCommit": "e45454602b53e8e572b179ccf1c91093ec9f4ed7",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "reporting-modeling",
+      "launch": true,
+      "roles": [
+        "docx-export"
+      ]
+    },
+    {
+      "id": "python-pptx",
+      "repository": "scanny/python-pptx",
+      "observedCommit": "278b47b1dedd5b46ee84c286e77cdfb0bf4594be",
+      "license": "MIT",
+      "decision": "library",
+      "pack": "reporting-modeling",
+      "launch": true,
+      "roles": [
+        "pptx-export"
+      ]
+    },
+    {
+      "id": "vectorbt",
+      "repository": "polakowo/vectorbt",
+      "license": "Apache-2.0 with Commons Clause",
+      "decision": "reject",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "backtesting"
+      ],
+      "notes": "Not approved for normal proprietary commercial bundling."
+    },
+    {
+      "id": "backtesting-py",
+      "repository": "kernc/backtesting.py",
+      "license": "AGPL-3.0",
+      "decision": "reject",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "backtesting"
+      ]
+    },
+    {
+      "id": "backtrader",
+      "repository": "mementum/backtrader",
+      "license": "GPL-3.0",
+      "decision": "reject",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "backtesting"
+      ]
+    },
+    {
+      "id": "freqtrade",
+      "repository": "freqtrade/freqtrade",
+      "license": "GPL-3.0",
+      "decision": "reject",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "trading"
+      ]
+    },
+    {
+      "id": "nautilus-trader",
+      "repository": "nautechsystems/nautilus_trader",
+      "license": "LGPL-3.0",
+      "decision": "reference",
+      "pack": "strategy-backtest",
+      "launch": false,
+      "roles": [
+        "trading-runtime"
+      ],
+      "notes": "No initial bundling; separate legal/distribution analysis required."
+    }
+  ]
+}

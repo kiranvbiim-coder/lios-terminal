@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "componentId": "edgartools-sec-url-adapter",
+  "status": "source_adapted_native_qualification_pending",
+  "asOfDate": "2026-10-12",
+  "canonicalOwners": [
+    "P0 SEC EDGAR connector",
+    "P7 source evidence and SEC filing retrieval"
+  ],
+  "siWorkstreams": [
+    "SI-05.28",
+    "SI-05.40"
+  ],
+  "shippingPoint": "SP-05 enabler only; acceptance not claimed",
+  "source": {
+    "repository": "dgunning/edgartools",
+    "approvedCommit": "4e817de7bf3efae44024e168754e8f5d53b1a227",
+    "license": "MIT",
+    "licenseSourcePath": "LICENSE.txt",
+    "licenseSourceBlob": "dc9079e0ebc14cc9432b5070a8a23267a399667e",
+    "licenseDestination": "third_party/licenses/edgartools-MIT.txt",
+    "noticeDestination": "THIRD_PARTY_NOTICES.md",
+    "sourcePath": "edgar/urls.py",
+    "sourceBlob": "02e17b91ce1fb7e0affc6866d484da925e7ea4a2",
+    "upstreamTestPath": "tests/core/test_urls.py",
+    "upstreamTestBlob": "42f716ddb9c8425b18e963257fef9238e6d5945a"
+  },
+  "destinations": [
+    "src/server/edgartoolsSecUrls.ts",
+    "src/server/edgartoolsSecUrls.test.ts",
+    "src/server/secEdgarData.ts",
+    "src/server/secEdgarFinancials.ts",
+    "src/server/secEdgarEntityIdentity.test.ts"
+  ],
+  "adaptedMechanics": [
+    "One canonical official SEC URL builder supports CIK zero-padding, company submissions and company-facts paths.",
+    "Archive URLs bind immutable 10-2-6 accession number and validated SEC directory filenames.",
+    "Malformed issuer/provider accession or XML filename is excluded before provider request.",
+    "Existing SEC Form 4 parsing, finite numerical models, connected source custody, fair access, rate limits, cache and entity identity remain authoritative."
+  ],
+  "nonGoals": [
+    "No donor Python runner or HTTP client",
+    "No change to SEC fair-access User-Agent or provider data rights",
+    "No XBRL numerical interpretation / tenant rights / alternate store",
+    "No company ticker inferred from CIK",
+    "No production acceptance or full-donor exhaustion"
+  ],
+  "nativeTests": {
+    "status": "pending",
+    "cases": [
+      "pure URI canonicalization and injection rejection",
+      "real P5 CIK-only connector fixture",
+      "SEC pagination and date contract",
+      "TypeScript + universal donor and OSS policy"
+    ]
+  }
+}

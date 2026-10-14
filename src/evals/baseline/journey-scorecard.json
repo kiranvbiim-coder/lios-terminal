@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-09-30T07:29:10.239Z",
+  "total": 5,
+  "passed": 5,
+  "journeys": [
+    {
+      "id": "JR01",
+      "prompt": "Research Apple",
+      "status": "must_pass",
+      "passed": true,
+      "failures": [],
+      "ms": 4,
+      "firstEventMs": 1
+    },
+    {
+      "id": "JR02",
+      "prompt": "Analyze Apple: key fundamentals, technicals and a valuation",
+      "status": "must_pass",
+      "passed": true,
+      "failures": [],
+      "ms": 1,
+      "firstEventMs": 0
+    },
+    {
+      "id": "JR03",
+      "prompt": "Research [company or ticker] using available, cited sources.",
+      "status": "must_pass",
+      "passed": true,
+      "failures": [],
+      "ms": 0,
+      "firstEventMs": 0
+    },
+    {
+      "id": "JR04",
+      "prompt": "Review [my portfolio file or connected source] for concentration, exposures, and downside risks. Ask me to select the file or source before using private data.",
+      "status": "must_pass",
+      "passed": true,
+      "failures": [],
+      "ms": 2,
+      "firstEventMs": 0
+    },
+    {
+      "id": "JR05",
+      "prompt": "Review [my portfolio file or connected source] for concentration, exposures, and downside risks. Ask me to select the file or source before using private data.",
+      "status": "must_pass",
+      "passed": true,
+      "failures": [],
+      "ms": 0,
+      "firstEventMs": 0
+    }
+  ]
+}

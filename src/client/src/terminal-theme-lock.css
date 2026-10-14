@@ -1,0 +1,503 @@
+/*
+ * LiOS exact dark theme lock
+ * Canonical background contract derived from the approved LiOS terminal reference.
+ *
+ * This file intentionally loads LAST. It is the single visual arbitration layer
+ * for shell/background surfaces so older V4/V5/V9/V10/V11 styles cannot drift
+ * the terminal into blue-black, charcoal, glossy, or gradient-heavy variants.
+ */
+
+:root,
+.dark,
+html[data-theme='dark'],
+html[data-theme='light'],
+html[data-theme='navy'],
+html[data-theme='bloomberg'] {
+  color-scheme: dark !important;
+
+  /* Exact background hierarchy */
+  --lios-bg-app: #050505;
+  --lios-bg-shell: #060606;
+  --lios-bg-panel: #080808;
+  --lios-bg-panel-2: #0a0a0a;
+  --lios-bg-elevated: #0d0d0d;
+  --lios-bg-hover: #121212;
+  --lios-bg-active: #151515;
+  --lios-bg-selected: #1a1206;
+
+  /* Exact borders */
+  --lios-border-subtle: #151515;
+  --lios-border-default: #202020;
+  --lios-border-strong: #2b2b2b;
+
+  /* Exact typography */
+  --lios-text-primary: #f2f2f2;
+  --lios-text-secondary: #a3a3a3;
+  --lios-text-muted: #666b70;
+
+  /* Brand + analytical semantics */
+  --lios-brand: #f69f0a;
+  --lios-brand-hover: #ffaf1a;
+  --lios-brand-muted: #2b1b03;
+  --lios-market-up: #2d9cdb;
+  --lios-market-down: #d4511a;
+  --lios-success: #1fcb84;
+  --lios-analytical: #8b5cf6;
+
+  /* HSL bridge for existing Tailwind/theme variables */
+  --background: 0 0% 1.96%;
+  --foreground: 0 0% 94.9%;
+  --card: 0 0% 3.14%;
+  --card-foreground: 0 0% 94.9%;
+  --card-border: 0 0% 12.55%;
+  --sidebar: 0 0% 2.35%;
+  --sidebar-foreground: 0 0% 94.9%;
+  --sidebar-border: 0 0% 8.24%;
+  --sidebar-primary: 37.88 92.91% 50.2%;
+  --sidebar-primary-foreground: 0 0% 1.96%;
+  --sidebar-accent: 0 0% 7.06%;
+  --sidebar-accent-foreground: 0 0% 94.9%;
+  --sidebar-ring: 37.88 92.91% 50.2%;
+  --popover: 0 0% 5.1%;
+  --popover-foreground: 0 0% 94.9%;
+  --popover-border: 0 0% 12.55%;
+  --primary: 37.88 92.91% 50.2%;
+  --primary-foreground: 0 0% 1.96%;
+  --secondary: 0 0% 3.92%;
+  --secondary-foreground: 0 0% 94.9%;
+  --muted: 0 0% 7.06%;
+  --muted-foreground: 210 4.67% 41.96%;
+  --accent: 0 0% 7.06%;
+  --accent-foreground: 0 0% 94.9%;
+  --input: 0 0% 12.55%;
+  --ring: 37.88 92.91% 50.2%;
+
+  /* Legacy LiOS / Limuria bridges */
+  --lios-void: 0 0% 1.96%;
+  --lios-canvas: 0 0% 3.14%;
+  --lios-raised: 0 0% 3.92%;
+  --lios-overlay: 0 0% 5.1%;
+  --lios-hover: 0 0% 7.06%;
+  --lios-hairline: 0 0% 8.24%;
+  --lios-hairline-strong: 0 0% 12.55%;
+  --lios-text: 0 0% 94.9%;
+  --lios-text-soft: 0 0% 63.92%;
+  --lios-text-dim: 210 4.67% 41.96%;
+  --lios-amber: 37.88 92.91% 50.2%;
+  --lios-cyan: 201.72 70.73% 51.76%;
+  --lios-emerald: 155.23 73.5% 45.88%;
+  --lios-red: 17.74 78.15% 46.67%;
+
+  --limuria-ink: 0 0% 1.96%;
+  --limuria-graphite-0: 0 0% 2.35%;
+  --limuria-graphite-1: 0 0% 3.14%;
+  --limuria-graphite-2: 0 0% 3.92%;
+  --limuria-graphite-3: 0 0% 5.1%;
+  --limuria-line: 0 0% 8.24%;
+  --limuria-line-strong: 0 0% 12.55%;
+  --limuria-text: 0 0% 94.9%;
+  --limuria-text-soft: 0 0% 63.92%;
+  --limuria-text-dim: 210 4.67% 41.96%;
+  --limuria-amber: 37.88 92.91% 50.2%;
+  --limuria-amber-hot: 39.04 100% 55.1%;
+  --limuria-amber-soft: 39.04 100% 55.1%;
+  --limuria-cyan: 201.72 70.73% 51.76%;
+  --limuria-green: 155.23 73.5% 45.88%;
+  --limuria-red: 17.74 78.15% 46.67%;
+
+  --up: 201.72 70.73% 51.76%;
+  --up-fg: 201.72 70.73% 51.76%;
+  --down: 17.74 78.15% 46.67%;
+  --down-fg: 17.74 78.15% 46.67%;
+  --amber: 37.88 92.91% 50.2%;
+  --cyan: 201.72 70.73% 51.76%;
+  --purple: 258.31 89.53% 66.27%;
+}
+
+html,
+body,
+#root {
+  background: var(--lios-bg-app) !important;
+  color: var(--lios-text-primary);
+}
+
+/* -------------------------------------------------------------------------
+   APP + SHELL
+   ------------------------------------------------------------------------- */
+
+.terminal-root {
+  background: var(--lios-bg-app) !important;
+  background-image: none !important;
+  color: var(--lios-text-primary);
+}
+
+.terminal-root::before,
+.terminal-root::after {
+  background: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+}
+
+.terminal-root > header,
+.terminal-root > header.h-9,
+.terminal-root [data-testid='terminal-tab-bar'],
+.terminal-root [data-testid='context-ribbon'],
+.terminal-root > div:has(> [aria-label='Analytical history']) {
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root aside[aria-label='LIOS primary product navigation'] {
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root main,
+.terminal-root .lios-pane-content {
+  background-color: var(--lios-bg-app) !important;
+}
+
+/* Keep the approved amber wordmark block exact and flat. */
+.terminal-root > header > div:first-child,
+.terminal-root > header.h-9 > div:first-child {
+  background: var(--lios-brand) !important;
+  background-image: none !important;
+  border-color: rgb(246 159 10 / .35) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root > header > div:first-child::after,
+.terminal-root > header.h-9 > div:first-child::after {
+  color: var(--lios-bg-app) !important;
+}
+
+/* -------------------------------------------------------------------------
+   WORKSPACE + PANELS
+   ------------------------------------------------------------------------- */
+
+.terminal-root [data-testid^='workspace-pane-'] {
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .012) !important;
+}
+
+.terminal-root [data-testid^='workspace-pane-'][data-focused='true'] {
+  border-color: rgb(246 159 10 / .32) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / .018),
+    inset 0 0 0 1px rgb(246 159 10 / .035) !important;
+}
+
+.terminal-root .lios-pane-header,
+.terminal-root [data-institutional-header],
+.terminal-root [data-workstation-toolbar] {
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root [data-institutional-shell],
+.terminal-root [data-workstation-overview],
+.terminal-root [data-institutional-stage] {
+  background-color: var(--lios-bg-panel) !important;
+}
+
+.terminal-root [data-institutional-nav] {
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.terminal-root [data-institutional-nav-item]:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+.terminal-root [data-institutional-nav-item][aria-current='page'] {
+  background: var(--lios-bg-selected) !important;
+  border-bottom-color: var(--lios-brand) !important;
+  color: var(--lios-brand-hover) !important;
+}
+
+.lios-v4-surface,
+.terminal-root .lios-v4-surface {
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.lios-v4-raised,
+.terminal-root .lios-v4-raised {
+  background: var(--lios-bg-panel-2) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.lios-v4-overlay,
+.terminal-root .lios-v4-overlay,
+.terminal-root .lios-research-tray,
+.terminal-root .lios-immersive-dock,
+.terminal-root [role='dialog'],
+.terminal-root [data-radix-popper-content-wrapper] > * {
+  background: var(--lios-bg-elevated) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: 0 18px 48px rgb(0 0 0 / .55) !important;
+  backdrop-filter: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   PHASE 1/2/3 EXPERIENCE SURFACES
+   ------------------------------------------------------------------------- */
+
+.terminal-root [data-testid='experience-shell'] {
+  background: var(--lios-bg-app) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root [data-testid='experience-shell'] > header,
+.terminal-root [data-testid='experience-shell'] > nav {
+  background: var(--lios-bg-shell) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.terminal-root .lios-phase1-panel,
+.terminal-root [data-testid='experience-shell'] section,
+.terminal-root .lios-phase2-explore-results,
+.terminal-root .lios-phase2-explore-selection,
+.terminal-root .lios-phase2-explore-quick,
+.terminal-root .lios-phase2-workbench-current,
+.terminal-root .lios-phase2-workbench-scenes,
+.terminal-root .lios-phase2-workbench-next {
+  background: var(--lios-bg-panel) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root .lios-phase2-explore-hero,
+.terminal-root .lios-phase2-workbench,
+.terminal-root .lios-phase2-workbench-hero {
+  background: var(--lios-bg-app) !important;
+  background-image: none !important;
+}
+
+.terminal-root .lios-phase2-explore-hero,
+.terminal-root .lios-phase2-workbench-hero {
+  border-color: var(--lios-border-default) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+.terminal-root .lios-phase2-explore-search {
+  background: var(--lios-bg-panel-2) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-default) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+.terminal-root .lios-phase2-explore-result,
+.terminal-root .lios-phase2-explore-quick-action,
+.terminal-root .lios-phase2-workbench-action-list > button {
+  background: var(--lios-bg-panel-2) !important;
+  background-image: none !important;
+  border-color: var(--lios-border-subtle) !important;
+}
+
+.terminal-root .lios-phase2-explore-result:hover,
+.terminal-root .lios-phase2-explore-quick-action:hover:not(:disabled),
+.terminal-root .lios-phase2-workbench-action-list > button:hover {
+  background: var(--lios-bg-hover) !important;
+  border-color: var(--lios-border-strong) !important;
+}
+
+.terminal-root .lios-phase2-explore-result[data-selected='true'],
+.terminal-root .lios-phase2-explore-result[data-active='true'] {
+  background: var(--lios-bg-selected) !important;
+  border-color: rgb(246 159 10 / .48) !important;
+  border-left-color: var(--lios-brand) !important;
+}
+
+/* -------------------------------------------------------------------------
+   FUSION / MARKET EXPERIENCE
+   ------------------------------------------------------------------------- */
+
+.terminal-root .fusion-market-hero,
+.terminal-root .fusion-hero-main,
+.terminal-root .fusion-hero-side,
+.terminal-root .fusion-market-canvas,
+.terminal-root .fusion-canvas-header,
+.terminal-root .fusion-canvas-panel,
+.terminal-root .fusion-section,
+.terminal-root .fusion-metric,
+.terminal-root .fusion-index-card,
+.terminal-root .fusion-continuity-card,
+.terminal-root .fusion-pulse-card {
+  background-image: none !important;
+}
+
+.terminal-root .fusion-market-hero,
+.terminal-root .fusion-market-canvas {
+  background: var(--lios-bg-app) !important;
+  border-color: var(--lios-border-default) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root .fusion-hero-main,
+.terminal-root .fusion-hero-side,
+.terminal-root .fusion-canvas-header {
+  background: var(--lios-bg-shell) !important;
+}
+
+.terminal-root .fusion-section,
+.terminal-root .fusion-metric,
+.terminal-root .fusion-canvas-panel,
+.terminal-root .fusion-index-card,
+.terminal-root .fusion-continuity-card,
+.terminal-root .fusion-pulse-card {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+.terminal-root .fusion-index-card:hover,
+.terminal-root .fusion-continuity-card:hover,
+.terminal-root .fusion-pulse-card:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+/* -------------------------------------------------------------------------
+   TABLES / FORMS / NAVIGATION
+   ------------------------------------------------------------------------- */
+
+.terminal-root table thead th {
+  background: var(--lios-bg-panel-2) !important;
+  color: var(--lios-text-secondary) !important;
+  border-color: var(--lios-border-subtle) !important;
+  box-shadow: inset 0 -1px 0 var(--lios-border-subtle) !important;
+}
+
+.terminal-root table tbody tr {
+  background-color: transparent;
+}
+
+.terminal-root table tbody tr:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+.terminal-root table :is(td, th),
+.terminal-root .tabular-nums,
+.terminal-root [data-financial-value] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.terminal-root :where(input, textarea, select) {
+  background-color: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary) !important;
+  caret-color: var(--lios-brand);
+}
+
+.terminal-root :where(input, textarea, select):hover {
+  border-color: var(--lios-border-strong) !important;
+}
+
+.terminal-root :where(button, input, textarea, select):focus-visible {
+  outline: 1px solid var(--lios-brand) !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 2px rgb(246 159 10 / .10) !important;
+}
+
+.terminal-root [aria-current='page'],
+.terminal-root [aria-selected='true'] {
+  --tw-ring-color: rgb(246 159 10 / .18);
+}
+
+/* -------------------------------------------------------------------------
+   TEXT + MARKET SEMANTICS
+   ------------------------------------------------------------------------- */
+
+.terminal-root .text-foreground {
+  color: var(--lios-text-primary) !important;
+}
+
+.terminal-root .text-muted-foreground {
+  color: var(--lios-text-muted) !important;
+}
+
+.terminal-root .text-up,
+.terminal-root .text-cyan-300,
+.terminal-root .text-cyan-200 {
+  color: var(--lios-market-up) !important;
+}
+
+.terminal-root .text-down {
+  color: var(--lios-market-down) !important;
+}
+
+.terminal-root .text-amber-300,
+.terminal-root .text-amber-200 {
+  color: var(--lios-brand-hover) !important;
+}
+
+.terminal-root .text-emerald-300,
+.terminal-root .text-green-300 {
+  color: var(--lios-success) !important;
+}
+
+/* -------------------------------------------------------------------------
+   SCROLLBARS + MOTION
+   ------------------------------------------------------------------------- */
+
+.terminal-root,
+.terminal-root * {
+  scrollbar-color: var(--lios-border-strong) var(--lios-bg-app);
+}
+
+.terminal-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-root ::-webkit-scrollbar-track {
+  background: var(--lios-bg-app);
+}
+
+.terminal-root ::-webkit-scrollbar-thumb {
+  background: var(--lios-border-strong);
+  border: 2px solid var(--lios-bg-app);
+}
+
+.terminal-root ::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+.terminal-root button:not(:disabled),
+.terminal-root a,
+.terminal-root input,
+.terminal-root select,
+.terminal-root textarea {
+  transition-duration: 140ms;
+  transition-timing-function: ease;
+}
+
+/* Accessibility: retain exact palette while reducing movement. */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-root *,
+  .terminal-root *::before,
+  .terminal-root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

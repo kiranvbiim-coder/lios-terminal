@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { matchSecTickers } from "./instrumentSearchIndexStore";
+
+const FIXTURE_TICKERS = [
+  { cik: "0000320193", ticker: "AAPL", name: "Apple Inc." },
+  { cik: "0000789019", ticker: "MSFT", name: "Microsoft Corp" },
+  { cik: "0001652044", ticker: "GOOGL", name: "Alphabet Inc." },
+];
+
+test("matchSecTickers matches by ticker substring", () => {
+  const results = matchSecTickers(FIXTURE_TICKERS, "AAPL", {});
+  assert.equal(results.length, 1);
+  assert.equal(results[0].symbol, "AAPL");
+  assert.equal(results[0].canonical, false, "a live SEC fallback hit is provisional, never silently canonical");
+  assert.equal(results[0].source, "sec_edgar");
+});
+
+test("matchSecTickers matches by company name substring, case-insensitively", () => {
+  const results = matchSecTickers(FIXTURE_TICKERS, "alphabet", {});
+  assert.equal(results.length, 1);
+  assert.equal(results[0].symbol, "GOOGL");
+});
+
+test("matchSecTickers returns no matches for an unrelated query, without throwing", () => {
+  assert.deepEqual(matchSecTickers(FIXTURE_TICKERS, "ZZZNOTHING", {}), []);
+});
+
+test("matchSecTickers returns [] for an empty/whitespace query rather than the entire universe", () => {
+  assert.deepEqual(matchSecTickers(FIXTURE_TICKERS, "   ", {}), []);
+});
+
+test("matchSecTickers respects the limit option", () => {
+  const manyTickers = Array.from({ length: 50 }, (_, i) => ({ cik: String(i), ticker: `ACME${i}`, name: "Acme Holdings" }));
+  const results = matchSecTickers(manyTickers, "ACME", { limit: 5 });
+  assert.equal(results.length, 5);
+});
+
+test("matchSecTickers carries the real CIK as a provider_id identifier", () => {
+  const results = matchSecTickers(FIXTURE_TICKERS, "MSFT", {});
+  assert.ok(results[0].identifiers.some((i) => i.type === "provider_id" && i.value === "0000789019" && i.provider === "sec_edgar"));
+});

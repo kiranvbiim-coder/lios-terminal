@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "componentId": "finrobot-v2-financial-audit-challenger",
+  "status": "code_integrated_v1_pass",
+  "asOfDate": "2026-10-11",
+  "canonicalOwners": ["P11", "P7"],
+  "siWorkstreams": ["SI-05.24", "SI-05.40"],
+  "shippingTarget": "SP-05 direct enabler; no Shipping Point acceptance",
+  "source": {
+    "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+    "controlledMirror": "kiranvbiim-coder/FinRobot",
+    "approvedSourceCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+    "license": "Apache-2.0",
+    "licenseBlobSha": "6cc0d28c44e482825bba73c84761e3d65f138f42",
+    "noticeBlobSha": "4ad1671f14994630695c91b14ee7cfa14cacb6af",
+    "licenseDestination": "third_party/licenses/finrobot-Apache-2.0.txt",
+    "noticeDestination": "third_party/licenses/finrobot-NOTICE.txt"
+  },
+  "selectedPackage": "finrobot_desktop/finrobot/engine/compute/operators/audit/",
+  "reuseDisposition": ["ADAPT", "REFERENCE_VALIDATOR"],
+  "sourcePaths": [
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/currency_caliber.py", "blobSha": "347cf502a35aa08f6349991ae6eafca71775e171"},
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/ev_bridge.py", "blobSha": "de2c8b9d5f485bd4d4efe0a9aba5084efdb20e"},
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/sector_sign.py", "blobSha": "72260597799e11d0880c3e33c713e2ff04230c26"},
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/ttm_period.py", "blobSha": "04902ed8fba74f9985f808f676ca7db0f6ec3de7"},
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/narrative_divergence.py", "blobSha": "5a25d0fdaddeb6586c76172120e57a9aefbdf82f"},
+    {"path": "finrobot_desktop/finrobot/engine/compute/operators/audit/narrative_numeric_grounding.py", "blobSha": "f0b59c35ff736640544e8ab117e1e0d10e742096"}
+  ],
+  "destinationPaths": [
+    "src/python-service/finrobot_audit_challenger.py",
+    "src/python-service/test_finrobot_audit_challenger.py"
+  ],
+  "upstreamTestsAdapted": [
+    {"path": "finrobot_desktop/tests/unit/test_audit_ev_bridge.py", "blobSha": "813b4ce5c21ea5c0c18b6a8837f6a9d903d883b1"},
+    {"path": "finrobot_desktop/tests/unit/test_audit_sector_sign.py", "blobSha": "20be7e4f06751893845e88278e760b126ed3ef7a"},
+    {"path": "finrobot_desktop/tests/unit/test_audit_ttm_period.py", "blobSha": "2fe90cf961b1c61b32b45121319787f46109ecac"},
+    {"path": "finrobot_desktop/tests/unit/test_narrative_divergence.py", "blobSha": "edf0a3690144ab0dc4b2efe0e6110517c98f6f72"},
+    {"path": "finrobot_desktop/tests/unit/test_narrative_numeric_grounding.py", "blobSha": "18d41efa4fe102e6fbeab8cbfbbb87f5c85e9a34"}
+  ],
+  "authoritySubstitutions": [
+    "FinRobot FinancialData/ThesisResult/Finding models are not imported; bounded LiOS scalar/list inputs and AuditFinding are used.",
+    "P11 remains the sole canonical deterministic finance calculation authority; this component only audits/challenges outputs and input posture.",
+    "P7 remains the source/evidence/truth authority; narrative numeric presence never elevates a number to observed/cited/entitled truth.",
+    "No FinRobot provider/cache/server/route/store/agent/orchestrator/action authority is imported."
+  ],
+  "dependencyDisposition": {
+    "retained": ["Python standard library only: math, re, dataclasses, datetime, typing"],
+    "removed": [
+      "FinRobot FinancialData and ThesisResult models",
+      "FinRobot provider/cache/data normalization stack",
+      "FastAPI/server/routes/auth/secret stores",
+      "AutoGen/OpenAI/LLM agent runtime",
+      "SQLAlchemy/audit/run persistence",
+      "Financial Modeling Prep and other provider dependencies",
+      "report/office asset stack",
+      "backtest/broker execution paths"
+    ],
+    "newRuntimeDependencies": []
+  },
+  "materialModifications": [
+    "Flattened donor model objects into bounded explicit LiOS-owned inputs.",
+    "Added fail-closed finite-number validation so NaN/Infinity cannot produce financial findings.",
+    "Preserved mixed-currency, EV-bridge, TTM cadence, sector/sign, momentum-divergence and narrative-numeric mechanisms.",
+    "Narrative numeric grounding is explicitly labelled a completeness warning, never source/evidence validation.",
+    "Removed all I/O, persistence, provider, agent and side-effect behavior."
+  ],
+  "explicitExclusions": [
+    "finrobot_desktop/finrobot/artifact/*",
+    "finrobot_desktop/finrobot/routes/*",
+    "finrobot_desktop/finrobot/server.py",
+    "finrobot_desktop/finrobot/auth.py",
+    "finrobot_desktop/finrobot/secret_store.py",
+    "finrobot_desktop/finrobot/audit/* persistence",
+    "finrobot_desktop/finrobot/data/cache/provider authorities",
+    "finrobot_desktop/finrobot/engine agents/orchestrator runtime",
+    "backtest/broker/live execution",
+    "FinRobot deterministic finance engines as competing P11 authority"
+  ],
+  "validation": {
+    "riskClass": "R2",
+    "v1": {
+      "status": "pass",
+      "runner": "self-hosted macOS",
+      "workflowRun": 38153263023,
+      "featureCommitValidated": "e058b3c1b9cc4e292006caa9d47bb774970ab30d",
+      "checks": [
+        "python3 -m py_compile finrobot_audit_challenger.py test_finrobot_audit_challenger.py",
+        "python3 -m unittest -v test_finrobot_audit_challenger — 16/16 PASS",
+        "exact source repository/commit constants PASS",
+        "no requests/httpx/subprocess/sqlite3/openai/autogen authority tokens PASS",
+        "git diff --check PASS after validation-wrapper fetch-depth correction"
+      ]
+    },
+    "v2": "deferred until a canonical P11/P7 consumer integration is justified",
+    "v3": "deferred to packaged SP-05",
+    "truthBoundary": "native source-level validator only; not registered as user tool, not packaged, not SP-05 accepted"
+  }
+}

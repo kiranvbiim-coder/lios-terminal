@@ -1,0 +1,743 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-11",
+  "authority": "docs/technical/LIOS_DONOR_IMPORT_REUSE_POLICY.md",
+  "scope": "source_path_and_rights_audit_not_wholesale_fork_import_or_sp05_acceptance",
+  "upstreamRepository": "TauricResearch/TradingAgents",
+  "approvedPin": "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f",
+  "observedUpstreamTreeSha": "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f",
+  "license": "Apache-2.0",
+  "ownerControlledFork": "kiranvbiim-coder/TradingAgents",
+  "forkHeadIsApprovedPin": false,
+  "canonicalOwners": [
+    "GM-12 governed agent loop and approval",
+    "P5 provider/source/identity",
+    "P7 evidence and session continuity",
+    "P4 Artifact/versioning",
+    "P11 finance math",
+    "P6 backtest"
+  ],
+  "selectedIntegration": {
+    "pr": 633,
+    "branch": "codex/si05-tradingagents-governed-rebase-20261011",
+    "destinations": [
+      "src/server/tradingAgentsResearchGate.mjs",
+      "src/server/tradingAgentsResearchGate.d.mts",
+      "src/server/tradingAgentsResearchTool.ts",
+      "src/server/conversationRuntime.ts"
+    ],
+    "level": "bounded_source_adaptation_merged_not_full_python_runtime",
+    "packaged": false,
+    "shipped": false,
+    "upstreamRuntimeInstalled": false,
+    "mergeCommit": "5aa2f455b1e7f4cf85285e85ee868d7c6112732c",
+    "nativeV1Run": "38150791824"
+  },
+  "essentialDependencySubstitutions": [
+    {
+      "upstream": "langgraph and langchain",
+      "decision": "substitute",
+      "liOSOwner": "GM-12",
+      "reason": "No parallel agent graph/checkpointer/runtime; reuse bounded debate mechanics inside existing agent loop."
+    },
+    {
+      "upstream": "OpenAI/Anthropic/Google/Bedrock upstream LLM clients",
+      "decision": "substitute",
+      "liOSOwner": "LiOS BYOAI",
+      "reason": "Provider/model credential and policy custody remains LiOS-owned; no donor direct remote inference."
+    },
+    {
+      "upstream": "yfinance/Alpha Vantage/news/Reddit/StockTwits/FRED vendors",
+      "decision": "substitute",
+      "liOSOwner": "P5/P7",
+      "reason": "Provenance and entitlement are per-source, historically dated and canonical; no donor default network fetch."
+    },
+    {
+      "upstream": "langgraph-checkpoint-sqlite and file memory",
+      "decision": "substitute",
+      "liOSOwner": "GM-12/P7",
+      "reason": "Single canonical run/project/checkpoint/Artifact state with tenant isolation."
+    },
+    {
+      "upstream": "Pydantic structured-output and presentation schemas",
+      "decision": "adapt",
+      "liOSOwner": "GM-12/P4",
+      "reason": "LiOS-owned Zod+Artifact schemas and governed tools, without a second decision identity."
+    },
+    {
+      "upstream": "donor trader and portfolio execution",
+      "decision": "defer",
+      "liOSOwner": "SI-05.37/GM-11",
+      "reason": "Only paper action via grants and receipts; no automatic brokerage credentials or order placement."
+    },
+    {
+      "upstream": "donor CLI/report files",
+      "decision": "defer",
+      "liOSOwner": "P4/Desktop",
+      "reason": "LiOS client and Artifacts own UX and product exports, not an alternate CLI/filesystem report surface."
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": "tradingagents/__init__.py",
+      "upstreamBlobSha": "87e37b3cc292e4abfbfd925ad5bdcbb663013fd8",
+      "disposition": "package_shim_not_imported",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Python package import shim unnecessary for the selected bounded JS adaptation; revisit only if coherent Python subpackage import is approved."
+    },
+    {
+      "path": "tradingagents/agents/__init__.py",
+      "upstreamBlobSha": "b78803a048d5f1df9225c76b7d80f9ccd551000a",
+      "disposition": "package_shim_not_imported",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Python package import shim unnecessary for the selected bounded JS adaptation; revisit only if coherent Python subpackage import is approved."
+    },
+    {
+      "path": "tradingagents/agents/analysts/fundamentals_analyst.py",
+      "upstreamBlobSha": "7b2b0ebf70d838d1290fc0e329a2a921c0310bc2",
+      "disposition": "defer_until_evidence_bound",
+      "liOSOwner": "P5/P7/GM-12",
+      "reason": "Whole analyst specialism worth reuse; requires P5/P7 provider entitlements, dated source citations, verified security identity, BYOAI invocation and a permissioned full research journey."
+    },
+    {
+      "path": "tradingagents/agents/analysts/market_analyst.py",
+      "upstreamBlobSha": "dd41c03dbacfb47dabc77a70f7d973e8b1e0be38",
+      "disposition": "defer_until_evidence_bound",
+      "liOSOwner": "P5/P7/GM-12",
+      "reason": "Whole analyst specialism worth reuse; requires P5/P7 provider entitlements, dated source citations, verified security identity, BYOAI invocation and a permissioned full research journey."
+    },
+    {
+      "path": "tradingagents/agents/analysts/news_analyst.py",
+      "upstreamBlobSha": "6c7454811a4a653bd98289bc8aca2cebe4061c70",
+      "disposition": "defer_until_evidence_bound",
+      "liOSOwner": "P5/P7/GM-12",
+      "reason": "Whole analyst specialism worth reuse; requires P5/P7 provider entitlements, dated source citations, verified security identity, BYOAI invocation and a permissioned full research journey."
+    },
+    {
+      "path": "tradingagents/agents/analysts/sentiment_analyst.py",
+      "upstreamBlobSha": "1051746ac18508b6486dace16b1575a0e4104492",
+      "disposition": "defer_until_evidence_bound",
+      "liOSOwner": "P5/P7/GM-12",
+      "reason": "Whole analyst specialism worth reuse; requires P5/P7 provider entitlements, dated source citations, verified security identity, BYOAI invocation and a permissioned full research journey."
+    },
+    {
+      "path": "tradingagents/agents/analysts/social_media_analyst.py",
+      "upstreamBlobSha": "8c72df08215f8ee85afc87e16d23670b0068feb0",
+      "disposition": "defer_until_evidence_bound",
+      "liOSOwner": "P5/P7/GM-12",
+      "reason": "Whole analyst specialism worth reuse; requires P5/P7 provider entitlements, dated source citations, verified security identity, BYOAI invocation and a permissioned full research journey."
+    },
+    {
+      "path": "tradingagents/agents/managers/portfolio_manager.py",
+      "upstreamBlobSha": "c85039236cb27697d603aa86f19c5f2452f89d03",
+      "disposition": "defer_until_product_owner",
+      "liOSOwner": "P5/GM-12/P4",
+      "reason": "Reviewer/report synthesis can be adapted after typed evidence and Artifact handoff; upstream manager makes transaction recommendations without LiOS decision approval."
+    },
+    {
+      "path": "tradingagents/agents/managers/research_manager.py",
+      "upstreamBlobSha": "0ffd2f4a2a3a8cf475595a74e90a0dbb37750135",
+      "disposition": "defer_until_product_owner",
+      "liOSOwner": "P5/GM-12/P4",
+      "reason": "Reviewer/report synthesis can be adapted after typed evidence and Artifact handoff; upstream manager makes transaction recommendations without LiOS decision approval."
+    },
+    {
+      "path": "tradingagents/agents/researchers/bear_researcher.py",
+      "upstreamBlobSha": "dddbefa526071b916adbc48fc6ead98cdcb747d5",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/researchers/bull_researcher.py",
+      "upstreamBlobSha": "28af77ea20e283fc11a5fd990c0e770f9b304f4d",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/risk_mgmt/aggressive_debator.py",
+      "upstreamBlobSha": "c0555e0b6438c3d1b50af0501b2d97b19599142b",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/risk_mgmt/conservative_debator.py",
+      "upstreamBlobSha": "0a9d67541a3c84a2e57b8a174b5079b0c6bcf1be",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/risk_mgmt/neutral_debator.py",
+      "upstreamBlobSha": "661b70ab4b21bb9caa330fef777750331363f32d",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/schemas.py",
+      "upstreamBlobSha": "fb89aa42b2d8e10ac77ced4dd64499e8b1921351",
+      "disposition": "adapt_review",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Structured research and portfolio opinions are useful; translate into existing LiOS Zod/Artifact contracts, no duplicate schema or direct trader instruction.",
+      "destination": "src/server/tradingAgentsResearchTool.ts"
+    },
+    {
+      "path": "tradingagents/agents/trader/trader.py",
+      "upstreamBlobSha": "a82ee4babce9f4ede25cd98902b76eef93c001f6",
+      "disposition": "replace_execution_authority",
+      "liOSOwner": "GM-11/GM-12/SI-05.37",
+      "reason": "Upstream trader/order semantics may be compared for paper simulation, but direct broker/action dispatch is replaced by LiOS governed action grants and reconciliation."
+    },
+    {
+      "path": "tradingagents/agents/utils/agent_states.py",
+      "upstreamBlobSha": "0d6df58cc6cde179a28044803327331393aa9146",
+      "disposition": "defer_dependency_review",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Supporting agent utility is only eligible with a specific selected package and must substitute LiOS model, permission and source contracts."
+    },
+    {
+      "path": "tradingagents/agents/utils/agent_utils.py",
+      "upstreamBlobSha": "3004d576f6ac5222ff9fa744cfaa53d85c56f075",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/utils/core_stock_tools.py",
+      "upstreamBlobSha": "eb97d982c0727e6a2cdb96cdf75e0e3937512c0e",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/fundamental_data_tools.py",
+      "upstreamBlobSha": "ffe76decc2f44484a7970235adb39746bc12dcbf",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/macro_data_tools.py",
+      "upstreamBlobSha": "f44809e6c77fb067fcd167bd8913cc03059e2b32",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/market_data_validation_tools.py",
+      "upstreamBlobSha": "853bda007c9864abed32c8f04257da30fd76f734",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/memory.py",
+      "upstreamBlobSha": "6abb5f631a179e8913ead5698f80d1b2e659bdd1",
+      "disposition": "replace_storage_authority",
+      "liOSOwner": "P7/GM-12",
+      "reason": "Upstream memory log may provide replay/lesson ideas; replace file log/ratings as truth with LiOS Project evidence, Run Ledger and Artifact versions."
+    },
+    {
+      "path": "tradingagents/agents/utils/news_data_tools.py",
+      "upstreamBlobSha": "122240a5ac018cfea0294890d5dfd36aa9baa76a",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/prediction_markets_tools.py",
+      "upstreamBlobSha": "dfa50f9b9a16c3e877e47bd9c35579299580810a",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/agents/utils/rating.py",
+      "upstreamBlobSha": "daaa3a492644e267f9486677197bb91d8eda5b65",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/agents/utils/structured.py",
+      "upstreamBlobSha": "8e94132c912858eef1ee5f8478de5afa5410a230",
+      "disposition": "adapt_review",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Structured research and portfolio opinions are useful; translate into existing LiOS Zod/Artifact contracts, no duplicate schema or direct trader instruction.",
+      "destination": "src/server/tradingAgentsResearchTool.ts"
+    },
+    {
+      "path": "tradingagents/agents/utils/technical_indicators_tools.py",
+      "upstreamBlobSha": "c6baecf37a0d73f6dd26961e16598be26d8fded2",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Vendor/market-data tools are not imported with default network rights; extract transformations only after explicit per-source entitlement, point-in-time, identity and security tests."
+    },
+    {
+      "path": "tradingagents/backtest.py",
+      "upstreamBlobSha": "99d6874a4f4368156d28b060669cf8c9ffb0a06a",
+      "disposition": "defer_p6_engine_comparison",
+      "liOSOwner": "P6/P11",
+      "reason": "Backtest mechanics merit point-in-time/fee/slippage comparison; import only after known-answer fixtures and P6 authority mapping, no invented provider prices."
+    },
+    {
+      "path": "tradingagents/dataflows/__init__.py",
+      "upstreamBlobSha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage_common.py",
+      "upstreamBlobSha": "7f07af9b1c456af7a050c01cd76b9705d1fa0e43",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage_fundamentals.py",
+      "upstreamBlobSha": "56525b3ffba2d9f727f6c2a514dd25a51ba67de7",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage_indicator.py",
+      "upstreamBlobSha": "c53d91a5c8223457d3b38b0c1a3e4b02e9893818",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage_news.py",
+      "upstreamBlobSha": "e323e49000941664817969ca28e8ace5ecfe2219",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage_stock.py",
+      "upstreamBlobSha": "43d693b9c901e577024a83b123f292a4605015bb",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/alpha_vantage.py",
+      "upstreamBlobSha": "90032a72b3867da5550d49db3b5e60a53cdcac07",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/config.py",
+      "upstreamBlobSha": "c4790e847ccf7d5545c21028ff3dd00816d1eb2c",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/date_window.py",
+      "upstreamBlobSha": "57ba38e1b198ccf21de7114f99c40b8f6ec1e7bb",
+      "disposition": "adapt_next_evidence_gate",
+      "liOSOwner": "P5/P7",
+      "reason": "Point-in-time look-ahead and verified snapshot checks are a high-value next package slice; LiOS canonical provider vintage/rights and company identity must supply inputs."
+    },
+    {
+      "path": "tradingagents/dataflows/errors.py",
+      "upstreamBlobSha": "2ce6a0c46b59a8d07b6942728c4b71f47a373702",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/fred.py",
+      "upstreamBlobSha": "28312e43486bbeddc4bdd7d1db2c1b04602e2223",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/interface.py",
+      "upstreamBlobSha": "61fd74e1a90fa5f1002824f12e2db8a6ad7a30b1",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/market_data_validator.py",
+      "upstreamBlobSha": "05c06245717e020dbd7e30d190e9e99a9f8fa331",
+      "disposition": "adapt_next_evidence_gate",
+      "liOSOwner": "P5/P7",
+      "reason": "Point-in-time look-ahead and verified snapshot checks are a high-value next package slice; LiOS canonical provider vintage/rights and company identity must supply inputs."
+    },
+    {
+      "path": "tradingagents/dataflows/polymarket.py",
+      "upstreamBlobSha": "3188ac034b1b79e81b2b3adf2e662c0d4823547b",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/reddit.py",
+      "upstreamBlobSha": "e014428532b0223868186a2c5e6375e64345832c",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/sec_edgar.py",
+      "upstreamBlobSha": "2999f815d7d3e49ff61a69109ffebed456e6e131",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/stockstats_utils.py",
+      "upstreamBlobSha": "5625f2e08948ebbe8c1d172dd808408421c26adf",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/stocktwits.py",
+      "upstreamBlobSha": "49700c9ae4c2f0b301abd867275a31e0e9c8070a",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/symbol_utils.py",
+      "upstreamBlobSha": "647f504448ee2448578141f2d4ef89cb028d7c36",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/utils.py",
+      "upstreamBlobSha": "1bff0273c0d2fd5bed5d19785e11fa5836d9d000",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/y_finance.py",
+      "upstreamBlobSha": "c2f24f35d22c6e5424d3a76964787af0b4d545a0",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/dataflows/yfinance_news.py",
+      "upstreamBlobSha": "3b2efce51bd372ed53be09730c273395df7476c3",
+      "disposition": "replace_provider_authority",
+      "liOSOwner": "P5/P7",
+      "reason": "Upstream yfinance/Alpha Vantage/social/SEC/FRED adapters bring network, storage and entitlement assumptions; use LiOS providers and only lift uniquely useful functions with licensed feeds."
+    },
+    {
+      "path": "tradingagents/default_config.py",
+      "upstreamBlobSha": "8d6384b3bac18f046018f34c48cdbcc27496bfe6",
+      "disposition": "replace_config_authority",
+      "liOSOwner": "GM/installer",
+      "reason": "Donor-specific provider/vendor/runtime configuration replaced by LiOS settings, installer and entitlement custody."
+    },
+    {
+      "path": "tradingagents/graph/__init__.py",
+      "upstreamBlobSha": "901edddd8c18a1a1dc433552640d8037dc5fec45",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/graph/analyst_execution.py",
+      "upstreamBlobSha": "0e653742b32e7d83e8540153ce14cfa9db3c17e8",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/graph/checkpointer.py",
+      "upstreamBlobSha": "d40255fa4ffb856b0f34402510f6534bf9442a9a",
+      "disposition": "replace_checkpoint_authority",
+      "liOSOwner": "GM-12/P7",
+      "reason": "LangGraph per-ticker SQLite checkpoints conflict with LiOS session/run ledger; retain graph-signature and safe-resume mechanics through canonical checkpoint owner only."
+    },
+    {
+      "path": "tradingagents/graph/conditional_logic.py",
+      "upstreamBlobSha": "b032735640f024d01cc5571bdd378fc20ebe1b7d",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/graph/propagation.py",
+      "upstreamBlobSha": "0bb2e461a2998a36b10c6559e0ee4b2e27662aed",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/graph/reflection.py",
+      "upstreamBlobSha": "094da1b511a1680c86b6b58f3d5881fa4f16381f",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/graph/setup.py",
+      "upstreamBlobSha": "171b656518b2683adeefc5e150140fecae4fcc88",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/graph/signal_processing.py",
+      "upstreamBlobSha": "57f72178cfadc7921a9b300b7624825dc2342418",
+      "disposition": "adapted_mechanisms",
+      "liOSOwner": "GM-12/P5",
+      "reason": "Mechanics of bounded role transitions, no-phantom-evidence openings and untradeable REVIEW are adapted in the canonical research gate; upstream model/provider and storage seams removed.",
+      "destination": "src/server/tradingAgentsResearchGate.mjs"
+    },
+    {
+      "path": "tradingagents/graph/trading_graph.py",
+      "upstreamBlobSha": "a3510ddc282493ffa16c05de6c38268b3baef20c",
+      "disposition": "defer_graph_binding",
+      "liOSOwner": "GM-12",
+      "reason": "Keep useful graph routing/structured propagation mechanics under existing LiOS agent loop; do not bundle parallel LangGraph runtime/runner or resume store."
+    },
+    {
+      "path": "tradingagents/llm_clients/__init__.py",
+      "upstreamBlobSha": "e528eabef4aed18830a1fd86f8f63ca7f5694367",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/anthropic_client.py",
+      "upstreamBlobSha": "04afee07102b46428f8c3e700d4e5e293e3a0493",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/api_key_env.py",
+      "upstreamBlobSha": "b97db38aa0d055c3e8405714522719866d000528",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/azure_client.py",
+      "upstreamBlobSha": "f6f996edd077f6809d1bb9a49c9d8b0d95695225",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/base_client.py",
+      "upstreamBlobSha": "cb56e25f226826e43f30a82ab494e597899c6a33",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/bedrock_client.py",
+      "upstreamBlobSha": "406c4ff081fb4b543890b038c6455dff44715e49",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/capabilities.py",
+      "upstreamBlobSha": "a2df7100a7e45be3e864dd3f80100e5752ddc259",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/factory.py",
+      "upstreamBlobSha": "02c1cf428398d4ec6e8563f0c6637fc791d12fab",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/google_client.py",
+      "upstreamBlobSha": "134baf556f9b364d57b0b73b1432f492505483c9",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/model_catalog.py",
+      "upstreamBlobSha": "e60cc347685be8ffc6c76833705f7044cd4d9acd",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/openai_client.py",
+      "upstreamBlobSha": "b1d7b65d6df0a14705c266a4028a7082a6df2492",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/llm_clients/validators.py",
+      "upstreamBlobSha": "b03cfb86006cc0e7a21fb2ef032a70df7d54adc0",
+      "disposition": "replace_byoai_authority",
+      "liOSOwner": "GM-12/BYOAI",
+      "reason": "Upstream LLM clients, model catalog, credential routing and retries conflict with canonical LiOS BYOAI; review improvements before selective adaptation, never ship duplicate auth."
+    },
+    {
+      "path": "tradingagents/portfolio.py",
+      "upstreamBlobSha": "c4f42392e9b448e781357eeef3fe873a41beda50",
+      "disposition": "defer_portfolio_paper_mapping",
+      "liOSOwner": "P11/SI-05.37",
+      "reason": "Portfolio mechanism needs exact LiOS positions/receipts, no broker automation, and full paper execution verification first."
+    },
+    {
+      "path": "tradingagents/reporting.py",
+      "upstreamBlobSha": "f89d6a04d650d42c64ea15a35315eed31405d994",
+      "disposition": "defer_artifact_composition",
+      "liOSOwner": "P4/P5",
+      "reason": "Reporting composition may be repurposed behind LiOS Artifact renderer/export; duplicate filesystem report writer is excluded."
+    }
+  ],
+  "upstreamTests": [
+    {
+      "path": "tests/test_backtest.py",
+      "upstreamBlobSha": "cebb6313486bbf5a52e634a1a0b6d58b955219e5",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_checkpoint_lifecycle.py",
+      "upstreamBlobSha": "4933b5b676f7474c20f29956eaceb014f89bfdd6",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_checkpoint_resume.py",
+      "upstreamBlobSha": "6c5be500c9eb275ad4fa32e32ca39aaa21b524ed",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_date_boundaries.py",
+      "upstreamBlobSha": "263a8cbb6646694ee5236a516822b2362cdd605f",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_debate_opening.py",
+      "upstreamBlobSha": "a20a08b8af99a1cade2cd9ca3a89450501e388e3",
+      "disposition": "mechanism_cases_adapted_in_native_gate",
+      "reason": "Relevant negative and deterministic safeguards adapted to JS native gate/tool tests; not a wholesale upstream pytest port."
+    },
+    {
+      "path": "tests/test_fundamentals_lookahead.py",
+      "upstreamBlobSha": "696b14872bd628ef34ba8148dc16870c70f59297",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_market_data_validator.py",
+      "upstreamBlobSha": "c26d6f537f1ca7dbf9139001c295b8fbeec9e60a",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_memory_pointintime.py",
+      "upstreamBlobSha": "8d312c7c594b28c40f194f5ea4e73dcb60af1674",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_news_lookahead.py",
+      "upstreamBlobSha": "2d7106415630b6d46867461ef2a0e8515e5b0bce",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_no_data_handling.py",
+      "upstreamBlobSha": "e4bc7845b6637e69b0b8f2f4fc796350453360f8",
+      "disposition": "mechanism_cases_adapted_in_native_gate",
+      "reason": "Relevant negative and deterministic safeguards adapted to JS native gate/tool tests; not a wholesale upstream pytest port."
+    },
+    {
+      "path": "tests/test_portfolio_context.py",
+      "upstreamBlobSha": "12305a8eca378d472e238e5e77f94cdc054b635d",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_prompt_integrity.py",
+      "upstreamBlobSha": "e26e7218566d9544b69b53cfc89f97f4c296a6c9",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_rating_integrity.py",
+      "upstreamBlobSha": "8d8fcb0cf010f1256774cf03c88f8173fdad7004",
+      "disposition": "mechanism_cases_adapted_in_native_gate",
+      "reason": "Relevant negative and deterministic safeguards adapted to JS native gate/tool tests; not a wholesale upstream pytest port."
+    },
+    {
+      "path": "tests/test_reporting.py",
+      "upstreamBlobSha": "04a1d5a72300323bb49c9355277052b827311c90",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_risk_router_path_map.py",
+      "upstreamBlobSha": "328816cba3b1ac76b57a5dd52eae347b2b37cb3d",
+      "disposition": "mechanism_cases_adapted_in_native_gate",
+      "reason": "Relevant negative and deterministic safeguards adapted to JS native gate/tool tests; not a wholesale upstream pytest port."
+    },
+    {
+      "path": "tests/test_social_lookahead.py",
+      "upstreamBlobSha": "09a4d0648961e599c516f2a7c14676c0a93f1ffd",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_structured_agent_prompts.py",
+      "upstreamBlobSha": "d7b24061c8d96ab11f90b9342defec7e96b0e92f",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_structured_agents.py",
+      "upstreamBlobSha": "efc104aeb38cca99b27140cd3bbe4b806b8a8236",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_undated_tools_as_of.py",
+      "upstreamBlobSha": "84c91e1bbccb417e501cb09700c3d9d7d555096b",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    },
+    {
+      "path": "tests/test_vendor_routing.py",
+      "upstreamBlobSha": "757fc288b1c0faad055bad1881e8739b8c774eb8",
+      "disposition": "qualify_when_corresponding_subsystem_selected",
+      "reason": "Review/port upstream tests with the next selected coherent package; no installed upstream Python graph/vendor harness."
+    }
+  ],
+  "exclusionsPolicy": "Every excluded/deferred path is explained individually above; revisit packages by measured user journey, security, source rights and dependencies. Do not equate non-import with rejected donor.",
+  "licenseFile": "third_party/licenses/tradingagents-Apache-2.0.txt",
+  "licenseUpstreamBlobSha": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"
+}

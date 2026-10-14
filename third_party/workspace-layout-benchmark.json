@@ -1,0 +1,166 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-09-21",
+  "documentationReconciledOn": "2026-10-04",
+  "executionAuthority": "docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md",
+  "shippingPointContract": "docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md",
+  "evidenceScope": "P0/P1 comparison and source/desktop records below are historical evidence, not fresh reconciliation checks. TC owns visible UX, P4 owns canonical workspace/Artifact state and GM-23 owns runtime convergence seams; SI-07 is the strategic convergence phase and S0/S3 are validation coverage only.",
+  "decision": "select_one_for_p1",
+  "decisionMeaning": "Historical P0 selection of one docking candidate for P1 is retained; the current implementation uses Dockview. P0/P1 comparison and recorded source/desktop results remain historical evidence, not fresh reconciliation checks or complete packaged integration/release proof.",
+  "selectedCandidate": "dockview",
+  "productionDependencyAddedInP0": false,
+  "currentImplementation": {
+    "libraries": [
+      "dockview-react",
+      "react-resizable-panels (mobile/maximized fallback)"
+    ],
+    "evidence": [
+      "src/client/src/components/terminal/DockviewWorkspaceGrid.tsx",
+      "src/client/src/components/terminal/ProfessionalWorkspaceGrid.tsx",
+      "src/client/src/lib/dockviewWorkspaceState.ts",
+      "src/client/src/lib/projectWorkspaceSession.ts",
+      "src/client/src/lib/terminalLinkedContextStore.ts"
+    ],
+    "capabilities": {
+      "resizablePanes": true,
+      "oneToFourPaneLayouts": true,
+      "mobileFocusedPane": true,
+      "savedLayouts": true,
+      "tabPersistence": true,
+      "linkedInstrumentContext": true,
+      "linkedTimeContext": true,
+      "linkedPortfolioContext": true,
+      "linkedScenarioContext": true,
+      "linkedBenchmarkContext": true,
+      "restartRestore": true,
+      "arbitraryDockDragDrop": true,
+      "arbitraryTabGroups": true,
+      "floatingPanels": true,
+      "modelSerialization": "LiOS canonical Project/Session/pane state + Dockview geometry-only serialization"
+    }
+  },
+  "candidates": [
+    {
+      "id": "dockview",
+      "package": "dockview-react",
+      "repository": "dockview/dockview",
+      "commitSha": "3b519454178f203d41acd49bd2733b5cdcd0f9be",
+      "license": "MIT",
+      "versionObserved": "8.3.1",
+      "reactCompatibility": "16.8-19",
+      "runtimeShape": "Open-source React docking layer over dockview core; upstream package advertises tabs, groups, grids, splitviews, drag/drop, floating panels and serialization.",
+      "scorecard": {
+        "arbitraryDocking": "strong",
+        "tabGroups": "strong",
+        "serialization": "strong",
+        "floatingPanels": "strong",
+        "react18Compatibility": "strong",
+        "currentLiOSFit": "strong",
+        "licenseBoundary": "strong",
+        "migrationRisk": "medium"
+      },
+      "p0Verdict": "selected_for_p1",
+      "reasons": [
+        "Closes the exact current LiOS gaps: arbitrary docking, tab groups and floating panels.",
+        "React 18 is supported without forcing a frontend framework migration.",
+        "Open-source core is MIT and can remain behind LiOS WorkspaceAdapter.",
+        "Selecting one candidate avoids shipping two competing workspace state models."
+      ]
+    },
+    {
+      "id": "flexlayout",
+      "package": "flexlayout-react",
+      "repository": "caplin/FlexLayout",
+      "commitSha": "92c9d67c2cba18b1fe6731af25f287e7abe30b2f",
+      "license": "MIT",
+      "versionObserved": "0.11.0",
+      "reactCompatibility": "18-19",
+      "runtimeShape": "Model-driven multi-tab docking manager with splitter, drag/drop, popout/floating and serialization.",
+      "scorecard": {
+        "arbitraryDocking": "strong",
+        "tabGroups": "strong",
+        "serialization": "strong",
+        "floatingPanels": "strong",
+        "react18Compatibility": "strong",
+        "currentLiOSFit": "good",
+        "licenseBoundary": "strong",
+        "migrationRisk": "medium"
+      },
+      "p0Verdict": "not_selected",
+      "reasons": [
+        "Capable alternative, but parallel POCs would violate the one-workspace-system convergence rule.",
+        "Dockview is the selected P1 candidate because its workbench/docking model maps more directly to the planned Living Workspace."
+      ]
+    }
+  ],
+  "legacyAlternativeReview": "FlexLayout's P0 docking non-selection is not a license rejection or a completed broader SI mechanism/repurposing/challenger analysis. That review remains pending; no competing workspace state authority or second docking installation is permitted.",
+  "packagedElectronAcceptance": {
+    "status": "source_pass_packaged_open",
+    "phase": "P14 release qualification",
+    "reason": "Dockview is mounted by the Project terminal. Recorded P1 source tests and the source acceptance contract passed; packaged Dockview interaction, accessibility and performance evidence remains incomplete. Later blueprint section 48.8's macOS arm64 unsigned package/CSP/Univer smoke is bounded cross-capability evidence, not Dockview workspace measurement or complete release proof.",
+    "sourceEvidence": {
+      "status": "pass",
+      "evidenceStatus": "historical_recorded_pass_not_rerun",
+      "commands": [
+        "npm run test:p1",
+        "npm run acceptance:p1"
+      ]
+    },
+    "desktopEvidence": {
+      "status": "partial",
+      "validator": "npm run acceptance:desktop",
+      "evidenceStatus": "historical_2_verified_10_blocked_snapshot; later bounded package smoke does not close these gates",
+      "verified": 2,
+      "blocked": 10,
+      "blockedIds": [
+        "desktop:native-secret-custody",
+        "desktop:bundled-python-sidecar",
+        "desktop:macos-signed-notarized",
+        "desktop:windows-authenticode",
+        "desktop:macos-clean-install",
+        "desktop:windows-clean-install",
+        "desktop:macos-update-rollback",
+        "desktop:windows-update-rollback",
+        "desktop:macos-accessibility",
+        "desktop:windows-accessibility"
+      ]
+    },
+    "additionalOpenEvidence": [
+      "No packaged Dockview startup, memory or workspace-interaction measurement is attached to this benchmark."
+    ],
+    "metricsEvidenceScope": "The metrics list is an inventory of recorded source checks/contracts/package smoke, not measured Dockview startup/RSS/interaction results or an approved release budget. The p1AcceptanceCriteria are required outcomes, not assertions that all passed.",
+    "metrics": [
+      "exact dockview-react/dockview/dockview-core lock at 8.3.1",
+      "typecheck",
+      "P1 Project/Session isolation tests",
+      "P1 workspace acceptance contract",
+      "desktop accessibility source contract",
+      "production renderer/server build",
+      "unsigned Electron directory packaging smoke",
+      "save/restore round trip contract",
+      "keyboard/focus ownership contract",
+      "drag/drop relocation does not mutate canonical LiOS pane state",
+      "floating groups bounded to viewport"
+    ],
+    "sourceContractsEnforcedBy": [
+      "npm run test:p1",
+      "npm run acceptance:p1",
+      ".github/workflows/lios-hardening.yml"
+    ]
+  },
+  "p1AcceptanceCriteria": [
+    "Packaged Electron works offline with no upstream cloud dependency.",
+    "Existing LiOS Project/Session/Workspace state remains canonical and round-trips losslessly.",
+    "Keyboard navigation and accessibility are at least as strong as the current workspace.",
+    "Drag/drop docking and tab groups materially improve Living Workspace without default cockpit clutter.",
+    "Measure and record renderer startup, memory and bundle impact against an explicit approved release budget.",
+    "Saved layouts survive restart and schema migration.",
+    "Linked instrument/time/portfolio/scenario/benchmark contexts continue to work.",
+    "No enterprise/proprietary feature is required for the selected open-source implementation.",
+    "FlexLayout is not installed alongside Dockview; only one docking implementation survives the P1 POC."
+  ],
+  "p0Conclusion": "Historical P0 decision: select Dockview open-source core as the sole P1 docking candidate and do not introduce a second workspace manager. Current-main implementation and outstanding packaged evidence are recorded in p1Conclusion and packagedElectronAcceptance.",
+  "productionDependencyAddedInP1": true,
+  "activeP1Implementation": "dockview",
+  "p1Conclusion": "Dockview OSS core remains the Living Workspace renderer behind LiOS-owned WorkspaceAdapter/state, with react-resizable-panels as mobile/maximized fallback. FlexLayout docking and Dockview Enterprise remain excluded; broader alternative mechanism review is pending. Recorded P1 source checks passed, but packaged Dockview interaction/performance/accessibility and P14 release qualification remain open. SP-01/SP-04/SP-07 acceptance must separately record a real integrated MSJ, applicable target execution, no fake success, regression protection and exact commit/build/target/journey/checks/limitations evidence; none is inferred from this benchmark."
+}

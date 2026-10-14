@@ -1,0 +1,8974 @@
+{
+ "generatedBy": "npm run routes:manifest",
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/api/admin/ai-kill-switch",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/ai-kill-switch",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/alerts/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/audit-events",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/connectors",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/connectors/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/connectors/by-capability/:contractFamily",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/consulting/requests",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/consulting/requests/:id/approvals",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/consulting/requests/:id/assign",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/consulting/requests/:id/quotes",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/consulting/requests/:id/triage",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/consulting/templates",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/consulting/templates",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/datasets",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/datasets/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/deliverables",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/deliverables",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/deliverables/:id/advance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/deliverables/:id/gate-log",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/deliverables/:id/reject",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/devices/:id",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/domains",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/domains/:id",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/engagements",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/engagements",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/entitlements/:id",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/generate-key",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/leads",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/meetings",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/meetings",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/organizations/:id",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations/:orgId/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations/:orgId/control-plane",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/devices",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations/:orgId/domains",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/domains",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/organizations/:orgId/domains/:domainId",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/entitlements",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/admin/organizations/:orgId/license",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations/:orgId/portfolios",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/portfolios",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/organizations/:orgId/watchlist",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/organizations/:orgId/watchlist",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/pipeline",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/plans",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/plans",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/portfolios/:id/positions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/portfolios/:id/positions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/positions/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/production-control/deletion-receipts",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/production-control/distribution/verify",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/production-control/export-custody",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/production-control/notification/test",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/production-control/organizations/:organizationId/purge-operational-metadata",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/production-control/purge",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/admin/production-control/retention",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/production-control/status",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/session-controls",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/users",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/users",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/admin/users/:id",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/users/:id/reset-password",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/users/:userId/domains",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/users/:userId/domains",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/users/:userId/domains/:domainId",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/vault/credentials",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/vault/credentials/:name",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/admin/vault/credentials/:name",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/admin/watchlist/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/admin/workstreams",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/admin/workstreams",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/alerts/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alerts/nlp",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/alternative-data/:dataClass",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/alternative-data/:dataClass/:entityKey/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/alternative-data/estimates/:id/surprises",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alternative-data/estimates/:symbol/capture",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alternative-data/import",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alternative-data/options/:symbol/capture",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/alternative-data/portfolios/:portfolioId/capture",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/alternative-data/snapshots/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifact-proposals/:proposalId/decision",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/artifacts/:artifactId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/artifacts/:artifactId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/compare/:leftVersion/:rightVersion",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/compose",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/data-query",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/decision-approval",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/decision-approval/link",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/decision-approval/options",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/decision-approval/unlink",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/export-plan",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/fork",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/integrated-model-review",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/integrated-model-run",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/interactions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/keep-draft-version",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/merge-branch",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/model-change-report",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/model-maintenance/apply",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/model-maintenance/options",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/model-maintenance/review",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/office-return",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/artifacts/:artifactId/permanent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/proposals",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/proposals",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/references",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/references",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/restore-revision",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/restore-trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/review-notes",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/review-notes",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/review-package",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/spreadsheet-return",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/undo",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/versions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/artifacts/:artifactId/versions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/auth/bootstrap/complete",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/auth/bootstrap/status",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/auth/change-password",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/auth/login",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/auth/logout",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/auth/me",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/auth/register",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/backup",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/backup/restore-test",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/backup/run",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/backup/settings",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/bls/catalog",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/bls/series/:seriesId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/brain/runs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/brain/runs/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs/:id/execute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs/:id/pause",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs/:id/resume",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs/:runId/approvals/:approvalId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/brain/runs/:runId/tasks/:taskId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/brain/runs/:runId/tasks/:taskId/retry",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/brain/tools",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/calculation-jobs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/calculation-jobs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/calculation-jobs/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/calculation-jobs/:id/cancel",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/calculation-jobs/runtime",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/capabilities/discover",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/cftc/cot/:code",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/cftc/markets",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/cftc/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/chat",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/chat",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/chat",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/auth/sso/:orgId",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/auth/sso/:orgId/callback",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/auth/sso/:orgId/saml/acs",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/auth/sso/:orgId/start",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/auth/sso/device/poll",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/auth/sso/device/start",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/consulting/requests",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/consulting/requests",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/consulting/requests/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/consulting/requests/:id/comments",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/consulting/requests/:id/quotes/:quoteId/accept",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/consulting/requests/:id/quotes/:quoteId/decline",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/consulting/select-services",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/control-plane/access",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/control-plane/enterprise-policy",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/control-plane/snapshot",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/activity",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/alerts",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/dashboard/alerts",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/client/dashboard/alerts/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/audit-log",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/content",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/domains",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/economics/indicator/:seriesId",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/economics/indicators",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/market-snapshot",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/performance",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/portfolio",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/portfolio/:portfolioId/export",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/quote/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/search",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/sparklines",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/supplychain/indicator/:seriesId",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/supplychain/indicators",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/dashboard/watchlist",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/dashboard/watchlist",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/client/dashboard/watchlist/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/datasets",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/datasets",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/client/datasets/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/datasets/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/decisions",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/decisions",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/client/decisions/:id/resolve",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/decisions/accuracy",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/device/request-authorization",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/diagnostics",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/diagnostics/config",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/engagements",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/engagements/:id/workstreams",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/export-custody",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/export-custody",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/client/export-custody/:id",
+   "reachableBy": [
+    "client_user",
+    "client_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/trial/chat",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/trial/select-tiers",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/trial/status",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/client/workstreams/:id",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/client/workstreams/:id/comments",
+   "reachableBy": [],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/climate/all",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/climate/locations",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/climate/snapshot/:code",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/columnar-artifacts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/columnar-artifacts/:id/scan",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/columnar-artifacts/:snapshotId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/company-spine/:query",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/component-library",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/component-library",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/component-library/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/consensus/alerts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/consensus/alerts/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/analysis",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/benchmarks",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/consensus/benchmarks",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/consensus/capture/:symbol",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/intelligence",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/providers",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/consensus/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/consensus/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/content",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/content/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content/:id/approve",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content/:id/organizations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/content/:id/organizations/:orgId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content/:id/publish",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content/:id/submit",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/content/:id/suppress",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/conversation-executions/:requestId/cancel",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/conversation-executions/:requestId/governed-tool-review",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/conversation-executions/:requestId/resume",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/conversation/approvals",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-entitlements",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-entitlements",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/browser/execute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/cache",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/coverage",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/coverage/refresh",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/execute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/high-volume/plan",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/lineage",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/mappings",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/mappings/confirm",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/mappings/suggest",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/mcp/server-contract",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/metrics",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/metrics",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/openapi/discover",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/prefetch",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/provider-depth",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/providers",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/providers/health",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/quality",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-fabric/rights",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/rights",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/search",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-fabric/streaming/plan",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/:id/revisions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/curves/ust",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/curves/ust",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/curves/ust/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/economics/:seriesId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/economics/:seriesId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/economics/:seriesId/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/financials/:symbol",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/financials/:symbol/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/financials/:symbol/conflicts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/financials/:symbol/conflicts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/financials/:symbol/conflicts/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/financials/conflicts/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/markets/:symbol",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/markets/:symbol",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/markets/:symbol/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-truth/conflicts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-truth/pins",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-truth/pins",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/data-truth/pins/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-universes",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-universes/:key/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-universes/:key/members",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-universes/capture/listings",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-universes/import",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decision-analysis",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decision-analysis/reverse-dcf",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/decision-monitors/:id/acknowledge",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/decision-monitors/:id/evaluate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/decisions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/decisions/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/approval",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/receipts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/replay",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/scenario-actions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/scenario-actions/monitor",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/decisions/:id/scenario-pipeline",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/devices",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/devices/:deviceId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/devices/network",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/devices/pairing",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/devices/pairing/:pairingId/approve",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/devices/pairing/:pairingId/deny",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/economics/indicator/:seriesId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/economics/indicators",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/edgar/filing-search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/edgar/filings/:ticker",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/edgar/insiders/:ticker",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/enterprise/organizations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/enterprise/organizations/:orgId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/enterprise/organizations/:orgId/deployment/credential",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/enterprise/organizations/:orgId/deployment/runtime",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/enterprise/organizations/:orgId/deployment/verify",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/enterprise/organizations/:orgId/policy",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/enterprise/organizations/:orgId/policy",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/enterprise/organizations/:orgId/policy/check",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/enterprise/organizations/:orgId/sso/credentials",
+   "reachableBy": [
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/enterprise/organizations/:orgId/sso/runtime",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/environment/indicator/:seriesId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/environment/indicators",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/factor-risk/decompose",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/factor-risk/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/factor-risk/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/factor-risk/snapshots/:snapshotId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/factor-risk/snapshots/:snapshotId/refresh",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/famafrench/carhart4",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/famafrench/factors3",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/famafrench/factors5",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/famafrench/status",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/active",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/breadth",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/cape",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/coverage-map",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/custom-metrics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/custom-metrics",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/finance/custom-metrics/:id",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/directory",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/directory/regions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/earnings",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/economics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/economics/calendar",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/economics/events/:releaseId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/entities/resolve",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/forex",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/fundamentals",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/gainers",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/instruments/resolve",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/instruments/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/losers",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/metric-overrides",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/metric-overrides",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/finance/metric-overrides/:id",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/news",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/news/ai-smart-search",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/news/read",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/normalization-policies",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/normalization-policies",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/finance/normalization-policies/:policyId/adjustments/:id",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/normalize",
+   "reachableBy": [
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/ohlcv",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/p6-backtest",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/p6-personal-finance",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/peers",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/finance/portfolio-analytics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/premarket-brief",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/provider-status",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/quotes",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/rate-cycle-impact",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/screener",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/sentiment",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/sparklines",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/finance/tick",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/financial-models/integrated",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/financial-models/integrated/runs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/financial-models/integrated/runs/:runId/artifact",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/financial-models/integrated/variance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/fred/yieldcurve",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/ledger/events/:eventId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/ledger/events/:eventId/undo",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/ledger/receipts/:receiptId/show-work",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/ledger/streams/:streamId/verify",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/license/import",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/license/status",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/bonds/countries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/bonds/screen",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/bonds/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/bonds/series/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/bondyields/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/calendar",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/candles/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/company/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/cot/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/dividends/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/economics/countries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/economics/screen",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/economics/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/economics/series/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/financials/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/financials/:symbol/conflicts",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/insiders",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/manifest",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/options-chain/:underlying",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/options-flow",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/splits/:symbol",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/lse/status",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/mcp",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/me/persona-preferences",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/me/persona-preferences",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/me/persona-preferences",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/media/topic/:topicId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/media/topics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/models",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/models",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/models/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/models/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/models/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/models/:modelId/versions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/models/:modelId/versions/:versionId/restore",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/acceptance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/desktop-acceptance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/items/:itemId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/p7-release-readiness",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/production-acceptance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/provider-acceptance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/readiness",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/release",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/security-acceptance",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/operations/support-summary",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/owid/countries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/owid/country/:iso3",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/artifacts/:artifactId/branch",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/artifacts/:artifactId/model-draft",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/p8/artifacts/:artifactId/snapshot",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/assumption-merge",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/formulas/validate",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/projects/:projectId/decisions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/projects/:projectId/formulas/publish",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/p8/projects/:projectId/scenario-compare",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-chat/temporary/respond",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/project-chats/:chatId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats/:chatId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/project-chats/:chatId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats/:chatId/executions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats/:chatId/executions/:requestId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats/:chatId/ledger",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/project-chats/:chatId/messages",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-chats/:chatId/messages",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/project-chats/:chatId/permanent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-chats/:chatId/promote",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-chats/:chatId/respond",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-chats/:chatId/restore-trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-chats/:chatId/trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/project-sessions/:sessionId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-sessions/:sessionId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/project-sessions/:sessionId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-sessions/:sessionId/ancestry",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-sessions/:sessionId/compare/:otherSessionId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-sessions/:sessionId/explain-change/:otherSessionId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-sessions/:sessionId/fork",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/project-sessions/:sessionId/parent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/project-sessions/:sessionId/permanent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-sessions/:sessionId/restore-trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/project-sessions/:sessionId/trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/projects/:projectId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/artifact-package",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifact-package/import",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifact-package/verify",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/artifacts",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifacts",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifacts/import-spreadsheet",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifacts/keep-draft",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/artifacts/professional-package",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/attachments/:attachmentId/download",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/automation/notifications",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/automation/notifications/:notificationId/read",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/automation/runs",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/automation/runtime",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/automation/save-conversation",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/automation/workflows",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/automation/workflows",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/automation/workflows/:workflowId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/projects/:projectId/automation/workflows/:workflowId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/automation/workflows/:workflowId/enabled",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/automation/workflows/:workflowId/run",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/chats/:chatId/attachments",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/continuity",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/continuity/refresh",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/conversation-approvals",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/conversation-approvals/:action",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/dependencies",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/home",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/as-known-on",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/delta",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/docling",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/documents",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/documents",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/filing-diff",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/insights",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/rebuild",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/research-graph",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/runtime",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/snapshots",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/snapshots/:snapshotId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/snapshots/:snapshotId/state",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/intelligence/timeline",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/ledger",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/ledger/decisions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/permanent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/personal-finance-profile",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/projects/:projectId/personal-finance-profile",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/portability-manifest",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/resources",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/resources",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/resources/:resourceId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/projects/:projectId/resources/:resourceId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/projects/:projectId/resources/:resourceId/permanent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/resources/:resourceId/restore-trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/resources/:resourceId/trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/restore-trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/projects/:projectId/sessions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/sessions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/theses",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/theses/:artifactId/postmortem",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/theses/:artifactId/refresh",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/:projectId/trash",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/projects/migrate-legacy-workspaces",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/public/desktop-distribution",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/public/leads",
+   "reachableBy": [
+    "anonymous",
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/compare",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/datasets",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/experiments",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant-lab/experiments",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/experiments/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/quant-lab/experiments/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant-lab/experiments/:id/clone",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant-lab/experiments/:id/runs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/models",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/runs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/runs/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant-lab/runs/:id/cancel",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant-lab/runs/:id/rerun",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant-lab/runtime",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/advanced/:family/:model",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant/advanced/catalog",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/challenge-assumption",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/consensus-note",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/credit/credit-var",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/credit/operational-risk-lda",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant/damodaran/industries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant/damodaran/industries/:industry",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/did",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/granger",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/heteroskedasticity",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/iv-2sls",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/johansen",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/mixed-effects-panel",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/panel-ols",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/quantile-regression",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/rd",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/sur",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/unit-root",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/var",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/econometrics/vecm",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/carbon-tax-dividend",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/gini",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/income-tax-microsim",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/leontief-io",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/phillips-curve",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/economics/taylor-rule",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/environment/carbon-credit-mrv",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/environment/climate-transition-risk",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/fixed-income/bond-price",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/forecasting/changepoint",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/forecasting/garch",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/forecasting/sarimax",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/forecasting/stl",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/ml/anomaly-detection",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/ml/classification",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/ml/clustering",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/ml/regression",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/optimization/genetic-algorithm",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/optimization/multi-objective",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/optimization/sensitivity-analysis",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/optimization/stochastic",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/options/heston-calibrate",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/options/heston-price",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/options/sabr-calibrate",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/options/sabr-smile",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/efficient-frontier",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/max-diversification",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/max-sharpe",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/mean-cvar",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/min-variance",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/portfolio/risk-parity",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant/registry",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quant/registry/summary",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/autocorrelation-tests",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/bayesian-normal",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/correlation",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/descriptive-diagnostics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/distribution-fit",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/gls",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/hypothesis-tests",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/influence-diagnostics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/logistic",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/multiple-testing",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/multivariate-structure",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/normality",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/ols-diagnostics",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/partial-correlation",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/probit",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/professional-inference",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/reset-test",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/robust-regression",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/seeded-resampling",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/stats/vif",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/supplychain/bullwhip",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/supplychain/network-analysis",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/supplychain/resilience",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/supplychain/route-optimization",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/supplychain/safety-stock",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quick-chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quick-chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/radar/opportunities",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/radar/risks",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/connections/summary",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/contracts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/contracts/:familyId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/contracts/:familyId/connectors",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/engine-declarations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/engines",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/engines/:engineId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/providers/depth",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/providers/depth/:providerId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/wave-c",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/wave-d",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/readiness/wave-e",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/briefs/:id/publishing-draft",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/research/evidence/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/research/evidence/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/investigations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/investigations",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/investigations/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/research/investigations/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/investigations/:id/briefs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/investigations/:id/briefs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/investigations/:id/evidence",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/investigations/:id/relationships",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/investigations/:id/timeline",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/investigations/:id/what-changed",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/research/relationships/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/research/saved-searches",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/saved-searches",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/research/saved-searches/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/research/search",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/runtime/foundation",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/runtime/foundation/health",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/scenario-pipeline/preview",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/ai/test",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/community-data-consent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/setup/community-data-consent",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/credentials",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/setup/credentials/:name",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/setup/credentials/:name",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/provider-credentials/test",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/python-runtime",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/python-runtime/install",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/python-runtime/rollback",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/sandbox-image",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/sandbox-image/repair",
+   "reachableBy": [
+    "client_admin",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/source-connections",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/setup/source-connections",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/setup/source-connections/:id",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/source-connections/:id/snapshots",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/api/discover",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/api/fetch",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/api/map",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/catalog",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/discover",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/normalize",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/profile",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/query",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/test",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/source-registry",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/setup/status",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/setup/status",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/supplychain/indicator/:seriesId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/supplychain/indicators",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/tourism/indicator/:seriesId",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/tourism/indicators",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/trends/compare",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/trends/interest",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/uide/fixtures",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/uide/fixtures/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/uide/fixtures/:id/classify",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/uide/statement-commit",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/uide/statement-extract",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/uide/upload",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/uide/workspace-imports/:workspaceId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/voice/providers",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/voice/setup",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/voice/setup/refresh",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/voice/speak",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/voice/transcribe",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/watchlist",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/watchlist",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/watchlist/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-c/ai/execute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-c/ai/state",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/wave-c/ai/state",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-c/ai/validate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-c/analytics/catalog",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-c/analytics/comparison",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-c/analytics/series",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-c/benchmarks/evaluate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-c/canonical/adapt",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-c/market-packs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/action-inbox",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/action-inbox/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/briefs/:mode",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/communications/connections",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/communications/connections",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/communications/connections/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/communications/plan",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/event-room",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/event-rooms",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/event-rooms",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/event-rooms/:id/action",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/event-rooms/:id/comparison",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/exports/reconcile",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/journal",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/journal",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/memory",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/memory",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/notifications",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/notifications",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/notifications/:id/deliver",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/pulse",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/pulse/ask",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/pulse/cards",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/pulse/cards/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/report-templates",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/reports",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/reports",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/reports/:id/reconcile",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/reports/reconcile",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/reports/render",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/schedules",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/schedules",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/schedules/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/schedules/due",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/signals",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/signals",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/signals/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/wave-d/signals/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/signals/propose",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/state",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/theses",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/theses",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/theses/:id/evaluate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/theses/impact-links",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/theses/impact-links",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/thesis/evaluate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/what-changed",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/what-changed/detect",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/ai/monitors/build",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/ai/reports/build",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/ai/workspaces/confirm",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/ai/workspaces/plan",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/ai/workspaces/preview",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/circles",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/circles",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/circles/:id/members",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/cross-domain/explain",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/cross-domain/relationships",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/cross-domain/relationships",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/cross-domain/scenarios",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/feed",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/follows",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/follows",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-e/follows/:kind/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/messages",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/messages/:threadId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/moderation/block",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/moderation/cases",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/moderation/mute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/moderation/report",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/notifications",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/objects",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects/:id/diff",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects/:id/fork",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects/:id/open",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects/:id/recompute",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/objects/:id/share",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/posts",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/posts/:id/reactions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/posts/:id/replies",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/posts/:id/save",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/profile",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/wave-e/profile",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/wave-e/profile/disclosure",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/rooms",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/rooms",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/sharing/policy",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/skills",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/skills/:id/approval",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/skills/install",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/skills/packs",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/skills/validate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-e/workspaces",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-e/workspaces",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wikipedia/pageviews/:article",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/work-search",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/workspaces",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/workspaces/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/workspaces/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/workspaces/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces/:id/duplicate",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/workspaces/:workspaceId/assumptions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces/:workspaceId/assumptions",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/workspaces/:workspaceId/assumptions/:name",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/workspaces/:workspaceId/scenarios",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces/:workspaceId/scenarios",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/workspaces/:workspaceId/scenarios/:name",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/workspaces/:workspaceId/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces/:workspaceId/snapshots",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/workspaces/:workspaceId/snapshots/:snapshotId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/workspaces/:workspaceId/snapshots/:snapshotId/restore",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/catalog/:domain",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/compare/:code",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/countries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/indicator/:code",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/provider/countries",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/worldbank/provider/indicators",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  }
+ ]
+}

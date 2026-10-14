@@ -1,0 +1,101 @@
+# Limuria Python sidecar -- deterministic quant compute the Node/TS side
+# calls into over internal HTTP (server/pythonService.ts). Add libraries
+# here only when a real engine actually uses them; this file grows one
+# domain at a time, same discipline as the rest of the roadmap (no
+# speculative dependency bloat).
+#
+# This file is the full development/CI superset -- every pack's packages --
+# and is what test machines install to exercise every engine at once. It is
+# NOT what
+# the shipped managed runtime installs: installManagedRuntime()
+# (server/pythonRuntimeManager.ts) installs only the packs a user actually
+# selected, derived from the signed allow-list in server/runtimeManifest.ts,
+# so a retail install gets core only and never silently pulls yfinance.
+# server/pythonRuntimePacks.test.ts asserts the pins here and in the
+# manifest cannot drift apart.
+# FastAPI 0.141.1 supports Starlette 1.x. Pin Starlette explicitly so
+# the managed runtime cannot resolve back to the vulnerable 0.41.3 line
+# flagged by the P10 pip-audit release gate (2026 advisories).
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn[standard]==0.34.0
+
+# Fixed income (bond pricing, duration/convexity, real day-count
+# conventions) -- see fixed_income.py. Real C++ pricing library, not a
+# hand-rolled approximation.
+QuantLib==1.43
+
+# Portfolio optimization (Markowitz/efficient frontier/risk parity/max
+# diversification via SLSQP, Mean-CVaR via linprog) -- see
+# portfolio_optimization.py. numpy comes in transitively via scipy.
+scipy==1.14.1
+
+# Statistics & econometrics (normality/hypothesis/correlation tests via
+# scipy.stats above; full OLS/GLS/Logit/Probit diagnostics need statsmodels
+# specifically for correct standard errors/AIC/BIC/F-tests) -- see
+# statistics_econometrics.py.
+statsmodels==0.14.4
+# Phase A4 professional statistics composes SciPy's BCa bootstrap,
+# permutation and Monte Carlo goodness-of-fit routines, statsmodels power and
+# multiple-testing controls, and scikit-learn's PCA/factor/shrinkage/cluster
+# implementations in professional_statistics.py. No speculative dependency
+# is added: all three libraries are already used by executable engines below.
+# statsmodels 0.14.4 predates pandas 3.0's internal API changes (its
+# `durbin_watson` import chain breaks on pandas 3.0's `deprecate_kwarg`
+# signature change) -- pin below 3.0 explicitly rather than letting pip
+# resolve to whatever's latest at install time.
+pandas<3.0
+
+# Econometrics: panel data (Fixed/Random effects, Hausman test), 2SLS
+# instrumental variables -- statsmodels doesn't cover panel estimators,
+# genuinely needs linearmodels. See econometrics.py.
+linearmodels==7.0
+
+# Forecasting upgrade: real GARCH/EGARCH MLE (benchmark model alongside the
+# existing hand-rolled TS GARCH) and real PELT multiple-changepoint
+# detection. Both depend only on numpy/pandas/scipy/statsmodels already
+# pinned above -- no new transitive dependency surface. See forecasting.py.
+arch==8.0.0
+ruptures==1.1.10
+# Market data library used by the Node market-data fallback and available
+# through the LiOS-managed Python runtime pack.
+yfinance==1.5.1
+
+# Machine Learning cluster: real train/test-split classification/regression
+# (Random Forest, Gradient Boosting, linear baseline), KMeans clustering with
+# a real silhouette score, IsolationForest anomaly detection. See
+# ml_cluster.py. scikit-learn ships prebuilt wheels for the platforms this
+# app targets (macOS arm64 dev, Linux containers), no native toolchain needed.
+scikit-learn==1.9.0
+
+# Supply Chain domain: real graph analysis (max-flow/critical path,
+# degree/betweenness/PageRank centrality for trade/supplier networks). See
+# supply_chain.py. Pure Python, no native toolchain.
+networkx==3.6.1
+
+# Optimization engine: real genetic algorithm and NSGA-II multi-objective
+# Pareto search (both are actual population-based GA -- NSGA-II literally
+# is "a genetic algorithm applied to multiple objectives"), replacing
+# LIMURIA_ENGINES source stubs that returned hardcoded fake results. See
+# optimization_engine.py.
+pymoo==0.6.2
+
+# Sensitivity analysis: real Sobol variance-based sensitivity indices via
+# Saltelli sampling, replacing a source stub that returned
+# `{"sobol_indices": [0.1] * len(params)}` regardless of input. See
+# optimization_engine.py.
+SALib==1.5.2
+
+# Safe objective-function evaluator for optimization_engine.py's
+# user-supplied expression strings (e.g. "sum(x**2)"). A bare eval(), even
+# with __builtins__ stripped, is a documented sandbox-escape vector (object
+# introspection via __class__.__bases__ chains reaches builtins anyway) --
+# asteval is a real restricted-AST interpreter built specifically for
+# letting users type formulas without that risk.
+asteval==1.0.9
+
+# SEC EDGAR full-text search (searches the actual text of filings, not just
+# XBRL numeric facts or Form 4/metadata -- those are already hand-built in
+# server/secEdgarData.ts, this is a genuinely different capability). MIT
+# licensed, no API key. See sec_search.py.
+edgartools==5.51.0

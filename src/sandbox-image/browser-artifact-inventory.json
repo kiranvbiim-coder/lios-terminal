@@ -1,0 +1,23 @@
+[
+  {
+    "filename": "playwright-core-1.63.0.tgz",
+    "sha256": "208593d4e1bcd8f8fe5f869cad1cc332dc7f1d70dc1d58c102dc3ac36e30f26c",
+    "size": 3123044,
+    "url": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.63.0.tgz",
+    "rights": "Apache-2.0; LICENSE and NOTICE retained in installed module"
+  },
+  {
+    "filename": "chromium-linux-arm64-1243.zip",
+    "sha256": "f144b7f58b61c6bea2c192c4c178faa9b606bdf758e2d47ca99fa03f759a13e4",
+    "size": 207794482,
+    "url": "https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1243/chromium-linux-arm64.zip",
+    "rights": "Chromium BSD-3-Clause and embedded chrome://credits third-party notices; no Widevine in this artifact"
+  },
+  {
+    "filename": "chromium-LICENSE.txt",
+    "sha256": "368cca1106be99d39ecd32a38d8305585d802a475effb66380b91ffc9bcf709b",
+    "size": 1536,
+    "url": "https://raw.githubusercontent.com/chromium/chromium/153.0.8010.12/LICENSE",
+    "rights": "BSD-3-Clause"
+  }
+]

@@ -1,0 +1,91 @@
+/* LiOS V4 analytical interaction layer.
+   Loaded after the base immersive styles so the new analytical primitives can
+   evolve independently from the legacy terminal skin. */
+
+.lios-pane-tool {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 6px;
+  color: hsl(var(--muted-foreground));
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: .43rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  transition: color 110ms ease, background 110ms ease, border-color 110ms ease, transform 110ms ease;
+}
+
+.lios-pane-tool:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border) / .85);
+  background: rgb(255 255 255 / .035);
+}
+
+.lios-pane-tool:active { transform: translateY(1px); }
+
+/* Semantic zoom must communicate hierarchy, not merely resize the panel. */
+[data-semantic-zoom='analysis'] .lios-pane-header {
+  border-bottom-color: hsl(var(--limuria-cyan) / .16) !important;
+}
+
+[data-semantic-zoom='thesis'] .lios-pane-header {
+  border-bottom-color: hsl(var(--limuria-amber) / .2) !important;
+  background: linear-gradient(180deg, hsl(var(--lios-raised) / .97), hsl(var(--lios-canvas) / .95));
+}
+
+/* Attention Lens: use quiet spatial emphasis. Panels may opt into semantic
+   regions by adding data-analytical-role=input/output/evidence/risk. */
+[data-attention-lens]:not([data-attention-lens='off']) .lios-pane-content [data-analytical-role] {
+  transition: opacity 150ms var(--lios-ease), filter 150ms var(--lios-ease), box-shadow 150ms var(--lios-ease);
+}
+
+[data-attention-lens='inputs'] .lios-pane-content [data-analytical-role]:not([data-analytical-role='input']),
+[data-attention-lens='outputs'] .lios-pane-content [data-analytical-role]:not([data-analytical-role='output']),
+[data-attention-lens='evidence'] .lios-pane-content [data-analytical-role]:not([data-analytical-role='evidence']),
+[data-attention-lens='risk'] .lios-pane-content [data-analytical-role]:not([data-analytical-role='risk']) {
+  opacity: .48;
+  filter: saturate(.7);
+}
+
+[data-attention-lens='inputs'] .lios-pane-content [data-analytical-role='input'],
+[data-attention-lens='outputs'] .lios-pane-content [data-analytical-role='output'],
+[data-attention-lens='evidence'] .lios-pane-content [data-analytical-role='evidence'],
+[data-attention-lens='risk'] .lios-pane-content [data-analytical-role='risk'] {
+  box-shadow: 0 0 0 1px hsl(var(--limuria-cyan) / .18) inset, 0 8px 28px rgb(0 0 0 / .12);
+}
+
+/* Generic fallback for legacy panels that have not yet annotated analytical
+   roles: keep content fully readable and only quiet surrounding chrome. */
+[data-attention-lens]:not([data-attention-lens='off']) > .lios-pane-header {
+  background: hsl(var(--lios-canvas) / .95);
+}
+
+/* Studio surfaces */
+.lios-v4-overlay select,
+.lios-v4-overlay textarea,
+.lios-v4-overlay input {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.lios-v4-overlay textarea:focus,
+.lios-v4-overlay input:focus,
+.lios-v4-overlay select:focus {
+  outline: none;
+  border-color: hsl(var(--limuria-amber) / .32);
+  box-shadow: 0 0 0 3px hsl(var(--limuria-amber) / .035);
+}
+
+@media (max-width: 1200px) {
+  .lios-pane-tool span { display: none; }
+  .lios-pane-tool { width: 24px; justify-content: center; padding: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lios-pane-tool,
+  [data-analytical-role] {
+    transition: none !important;
+  }
+}

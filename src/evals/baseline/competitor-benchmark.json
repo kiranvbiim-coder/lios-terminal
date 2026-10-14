@@ -1,0 +1,54 @@
+{
+  "checkedOn": "2026-09-30",
+  "note": "Secondary sources (review sites and vendor pages); verify against the live products before relying on any single claim.",
+  "rows": [
+    {
+      "product": "ChatGPT",
+      "capability": "Deep research produces cited reports (5-30 min), progress can be tracked and interrupted, restrictable to trusted sites, connects to MCP/apps",
+      "source": "https://openai.com/index/introducing-deep-research/",
+      "lios": "LiOS H3: interruptible deep-research mode with live progress"
+    },
+    {
+      "product": "ChatGPT",
+      "capability": "Separate Canvas workspace removed 2026-05-28; writing and coding happen inline in chat",
+      "source": "https://suprmind.ai/hub/chatgpt/features/",
+      "lios": "LiOS H4: keep short answers inline, artifact pane for inspectable work"
+    },
+    {
+      "product": "Claude",
+      "capability": "Creates and edits real xlsx/pptx/docx/pdf files",
+      "source": "https://claude.com/blog/create-files",
+      "lios": "LiOS H5: Excel with live formulas, PowerPoint, PDF, Word exports"
+    },
+    {
+      "product": "Claude",
+      "capability": "Word, Excel and PowerPoint add-ins share conversation context (GA 2026-05); Microsoft 365 connector gained write tools (2026-09)",
+      "source": "https://suprmind.ai/hub/claude/features/",
+      "lios": "Deferred: Office add-ins"
+    },
+    {
+      "product": "Perplexity",
+      "capability": "Finance: dashboard, ticker pages, Earnings Hub, SEC filing research, portfolio tracking, live models in Labs; partners FactSet, S&P Global, LSEG, Quartr",
+      "source": "https://sidsaladi.substack.com/p/perplexity-finance-101-2026-the-complete",
+      "lios": "LiOS H6: ticker page, earnings hub, filing Q&A, portfolio from file"
+    },
+    {
+      "product": "Bloomberg",
+      "capability": "ASKB conversational agentic AI in beta; Document Search & Analysis over transcripts, filings and research",
+      "source": "https://www.alpha-sense.com/compare/alphasense-vs-bloomberg/",
+      "lios": "LiOS H8: command line and Pro layer; H6 document Q&A"
+    },
+    {
+      "product": "Hebbia",
+      "capability": "Cross-document grid for comparison across many financial documents",
+      "source": "https://www.hebbia.com/resources/financial-research-platforms",
+      "lios": "Deferred: cross-document grid"
+    },
+    {
+      "product": "Rogo",
+      "capability": "Automates peer comps, company profiles, CIMs and pitch decks",
+      "source": "https://www.hebbia.com/resources/rogo-competitors",
+      "lios": "LiOS H6: comps builder and report templates"
+    }
+  ]
+}

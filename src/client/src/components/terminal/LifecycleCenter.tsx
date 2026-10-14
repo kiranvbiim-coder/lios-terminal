@@ -1,0 +1,197 @@
+import { useMemo, useState } from "react";
+import { ArrowLeft, FolderKanban, MessageSquare, Package } from "lucide-react";
+import { ObjectActionMenu } from "./ObjectActionMenu";
+import {
+  getProjectDependencySummary,
+  permanentlyDeleteProject,
+  permanentlyDeleteProjectChat,
+  restoreTrashedProject,
+  restoreTrashedProjectChat,
+  trashProject,
+  trashProjectChat,
+  updateProject,
+  updateProjectChat,
+  useAllProjectChats,
+  useProjects,
+  useQuickChats,
+  type Project,
+  type ProjectChat,
+} from "@/lib/useProjects";
+import {
+  permanentlyDeleteArtifact,
+  restoreTrashedArtifact,
+  setArtifactStatus,
+  trashArtifact,
+  useAllArtifacts,
+  type ProjectArtifactRecord,
+} from "@/lib/useArtifacts";
+import type { LifecycleAction, LifecycleStatus } from "@shared/objectLifecycle";
+
+interface Props {
+  onClose: () => void;
+  onNotice: (message: string | null) => void;
+  onInvalidate: () => void;
+}
+
+type CenterTab = "archived" | "trash";
+
+function lifecycleStatus(trashedAt: string | null | undefined, status: "active" | "archived"): LifecycleStatus {
+  return trashedAt ? "trashed" : status;
+}
+
+function actionLabel(tab: CenterTab): string {
+  return tab === "trash" ? "Trash" : "Archived";
+}
+
+export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
+  const [tab, setTab] = useState<CenterTab>("trash");
+  const archivedProjectsQuery = useProjects("archived");
+  const trashedProjectsQuery = useProjects("trash");
+  const archivedChatsQuery = useAllProjectChats("archived");
+  const trashedChatsQuery = useAllProjectChats("trash");
+  const archivedQuickChatsQuery = useQuickChats("archived");
+  const trashedQuickChatsQuery = useQuickChats("trash");
+  const trashedArtifactsQuery = useAllArtifacts("trash");
+  const archivedArtifactsQuery = useAllArtifacts("archived");
+
+  const projects = tab === "trash" ? trashedProjectsQuery.data ?? [] : archivedProjectsQuery.data ?? [];
+  const chats = tab === "trash"
+    ? [...(trashedChatsQuery.data ?? []), ...(trashedQuickChatsQuery.data ?? [])]
+    : [...(archivedChatsQuery.data ?? []), ...(archivedQuickChatsQuery.data ?? [])];
+  const artifacts = tab === "trash" ? trashedArtifactsQuery.data ?? [] : archivedArtifactsQuery.data ?? [];
+  const counts = useMemo(() => ({ projects: projects.length, chats: chats.length, artifacts: artifacts.length }), [artifacts.length, chats.length, projects.length]);
+
+  const run = async (work: () => Promise<void>) => {
+    onNotice(null);
+    try {
+      await work();
+      onInvalidate();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : `Unable to update ${actionLabel(tab).toLowerCase()}.`);
+    }
+  };
+
+  const confirmProjectTrash = async (project: Project) => {
+    const dependencies = await getProjectDependencySummary(project.id);
+    const detail = dependencies.total
+      ? ` This also moves ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} (${dependencies.chats} chats, ${dependencies.resources} resources, ${dependencies.sessions} sessions, ${dependencies.artifacts} artifacts) to Trash.`
+      : " It has no active dependent objects.";
+    if (!window.confirm(`Move Project “${project.name}” to Trash?${detail}`)) return;
+    await trashProject(project.id);
+  };
+
+  const confirmProjectPermanentDelete = async (project: Project) => {
+    const dependencies = await getProjectDependencySummary(project.id);
+    const detail = dependencies.total
+      ? ` This permanently removes ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} (${dependencies.chats} chats, ${dependencies.resources} resources, ${dependencies.sessions} sessions, ${dependencies.artifacts} artifacts).`
+      : " It has no active dependent objects.";
+    if (!window.confirm(`Permanently delete Project “${project.name}”?${detail} This cannot be undone.`)) return;
+    await permanentlyDeleteProject(project.id);
+  };
+
+  const handleProjectAction = (project: Project, action: LifecycleAction) => {
+    if (action === "restore") {
+      return run(async () => {
+        if (project.trashedAt) await restoreTrashedProject(project.id);
+        else await updateProject(project.id, { status: "active" });
+      });
+    }
+    if (action === "delete") return run(() => confirmProjectTrash(project));
+    if (action === "delete_permanently") return run(() => confirmProjectPermanentDelete(project));
+    return Promise.resolve();
+  };
+
+  const handleChatAction = (chat: ProjectChat, action: LifecycleAction) => {
+    if (action === "restore") return run(async () => {
+      if (chat.trashedAt) await restoreTrashedProjectChat(chat.id);
+      else await updateProjectChat(chat.id, { status: "active" });
+    });
+    if (action === "delete") return run(async () => { await trashProjectChat(chat.id); });
+    if (action === "delete_permanently") return run(async () => {
+      if (!window.confirm(`Permanently delete chat “${chat.title}”? This cannot be undone.`)) return;
+      await permanentlyDeleteProjectChat(chat.id);
+    });
+    return Promise.resolve();
+  };
+
+  const handleArtifactAction = (artifact: ProjectArtifactRecord, action: LifecycleAction) => {
+    if (action === "restore") return run(async () => {
+      if (artifact.trashedAt) await restoreTrashedArtifact(artifact.id);
+      else await setArtifactStatus(artifact.id, "active");
+    });
+    if (action === "delete") return run(async () => { await trashArtifact(artifact.id); });
+    if (action === "delete_permanently") return run(async () => {
+      if (!window.confirm(`Permanently delete Artifact “${artifact.title}”? This cannot be undone.`)) return;
+      await permanentlyDeleteArtifact(artifact.id);
+    });
+    return Promise.resolve();
+  };
+
+  return (
+    <section className="flex h-full min-h-0 flex-col bg-[#050505]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border/70 px-5 py-4">
+        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close Lifecycle Center" title="Back to Project Home">
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="font-terminal text-[7px] uppercase tracking-[0.24em] text-amber-300/80">Lifecycle Center</div>
+          <h1 className="mt-1 font-ui text-xl font-semibold text-foreground">Recover or remove work</h1>
+          <p className="mt-1 font-ui text-[9px] leading-5 text-muted-foreground">Archive keeps work organized. Trash is recoverable until permanent deletion.</p>
+        </div>
+      </header>
+
+      <div className="flex shrink-0 gap-2 border-b border-border/60 px-5 py-3">
+        {(["trash", "archived"] as const).map((item) => (
+          <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-md border px-3 py-2 font-ui text-[8px] ${tab === item ? "border-amber-300/40 bg-amber-300/[0.08] text-amber-100" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
+            {item === "trash" ? "Trash" : "Archived"}
+          </button>
+        ))}
+        <span className="ml-auto self-center font-terminal text-[6px] uppercase tracking-[0.16em] text-muted-foreground">
+          {counts.projects + counts.chats + counts.artifacts} objects
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        {tab === "trash" && <div className="mb-5 rounded-lg border border-red-300/20 bg-red-300/[0.035] px-4 py-3 font-ui text-[9px] leading-5 text-red-100/80">Trash is recoverable. Permanent deletion removes the selected object and cannot be undone.</div>}
+        <div className="grid gap-4 xl:grid-cols-3">
+          <LifecycleGroup title="Projects" icon={<FolderKanban className="h-3.5 w-3.5 text-amber-300" />} empty={tab === "trash" ? "Trash is empty." : "No archived Projects."}>
+            {projects.map((project) => (
+              <div key={project.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
+                <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{project.name}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{project.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
+                <ObjectActionMenu kind="project" status={lifecycleStatus(project.trashedAt, project.status)} pinned={project.pinned} hidden={["share"]} label={`Actions for ${project.name}`} onAction={(action) => void handleProjectAction(project, action)} />
+              </div>
+            ))}
+          </LifecycleGroup>
+
+          <LifecycleGroup title="Chats" icon={<MessageSquare className="h-3.5 w-3.5 text-cyan-300" />} empty={tab === "trash" ? "Trash is empty." : "No archived chats."}>
+            {chats.map((chat) => (
+              <div key={chat.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
+                <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{chat.title}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{chat.scope.toUpperCase()} · {chat.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
+                <ObjectActionMenu kind="chat" scope={chat.scope} status={lifecycleStatus(chat.trashedAt, chat.status)} pinned={chat.pinned} hidden={["branch"]} label={`Actions for ${chat.title}`} onAction={(action) => void handleChatAction(chat, action)} />
+              </div>
+            ))}
+          </LifecycleGroup>
+
+          <LifecycleGroup title="Artifacts" icon={<Package className="h-3.5 w-3.5 text-violet-300" />} empty={tab === "trash" ? "Trash is empty." : "No archived Artifacts."}>
+            {artifacts.map((artifact) => (
+              <div key={artifact.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
+                <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{artifact.title}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{artifact.kind.toUpperCase()} · {artifact.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
+                <ObjectActionMenu kind="artifact" status={lifecycleStatus(artifact.trashedAt, artifact.status)} hidden={[]} label={`Actions for ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
+              </div>
+            ))}
+          </LifecycleGroup>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LifecycleGroup({ title, icon, empty, children }: { title: string; icon: React.ReactNode; empty: string; children: React.ReactNode }) {
+  const hasChildren = Boolean(children && (Array.isArray(children) ? children.length : true));
+  return (
+    <section className="rounded-xl border border-border/60 bg-white/[0.012] p-3">
+      <div className="flex items-center gap-2 border-b border-border/50 pb-3"><span>{icon}</span><h2 className="font-ui text-[10px] font-semibold">{title}</h2></div>
+      <div className="mt-3 space-y-2">{hasChildren ? children : <div className="px-1 py-5 font-ui text-[8px] text-muted-foreground">{empty}</div>}</div>
+    </section>
+  );
+}

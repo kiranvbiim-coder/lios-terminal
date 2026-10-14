@@ -1,0 +1,331 @@
+/* LiOS shell stabilization.
+ *
+ * This is the final readability and progressive-disclosure layer for the V4
+ * shell. It keeps the approved black/amber/cyan identity while preventing the
+ * shell from collapsing into low-contrast micro-copy or an always-open tool
+ * catalogue. Analytical capabilities remain available through Workbench,
+ * the expandable groups, and the omnibox.
+ */
+
+.terminal-root {
+  /* The theme lock owns the palette. These values only restore the contrast
+     needed for long analytical sessions and small laptop displays. */
+  --limuria-text-dim: 35 7% 58%;
+  --limuria-text-soft: 38 8% 74%;
+  --muted-foreground: 35 7% 60%;
+  --limuria-line: 35 10% 15%;
+  --limuria-line-strong: 38 18% 24%;
+}
+
+/* Text scale is a real preference. Keep the terminal typeface and semantic
+   colours fixed, but give the user a predictable readability adjustment. */
+.terminal-root[data-text-scale='small'] { --lios-type-scale: .94; }
+.terminal-root[data-text-scale='normal'] { --lios-type-scale: 1; }
+.terminal-root[data-text-scale='large'] { --lios-type-scale: 1.08; }
+
+/* Workbench is an orientation surface, so it needs a clear hierarchy rather
+   than the same tiny type used by dense data cells. */
+.terminal-root .lios-phase2-workbench {
+  gap: clamp(10px, 1.2vw, 16px);
+  padding: clamp(12px, 1.4vw, 22px);
+  font-size: calc(.6875rem * var(--lios-type-scale, 1));
+}
+.terminal-root .lios-phase2-workbench-hero { padding: clamp(14px, 1.8vw, 22px); }
+.terminal-root .lios-phase2-workbench-eyebrow,
+.terminal-root .lios-phase2-workbench-kicker { font-size: calc(.55rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-heading h1 { font-size: calc(1.35rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-heading p { font-size: calc(.62rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-metrics > div { min-height: 76px; padding: 12px; }
+.terminal-root .lios-phase2-workbench-metrics span { font-size: calc(.5rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-metrics strong { font-size: calc(.96rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-metrics em { font-size: calc(.5rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-toolbar-copy strong { font-size: calc(.76rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-toolbar-copy small { font-size: calc(.52rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-section-head h2 { font-size: calc(.8rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-section-meta { font-size: calc(.5rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-pane { padding: 10px; }
+.terminal-root .lios-phase2-workbench-pane-copy strong { font-size: calc(.64rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-pane-copy small,
+.terminal-root .lios-phase2-workbench-pane-state { font-size: calc(.5rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-evidence span { font-size: calc(.48rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-evidence strong { font-size: calc(.56rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-action-list button { padding: 10px; }
+.terminal-root .lios-phase2-workbench-action-list strong { font-size: calc(.62rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-action-list small { font-size: calc(.5rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-scene { padding: 9px; }
+.terminal-root .lios-phase2-workbench-scene-copy strong { font-size: calc(.6rem * var(--lios-type-scale, 1)); }
+.terminal-root .lios-phase2-workbench-scene-copy small,
+.terminal-root .lios-phase2-workbench-scene-intent { font-size: calc(.48rem * var(--lios-type-scale, 1)); }
+
+/* Phase 2 workspace continuity: make named groups visible in the tab rail so
+   saved analytical context is discoverable without opening a context menu. */
+.terminal-root .lios-tab-group-marker {
+  display: flex;
+  min-width: 112px;
+  max-width: 156px;
+  align-items: center;
+  gap: 6px;
+  border-right: 1px solid hsl(var(--limuria-line-strong) / .72);
+  border-left: 1px solid hsl(var(--limuria-line) / .6);
+  background: linear-gradient(90deg, hsl(var(--limuria-graphite-1) / .55), hsl(var(--limuria-graphite-1) / .18));
+  padding: 0 8px;
+  color: hsl(var(--limuria-text-soft) / .82);
+}
+.terminal-root .lios-tab-group-marker-kicker {
+  flex: 0 0 auto;
+  color: hsl(var(--limuria-amber) / .82);
+  font-size: calc(.42rem * var(--lios-type-scale, 1));
+  letter-spacing: .14em;
+}
+.terminal-root .lios-tab-group-marker-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  color: hsl(var(--limuria-text-soft) / .94);
+  font-family: var(--font-ui, Inter, sans-serif);
+  font-size: calc(.55rem * var(--lios-type-scale, 1));
+  font-weight: 600;
+}
+.terminal-root .lios-tab-group-marker-count {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--limuria-line-strong) / .82);
+  border-radius: 999px;
+  padding: 2px 5px;
+  color: hsl(var(--limuria-cyan) / .85);
+  font-size: calc(.42rem * var(--lios-type-scale, 1));
+}
+.terminal-root .lios-tab-v4[data-group-id]:not([data-group-id="ungrouped"]) {
+  background: hsl(var(--limuria-graphite-1) / .16);
+}
+.terminal-root .lios-tab-v4[data-link-group] .lios-tab-title {
+  max-width: 160px;
+}
+
+@media (max-width: 900px) {
+  .terminal-root .lios-tab-group-marker { min-width: 92px; padding: 0 6px; }
+  .terminal-root .lios-tab-group-marker-kicker { display: none; }
+}
+
+/* The tool catalogue is available without occupying the entire left edge.
+   Group headers remain visible and their counts communicate breadth; only
+   the active group is opened automatically. */
+.terminal-root aside[aria-label='LIOS primary product navigation'] {
+  border-right-color: hsl(var(--limuria-line-strong) / .72);
+}
+.terminal-root aside[aria-label='LIOS primary product navigation'] nav > div > div.mb-1 {
+  margin-top: 3px;
+  margin-bottom: 5px;
+}
+.terminal-root aside[aria-label='LIOS primary product navigation'] nav > div > div.mb-1 > button {
+  min-height: 30px;
+  border: 1px solid hsl(var(--limuria-line) / .72);
+  background: hsl(var(--limuria-graphite-1) / .3);
+}
+.terminal-root aside[aria-label='LIOS primary product navigation'] nav > div > div.mb-1 > button:hover {
+  border-color: hsl(var(--limuria-cyan) / .35);
+  background: hsl(var(--limuria-cyan) / .045);
+}
+.terminal-root aside[aria-label='LIOS primary product navigation'] nav > div > div.mb-1 > button + button {
+  margin-top: 2px;
+}
+.terminal-root aside[aria-label='LIOS primary product navigation'] nav > div > div.mb-1 > button + button[aria-current='true'] {
+  border-left-color: hsl(var(--limuria-amber) / .9);
+}
+
+/* On an operational page the icon rail is the quiet default. The explicit
+   expand control is the safe path to the full catalogue. */
+@media (min-width: 768px) {
+  .terminal-root aside[aria-label='LIOS primary product navigation'][data-operational='true'][data-collapsed='true'] {
+    width: 52px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .terminal-root .lios-phase2-workbench-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .terminal-root .lios-phase2-workbench-metrics > div:nth-child(2) { border-right: 0; }
+}
+
+@media (max-width: 640px) {
+  .terminal-root .lios-phase2-workbench { padding: 10px; }
+  .terminal-root .lios-phase2-workbench-hero { padding: 13px; }
+  .terminal-root .lios-phase2-workbench-grid { grid-template-columns: 1fr; }
+  .terminal-root .lios-phase2-workbench-scene-list { grid-template-columns: 1fr; }
+}
+
+
+/* P1-17 — conversation-first shell readability and first-use adaptation.
+   The Project shell is a primary navigation/work surface, not a dense data grid,
+   so it must not inherit terminal micro-copy sizing or fixed-width behavior. */
+.terminal-root .lios-project-experience-shell {
+  min-width: 0;
+  font-size: calc(.6875rem * var(--lios-type-scale, 1));
+}
+.terminal-root .lios-project-experience-shell button,
+.terminal-root .lios-project-experience-shell input,
+.terminal-root .lios-project-experience-shell select,
+.terminal-root .lios-project-experience-shell textarea {
+  min-height: 28px;
+}
+.terminal-root .lios-conversation-composer {
+  overflow: hidden;
+}
+.terminal-root .lios-conversation-composer textarea {
+  min-height: 74px;
+}
+.terminal-root .lios-conversation-empty-state {
+  padding: clamp(18px, 4vw, 44px) 12px;
+}
+
+@media (max-width: 1120px) {
+  .terminal-root .lios-project-sidebar {
+    width: 236px !important;
+  }
+  .terminal-root .lios-conversation-header {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+  .terminal-root .lios-conversation-composer-actions {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .terminal-root .lios-conversation-composer-actions > span.ml-auto {
+    flex-basis: 100%;
+    margin-left: 0;
+    order: 20;
+  }
+}
+
+@media (max-width: 760px) {
+  .terminal-root .lios-project-experience-shell {
+    flex-direction: column;
+  }
+  .terminal-root .lios-project-sidebar {
+    width: 100% !important;
+    max-height: min(32vh, 230px);
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--limuria-line-strong) / .72);
+  }
+  .terminal-root .lios-project-experience-shell > main {
+    min-height: 0;
+  }
+  .terminal-root .lios-conversation-header {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding-block: 8px;
+  }
+  .terminal-root .lios-conversation-composer-actions {
+    padding-inline: 10px;
+  }
+  .terminal-root .lios-conversation-composer-actions select {
+    max-width: min(100%, 190px);
+  }
+}
+
+
+/* P1-17 continued — Project conversation readability, focus and adaptive layout.
+   Consolidated here during Product Hardening to avoid another global CSS generation. */
+.lios-project-experience-shell [class~="text-[5px]"] {
+  font-size: max(0.625rem, calc(0.625rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.4;
+}
+
+.lios-project-experience-shell [class~="text-[6px]"] {
+  font-size: max(0.625rem, calc(0.625rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.4;
+}
+
+.lios-project-experience-shell [class~="text-[7px]"] {
+  font-size: max(0.6875rem, calc(0.6875rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.45;
+}
+
+.lios-project-experience-shell [class~="text-[8px]"] {
+  font-size: max(0.75rem, calc(0.75rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-[9px]"] {
+  font-size: max(0.8125rem, calc(0.8125rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-[10px]"] {
+  font-size: max(0.875rem, calc(0.875rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.5;
+}
+
+.lios-project-experience-shell [class~="text-muted-foreground"] {
+  color: var(--lios-text-secondary, #a3a3a3) !important;
+}
+
+.lios-project-experience-shell > aside:first-child {
+  flex-basis: clamp(15rem, 22vw, 18.75rem);
+  width: clamp(15rem, 22vw, 18.75rem) !important;
+}
+
+.lios-project-experience-shell > aside:first-child button,
+.lios-project-experience-shell .lios-conversation-composer button {
+  min-height: 2.25rem;
+}
+
+.lios-project-experience-shell .lios-project-create-button {
+  min-height: 2.25rem;
+}
+
+.lios-project-experience-shell .lios-project-sidebar-search {
+  min-height: 2.5rem;
+}
+
+.lios-project-experience-shell .lios-project-chat-content,
+.lios-project-experience-shell .lios-conversation-composer {
+  max-width: 56rem;
+}
+
+.lios-project-experience-shell .lios-conversation-composer textarea {
+  min-height: 5.5rem;
+  font-size: max(0.875rem, calc(0.875rem * var(--lios-type-scale, 1))) !important;
+  line-height: 1.55;
+}
+
+.lios-project-experience-shell .lios-composer-toolbar {
+  row-gap: 0.5rem;
+}
+
+.lios-project-experience-shell .lios-composer-toolbar > span {
+  flex: 1 1 12rem;
+  text-align: right;
+}
+
+.lios-project-experience-shell .lios-chat-empty-state {
+  text-wrap: pretty;
+}
+
+.lios-project-experience-shell .lios-chat-starter {
+  min-height: 5.75rem;
+}
+
+.lios-project-experience-shell :is(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--lios-brand, #f69f0a) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .lios-project-experience-shell > aside:first-child {
+    flex-basis: 15rem;
+    width: 15rem !important;
+  }
+
+  .lios-project-experience-shell .lios-project-chat-content {
+    max-width: 48rem;
+  }
+
+  .lios-project-experience-shell .lios-composer-toolbar > span {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lios-project-experience-shell .lios-chat-starter {
+    transition: none !important;
+  }
+}

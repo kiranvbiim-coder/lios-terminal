@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-12",
+  "scope": "controlled_fork_snapshot_not_runtime_or_import_approval",
+  "owner": "kiranvbiim-coder",
+  "canonicalBaseline": "third_party/capability-assimilation.json",
+  "baselineDonorCount": 92,
+  "canonicalPins": "third_party/upstream-lock.json",
+  "canonicalComponents": "third_party/components.json",
+  "harvestingControls": "third_party/donor-harvesting-controls.json",
+  "rules": [
+    "Fork HEAD is an observation, not an approved donor import pin or released dependency.",
+    "An unregistered fork may be studied without increasing the exact 92-donor baseline; any material reuse requires canonical donor records, path-level provenance, licenses, tests and notice updates.",
+    "A different fork upstream must never inherit another donor's rights, source hashes or approved pin.",
+    "A documented donor does not become runtime-integrated, packaged or shipped merely because a fork exists.",
+    "All finance execution, evidence, AI and Artifact permissions remain with canonical LiOS P5/P7/P11/P4/GM owners.",
+    "Controlled forks must record delta-review state, material-delta disposition, rights/provenance gate and a concrete next-review trigger; observed fork HEAD alone never promotes integration truth."
+  ],
+  "mirrors": [
+    {
+      "id": "openclaw",
+      "forkRepository": "kiranvbiim-coder/openclaw",
+      "upstreamRepository": "openclaw/openclaw",
+      "defaultBranch": "main",
+      "observedCommit": "0be750916b123c328b8962117213f8c4fd1b2a0a",
+      "baselineDonorId": "openclaw",
+      "status": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.37",
+        "SI-05.30"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "partial_source_imports_recorded_continue_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review fork-only deltas when a GM capability slice, platform fix, security fix or packaging change is selected",
+      "nextAction": "Reuse already approved GM-11/GM-12 execution, approval and tool subsystems; compare fork changes to the separately approved upstream pin before any new import."
+    },
+    {
+      "id": "cua",
+      "forkRepository": "kiranvbiim-coder/cua",
+      "upstreamRepository": "trycua/cua",
+      "defaultBranch": "main",
+      "observedCommit": "a7524cfd1d3e959963b43954d43f27c4bd260f08",
+      "baselineDonorId": null,
+      "status": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.30"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "pending_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review material CUA deltas when GM-14 computer-use selects a concrete native driver, permission or recovery capability",
+      "nextAction": "Evaluate controlled-computer model-maintenance interactions behind existing GM-14 and user-approved native permissions; no direct Project data or filesystem authority."
+    },
+    {
+      "id": "TradingAgents",
+      "forkRepository": "kiranvbiim-coder/TradingAgents",
+      "upstreamRepository": "TauricResearch/TradingAgents",
+      "defaultBranch": "main",
+      "observedCommit": "1394a3f72aa4393e1a98f51b382434c4b4c2d972",
+      "baselineDonorId": "tradingagents",
+      "status": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.26",
+        "SI-05.27",
+        "SI-05.29"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "partial_source_imports_recorded_continue_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review analyst, debate, risk and workflow fork deltas when P5/P7/GM-12 selects the next bounded finance-intelligence slice",
+      "nextAction": "Existing approved TradingAgents source pin contributes bounded verified GM-12 risk-review mechanics; next qualify source-backed analyst/team workflow, full licensed dependency and packaged SP-05, not fork HEAD or live brokerage."
+    },
+    {
+      "id": "FinRobot",
+      "forkRepository": "kiranvbiim-coder/FinRobot",
+      "upstreamRepository": "AI4Finance-Foundation/FinRobot",
+      "defaultBranch": "master",
+      "observedCommit": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "baselineDonorId": null,
+      "status": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.24",
+        "SI-05.25",
+        "SI-05.28",
+        "SI-05.40",
+        "SI-05.34",
+        "SI-05.27"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "partial_source_imports_recorded_continue_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review equity-research, IC-memo and professional-report fork deltas when the owning P4/P7/P11 slice enters implementation",
+      "nextAction": "Three bounded Production-V2 packages are now integrated at the exact approved source pin with native V1 evidence: zero-I/O financial audit, result-contract validation, and semantic Artifact decision/change diff. Next inspect coherent equity-research, IC-memo and professional-report composition packages plus canonical consumer wiring, while keeping FinRobot provider, store, agent, server, report-runtime, finance-engine and broker authorities excluded unless separately approved."
+    },
+    {
+      "id": "FinGPT",
+      "forkRepository": "kiranvbiim-coder/FinGPT",
+      "upstreamRepository": "AI4Finance-Foundation/FinGPT",
+      "defaultBranch": "master",
+      "observedCommit": "fdb04c9a273d1ccc3764b09b8e3ed1e708e57566",
+      "baselineDonorId": null,
+      "status": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.26",
+        "SI-05.39"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "pending_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review NLP, evaluation and signal fork deltas only after model-weight, training-data and redistribution rights are independently verified",
+      "nextAction": "Evaluate finance text/model benchmarks in opt-in user-managed AI runtime; independently verify model-weight, data and redistribution rights."
+    },
+    {
+      "id": "LangAlpha",
+      "forkRepository": "kiranvbiim-coder/LangAlpha",
+      "upstreamRepository": "ginlix-ai/LangAlpha",
+      "defaultBranch": "main",
+      "observedCommit": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "baselineDonorId": "langalpha",
+      "status": "documented_only",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.28"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "baseline_source_import_recorded_fork_delta_not_imported",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review research-workspace, skill and thesis-continuity fork deltas when P7/GM selects the next coherent LangAlpha capability slice",
+      "nextAction": "Inspect coherent research workspace/skills subsystem and adapt permitted portions behind LiOS Project, governed tools and Artifact authority."
+    },
+    {
+      "id": "dexter-js",
+      "forkRepository": "kiranvbiim-coder/dexter-js",
+      "upstreamRepository": "rodionlim/dexter-js",
+      "defaultBranch": "main",
+      "observedCommit": "d2efa875c4f7e27f2f11bc59f20db72037725736",
+      "baselineDonorId": null,
+      "status": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.27"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "pending_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review planner and finance-workflow deltas after rodionlim/dexter-js lineage and rights are reconciled separately from virattt/dexter",
+      "nextAction": "Treat as a separate upstream from the registry's virattt/dexter; inspect license and source independently before reconciling any reusable planner/finance workflow."
+    },
+    {
+      "id": "browser-use",
+      "forkRepository": "kiranvbiim-coder/browser-use",
+      "upstreamRepository": "browser-use/browser-use",
+      "defaultBranch": "main",
+      "observedCommit": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "baselineDonorId": null,
+      "status": "mirror_observed_no_runtime_claim",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.27"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "supplemental_source_import_recorded_fork_delta_not_imported",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review browser safety, download, recovery and research deltas whenever GM-14 selects another governed browser capability slice",
+      "nextAction": "Evaluate browser research mechanisms under LiOS GM-14 governed browser/session, entitlements, screenshots and source lineage; no unmanaged browser process."
+    },
+    {
+      "id": "qlib",
+      "forkRepository": "kiranvbiim-coder/qlib",
+      "upstreamRepository": "microsoft/qlib",
+      "defaultBranch": "main",
+      "observedCommit": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "baselineDonorId": "qlib",
+      "status": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.12",
+        "SI-05.13",
+        "SI-05.16",
+        "SI-05.23"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "partial_source_imports_recorded_continue_capability_slice_review",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review formula, risk, model and dataset fork deltas when P11 selects the next bounded Qlib challenger or modeling slice",
+      "nextAction": "Bounded Qlib risk_analysis formula challenger behind P11/GM-12; qualify source-bound returns, remaining Qlib package/model/dataset rights and packaged SP-05 before claiming broader adoption."
+    },
+    {
+      "id": "graphrag",
+      "forkRepository": "kiranvbiim-coder/graphrag",
+      "upstreamRepository": "microsoft/graphrag",
+      "defaultBranch": "main",
+      "observedCommit": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "baselineDonorId": null,
+      "status": "partially_integrated_pinned_paths",
+      "si05Workstreams": [
+        "SI-05.22",
+        "SI-05.31"
+      ],
+      "deltaReviewStatus": "controlled_fork_reviewed",
+      "materialDeltaDisposition": "supplemental_source_import_recorded_fork_delta_not_imported",
+      "rightsProvenanceGate": "exact_source_pin_and_path_rights_required_before_import",
+      "nextReviewTrigger": "review graph-index, query, provenance and retrieval deltas when P7/P5 selects the next source-scoped graph capability slice",
+      "nextAction": "Continue coherent GraphRAG source-context evidence exploration behind existing P7/P5 while evaluating remaining package paths, Microsoft upstream dependencies, AI-use rights and packaged SP-03; currently only selected two MIT source paths are adapted, not full graph runtime."
+    }
+  ]
+}

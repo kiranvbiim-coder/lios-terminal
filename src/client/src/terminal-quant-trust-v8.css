@@ -1,0 +1,27 @@
+/* LV3-UX-04: quantitative trust/readability refinement.
+   Loaded after v7 so secondary analytical copy clears the long-session
+   readability floor without changing the terminal's density or hierarchy. */
+
+.dark .text-muted-foreground {
+  color: hsl(0 0% 58%);
+}
+
+.dark [data-workstation-toolbar] .text-muted-foreground,
+.dark [data-workstation-toolbar] .panel-label {
+  color: hsl(0 0% 64%);
+}
+
+.dark .panel-label {
+  letter-spacing: 0.14em;
+}
+
+/* Trust/provenance disclosures are operational metadata, not decoration. */
+.dark [role="dialog"] .text-muted-foreground {
+  color: hsl(0 0% 62%);
+}
+
+/* Keep intentionally disabled/low-priority controls muted. */
+.dark :disabled.text-muted-foreground,
+.dark .opacity-40.text-muted-foreground {
+  color: hsl(0 0% 46%);
+}

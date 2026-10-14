@@ -1,0 +1,506 @@
+import crypto from "node:crypto";
+import { and, desc, eq, isNull, lt, lte, or } from "drizzle-orm";
+import {
+  projectAutomationNotifications,
+  projectAutomationRuns,
+  projectAutomationWorkflows,
+  type ProjectAutomationNotification,
+  type ProjectAutomationRun,
+  type ProjectAutomationWorkflow,
+} from "@shared/schema";
+import {
+  p9NotificationPolicySchema,
+  p9WorkflowActionSchema,
+  p9WorkflowDefinitionInputSchema,
+  p9WorkflowTriggerSchema,
+  type P9AutomationEventType,
+  type P9WorkflowDefinitionInput,
+  type P9WorkflowRunResult,
+} from "@shared/p9AutomationContracts";
+import { getDb } from "./db";
+import type { TenantContext } from "./tenantContext";
+import { getProject, touchProjectActivity } from "./projectStore";
+import { appendLedgerEvent } from "./ledgerStore";
+import { nextP9ScheduledRun } from "./p9AutomationEngine";
+
+const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
+const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
+const CLAIM_LEASE_MS = 5 * 60_000;
+
+function orgClause(column: any, ctx: TenantContext) {
+  return ctx.organizationId === null ? isNull(column) : eq(column, ctx.organizationId);
+}
+
+function workflowTenantFilter(ctx: TenantContext, id?: string) {
+  return and(
+    eq(projectAutomationWorkflows.ownerUserId, ctx.userId),
+    orgClause(projectAutomationWorkflows.organizationId, ctx),
+    ...(id ? [eq(projectAutomationWorkflows.id, id)] : []),
+  );
+}
+
+function runTenantFilter(ctx: TenantContext) {
+  return and(
+    eq(projectAutomationRuns.ownerUserId, ctx.userId),
+    orgClause(projectAutomationRuns.organizationId, ctx),
+  );
+}
+
+function notificationTenantFilter(ctx: TenantContext) {
+  return and(
+    eq(projectAutomationNotifications.ownerUserId, ctx.userId),
+    orgClause(projectAutomationNotifications.organizationId, ctx),
+  );
+}
+
+function assertSecretFree(value: unknown, path = "workflow", depth = 0): void {
+  if (depth > 30) throw new Error("Workflow definition exceeds the maximum nesting depth.");
+  if (typeof value === "string") {
+    if (SECRET_VALUE.test(value)) throw new Error(`Workflow definitions cannot persist credential-shaped content at "${path}".`);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertSecretFree(item, path + "[" + index + "]", depth + 1));
+    return;
+  }
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (SECRET_KEY.test(key)) throw new Error(`Workflow definitions cannot persist credential-shaped field "${path}.${key}".`);
+    assertSecretFree(nested, path + "." + key, depth + 1);
+  }
+}
+
+export async function createP9Workflow(
+  ctx: TenantContext,
+  projectId: number,
+  raw: unknown,
+): Promise<ProjectAutomationWorkflow> {
+  await getProject(ctx, projectId);
+  const input = p9WorkflowDefinitionInputSchema.parse(raw);
+  assertSecretFree(input);
+  const now = new Date();
+  const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
+  const id = "workflow:" + crypto.randomUUID();
+  const [row] = await getDb().insert(projectAutomationWorkflows).values({
+    id,
+    projectId,
+    ownerUserId: ctx.userId,
+    organizationId: ctx.organizationId,
+    name: input.name,
+    description: input.description,
+    template: input.template,
+    enabled: input.enabled,
+    trigger: input.trigger,
+    action: input.action,
+    notificationPolicy: input.notificationPolicy,
+    sourceRefs: input.sourceRefs,
+    engineRefs: input.engineRefs,
+    artifactRefs: input.artifactRefs,
+    eventCursor: {},
+    nextRunAt,
+    createdAt: now,
+    updatedAt: now,
+  }).returning();
+  await appendLedgerEvent(ctx, {
+    projectId,
+    eventType: "policy.changed",
+    actorType: "user",
+    payload: {
+      workflowId: id,
+      policy: "automation",
+      action: "created",
+      template: input.template,
+      triggerType: input.trigger.type,
+    },
+  });
+  await touchProjectActivity(ctx, projectId);
+  return row;
+}
+
+export async function listP9Workflows(ctx: TenantContext, projectId: number): Promise<ProjectAutomationWorkflow[]> {
+  await getProject(ctx, projectId);
+  return getDb().select().from(projectAutomationWorkflows)
+    .where(and(workflowTenantFilter(ctx), eq(projectAutomationWorkflows.projectId, projectId)))
+    .orderBy(desc(projectAutomationWorkflows.updatedAt));
+}
+
+export async function getP9Workflow(ctx: TenantContext, workflowId: string): Promise<ProjectAutomationWorkflow> {
+  const [row] = await getDb().select().from(projectAutomationWorkflows)
+    .where(workflowTenantFilter(ctx, workflowId)).limit(1);
+  if (!row) throw new Error("Automation workflow not found or not owned by the requesting user.");
+  await getProject(ctx, row.projectId);
+  return row;
+}
+
+export async function replaceP9Workflow(
+  ctx: TenantContext,
+  workflowId: string,
+  raw: unknown,
+): Promise<ProjectAutomationWorkflow> {
+  const current = await getP9Workflow(ctx, workflowId);
+  const input = p9WorkflowDefinitionInputSchema.parse(raw);
+  assertSecretFree(input);
+  const now = new Date();
+  const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
+  const [row] = await getDb().update(projectAutomationWorkflows).set({
+    name: input.name,
+    description: input.description,
+    template: input.template,
+    enabled: input.enabled,
+    trigger: input.trigger,
+    action: input.action,
+    notificationPolicy: input.notificationPolicy,
+    sourceRefs: input.sourceRefs,
+    engineRefs: input.engineRefs,
+    artifactRefs: input.artifactRefs,
+    nextRunAt,
+    claimToken: null,
+    claimExpiresAt: null,
+    updatedAt: now,
+  }).where(workflowTenantFilter(ctx, workflowId)).returning();
+  await appendLedgerEvent(ctx, {
+    projectId: current.projectId,
+    eventType: "policy.changed",
+    actorType: "user",
+    payload: { workflowId, policy: "automation", action: "updated", triggerType: input.trigger.type },
+  });
+  await touchProjectActivity(ctx, current.projectId);
+  return row;
+}
+
+export async function setP9WorkflowEnabled(
+  ctx: TenantContext,
+  workflowId: string,
+  enabled: boolean,
+): Promise<ProjectAutomationWorkflow> {
+  const current = await getP9Workflow(ctx, workflowId);
+  const now = new Date();
+  const trigger = p9WorkflowTriggerSchema.parse(current.trigger);
+  const [row] = await getDb().update(projectAutomationWorkflows).set({
+    enabled,
+    nextRunAt: enabled ? nextP9ScheduledRun(trigger, now) : null,
+    claimToken: null,
+    claimExpiresAt: null,
+    updatedAt: now,
+  }).where(workflowTenantFilter(ctx, workflowId)).returning();
+  await appendLedgerEvent(ctx, {
+    projectId: current.projectId,
+    eventType: "policy.changed",
+    actorType: "user",
+    payload: { workflowId, policy: "automation", action: enabled ? "enabled" : "paused" },
+  });
+  return row;
+}
+
+export async function deleteP9Workflow(ctx: TenantContext, workflowId: string): Promise<void> {
+  const current = await getP9Workflow(ctx, workflowId);
+  await appendLedgerEvent(ctx, {
+    projectId: current.projectId,
+    eventType: "policy.changed",
+    actorType: "user",
+    payload: { workflowId, policy: "automation", action: "deleted" },
+  });
+  await getDb().delete(projectAutomationWorkflows).where(workflowTenantFilter(ctx, workflowId));
+  await touchProjectActivity(ctx, current.projectId);
+}
+
+export interface ClaimedP9Workflow {
+  workflow: ProjectAutomationWorkflow;
+  claimToken: string;
+}
+
+export async function claimDueP9Workflows(now = new Date(), limit = 25): Promise<ClaimedP9Workflow[]> {
+  const db = getDb();
+  const candidates = await db.select().from(projectAutomationWorkflows).where(and(
+    eq(projectAutomationWorkflows.enabled, true),
+    lte(projectAutomationWorkflows.nextRunAt, now),
+    or(isNull(projectAutomationWorkflows.claimExpiresAt), lt(projectAutomationWorkflows.claimExpiresAt, now)),
+  )).orderBy(projectAutomationWorkflows.nextRunAt).limit(Math.min(Math.max(limit, 1), 100));
+
+  const claimed: ClaimedP9Workflow[] = [];
+  for (const candidate of candidates) {
+    const claimToken = crypto.randomUUID();
+    const claimExpiresAt = new Date(now.getTime() + CLAIM_LEASE_MS);
+    const [row] = await db.update(projectAutomationWorkflows).set({
+      claimToken,
+      claimExpiresAt,
+      updatedAt: now,
+    }).where(and(
+      eq(projectAutomationWorkflows.id, candidate.id),
+      eq(projectAutomationWorkflows.enabled, true),
+      lte(projectAutomationWorkflows.nextRunAt, now),
+      or(isNull(projectAutomationWorkflows.claimExpiresAt), lt(projectAutomationWorkflows.claimExpiresAt, now)),
+    )).returning();
+    if (row) claimed.push({ workflow: row, claimToken });
+  }
+  return claimed;
+}
+
+export async function renewP9WorkflowClaimSystem(
+  workflowId: string,
+  claimToken: string,
+  now = new Date(),
+): Promise<boolean> {
+  const [row] = await getDb().update(projectAutomationWorkflows).set({
+    claimExpiresAt: new Date(now.getTime() + CLAIM_LEASE_MS),
+    updatedAt: now,
+  }).where(and(
+    eq(projectAutomationWorkflows.id, workflowId),
+    eq(projectAutomationWorkflows.claimToken, claimToken),
+    eq(projectAutomationWorkflows.enabled, true),
+  )).returning();
+  return Boolean(row);
+}
+
+export async function updateP9WorkflowEventCursorSystem(
+  workflowId: string,
+  eventCursor: Record<string, unknown>,
+): Promise<void> {
+  await getDb().update(projectAutomationWorkflows).set({
+    eventCursor,
+    updatedAt: new Date(),
+  }).where(eq(projectAutomationWorkflows.id, workflowId));
+}
+
+export async function listP9EventWorkflows(
+  eventType: P9AutomationEventType,
+  scope: { projectId: number | null; ownerUserId: number | null; organizationId: number | null },
+): Promise<ProjectAutomationWorkflow[]> {
+  const rows = await getDb().select().from(projectAutomationWorkflows)
+    .where(and(
+      eq(projectAutomationWorkflows.enabled, true),
+      ...(scope.projectId ? [eq(projectAutomationWorkflows.projectId, scope.projectId)] : []),
+      ...(scope.ownerUserId ? [eq(projectAutomationWorkflows.ownerUserId, scope.ownerUserId)] : []),
+      ...(scope.organizationId ? [eq(projectAutomationWorkflows.organizationId, scope.organizationId)] : []),
+    ))
+    .orderBy(projectAutomationWorkflows.updatedAt);
+  return rows.filter((row) => {
+    const parsed = p9WorkflowTriggerSchema.safeParse(row.trigger);
+    return parsed.success && parsed.data.type === "event" && parsed.data.eventType === eventType;
+  });
+}
+
+export async function beginP9Run(
+  ctx: TenantContext,
+  workflow: ProjectAutomationWorkflow,
+  triggerType: "manual" | "schedule" | "event",
+  triggerDetail: Record<string, unknown>,
+  dedupeKey: string | null = null,
+): Promise<ProjectAutomationRun | null> {
+  await getProject(ctx, workflow.projectId);
+  const id = "workflow-run:" + crypto.randomUUID();
+  const startedAt = new Date();
+  const [row] = await getDb().insert(projectAutomationRuns).values({
+    id,
+    workflowId: workflow.id,
+    projectId: workflow.projectId,
+    ownerUserId: ctx.userId,
+    organizationId: ctx.organizationId,
+    triggerType,
+    triggerDetail,
+    dedupeKey,
+    status: "running",
+    startedAt,
+  }).onConflictDoNothing().returning();
+  if (!row) return null;
+  await appendLedgerEvent(ctx, {
+    projectId: workflow.projectId,
+    eventType: "execution.planned",
+    actorType: triggerType === "manual" ? "user" : "system",
+    correlationId: workflow.id,
+    causationId: id,
+    payload: { workflowId: workflow.id, workflowRunId: id, triggerType, template: workflow.template },
+  });
+  return row;
+}
+
+export async function completeP9Run(
+  ctx: TenantContext,
+  workflow: ProjectAutomationWorkflow,
+  runId: string,
+  input: { result?: P9WorkflowRunResult; error?: string; claimToken?: string | null },
+): Promise<ProjectAutomationRun> {
+  const now = new Date();
+  const success = Boolean(input.result) && !input.error;
+  const result = input.result ?? {
+    summary: input.error || "Workflow failed.",
+    changed: false,
+    conditionMet: false,
+    relevanceScore: 1,
+    sourceRefs: [],
+    engineRefs: [],
+    artifactRefs: [],
+    executionReceiptIds: [],
+    output: {},
+  };
+  const [run] = await getDb().update(projectAutomationRuns).set({
+    status: success ? "succeeded" : "failed",
+    completedAt: now,
+    summary: result.summary,
+    changed: result.changed,
+    conditionMet: result.conditionMet,
+    relevanceScore: result.relevanceScore,
+    sourceRefs: result.sourceRefs,
+    engineRefs: result.engineRefs,
+    artifactRefs: result.artifactRefs,
+    executionReceiptIds: result.executionReceiptIds,
+    output: result.output,
+    error: success ? null : input.error || result.summary,
+  }).where(and(eq(projectAutomationRuns.id, runId), runTenantFilter(ctx))).returning();
+  if (!run) throw new Error("Automation run not found or not owned by the requesting user.");
+
+  const trigger = p9WorkflowTriggerSchema.parse(workflow.trigger);
+  const nextRunAt = workflow.enabled ? nextP9ScheduledRun(trigger, now) : null;
+  const updateConditions = [
+    eq(projectAutomationWorkflows.id, workflow.id),
+    ...(input.claimToken ? [eq(projectAutomationWorkflows.claimToken, input.claimToken)] : []),
+  ];
+  await getDb().update(projectAutomationWorkflows).set({
+    lastRunAt: now,
+    lastSuccessAt: success ? now : workflow.lastSuccessAt,
+    lastFailureAt: success ? workflow.lastFailureAt : now,
+    consecutiveFailures: success ? 0 : workflow.consecutiveFailures + 1,
+    nextRunAt,
+    claimToken: null,
+    claimExpiresAt: null,
+    updatedAt: now,
+  }).where(and(...updateConditions));
+
+  await appendLedgerEvent(ctx, {
+    projectId: workflow.projectId,
+    eventType: "execution.receipt",
+    actorType: "system",
+    receiptId: run.id,
+    correlationId: workflow.id,
+    causationId: run.id,
+    payload: {
+      workflowId: workflow.id,
+      workflowRunId: run.id,
+      status: success ? "succeeded" : "failed",
+      changed: result.changed,
+      conditionMet: result.conditionMet,
+      relevanceScore: result.relevanceScore,
+      sourceRefs: result.sourceRefs.slice(0, 100),
+      engineRefs: result.engineRefs.slice(0, 100),
+      artifactRefs: result.artifactRefs.slice(0, 100),
+    },
+  });
+  await touchProjectActivity(ctx, workflow.projectId);
+  return run;
+}
+
+export async function listP9Runs(
+  ctx: TenantContext,
+  projectId: number,
+  workflowId?: string,
+  limit = 50,
+): Promise<ProjectAutomationRun[]> {
+  await getProject(ctx, projectId);
+  return getDb().select().from(projectAutomationRuns).where(and(
+    runTenantFilter(ctx),
+    eq(projectAutomationRuns.projectId, projectId),
+    ...(workflowId ? [eq(projectAutomationRuns.workflowId, workflowId)] : []),
+  )).orderBy(desc(projectAutomationRuns.startedAt)).limit(Math.min(Math.max(limit, 1), 200));
+}
+
+export async function latestSuccessfulP9Run(ctx: TenantContext, workflowId: string): Promise<ProjectAutomationRun | null> {
+  const [row] = await getDb().select().from(projectAutomationRuns).where(and(
+    runTenantFilter(ctx),
+    eq(projectAutomationRuns.workflowId, workflowId),
+    eq(projectAutomationRuns.status, "succeeded"),
+  )).orderBy(desc(projectAutomationRuns.startedAt)).limit(1);
+  return row ?? null;
+}
+
+export async function latestDeliveredP9Notification(ctx: TenantContext, workflowId: string): Promise<ProjectAutomationNotification | null> {
+  const [row] = await getDb().select().from(projectAutomationNotifications).where(and(
+    notificationTenantFilter(ctx),
+    eq(projectAutomationNotifications.workflowId, workflowId),
+    eq(projectAutomationNotifications.status, "delivered"),
+  )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(1);
+  return row ?? null;
+}
+
+export async function createP9Notification(
+  ctx: TenantContext,
+  workflow: ProjectAutomationWorkflow,
+  runId: string,
+  input: {
+    status: "delivered" | "suppressed";
+    reason: "success" | "failure" | "condition_met" | "change_detected";
+    title: string;
+    body: string;
+    relevanceScore: number;
+  },
+): Promise<ProjectAutomationNotification> {
+  const [row] = await getDb().insert(projectAutomationNotifications).values({
+    id: "workflow-notification:" + crypto.randomUUID(),
+    workflowId: workflow.id,
+    runId,
+    projectId: workflow.projectId,
+    ownerUserId: ctx.userId,
+    organizationId: ctx.organizationId,
+    channel: "in_app",
+    status: input.status,
+    reason: input.reason,
+    title: input.title.slice(0, 500),
+    body: input.body.slice(0, 20_000),
+    relevanceScore: input.relevanceScore,
+  }).returning();
+  return row;
+}
+
+export async function listP9Notifications(
+  ctx: TenantContext,
+  projectId: number,
+  limit = 100,
+): Promise<ProjectAutomationNotification[]> {
+  await getProject(ctx, projectId);
+  return getDb().select().from(projectAutomationNotifications).where(and(
+    notificationTenantFilter(ctx),
+    eq(projectAutomationNotifications.projectId, projectId),
+  )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(Math.min(Math.max(limit, 1), 500));
+}
+
+export async function markP9NotificationRead(
+  ctx: TenantContext,
+  projectId: number,
+  notificationId: string,
+): Promise<ProjectAutomationNotification> {
+  await getProject(ctx, projectId);
+  const [row] = await getDb().update(projectAutomationNotifications).set({ readAt: new Date() }).where(and(
+    notificationTenantFilter(ctx),
+    eq(projectAutomationNotifications.projectId, projectId),
+    eq(projectAutomationNotifications.id, notificationId),
+  )).returning();
+  if (!row) throw new Error("Automation notification not found or not owned by the requesting user.");
+  return row;
+}
+
+export function parseP9StoredWorkflow(row: ProjectAutomationWorkflow): {
+  trigger: ReturnType<typeof p9WorkflowTriggerSchema.parse>;
+  action: ReturnType<typeof p9WorkflowActionSchema.parse>;
+  notificationPolicy: ReturnType<typeof p9NotificationPolicySchema.parse>;
+} {
+  return {
+    trigger: p9WorkflowTriggerSchema.parse(row.trigger),
+    action: p9WorkflowActionSchema.parse(row.action),
+    notificationPolicy: p9NotificationPolicySchema.parse(row.notificationPolicy),
+  };
+}
+
+export function p9WorkflowInputFromRow(row: ProjectAutomationWorkflow): P9WorkflowDefinitionInput {
+  return p9WorkflowDefinitionInputSchema.parse({
+    schemaVersion: "1",
+    name: row.name,
+    description: row.description,
+    template: row.template,
+    trigger: row.trigger,
+    action: row.action,
+    notificationPolicy: row.notificationPolicy,
+    sourceRefs: row.sourceRefs,
+    engineRefs: row.engineRefs,
+    artifactRefs: row.artifactRefs,
+    enabled: row.enabled,
+  });
+}

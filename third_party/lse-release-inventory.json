@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-09-23",
+  "releasePosture": "optional_provider_fail_closed",
+  "evidenceBoundary": "Current source/release posture, not a qualified release or accepted SP. Candidate vendor/launch flags describe targets only; reference use does not fulfill suitable-donor integration obligations.",
+  "brueConnect": "Exact source/license remains unavailable or unverified; copying, bundling and brokerage execution are not approved.",
+  "components": [
+    {
+      "id": "lse-terminal",
+      "repository": "londonstrategicedge/lse-terminal",
+      "commitSha": "62c48a5ce6de37a1c115d6270dfd0eee75166d8b",
+      "license": "MIT",
+      "verbatimImportedPaths": [],
+      "adaptedLiOSPaths": [],
+      "modifications": [
+        "Used as architecture/test/reference donor only in the current release.",
+        "No LSE branding/assets are distributed by LiOS."
+      ],
+      "dataRights": "not_applicable_to_code_reference",
+      "releaseDecision": "reference_only",
+      "targetReuse": "CA-04/P11 and existing P6-17–22: evaluate vendor/adapted backtest/indicator mechanisms after a measured capability gap; revisit with exact imported paths, rights, upstream and known-answer conformance, provisioning and real journey evidence."
+    },
+    {
+      "id": "lse-data",
+      "repository": "londonstrategicedge/lse-data",
+      "commitSha": "564c63dd99e3b447777cb396314ec6c4342f82ff",
+      "license": "MIT",
+      "verbatimImportedPaths": [],
+      "adaptedLiOSPaths": [
+        "server/lseDataProvider.ts",
+        "server/lseRoutes.ts",
+        "client/src/lib/useLse.ts",
+        "client/src/components/panels/LiveLseOptionsChain.tsx",
+        "client/src/lib/lseDatasetBrowser.ts"
+      ],
+      "modifications": [
+        "LiOS-owned Provider SDK protocol adaptation implements REST/WebSocket/Parquet flows; no LSE SDK source is copied or bundled.",
+        "User-owned LSE credential remains in LiOS secret custody and never enters normal Project/chat content.",
+        "LSE remains optional; generic Provider SDK precedence/fallback remains authoritative.",
+        "Hosted data/API rights are explicitly separate from the MIT client-code license."
+      ],
+      "dataRights": "provider_terms_and_user_entitlement_required",
+      "redistribution": "not_permitted_by_lios_release_posture",
+      "releaseDecision": "optional_connector_only"
+    },
+    {
+      "id": "brue-language",
+      "repository": "londonstrategicedge/brue",
+      "commitSha": "a846522fe8af0e11ee7739ef8b6b8a4c0f7922cb",
+      "license": "MIT",
+      "verbatimImportedPaths": [],
+      "adaptedLiOSPaths": [],
+      "modifications": [
+        "Pinned and evaluated as a strategy/runtime donor; no Brue source is bundled in the current release."
+      ],
+      "dataRights": "not_applicable",
+      "releaseDecision": "reference_only",
+      "targetReuse": "CA-04/P11 and P6-19–22: revisit strategy-language/runtime reuse on a measured gap with verified paths/rights and governed adapter/conformance/product evidence; target reuse is not shipped."
+    }
+  ],
+  "providerReleaseRequirements": {
+    "userOwnedCredential": true,
+    "centralRedistribution": false,
+    "localOnlyHostedDataUse": true,
+    "featureCanBeDisabled": true,
+    "otherProvidersRemainEligible": true,
+    "quotaHealthEntitlementVisible": true,
+    "upstreamCommitMustMatchRegistry": true,
+    "thirdPartyNoticeRequired": true,
+    "providerTermsCompatibilityReview": "Review public connector/marketing and competing-interface restrictions; disable production connector if terms are incompatible.",
+    "brokerWrites": "Prohibited in current scope; credentials, user confirmation or draft execution intents do not authorize orders.",
+    "shippingPointAcceptance": "Require real MSJ, target execution, no fake success, regression protection and exact commit/build/target/outcome/limitations evidence under the mandatory SP contract."
+  }
+}

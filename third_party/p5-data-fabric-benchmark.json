@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-09-22",
+  "phase": "P5",
+  "universe": {
+    "scaleProofCandidates": 120000,
+    "warmSearchP95TargetMs": 300,
+    "realCoverageMustBeReportedSeparately": true,
+    "rule": "Capacity/federated reach must never be relabelled as bundled real local coverage."
+  },
+  "providerExecution": {
+    "cacheEntriesMax": 500,
+    "prefetchRequestsMax": 100,
+    "prefetchConcurrencyMax": 8,
+    "cacheGapsOrErrors": false
+  },
+  "highVolume": {
+    "inlineRowThreshold": 50000,
+    "inlineByteThreshold": 26214400,
+    "primaryLargeDataPath": "duckdb_parquet",
+    "arrowIpc": "runtime_pack_candidate_when_repeated_cross_process_transfer_is_measured",
+    "polars": "runtime_pack_candidate_when_dataframe_heavy_transforms_are_measured"
+  },
+  "baseDesktop": {
+    "playwrightBundled": false,
+    "arrowBundled": false,
+    "polarsBundled": false,
+    "duckdbBundled": true
+  }
+}

@@ -1,0 +1,310 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-10-02",
+  "pinPolicy": "Exact recorded pins remain unchanged. A lock is provenance metadata, not proof of import, packaging or release acceptance. p11-candidates.json observedCommit fields are research observations, not replacement pins; reconcile selected package/release source and exact paths before importing. Software licenses do not grant API/data/model/asset/trademark rights.",
+  "locks": [
+    {
+      "id": "openterminalui",
+      "repository": "Hitheshkaranth/OpenTerminalUI",
+      "commitSha": "3e0756432da9c6afd5f0bf6f7aa6e62b7b2c1906",
+      "license": "MIT"
+    },
+    {
+      "id": "openterminal",
+      "repository": "ErTasselli/OpenTerminal",
+      "commitSha": "6feb4869489c8ac9537b1405547983591e1d3263",
+      "license": "MIT"
+    },
+    {
+      "id": "tradingagents",
+      "repository": "TauricResearch/TradingAgents",
+      "commitSha": "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "dexter",
+      "repository": "virattt/dexter",
+      "commitSha": "ecaed3011f24ea24ef687ab536aa7f22f7294038",
+      "license": "MIT"
+    },
+    {
+      "id": "langalpha",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "db8f8c2dee948c9c6f77805558898c3abb637328",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "fin-agent",
+      "repository": "YUHAI0/fin-agent",
+      "commitSha": "b99686296357f37487edd42a261c153104248c9a",
+      "license": "MIT"
+    },
+    {
+      "id": "backtest-kit",
+      "repository": "tripolskypetr/backtest-kit",
+      "commitSha": "599d990204cd7bfb44ba61c973cc3f742ea43861",
+      "license": "MIT"
+    },
+    {
+      "id": "lean",
+      "repository": "QuantConnect/Lean",
+      "commitSha": "985ef30ad3ac774218c5ac516b4cb0aa2655730f",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "dockview",
+      "repository": "dockview/dockview",
+      "commitSha": "3b519454178f203d41acd49bd2733b5cdcd0f9be",
+      "license": "MIT"
+    },
+    {
+      "id": "lydell-node-pty",
+      "repository": "lydell/node-pty",
+      "commitSha": "e1212da80b2b1e7f9b03efb97addb97ecf27a2d4",
+      "license": "MIT"
+    },
+    {
+      "id": "flexlayout",
+      "repository": "caplin/FlexLayout",
+      "commitSha": "92c9d67c2cba18b1fe6731af25f287e7abe30b2f",
+      "license": "MIT"
+    },
+    {
+      "id": "monaco-editor",
+      "repository": "microsoft/monaco-editor",
+      "commitSha": "d620ca0c03d24a51c05ae4dca8a9d5923a4aeb9c",
+      "license": "MIT"
+    },
+    {
+      "id": "whisper-cpp",
+      "repository": "ggml-org/whisper.cpp",
+      "commitSha": "307869af285d7f6f689ba100b3515e2d1b3feb05",
+      "license": "MIT"
+    },
+    {
+      "id": "hqtui",
+      "repository": "profullstack/hqtui",
+      "commitSha": "6f6f70fa7a0307ed6948df75205e37dd0a0928c7",
+      "license": "MIT"
+    },
+    {
+      "id": "assistant-ui",
+      "repository": "assistant-ui/assistant-ui",
+      "commitSha": "0587eab05b5038df80d8b39489a65084f193c6d7",
+      "license": "MIT"
+    },
+    {
+      "id": "tool-ui",
+      "repository": "assistant-ui/tool-ui",
+      "commitSha": "49a870286facdbf28160cd647f0d337ebdc9b275",
+      "license": "MIT"
+    },
+    {
+      "id": "univer",
+      "repository": "dream-num/univer",
+      "commitSha": "360c5ccb5e40e48be95b213a19527ac5afe9909a",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "perspective",
+      "repository": "perspective-dev/perspective",
+      "commitSha": "1fc0c8373574a478195ebc69302cafeb924f7876",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "echarts",
+      "repository": "apache/echarts",
+      "commitSha": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "tanstack-table",
+      "repository": "TanStack/table",
+      "commitSha": "21d713fc4947d2a08cc2136bb055889a61412ded",
+      "license": "MIT"
+    },
+    {
+      "id": "tanstack-virtual",
+      "repository": "TanStack/virtual",
+      "commitSha": "78371e851e90fd74e984deeb0c3fd8098e2cd4f3",
+      "license": "MIT"
+    },
+    {
+      "id": "tiptap",
+      "repository": "ueberdosis/tiptap",
+      "commitSha": "d9af9c6a16e17438b06b2266765b9c1a21a3d7a0",
+      "license": "MIT"
+    },
+    {
+      "id": "xyflow",
+      "repository": "xyflow/xyflow",
+      "commitSha": "0a1f9575b25679f2880175de8d3eae21aedde921",
+      "license": "MIT"
+    },
+    {
+      "id": "skfolio",
+      "repository": "skfolio/skfolio",
+      "commitSha": "eb73a4cfe3136d5615a6047060705695d4462588",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "id": "cvxpy",
+      "repository": "cvxpy/cvxpy",
+      "commitSha": "01992f50f3023d1325bda8aff560de2c5f2ca138",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "quantlib",
+      "repository": "lballabio/QuantLib",
+      "commitSha": "cb8894faa0eba62416e6549c80dfc68f3ace871a",
+      "license": "QuantLib License"
+    },
+    {
+      "id": "edgartools",
+      "repository": "dgunning/edgartools",
+      "commitSha": "4e817de7bf3efae44024e168754e8f5d53b1a227",
+      "license": "MIT"
+    },
+    {
+      "id": "arelle",
+      "repository": "Arelle/Arelle",
+      "commitSha": "24b6f2c1da5b7b94a267c96c06a5db49f01305e5",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "docling",
+      "repository": "docling-project/docling",
+      "commitSha": "14789f2c2c542f8d127a0aac85eb779d5bba554e",
+      "license": "MIT"
+    },
+    {
+      "id": "sqlite-vec",
+      "repository": "asg017/sqlite-vec",
+      "commitSha": "04d28bd21773981e2d266bbf6aa4efbd011eb4f6",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "id": "polars",
+      "repository": "pola-rs/polars",
+      "commitSha": "d5be1f6f86df7889d3087a671c68f3199b33c8c3",
+      "license": "MIT"
+    },
+    {
+      "id": "arrow",
+      "repository": "apache/arrow",
+      "commitSha": "c400f72eb66087604f7e0a6af4d976562971cf1a",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "opentelemetry-js",
+      "repository": "open-telemetry/opentelemetry-js",
+      "commitSha": "bbaec14660b04c229629ddf282776bdea072b51f",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "openlineage",
+      "repository": "OpenLineage/OpenLineage",
+      "commitSha": "a2b7ed7961225c6020a7534b368dc99984378c96",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "opa",
+      "repository": "open-policy-agent/opa",
+      "commitSha": "8cb390243358936dca23cc3c2822266587ded08f",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "pydantic-ai",
+      "repository": "pydantic/pydantic-ai",
+      "commitSha": "c4898abb54dc25ae6f6aef208a4c0661b30a455e",
+      "license": "MIT"
+    },
+    {
+      "id": "langgraphjs",
+      "repository": "langchain-ai/langgraphjs",
+      "commitSha": "0284323b2d8457bd830ea987e93f03ebee8370ce",
+      "license": "MIT"
+    },
+    {
+      "id": "apache-echarts",
+      "repository": "apache/echarts",
+      "commitSha": "984bf46b2f905dd0ad909a2d5e6e9d66a1b6568c",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "lse-terminal",
+      "repository": "londonstrategicedge/lse-terminal",
+      "commitSha": "62c48a5ce6de37a1c115d6270dfd0eee75166d8b",
+      "license": "MIT"
+    },
+    {
+      "id": "lse-data",
+      "repository": "londonstrategicedge/lse-data",
+      "commitSha": "564c63dd99e3b447777cb396314ec6c4342f82ff",
+      "license": "MIT"
+    },
+    {
+      "id": "brue-language",
+      "repository": "londonstrategicedge/brue",
+      "commitSha": "a846522fe8af0e11ee7739ef8b6b8a4c0f7922cb",
+      "license": "MIT"
+    },
+    {
+      "id": "openclaw",
+      "repository": "openclaw/openclaw",
+      "releaseTag": "v2026.9.7",
+      "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "license": "MIT"
+    },
+    {
+      "id": "pptxgenjs",
+      "repository": "gitbrent/PptxGenJS",
+      "releaseTag": "v4.0.1",
+      "commitSha": "3c9ec1b687c174952166f6a34b5e87ebf69fa469",
+      "license": "MIT"
+    },
+    {
+      "id": "graphrag",
+      "repository": "microsoft/graphrag",
+      "commitSha": "769542fbf1d8e5b4c6a8677fefc34621c87894c5",
+      "license": "MIT",
+      "notes": "Supplemental source-scoped P7 read-only mechanism only; upstream GraphRAG Python distribution not installed, no new graph store."
+    },
+    {
+      "id": "FinRobot",
+      "repository": "AI4Finance-Foundation/FinRobot",
+      "commitSha": "2717499b8e30f242640af08c4ad9afd1113c2d45",
+      "license": "Apache-2.0",
+      "notes": "Supplemental source-pinned P4 immutable report audit only; upstream agent/desktop and market-data runtime not installed."
+    },
+    {
+      "id": "browser-use",
+      "repository": "browser-use/browser-use",
+      "commitSha": "a6e103e27d28c390ac6421a6ee8ac21f1b1dfc1c",
+      "license": "MIT",
+      "notes": "Supplemental GM-14 filename/download path safety mechanisms only; upstream Python browser runtime and CDP agent not installed."
+    },
+    {
+      "id": "langalpha-gm-response",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+      "license": "Apache-2.0",
+      "notes": "Supplemental GM-only bounded model response/parser mechanics; not the upstream Python, QuickJS, provider or workflow runtime.",
+      "baselineDonorId": "langalpha"
+    },
+    {
+      "id": "qlib",
+      "repository": "microsoft/qlib",
+      "commitSha": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "license": "MIT"
+    },
+    {
+      "id": "langalpha-p7-excerpt-fingerprint",
+      "repository": "ginlix-ai/LangAlpha",
+      "commitSha": "db8f8c2dee948c9c6f77805558898c3abb637328",
+      "license": "Apache-2.0",
+      "notes": "Supplemental source-pinned P7 exact UTF-8 research quote provenance only; no upstream PTC agent, event stream, body store, services or data authority.",
+      "baselineDonorId": "langalpha"
+    }
+  ]
+}

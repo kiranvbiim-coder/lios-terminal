@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="LiOS markets low resource visual environment">
+  <defs>
+    <radialGradient id="b" cx="50%" cy="48%" r="72%"><stop stop-color="#0A0A0D"/><stop offset="1" stop-color="#020203"/></radialGradient>
+    <linearGradient id="l" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#F2A11A" stop-opacity=".05"/><stop offset=".5" stop-color="#F2A11A" stop-opacity=".42"/><stop offset="1" stop-color="#2FA7D8" stop-opacity=".05"/></linearGradient>
+    <radialGradient id="g1" cx="0" cy=".55" r=".78"><stop stop-color="#F2A11A" stop-opacity=".12"/><stop offset="1" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g2" cx="1" cy=".42" r=".78"><stop stop-color="#2FA7D8" stop-opacity=".11"/><stop offset="1" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#b)"/><rect width="1600" height="900" fill="url(#g1)"/><rect width="1600" height="900" fill="url(#g2)"/>
+  <path d="M0 744 C220 662 328 706 500 620 S794 560 944 608 S1280 604 1600 456" fill="none" stroke="url(#l)" stroke-width="1.8" opacity=".52"/>
+  <path d="M0 790 C248 708 382 760 548 686 S816 642 978 676 S1284 686 1600 552" fill="none" stroke="url(#l)" opacity=".28"/>
+  <rect x="360" y="112" width="880" height="676" rx="150" fill="#050506" fill-opacity=".34"/>
+</svg>

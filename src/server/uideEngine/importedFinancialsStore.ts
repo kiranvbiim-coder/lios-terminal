@@ -1,0 +1,15 @@
+import fs from "fs";
+import path from "path";
+import type { StatementType } from "./pdfStatementExtractor";
+import { dataPath } from "../dataRoot";
+export interface ImportedReportRow{symbol:string;report_type:StatementType;date:string;fiscal_year:string;period:string;reported_currency:string;data:string;filing_date:string|null;}
+export interface ImportProvenance{fileName:string;importedAt:string;importedByUserId:number;workspaceId?:string;}
+export interface StoredImport{symbol:string;reports:ImportedReportRow[];provenance:ImportProvenance;}
+function storeRoot(){return dataPath("imported-financials");}
+function ensureStoreDir(){if(!fs.existsSync(storeRoot()))fs.mkdirSync(storeRoot(),{recursive:true});}function fileFor(symbol:string){const safe=symbol.toUpperCase().replace(/[^A-Z0-9._-]/g,"_");return path.join(storeRoot(),`${safe}.json`);}function writeFileAtomic(file:string,contents:string){const tmp=`${file}.tmp`;fs.writeFileSync(tmp,contents,"utf8");fs.renameSync(tmp,file);}
+function readRaw(symbol:string):StoredImport|null{ensureStoreDir();const f=fileFor(symbol);if(!fs.existsSync(f))return null;try{return JSON.parse(fs.readFileSync(f,"utf8"));}catch{return null;}}
+export function loadImportedFinancials(symbol:string,userId:number):StoredImport|null{const record=readRaw(symbol);return record&&record.provenance?.importedByUserId===userId?record:null;}
+export function saveImportedFinancials(symbol:string,newReports:ImportedReportRow[],provenance:ImportProvenance):StoredImport{ensureStoreDir();const existing=readRaw(symbol);if(existing&&existing.provenance.importedByUserId!==provenance.importedByUserId)throw new Error("Import already belongs to another user.");const merged=new Map<string,ImportedReportRow>();for(const r of existing?.reports??[])merged.set(`${r.report_type}:${r.fiscal_year}:${r.period}`,r);for(const r of newReports)merged.set(`${r.report_type}:${r.fiscal_year}:${r.period}`,r);const record={symbol:symbol.toUpperCase(),reports:Array.from(merged.values()),provenance};writeFileAtomic(fileFor(symbol),JSON.stringify(record,null,2));return record;}
+export function storeDir(){return storeRoot();}
+export interface WorkspaceImportSummary{symbol:string;fileName:string;importedAt:string;importedByUserId:number;reportCount:number;}
+export function listImportsForWorkspace(workspaceId:string,userId:number):WorkspaceImportSummary[]{ensureStoreDir();const summaries:WorkspaceImportSummary[]=[];for(const file of fs.readdirSync(storeRoot())){if(!file.endsWith(".json"))continue;let record:StoredImport;try{record=JSON.parse(fs.readFileSync(path.join(storeRoot(),file),"utf8"));}catch{continue;}if(record.provenance?.workspaceId!==workspaceId||record.provenance?.importedByUserId!==userId)continue;summaries.push({symbol:record.symbol,fileName:record.provenance.fileName,importedAt:record.provenance.importedAt,importedByUserId:record.provenance.importedByUserId,reportCount:record.reports.length});}return summaries.sort((a,b)=>b.importedAt.localeCompare(a.importedAt));}

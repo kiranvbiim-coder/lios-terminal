@@ -1,0 +1,486 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { Readable, Writable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import zlib from "node:zlib";
+import { z } from "zod";
+import type { DrizzleDb } from "./db";
+import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
+import { PGlite } from "@electric-sql/pglite";
+import os from "node:os";
+import * as schema from "@shared/schema";
+import { resolveMigrationsFolder } from "./db";
+import { databaseDir, dataRoot } from "./dataRoot";
+import { BackupDecryptStream, BackupEncryptStream, isEncryptedBackupHeader } from "./backupCrypto";
+import { exportDatabase, importDatabase, readExportManifest, type DatabaseExportManifest } from "./databaseTransfer";
+import { createVaultMigrationEnvelope } from "./credentialVault";
+import { normalizeArchivePath, padTo512, TAR_END, TarFormatError, TarReader, tarFileHeader } from "./tarFormat";
+
+/**
+ * GM-06: one portable, verified backup of everything a Home owns.
+ *
+ *   <dest>/lios-backup-<UTC stamp>.tar.gz   (unencrypted: secret keys and execution transcripts are left out)
+ *   <dest>/lios-backup-<UTC stamp>.liosbak  (passphrase-encrypted tar.gz: includes vault.key and storage.key)
+ *
+ * Entries: `db/**` (the GM-04 logical export), `files/**` (the data root, minus the live PGlite directory and
+ * regenerable/transient files), and a final `lios-backup.json` listing every entry with SHA-256 and size.
+ */
+
+export const BACKUP_FORMAT = "lios-backup/1";
+export const BACKUP_MANIFEST_ENTRY = "lios-backup.json";
+export const BACKUP_VAULT_MIGRATION_ENTRY = "files/data/credential-vault-portable.bin";
+const DEFAULT_MAX_EXPANDED_BYTES = 64 * 1024 ** 3;
+
+const SECRET_KEY_FILES: Readonly<Record<string, true>> = {
+  "vault.key": true,
+  "data/storage.key": true,
+  "data/device-tls/identity.json": true,
+};
+/** Never archived: regenerated per Home, or tied to one running process. */
+const NEVER_ARCHIVED: Array<[RegExp, string]> = [
+  [/^\.lios-root\.json$/, "data-root marker (recreated on restore)"],
+  [/^\.pgdata-migration-fingerprint$/, "regenerable"],
+  [/^pgdata-backups(\/|$)/, "local pre-migration snapshots"],
+  [/^data\/session-secret$/, "Home session secret (a restored Home signs in again)"],
+  [/^owner-setup\.token$/, "one-time setup token"],
+  [/^data\/owner-setup\.token$/, "one-time setup token"],
+  [/^data\/observability(\/|$)/, "diagnostic logs"],
+  [/^data\/credential-vault-portable\.bin$/, "ephemeral credential migration envelope"],
+  [/^restore-previous-/, "previous restore leftovers"],
+  [/(^|\/)\.lios-(restore|backup)-/, "in-progress staging"],
+  [/(\.lock|\.pid|\.tmp|\.partial)$/, "transient"],
+];
+
+const entrySchema = z.object({
+  path: z.string(),
+  kind: z.enum(["db", "file"]),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  bytes: z.number().int().nonnegative(),
+});
+const manifestSchema = z.object({
+  format: z.literal(BACKUP_FORMAT),
+  createdAt: z.string(),
+  liosVersion: z.string(),
+  encrypted: z.boolean(),
+  sourceEngine: z.enum(["pglite", "postgres"]),
+  database: z.object({ tables: z.number().int(), rows: z.number().int(), migrations: z.number().int() }),
+  entries: z.array(entrySchema),
+  skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
+  notes: z.array(z.string()),
+});
+export type BackupManifest = z.infer<typeof manifestSchema>;
+
+export class BackupError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BackupError";
+  }
+}
+
+interface PlannedFile {
+  relative: string;
+  absolute: string;
+  size: number;
+}
+
+function walk(root: string, dbDir: string, encrypted: boolean): { files: PlannedFile[]; skipped: BackupManifest["skipped"] } {
+  const files: PlannedFile[] = [];
+  const skipped: BackupManifest["skipped"] = [];
+  const visit = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(root, absolute).split(path.sep).join("/");
+      if (absolute === dbDir) {
+        skipped.push({ path: relative, reason: "live database directory (exported logically under db/)" });
+        continue;
+      }
+      if (!encrypted && relative === "execution-journal") {
+        skipped.push({ path: relative, reason: "private execution transcripts; only included in an encrypted backup" });
+        continue;
+      }
+      const never = NEVER_ARCHIVED.find(([pattern]) => pattern.test(relative));
+      if (never) {
+        skipped.push({ path: relative, reason: never[1] });
+        continue;
+      }
+      if (entry.isSymbolicLink()) {
+        skipped.push({ path: relative, reason: "symbolic link" });
+      } else if (entry.isDirectory()) {
+        visit(absolute);
+      } else if (entry.isFile()) {
+        files.push({ relative, absolute, size: fs.statSync(absolute).size });
+      } else {
+        skipped.push({ path: relative, reason: "not a regular file" });
+      }
+    }
+  };
+  visit(root);
+  return { files, skipped };
+}
+
+async function* fileChunks(file: string, size: number): AsyncGenerator<Buffer> {
+  if (size === 0) return;
+  let read = 0;
+  for await (const chunk of fs.createReadStream(file, { start: 0, end: size - 1 })) {
+    read += (chunk as Buffer).length;
+    yield chunk as Buffer;
+  }
+  if (read !== size) throw new BackupError(`${path.basename(file)} changed while it was being backed up. Run the backup again.`);
+}
+
+function stamp(now: Date): string {
+  return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+const ARCHIVE_NAME = /^lios-backup-\d{8}T\d{6}Z\.(tar\.gz|liosbak)$/;
+
+export interface CreateBackupOptions {
+  destination: string;
+  engine: DatabaseExportManifest["sourceEngine"];
+  liosVersion: string;
+  /** Present: encrypted archive that includes the key files. Absent: plain tar.gz without them. */
+  passphrase?: string;
+  /** Keep this many archives in the destination (newest first) after a successful, verified backup. */
+  keep?: number;
+  now?: Date;
+}
+
+export interface BackupResult {
+  file: string;
+  manifest: BackupManifest;
+  pruned: string[];
+}
+
+export async function createBackup(db: DrizzleDb, options: CreateBackupOptions): Promise<BackupResult> {
+  const root = dataRoot();
+  const destination = path.resolve(options.destination);
+  if (destination === root || destination.startsWith(`${root}${path.sep}`)) {
+    throw new BackupError("Choose a backup destination outside the LiOS data folder.");
+  }
+  const dbDir = databaseDir();
+  if (dbDir === root) throw new BackupError("This data root stores the database at its top level; move it into a pgdata folder first.");
+  fs.mkdirSync(destination, { recursive: true, mode: 0o700 });
+
+  const now = options.now ?? new Date();
+  const encrypted = options.passphrase !== undefined;
+  const file = path.join(destination, `lios-backup-${stamp(now)}.${encrypted ? "liosbak" : "tar.gz"}`);
+  if (fs.existsSync(file)) throw new BackupError(`${path.basename(file)} already exists.`);
+  const partial = `${file}.${process.pid}.partial`;
+  const staging = path.join(destination, `.lios-backup-${process.pid}`);
+  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+  let vaultMigrationEnvelope: Buffer | null = null;
+
+  try {
+    const dbOut = path.join(staging, "db");
+    const dbManifest = await exportDatabase(db, dbOut, options.engine);
+
+    const planned = walk(root, dbDir, encrypted);
+    vaultMigrationEnvelope = encrypted
+      ? createVaultMigrationEnvelope(options.passphrase as string)
+      : null;
+    const files = planned.files.filter((candidate) => {
+      if (!encrypted && SECRET_KEY_FILES[candidate.relative]) {
+        planned.skipped.push({ path: candidate.relative, reason: "secret key; only included in an encrypted backup" });
+        return false;
+      }
+      return true;
+    });
+
+    const notes = [
+      encrypted
+        ? "Saved credentials include a passphrase-sealed portable migration envelope so a restored Home can re-key them under destination secret custody."
+        : "Credential ciphertext is included, but portable credential migration material is NOT included in an unencrypted backup.",
+      ...(encrypted ? [] : ["Object-storage blobs encrypted with storage.key cannot be decrypted from this backup because the key is not included."]),
+      ...(encrypted ? [] : ["Private execution transcripts are omitted from unencrypted backups."]),
+    ];
+
+    const entries: BackupManifest["entries"] = [];
+    async function* archive(): AsyncGenerator<Buffer> {
+      const emit = async function* (name: string, kind: "db" | "file", size: number, source: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
+        const safe = normalizeArchivePath(name);
+        const hash = crypto.createHash("sha256");
+        yield tarFileHeader(safe, size, now);
+        for await (const chunk of source) {
+          hash.update(chunk);
+          yield chunk;
+        }
+        yield padTo512(size);
+        entries.push({ path: safe, kind, sha256: hash.digest("hex"), bytes: size });
+      };
+      for (const table of ["manifest.json", ...dbManifest.tables.map((entry) => `tables/${entry.name}.ndjson`)]) {
+        const absolute = path.join(dbOut, table);
+        const size = fs.statSync(absolute).size;
+        yield* emit(`db/${table}`, "db", size, fileChunks(absolute, size));
+      }
+      for (const candidate of files) {
+        yield* emit(`files/${candidate.relative}`, "file", candidate.size, fileChunks(candidate.absolute, candidate.size));
+      }
+      if (vaultMigrationEnvelope) {
+        yield* emit(
+          BACKUP_VAULT_MIGRATION_ENTRY,
+          "file",
+          vaultMigrationEnvelope.length,
+          Readable.from([vaultMigrationEnvelope]),
+        );
+      }
+      const manifest: BackupManifest = {
+        format: BACKUP_FORMAT,
+        createdAt: now.toISOString(),
+        liosVersion: options.liosVersion,
+        encrypted,
+        sourceEngine: options.engine,
+        database: {
+          tables: dbManifest.tables.length,
+          rows: dbManifest.tables.reduce((sum, entry) => sum + entry.rows, 0),
+          migrations: dbManifest.migrations.length,
+        },
+        entries,
+        skipped: planned.skipped,
+        notes,
+      };
+      const body = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+      yield tarFileHeader(BACKUP_MANIFEST_ENTRY, body.length, now);
+      yield body;
+      yield padTo512(body.length);
+      yield TAR_END;
+    }
+
+    const sink = fs.createWriteStream(partial, { flags: "wx", mode: 0o600 });
+    await pipeline([Readable.from(archive()), zlib.createGzip({ level: 6 }), ...(encrypted ? [new BackupEncryptStream(options.passphrase as string)] : []), sink]);
+    const handle = fs.openSync(partial, "r+");
+    try {
+      fs.fsyncSync(handle);
+    } finally {
+      fs.closeSync(handle);
+    }
+    fs.renameSync(partial, file);
+
+    // A backup that cannot be read back is not a backup: verify before reporting success or pruning.
+    const manifest = await verifyBackup(file, { passphrase: options.passphrase });
+    const pruned = options.keep === undefined ? [] : pruneBackups(destination, Math.max(1, options.keep));
+    return { file, manifest, pruned };
+  } catch (error) {
+    fs.rmSync(partial, { force: true });
+    fs.rmSync(file, { force: true });
+    throw error;
+  } finally {
+    vaultMigrationEnvelope?.fill(0);
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+export function pruneBackups(destination: string, keep: number): string[] {
+  const archives = fs.readdirSync(destination).filter((name) => ARCHIVE_NAME.test(name)).sort().reverse();
+  const removed = archives.slice(keep);
+  for (const name of removed) fs.rmSync(path.join(destination, name));
+  return removed;
+}
+
+interface ReadOptions {
+  passphrase?: string | undefined;
+  /** Extract into this directory (created 0700) instead of only hashing. */
+  extractTo?: string;
+  maxExpandedBytes?: number;
+}
+
+/** Streams the archive once: authenticates (if encrypted), validates every path, hashes every entry, checks the manifest. */
+async function readArchive(file: string, options: ReadOptions): Promise<BackupManifest> {
+  const head = Buffer.alloc(8);
+  const descriptor = fs.openSync(file, "r");
+  try {
+    fs.readSync(descriptor, head, 0, 8, 0);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  const encrypted = isEncryptedBackupHeader(head);
+  if (encrypted && options.passphrase === undefined) throw new BackupError("This backup is encrypted. Provide the passphrase file.");
+  if (!encrypted && options.passphrase !== undefined) throw new BackupError("This backup is not encrypted; remove the passphrase option.");
+
+  const limit = options.maxExpandedBytes ?? DEFAULT_MAX_EXPANDED_BYTES;
+  const seen = new Map<string, { sha256: string; bytes: number }>();
+  let manifestBody: Buffer[] = [];
+  let current: { name: string; hash: crypto.Hash; bytes: number; fd: number | null } | null = null;
+  let expanded = 0;
+  let afterManifest = false;
+  const extractRoot = options.extractTo ? path.resolve(options.extractTo) : null;
+  if (extractRoot) fs.mkdirSync(extractRoot, { recursive: true, mode: 0o700 });
+
+  const reader = new TarReader({
+    onEntry(rawName, size) {
+      if (afterManifest) throw new BackupError("Unexpected data after the backup manifest.");
+      const name = normalizeArchivePath(rawName);
+      if (name !== BACKUP_MANIFEST_ENTRY && !name.startsWith("db/") && !name.startsWith("files/")) throw new BackupError(`Unexpected entry in backup: ${name}`);
+      if (seen.has(name)) throw new BackupError(`Duplicate entry in backup: ${name}`);
+      expanded += size;
+      if (expanded > limit) throw new BackupError("The backup expands beyond the allowed size.");
+      let fd: number | null = null;
+      if (extractRoot && name !== BACKUP_MANIFEST_ENTRY) {
+        const target = path.resolve(extractRoot, name);
+        if (!target.startsWith(`${extractRoot}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${name}`);
+        fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+        fd = fs.openSync(target, "wx", 0o600);
+      }
+      current = { name, hash: crypto.createHash("sha256"), bytes: 0, fd };
+      if (name === BACKUP_MANIFEST_ENTRY) manifestBody = [];
+    },
+    onData(chunk) {
+      if (!current) return;
+      current.hash.update(chunk);
+      current.bytes += chunk.length;
+      if (current.name === BACKUP_MANIFEST_ENTRY) manifestBody.push(Buffer.from(chunk));
+      if (current.fd !== null) fs.writeSync(current.fd, chunk);
+    },
+    onEntryEnd() {
+      if (!current) return;
+      if (current.fd !== null) fs.closeSync(current.fd);
+      seen.set(current.name, { sha256: current.hash.digest("hex"), bytes: current.bytes });
+      if (current.name === BACKUP_MANIFEST_ENTRY) afterManifest = true;
+      current = null;
+    },
+  });
+
+  try {
+    await pipeline([
+      fs.createReadStream(file),
+      ...(encrypted ? [new BackupDecryptStream(options.passphrase as string)] : []),
+      zlib.createGunzip(),
+      new Writable({
+        write(chunk: Buffer, _encoding, callback) {
+          try {
+            reader.push(chunk);
+            callback();
+          } catch (error) {
+            callback(error as Error);
+          }
+        },
+      }),
+    ]);
+    reader.finish();
+  } catch (error) {
+    const open = current as { fd: number | null } | null;
+    if (open?.fd !== null && open?.fd !== undefined) fs.closeSync(open.fd);
+    if (extractRoot) fs.rmSync(extractRoot, { recursive: true, force: true });
+    if (error instanceof TarFormatError) throw new BackupError(error.message);
+    throw error;
+  }
+
+  const recorded = seen.get(BACKUP_MANIFEST_ENTRY);
+  if (!recorded) throw new BackupError("The backup has no manifest; it is incomplete.");
+  const parsed = manifestSchema.safeParse(JSON.parse(Buffer.concat(manifestBody).toString("utf8")));
+  if (!parsed.success) throw new BackupError("The backup manifest is unsupported or damaged.");
+  const manifest = parsed.data;
+  const problems: string[] = [];
+  const listed = new Set<string>();
+  for (const entry of manifest.entries) {
+    listed.add(entry.path);
+    const actual = seen.get(entry.path);
+    if (!actual) problems.push(`missing ${entry.path}`);
+    else if (actual.sha256 !== entry.sha256 || actual.bytes !== entry.bytes) problems.push(`changed ${entry.path}`);
+  }
+  for (const name of seen.keys()) if (name !== BACKUP_MANIFEST_ENTRY && !listed.has(name)) problems.push(`unlisted ${name}`);
+  if (problems.length) {
+    if (extractRoot) fs.rmSync(extractRoot, { recursive: true, force: true });
+    throw new BackupError(`Backup failed verification: ${problems.slice(0, 5).join(", ")}${problems.length > 5 ? ` and ${problems.length - 5} more` : ""}.`);
+  }
+  return manifest;
+}
+
+export function verifyBackup(file: string, options: { passphrase?: string | undefined } = {}): Promise<BackupManifest> {
+  return readArchive(file, options);
+}
+
+/** Decrypts/verifies and writes the archive's contents to a directory: db/ (logical export) and files/. */
+export function extractBackup(file: string, directory: string, options: { passphrase?: string | undefined } = {}): Promise<BackupManifest> {
+  if (fs.existsSync(directory)) throw new BackupError(`Extraction target already exists: ${directory}`);
+  return readArchive(file, { ...options, extractTo: directory });
+}
+
+export interface RestoreResult {
+  manifest: BackupManifest;
+  filesRestored: number;
+  /** Existing files that a restored file replaced; kept here, never deleted. */
+  previousFilesDir: string | null;
+  /** Passphrase-sealed portable credential payload. Never installed as Home state. */
+  credentialMigrationEnvelope: Buffer | null;
+}
+
+export async function restoreBackup(
+  db: DrizzleDb,
+  file: string,
+  options: { passphrase?: string | undefined; replace?: boolean } = {},
+): Promise<RestoreResult> {
+  const root = dataRoot();
+  fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  const staging = path.join(root, `.lios-restore-${process.pid}`);
+  try {
+    const manifest = await extractBackup(file, staging, options);
+    // Re-check the database export itself, then load it atomically. A refused or failed import changes nothing.
+    readExportManifest(path.join(staging, "db"));
+    await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
+
+    const previous = path.join(root, `restore-previous-${stamp(new Date())}`);
+    let moved = false;
+    let restored = 0;
+    let credentialMigrationEnvelope: Buffer | null = null;
+    for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file")) {
+      if (entry.path === BACKUP_VAULT_MIGRATION_ENTRY) {
+        credentialMigrationEnvelope = fs.readFileSync(path.join(staging, entry.path));
+        continue;
+      }
+      const relative = entry.path.slice("files/".length);
+      const target = path.resolve(root, relative);
+      if (!target.startsWith(`${root}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${entry.path}`);
+      fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+      if (fs.existsSync(target)) {
+        const keep = path.join(previous, relative);
+        fs.mkdirSync(path.dirname(keep), { recursive: true, mode: 0o700 });
+        fs.renameSync(target, keep);
+        moved = true;
+      }
+      fs.renameSync(path.join(staging, entry.path), target);
+      restored += 1;
+    }
+    return {
+      manifest,
+      filesRestored: restored,
+      previousFilesDir: moved ? previous : null,
+      credentialMigrationEnvelope,
+    };
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+export interface RestoreTestResult {
+  tables: number;
+  rows: number;
+  /** True when the scratch database re-exported to exactly the digests recorded in the backup. */
+  digestsMatch: boolean;
+}
+
+/**
+ * Proves a backup can actually be restored without touching this Home: extracts it, loads it into a throw-away
+ * PGlite database at the current schema, and compares every table's content digest with the backup's own record.
+ */
+export async function restoreTestBackup(file: string, options: { passphrase?: string | undefined } = {}): Promise<RestoreTestResult> {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "lios-restore-test-"));
+  const client = new PGlite(path.join(scratch, "pg"));
+  try {
+    const db = drizzle(client, { schema });
+    await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
+    const extracted = path.join(scratch, "extracted");
+    await extractBackup(file, extracted, options);
+    const exportDir = path.join(extracted, "db");
+    const original = readExportManifest(exportDir);
+    const imported = await importDatabase(db, exportDir, { replace: true });
+    const again = await exportDatabase(db, path.join(scratch, "again"), "pglite");
+    const digestsMatch = again.tables.length === original.tables.length
+      && again.tables.every((table, index) => table.name === original.tables[index]?.name && table.contentDigest === original.tables[index]?.contentDigest);
+    return { tables: imported.tables, rows: imported.rows, digestsMatch };
+  } finally {
+    await client.close().catch(() => undefined);
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}

@@ -1,0 +1,20 @@
+LiOS Original-Code Rights Notice
+
+Copyright (c) 2026 Limuria Intelligence LLP and other applicable copyright holders.
+All rights reserved in original LiOS material, except where a separate license applies.
+
+Public availability of this repository does not grant a general license to use,
+modify, distribute, sublicense or commercially exploit original LiOS material.
+Rights granted by applicable law, any separately agreed license and the terms of
+the repository hosting service remain unaffected. Contact the repository
+maintainers for additional permissions.
+
+Third-party software, adapted source, dependencies and other separately licensed
+material retain their own licenses and copyright notices. This notice does not
+restrict or replace rights granted by those licenses. Consult THIRD_PARTY_NOTICES.md,
+third_party/licenses/ and the applicable source or dependency license files.
+
+No third-party data, provider/API entitlement, model-weight license, trademark
+permission or right to personal/customer information is granted by publication
+of this repository. Contributions remain subject to their existing rights; no
+copyright assignment or additional contribution license is implied here.

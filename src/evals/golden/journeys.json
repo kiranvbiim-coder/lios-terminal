@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "description": "Full-conversation journeys run through the real runtime with fixture tools. Checks user-visible results, honest gaps and wall-clock time. maxMs covers runtime overhead only, not provider latency.",
+  "cases": [
+    {
+      "id": "JR01",
+      "prompt": "Research Apple",
+      "expect": {
+        "artifactTypes": [
+          "research",
+          "report"
+        ],
+        "textIncludes": [
+          "AAPL",
+          "professional research",
+          "58\\.4"
+        ],
+        "minReceipts": 1,
+        "trustManifest": true,
+        "toolStarts": [
+          "lios.instrument-master",
+          "lios.market-data",
+          "lios.company-intelligence"
+        ],
+        "noErrorEvent": true,
+        "doneStatus": "completed",
+        "allPlanStepsSettled": true
+      },
+      "maxMs": 3000,
+      "status": "must_pass"
+    },
+    {
+      "id": "JR02",
+      "prompt": "Analyze Apple: key fundamentals, technicals and a valuation",
+      "expect": {
+        "artifactTypes": [
+          "research",
+          "report"
+        ],
+        "textIncludes": [
+          "Professional inputs still required",
+          "did not invent assumptions"
+        ],
+        "textExcludes": [
+          "intrinsic value of"
+        ],
+        "noErrorEvent": true,
+        "minReceipts": 1
+      },
+      "maxMs": 3000,
+      "status": "must_pass"
+    },
+    {
+      "id": "JR03",
+      "prompt": "Research [company or ticker] using available, cited sources.",
+      "expect": {
+        "artifactTypes": [],
+        "forbidToolStarts": [
+          "lios.market-data",
+          "lios.company-intelligence"
+        ],
+        "dataGap": true
+      },
+      "maxMs": 3000,
+      "status": "must_pass"
+    },
+    {
+      "id": "JR04",
+      "prompt": "Review [my portfolio file or connected source] for concentration, exposures, and downside risks. Ask me to select the file or source before using private data.",
+      "expect": {
+        "forbidToolStarts": [
+          "lios.market-data",
+          "lios.instrument-master"
+        ]
+      },
+      "maxMs": 3000,
+      "status": "must_pass"
+    },
+    {
+      "id": "JR05",
+      "prompt": "Review [my portfolio file or connected source] for concentration, exposures, and downside risks. Ask me to select the file or source before using private data.",
+      "aiText": "Please select or attach your portfolio file first, then I will route it through the governed analytics engines.",
+      "expect": {
+        "textIncludes": [
+          "select or attach your portfolio file"
+        ],
+        "forbidToolStarts": [
+          "lios.market-data",
+          "lios.instrument-master"
+        ],
+        "artifactTypes": [],
+        "noErrorEvent": true,
+        "doneStatus": "completed"
+      },
+      "maxMs": 3000,
+      "status": "must_pass"
+    }
+  ]
+}

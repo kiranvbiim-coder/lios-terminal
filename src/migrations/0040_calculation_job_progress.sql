@@ -1,0 +1,1 @@
+ALTER TABLE "calculation_jobs" ADD COLUMN "progress_pct" integer DEFAULT 0 NOT NULL;

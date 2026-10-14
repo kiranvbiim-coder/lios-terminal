@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "componentId": "langalpha-p7-excerpt-fingerprint",
+  "status": "source_adapted_native_qualification_pending",
+  "asOfDate": "2026-10-12",
+  "canonicalOwners": [
+    "P7 Project Research Evidence",
+    "P4 ResearchArtifact revision"
+  ],
+  "siWorkstreams": [
+    "SI-03",
+    "SI-05.28"
+  ],
+  "shippingPoint": "SP-03 supporting evidence only; no packaged acceptance",
+  "source": {
+    "upstreamRepository": "ginlix-ai/LangAlpha",
+    "controlledMirror": "kiranvbiim-coder/LangAlpha",
+    "approvedBaselineCommit": "db8f8c2dee948c9c6f77805558898c3abb637328",
+    "observedForkCommit": "941ca4a18f5a364caf481a6f78cdb040086aa38d",
+    "sourcePinDisposition": "baseline approved upstream pin only; no fork-delta imports",
+    "license": "Apache-2.0",
+    "licenseBlobSha": "49f398b994fc35452798288754a857877555efb2",
+    "licenseDestination": "third_party/licenses/langalpha-Apache-2.0.txt",
+    "noticeDestination": "THIRD_PARTY_NOTICES.md",
+    "sourcePaths": [
+      {
+        "path": "src/ptc_agent/agent/provenance/types.py",
+        "blobSha": "8b54bc5d0d79c740aa809a40372b6afed1cce577"
+      }
+    ],
+    "upstreamTestPaths": [
+      {
+        "path": "tests/unit/ptc_agent/agent/provenance/test_types.py",
+        "blobSha": "b714a49c6dc9eaa0059f5b2133024fcb71302444"
+      }
+    ]
+  },
+  "selectedMechanics": [
+    "bounded exact UTF-8 excerpt SHA-256 + byte length as a deterministic fingerprint; never trust digest as proof of factual correctness",
+    "same quote-byte fingerprint identity across Project digest, browser evidence capture and owner-reviewed research refresh",
+    "independent verification helper rejects metadata tampering, Unicode/whitespace changes and unbounded quotes"
+  ],
+  "destinationPaths": [
+    "src/server/langalphaExcerptProvenance.ts",
+    "src/server/langalphaExcerptProvenance.test.ts",
+    "src/server/projectEvidenceArtifactTool.ts",
+    "src/server/projectEvidenceArtifactTool.test.ts",
+    "src/server/webResearchArtifactTool.ts",
+    "src/server/webResearchArtifactTool.test.ts",
+    "src/server/researchRevisionTool.ts",
+    "src/server/researchRevisionTool.test.ts"
+  ],
+  "replacedAuthorities": [
+    "No independent LangAlpha provenance event stream, content-addressed body store, database, PTC agent runtime or model provider",
+    "Existing P7 Project Evidence manages source authorization, acquisition and rights; these digests only validate exact captured quote bytes",
+    "Existing P4 ResearchArtifact tracks Project owner, version/hash and immutable persistence",
+    "No source text/body duplication or ambient tool-argument collection; no external security claims or Shipping Point acceptance"
+  ],
+  "validation": {
+    "nativeV1": "pending_macOS_runner_capacity",
+    "nativeV2": "pending",
+    "packagedV3": "not_attempted"
+  }
+}

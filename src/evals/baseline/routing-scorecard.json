@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-09-30T07:29:10.229Z",
+  "total": 57,
+  "passed": 54,
+  "mustPass": {
+    "total": 54,
+    "passed": 54
+  },
+  "knownGaps": {
+    "total": 3,
+    "stillFailing": 3,
+    "nowPassing": []
+  },
+  "byCategory": {
+    "research": {
+      "total": 12,
+      "passed": 12
+    },
+    "technical": {
+      "total": 9,
+      "passed": 9
+    },
+    "valuation": {
+      "total": 6,
+      "passed": 5
+    },
+    "portfolio": {
+      "total": 6,
+      "passed": 6
+    },
+    "macro_fixed_income_derivatives": {
+      "total": 6,
+      "passed": 4
+    },
+    "project": {
+      "total": 4,
+      "passed": 4
+    },
+    "ambiguity_and_safety": {
+      "total": 7,
+      "passed": 7
+    },
+    "symbols_and_names": {
+      "total": 7,
+      "passed": 7
+    }
+  },
+  "planMs": {
+    "p50": 0.14,
+    "p95": 2.62,
+    "max": 7.13
+  },
+  "failures": [
+    {
+      "id": "V05",
+      "prompt": "Compare Apple and Microsoft",
+      "status": "known_gap",
+      "failures": [
+        "none of [company.research, security.overview, company.valuation] selected",
+        "no entity starting with \"Apple\" (got none)"
+      ]
+    },
+    {
+      "id": "M02",
+      "prompt": "Price a 5 year bond with a 4% coupon",
+      "status": "known_gap",
+      "failures": [
+        "missing capability fixed_income.analytics"
+      ]
+    },
+    {
+      "id": "M04",
+      "prompt": "How does EUR/USD look?",
+      "status": "known_gap",
+      "failures": [
+        "none of [macro_fx.analytics, market.technical, security.overview] selected"
+      ]
+    }
+  ]
+}

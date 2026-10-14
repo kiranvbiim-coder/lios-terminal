@@ -1,0 +1,1306 @@
+{
+  "schemaVersion": "1",
+  "status": "canonical_capability_assimilation_truth_registry",
+  "effectiveDate": "2026-10-05",
+  "purpose": "Separates donor discovery/approval from actual LiOS implementation, packaging, user accessibility and release proof.",
+  "authority": "docs/technical/CAPABILITY_ASSIMILATION_WORKSTREAM.md",
+  "executionAuthority": "docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md",
+  "shippingPointContract": "docs/technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md",
+  "integrationPolicy": {
+    "primaryDonor": "openclaw/openclaw",
+    "goal": "Review every registered entry and integrate every suitable donor through existing canonical LiOS authorities.",
+    "reviewBaselineEntries": 92,
+    "preserveRegistryEntries": true,
+    "baselineAccounting": "The donors array preserves exactly the 92 baseline IDs, including overlapping upstream entries. Additional components are accounted for separately, never silently counted as a 93rd baseline donor.",
+    "suitableDeferredDonorsRequire": ["canonical task", "acceptance journey", "dependency blocker", "delivery milestone or revisit trigger"],
+    "creativeReusePolicy": "No arbitrary exploration or useful-import ceiling. Investigate repurposing functionality beyond its original purpose and combining whole useful subsystems for LiOS.",
+    "beforeNotNeededOrOverlapRejection": ["direct reuse", "repurposing", "replacement", "complementary combination", "challenger role", "user benefit and concrete obstacle"],
+    "newScopePolicy": "Present new product-scope proposals to the owner; never silently reject or silently approve them.",
+    "zeroSetupTarget": "Normal users must not manually install donor runtimes, Python servers or renderer dependencies. LiOS provisions/verifies internal components; heavy optional assets require visible size/rights/consent. Today's external Ollama provider, optional missing browser runtime and nonintegrated engine/output/renderers are delivery gaps, not exemptions from this target.",
+    "overlapGroups": [
+      { "repository": "apache/echarts", "entries": ["apache-echarts", "echarts"], "integrationAuthority": "P4 Artifact & Workspace OS", "rule": "Preserve both entries; one canonical chart integration, not duplicate installations." },
+      { "repository": "londonstrategicedge/brue", "entries": ["brue", "brue-language"], "integrationAuthority": "P11 Strategy & Backtest", "rule": "Preserve both entries; evaluate vendor/adapt roles together behind one strategy authority." }
+    ],
+    "truthRule": "SI-01..SI-07 define strategic execution; S0..S10 are validation journeys and CP records are historical evidence. This policy records owner intent, not suitability approval, implementation, Shipping Point acceptance or shipped evidence.",
+    "legacyRejectionReview": "Domain-only, initial-scope or overlap-only reasons are historical decisions, not final REJECT_WITH_EVIDENCE dispositions. Mechanism, repurposing, combination and challenger review remains pending where no concrete evidence is recorded; rights prohibitions and singular canonical authorities remain in force."
+  },
+  "invariants": [
+    "This file does not replace third_party/components.json or third_party/p11-candidates.json; it records implementation truth across them.",
+    "candidate, launch=true, pinned, adapter-designed, or capability-available never by themselves mean a donor is integrated or shipped.",
+    "Code evidence and acceptance evidence outrank roadmap wording.",
+    "Every capability remains owned by its existing LiOS subsystem; CA creates no competing router, store, registry, artifact authority, agent runtime, MCP stack, data fabric or engine authority."
+  ],
+  "additionalComponentAccounting": [
+    {
+      "componentId": "lydell-node-pty",
+      "repository": "lydell/node-pty",
+      "commitSha": "e1212da80b2b1e7f9b03efb97addb97ecf27a2d4",
+      "package": "@lydell/node-pty@1.2.0-beta.15",
+      "license": "MIT",
+      "baselineMembership": "outside_92_donor_baseline",
+      "canonicalOwner": "GM-10 / GM-11",
+      "evidence": "Exact-pinned optional dependency and lazy backend only. Blueprint sections 48.7-48.8 record a macOS arm64 source native smoke and a packaged-layout probe (mode pty, TTY=yes, 25x90). The backend has no shipped-server caller and is tree-shaken from dist/index.cjs; the probe is not an interactive product journey.",
+      "remainingEvidence": "GM-11 exact-operation authority before privileged exec.* exposure; GM-10c consumer/session integration; Windows ConPTY, Linux packaging, signed/notarized hardened-runtime loading and stable re-pin remain open.",
+      "sourceRegistries": ["third_party/components.json", "third_party/upstream-lock.json"]
+    }
+  ],
+  "shippingEvidenceRule": "SP-01..SP-07 require a real integrated MSJ, applicable packaged/target execution, no fake success, regression protection and an exact commit/build/target/journey/checks/limitations evidence record. Donor status or historical smoke alone never establishes Shipping Point acceptance.",
+  "evidenceTruthLadder": "contract locked -> code integrated -> tests passed -> packaged/provisioned -> user accessible -> vertical flagship passed -> shipping point accepted -> release proven; donor truthStatusVocabulary is component accounting, not an SP acceptance ledger",
+  "truthStatusVocabulary": [
+    "discovered",
+    "reference_only",
+    "documented_only",
+    "bridge_only",
+    "contract_only_deferred",
+    "partially_integrated",
+    "provider_integrated_external_runtime",
+    "runtime_integrated_optional",
+    "runtime_integrated_connector",
+    "runtime_integrated",
+    "packaged",
+    "user_accessible",
+    "release_proven",
+    "rejected",
+    "standard_compatible_not_library"
+  ],
+  "nextEvidenceRequired": {
+    "discovered": [
+      "license/path verification",
+      "exact pin",
+      "gap/benchmark decision",
+      "owner assignment confirmation"
+    ],
+    "documented_only": [
+      "dependency/source presence",
+      "LiOS adapter",
+      "tests",
+      "packaging/user path"
+    ],
+    "bridge_only": [
+      "actual dependency/runtime",
+      "real renderer/engine path",
+      "tests",
+      "packaged proof"
+    ],
+    "partially_integrated": [
+      "remaining subsystem scope",
+      "tests",
+      "packaging",
+      "user-visible acceptance"
+    ],
+    "runtime_integrated": [
+      "packaged proof",
+      "user journey",
+      "release evidence"
+    ]
+  },
+  "donors": [
+    {
+      "id": "antv-g6",
+      "repository": "antvis/G6",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for entity-relationship-graph; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "apache-echarts",
+      "repository": "apache/echarts",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated_optional",
+      "evidence": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "arelle",
+      "repository": "Arelle/Arelle",
+      "license": "Apache-2.0 core with separate included notices",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "arrow",
+      "repository": "apache/arrow",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "contract_only_deferred",
+      "evidence": "P11 capability data.columnar.arrow is explicitly deferred; DuckDB+Parquet is the real high-volume path.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "assistant-ui",
+      "repository": "assistant-ui/assistant-ui",
+      "license": "MIT",
+      "canonicalOwner": "P2 Conversation Runtime / GM-23",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Components and imported-OSS regression records document LiOS-owned thread navigation, composer, mentions and slash-action pattern adaptation in ProjectExperienceShell.tsx. No assistant-ui package/runtime or Assistant Cloud state is integrated; documented_only remains the donor-runtime truth level.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "backtest-kit",
+      "repository": "tripolskypetr/backtest-kit",
+      "license": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "adapt",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "backtesting-py",
+      "repository": "kernc/backtesting.py",
+      "license": "AGPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "rejected",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "backtrader",
+      "repository": "mementum/backtrader",
+      "license": "GPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "rejected",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "brue",
+      "repository": "londonstrategicedge/brue",
+      "license": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "vendor",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 vendor/launch intent is not current integration. Components and the LSE release inventory record Brue strategy/runtime/conformance reference use only, with no bundled upstream source. Suitable assimilation remains deferred behind P11 Strategy & Backtest / CA-04 until the strategy contract, sandbox and conformance acceptance are ready; launch=true is not evidence.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "brue-language",
+      "repository": "londonstrategicedge/brue",
+      "license": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Pinned Brue strategy/runtime/conformance reference only, as recorded in components and the LSE release inventory; no Brue source is bundled. Evaluate with the overlapping brue ID behind one P11 Strategy & Backtest / CA-04 authority when the strategy contract, sandbox and conformance acceptance are ready.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "bt",
+      "repository": "pmorissette/bt",
+      "license": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "camelot",
+      "repository": "camelot-dev/camelot",
+      "license": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "ccxt",
+      "repository": "ccxt/ccxt",
+      "license": "MIT",
+      "canonicalOwner": "P11 Broker & Execution",
+      "declaredDecision": "connector",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "cvxpy",
+      "repository": "cvxpy/cvxpy",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Portfolio",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "datafusion",
+      "repository": "apache/datafusion",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "deck-gl",
+      "repository": "visgl/deck.gl",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for large-geo-visualization; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "dexter",
+      "repository": "virattt/dexter",
+      "license": "MIT",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "dockview",
+      "repository": "dockview/dockview",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS / GM-23",
+      "declaredDecision": "production",
+      "declaredPosture": "bundled",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Direct package dependency; current Living/Expanded Workspace renderer.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "docling",
+      "repository": "docling-project/docling",
+      "license": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated_optional",
+      "evidence": "Managed optional research-docs pack; p7DocumentIntelligence.ts invokes DocumentConverter.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "duckdb",
+      "repository": "duckdb/duckdb",
+      "license": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "echarts",
+      "repository": "apache/echarts",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "runtime_integrated_optional",
+      "evidence": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "edgartools",
+      "repository": "dgunning/edgartools",
+      "license": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Managed Python runtime package edgartools==5.51.0; sec_search.py executes it.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "exchange-calendars",
+      "repository": "gerrymanoim/exchange_calendars",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "fin-agent",
+      "repository": "YUHAI0/fin-agent",
+      "license": "MIT",
+      "canonicalOwner": "P5 Research Workflows / P11 Finance",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "finance-database",
+      "repository": "JerBouma/FinanceDatabase",
+      "license": "MIT repository; dataset rights/provenance separate",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "finance-toolkit",
+      "repository": "JerBouma/FinanceToolkit",
+      "license": "MIT",
+      "canonicalOwner": "P11 Core Finance",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "flexlayout",
+      "repository": "caplin/FlexLayout",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "reject",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "rejected",
+      "evidence": "Historical P0 docking comparison selected Dockview as the sole workspace implementation; FlexLayout is not installed and this is not a license rejection. Broader mechanism/repurposing/challenger analysis remains pending before a final SI rejection disposition; no competing workspace authority is permitted.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "freqtrade",
+      "repository": "freqtrade/freqtrade",
+      "license": "GPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "rejected",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "hqtui",
+      "repository": "profullstack/hqtui",
+      "license": "MIT",
+      "canonicalOwner": "Goldmine GM-21",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "hummingbot",
+      "repository": "hummingbot/hummingbot",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Broker & Execution",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "ib-async",
+      "repository": "ib-api-reloaded/ib_async",
+      "license": "BSD-2-Clause",
+      "canonicalOwner": "P11 Broker & Execution",
+      "declaredDecision": "connector",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "ibis",
+      "repository": "ibis-project/ibis",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "langalpha",
+      "repository": "ginlix-ai/LangAlpha",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "langgraphjs",
+      "repository": "langchain-ai/langgraphjs",
+      "license": "MIT",
+      "canonicalOwner": "GM-12 / P2 Conversation Runtime",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "lean",
+      "repository": "QuantConnect/Lean",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "lightgbm",
+      "repository": "microsoft/LightGBM",
+      "license": "verification_required",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "llama-cpp",
+      "repository": "ggml-org/llama.cpp",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "Goldmine GM-22",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for local-ai-runtime; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "lse-data",
+      "repository": "londonstrategicedge/lse-data",
+      "license": "MIT client; hosted data rights separate",
+      "canonicalOwner": "P5 Universal Data Fabric / P11 Market Data",
+      "declaredDecision": "connector",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated_connector",
+      "evidence": "Real governed LSE provider adapter with catalog/history/streaming/export/entitlement tests.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "lse-terminal",
+      "repository": "londonstrategicedge/lse-terminal",
+      "license": "MIT",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "vendor",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Current release uses LSE Terminal as architecture/test/reference material only, with no bundled upstream source or branding. P11 vendor intent is a target, not runtime proof. P11 Strategy & Backtest / CA-04 assimilation remains deferred until the BacktestEngine contract and known-answer/look-ahead/fill/slippage benchmarks support a bounded import.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "maplibre-gl-js",
+      "repository": "maplibre/maplibre-gl-js",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for geo-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "mermaid",
+      "repository": "mermaid-js/mermaid",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for diagram-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "mlx",
+      "repository": "ml-explore/mlx",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "Goldmine GM-22",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for apple-silicon-local-ai; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "monaco-editor",
+      "repository": "microsoft/monaco-editor",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "nautilus-trader",
+      "repository": "nautechsystems/nautilus_trader",
+      "license": "LGPL-3.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "ollama",
+      "repository": "ollama/ollama",
+      "license": "MIT (exact version/path must be pinned before bundling)",
+      "canonicalOwner": "Goldmine GM-22",
+      "declaredDecision": "external_provider_adapter",
+      "declaredPosture": "current_implementation_not_bundled",
+      "currentTruthStatus": "provider_integrated_external_runtime",
+      "evidence": "byoaiRouter.ts exposes Ollama and byoaiTransport.ts implements /api/chat; LiOS does not currently install/manage the Ollama runtime.",
+      "sourceRegistries": [
+        "current implementation audit"
+      ]
+    },
+    {
+      "id": "opa",
+      "repository": "open-policy-agent/opa",
+      "license": "Apache-2.0",
+      "canonicalOwner": "GM-11 / P13 governance",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "openclaw",
+      "repository": "openclaw/openclaw",
+      "license": "MIT",
+      "canonicalOwner": "Goldmine GM-00..GM-25",
+      "declaredDecision": "adapt",
+      "declaredPosture": "major_donor",
+      "currentTruthStatus": "partially_integrated",
+      "evidence": "Components and blueprint sections 46-48 and 51-52 record actual pinned OpenClaw utility, Gateway/device/execution, retry-timing, ACP-helper, placement-binding and CUA-policy imports/adaptations. Exact imported and destination paths, modifications and rights boundaries are in third_party/components.json and THIRD_PARTY_NOTICES.md. GM-13 ACP helpers bind metadata to already-admitted GM-11 runs and report read-only installation health; they do not provide ACP transport, patch execution, automatic resume or governed availability. L5 timing imports provide no retry runner or dispatch authority. Placement adaptation binds current owner/node/generation to existing backends and adds no remote executor or donor state store. CUA is assessment-only with nativeAvailable=false and no native binary. The L3 kernel in server/agentLoop.ts is LiOS-owned, with no agent-core loop source import: pinned agent-core loop/admission/steering mechanisms informed cancellation/admission ordering, while LiOS independently owns goal-plan-act-inspect-revise, enforced step/AI/revision budgets, durable ledger events, exact approval pause/resume and outcome-unknown handling. At this commit OpenClaw browser source is not imported; the donor-first L12 disposition selects bounded UTF-8 diagnostics for direct import when provenance lands, adapts lifecycle/page-ownership/navigation/framed-transport mechanisms, and declines donor control/profile/auth/storage/plugin authorities. Browser/computer native execution, complete coding transport, remote nodes, memory/skills breadth and release qualification remain open; no listed tests or Shipping Point acceptance are implied.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "openlineage",
+      "repository": "OpenLineage/OpenLineage",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P5 Data Lineage / P10 interoperability",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "standard_compatible_not_library",
+      "evidence": "LiOS emits OpenLineage-compatible events itself; donor library is not integrated.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "opentelemetry-js",
+      "repository": "open-telemetry/opentelemetry-js",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P10 Runtime Observability",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "standard_compatible_not_library",
+      "evidence": "LiOS emits OTLP-compatible observability itself; OpenTelemetry JS SDK is not a direct dependency.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "openterminal",
+      "repository": "ErTasselli/OpenTerminal",
+      "license": "MIT",
+      "canonicalOwner": "Terminal Convergence / P2-P4",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "openterminalui",
+      "repository": "Hitheshkaranth/OpenTerminalUI",
+      "license": "MIT",
+      "canonicalOwner": "Terminal Convergence / P2-P4",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "optuna",
+      "repository": "optuna/optuna",
+      "license": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "ore",
+      "repository": "OpenSourceRisk/Engine",
+      "license": "BSD-style permissive",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "pandera",
+      "repository": "unionai-oss/pandera",
+      "license": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "pdfplumber",
+      "repository": "jsvine/pdfplumber",
+      "license": "MIT",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "perspective",
+      "repository": "perspective-dev/perspective",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "bridge_only",
+      "evidence": "Artifact projection/renderer family exists; Perspective packages are not present in src/package.json.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "polars",
+      "repository": "pola-rs/polars",
+      "license": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "prophet",
+      "repository": "facebook/prophet",
+      "license": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "py-vollib",
+      "repository": "vollib/py_vollib",
+      "license": "MIT",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "pydantic-ai",
+      "repository": "pydantic/pydantic-ai",
+      "license": "MIT",
+      "canonicalOwner": "GM-12 / P2 Conversation Runtime",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "pyportfolioopt",
+      "repository": "PyPortfolio/PyPortfolioOpt",
+      "license": "MIT",
+      "canonicalOwner": "P11 Portfolio",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "python-docx",
+      "repository": "python-openxml/python-docx",
+      "license": "MIT",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "python-pptx",
+      "repository": "scanny/python-pptx",
+      "license": "MIT",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "qlib",
+      "repository": "microsoft/qlib",
+      "license": "MIT",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "partially_integrated",
+      "evidence": "Bounded MIT adaptation of qlib/contrib/evaluate.py risk_analysis at exact upstream pin be725493eb1a6bbb42bf11b37aa7669f59610ff1 is registered as lios.quant.qlib_risk_challenger. LiOS includes adapted sum/product formulas only, not the Qlib Python package, trained model, dataset or provider. Agent-submitted returns are truth-class unknown until separately source-bound; experimental numerical challenger; SP-05 and native/package qualification not accepted. Imported paths and modifications are recorded in third_party/components.json.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "quantlib",
+      "repository": "lballabio/QuantLib",
+      "license": "QuantLib License",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Managed Python runtime package QuantLib==1.43; fixed_income.py imports and executes QuantLib.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "quantstats",
+      "repository": "ranaroussi/quantstats",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Portfolio",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "react-pdf",
+      "repository": "diegomura/react-pdf",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for pdf-report-renderer; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "riskfolio-lib",
+      "repository": "dcajasn/Riskfolio-Lib",
+      "license": "BSD-3-Clause",
+      "canonicalOwner": "P11 Portfolio",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "scikit-learn",
+      "repository": "scikit-learn/scikit-learn",
+      "license": "BSD-3-Clause",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "skfolio",
+      "repository": "skfolio/skfolio",
+      "license": "BSD-3-Clause",
+      "canonicalOwner": "P11 Portfolio",
+      "declaredDecision": "library",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json",
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "sktime",
+      "repository": "sktime/sktime",
+      "license": "BSD-3-Clause",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "splink",
+      "repository": "moj-analytical-services/splink",
+      "license": "MIT (verified 2026-10-03: GitHub licence API and PyPI splink 5.0.0 License-Expression; upstream commit c9f571239e5c19032d0d825c06e404f1b08b75c3)",
+      "canonicalOwner": "P5 Universal Data Fabric",
+      "declaredDecision": "reference",
+      "declaredPosture": "bake_off_run_not_pinned_not_integrated",
+      "currentTruthStatus": "reference_only",
+      "evidence": "CA-03 bake-off (#148 Task A, 5,000 real-name entities x 440 queries, splink 5.0.0 + DuckDB in a throw-away venv, not a repo dependency): Splink is a batch Fellegi-Sunter record-linkage library. It tolerated single-character typos (79/80 vs 0/80 for the GIM name scorer) but picked a wrong entity on 5/80 dropped-token queries (GIM: 1/80), returned a second candidate within 0.05 match probability of the top for 169 of 399 answered queries (34/80 even for exact names) and has no ambiguity/abstain contract of its own, and it needs an unsupervised-trained model, a Python+DuckDB+pandas runtime (about 300 MB venv) and cannot express namespaced registry identifiers or LiOS ids. It does not replace the scored Global Instrument Master name/identifier resolver; no P5 identity state is delegated to it. Deferred, not rejected: reconsider for bulk reconciliation of provider catalogs / holdings imports (S4) behind the same P5 candidate contract, with ambiguity surfaced by LiOS, after the labelled no-ticker corpus (roadmap 0.0.13 F) exists.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "sqlglot",
+      "repository": "tobymao/sqlglot",
+      "license": "MIT",
+      "canonicalOwner": "P11 Data Lab",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "sqlite-vec",
+      "repository": "asg017/sqlite-vec",
+      "license": "MIT OR Apache-2.0",
+      "canonicalOwner": "P5/P11 Research & Data Lab",
+      "declaredDecision": "stub",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "statsforecast",
+      "repository": "Nixtla/statsforecast",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "statsmodels",
+      "repository": "statsmodels/statsmodels",
+      "license": "BSD-3-Clause",
+      "canonicalOwner": "P11 Core Finance",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Executable dependency/path verified in current runtime audit.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "strata",
+      "repository": "OpenGamma/Strata",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Pricing & Risk",
+      "declaredDecision": "sidecar",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "tanstack-table",
+      "repository": "TanStack/table",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "tanstack-virtual",
+      "repository": "TanStack/virtual",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "tiptap",
+      "repository": "ueberdosis/tiptap",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "adapt",
+      "declaredPosture": "major_donor",
+      "currentTruthStatus": "runtime_integrated",
+      "evidence": "Pinned MIT Tiptap OSS 3.31.4 lazy rich editor integration behind canonical P4 blocks/versions; native rich-edit and packaged SP-04 qualification remain distinct.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "tool-ui",
+      "repository": "assistant-ui/tool-ui",
+      "license": "MIT",
+      "canonicalOwner": "P2 Conversation Runtime / GM-23",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Components and imported-OSS regression records document LiOS-owned progress/result/Artifact/approval-card interaction patterns in ConversationRuntimeTrace.tsx. No upstream source is copied verbatim and no tool-ui package/runtime is integrated; documented_only remains the donor-runtime truth level.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "tradingagents",
+      "repository": "TauricResearch/TradingAgents",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P5 Research Workflows / GM-12 orchestration",
+      "declaredDecision": "adapt",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "partially_integrated",
+      "evidence": "Merged PR #633 commit 5aa2f455b1e7f4cf85285e85ee868d7c6112732c integrates bounded Apache-2.0 TradingAgents rating, bull/bear and three-risk-perspective mechanisms as governed LiOS read-only tool. Native macOS V1 PASS run 38150791824. Nine imported source paths recorded with separate complete 75-path disposition, full license and 20 upstream tests. Source-unverified model inputs never become verified market evidence; no LangGraph/Python runtime, trading, brokerage, provider datasets or packaged SP-05 accepted.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "univer",
+      "repository": "dream-num/univer",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "library",
+      "declaredPosture": "bundled",
+      "currentTruthStatus": "partially_integrated",
+      "evidence": "Univer OSS presets (@univerjs/presets and preset-sheets-core 1.0.0-rc.0) render/edit canonical P4 spreadsheet projections and save through the P4 revision API. Recorded browser load/edit/save/reload/formula checks are supplemented by blueprint section 48.8's 2026-10-03 macOS arm64 unsigned/ad-hoc packaged-shell smoke: real desktop CSP, ribbon/canvas/formula and revision 2 save, zero CSP violations. This is bounded local smoke, not signed/notarized clean-install or SP-04 acceptance. Packaged size/startup/RSS, Windows qualification, full professional-work round trip and stable re-pin remain open.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "unstructured",
+      "repository": "Unstructured-IO/unstructured",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Research & Documents",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "vectorbt",
+      "repository": "polakowo/vectorbt",
+      "license": "Apache-2.0 with Commons Clause",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reject",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "rejected",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "vis-timeline",
+      "repository": "visjs/vis-timeline",
+      "license": "verification_required_before_pin",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "discovered_candidate",
+      "declaredPosture": "not_pinned_not_integrated",
+      "currentTruthStatus": "discovered",
+      "evidence": "New CA exploration target for timeline-artifact; exact commit/path license, dependencies, footprint and benchmark must be verified before approval.",
+      "sourceRegistries": [
+        "Capability Assimilation workstream"
+      ]
+    },
+    {
+      "id": "vnpy",
+      "repository": "vnpy/vnpy",
+      "license": "MIT",
+      "canonicalOwner": "P11 Broker & Execution",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "whisper-cpp",
+      "repository": "ggml-org/whisper.cpp",
+      "license": "MIT",
+      "canonicalOwner": "P12 Voice & Multimodal",
+      "declaredDecision": "stub",
+      "declaredPosture": "runtime_candidate",
+      "currentTruthStatus": "runtime_integrated_optional",
+      "evidence": "P12 optional local voice pack resolves whisper-cli/model/ffmpeg and routes transcription through LiOS.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "xgboost",
+      "repository": "dmlc/xgboost",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Quant & Forecast",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "xlsxwriter",
+      "repository": "jmcnamara/XlsxWriter",
+      "license": "BSD-2-Clause",
+      "canonicalOwner": "P11 Reporting & Modeling",
+      "declaredDecision": "library",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    },
+    {
+      "id": "xyflow",
+      "repository": "xyflow/xyflow",
+      "license": "MIT",
+      "canonicalOwner": "P4 Artifact & Workspace OS",
+      "declaredDecision": "stub",
+      "declaredPosture": "donor_candidate",
+      "currentTruthStatus": "documented_only",
+      "evidence": "Present in donor registry only; no runtime implementation claim.",
+      "sourceRegistries": [
+        "third_party/components.json"
+      ]
+    },
+    {
+      "id": "zipline-reloaded",
+      "repository": "stefan-jansen/zipline-reloaded",
+      "license": "Apache-2.0",
+      "canonicalOwner": "P11 Strategy & Backtest",
+      "declaredDecision": "reference",
+      "declaredPosture": "p11_candidate",
+      "currentTruthStatus": "reference_only",
+      "evidence": "P11 candidate inventory/decision only; launch=true does not prove integration, packaging or user accessibility.",
+      "sourceRegistries": [
+        "third_party/p11-candidates.json"
+      ]
+    }
+  ]
+}

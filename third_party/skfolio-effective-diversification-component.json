@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "skfolio-effective-diversification-p6",
+  "asOf": "2026-10-12",
+  "status": "source_adapted_pending_native_qualification",
+  "source": {
+    "repository": "skfolio/skfolio",
+    "commit": "eb73a4cfe3136d5615a6047060705695d4462588",
+    "license": "BSD-3-Clause",
+    "licenseBlob": "96b2a96a077c8daad196a2fc093e585942f67101",
+    "sourcePath": "src/skfolio/measures/_measures.py",
+    "sourceBlob": "6451c83f92b80af50cdc9f8eca275da4bd635af4",
+    "referenceTests": "tests/test_measures/test_measures.py",
+    "testBlob": "b3dc127bce043411449e8c15be833a16e2246ff1",
+    "notice": "THIRD_PARTY_NOTICES.md",
+    "fullLicense": "third_party/licenses/skfolio-BSD-3-Clause.txt"
+  },
+  "owner": "P6 read-only portfolio analytics (P11 financial truth retains authority)",
+  "destinationPaths": [
+    "src/server/skfolioEffectiveDiversification.ts",
+    "src/server/skfolioEffectiveDiversification.test.ts",
+    "src/server/portfolioAnalytics.ts",
+    "src/server/portfolioAnalytics.test.ts",
+    "src/client/src/lib/finance.ts",
+    "src/client/src/components/panels/PortfolioHoldingsPanel.tsx"
+  ],
+  "selectedMechanisms": [
+    "inverse of sum of squared weights as effective number of assets",
+    "exact recorded-date long exposure weight calculation; aggregate duplicate tickers",
+    "null rather than stale/latest-price interpolation, zero/short exposure, infinity or incomplete quote"
+  ],
+  "exclusions": [
+    "no portfolio optimizer or Python skfolio runtime",
+    "no covariance/correlation model, risk advice or trading recommendation",
+    "no change to P11 position ownership/accounting",
+    "no fabricated market pricing, no new provider or store",
+    "no SP-05 acceptance or whole-donor exhaustion"
+  ],
+  "validation": {
+    "nativeV1": "pending",
+    "packagedV3": "not_attempted"
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "1",
+  "effectiveDate": "2026-10-05",
+  "policy": {
+    "purpose": "Release-time regression evidence for bundled or materially adapted OSS donor behavior.",
+    "upstreamUpdateRule": "No upstream SHA may change without license review, imported/adapted path review, relevant regression tests, THIRD_PARTY_NOTICES reconciliation, and a human-readable change note.",
+    "sourceOfTruth": "third_party/components.json",
+    "pathBase": "All destinationPaths and regressionEvidence are relative to the LiOS src/ directory; corresponding component destinationPaths use the same src-relative strings.",
+    "evidenceMeaning": "Listed paths identify existing regression coverage/lineage, not executed PASS results. Historical blueprint smoke evidence is bounded to its recorded target; no release or SP acceptance is inferred. Exact-head outcomes and real MSJ/target/regression evidence remain required."
+  },
+  "entries": [
+    {
+      "componentId": "openclaw",
+      "integrationKind": "source_and_pattern_adaptation",
+      "destinationPaths": [
+        "server/acp/runtime-types.ts",
+        "server/acp/session-identity.ts",
+        "server/acp/identity-types.ts",
+        "server/acp/session-lineage-meta.ts",
+        "server/acp/error-format.ts",
+        "server/acp/structured-auth-redaction.ts",
+        "server/acp/normalization.ts",
+        "server/computer/actions.ts",
+        "server/computer/frame.ts",
+        "server/computer/driver-artifact-verification.ts",
+        "server/computer/driver-artifacts.json",
+        "server/computer/risk-policy.ts",
+        "server/safeEqualSecret.ts",
+        "server/netPolicy/ip.ts",
+        "shared/gatewayProtocol.ts",
+        "client/src/lib/gateway/gatewayClient.ts",
+        "shared/devicePairing.ts",
+        "server/exec/supervisor.ts",
+        "server/exec/placement-grant.ts",
+        "server/exec/terminal-pty.ts",
+        "server/exec/retry-timing.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.ts",
+        "server/browserRuntimePack.ts"
+      ],
+      "regressionEvidence": [
+        "server/acpRuntime.test.ts",
+        "server/runtimeFoundation.test.ts",
+        "server/computer/computer-policy.test.ts",
+        "server/safeEqualSecret.test.ts",
+        "server/netPolicy/ip.test.ts",
+        "client/src/lib/gateway/gatewayClient.test.ts",
+        "server/gatewayHub.test.ts",
+        "server/gatewayConversation.test.ts",
+        "shared/devicePairing.test.ts",
+        "server/devicePairingService.test.ts",
+        "server/exec/bounded-buffer.test.ts",
+        "server/exec/utf8-truncate.test.ts",
+        "server/exec/pipe-output.test.ts",
+        "server/exec/output-ring.test.ts",
+        "server/exec/supervisor.scope.test.ts",
+        "server/exec/supervisor.output.test.ts",
+        "server/exec/supervisor.real.test.ts",
+        "server/exec/child.test.ts",
+        "server/exec/decoded-output.test.ts",
+        "server/exec/placement-grant.test.ts",
+        "server/exec/terminal-pty.test.ts",
+        "server/exec/retry-timing.test.ts",
+        "server/exec/backends/container-lifecycle.test.ts",
+        "server/browser-runtime-pack/bounded-utf8-tail.test.ts",
+        "server/browserRuntimePack.test.ts",
+        "server/governedBrowserTool.test.ts"
+      ],
+      "lineage": "components.json importedPaths/destinationPaths/modifications is the exact source-to-destination authority; destinationPaths include both source imports and explicitly identified LiOS-owned consumers/pattern adaptations. GM-13 imports the pinned acp-core helpers; SI-02 L5 imports retry timing; SI-02.15 adapts placement binding; SI-02.14 imports CUA policy/helpers. SI-02.13 directly imports the pinned browser bounded-UTF8 diagnostic helper and ports its test, while server/browserRuntimePack.ts is a LiOS-owned consumer/pattern adaptation, not a donor byte copy. Its isolated worker/stdio/P13 broker path adapts pinned browser lifecycle, page ownership, interception and transport mechanics. Donor browser control/profile/auth/plugin authorities and host/raw-network launch paths are not imported. Earlier utility, Gateway/device and GM-10 mappings remain in components.json. Listed coverage is authored lineage, not an executed PASS or Shipping Point claim.",
+      "authorityBoundary": "ACP helpers bind only to admitted GM-11 runs; timing authorizes no retry; placement cannot mint authority or fall back to ambient host; CUA assessment does not execute. The browser transport executes only an exact prepared plan in a physically deny-network container, with BrowserConnectorPolicy and P13 DNS-pinned host fetches. `agent.browser.navigate` uses the existing governed registry and exact server-held approval. No browser runtime image is qualified by this record; missing in-image Node/playwright-core/Chromium fails closed, and native GUI execution remains unavailable."
+    },
+    {
+      "componentId": "univer",
+      "integrationKind": "bundled_dependency",
+      "destinationPaths": [
+        "client/src/components/terminal/UniverSpreadsheetEditor.tsx",
+        "shared/univerArtifact.ts"
+      ],
+      "regressionEvidence": [
+        "shared/univerArtifact.test.ts"
+      ],
+      "lineage": "LiOS canonical Artifact projection regression, not a claimed port of all upstream Univer tests. Blueprint §48.8 records unsigned/ad-hoc macOS packaged CSP/formula/revision smoke; signed/notarized clean install, Windows, packaged footprint and full round-trip qualification remain open."
+    },
+    {
+      "componentId": "lydell-node-pty",
+      "integrationKind": "optional_native_dependency",
+      "destinationPaths": [
+        "server/exec/terminal-pty.ts",
+        "server/exec/terminal-backend.ts"
+      ],
+      "regressionEvidence": [
+        "server/exec/terminal-pty.test.ts",
+        "server/exec/terminal-backend.test.ts"
+      ],
+      "lineage": "terminal-pty test port lineage belongs to OpenClaw; node-pty is the native dependency, not copied SDK source. Blueprint §48.8 records a packaged native PTY probe only, not a shipped-server caller or supported-target release qualification; no new PASS is asserted."
+    },
+    {
+      "componentId": "dockview",
+      "integrationKind": "bundled_dependency",
+      "destinationPaths": [
+        "client/src/components/terminal/DockviewWorkspaceGrid.tsx",
+        "client/src/lib/dockviewWorkspaceState.ts"
+      ],
+      "regressionEvidence": [
+        "client/src/lib/experienceShell.test.ts",
+        "script/validate_desktop_accessibility.ts",
+        "script/validate_p1_workspace_acceptance.ts"
+      ]
+    },
+    {
+      "componentId": "assistant-ui",
+      "integrationKind": "pattern_adaptation",
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectExperienceShell.tsx"
+      ],
+      "regressionEvidence": [
+        "client/src/lib/projectWorkspaceDirectives.test.ts",
+        "script/validate_p1_workspace_acceptance.ts",
+        "script/validate_p2_conversation_acceptance.ts"
+      ]
+    },
+    {
+      "componentId": "tool-ui",
+      "integrationKind": "pattern_adaptation",
+      "destinationPaths": [
+        "client/src/components/terminal/ConversationRuntimeTrace.tsx"
+      ],
+      "regressionEvidence": [
+        "shared/conversationRuntime.test.ts",
+        "server/conversationRuntime.test.ts",
+        "script/validate_p2_conversation_acceptance.ts"
+      ]
+    },
+    {
+      "componentId": "lse-data",
+      "integrationKind": "protocol_adaptation",
+      "destinationPaths": [
+        "server/lseDataProvider.ts",
+        "server/lseRoutes.ts",
+        "client/src/lib/useLse.ts"
+      ],
+      "regressionEvidence": [
+        "server/lseDataProvider.test.ts",
+        "server/lseDataCompleteness.test.ts",
+        "client/src/lib/lseDatasetBrowser.test.ts",
+        "script/validate_p5_data_fabric_acceptance.ts"
+      ]
+    },
+    {
+      "componentId": "opentelemetry-js",
+      "integrationKind": "protocol_adaptation",
+      "destinationPaths": [
+        "server/p10Observability.ts"
+      ],
+      "regressionEvidence": [
+        "server/p10Observability.test.ts",
+        "script/validate_p10_release_acceptance.ts"
+      ]
+    },
+    {
+      "componentId": "openlineage",
+      "integrationKind": "schema_adaptation",
+      "destinationPaths": [
+        "server/p10OpenLineage.ts",
+        "server/dataLineageService.ts"
+      ],
+      "regressionEvidence": [
+        "server/p10OpenLineage.test.ts",
+        "server/dataLineageService.test.ts",
+        "script/validate_p10_release_acceptance.ts"
+      ]
+    }
+  ]
+}
