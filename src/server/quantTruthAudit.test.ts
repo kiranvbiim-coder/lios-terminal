@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
 import { quantRunEnvelopeSchema } from "@shared/quantModelRegistry";
 import {
   QUANT_ANALYTICAL_SURFACES,
@@ -12,8 +14,31 @@ import { runQuantTruthAudit } from "./quantTruthAudit";
 
 test("quant truth audit classifies every current engine, model export and stochastic source", () => {
   const audit = runQuantTruthAudit();
-  assert.deepEqual(audit.issues, []);
-  assert.equal(audit.ok, true);
+
+  // Public source CI deliberately does not redistribute the CoinGecko symbol
+  // catalog. Preserve a real audit failure for its absence, rather than
+  // inventing catalog rows or weakening the actual audit/release command.
+  const repositoryRoot = path.resolve(process.cwd(), "..");
+  const distribution = JSON.parse(fs.readFileSync(
+    path.join(repositoryRoot, "third_party/source-distribution.json"), "utf8",
+  )) as { distribution: string; withheldDatasets: string[] };
+  assert.equal(distribution.distribution, "sanitized_proprietary_source_only");
+  assert.ok(distribution.withheldDatasets.includes("src/server/data/crypto_coingecko_ids.json"));
+
+  const missingProviderSources = Object.entries(QUANT_DATA_PROVIDER_SOURCES).flatMap(
+    ([provider, sources]) => sources
+      .filter((relative) => !fs.existsSync(path.join(process.cwd(), relative)))
+      .map((relative) => ({ provider, relative })),
+  );
+  assert.deepEqual(missingProviderSources, [
+    { provider: "CoinGecko", relative: "server/data/crypto_coingecko_ids.json" },
+  ], "No other registered provider source may be missing");
+
+  const expectedIssues = missingProviderSources.map(
+    ({ provider, relative }) => `Registered provider source is missing: ${provider} (${relative})`,
+  );
+  assert.deepEqual(audit.issues, expectedIssues);
+  assert.equal(audit.ok, false, "Withheld provider data is not a successful quant audit");
   assert.equal(audit.counts.registryEntries, QUANT_MODEL_REGISTRY.length);
   assert.equal(audit.counts.quantComputeEndpoints, QUANT_COMPUTE_ENDPOINTS.length);
   const pythonHostedEndpoints = new Set(
