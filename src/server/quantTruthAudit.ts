@@ -145,7 +145,8 @@ export function runQuantTruthAudit(root = process.cwd()) {
   const clientRoot = path.join(root, "client/src");
   const randomSources = walk(clientRoot)
     .filter((file) => /\.(ts|tsx)$/.test(file) && fs.readFileSync(file, "utf8").includes("Math.random"))
-    .map((file) => path.relative(root, file))
+    // Registry keys are POSIX-style repository paths; path.relative yields backslashes on Windows.
+    .map((file) => path.relative(root, file).split(path.sep).join("/"))
     .sort();
   for (const source of randomSources) {
     if (!KNOWN_STOCHASTIC_OR_SYNTHETIC_SOURCES[source]) issues.push(`Unclassified stochastic or synthetic source: ${source}`);
