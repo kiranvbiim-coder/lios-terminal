@@ -30,17 +30,56 @@ test("operational inventory is immutable and has unique IDs", () => {
   assert.ok(ids.every((id) => /^LV4-(25|26|27|28|29)-\d{2}$/.test(id)));
 });
 
-test("every published operational evidence path resolves to a repository file", () => {
+test("published evidence files resolve, while privately withheld workflows remain explicitly NOT_RUN", () => {
   const repositoryRoot = path.resolve(process.cwd(), "..");
+  // This public snapshot intentionally excludes private signing, release and
+  // hardware qualification workflows. A missing, *unlisted* evidence file is
+  // still a regression, never a success or an unconditional test skip.
+  const distribution = JSON.parse(fs.readFileSync(
+    path.join(repositoryRoot, "third_party/source-distribution.json"), "utf8",
+  )) as {
+    distribution: string;
+    sourceWorkflow: string;
+    withheldWorkflows: string[];
+    qualification: Record<string, string>;
+  };
+  assert.equal(distribution.distribution, "sanitized_proprietary_source_only");
+  assert.deepEqual(new Set(Object.values(distribution.qualification)), new Set(["NOT_RUN"]));
+  assert.equal(distribution.sourceWorkflow, ".github/workflows/source-cross-platform.yml");
+  assert.ok(fs.statSync(path.join(repositoryRoot, distribution.sourceWorkflow)).isFile());
+
+  const withheld = new Set(distribution.withheldWorkflows);
+  assert.equal(withheld.size, distribution.withheldWorkflows.length, "duplicate withheld workflow paths");
+  for (const relativePath of withheld) {
+    assert.match(relativePath, /^\.github\/workflows\/[a-z0-9._-]+\.ya?ml$/i);
+    assert.equal(fs.existsSync(path.join(repositoryRoot, relativePath)), false,
+      `Withheld workflow was accidentally published: ${relativePath}`);
+  }
+
   const missing = V4_OPERATIONAL_ITEMS.flatMap((item) =>
     item.evidence
       .filter((relativePath) => {
         const evidencePath = path.resolve(repositoryRoot, relativePath);
         return !fs.existsSync(evidencePath) || !fs.statSync(evidencePath).isFile();
       })
-      .map((relativePath) => `${item.id}: ${relativePath}`),
+      .map((relativePath) => ({ item: item.id, relativePath })),
   );
-  assert.deepEqual(missing, []);
+
+  assert.deepEqual(
+    missing.filter(({ relativePath }) => !withheld.has(relativePath)),
+    [],
+    "All non-withheld operational evidence must exist as a repository file",
+  );
+  // Lock the actual exception surface; extending it requires an explicit
+  // review of the public distribution and V4 evidence contract.
+  assert.deepEqual(
+    [...new Set(missing.map(({ relativePath }) => relativePath))].sort(),
+    [
+      ".github/workflows/lios-hardening.yml",
+      ".github/workflows/production-release-readiness.yml",
+      ".github/workflows/windows-release.yml",
+    ],
+  );
 });
 
 test("V4-25 through V4-29 expose read-only readiness and support surfaces", () => {
