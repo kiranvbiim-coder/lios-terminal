@@ -154,7 +154,11 @@ test("P11 sidecar timeout terminates an uncooperative worker after the cancellat
       payload: { neverRespond: true },
       deadlineMs: 50,
     }), /timed out/i);
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    // Windows stops the worker via asynchronous taskkill; poll for the real outcome instead of a fixed sleep.
+    const deadline = Date.now() + 10_000;
+    while (supervisor.diagnosticsSnapshot().running && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const snapshot = supervisor.diagnosticsSnapshot();
     assert.equal(snapshot.running, false);
     assert.ok(snapshot.crashCount >= 1);

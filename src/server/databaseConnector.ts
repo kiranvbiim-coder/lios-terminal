@@ -65,10 +65,15 @@ function databaseType(config: DatabaseSourceConfig): NonNullable<DatabaseSourceC
   return config.databaseType ?? "postgresql";
 }
 
-function filePath(endpoint: string, protocol: "sqlite" | "duckdb"): string {
+export function filePath(endpoint: string, protocol: "sqlite" | "duckdb"): string {
   if (endpoint.startsWith(`${protocol}://`)) {
+    const remainder = endpoint.slice(protocol.length + 3);
+    // A native Windows path such as C:\data\x.db is not a URL authority and `new URL` rejects it.
+    if (/^[A-Za-z]:[\\/]/.test(remainder)) return remainder;
     const parsed = new URL(endpoint);
-    const decoded = decodeURIComponent(parsed.pathname);
+    let decoded = decodeURIComponent(parsed.pathname);
+    // sqlite:///C:/data/x.db parses as "/C:/data/x.db"; the leading slash is not part of a Windows path.
+    if (/^\/[A-Za-z]:[\\/]/.test(decoded)) decoded = decoded.slice(1);
     if (parsed.hostname && parsed.hostname !== "localhost") return `//${parsed.hostname}${decoded}`;
     return decoded;
   }

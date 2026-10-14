@@ -49,7 +49,8 @@ test("a full database round-trips exactly, keeps identity sequences usable and i
   const manifest = await exportDatabase(source, out, "pglite");
   assert.equal(manifest.tables.length, await publicTableCount(source));
   assert.equal(manifest.tables.find((table) => table.name === "audit_events")?.rows, 2);
-  assert.equal((fs.statSync(path.join(out, "manifest.json")).mode & 0o777), 0o600);
+  // Windows has no POSIX mode bits; the ACL-based protection is not expressible through stat().mode.
+  if (process.platform !== "win32") assert.equal((fs.statSync(path.join(out, "manifest.json")).mode & 0o777), 0o600);
 
   const destination = await openDatabase("dest");
   const result = await importDatabase(destination, out);

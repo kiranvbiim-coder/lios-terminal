@@ -85,7 +85,7 @@ test("Home startup creates a setup token only on an empty Home and never creates
     console.log = original;
   }
   const tokenFile = path.join(root, "owner-setup.token");
-  assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600);
   assert.equal(lines.filter((line) => line.includes("one-time owner setup token")).length, 1, "printed once across restarts");
   assert.equal((await getDb().select().from(users)).length, 0);
 });

@@ -137,7 +137,7 @@ test("P11 pack manager proves side-by-side update, health gate, rollback, deacti
     assert.throws(() => manager.installAndActivate({ archive: Buffer.from("not-a-zip") }), /verification failed/i);
     assert.equal(manager.inspect("lios.portfolio")?.activeVersion, "1.0.0");
     assert.equal(fs.readFileSync(path.join(root, "lios.portfolio", "1.0.0", "adapter", "index.js"), "utf8"), "export const run = (input) => input;\n");
-    assert.ok((fs.statSync(path.join(root, "lios.portfolio", "1.0.0", "runtime", "node")).mode & 0o100) !== 0);
+    if (process.platform !== "win32") assert.ok((fs.statSync(path.join(root, "lios.portfolio", "1.0.0", "runtime", "node")).mode & 0o100) !== 0);
 
     manager.installAndActivate(artifact("1.1.0", keys.privateKey));
     const updated = manager.inspect("lios.portfolio")!;

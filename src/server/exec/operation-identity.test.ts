@@ -17,10 +17,11 @@ test("operation descriptor binds argv, cwd, effective environment and executable
     cwd,
     env: { LIOS_BINDING_TEST: "private-value" },
   });
-  const executableStat = fs.statSync(fs.realpathSync(process.execPath), { bigint: true });
+  const executableStat = fs.statSync(fs.realpathSync.native(process.execPath), { bigint: true });
   assert.equal(descriptor.version, 1);
-  assert.equal(descriptor.cwd, fs.realpathSync(cwd));
-  assert.equal(descriptor.executable.path, fs.realpathSync(process.execPath));
+  // The product resolves through the native realpath, which expands Windows 8.3 names such as RUNNER~1.
+  assert.equal(descriptor.cwd, fs.realpathSync.native(cwd));
+  assert.equal(descriptor.executable.path, fs.realpathSync.native(process.execPath));
   assert.match(descriptor.executable.sha256, /^[a-f0-9]{64}$/);
   assert.equal(descriptor.executable.mtimeNs, executableStat.mtimeNs.toString());
   assert.equal(descriptor.executable.ctimeNs, executableStat.ctimeNs.toString());
@@ -169,7 +170,7 @@ test("analyzed mutable file drift invalidates the approved operation", async (t)
   const argv = node("process.stdout.write('ok')");
   const approved = await describeExecutionOperation({ argv, cwd, filePaths: [script] });
   assert.equal(approved.files.length, 1);
-  assert.equal(approved.files[0].path, fs.realpathSync(script));
+  assert.equal(approved.files[0].path, fs.realpathSync.native(script));
   assert.match(approved.files[0].sha256, /^[a-f0-9]{64}$/);
   fs.writeFileSync(script, "module.exports = 2;\n");
   await assert.rejects(

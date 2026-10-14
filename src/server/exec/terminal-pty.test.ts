@@ -155,7 +155,7 @@ describe("packaged-app native module path", () => {
     assert.equal(nativePtyLoadPath(viaAsar), viaAsar);
   });
 
-  it("the default loader loads the real addon and spawns a real terminal, or reports it unavailable", T, async (t) => {
+  it("the default loader loads the real addon and spawns a real terminal, or reports it unavailable", { timeout: 30_000 }, async (t) => {
     let native;
     try { native = await loadNativePty(); }
     catch (error) {
@@ -165,9 +165,19 @@ describe("packaged-app native module path", () => {
     }
     const handle = native.spawn(process.execPath, ["-e", "process.stdout.write(String(process.stdout.isTTY))"], { name: "xterm-256color", cols: 80, rows: 24, env: buildChildEnv({}) });
     let output = "";
-    const exited = new Promise<number>((resolve) => { handle.onExit((event) => resolve(event.exitCode)); });
-    handle.onData((chunk) => { output += chunk; });
-    assert.equal(await exited, 0);
-    assert.match(output, /true/);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const exited = new Promise<number>((resolve) => { handle.onExit((event) => resolve(event.exitCode)); });
+      handle.onData((chunk) => { output += chunk; });
+      // A hung ConPTY/forkpty child must fail this test quickly with evidence, not hold the whole file open.
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`real PTY did not exit within 20s; output so far: ${JSON.stringify(output)}`)), 20_000);
+      });
+      assert.equal(await Promise.race([exited, deadline]), 0);
+      assert.match(output, /true/);
+    } finally {
+      clearTimeout(timer);
+      try { handle.kill(); } catch { /* already exited */ }
+    }
   });
 });

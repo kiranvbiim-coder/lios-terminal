@@ -79,7 +79,7 @@ test("Project attachment blobs are private, bounded, integrity-checked and remov
   await writeProjectAttachmentBlob(7, 11, reference.id, bytes);
   assert.deepEqual(await readProjectAttachmentBlob(7, 11, reference.id), bytes);
   const filePath = path.join(process.env.LIOS_ATTACHMENT_STORAGE_DIR!, "7", "11", `${reference.id}.blob`);
-  assert.equal((await fs.stat(filePath)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal((await fs.stat(filePath)).mode & 0o777, 0o600);
   await deleteProjectAttachmentBlob(7, 11, reference.id);
   await assert.rejects(() => readProjectAttachmentBlob(7, 11, reference.id), ProjectAttachmentStorageUnavailableError);
   await assert.rejects(() => writeProjectAttachmentBlob(7, 11, reference.id, Buffer.alloc(0)), /size limit/);

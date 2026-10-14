@@ -141,9 +141,10 @@ function governedBroker(t: TestContext, manifest: LiosPluginManifestV1): P13Node
     },
     requestTimeoutMs: 5_000,
   });
-  t.after(() => {
+  t.after(async () => {
     broker.dispose();
-    fs.rmSync(root, { recursive: true, force: true });
+    // Windows reports EBUSY while the just-stopped child is still releasing its working directory.
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
   });
   return broker;
 }

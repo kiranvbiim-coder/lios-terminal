@@ -137,7 +137,14 @@ describe("process supervisor with real children", () => {
     run.cancel();
     const exit = await run.wait();
     assert.equal(exit.reason, "manual-cancel");
-    assert.equal(exit.exitSignal, "SIGKILL");
+    // POSIX reports the signal. Windows terminates the tree with taskkill and reports no OS signal, so assert the
+    // observable contract instead: the process that ignored the graceful request is really gone.
+    if (process.platform === "win32") {
+      assert.ok(exit.exitSignal === null || exit.exitSignal === "SIGKILL", `unexpected exit signal ${String(exit.exitSignal)}`);
+      assert.ok(run.pid !== undefined && (await waitForPidGone(run.pid)), "the cancelled process is still alive");
+    } else {
+      assert.equal(exit.exitSignal, "SIGKILL");
+    }
   });
 
   it("kills a SIGTERM-ignoring descendant with no inherited output after the root exits", { ...T, skip: process.platform === "win32" }, async () => {

@@ -138,7 +138,8 @@ describe("process supervisor admission and cleanup", () => {
     adapter.settle(null, "SIGTERM");
     assert.equal((await run.wait()).reason, "overall-timeout");
     assert.equal(revoked, 1);
-    assert.deepEqual(killSignals(adapter), ["SIGTERM"]);
+    // Windows force-terminates deadline cancellations immediately; POSIX starts with SIGTERM.
+    assert.deepEqual(killSignals(adapter), [process.platform === "win32" ? "SIGKILL" : "SIGTERM"]);
     await supervisor.shutdown();
   });
 

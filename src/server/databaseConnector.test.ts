@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import BetterSqlite3 from "better-sqlite3";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { assertDatabaseConnectorRuntime, executeReadOnlyQuery, mapColumnsToContract, discoverDatabaseSchema } from "./databaseConnector";
+import { assertDatabaseConnectorRuntime, executeReadOnlyQuery, filePath, mapColumnsToContract, discoverDatabaseSchema } from "./databaseConnector";
 
 test("database column mapping uses exact, normalized, and alias matches", () => {
   const result = mapColumnsToContract(["period_end_date", "sales", "net_profit", "unused"], "financial_statements");
@@ -28,6 +28,21 @@ test("database query guard rejects writes and multi-statement payloads before co
     /read-only SELECT/i,
   );
 });
+
+test("file database endpoints resolve POSIX, UNC and Windows drive paths without URL parsing failures", () => {
+  assert.equal(filePath("sqlite:///var/data/x.db", "sqlite"), "/var/data/x.db");
+  assert.equal(filePath("sqlite://localhost/var/data/x.db", "sqlite"), "/var/data/x.db");
+  assert.equal(filePath("duckdb:///var/data/with%20space.duckdb", "duckdb"), "/var/data/with space.duckdb");
+  assert.equal(filePath("sqlite://server/share/x.db", "sqlite"), "//server/share/x.db");
+  // Windows: a raw drive path or a drive-letter file URL, with either slash style.
+  assert.equal(filePath("sqlite://C:\\Users\\me\\x.db", "sqlite"), "C:\\Users\\me\\x.db");
+  assert.equal(filePath("sqlite://C:/Users/me/x.db", "sqlite"), "C:/Users/me/x.db");
+  assert.equal(filePath("sqlite:///C:/Users/me/x.db", "sqlite"), "C:/Users/me/x.db");
+  assert.equal(filePath("duckdb://D:\\data\\x.duckdb", "duckdb"), "D:\\data\\x.duckdb");
+  // A bare path with no scheme is already a filesystem path.
+  assert.equal(filePath("/plain/path.db", "sqlite"), "/plain/path.db");
+});
+
 test("SQLite and DuckDB adapters execute read-only queries and discovery", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-db-adapters-"));
   const sqlitePath = path.join(directory, "fixture.sqlite");

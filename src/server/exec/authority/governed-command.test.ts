@@ -633,7 +633,7 @@ test("registered internal ExecIntent feeds exact mutable-file identity without b
   });
   assert.equal(prepared.facts.intent?.intentId, "archive.zip.extract.python-stdlib");
   assert.equal(prepared.operation.files.length, 1);
-  assert.equal(prepared.operation.files[0]!.path, fs.realpathSync(script));
+  assert.equal(prepared.operation.files[0]!.path, fs.realpathSync.native(script));
 });
 
 test("governed happy path reaches exactly one GM-10 native adapter", async (t) => {

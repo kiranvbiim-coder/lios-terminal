@@ -38,8 +38,14 @@ interface TokenRecord {
 
 function readToken(root?: string): TokenRecord | null {
   const file = tokenPath(root);
-  if (!fs.existsSync(file)) return null;
-  const stat = regularPrivateFile(file);
+  let stat: fs.Stats;
+  try {
+    // lstat, not exists(): a dangling symlink must be refused rather than treated as "no token" and written through.
+    stat = regularPrivateFile(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
   if (stat.size > 512 || stat.size === 0) throw new OwnerBootstrapCredentialError("The owner setup token file is invalid.");
   try {
     const record: unknown = JSON.parse(fs.readFileSync(file, "utf8"));

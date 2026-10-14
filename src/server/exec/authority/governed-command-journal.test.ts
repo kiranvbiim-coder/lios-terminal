@@ -142,7 +142,8 @@ test("interactive sandbox intent rejects arbitrary input and persists only appro
   };
   const prepared = await prepareInternalExecIntent({
     backend,
-    intent: { intentId: "sandbox.terminal.readonly", executable: "/bin/sh" },
+    // /bin/sh exists only on POSIX; on Windows any real executable demonstrates the same exact-operation binding.
+    intent: { intentId: "sandbox.terminal.readonly", executable: process.platform === "win32" ? process.execPath : "/bin/sh" },
     cwd: root,
     scopeKey: `conversation:${requestId}`,
     isolation: { filesystem: "host", network: "inherit", processes: "host" },
