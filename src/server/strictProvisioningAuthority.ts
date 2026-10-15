@@ -1,5 +1,5 @@
 import path from "node:path";
-import { runCommand, type CommandInput, type CommandResult } from "./exec/run-command";
+import type { CommandInput, CommandResult } from "./exec/run-command";
 import { pythonRuntimeEnvOverlay } from "./exec/env";
 import type {
   StrictProvisioningAuthority,
@@ -16,7 +16,8 @@ export type StrictProvisioningRequestErrorCode =
   | "invalid_package_spec"
   | "invalid_release_lock"
   | "verified_artifacts_required"
-  | "invalid_package_inventory";
+  | "invalid_package_inventory"
+  | "authority_runner_missing";
 
 export class StrictProvisioningRequestError extends Error {
   constructor(readonly code: StrictProvisioningRequestErrorCode) {
@@ -30,7 +31,7 @@ export type StrictProvisioningCommandRunner = (input: CommandInput) => Promise<C
 export interface StrictProvisioningAuthorityOptions {
   /** Canonical LiOS-managed runtime root. Provisioning may write only to one generated staging child. */
   runtimeRoot: string;
-  /** Internal dependency injection for tests/composition; repair callers never receive this surface. */
+  /** Trusted internal dependency injection. Strict provisioning never defaults to the generic host runner. */
   run?: StrictProvisioningCommandRunner;
   /** Server-owned Python executable selected by the managed-runtime owner. */
   pythonExecutable?: string;
@@ -108,14 +109,18 @@ function provisioningCommand(
 /**
  * Closed SI-07 provisioning capability. The caller supplies semantic managed-runtime inputs only;
  * argv/cwd/environment are derived here and cannot be selected by Doctor or a repair executor.
+ * A trusted runner binding is mandatory: strict mode never falls back to the generic host runner.
  */
 export function createStrictProvisioningAuthority(
   options: StrictProvisioningAuthorityOptions,
 ): StrictProvisioningAuthority {
+  if (!options.run) {
+    throw new StrictProvisioningRequestError("authority_runner_missing");
+  }
   const runtimeRoot = path.resolve(options.runtimeRoot);
   const platform = options.platform ?? process.platform;
   const pythonExecutable = options.pythonExecutable?.trim() || (platform === "win32" ? "python" : "python3");
-  const run = options.run ?? runCommand;
+  const run = options.run;
 
   return Object.freeze({
     async provisionManagedRuntime(request: StrictProvisioningRequest): Promise<StrictProvisioningResult> {
