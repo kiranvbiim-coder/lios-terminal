@@ -22,6 +22,7 @@ import type { TenantContext } from "./tenantContext";
 import { getProject, touchProjectActivity } from "./projectStore";
 import { appendLedgerEvent } from "./ledgerStore";
 import { nextP9ScheduledRun } from "./p9AutomationEngine";
+import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
@@ -286,11 +287,12 @@ export async function beginP9Run(
   triggerType: "manual" | "schedule" | "event",
   triggerDetail: Record<string, unknown>,
   dedupeKey: string | null = null,
+  expectedWorkflowUpdatedAt: Date | null = null,
 ): Promise<ProjectAutomationRun | null> {
   await getProject(ctx, workflow.projectId);
   const id = "workflow-run:" + crypto.randomUUID();
   const startedAt = new Date();
-  const [row] = await getDb().insert(projectAutomationRuns).values({
+  const values = {
     id,
     workflowId: workflow.id,
     projectId: workflow.projectId,
@@ -301,7 +303,32 @@ export async function beginP9Run(
     dedupeKey,
     status: "running",
     startedAt,
-  }).onConflictDoNothing().returning();
+  };
+
+  const row = triggerType === "manual" && dedupeKey && expectedWorkflowUpdatedAt
+    ? await getDb().transaction(async (tx) => admitP9ApprovedManualRun(
+        async () => {
+          // Serialize against UPDATE/DELETE of this canonical workflow row.
+          // The lock and unique-key run insert MUST share this transaction:
+          // a route-level revision check alone is a TOCTOU vulnerability.
+          const [locked] = await tx.select().from(projectAutomationWorkflows)
+            .where(and(
+              workflowTenantFilter(ctx, workflow.id),
+              eq(projectAutomationWorkflows.projectId, workflow.projectId),
+            ))
+            .limit(1)
+            .for("update");
+          return locked ?? null;
+        },
+        async () => {
+          const [admitted] = await tx.insert(projectAutomationRuns).values(values)
+            .onConflictDoNothing().returning();
+          return admitted ?? null;
+        },
+        workflow,
+        expectedWorkflowUpdatedAt,
+      ))
+    : (await getDb().insert(projectAutomationRuns).values(values).onConflictDoNothing().returning())[0] ?? null;
   if (!row) return null;
   await appendLedgerEvent(ctx, {
     projectId: workflow.projectId,
