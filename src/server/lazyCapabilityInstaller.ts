@@ -99,14 +99,13 @@ export async function ensureLazyCapability(
   const installed = new Set(currentState?.selectedPackIds ?? []);
   const missingManagedPackIds = requiredManagedPackIds.filter((id) => !installed.has(id));
 
-  if (missingManagedPackIds.length === 0) {
-    // Saved pack IDs are not health evidence. A missing Python executable,
-    // stale manifest, corrupt package inventory or unverified installation
-    // must never be advertised as an invocable capability. Doctor remains
-    // the canonical repair owner; lazy installation does not silently repair.
+  // Check the existing installation *before* any no-op or expansion claim.
+  // A missing Python, stale manifest or unverified installed base is Doctor
+  // repair work; lazy expansion must not silently overwrite that state.
+  if (currentState) {
     const readiness = evaluateManagedRuntimeReadiness({
       state: currentState,
-      requiredPackIds: requiredManagedPackIds,
+      requiredPackIds: ["core", ...currentState.selectedPackIds],
       pythonAvailable: (dependencies.pythonAvailable ?? (() => managedRuntimePythonPath() !== null))(),
     });
     if (!readiness.ready) {
@@ -116,9 +115,12 @@ export async function ensureLazyCapability(
         runtimePackId: runtimePack.id,
         requiredManagedPackIds,
         requiresConsent: false,
-        detail: `${runtimePack.name} is recorded as installed but managed runtime readiness is ${readiness.state}. Verify or repair it through Doctor before use.`,
+        detail: `${runtimePack.name} cannot be used or expanded because managed runtime readiness is ${readiness.state}. Verify or repair it through Doctor first.`,
       };
     }
+  }
+
+  if (missingManagedPackIds.length === 0) {
     return {
       status: "already_available",
       capability: normalizedCapability,
