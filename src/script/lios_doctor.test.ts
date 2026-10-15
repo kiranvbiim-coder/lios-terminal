@@ -12,7 +12,7 @@ test("P10 doctor reports all diagnostic domains without credential values or ten
     FRED_API_KEY: "should-never-appear-abcdef",
   });
   const serialized = JSON.stringify(snapshot);
-  for (const key of ["system","runtimePacks","sp01Dependencies","connectors","observability","jobsAgents","dataDiagnostics","releaseGovernance"]) {
+  for (const key of ["system","runtimePacks","repairPlan","sp01Dependencies","connectors","observability","jobsAgents","dataDiagnostics","releaseGovernance"]) {
     assert.ok(key in snapshot);
   }
   assert.doesNotMatch(serialized, /should-never-appear/i);
@@ -23,6 +23,8 @@ test("P10 doctor reports all diagnostic domains without credential values or ten
   assert.deepEqual(snapshot.runtimePacks.engineFabricValidationErrors, []);
   assert.equal(typeof snapshot.runtimePacks.managedRuntimeReadiness?.state, "string");
   assert.equal(typeof snapshot.runtimePacks.managedRuntimeReadiness?.repairAction, "string");
+  assert.equal(typeof snapshot.repairPlan.action, "string");
+  assert.equal("command" in snapshot.repairPlan, false);
   assert.equal(snapshot.sp01Dependencies.components.length, 8);
 });
 
@@ -55,6 +57,18 @@ test("SI-01.16 doctor reports a missing default Core runtime as installable rath
       requiredPackIds: ["core"],
       missingPackIds: ["core"],
       reasons: ["Managed runtime is not installed."],
+    });
+    assert.deepEqual(snapshot.repairPlan, {
+      schemaVersion: "1",
+      component: "managed_runtime",
+      state: "missing",
+      severity: "warning",
+      action: "install_managed_runtime",
+      automaticCandidate: true,
+      requiresConfirmation: true,
+      summary: "Managed runtime installation is required.",
+      reasons: ["Managed runtime is not installed."],
+      affectedPackIds: ["core"],
     });
     assert.ok(snapshot.warnings.some((warning: string) => /managed-runtime readiness: missing/.test(warning)));
   } finally {
