@@ -142,3 +142,15 @@ test("rollback failure is explicit when the previous verified root becomes unava
   assert.equal(resolveDataRoot({ env, homedir: home }).root, targetRoot);
   assert.equal(fs.readFileSync(path.join(targetRoot, "workspace", "project.json"), "utf8"), "{\"project\":\"alpha\"}\n");
 });
+
+test("desktop move-data-folder IPC delegates to the governed migration authority", () => {
+  const mainSource = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  assert.match(mainSource, /const \{ migrateDataRootSafely \} = require\("\.\/governedDataMigration\.cjs"\);/);
+  const start = mainSource.indexOf('ipcMain.handle("limuria:move-data-folder"');
+  const end = mainSource.indexOf('ipcMain.handle("limuria:restore-backup"', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const handler = mainSource.slice(start, end);
+  assert.match(handler, /await migrateDataRootSafely\(\{/);
+  assert.doesNotMatch(handler, /\bmoveDataRoot\(/);
+});
