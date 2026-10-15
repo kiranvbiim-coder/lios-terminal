@@ -16,7 +16,7 @@ import { setAudienceFromRole, useAudience } from "@/lib/audience";
 import { clearTerminalTabs } from "@/lib/terminalTabs";
 import { clearTerminalLinkedContextState } from "@/lib/terminalLinkedContextStore";
 import { clearActiveWorkspace } from "@/lib/terminalWorkspace";
-import { clearSessionMemory } from "@/lib/terminalSessionMemory";
+import { clearSessionMemory, setSessionMemoryOwner } from "@/lib/terminalSessionMemory";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -75,6 +75,9 @@ function App() {
   const audience = useAudience();
 
   const acceptSession = (data: SessionData | null) => {
+    // The server-restored principal, not editable browser storage or display
+    // email, determines which recent analytical history is visible.
+    setSessionMemoryOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -144,6 +147,9 @@ function App() {
       }
       try { localStorage.removeItem(LAST_DOMAIN_STORAGE_KEY); } catch { /* Storage can be disabled. */ }
     } finally {
+      // Cleanup is attempted while the prior verified principal is still
+      // selected; always disarm the memory owner after server sign-out.
+      setSessionMemoryOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
