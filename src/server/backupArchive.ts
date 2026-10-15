@@ -446,7 +446,18 @@ export async function restoreBackup(
   options: { passphrase?: string | undefined; replace?: boolean } = {},
 ): Promise<RestoreResult> {
   const root = dataRoot();
+  // Reject redirected Home storage *before* creating the extraction staging
+  // folder. A later per-file preflight cannot undo writes through a
+  // symlinked Home root made during archive extraction.
+  const existingRoot = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (existingRoot && (!existingRoot.isDirectory() || existingRoot.isSymbolicLink())) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  const preparedRoot = fs.lstatSync(root);
+  if (!preparedRoot.isDirectory() || preparedRoot.isSymbolicLink()) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
   const staging = path.join(root, `.lios-restore-${process.pid}`);
   try {
     const manifest = await extractBackup(file, staging, options);
