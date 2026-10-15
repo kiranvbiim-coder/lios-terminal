@@ -83,3 +83,29 @@ test("monitor polling refuses invalid intervals and keeps the stop function idem
   const stop = createAlertMonitor(async () => 0, 10_000);
   assert.doesNotThrow(() => { stop(); stop(); });
 });
+
+test("an in-flight monitor tick cannot overlap and stop prevents future polling", async () => {
+  let calls = 0;
+  let release!: (value: number) => void;
+  let started!: () => void;
+  const began = new Promise<void>((resolve) => { started = resolve; });
+  const inFlight = new Promise<number>((resolve) => { release = resolve; });
+  const stop = createAlertMonitor(async () => {
+    calls += 1;
+    started();
+    return inFlight;
+  }, 2);
+  try {
+    await began;
+    // Several interval ticks pass while the first cycle has not settled.
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    assert.equal(calls, 1, "a slow cycle must not run concurrently");
+    stop();
+    release(0);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(calls, 1, "stop must suppress new cycles");
+  } finally {
+    stop();
+    release(0);
+  }
+});
