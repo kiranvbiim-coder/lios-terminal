@@ -11,6 +11,10 @@ interface Entry {
 const CACHE_LIMIT = 500;
 const cache = new Map<string, Entry>();
 const inflight = new Map<string, Promise<CanonicalDataResponse>>();
+// Incremented whenever cache state is explicitly invalidated (e.g. changed
+// provider configuration/entitlement). Old requests may finish for their
+// existing callers, but must not reintroduce stale observations.
+let cacheGeneration = 0;
 
 function ttlMs(request: CanonicalDataRequest): number {
   if (request.pointInTime.mode !== "latest") return 5 * 60_000;
@@ -61,6 +65,7 @@ export async function executeCanonicalDataRequestCached(
   registry: ProviderSdkRegistry,
 ): Promise<{ response: CanonicalDataResponse; cache: "hit" | "miss" | "deduped" }> {
   const k = key(request, context, registry);
+  const generation = cacheGeneration;
   const now = Date.now();
   const hit = cache.get(k);
   if (hit && hit.expiresAt > now) {
@@ -77,13 +82,15 @@ export async function executeCanonicalDataRequestCached(
     const response = await promise;
     // Gaps/errors are intentionally not cached: a just-connected provider or renewed
     // entitlement must take effect immediately.
-    if (response.observation) {
+    if (response.observation && generation === cacheGeneration) {
       const entry = { response, createdAt: now, expiresAt: now + ttlMs(request) };
       touch(k, entry);
     }
     return { response, cache: "miss" };
   } finally {
-    inflight.delete(k);
+    // An invalidation may have started a newer request for this same key.
+    // Old cleanup may remove only its own promise, never the replacement.
+    if (inflight.get(k) === promise) inflight.delete(k);
   }
 }
 
@@ -112,6 +119,7 @@ export async function prefetchCanonicalDataRequests(
 }
 
 export function clearProviderExecutionCache(): void {
+  cacheGeneration += 1;
   cache.clear();
   inflight.clear();
 }
