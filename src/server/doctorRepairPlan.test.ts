@@ -84,12 +84,13 @@ test("SI-07 Doctor repair planner maps integrity/corruption states to verified r
     assert.equal(plan.executionStatus, "blocked");
     assert.equal(plan.executionBlocker, "strict_provisioning_authority_missing");
     assert.equal(plan.requiresConfirmation, true);
+    assert.equal(plan.requiresVerifiedArtifacts, true);
     assert.equal(JSON.stringify(plan).includes("shell"), false);
   }
 });
 
-test("SI-07 Doctor verification failures require verified release artifacts for any future repair executor", () => {
-  for (const state of ["unverified", "integrity_failed"] as const) {
+test("SI-07 governed repair states require verified release artifacts for any future repair executor", () => {
+  for (const state of ["corrupt", "incompatible", "unverified", "integrity_failed"] as const) {
     const plan = planManagedRuntimeRepair(readiness({
       state,
       ready: false,
@@ -99,7 +100,7 @@ test("SI-07 Doctor verification failures require verified release artifacts for 
     assert.equal(
       plan.requiresVerifiedArtifacts,
       true,
-      `${state} repair must not be executable with the installer's default unverified-artifact policy`,
+      `${state} repair must not be executable with an unverified-artifact policy`,
     );
   }
 });
