@@ -269,12 +269,12 @@ test("SI-07.12 restore target preflight rejects linked parents and linked files"
 
 test("SI-07.12 restore refuses symlinked Home parent before importing database", async (t) => {
   const file = (await createBackup(getDb(), { ...common, destination: path.join(base, "symlinked-restore-source"), passphrase: PASS })).file;
-  const home = rootB;
+  const home = path.join(base, "symlink-restore-destination");
   const attached = path.join(home, "project-attachments");
   const outside = path.join(base, "restore-unrelated-data");
+  fs.mkdirSync(home, { recursive: true });
   fs.mkdirSync(outside, { recursive: true });
   fs.writeFileSync(path.join(outside, "private.txt"), "DO-NOT-REPLACE");
-  fs.rmSync(attached, { recursive: true, force: true });
   try {
     fs.symlinkSync(outside, attached, process.platform === "win32" ? "junction" : "dir");
   } catch (error) {
@@ -282,7 +282,7 @@ test("SI-07.12 restore refuses symlinked Home parent before importing database",
     return;
   }
   const before = (await getDb().select().from(users)).map((u) => u.email).sort();
-  process.env.LIOS_DATA_ROOT = rootB;
+  process.env.LIOS_DATA_ROOT = home;
   try {
     await assert.rejects(
       restoreBackup(getDb(), file, { passphrase: PASS, replace: true }),
@@ -292,7 +292,7 @@ test("SI-07.12 restore refuses symlinked Home parent before importing database",
     assert.deepEqual(after, before, "a refused file path must not commit the database import");
     assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "DO-NOT-REPLACE");
     assert.deepEqual(fs.readdirSync(outside), ["private.txt"]);
-    assert.equal(fs.existsSync(path.join(rootB, `.lios-restore-${process.pid}`)), false);
+    assert.equal(fs.existsSync(path.join(home, `.lios-restore-${process.pid}`)), false);
   } finally {
     process.env.LIOS_DATA_ROOT = rootA;
     fs.rmSync(attached, { force: true });
