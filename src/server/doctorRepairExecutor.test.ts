@@ -185,3 +185,59 @@ test("SI-07 Doctor repair executor forces verified artifacts for governed repair
   assert.deepEqual(calls[0]?.selectedReleasePackIds, ["research"]);
   assert.equal(calls[0]?.options.requireVerified, true);
 });
+
+test("SI-07 Doctor repair executor prevents overlapping runtime mutations and releases the guard", async () => {
+  let releaseInstall!: () => void;
+  let startedInstall!: () => void;
+  let reads = 0;
+  let installs = 0;
+  const pausedInstall = new Promise<void>((resolve) => { releaseInstall = resolve; });
+  const started = new Promise<void>((resolve) => { startedInstall = resolve; });
+  const deps: DoctorRepairExecutionDependencies = {
+    readCurrentRuntimeContext() {
+      reads += 1;
+      return { readiness: readiness(), selectedReleasePackIds: ["quant"] };
+    },
+    async installManagedRuntime() {
+      installs += 1;
+      startedInstall();
+      await pausedInstall;
+      return operationResult();
+    },
+  };
+  const first = executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps);
+  await started;
+  await assert.rejects(
+    executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps),
+    (error: unknown) => error instanceof DoctorRepairExecutionRefusedError
+      && error.code === "repair_in_progress",
+  );
+  assert.equal(reads, 1, "overlapping confirmation cannot re-enter current-state evaluation");
+  assert.equal(installs, 1, "only one install reaches the canonical runtime manager");
+  releaseInstall();
+  await first;
+  await executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps);
+  assert.equal(installs, 2, "a completed install releases the guard for a fresh explicit request");
+});
+
+test("SI-07 Doctor repair executor releases the guard after a failed installer", async () => {
+  const error = new Error("simulated runtime installer failure");
+  let attempts = 0;
+  const deps: DoctorRepairExecutionDependencies = {
+    readCurrentRuntimeContext() {
+      return { readiness: readiness(), selectedReleasePackIds: [] };
+    },
+    async installManagedRuntime() {
+      attempts += 1;
+      if (attempts === 1) throw error;
+      return operationResult();
+    },
+  };
+  await assert.rejects(
+    executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps),
+    (caught: unknown) => caught === error,
+  );
+  const retry = await executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps);
+  assert.equal(retry.plan.action, "install_managed_runtime");
+  assert.equal(attempts, 2);
+});
