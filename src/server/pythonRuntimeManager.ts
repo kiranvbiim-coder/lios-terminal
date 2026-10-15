@@ -402,6 +402,7 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
     }
   }
   if (!replacedPath) throw new Error("No free managed runtime rollback destination is available.");
+  const safeReplacedPath = replacedPath;
 
   const rollbackSnapshotPath = runtimeStateSnapshotPath(previousPath);
   const currentSnapshotPath = runtimeStateSnapshotPath(currentPath);
@@ -424,13 +425,13 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
         ...previousState,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: replacedPath,
+        rollbackPath: safeReplacedPath,
       }
     : {
         ...state,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: replacedPath,
+        rollbackPath: safeReplacedPath,
         selectedReleasePackIds: [],
         verificationWarnings: [
           ...state.verificationWarnings,
@@ -443,7 +444,7 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
   let stateWriteAttempted = false;
   try {
     writeRuntimeStateSnapshot(currentPath, state);
-    fs.renameSync(currentPath, replacedPath);
+    fs.renameSync(currentPath, safeReplacedPath);
     currentMovedAside = true;
     fs.renameSync(previousPath, currentPath);
     rollbackActivated = true;
@@ -466,7 +467,7 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
       });
     }
     if (currentMovedAside) {
-      recover(() => fs.renameSync(replacedPath, currentPath));
+      recover(() => fs.renameSync(safeReplacedPath, currentPath));
     }
     recover(() => {
       if (!fs.existsSync(currentPath)) return;
