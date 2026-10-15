@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
+const Module = require("node:module");
 const test = require("node:test");
 const { configureAutoUpdater, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
 
@@ -173,12 +173,42 @@ test("desktop updater never logs raw external error text", async () => {
   assert.equal(logs.filter((line) => line.includes("Desktop update failed safely.")).length >= 1, true);
 });
 
-test("desktop updater owns a native safe-default install confirmation in the main process", () => {
-  const updaterSource = fs.readFileSync(require.resolve("./desktopUpdater.cjs"), "utf8");
-  assert.match(updaterSource, /require\("electron"\)/);
-  assert.match(updaterSource, /dialog\.showMessageBox/);
-  assert.match(updaterSource, /buttons:\s*\[\s*"Later"\s*,\s*"Restart and install"\s*\]/);
-  assert.match(updaterSource, /defaultId:\s*0/);
-  assert.match(updaterSource, /cancelId:\s*0/);
-  assert.match(updaterSource, /return\s+confirmation\.response\s*===\s*1/);
+test("default production confirmation uses a native safe-default dialog", async () => {
+  const originalLoad = Module._load;
+  const prompts = [];
+  const fakeWindow = { isDestroyed: () => false };
+  Module._load = function patchedLoad(request, parent, isMain) {
+    if (request === "electron") {
+      return {
+        BrowserWindow: {
+          getFocusedWindow: () => fakeWindow,
+          getAllWindows: () => [fakeWindow],
+        },
+        dialog: {
+          async showMessageBox(parentWindow, options) {
+            prompts.push({ parentWindow, options });
+            return { response: 1 };
+          },
+        },
+      };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  const { updater, events, calls } = makeUpdater();
+  try {
+    configureAutoUpdater({ updater, isPackaged: true, env: {}, log() {} });
+    await events.get("update-downloaded")({ version: "1.2.3" });
+  } finally {
+    Module._load = originalLoad;
+  }
+
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].parentWindow, fakeWindow);
+  assert.deepEqual(prompts[0].options.buttons, ["Later", "Restart and install"]);
+  assert.equal(prompts[0].options.defaultId, 0);
+  assert.equal(prompts[0].options.cancelId, 0);
+  assert.equal(prompts[0].options.noLink, true);
+  assert.match(prompts[0].options.message, /1\.2\.3/);
+  assert.deepEqual(calls, [["check"], ["quitAndInstall", false, true]]);
 });
