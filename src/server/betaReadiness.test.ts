@@ -46,3 +46,62 @@ test("buildBetaChecks fails closed for missing results", () => {
   assert.ok(checks.every((c) => c.passed === false));
   assert.ok(checks.every((c) => c.detail === "Check has not been executed."));
 });
+
+test("partial passing submissions never qualify the full required beta catalog", () => {
+  const first = BETA_CHECK_CATALOG.find((check) => check.id === "fresh_install")!;
+  const report = evaluateBetaReadiness([{ ...first, passed: true, detail: "Installed" }]);
+  assert.equal(report.ready, false);
+  assert.equal(report.requiredTotal, 18);
+  assert.equal(report.requiredPassed, 1);
+  assert.equal(report.checks.length, BETA_CHECK_CATALOG.length);
+  assert.ok(report.blockers.some((blocker) => blocker.includes("Authentication")));
+});
+
+test("duplicating a passing required check invalidates readiness instead of inflating the count", () => {
+  const all = buildBetaChecks(
+    Object.fromEntries(BETA_CHECK_CATALOG.map((check) => [check.id, { passed: true, detail: "Verified" }])),
+  );
+  const duplicate = all.find((check) => check.id === "authentication")!;
+  const report = evaluateBetaReadiness([...all, duplicate]);
+  assert.equal(report.ready, false);
+  assert.equal(report.requiredTotal, 18);
+  assert.equal(report.requiredPassed, 17);
+  assert.ok(report.blockers.includes("Duplicate readiness check: authentication"));
+});
+
+test("caller cannot demote required checks or alter required/optional labels to spoof readiness", () => {
+  const all = buildBetaChecks(
+    Object.fromEntries(BETA_CHECK_CATALOG.map((check) => [check.id, { passed: true, detail: "Verified" }])),
+  );
+  const forged = all.map((check) => check.id === "tenant_isolation"
+    ? { ...check, required: false, label: "Not required" }
+    : check);
+  const report = evaluateBetaReadiness(forged);
+  assert.equal(report.ready, false);
+  assert.equal(report.requiredTotal, 18);
+  assert.equal(report.requiredPassed, 17);
+  assert.ok(report.blockers.includes("Altered readiness check declaration: tenant_isolation"));
+
+  const changedOptional = all.map((check) => check.id === "byoai"
+    ? { ...check, required: true }
+    : check);
+  const optionalReport = evaluateBetaReadiness(changedOptional);
+  assert.equal(optionalReport.ready, false);
+  assert.equal(optionalReport.optionalTotal, 1);
+  assert.ok(optionalReport.blockers.includes("Altered readiness check declaration: byoai"));
+});
+
+test("unknown check IDs cannot silently validate a partial or complete release report", () => {
+  const all = buildBetaChecks(
+    Object.fromEntries(BETA_CHECK_CATALOG.map((check) => [check.id, { passed: true, detail: "Verified" }])),
+  );
+  const result = evaluateBetaReadiness([
+    ...all,
+    { id: "synthetic_release_pass" as never, required: true, passed: true, label: "Everything", detail: "ok" },
+  ]);
+  assert.equal(result.ready, false);
+  assert.equal(result.requiredPassed, 18);
+  assert.equal(result.requiredTotal, 18);
+  assert.ok(result.blockers.includes("Unrecognized readiness check: synthetic_release_pass"));
+  assert.equal(result.checks.some((check) => check.id === ("synthetic_release_pass" as never)), false);
+});
