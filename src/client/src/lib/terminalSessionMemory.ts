@@ -33,9 +33,9 @@ function isSessionMemoryEntry(value: unknown): value is SessionMemoryEntry {
     && typeof item.view === "string" && isRegisteredView(item.view)
     && isWorkspaceState(item.workspace)
     && getWorkspacePanes(item.workspace).every(({ pane }) => isRegisteredView(pane.view))
-    && Number.isSafeInteger(item.startedAt) && item.startedAt! >= 0
-    && Number.isSafeInteger(item.lastActiveAt) && item.lastActiveAt! >= item.startedAt!
-    && Number.isSafeInteger(item.visitCount) && item.visitCount! > 0;
+    && typeof item.startedAt === "number" && Number.isSafeInteger(item.startedAt) && item.startedAt >= 0
+    && typeof item.lastActiveAt === "number" && Number.isSafeInteger(item.lastActiveAt) && item.lastActiveAt >= item.startedAt
+    && typeof item.visitCount === "number" && Number.isSafeInteger(item.visitCount) && item.visitCount > 0;
 }
 
 export function loadSessionMemory(): SessionMemoryEntry[] {
