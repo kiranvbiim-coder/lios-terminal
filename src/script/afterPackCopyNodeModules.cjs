@@ -38,19 +38,25 @@ const LEGAL_PATH_NAME = /^(?:third[-_]?party[-_])?(?:licen[cs]es?|copying|notice
 
 /** Enumerate every bundled root-rights source so verification cannot miss nested donor grants. */
 function rootRightsFiles(repoRoot) {
-  const paths = ["LICENSE", "THIRD_PARTY_NOTICES.md"];
+  const paths = [];
   function collect(relative) {
     const source = path.join(repoRoot, relative);
-    const entry = fs.statSync(source);
+    // Root legal files are code-signing evidence, not an arbitrary file-copy
+    // capability. Dereferencing a linked grant can bundle outside-user files
+    // and conceal the real license source under a plausible archive path.
+    const entry = fs.lstatSync(source);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`[afterPackCopyNodeModules] Symlinked root legal source is refused: ${relative}`);
+    }
     if (entry.isDirectory()) {
-      for (const child of fs.readdirSync(source)) collect(path.join(relative, child));
+      for (const child of fs.readdirSync(source).sort()) collect(path.join(relative, child));
     } else if (entry.isFile()) {
       paths.push(relative);
     } else {
       throw new Error(`[afterPackCopyNodeModules] Unsupported root legal source: ${relative}`);
     }
   }
-  collect("third_party/licenses");
+  for (const relative of ["LICENSE", "THIRD_PARTY_NOTICES.md", "third_party/licenses"]) collect(relative);
   return paths;
 }
 
