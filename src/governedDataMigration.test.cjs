@@ -92,3 +92,53 @@ test("failed post-switch validation restores the previously selected pointer roo
   assert.equal(resolveDataRoot({ env, homedir: home }).root, intermediate);
   assert.equal(fs.readFileSync(path.join(intermediate, "data", "memory.json"), "utf8"), "{\"memory\":true}\n");
 });
+
+test("overlapping governed migrations are refused while activation validation is pending", async (t) => {
+  const { home, env } = fixture(t);
+  const firstTarget = path.join(home, "first-target");
+  const secondTarget = path.join(home, "second-target");
+  let releaseValidation;
+  const validationGate = new Promise((resolve) => { releaseValidation = resolve; });
+
+  const first = migrateDataRootSafely({
+    targetRoot: firstTarget,
+    env,
+    homedir: home,
+    validateActivatedRoot: async () => {
+      await validationGate;
+      return true;
+    },
+  });
+
+  await assert.rejects(
+    migrateDataRootSafely({ targetRoot: secondTarget, env, homedir: home }),
+    (error) => error instanceof GovernedDataMigrationError && error.code === "migration_in_progress",
+  );
+  assert.equal(fs.existsSync(secondTarget), false);
+
+  releaseValidation();
+  assert.equal((await first).status, "migrated");
+});
+
+test("rollback failure is explicit when the previous verified root becomes unavailable", async (t) => {
+  const { home, env, current } = fixture(t);
+  const intermediate = path.join(home, "intermediate-home");
+  moveDataRoot({ from: current.root, to: intermediate, env, homedir: home });
+  const targetRoot = path.join(home, "target-home");
+
+  await assert.rejects(
+    migrateDataRootSafely({
+      targetRoot,
+      env,
+      homedir: home,
+      validateActivatedRoot: async ({ previous }) => {
+        fs.rmSync(previous.root, { recursive: true, force: true });
+        return false;
+      },
+    }),
+    (error) => error instanceof GovernedDataMigrationError && error.code === "rollback_failed",
+  );
+
+  assert.equal(resolveDataRoot({ env, homedir: home }).root, targetRoot);
+  assert.equal(fs.readFileSync(path.join(targetRoot, "workspace", "project.json"), "utf8"), "{\"project\":\"alpha\"}\n");
+});
