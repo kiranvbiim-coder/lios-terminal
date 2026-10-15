@@ -23,6 +23,7 @@ const { BackupDecryptStream, BackupEncryptStream } = await import("./backupCrypt
 const {
   BACKUP_VAULT_MIGRATION_ENTRY,
   BackupError,
+  assertSafeRestoreFileTarget,
   createBackup,
   extractBackup,
   restoreBackup,
@@ -234,6 +235,68 @@ test("restore recreates database, files and keys in a fresh Home and keeps repla
   await closeDb();
   process.env.LIOS_DATA_ROOT = rootA;
   await initDb();
+});
+
+test("SI-07.12 restore target preflight rejects linked parents and linked files", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-restore-containment-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, "home");
+  const outside = path.join(root, "outside");
+  const targetDir = path.join(home, "documents");
+  fs.mkdirSync(home);
+  fs.mkdirSync(outside);
+  fs.mkdirSync(targetDir);
+  fs.writeFileSync(path.join(outside, "private.txt"), "PRIVATE-UNTOUCHED");
+
+  assert.equal(assertSafeRestoreFileTarget(home, "documents/future.txt"), path.join(targetDir, "future.txt"));
+  assert.throws(() => assertSafeRestoreFileTarget(home, "../outside/private.txt"), /Unsafe path/);
+  assert.throws(() => assertSafeRestoreFileTarget(home, "documents"), /not a regular file/);
+  assert.throws(() => assertSafeRestoreFileTarget(home, "documents/new/.././../.."), /Unsafe path/);
+
+  const alias = path.join(home, "linked");
+  const linkedFile = path.join(home, "linked.txt");
+  try {
+    fs.symlinkSync(outside, alias, process.platform === "win32" ? "junction" : "dir");
+    fs.symlinkSync(path.join(outside, "private.txt"), linkedFile, "file");
+  } catch (error) {
+    t.skip("Host cannot create filesystem symlinks: " + String(error));
+    return;
+  }
+  assert.throws(() => assertSafeRestoreFileTarget(home, "linked/private.txt"), /Refusing linked restore destination/);
+  assert.throws(() => assertSafeRestoreFileTarget(home, "linked.txt"), /Refusing linked restore destination/);
+  assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "PRIVATE-UNTOUCHED");
+});
+
+test("SI-07.12 restore refuses symlinked Home parent before importing database", async (t) => {
+  const file = (await createBackup(getDb(), { ...common, destination: path.join(base, "symlinked-restore-source"), passphrase: PASS })).file;
+  const home = rootB;
+  const attached = path.join(home, "project-attachments");
+  const outside = path.join(base, "restore-unrelated-data");
+  fs.mkdirSync(outside, { recursive: true });
+  fs.writeFileSync(path.join(outside, "private.txt"), "DO-NOT-REPLACE");
+  fs.rmSync(attached, { recursive: true, force: true });
+  try {
+    fs.symlinkSync(outside, attached, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  const before = (await getDb().select().from(users)).map((u) => u.email).sort();
+  process.env.LIOS_DATA_ROOT = rootB;
+  try {
+    await assert.rejects(
+      restoreBackup(getDb(), file, { passphrase: PASS, replace: true }),
+      /Refusing linked restore destination/,
+    );
+    const after = (await getDb().select().from(users)).map((u) => u.email).sort();
+    assert.deepEqual(after, before, "a refused file path must not commit the database import");
+    assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "DO-NOT-REPLACE");
+    assert.deepEqual(fs.readdirSync(outside), ["private.txt"]);
+    assert.equal(fs.existsSync(path.join(rootB, `.lios-restore-${process.pid}`)), false);
+  } finally {
+    process.env.LIOS_DATA_ROOT = rootA;
+    fs.rmSync(attached, { force: true });
+  }
 });
 
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
