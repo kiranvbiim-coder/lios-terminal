@@ -241,3 +241,21 @@ test("SI-07 Doctor repair executor releases the guard after a failed installer",
   assert.equal(retry.plan.action, "install_managed_runtime");
   assert.equal(attempts, 2);
 });
+
+test("SI-07 Doctor repair executor obeys server strict-mode policy over requested legacy-host mode", async () => {
+  const original = process.env.LIOS_EXECUTION_ISOLATION;
+  process.env.LIOS_EXECUTION_ISOLATION = "strict";
+  const calls: unknown[] = [];
+  try {
+    const deps = dependencies(readiness(), [], calls as never[]);
+    await assert.rejects(
+      executeManagedRuntimeRepair({ confirmed: true, isolationMode: "legacy-host" }, deps),
+      (error: unknown) => error instanceof DoctorRepairExecutionRefusedError
+        && error.code === "strict_provisioning_authority_missing",
+    );
+    assert.deepEqual(calls, [], "strict policy cannot be downgraded to the legacy provisioning path");
+  } finally {
+    if (original === undefined) delete process.env.LIOS_EXECUTION_ISOLATION;
+    else process.env.LIOS_EXECUTION_ISOLATION = original;
+  }
+});
