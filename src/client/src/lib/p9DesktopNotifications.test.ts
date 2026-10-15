@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createBrowserP9DesktopNotificationPort,
   deliverP9DesktopNotifications,
   sanitizeP9DesktopNotificationText,
   type P9DesktopNotificationPermission,
@@ -164,4 +165,38 @@ test("SI-06 desktop delivery refuses to show when durable local dedupe state can
   const result = await deliverP9DesktopNotifications([canonical], adapter, options);
   assert.equal(result.unavailable, 1);
   assert.equal(shown.length, 0);
+});
+
+test("SI-06 browser delivery rechecks persisted ids when concurrent ports claim the same notification", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  const storageValues = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => storageValues.get(key) ?? null,
+    setItem: (key: string, value: string) => { storageValues.set(key, value); },
+  };
+  class FakeNotification {
+    static permission = "granted";
+    static async requestPermission() { return "granted"; }
+    constructor(_title: string, _options?: unknown) {}
+  }
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: {
+      limuriaDesktop: { isElectron: true },
+      localStorage: storage,
+      Notification: FakeNotification,
+    },
+  });
+
+  try {
+    const first = createBrowserP9DesktopNotificationPort();
+    const concurrent = createBrowserP9DesktopNotificationPort();
+    assert.equal(first.claimDelivery(canonical.id), "claimed");
+    assert.equal(concurrent.claimDelivery(canonical.id), "duplicate");
+  } finally {
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: originalWindow });
+  }
 });
