@@ -7,9 +7,9 @@ This tranche defines and validates the machine-readable observation that feeds t
 Canonical owners reused:
 
 - `src/desktopUpdater.cjs` — packaged update trust/download/install policy.
-- `src/shared/p14UpdateRollbackEvidence.ts` — P14-03 raw journey observation contract.
+- `src/shared/p14UpdateRollbackEvidence.ts` — raw P14-03 journey observation contract.
 - `src/script/validate_p14_update_rollback_evidence.ts` — read-only validation of a supplied observation JSON file.
-- `src/script/write_p14_evidence.cjs` — sole final P14 evidence writer/hash authority.
+- `src/script/write_p14_evidence.cjs` — sole final P14 evidence writer/hash authority; for `update_rollback` it now refuses to write unless the first source artifact passes the P14-03 validator.
 - `src/shared/p14ReleaseEvidence.ts` — final P14 category/task board authority.
 - `src/script/validate_p14_desktop_acceptance.ts` — final P14 board validation.
 
@@ -17,26 +17,28 @@ Canonical owners reused:
 
 Source CI can validate this contract but cannot manufacture a passed P14-03 journey. The observation must come from an actual signed/package qualification environment that exercised the relevant application packages and user state.
 
-A valid observation proves that the supplied record is complete and internally consistent. It does not, by itself, prove code signing, notarization, update transport, clean-machine installation, or the authenticity of external evidence files. Final P14 evidence must hash the observation **and the underlying source artifacts** through the existing `write_p14_evidence.cjs` writer.
+A valid observation proves that the supplied record is complete and internally consistent. It does not, by itself, prove code signing, notarization, update transport, clean-machine installation, or authenticity of external artifacts. Final P14 evidence must hash the observation **and the underlying source artifacts** through the existing canonical writer.
+
+The canonical writer closes the validation bypass: for category `update_rollback`, source artifact **#1 must be the raw observation JSON**, and that observation must pass the P14-03 validator before any evidence file is written.
 
 ## Required journey
 
-The observation records one N → N+1 packaged journey and requires:
+One observation records one N → N+1 packaged journey and requires:
 
 1. exact baseline and target semantic versions;
-2. different SHA-256 identities for the baseline and target packages;
-3. target version strictly newer than baseline;
+2. different SHA-256 identities for baseline and target packages;
+3. target strictly newer than baseline;
 4. update download observed;
 5. explicit user install/restart confirmation observed;
 6. install initiation observed;
 7. application restart observed;
 8. running post-update version equal to the target;
-9. migration path actually exercised and successful;
-10. user/workspace continuity verified after the update;
-11. a recovery path actually exercised and successful;
-12. final running version consistent with the recorded recovery outcome.
+9. migration actually exercised and successful;
+10. user/workspace continuity verified;
+11. recovery actually exercised and successful;
+12. final running version consistent with the recovery outcome.
 
-Supported target combinations mirror current desktop distribution truth:
+Supported packaged targets mirror current distribution truth:
 
 - macOS (`darwin`): `arm64` or `x64`;
 - Windows (`win32`): `x64` only.
@@ -45,14 +47,12 @@ Linux is not a packaged LiOS desktop distribution target for this P14 observatio
 
 ## Recovery outcome semantics
 
-`recoveryOutcome` is intentionally narrow:
-
 - `retained_target` — recovery succeeded while retaining N+1; `finalObservedVersion` must equal `targetVersion`.
 - `rolled_back` — a separately qualified rollback/reinstall/recovery mechanism restored N; `finalObservedVersion` must equal `baselineVersion`.
 
-`rolled_back` must **not** be interpreted as evidence that `electron-updater` supports or performed automatic downgrade/rollback. The current desktop updater explicitly refuses downgrades. Until a real previous-version rollback authority is qualified, a rollback claim must be backed by the separate recovery/reinstall mechanism and its artifacts.
+`rolled_back` must **not** be interpreted as evidence that `electron-updater` performed an automatic downgrade. The current desktop updater explicitly refuses downgrades. A rollback claim therefore requires evidence from a separately qualified recovery/reinstall mechanism until a real previous-version rollback authority exists.
 
-## Observation file validation
+## Observation validation
 
 From `src/` after dependencies are installed:
 
@@ -64,7 +64,7 @@ The validator is read-only. It does not rewrite the observation, create hashes, 
 
 ## Final P14 evidence
 
-After the raw observation passes validation, use the existing canonical writer. Include the observation and every material source artifact referenced by the journey so the final evidence hashes the real inputs:
+The raw observation must be the first source artifact passed to the canonical writer. Add every material underlying source artifact after it:
 
 ```bash
 node script/write_p14_evidence.cjs \
@@ -78,7 +78,9 @@ node script/write_p14_evidence.cjs \
   artifacts/p14/recovery-journey.json
 ```
 
-The exact artifact names may differ by qualification environment. The rule does not: the final evidence record must hash the observation plus the underlying proof needed to support it.
+For `update_rollback`, `write_p14_evidence.cjs` validates the first source artifact before hashing or writing. If validation fails, no passed final evidence file is emitted.
+
+The exact artifact names may differ by qualification environment. The invariant does not: final evidence hashes the observation plus the material proof needed to support it.
 
 ## Source observation shape
 
@@ -113,17 +115,20 @@ The exact artifact names may differ by qualification environment. The rule does 
 }
 ```
 
-Placeholders above describe the shape only; they are not valid release evidence. Real qualification must use the exact observed versions, package digests, timestamps and source-artifact identifiers.
+Placeholders describe the shape only; they are not release evidence. Real qualification must use exact observed versions, package digests, timestamps and source-artifact identifiers.
 
 ## TDD evidence
 
 RED was observed before each behavior was implemented:
 
-- the P14-03 observation module was absent (`ERR_MODULE_NOT_FOUND`);
-- the release-facing file validator module was absent (`ERR_MODULE_NOT_FOUND`);
-- the first validator incorrectly accepted `win32 + arm64` before the Windows x64 target lock was added.
+- the raw observation validator was absent (`ERR_MODULE_NOT_FOUND`);
+- the release-facing file validator was absent (`ERR_MODULE_NOT_FOUND`);
+- the initial validator accepted fictitious `win32 + arm64` evidence;
+- the canonical P14 writer accepted an invalid `update_rollback` observation and wrote a passed evidence file.
 
-Focused GREEN evidence was then observed for the observation contract, file-validation behaviors, and Windows target restriction. Exact-head hosted Linux/macOS/Windows source validation remains the source-regression gate; real P14-03 acceptance still requires signed/package execution outside source CI.
+Focused GREEN evidence was then observed for observation/file validation and Windows target restriction. The canonical writer integration is additionally covered by `write_p14_update_rollback_evidence.test.cjs`; exact-head hosted Linux/macOS/Windows source validation is the final source-regression gate.
+
+Real LIOS-P14-03 acceptance still requires signed/package execution outside source CI.
 
 ## Dependency order
 
