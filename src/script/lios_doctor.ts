@@ -9,6 +9,7 @@ import { P11_PACK_CATALOG, validateP11PackCatalog } from "../server/p11PackCatal
 import { managedRuntimePythonPath, readManagedRuntimeState } from "../server/pythonRuntimeManager";
 import { evaluateManagedRuntimeReadiness } from "../server/provisioningReadiness";
 import { planManagedRuntimeRepair, type DoctorRepairPlan } from "../server/doctorRepairPlan";
+import { effectiveSandboxIsolationMode } from "../server/exec/sandbox-runtime-profile";
 import { SP01_DEPENDENCY_INVENTORY } from "../server/sp01DependencyInventory";
 import { p10ObservabilityPath, p10RemoteObservabilityConfig } from "../server/p10Observability";
 import { p10OpenLineageConfig } from "../server/p10OpenLineage";
@@ -46,7 +47,8 @@ export function buildLiosDoctorSnapshot(env: NodeJS.ProcessEnv = process.env): L
     pythonAvailable: Boolean(managedRuntimePythonPath()),
     requiredPackIds: ["core"],
   });
-  const repairPlan = planManagedRuntimeRepair(managedRuntimeReadiness);
+  const isolationMode = effectiveSandboxIsolationMode(undefined, env);
+  const repairPlan = planManagedRuntimeRepair(managedRuntimeReadiness, { isolationMode });
   const packErrors = validateP10RuntimePackCatalog();
   const p11PackErrors = validateP11PackCatalog();
   const observability = p10RemoteObservabilityConfig(env);
@@ -69,6 +71,9 @@ export function buildLiosDoctorSnapshot(env: NodeJS.ProcessEnv = process.env): L
   if (!managedRuntimeReadiness.ready) {
     warnings.push(`managed-runtime readiness: ${managedRuntimeReadiness.state} (${managedRuntimeReadiness.reasons.join(" ")})`);
   }
+  if (repairPlan.executionStatus === "blocked" && repairPlan.executionBlocker) {
+    warnings.push(`managed-runtime repair execution blocked: ${repairPlan.executionBlocker}`);
+  }
 
   return {
     schemaVersion: "1",
@@ -77,6 +82,7 @@ export function buildLiosDoctorSnapshot(env: NodeJS.ProcessEnv = process.env): L
       node: process.version,
       platform: process.platform,
       arch: process.arch,
+      executionIsolationMode: isolationMode,
       localDataDirectoryConfigured: dataRootIsExplicit({ env }),
       hostedDatabaseConfigured: Boolean(env.DATABASE_URL?.trim()),
     },
@@ -174,7 +180,7 @@ function renderHuman(snapshot: LiosDoctorSnapshot, section: string | null): stri
     `system: ${process.platform}/${process.arch} ${process.version}`,
     `runtime packs: ${P10_RUNTIME_PACKS.map((pack) => pack.id).join(", ")}`,
     `managed runtime core: ${managedRuntime?.state ?? "unknown"}${managedRuntime?.repairAction && managedRuntime.repairAction !== "none" ? ` (action: ${managedRuntime.repairAction})` : ""}`,
-    `repair plan: ${snapshot.repairPlan.action}${snapshot.repairPlan.requiresConfirmation ? " (confirmation required)" : ""}`,
+    `repair plan: ${snapshot.repairPlan.action} · ${snapshot.repairPlan.executionStatus}${snapshot.repairPlan.requiresConfirmation ? " (confirmation required)" : ""}`,
     `P11 engine packs: ${P11_PACK_CATALOG.map((pack) => pack.id).join(", ")}`,
     `connectors: ${BUILT_IN_CONNECTORS.length} built-in, ${BUILT_IN_CONNECTORS.filter((item) => item.adapterImplemented).length} implemented`,
     `observability remote: ${(snapshot.observability.remoteEnabled as boolean) ? "enabled (redacted-only)" : "disabled"}`,
