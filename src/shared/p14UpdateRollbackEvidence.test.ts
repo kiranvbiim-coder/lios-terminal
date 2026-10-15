@@ -72,5 +72,6 @@ test("P14 update/rollback observation enforces final version consistency for rol
 test("P14 update/rollback observation rejects malformed digests, unsupported targets and empty source evidence", () => {
   assert.throws(() => validateP14UpdateRollbackObservation(validObservation({ baselinePackageSha256: "abc" })), /sha256/i);
   assert.throws(() => validateP14UpdateRollbackObservation(validObservation({ platform: "linux" })), /platform/i);
+  assert.throws(() => validateP14UpdateRollbackObservation(validObservation({ platform: "win32", arch: "arm64" })), /win32.*x64/i);
   assert.throws(() => validateP14UpdateRollbackObservation(validObservation({ sourceEvidence: [] })), /sourceEvidence/i);
 });
