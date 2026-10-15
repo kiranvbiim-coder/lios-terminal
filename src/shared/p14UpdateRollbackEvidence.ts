@@ -119,6 +119,9 @@ export function validateP14UpdateRollbackObservation(value: unknown): P14UpdateR
   if (!P14_UPDATE_ROLLBACK_ARCHES.includes(arch as P14UpdateRollbackArch)) {
     throw new Error("arch must be arm64 or x64 for P14 packaged update/rollback evidence.");
   }
+  if (platform === "win32" && arch !== "x64") {
+    throw new Error("win32 packaged update/rollback evidence must use x64, matching the supported Windows distribution target.");
+  }
 
   const baselineVersion = requireVersion(record, "baselineVersion");
   const targetVersion = requireVersion(record, "targetVersion");
