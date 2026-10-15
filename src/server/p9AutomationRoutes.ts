@@ -137,11 +137,12 @@ export function registerP9AutomationRoutes(app: Express): void {
       const current = await getP9Workflow(owner, String(req.params.workflowId));
       if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
       const request = p9ManualRunRequestSchema.parse(req.body ?? {});
-      const key = "idempotencyKey" in request ? p9ManualRunDedupeKey(request.idempotencyKey) : null;
+      const keyed = "idempotencyKey" in request ? request : null;
+      const key = keyed ? p9ManualRunDedupeKey(keyed.idempotencyKey) : null;
 
       // Return the original durable receipt for a repeated key, even if the
       // workflow was subsequently edited. Never execute a second action.
-      if (key) {
+      if (key && keyed) {
         const previous = await findP9ManualRunReceipt(owner, pid, current.id, key);
         if (previous) {
           res.status(previous.status === "running" ? 202 : 200).json({
@@ -151,7 +152,7 @@ export function registerP9AutomationRoutes(app: Express): void {
           });
           return;
         }
-        if (!p9ManualRunRevisionMatches(current.updatedAt, request.expectedUpdatedAt)) {
+        if (!p9ManualRunRevisionMatches(current.updatedAt, keyed.expectedUpdatedAt)) {
           res.status(409).json({ error: "Workflow changed since approval. Review and confirm again." });
           return;
         }
@@ -164,8 +165,8 @@ export function registerP9AutomationRoutes(app: Express): void {
         dedupeKey: key,
         // beginP9Run locks the canonical row and compares this exact approved
         // snapshot before insert; the earlier route check is only a fast reject.
-        expectedWorkflowUpdatedAt: key && "expectedUpdatedAt" in request
-          ? new Date(request.expectedUpdatedAt)
+        expectedWorkflowUpdatedAt: keyed
+          ? new Date(keyed.expectedUpdatedAt)
           : null,
       });
       if (!result.run && key) {
