@@ -423,6 +423,8 @@ export interface ExecuteP9WorkflowInput {
   triggerType: "manual" | "schedule" | "event";
   triggerDetail?: Record<string, unknown>;
   dedupeKey?: string | null;
+  // Only a keyed, human-approved manual run may pass this revision claim.
+  expectedWorkflowUpdatedAt?: Date | null;
   claimToken?: string | null;
 }
 
@@ -443,6 +445,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
     input.triggerType,
     input.triggerDetail ?? {},
     input.dedupeKey ?? null,
+    input.expectedWorkflowUpdatedAt ?? null,
   );
   if (!run) return { run: null, notification: null, result: null, error: null };
 
