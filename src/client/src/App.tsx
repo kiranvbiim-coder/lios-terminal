@@ -17,6 +17,11 @@ import { clearTerminalTabs } from "@/lib/terminalTabs";
 import { clearTerminalLinkedContextState } from "@/lib/terminalLinkedContextStore";
 import { clearActiveWorkspace } from "@/lib/terminalWorkspace";
 import { clearSessionMemory, setSessionMemoryOwner } from "@/lib/terminalSessionMemory";
+import {
+  clearNotificationReadOutbox,
+  replayNotificationReads,
+  setNotificationReadOutboxOwner,
+} from "@/lib/p9NotificationReadOutbox";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -78,6 +83,7 @@ function App() {
     // The server-restored principal, not editable browser storage or display
     // email, determines which recent analytical history is visible.
     setSessionMemoryOwner(data?.authState ?? null);
+    setNotificationReadOutboxOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -119,6 +125,22 @@ function App() {
     }
   }, [session]);
 
+  // Replay only the safe notification-read receipts. Each reconnect obtains a
+  // fresh server session and the P9 endpoint rechecks ownership before update.
+  useEffect(() => {
+    if (!session || session.authState?.state !== "authenticated_online") return;
+    const flush = () => {
+      void replayNotificationReads().then((result) => {
+        if (result.confirmed > 0) {
+          void queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        }
+      });
+    };
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [session?.authState?.principal?.userId, session?.authState?.principal?.organizationId, session?.authState?.state]);
+
   useEffect(() => subscribeOpenEnvironmentCenter(() => setEnvironmentSetupOpen(true)), []);
 
   const handleLogout = async () => {
@@ -142,7 +164,7 @@ function App() {
     setEnvironmentSetupOpen(false);
     try {
       queryClient.clear();
-      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearResearchTray, clearTerminalPersonalization]) {
+      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearResearchTray, clearTerminalPersonalization]) {
         try { clear(); } catch { /* Continue clearing the remaining account-scoped state. */ }
       }
       try { localStorage.removeItem(LAST_DOMAIN_STORAGE_KEY); } catch { /* Storage can be disabled. */ }
@@ -150,6 +172,7 @@ function App() {
       // Cleanup is attempted while the prior verified principal is still
       // selected; always disarm the memory owner after server sign-out.
       setSessionMemoryOwner(null);
+      setNotificationReadOutboxOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
