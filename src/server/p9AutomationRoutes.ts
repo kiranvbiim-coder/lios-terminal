@@ -162,13 +162,18 @@ export function registerP9AutomationRoutes(app: Express): void {
         triggerType: "manual",
         triggerDetail: { requestedAt: new Date().toISOString() },
         dedupeKey: key,
+        // beginP9Run locks the canonical row and compares this exact approved
+        // snapshot before insert; the earlier route check is only a fast reject.
+        expectedWorkflowUpdatedAt: key && "expectedUpdatedAt" in request
+          ? new Date(request.expectedUpdatedAt)
+          : null,
       });
       if (!result.run && key) {
         // Another process won the DB unique-key race. Its P9 run row is the
         // receipt; never retry execution just because our insert conflicted.
         const previous = await findP9ManualRunReceipt(owner, pid, current.id, key);
         if (!previous) {
-          res.status(409).json({ error: "Request already claimed; receipt temporarily unavailable. Reconcile before retry." });
+          res.status(409).json({ error: "Workflow changed during admission or request already claimed. Review current workflow and reconcile the receipt; no new execution was admitted." });
           return;
         }
         res.status(previous.status === "running" ? 202 : 200).json({
