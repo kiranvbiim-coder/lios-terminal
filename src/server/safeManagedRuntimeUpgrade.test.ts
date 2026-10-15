@@ -26,6 +26,7 @@ type UpgradeDependencies = {
   ) => Promise<ManagedRuntimeOperationResult>;
   rollbackRuntime?: () => Promise<ManagedRuntimeOperationResult>;
   validateActivatedRuntime?: (state: ManagedRuntimeState) => Promise<boolean> | boolean;
+  currentPythonPath?: () => string | null;
 };
 type UpgradeFn = (
   options?: { strictProvisioningAuthority?: StrictProvisioningAuthority },
@@ -242,4 +243,99 @@ test("overlapping upgrades are refused and the guard releases after completion",
     },
   );
   assert.equal(second.status, "upgraded");
+});
+
+test("SI-07.10 a rollback reporting the new candidate cannot claim restoration", async () => {
+  const original = state("1.0.0");
+  const candidate = state("1.1.0");
+  let calls = 0;
+  await assert.rejects(
+    upgrade(
+      { strictProvisioningAuthority: authority },
+      {
+        targetManifestVersion: "1.1.0",
+        readState: () => original,
+        installRuntime: async () => ({ state: candidate, detail: "activated" }),
+        validateActivatedRuntime: () => false,
+        rollbackRuntime: async () => {
+          calls += 1;
+          return { state: candidate, detail: "incorrectly reported restored" };
+        },
+      },
+    ),
+    (error: unknown) => error instanceof runtimeUpgrade.ManagedRuntimeUpgradeError
+      && error.code === "rollback_failed",
+  );
+  assert.equal(calls, 1);
+});
+
+test("SI-07.10 rollback result alone is insufficient when disk still holds the candidate", async () => {
+  const original = state("1.0.0");
+  const candidate = state("1.1.0");
+  let onDisk = original;
+  await assert.rejects(
+    upgrade(
+      { strictProvisioningAuthority: authority },
+      {
+        targetManifestVersion: "1.1.0",
+        readState: () => onDisk,
+        installRuntime: async () => {
+          onDisk = candidate;
+          return { state: candidate, detail: "activated" };
+        },
+        validateActivatedRuntime: () => false,
+        rollbackRuntime: async () => ({ state: original, detail: "claimed restored, but disk is unchanged" }),
+      },
+    ),
+    (error: unknown) => error instanceof runtimeUpgrade.ManagedRuntimeUpgradeError
+      && error.code === "rollback_failed",
+  );
+  assert.equal(onDisk, candidate);
+});
+
+test("SI-07.10 rollback verification rejects changed restored pack or hash evidence", async () => {
+  const original = state("1.0.0", ["core", "forecasting"], ["quant"]);
+  const candidate = state("1.1.0", [...original.selectedPackIds], [...original.selectedReleasePackIds]);
+  const altered = { ...original, hashVerified: false, selectedReleasePackIds: ["research"] };
+  await assert.rejects(
+    upgrade(
+      { strictProvisioningAuthority: authority },
+      {
+        targetManifestVersion: "1.1.0",
+        readState: () => original,
+        installRuntime: async () => ({ state: candidate, detail: "activated" }),
+        validateActivatedRuntime: () => false,
+        rollbackRuntime: async () => ({ state: altered, detail: "incomplete restoration" }),
+      },
+    ),
+    (error: unknown) => error instanceof runtimeUpgrade.ManagedRuntimeUpgradeError
+      && error.code === "rollback_failed",
+  );
+});
+
+test("SI-07.10 post-upgrade validator refuses unverified persisted state and restores the original", async () => {
+  const original = state("1.0.0");
+  const candidate = state("1.1.0");
+  let onDisk = original;
+  let restores = 0;
+  const result = await upgrade(
+    { strictProvisioningAuthority: authority },
+    {
+      targetManifestVersion: "1.1.0",
+      readState: () => onDisk,
+      installRuntime: async () => {
+        onDisk = { ...candidate, hashVerified: false };
+        return { state: candidate, detail: "claimed verified" };
+      },
+      currentPythonPath: () => "/managed/current/bin/python3",
+      rollbackRuntime: async () => {
+        restores += 1;
+        onDisk = original;
+        return { state: original, detail: "restored" };
+      },
+    },
+  );
+  assert.equal(result.status, "rollback_restored");
+  assert.equal(restores, 1);
+  assert.equal(result.state.manifestVersion, "1.0.0");
 });
