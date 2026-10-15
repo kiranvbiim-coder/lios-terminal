@@ -1,9 +1,11 @@
 export type P9DesktopNotificationPermission = "granted" | "denied" | "default" | "unsupported";
 export type P9DesktopDeliveryClaim = "claimed" | "duplicate" | "unavailable";
+export type P9DesktopNotificationReason = "success" | "failure" | "condition_met" | "change_detected";
 
 export interface CanonicalP9NotificationForDesktop {
   id: string;
   status: "delivered" | "suppressed";
+  reason: P9DesktopNotificationReason;
   title: string;
   body: string;
   createdAt: string;
@@ -68,6 +70,20 @@ export function sanitizeP9DesktopNotificationText(value: string, maxBytes: numbe
     .replace(/\s+/g, " ")
     .trim();
   return sliceUtf8(normalized, Math.max(0, maxBytes));
+}
+
+function lockScreenCopy(notification: CanonicalP9NotificationForDesktop): { title: string; body: string } {
+  const reason = notification.reason === "failure"
+    ? "Workflow needs attention"
+    : notification.reason === "condition_met"
+      ? "Workflow condition met"
+      : notification.reason === "change_detected"
+        ? "Material change detected"
+        : "Workflow completed";
+  return {
+    title: sanitizeP9DesktopNotificationText(`LiOS · ${reason}`, DESKTOP_TITLE_MAX_BYTES),
+    body: sanitizeP9DesktopNotificationText("Open LiOS to review this Project update.", DESKTOP_BODY_MAX_BYTES),
+  };
 }
 
 function isFreshNotification(
@@ -152,11 +168,8 @@ export async function deliverP9DesktopNotifications(
     }
 
     try {
-      await port.show({
-        id: notification.id,
-        title: sanitizeP9DesktopNotificationText(notification.title || "LiOS", DESKTOP_TITLE_MAX_BYTES) || "LiOS",
-        body: sanitizeP9DesktopNotificationText(notification.body, DESKTOP_BODY_MAX_BYTES),
-      });
+      const copy = lockScreenCopy(notification);
+      await port.show({ id: notification.id, ...copy });
       result.delivered += 1;
     } catch {
       // The durable claim intentionally remains. Retrying the same canonical
