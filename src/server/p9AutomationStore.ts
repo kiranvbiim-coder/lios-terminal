@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, desc, eq, isNull, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   projectAutomationNotifications,
   projectAutomationRuns,
@@ -468,7 +468,11 @@ export async function markP9NotificationRead(
   notificationId: string,
 ): Promise<ProjectAutomationNotification> {
   await getProject(ctx, projectId);
-  const [row] = await getDb().update(projectAutomationNotifications).set({ readAt: new Date() }).where(and(
+  // Offline retries must be idempotent: preserve the first server-confirmed
+  // read timestamp if a prior successful response was lost in transit.
+  const [row] = await getDb().update(projectAutomationNotifications).set({
+    readAt: sql<Date>`COALESCE(${projectAutomationNotifications.readAt}, NOW())`,
+  }).where(and(
     notificationTenantFilter(ctx),
     eq(projectAutomationNotifications.projectId, projectId),
     eq(projectAutomationNotifications.id, notificationId),
