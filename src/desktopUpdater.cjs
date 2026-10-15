@@ -24,12 +24,39 @@ function safePercent(value) {
   return Math.max(0, Math.min(100, Math.round(percent)));
 }
 
+async function confirmDesktopUpdateInstall({ version }) {
+  // This module is only invoked from Electron's trusted main process. Keep the
+  // install decision in a native dialog instead of exposing restart/install
+  // authority to renderer JavaScript or preload IPC.
+  const { dialog, BrowserWindow } = require("electron");
+  const options = {
+    type: "info",
+    title: "LiOS update ready",
+    message: version === "unknown"
+      ? "A signed LiOS Intelligence Terminal update is ready to install."
+      : `LiOS Intelligence Terminal ${version} is ready to install.`,
+    detail: "Restart LiOS now to install the downloaded signed update. Choose Later to keep working.",
+    buttons: ["Later", "Restart and install"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  };
+
+  const focusedWindow = BrowserWindow.getFocusedWindow?.() ?? null;
+  const fallbackWindow = BrowserWindow.getAllWindows?.().find((window) => !window.isDestroyed?.()) ?? null;
+  const parentWindow = focusedWindow && !focusedWindow.isDestroyed?.() ? focusedWindow : fallbackWindow;
+  const confirmation = parentWindow
+    ? await dialog.showMessageBox(parentWindow, options)
+    : await dialog.showMessageBox(options);
+  return confirmation.response === 1;
+}
+
 function configureAutoUpdater({
   updater,
   isPackaged,
   env = process.env,
   log = () => {},
-  confirmInstall = null,
+  confirmInstall = confirmDesktopUpdateInstall,
 }) {
   if (!isPackaged) {
     return { enabled: false, reason: "Desktop updates are disabled for unpackaged development launches." };
@@ -64,10 +91,6 @@ function configureAutoUpdater({
 
     if (installConfirmationInFlight) {
       log("Desktop update install confirmation is already pending.");
-      return;
-    }
-    if (typeof confirmInstall !== "function") {
-      log("Desktop update install confirmation is unavailable; update remains downloaded.");
       return;
     }
 
