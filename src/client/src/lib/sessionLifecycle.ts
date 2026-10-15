@@ -16,18 +16,18 @@ async function withSessionDeadline<T>(
   operation: (signal: AbortSignal) => Promise<T>,
   options: RequestOptions,
 ): Promise<T> {
+  // Use a private signal for network operations. AbortSignal.any would copy
+  // options.signal.reason (possibly a credential) onto the fetch signal.
   const controller = new AbortController();
-  const signal = options.signal
-    ? AbortSignal.any([controller.signal, options.signal])
-    : controller.signal;
+  const signal = controller.signal;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
+  let onExternalAbort: (() => void) | undefined;
+  let timedOut = false;
   try {
     const interrupted = new Promise<never>((_, reject) => {
       onAbort = () => {
-        // External AbortSignal.reason may contain credentials or sensitive
-        // caller state. Never read, throw, log or propagate that value.
-        if (controller.signal.aborted && !options.signal?.aborted) {
+        if (timedOut) {
           reject(new Error("LiOS took too long to respond. Please retry."));
           return;
         }
@@ -35,18 +35,32 @@ async function withSessionDeadline<T>(
         error.name = "AbortError";
         reject(error);
       };
-      if (signal.aborted) {
-        onAbort();
-        return;
-      }
       signal.addEventListener("abort", onAbort, { once: true });
-      timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
+      // Never read, forward or log the caller's AbortSignal.reason.
+      onExternalAbort = () => controller.abort();
+      if (options.signal) {
+        if (options.signal.aborted) {
+          onExternalAbort();
+          return;
+        }
+        options.signal.addEventListener("abort", onExternalAbort, { once: true });
+        // Cover a cancellation racing listener registration.
+        if (options.signal.aborted) {
+          onExternalAbort();
+          return;
+        }
+      }
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, options.timeoutMs ?? 15_000);
     });
     if (signal.aborted) return await interrupted;
     return await Promise.race([operation(signal), interrupted]);
   } finally {
-    if (timer) clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
     if (onAbort) signal.removeEventListener("abort", onAbort);
+    if (onExternalAbort) options.signal?.removeEventListener("abort", onExternalAbort);
   }
 }
 
