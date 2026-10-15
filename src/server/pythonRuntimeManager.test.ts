@@ -129,7 +129,7 @@ test("managed runtime rollback restores the previous runtime pack-selection meta
   process.env.LIMURIA_DATA_DIR = directory;
   const root = path.join(directory, "python-runtimes");
   const current = path.join(root, "current");
-  const rollback = path.join(root, "rollback-previous");
+  const rollback = path.join(root, "rollback-123456");
   fs.mkdirSync(current, { recursive: true });
   fs.mkdirSync(rollback, { recursive: true });
   fs.writeFileSync(path.join(current, "current-marker.txt"), "current");
@@ -174,6 +174,136 @@ test("managed runtime rollback restores the previous runtime pack-selection meta
   } finally {
     if (previous === undefined) delete process.env.LIMURIA_DATA_DIR;
     else process.env.LIMURIA_DATA_DIR = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 corrupted rollback metadata cannot move directories outside the managed runtime root", async () => {
+  const previousRoot = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-rollback-outside-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const outside = path.join(directory, "unrelated-private-data");
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(current, "keep.txt"), "current");
+  fs.writeFileSync(path.join(outside, "keep.txt"), "private");
+  const saved = {
+    manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
+    installedAt: "2026-10-15T00:00:00.000Z",
+    runtimePath: current,
+    rollbackPath: outside,
+    selectedPackIds: ["core"],
+    selectedReleasePackIds: [],
+    packageOutput: "",
+    installedSpecs: [],
+    hashVerified: false,
+    verificationWarnings: [],
+  };
+  fs.writeFileSync(path.join(root, "managed-state.json"), JSON.stringify(saved));
+  try {
+    await assert.rejects(rollbackManagedRuntime(), /No safe managed runtime rollback/);
+    assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "private");
+    assert.equal(fs.readFileSync(path.join(current, "keep.txt"), "utf8"), "current");
+    assert.equal(fs.existsSync(path.join(root, ".lios-runtime-state.json")), false);
+  } finally {
+    if (previousRoot === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previousRoot;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 rollback refuses a numeric-named symlink to an external directory", async (t) => {
+  const previousRoot = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-rollback-symlink-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const outside = path.join(directory, "other-data");
+  const link = path.join(root, "rollback-654321");
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(current, "keep.txt"), "current");
+  fs.writeFileSync(path.join(outside, "keep.txt"), "outside");
+  try {
+    try {
+      fs.symlinkSync(outside, link, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      t.skip("Host cannot create directory symlinks: " + (error instanceof Error ? error.message : String(error)));
+      return;
+    }
+    const state = {
+      manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
+      installedAt: "2026-10-15T00:00:00.000Z",
+      runtimePath: current,
+      rollbackPath: link,
+      selectedPackIds: ["core"],
+      selectedReleasePackIds: [],
+      packageOutput: "",
+      installedSpecs: [],
+      hashVerified: false,
+      verificationWarnings: [],
+    };
+    fs.writeFileSync(path.join(root, "managed-state.json"), JSON.stringify(state));
+    await assert.rejects(rollbackManagedRuntime(), /No safe managed runtime rollback/);
+    assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "outside");
+    assert.equal(fs.readFileSync(path.join(current, "keep.txt"), "utf8"), "current");
+  } finally {
+    if (previousRoot === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previousRoot;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 successful governed install never deletes an outside path named by previous rollback metadata", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this test host");
+    return;
+  }
+  const previousRoot = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-rollback-cleanup-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const outside = path.join(directory, "valuable-user-folder");
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "keep.txt"), "safe");
+  const saved = {
+    manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
+    installedAt: "2026-10-15T00:00:00.000Z",
+    runtimePath: current,
+    rollbackPath: outside,
+    selectedPackIds: ["core"],
+    selectedReleasePackIds: [],
+    packageOutput: "",
+    installedSpecs: [],
+    hashVerified: false,
+    verificationWarnings: [],
+  };
+  fs.writeFileSync(path.join(root, "managed-state.json"), JSON.stringify(saved));
+  const authority: StrictProvisioningAuthority = {
+    async provisionManagedRuntime(request) {
+      fs.mkdirSync(request.runtimePath, { recursive: true });
+      const core = MANAGED_RUNTIME_MANIFEST.packs.find((pack) => pack.id === "core");
+      assert.ok(core);
+      return {
+        packageOutput: "mock governed staging",
+        installedPackages: Object.fromEntries(core.packages.map((pkg) => [pkg.name, pkg.version])),
+      };
+    },
+  };
+  try {
+    const result = await installManagedRuntime(["core"], [], {
+      isolationMode: "strict", strictProvisioningAuthority: authority,
+    });
+    assert.equal(result.state.selectedPackIds.includes("core"), true);
+    assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "safe");
+    assert.ok(fs.existsSync(current));
+  } finally {
+    if (previousRoot === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previousRoot;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
