@@ -1,4 +1,5 @@
 export type P9DesktopNotificationPermission = "granted" | "denied" | "default" | "unsupported";
+export type P9DesktopDeliveryClaim = "claimed" | "duplicate" | "unavailable";
 
 export interface CanonicalP9NotificationForDesktop {
   id: string;
@@ -15,8 +16,7 @@ export interface P9DesktopNotificationPayload {
 
 export interface P9DesktopNotificationPort {
   permission: P9DesktopNotificationPermission;
-  hasDelivered(id: string): boolean;
-  markDelivered(id: string): void;
+  claimDelivery(id: string): P9DesktopDeliveryClaim;
   show(notification: P9DesktopNotificationPayload): void | Promise<void>;
 }
 
@@ -65,11 +65,17 @@ export async function deliverP9DesktopNotifications(
       result.failed += 1;
       continue;
     }
-    if (port.hasDelivered(notification.id)) {
+    if (port.permission !== "granted") {
+      result.unavailable += 1;
+      continue;
+    }
+
+    const claim = port.claimDelivery(notification.id);
+    if (claim === "duplicate") {
       result.duplicate += 1;
       continue;
     }
-    if (port.permission !== "granted") {
+    if (claim === "unavailable") {
       result.unavailable += 1;
       continue;
     }
@@ -80,9 +86,11 @@ export async function deliverP9DesktopNotifications(
         title: sanitizeP9DesktopNotificationText(notification.title || "LiOS", 120) || "LiOS",
         body: sanitizeP9DesktopNotificationText(notification.body, 240),
       });
-      port.markDelivered(notification.id);
       result.delivered += 1;
     } catch {
+      // The durable claim intentionally remains. Retrying the same canonical
+      // id after a renderer/app restart could otherwise create duplicate
+      // user-visible alerts if the platform threw after partially delivering.
       result.failed += 1;
     }
   }
@@ -102,6 +110,14 @@ function readDeliveredIds(storage: Storage): string[] {
   }
 }
 
+function unsupportedPort(): P9DesktopNotificationPort {
+  return {
+    permission: "unsupported",
+    claimDelivery: () => "unavailable",
+    show: () => undefined,
+  };
+}
+
 /**
  * Electron renders the standard Web Notification API as a native desktop
  * notification. Keeping this adapter in the renderer avoids adding a new
@@ -110,28 +126,30 @@ function readDeliveredIds(storage: Storage): string[] {
  */
 export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationPort {
   if (typeof window === "undefined" || !(window as any).limuriaDesktop?.isElectron || typeof window.Notification === "undefined") {
-    return {
-      permission: "unsupported",
-      hasDelivered: () => false,
-      markDelivered: () => undefined,
-      show: () => undefined,
-    };
+    return unsupportedPort();
   }
 
-  const storage = window.localStorage;
+  let storage: Storage;
+  try {
+    storage = window.localStorage;
+  } catch {
+    return unsupportedPort();
+  }
   const deliveredIds = new Set(readDeliveredIds(storage));
   const permission = window.Notification.permission as P9DesktopNotificationPermission;
 
   return {
     permission,
-    hasDelivered: (id) => deliveredIds.has(id),
-    markDelivered: (id) => {
+    claimDelivery: (id) => {
+      if (deliveredIds.has(id)) return "duplicate";
       deliveredIds.add(id);
       const values = [...deliveredIds].slice(-MAX_PERSISTED_IDS);
       try {
         storage.setItem(DESKTOP_DELIVERY_STORAGE_KEY, JSON.stringify(values));
+        return "claimed";
       } catch {
-        // OS delivery already happened. Storage pressure must not fail P9.
+        deliveredIds.delete(id);
+        return "unavailable";
       }
     },
     show: ({ id, title, body }) => {
