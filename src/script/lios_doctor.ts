@@ -8,6 +8,7 @@ import { P10_RUNTIME_PACKS, validateP10RuntimePackCatalog } from "../server/p10R
 import { P11_PACK_CATALOG, validateP11PackCatalog } from "../server/p11PackCatalog";
 import { managedRuntimePythonPath, readManagedRuntimeState } from "../server/pythonRuntimeManager";
 import { evaluateManagedRuntimeReadiness } from "../server/provisioningReadiness";
+import { planManagedRuntimeRepair, type DoctorRepairPlan } from "../server/doctorRepairPlan";
 import { SP01_DEPENDENCY_INVENTORY } from "../server/sp01DependencyInventory";
 import { p10ObservabilityPath, p10RemoteObservabilityConfig } from "../server/p10Observability";
 import { p10OpenLineageConfig } from "../server/p10OpenLineage";
@@ -17,6 +18,7 @@ export interface LiosDoctorSnapshot {
   generatedAt: string;
   system: Record<string, unknown>;
   runtimePacks: Record<string, unknown>;
+  repairPlan: DoctorRepairPlan;
   sp01Dependencies: typeof SP01_DEPENDENCY_INVENTORY;
   connectors: Record<string, unknown>;
   observability: Record<string, unknown>;
@@ -44,6 +46,7 @@ export function buildLiosDoctorSnapshot(env: NodeJS.ProcessEnv = process.env): L
     pythonAvailable: Boolean(managedRuntimePythonPath()),
     requiredPackIds: ["core"],
   });
+  const repairPlan = planManagedRuntimeRepair(managedRuntimeReadiness);
   const packErrors = validateP10RuntimePackCatalog();
   const p11PackErrors = validateP11PackCatalog();
   const observability = p10RemoteObservabilityConfig(env);
@@ -104,6 +107,7 @@ export function buildLiosDoctorSnapshot(env: NodeJS.ProcessEnv = process.env): L
       })),
       engineFabricValidationErrors: p11PackErrors,
     },
+    repairPlan,
     connectors: {
       builtInCount: BUILT_IN_CONNECTORS.length,
       adapterImplementedCount: BUILT_IN_CONNECTORS.filter((item) => item.adapterImplemented).length,
@@ -152,6 +156,7 @@ function renderHuman(snapshot: LiosDoctorSnapshot, section: string | null): stri
   const sections: Record<string, unknown> = {
     system: snapshot.system,
     "runtime-packs": snapshot.runtimePacks,
+    repair: snapshot.repairPlan,
     "sp01-dependencies": snapshot.sp01Dependencies,
     connectors: snapshot.connectors,
     observability: snapshot.observability,
@@ -169,6 +174,7 @@ function renderHuman(snapshot: LiosDoctorSnapshot, section: string | null): stri
     `system: ${process.platform}/${process.arch} ${process.version}`,
     `runtime packs: ${P10_RUNTIME_PACKS.map((pack) => pack.id).join(", ")}`,
     `managed runtime core: ${managedRuntime?.state ?? "unknown"}${managedRuntime?.repairAction && managedRuntime.repairAction !== "none" ? ` (action: ${managedRuntime.repairAction})` : ""}`,
+    `repair plan: ${snapshot.repairPlan.action}${snapshot.repairPlan.requiresConfirmation ? " (confirmation required)" : ""}`,
     `P11 engine packs: ${P11_PACK_CATALOG.map((pack) => pack.id).join(", ")}`,
     `connectors: ${BUILT_IN_CONNECTORS.length} built-in, ${BUILT_IN_CONNECTORS.filter((item) => item.adapterImplemented).length} implemented`,
     `observability remote: ${(snapshot.observability.remoteEnabled as boolean) ? "enabled (redacted-only)" : "disabled"}`,
