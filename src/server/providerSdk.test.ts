@@ -291,7 +291,9 @@ test("SI-06.31 streaming checks capability, source policy, and point-in-time bef
   assert.equal(entitlementCalls, 0, "policy-incompatible requests must not contact credentials or providers");
   const subscription = await startProviderStream("stream-source", streamingRequest(), ctx, registry);
   assert.equal(streamCalls, 1);
-  assert.equal(entitlementCalls, 1);
+  assert.equal(entitlementCalls, 2, "grant must also be rechecked after opening the connection");
+  assert.equal(await subscription.recheckEntitlement(), true);
+  assert.equal(entitlementCalls, 3);
   await subscription.stop();
 });
 
@@ -361,4 +363,58 @@ test("SI-06.31 one failed entitlement check does not block the next eligible dat
   assert.equal(gap.gap?.reason, "provider_error");
   assert.equal(gap.attempts.length, 1);
   assert.doesNotMatch(JSON.stringify(gap), /DO_NOT_LOG|secret=/);
+});
+
+test("SI-06.31 revocation during stream connection closes the underlying source before returning access", async () => {
+  const registry = new ProviderSdkRegistry();
+  let checks = 0;
+  let opened = 0;
+  let stopped = 0;
+  registry.register({
+    id: "connect-revocation",
+    label: "Connect-time revocation",
+    priority: 1,
+    capabilities: ["prices"],
+    pointInTimeModes: ["latest"],
+    async entitlement() {
+      checks += 1;
+      return checks === 1
+        ? { decision: "allowed", policyId: "v1", permittedUses: ["internal_research"], reasons: [] }
+        : { decision: "denied", policyId: "v1", permittedUses: [], reasons: ["secret=DO_NOT_EXPOSE"] };
+    },
+    async fetch() { return null; },
+    async stream() {
+      opened += 1;
+      return { lifecycle: { state: "streaming", reason: null } as never, async stop() { stopped += 1; } };
+    },
+  });
+  await assert.rejects(startProviderStream("connect-revocation", streamingRequest(), ctx, registry), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /entitlement changed/);
+    assert.doesNotMatch(error.message, /DO_NOT_EXPOSE|secret=/);
+    return true;
+  });
+  assert.equal(checks, 2);
+  assert.equal(opened, 1);
+  assert.equal(stopped, 1, "just-opened stream must be closed on lost entitlement");
+});
+
+test("SI-06.31 policy change while connecting closes stream even if provider still reports allowed", async () => {
+  const registry = new ProviderSdkRegistry();
+  let checks = 0;
+  let stopped = 0;
+  registry.register({
+    id: "connecting-policy-change", label: "Policy changed", priority: 1,
+    capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() {
+      checks += 1;
+      return { decision: "allowed", policyId: checks === 1 ? "old-policy" : "new-policy", permittedUses: ["internal_research"], reasons: [] };
+    },
+    async fetch() { return null; },
+    async stream() {
+      return { lifecycle: { state: "streaming", reason: null } as never, async stop() { stopped += 1; } };
+    },
+  });
+  await assert.rejects(startProviderStream("connecting-policy-change", streamingRequest(), ctx, registry), /entitlement changed/);
+  assert.equal(stopped, 1);
 });
