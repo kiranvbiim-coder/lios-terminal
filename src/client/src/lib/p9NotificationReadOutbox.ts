@@ -18,6 +18,7 @@ const LIMIT = 50;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let activeKey: string | null = null;
+let activeOnline = false;
 let generation = 0;
 let abortReplay: AbortController | null = null;
 let pendingReplay: Promise<ReplayResult> | null = null;
@@ -28,10 +29,11 @@ export interface ReplayResult {
   blocked: boolean;
 }
 
-function keyFor(session: unknown): string | null {
+function keyFor(session: unknown, onlineRequired = false): string | null {
   const parsed = authSessionStateSchema.safeParse(session);
   if (!parsed.success) return null;
-  if (parsed.data.state !== "authenticated_online") return null;
+  if (parsed.data.state !== "authenticated_online"
+    && (onlineRequired || parsed.data.state !== "authenticated_offline")) return null;
   const principal = parsed.data.principal;
   if (!principal) return null;
   return `${PREFIX}${principal.userId}.${principal.organizationId ?? "internal"}`;
@@ -39,12 +41,14 @@ function keyFor(session: unknown): string | null {
 
 export function setNotificationReadOutboxOwner(session: AuthSessionState | null): void {
   const next = keyFor(session);
-  if (activeKey === next) return;
+  const nextOnline = Boolean(keyFor(session, true));
+  if (activeKey === next && activeOnline === nextOnline) return;
   generation += 1;
   abortReplay?.abort();
   abortReplay = null;
   pendingReplay = null;
   activeKey = next;
+  activeOnline = nextOnline;
 }
 
 function valid(value: unknown, now: number): value is ReadIntent {
@@ -121,7 +125,7 @@ export function replayNotificationReads(fetcher: FetchLike = fetch): Promise<Rep
   const key = activeKey;
   const currentGeneration = generation;
   const empty = (): ReplayResult => ({ confirmed: 0, remaining: key ? loadFor(key).length : 0, blocked: true });
-  if (!key || typeof window === "undefined" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+  if (!key || !activeOnline || typeof window === "undefined" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
     return Promise.resolve(empty());
   }
   const controller = new AbortController();
@@ -134,7 +138,7 @@ export function replayNotificationReads(fetcher: FetchLike = fetch): Promise<Rep
       if (!identity.ok || !owned()) return empty();
       const data: unknown = await identity.json();
       const restored = data && typeof data === "object" ? (data as { authState?: unknown }).authState : null;
-      if (keyFor(restored) !== key || !owned()) return empty();
+      if (keyFor(restored, true) !== key || !owned()) return empty();
 
       for (const intent of loadFor(key)) {
         if (!owned()) return { confirmed, remaining: loadFor(key).length, blocked: true };
