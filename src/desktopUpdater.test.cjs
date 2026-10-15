@@ -16,6 +16,9 @@ function makeUpdater({ checkError = null } = {}) {
       calls.push(["check"]);
       return checkError ? Promise.reject(checkError) : Promise.resolve();
     },
+    quitAndInstall(isSilent, isForceRunAfter) {
+      calls.push(["install", isSilent, isForceRunAfter]);
+    },
   };
   return { updater, events, calls };
 }
@@ -41,11 +44,11 @@ test("development is disabled while packaged builds use only embedded app-update
   assert.deepEqual(dev.calls, []);
 
   const packaged = makeUpdater();
-  assert.deepEqual(configureAutoUpdater({ updater: packaged.updater, isPackaged: true, env: {}, log() {} }), {
-    enabled: true,
-    url: null,
-    source: "packaged_config",
-  });
+  const configured = configureAutoUpdater({ updater: packaged.updater, isPackaged: true, env: {}, log() {} });
+  assert.equal(configured.enabled, true);
+  assert.equal(configured.url, null);
+  assert.equal(configured.source, "packaged_config");
+  assert.equal(typeof configured.installDownloaded, "function");
   assert.equal(packaged.updater.autoDownload, true);
   assert.equal(packaged.updater.autoInstallOnAppQuit, false);
   assert.equal(packaged.updater.allowDowngrade, false);
@@ -63,11 +66,9 @@ test("packaged runtime environment cannot replace the embedded release feed", ()
     env: { LIOS_UPDATE_URL: "https://attacker-controlled.example/lios" },
     log(message) { logs.push(String(message)); },
   });
-  assert.deepEqual(configured, {
-    enabled: true,
-    url: null,
-    source: "packaged_config",
-  });
+  assert.equal(configured.enabled, true);
+  assert.equal(configured.url, null);
+  assert.equal(configured.source, "packaged_config");
   assert.deepEqual(calls, [["check"]]);
   assert.equal(logs.some((line) => line.includes("attacker-controlled.example")), false);
 });
@@ -90,4 +91,34 @@ test("desktop updater never logs raw external error text", async () => {
   assert.equal(logs.some((line) => line.includes(secret)), false);
   assert.equal(logs.some((line) => line.includes("token=")), false);
   assert.equal(logs.filter((line) => line.includes("Desktop update failed safely.")).length >= 1, true);
+});
+
+test("downloaded desktop update requires an explicit confirmation before install and restart", () => {
+  const { updater, events, calls } = makeUpdater();
+  const configured = configureAutoUpdater({ updater, isPackaged: true, env: {}, log() {} });
+
+  assert.deepEqual(configured.installDownloaded(), {
+    started: false,
+    reason: "confirmation-required",
+  });
+  assert.deepEqual(configured.installDownloaded({ confirmed: true }), {
+    started: false,
+    reason: "update-not-downloaded",
+  });
+
+  events.get("update-downloaded")({ version: "1.1.0" });
+  assert.deepEqual(configured.installDownloaded(), {
+    started: false,
+    reason: "confirmation-required",
+  });
+  assert.deepEqual(configured.installDownloaded({ confirmed: true }), {
+    started: true,
+    reason: "install-started",
+  });
+  assert.deepEqual(calls.at(-1), ["install", false, true]);
+
+  assert.deepEqual(configured.installDownloaded({ confirmed: true }), {
+    started: false,
+    reason: "install-already-started",
+  });
 });
