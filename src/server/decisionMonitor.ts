@@ -28,6 +28,25 @@ export function parseDecisionIndicator(indicator: string): DecisionIndicatorRefe
   return { kind, key: key.toUpperCase() };
 }
 
+/**
+ * An acknowledged threshold remains acknowledged while the breach persists.
+ * A real recovery re-arms the rule for a later genuine breach.
+ * The caller retains the existing database, permission and audit authorities.
+ */
+export function classifyDecisionMonitorTransition(
+  previousStatus: string,
+  isBreached: boolean,
+): { nextStatus: "active" | "breached" | "acknowledged"; emitBreach: boolean; emitRecovery: boolean } {
+  const wasBreached = previousStatus === "breached" || previousStatus === "acknowledged";
+  return {
+    nextStatus: isBreached
+      ? previousStatus === "acknowledged" ? "acknowledged" : "breached"
+      : "active",
+    emitBreach: isBreached && !wasBreached,
+    emitRecovery: !isBreached && wasBreached,
+  };
+}
+
 export async function runDecisionMonitoringCycle(): Promise<DecisionMonitorCycleResult> {
   const rows = await getDb().select({ rule: decisionMonitoringRules, decision: decisionCases })
     .from(decisionMonitoringRules)
@@ -65,17 +84,16 @@ export async function runDecisionMonitoringCycle(): Promise<DecisionMonitorCycle
     }
     const isBreached = evaluateMonitoringRule(row.rule.operator, row.rule.threshold, currentValue);
     evaluated += 1;
-    const wasBreached = row.rule.status === "breached";
-    const nextStatus = isBreached ? "breached" : "active";
+    const transition = classifyDecisionMonitorTransition(row.rule.status, isBreached);
     await getDb().update(decisionMonitoringRules).set({
       currentValue,
       lastEvaluatedAt: new Date(),
-      status: nextStatus,
+      status: transition.nextStatus,
       breachedAt: isBreached ? row.rule.breachedAt ?? new Date() : null,
       acknowledgedAt: isBreached ? row.rule.acknowledgedAt : null,
       sourceUrl: reference.kind === "fred" ? `https://fred.stlouisfed.org/series/${reference.key}` : `market:${reference.key}`,
     }).where(eq(decisionMonitoringRules.id, row.rule.id));
-    if (isBreached && !wasBreached) {
+    if (transition.emitBreach) {
       breached += 1;
       await recordAuditEvent(row.rule.createdByUserId, "decision_monitor_breached", { decisionId: row.rule.decisionId, monitoringRuleId: row.rule.id, currentValue, action: row.rule.action, ...auditActor({ id: row.rule.createdByUserId, email: "decision-monitor" }) });
       await emitP9AutomationEvent({
@@ -92,7 +110,7 @@ export async function runDecisionMonitoringCycle(): Promise<DecisionMonitorCycle
           action: row.rule.action,
         },
       });
-    } else if (!isBreached && wasBreached) {
+    } else if (transition.emitRecovery) {
       recovered += 1;
       await recordAuditEvent(row.rule.createdByUserId, "decision_monitor_recovered", { decisionId: row.rule.decisionId, monitoringRuleId: row.rule.id, currentValue, ...auditActor({ id: row.rule.createdByUserId, email: "decision-monitor" }) });
     }
