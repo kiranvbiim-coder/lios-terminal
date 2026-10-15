@@ -397,6 +397,40 @@ export function extractBackup(file: string, directory: string, options: { passph
   return readArchive(file, { ...options, extractTo: directory });
 }
 
+/**
+ * Refuse existing Home symlinks that redirect an otherwise valid archive
+ * entry outside the user-owned root. Check once before DB import and again
+ * immediately before file mutation; aliases above the Home root are allowed.
+ */
+export function assertSafeRestoreFileTarget(root: string, relative: string): string {
+  const resolvedRoot = path.resolve(root);
+  const rootEntry = fs.lstatSync(resolvedRoot, { throwIfNoEntry: false });
+  if (!rootEntry?.isDirectory() || rootEntry.isSymbolicLink()) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
+  const target = path.resolve(resolvedRoot, relative);
+  if (!target.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new BackupError(`Unsafe path in backup: ${relative}`);
+  }
+  const parts = path.relative(resolvedRoot, target).split(path.sep);
+  let current = resolvedRoot;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    const entry = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!entry) continue;
+    if (entry.isSymbolicLink()) {
+      throw new BackupError(`Refusing linked restore destination: ${relative}`);
+    }
+    if (index < parts.length - 1 && !entry.isDirectory()) {
+      throw new BackupError(`Restore parent is not a directory: ${relative}`);
+    }
+    if (index === parts.length - 1 && !entry.isFile()) {
+      throw new BackupError(`Restore target is not a regular file: ${relative}`);
+    }
+  }
+  return target;
+}
+
 export interface RestoreResult {
   manifest: BackupManifest;
   filesRestored: number;
@@ -416,6 +450,12 @@ export async function restoreBackup(
   const staging = path.join(root, `.lios-restore-${process.pid}`);
   try {
     const manifest = await extractBackup(file, staging, options);
+    // Validate all Home destinations before the database import. Otherwise a
+    // symlinked parent could refuse the file stage after DB state changed.
+    for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file"
+      && candidate.path !== BACKUP_VAULT_MIGRATION_ENTRY)) {
+      assertSafeRestoreFileTarget(root, entry.path.slice("files/".length));
+    }
     // Re-check the database export itself, then load it atomically. A refused or failed import changes nothing.
     readExportManifest(path.join(staging, "db"));
     await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
@@ -430,8 +470,8 @@ export async function restoreBackup(
         continue;
       }
       const relative = entry.path.slice("files/".length);
-      const target = path.resolve(root, relative);
-      if (!target.startsWith(`${root}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${entry.path}`);
+      // The DB import is async, so verify the filesystem boundary again.
+      const target = assertSafeRestoreFileTarget(root, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       if (fs.existsSync(target)) {
         const keep = path.join(previous, relative);
