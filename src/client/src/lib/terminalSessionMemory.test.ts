@@ -1,14 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { WorkspaceState } from "./terminalTypes";
+import type { AuthSessionState } from "@shared/identityContracts";
 import {
   loadSessionMemory,
   rememberAnalyticalSession,
   clearSessionMemory,
   subscribeSessionMemory,
+  setSessionMemoryOwner,
 } from "./terminalSessionMemory";
 
-const STORAGE_KEY = "limuria-terminal-session-memory-v1";
+const LEGACY_STORAGE_KEY = "limuria-terminal-session-memory-v1";
+const STORAGE_KEY = "limuria-terminal-session-memory-v2.11.22";
+const OTHER_STORAGE_KEY = "limuria-terminal-session-memory-v2.12.22";
+
+function verifiedSession(userId = 11, organizationId = 22): AuthSessionState {
+  return {
+    version: 1, state: "authenticated_online",
+    principal: {
+      version: 1, kind: "human", userId, organizationId,
+      email: `user${userId}@example.test`, name: "Analyst", role: "client_user", audience: "client",
+    },
+    restoredAt: "2026-10-15T06:00:00.000Z", reason: null,
+  };
+}
 const workspace: WorkspaceState = {
   primary: { view: "market", symbol: "AAPL" }, secondary: null, focusedPane: "primary",
 };
@@ -69,6 +84,8 @@ function withBrowserStorage<T>(
   Object.defineProperty(globalThis, "window", { configurable: true, value: mockWindow });
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
   Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: MemoryEvent });
+  setSessionMemoryOwner(verifiedSession());
+  events.length = 0; // Initial account-selection notification isn't a saved-history mutation.
   try {
     return fn({
       data, events,
@@ -77,6 +94,7 @@ function withBrowserStorage<T>(
       failRemove: () => { removeFails = true; },
     });
   } finally {
+    setSessionMemoryOwner(null);
     for (const [name, original] of originals) {
       if (original) Object.defineProperty(globalThis, name, original);
       else Reflect.deleteProperty(globalThis, name);
@@ -150,5 +168,64 @@ test("SI-06.23 valid history updates remain bounded, deduplicated and observable
     } finally {
       unsubscribe();
     }
+  });
+});
+
+test("SI-06.23 a second authenticated user cannot load or mutate the first user's recent history", () => {
+  withBrowserStorage({ [STORAGE_KEY]: JSON.stringify([valid("first-owner")]) }, ({ data }) => {
+    assert.deepEqual(loadSessionMemory().map((entry) => entry.id), ["first-owner"]);
+    setSessionMemoryOwner(verifiedSession(12));
+    assert.deepEqual(loadSessionMemory(), [], "the next identity sees no prior account history");
+    rememberAnalyticalSession({ title: "Second owner", symbol: "msft", view: "market", workspace });
+    assert.equal(JSON.parse(data.get(OTHER_STORAGE_KEY) ?? "[]").length, 1);
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? "[]")[0].id, "first-owner",
+      "a different authenticated user's history is not modified");
+    clearSessionMemory();
+    assert.equal(data.has(OTHER_STORAGE_KEY), false);
+    assert.equal(data.has(STORAGE_KEY), true, "sign-out clears only the current owner's records");
+    setSessionMemoryOwner(verifiedSession());
+    assert.deepEqual(loadSessionMemory().map((entry) => entry.id), ["first-owner"]);
+  });
+});
+
+test("SI-06.23 unscoped legacy history is never adopted by a newly authenticated account", () => {
+  withBrowserStorage({
+    [LEGACY_STORAGE_KEY]: JSON.stringify([valid("unknown-prior-owner")]),
+  }, ({ data }) => {
+    assert.deepEqual(loadSessionMemory(), []);
+    assert.equal(data.has(LEGACY_STORAGE_KEY), false,
+      "legacy device-global data has no verifiable owner and must be retired");
+    rememberAnalyticalSession({ title: "New verified owner", symbol: "aapl", view: "market", workspace });
+    assert.equal(loadSessionMemory().length, 1);
+    assert.notEqual(loadSessionMemory()[0].id, "unknown-prior-owner");
+  });
+});
+
+test("SI-06.23 revoked, malformed, or absent authenticated principal cannot access any account history", () => {
+  withBrowserStorage({ [STORAGE_KEY]: JSON.stringify([valid("private-item")]) }, ({ data, events }) => {
+    const revoked: AuthSessionState = { ...verifiedSession(), state: "revoked", reason: "revoked" };
+    setSessionMemoryOwner(revoked);
+    assert.deepEqual(loadSessionMemory(), []);
+    setSessionMemoryOwner(null);
+    assert.deepEqual(loadSessionMemory(), []);
+    const unsaved = rememberAnalyticalSession({ title: "Signed out", view: "market", workspace });
+    assert.equal(unsaved.title, "Signed out");
+    assert.equal(data.has(OTHER_STORAGE_KEY), false);
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? "[]")[0].id, "private-item");
+    setSessionMemoryOwner({ ...verifiedSession(), principal: { ...verifiedSession().principal!, userId: -1 } } as AuthSessionState);
+    assert.deepEqual(loadSessionMemory(), [], "invalid claimed identity must fail closed");
+    assert.equal(events.at(-1)?.type, "lios:session-memory");
+    assert.deepEqual(events.at(-1)?.detail, []);
+  });
+});
+
+test("SI-06.23 scoped history remains distinct when the same user changes organization", () => {
+  withBrowserStorage({ [STORAGE_KEY]: JSON.stringify([valid("original-org")]) }, ({ data }) => {
+    setSessionMemoryOwner(verifiedSession(11, 23));
+    assert.deepEqual(loadSessionMemory(), []);
+    rememberAnalyticalSession({ title: "New organization", symbol: "aapl", view: "market", workspace });
+    assert.equal(data.has("limuria-terminal-session-memory-v2.11.23"), true);
+    setSessionMemoryOwner(verifiedSession());
+    assert.deepEqual(loadSessionMemory().map((row) => row.id), ["original-org"]);
   });
 });
