@@ -3,6 +3,7 @@ import { BellRing, Pause, Play, RefreshCw, Trash2, Workflow } from "lucide-react
 import {
   createP9Workflow,
   deleteP9Workflow,
+  getP9ManualRunReceipt,
   markP9NotificationRead,
   runP9WorkflowNow,
   setP9WorkflowEnabled,
@@ -91,20 +92,38 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     confirming.current = true;
     setBusyId("confirm:" + id);
     setMessage(null);
+    let requestKey: string | null = null;
     try {
+      const draft = drafts.find((item) => item.projectId === projectId && item.workflowId === id);
+      if (!draft) {
+        setMessage("Offline draft is unavailable. No workflow was started.");
+        return;
+      }
       const permitted = await prepareP9ManualRunConfirmation(projectId, id);
       if (!permitted) {
         setMessage("Confirmation blocked. Reconnect, sign in and verify that this workflow has not changed; discard any stale draft.");
         return;
       }
-      // Exactly one normal P9 manual-run request after the fresh-user,
-      // project, workflow revision and explicit human confirmation gates.
-      const outcome = await runP9WorkflowNow(projectId, id);
+      // One deliberate POST with a unique durable DB dedupe key. The draft
+      // has already been consumed: a lost HTTP reply must not auto-retry.
+      requestKey = crypto.randomUUID();
+      const outcome = await runP9WorkflowNow(projectId, id, {
+        idempotencyKey: requestKey,
+        expectedUpdatedAt: draft.expectedUpdatedAt,
+      });
       setMessage(outcome.error || outcome.run?.summary || "Run request completed; check workflow history.");
     } catch {
-      // Network failure AFTER issuing a manual POST has an ambiguous result.
-      // The consumed draft is not auto-retried; inspect P9 run history first.
-      setMessage("Run outcome unconfirmed. Check server run history before initiating another request. No automatic retry was scheduled.");
+      if (requestKey) {
+        try {
+          // Read-only reconciliation; never re-issue the execution POST here.
+          const receipt = await getP9ManualRunReceipt(projectId, id, requestKey);
+          setMessage(`Server receipt ${receipt.run.id}: ${receipt.receiptStatus}. No duplicate execution was requested.`);
+        } catch {
+          setMessage(`Run outcome unconfirmed (request ${requestKey}). Check server history before retrying. No automatic retry was scheduled.`);
+        }
+      } else {
+        setMessage("Unable to prepare a governed run; no automatic retry was scheduled.");
+      }
     } finally {
       invalidate(projectId);
       confirming.current = false;
