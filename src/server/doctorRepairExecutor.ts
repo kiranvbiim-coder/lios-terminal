@@ -45,7 +45,8 @@ export type DoctorRepairExecutionRefusalCode =
   | "no_repair_required"
   | "unsupported_platform"
   | "strict_provisioning_authority_missing"
-  | "repair_unavailable";
+  | "repair_unavailable"
+  | "repair_in_progress";
 
 export class DoctorRepairExecutionRefusedError extends Error {
   constructor(readonly code: DoctorRepairExecutionRefusalCode) {
@@ -78,6 +79,10 @@ const productionDependencies: DoctorRepairExecutionDependencies = {
  * manifest checks, strict provisioning, release-lock verification, rollback
  * and atomic activation responsibility.
  */
+// Prevent overlapping in-process install/rollback transactions. The canonical
+// installer remains the lifecycle authority; this gate is not a cross-process lock.
+let repairInProgress = false;
+
 export async function executeManagedRuntimeRepair(
   request: DoctorRepairExecutionRequest,
   dependencies: DoctorRepairExecutionDependencies = productionDependencies,
@@ -85,39 +90,47 @@ export async function executeManagedRuntimeRepair(
   if (request.confirmed !== true) {
     throw new DoctorRepairExecutionRefusedError("confirmation_required");
   }
-
-  const current = dependencies.readCurrentRuntimeContext();
-  const plan = planManagedRuntimeRepair(current.readiness, {
-    isolationMode: request.isolationMode,
-    strictProvisioningAuthorityAvailable: Boolean(request.strictProvisioningAuthority),
-  });
-
-  if (plan.action === "none") {
-    throw new DoctorRepairExecutionRefusedError("no_repair_required");
+  if (repairInProgress) {
+    throw new DoctorRepairExecutionRefusedError("repair_in_progress");
   }
-  if (plan.action === "manual_platform_support") {
-    throw new DoctorRepairExecutionRefusedError("unsupported_platform");
-  }
-  if (plan.executionStatus !== "authority_available") {
-    throw new DoctorRepairExecutionRefusedError(
-      plan.executionBlocker === "strict_provisioning_authority_missing"
-        ? "strict_provisioning_authority_missing"
-        : "repair_unavailable",
+
+  repairInProgress = true;
+  try {
+    const current = dependencies.readCurrentRuntimeContext();
+    const plan = planManagedRuntimeRepair(current.readiness, {
+      isolationMode: request.isolationMode,
+      strictProvisioningAuthorityAvailable: Boolean(request.strictProvisioningAuthority),
+    });
+
+    if (plan.action === "none") {
+      throw new DoctorRepairExecutionRefusedError("no_repair_required");
+    }
+    if (plan.action === "manual_platform_support") {
+      throw new DoctorRepairExecutionRefusedError("unsupported_platform");
+    }
+    if (plan.executionStatus !== "authority_available") {
+      throw new DoctorRepairExecutionRefusedError(
+        plan.executionBlocker === "strict_provisioning_authority_missing"
+          ? "strict_provisioning_authority_missing"
+          : "repair_unavailable",
+      );
+    }
+
+    const packIds = [...current.readiness.requiredPackIds];
+    const selectedReleasePackIds = [...current.selectedReleasePackIds];
+    const installOptions: ManagedRuntimeInstallOptions = {
+      isolationMode: request.isolationMode,
+      requireVerified: plan.requiresVerifiedArtifacts,
+    };
+    if (request.strictProvisioningAuthority) {
+      installOptions.strictProvisioningAuthority = request.strictProvisioningAuthority;
+    }
+
+    const operation = await dependencies.installManagedRuntime(
+      packIds, selectedReleasePackIds, installOptions,
     );
+    return { plan, operation };
+  } finally {
+    repairInProgress = false;
   }
-
-  const packIds = [...current.readiness.requiredPackIds];
-  const selectedReleasePackIds = [...current.selectedReleasePackIds];
-  const installOptions: ManagedRuntimeInstallOptions = {
-    isolationMode: request.isolationMode,
-    requireVerified: plan.requiresVerifiedArtifacts,
-  };
-  if (request.strictProvisioningAuthority) {
-    installOptions.strictProvisioningAuthority = request.strictProvisioningAuthority;
-  }
-
-  const operation = await dependencies.installManagedRuntime(
-    packIds, selectedReleasePackIds, installOptions,
-  );
-  return { plan, operation };
 }
