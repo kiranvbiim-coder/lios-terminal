@@ -3,7 +3,6 @@ import { BellRing, Pause, Play, RefreshCw, Trash2, Workflow } from "lucide-react
 import {
   createP9Workflow,
   deleteP9Workflow,
-  getP9ManualRunReceipt,
   markP9NotificationRead,
   runP9WorkflowNow,
   setP9WorkflowEnabled,
@@ -20,6 +19,13 @@ import {
   saveP9ManualRunDraft,
   subscribeP9ManualRunDrafts,
 } from "@/lib/p9ManualRunDrafts";
+import {
+  checkP9ManualRunAttempt,
+  discardP9ManualRunAttempt,
+  listP9ManualRunAttempts,
+  prepareP9ManualRunAttempt,
+  subscribeP9ManualRunAttempts,
+} from "@/lib/p9ManualRunAttemptLedger";
 import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
 
 function time(value: string | null): string {
@@ -47,12 +53,19 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
+  const [attempts, setAttempts] = useState(() => listP9ManualRunAttempts(projectId));
   const confirming = useRef(false);
 
   useEffect(() => {
     const refresh = () => setDrafts(listP9ManualRunDrafts(projectId));
     refresh();
     return subscribeP9ManualRunDrafts(refresh);
+  }, [projectId]);
+
+  useEffect(() => {
+    const refresh = () => setAttempts(listP9ManualRunAttempts(projectId));
+    refresh();
+    return subscribeP9ManualRunAttempts(refresh);
   }, [projectId]);
 
   const workflows = workflowsQuery.data ?? [];
@@ -104,29 +117,48 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         setMessage("Confirmation blocked. Reconnect, sign in and verify that this workflow has not changed; discard any stale draft.");
         return;
       }
-      // One deliberate POST with a unique durable DB dedupe key. The draft
-      // has already been consumed: a lost HTTP reply must not auto-retry.
+      // Persist the exact key before sending anything to P9. A browser crash
+      // cannot silently turn an uncertain attempt into a new UUID/execution.
       requestKey = crypto.randomUUID();
+      if (!prepareP9ManualRunAttempt(projectId, id, requestKey)) {
+        setMessage("Could not save a durable receipt bookmark. No workflow request was sent.");
+        return;
+      }
       const outcome = await runP9WorkflowNow(projectId, id, {
         idempotencyKey: requestKey,
         expectedUpdatedAt: draft.expectedUpdatedAt,
       });
-      setMessage(outcome.error || outcome.run?.summary || "Run request completed; check workflow history.");
+      if (outcome.run && outcome.receiptStatus === "completed") {
+        discardP9ManualRunAttempt(projectId, id, requestKey);
+      }
+      setMessage(outcome.error || outcome.run?.summary || "Check your P9 run receipt before any new request.");
     } catch {
       if (requestKey) {
-        try {
-          // Read-only reconciliation; never re-issue the execution POST here.
-          const receipt = await getP9ManualRunReceipt(projectId, id, requestKey);
-          setMessage(`Server receipt ${receipt.run.id}: ${receipt.receiptStatus}. No duplicate execution was requested.`);
-        } catch {
-          setMessage(`Run outcome unconfirmed (request ${requestKey}). Check server history before retrying. No automatic retry was scheduled.`);
-        }
+        const receipt = await checkP9ManualRunAttempt(projectId, id, requestKey);
+        setMessage(receipt.state === "completed" || receipt.state === "in_progress"
+          ? `Server receipt ${receipt.runId}: ${receipt.state}. No duplicate execution was requested.`
+          : "Run outcome not confirmed. The request key is saved under your account for read-only reconciliation. Do not start a duplicate run.");
       } else {
         setMessage("Unable to prepare a governed run; no automatic retry was scheduled.");
       }
     } finally {
       invalidate(projectId);
       confirming.current = false;
+      setBusyId(null);
+    }
+  };
+
+  const checkAttempt = async (workflowId: string, requestKey: string) => {
+    setBusyId("receipt:" + requestKey);
+    setMessage(null);
+    try {
+      const receipt = await checkP9ManualRunAttempt(projectId, workflowId, requestKey);
+      setMessage(receipt.state === "completed" || receipt.state === "in_progress"
+        ? `P9 server receipt ${receipt.runId}: ${receipt.state}.`
+        : receipt.state === "unconfirmed"
+          ? "No server receipt is confirmed yet. This bookmark is kept; no workflow was rerun."
+          : "Receipt recheck blocked. Sign in online with the original account and retry the read-only check.");
+    } finally {
       setBusyId(null);
     }
   };
@@ -271,6 +303,36 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           </div>
         )}
       </div>
+
+      {attempts.length > 0 && (
+        <div className="mt-4 border-t border-border/50 pt-3" data-p9-manual-receipt-bookmarks>
+          <h3 className="font-ui text-[13px] font-semibold text-foreground">Manual run receipts to reconcile</h3>
+          <p className="mt-1 font-ui text-[12px] text-muted-foreground">
+            These are locally saved request identifiers, not confirmed executions. Checking them only reads server receipts; it never runs a workflow.
+          </p>
+          {attempts.map((attempt) => (
+            <div key={attempt.requestKey} className="mt-2 flex flex-wrap items-center gap-2 rounded border border-border/50 px-3 py-2">
+              <span className="flex-1 font-ui text-[12px] text-muted-foreground">
+                {workflows.find(item => item.id === attempt.workflowId)?.name ?? "Workflow unavailable"}
+                {" · "}
+                <span className="font-mono">{attempt.requestKey.slice(0, 8)}</span>
+              </span>
+              <button type="button" disabled={Boolean(busyId)} onClick={() => void checkAttempt(attempt.workflowId, attempt.requestKey)}
+                className="rounded border border-border/60 px-2 py-1 text-[12px] disabled:opacity-40">
+                Check server receipt
+              </button>
+              <button type="button" disabled={Boolean(busyId)}
+                onClick={() => {
+                  discardP9ManualRunAttempt(projectId, attempt.workflowId, attempt.requestKey);
+                  setMessage("Local bookmark discarded. This does not cancel or rerun any server workflow.");
+                }}
+                className="rounded border border-border/60 px-2 py-1 text-[12px] text-muted-foreground disabled:opacity-40">
+                Remove bookmark
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {drafts.length > 0 && (
         <div className="mt-4 border-t border-border/50 pt-3" data-p9-manual-run-drafts>
