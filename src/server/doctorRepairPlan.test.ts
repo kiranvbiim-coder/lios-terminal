@@ -28,6 +28,7 @@ test("SI-07 Doctor repair planner emits no mutation for a healthy managed runtim
     executionStatus: "not_required",
     executionBlocker: null,
     requiresConfirmation: false,
+    requiresVerifiedArtifacts: false,
     summary: "Managed runtime is healthy; no repair is required.",
     reasons: [],
     affectedPackIds: [],
@@ -48,6 +49,7 @@ test("SI-07 Doctor repair planner maps missing runtime to install but blocks str
   assert.equal(plan.executionStatus, "blocked");
   assert.equal(plan.executionBlocker, "strict_provisioning_authority_missing");
   assert.equal(plan.requiresConfirmation, true);
+  assert.equal(plan.requiresVerifiedArtifacts, false);
   assert.deepEqual(plan.affectedPackIds, ["core"]);
   assert.deepEqual(plan.reasons, ["Managed runtime is not installed."]);
   assert.equal("command" in plan, false);
@@ -65,6 +67,7 @@ test("SI-07 Doctor repair planner reports existing legacy-host provisioning auth
   assert.equal(plan.executionStatus, "authority_available");
   assert.equal(plan.executionBlocker, null);
   assert.equal(plan.requiresConfirmation, true);
+  assert.equal(plan.requiresVerifiedArtifacts, false);
 });
 
 test("SI-07 Doctor repair planner maps integrity/corruption states to verified repair, never arbitrary shell", () => {
@@ -94,7 +97,7 @@ test("SI-07 Doctor verification failures require verified release artifacts for 
       reasons: ["release verification failed"],
     }), { isolationMode: "legacy-host" });
     assert.equal(
-      (plan as DoctorPlanWithVerifiedArtifacts).requiresVerifiedArtifacts,
+      plan.requiresVerifiedArtifacts,
       true,
       `${state} repair must not be executable with the installer's default unverified-artifact policy`,
     );
@@ -115,8 +118,5 @@ test("SI-07 Doctor repair planner fails closed for unsupported platforms", () =>
   assert.equal(plan.executionStatus, "manual_required");
   assert.equal(plan.executionBlocker, "unsupported_platform");
   assert.equal(plan.requiresConfirmation, false);
+  assert.equal(plan.requiresVerifiedArtifacts, false);
 });
-
-interface DoctorPlanWithVerifiedArtifacts {
-  requiresVerifiedArtifacts?: boolean;
-}
