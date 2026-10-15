@@ -67,6 +67,34 @@ test("surface and invocable filters prevent discovery surfaces from over-claimin
   assert.equal(discoverCapabilities("workspace", { surface: "command_palette" }, registry).length, 0);
 });
 
+
+test("SI-07 discovery retains unavailable tools but never claims they are invocable now", () => {
+  const registry = new CapabilityRegistry();
+  const states = ["available", "configurable", "experimental", "degraded", "disabled"] as const;
+  registry.registerMany(states.map((state) =>
+    capability(`tool.${state}`, `Tool ${state}`, {
+      aiHints: { invocable: true, requiresConfirmation: false },
+      availability: state === "available"
+        ? { state }
+        : { state, reason: `Requires ${state} setup or recovery.` },
+    }),
+  ));
+  const visible = discoverCapabilities("tool", { surface: "command_palette" }, registry);
+  assert.equal(visible.length, states.length);
+  for (const result of visible) {
+    assert.equal(result.invocable, result.availability.state === "available",
+      `Capability ${result.capabilityId} must not overstate execution readiness`);
+  }
+  assert.deepEqual(
+    discoverCapabilities("tool", { surface: "master_ai", invocableOnly: true }, registry)
+      .map((result) => result.capabilityId),
+    ["tool.available"],
+  );
+  const disabled = discoverCapabilities("tool.disabled", { surface: "command_palette" }, registry)[0];
+  assert.equal(disabled?.availability.state, "disabled");
+  assert.equal(disabled?.invocable, false);
+});
+
 test("default discovery exposes advanced compute with safe launch targets and connectors via Connection Center", () => {
   const registry = createDefaultCapabilityRegistry();
   const reverseDcf = discoverCapabilities("reverse dcf", { surface: "command_palette", limit: 10 }, registry);
