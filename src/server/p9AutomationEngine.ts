@@ -25,12 +25,16 @@ function comparable(value: string | number | boolean | null | undefined): string
 
 export function p9AutomationEventMatches(trigger: P9WorkflowTrigger, event: P9AutomationEvent): boolean {
   if (trigger.type !== "event" || trigger.eventType !== event.eventType) return false;
+  // Filter inputs may include source payload fields, but the authoritative
+  // tenant scope and source identity must always come from the event envelope.
+  // Otherwise a producer could shadow ownerUserId/projectId/sourceRef with
+  // same-named payload values and make a scoped trigger match incorrectly.
   const bag: Record<string, string | number | boolean | null> = {
+    ...event.payload,
     projectId: event.projectId,
     ownerUserId: event.ownerUserId,
     organizationId: event.organizationId,
     sourceRef: event.sourceRef,
-    ...event.payload,
   };
   return Object.entries(trigger.filters).every(([key, expected]) =>
     Object.prototype.hasOwnProperty.call(bag, key) && comparable(bag[key]) === comparable(expected)
