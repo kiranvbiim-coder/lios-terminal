@@ -102,7 +102,12 @@ export async function deliverP9DesktopNotifications(
       continue;
     }
 
-    if (port.permission !== "granted") {
+    // In Electron, the Web Notification constructor is itself the request
+    // path and Electron approves permission requests by default unless the app
+    // installs a custom permission handler. Blocking the "default" state here
+    // would prevent Chromium from resolving that request at all. Only an
+    // explicit denial or an unsupported runtime is a pre-show blocker.
+    if (port.permission === "denied" || port.permission === "unsupported") {
       result.unavailable += 1;
       continue;
     }
