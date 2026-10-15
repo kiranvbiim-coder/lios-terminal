@@ -77,6 +77,24 @@ function statePath(): string {
   return path.join(runtimeRoot(), "managed-state.json");
 }
 
+/**
+ * Persisted rollback metadata is not filesystem authority. Only a direct,
+ * non-symlink rollback directory created by the managed-runtime lifecycle
+ * can be moved or recursively deleted. Older/untrusted paths fail closed.
+ */
+function authorizedRollbackPath(candidate: unknown): string | null {
+  if (typeof candidate !== "string" || !path.isAbsolute(candidate)) return null;
+  const normalized = path.resolve(candidate);
+  if (path.dirname(normalized) !== path.resolve(runtimeRoot())
+    || !/^rollback-\d+$/.test(path.basename(normalized))) return null;
+  try {
+    const entry = fs.lstatSync(normalized);
+    return entry.isDirectory() && !entry.isSymbolicLink() ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 function runtimeStateSnapshotPath(runtimePath: string): string {
   return path.join(runtimePath, RUNTIME_STATE_SNAPSHOT);
 }
@@ -339,8 +357,9 @@ export async function installManagedRuntime(
     };
     writeRuntimeStateSnapshot(currentPath, state);
     fs.writeFileSync(statePath(), JSON.stringify(state, null, 2), { mode: 0o600 });
-    if (previousState?.rollbackPath && previousState.rollbackPath !== previousPath) {
-      fs.rmSync(previousState.rollbackPath, { recursive: true, force: true });
+    const obsoleteRollback = authorizedRollbackPath(previousState?.rollbackPath);
+    if (obsoleteRollback && obsoleteRollback !== previousPath) {
+      fs.rmSync(obsoleteRollback, { recursive: true, force: true });
     }
     const detail = verificationWarnings.length
       ? `Managed Python runtime installed with ${verificationWarnings.length} allow-list warning(s).`
@@ -360,11 +379,17 @@ export async function installManagedRuntime(
 
 export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationResult> {
   const state = readManagedRuntimeState();
-  if (!state?.rollbackPath || !fs.existsSync(state.rollbackPath)) {
-    throw new Error("No managed runtime rollback is available.");
+  const previousPath = authorizedRollbackPath(state?.rollbackPath);
+  if (!state || !previousPath) {
+    throw new Error("No safe managed runtime rollback is available.");
   }
   const currentPath = path.join(runtimeRoot(), "current");
-  const previousPath = state.rollbackPath;
+  // A replaced/missing current installation cannot be the source of an
+  // atomic rollback; in particular do not write its snapshot via a symlink.
+  const currentEntry = fs.lstatSync(currentPath, { throwIfNoEntry: false });
+  if (!currentEntry?.isDirectory() || currentEntry.isSymbolicLink()) {
+    throw new Error("Managed runtime current directory is unavailable or unsafe for rollback.");
+  }
   const previousState = readRuntimeStateSnapshot(previousPath);
   const failedPath = path.join(runtimeRoot(), `failed-${Date.now()}`);
   if (fs.existsSync(currentPath)) writeRuntimeStateSnapshot(currentPath, state);
