@@ -164,6 +164,7 @@ test("post-activation health failure restores the previous runtime", async () =>
       readState: () => previous,
       installRuntime: async () => ({ state: candidate, detail: "activated" }),
       validateActivatedRuntime: () => false,
+      currentPythonPath: () => "/managed/current/bin/python3",
       rollbackRuntime: async () => {
         rollbacks += 1;
         return { state: previous, detail: "restored" };
@@ -338,4 +339,56 @@ test("SI-07.10 post-upgrade validator refuses unverified persisted state and res
   assert.equal(result.status, "rollback_restored");
   assert.equal(restores, 1);
   assert.equal(result.state.manifestVersion, "1.0.0");
+});
+
+test("SI-07.10 rollback cannot report restoration if the canonical runtime Python is missing", async () => {
+  const original = state("1.0.0");
+  const candidate = state("1.1.0");
+  await assert.rejects(
+    upgrade(
+      { strictProvisioningAuthority: authority },
+      {
+        targetManifestVersion: "1.1.0",
+        readState: () => original,
+        installRuntime: async () => ({ state: candidate, detail: "activated" }),
+        validateActivatedRuntime: () => false,
+        rollbackRuntime: async () => ({ state: original, detail: "metadata restored" }),
+        currentPythonPath: () => null,
+      },
+    ),
+    (error: unknown) => error instanceof runtimeUpgrade.ManagedRuntimeUpgradeError
+      && error.code === "rollback_failed",
+  );
+});
+
+test("SI-07.10 healthy upgrade refuses changed persisted runtime path or installed specs", async () => {
+  const original = state("1.0.0");
+  const candidate = { ...state("1.1.0"), installedSpecs: ["trusted-pkg==1.0"] };
+  for (const corrupt of [
+    { ...candidate, runtimePath: "/unrelated/runtime" },
+    { ...candidate, installedSpecs: ["substituted-pkg==1.0"] },
+  ]) {
+    let saved = original;
+    let restored = 0;
+    const result = await upgrade(
+      { strictProvisioningAuthority: authority },
+      {
+        targetManifestVersion: "1.1.0",
+        readState: () => saved,
+        installRuntime: async () => {
+          saved = corrupt;
+          return { state: candidate, detail: "activated" };
+        },
+        currentPythonPath: () => "/managed/current/bin/python3",
+        rollbackRuntime: async () => {
+          restored += 1;
+          saved = original;
+          return { state: original, detail: "restored" };
+        },
+      },
+    );
+    assert.equal(result.status, "rollback_restored");
+    assert.equal(restored, 1);
+    assert.equal(saved.manifestVersion, "1.0.0");
+  }
 });
