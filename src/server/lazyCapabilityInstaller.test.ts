@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ManagedRuntimeOperationResult, ManagedRuntimeState } from "./pythonRuntimeManager";
+import { StrictProvisioningAuthorityError, type ManagedRuntimeOperationResult, type ManagedRuntimeState } from "./pythonRuntimeManager";
 import { ensureLazyCapability } from "./lazyCapabilityInstaller";
 
 function state(selectedPackIds: string[], selectedReleasePackIds: string[] = []): ManagedRuntimeState {
@@ -93,6 +93,20 @@ test("approved lazy install preserves existing low-level packs and release-pack 
   }
   assert.deepEqual(receivedReleasePackIds, ["research"]);
   assert.equal(receivedStrictAuthority, strictProvisioningAuthority);
+});
+
+test("lazy installation cannot downgrade strict provisioning to legacy host pip", async () => {
+  await assert.rejects(
+    () => ensureLazyCapability(
+      "fixed-income",
+      {
+        consentToHeavyweight: true,
+        runtimeInstallOptions: { isolationMode: "legacy-host" },
+      },
+      { readState: () => state(["core"]) },
+    ),
+    (error: unknown) => error instanceof StrictProvisioningAuthorityError && error.code === "strict_provisioning_authority_missing",
+  );
 });
 
 test("local-ai never silently downloads a model or package", async () => {
