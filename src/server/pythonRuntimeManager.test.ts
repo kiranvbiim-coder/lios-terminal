@@ -581,3 +581,128 @@ test("SI-07.10 install rejects a symlinked current snapshot before writing metad
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("SI-07.10 an external managed-state symlink cannot redirect an install's final state write", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this host");
+    return;
+  }
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-managed-state-install-link-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const target = path.join(directory, "private-file.json");
+  fs.mkdirSync(root);
+  fs.writeFileSync(target, "PRIVATE_SETTINGS");
+  let provisioned = 0;
+  try {
+    try {
+      fs.symlinkSync(target, path.join(root, "managed-state.json"), "file");
+    } catch (error) {
+      t.skip("Host cannot create a file symlink: " + String(error));
+      return;
+    }
+    await assert.rejects(
+      installManagedRuntime(["core"], [], {
+        isolationMode: "strict",
+        strictProvisioningAuthority: {
+          async provisionManagedRuntime() {
+            provisioned += 1;
+            throw new Error("Unsafe state storage must be detected before provisioning");
+          },
+        },
+      }),
+      /saved state path is unsafe/,
+    );
+    assert.equal(provisioned, 0);
+    assert.equal(fs.readFileSync(target, "utf8"), "PRIVATE_SETTINGS");
+    assert.equal(fs.existsSync(path.join(root, "current")), false);
+  } finally {
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 a managed-state symlink cannot redirect rollback persistence", async (t) => {
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-managed-state-rollback-link-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const previous = path.join(root, "rollback-252525");
+  const target = path.join(directory, "unrelated-state.json");
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(previous);
+  fs.writeFileSync(path.join(current, "current.txt"), "keep-current");
+  fs.writeFileSync(path.join(previous, "previous.txt"), "keep-previous");
+  const state = {
+    manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
+    installedAt: "2026-10-15T00:00:00.000Z",
+    runtimePath: current,
+    rollbackPath: previous,
+    selectedPackIds: ["core"],
+    selectedReleasePackIds: [],
+    packageOutput: "",
+    installedSpecs: [],
+    hashVerified: true,
+    verificationWarnings: [],
+  };
+  const saved = JSON.stringify(state);
+  fs.writeFileSync(target, saved);
+  try {
+    try {
+      fs.symlinkSync(target, path.join(root, "managed-state.json"), "file");
+    } catch (error) {
+      t.skip("Host cannot create a file symlink: " + String(error));
+      return;
+    }
+    await assert.rejects(rollbackManagedRuntime(), /saved state path is unsafe/);
+    assert.equal(fs.readFileSync(target, "utf8"), saved);
+    assert.equal(fs.readFileSync(path.join(current, "current.txt"), "utf8"), "keep-current");
+    assert.equal(fs.readFileSync(path.join(previous, "previous.txt"), "utf8"), "keep-previous");
+    assert.deepEqual(fs.readdirSync(root).sort(), ["current", "managed-state.json", "rollback-252525"]);
+  } finally {
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 symlinked managed-runtime storage root is refused before staging", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this host");
+    return;
+  }
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-managed-root-link-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const outside = path.join(directory, "unrelated-folder");
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "sentinel.txt"), "unchanged");
+  try {
+    try {
+      fs.symlinkSync(outside, path.join(directory, "python-runtimes"), process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      t.skip("Host cannot create a directory symlink: " + String(error));
+      return;
+    }
+    await assert.rejects(
+      installManagedRuntime(["core"], [], {
+        isolationMode: "strict",
+        strictProvisioningAuthority: {
+          async provisionManagedRuntime() {
+            throw new Error("Unsafe storage root must be detected before provisioning");
+          },
+        },
+      }),
+      /storage root is unsafe/,
+    );
+    assert.equal(fs.readFileSync(path.join(outside, "sentinel.txt"), "utf8"), "unchanged");
+    assert.equal(fs.readdirSync(outside).length, 1);
+  } finally {
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
