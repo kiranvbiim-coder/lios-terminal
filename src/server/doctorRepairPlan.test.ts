@@ -55,6 +55,23 @@ test("SI-07 Doctor repair planner maps missing runtime to install but blocks str
   assert.equal("command" in plan, false);
 });
 
+test("SI-07 Doctor repair planner reports explicitly composed strict provisioning authority truthfully", () => {
+  const plan = planManagedRuntimeRepair(readiness({
+    state: "missing",
+    ready: false,
+    repairAction: "install",
+    missingPackIds: ["core"],
+    reasons: ["Managed runtime is not installed."],
+  }), {
+    isolationMode: "strict",
+    strictProvisioningAuthorityAvailable: true,
+  });
+  assert.equal(plan.action, "install_managed_runtime");
+  assert.equal(plan.executionStatus, "authority_available");
+  assert.equal(plan.executionBlocker, null);
+  assert.equal(plan.requiresConfirmation, true);
+});
+
 test("SI-07 Doctor repair planner reports existing legacy-host provisioning authority without executing it", () => {
   const plan = planManagedRuntimeRepair(readiness({
     state: "missing",
