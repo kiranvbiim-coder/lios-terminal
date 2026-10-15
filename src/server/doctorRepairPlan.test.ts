@@ -85,6 +85,22 @@ test("SI-07 Doctor repair planner maps integrity/corruption states to verified r
   }
 });
 
+test("SI-07 Doctor verification failures require verified release artifacts for any future repair executor", () => {
+  for (const state of ["unverified", "integrity_failed"] as const) {
+    const plan = planManagedRuntimeRepair(readiness({
+      state,
+      ready: false,
+      repairAction: "repair",
+      reasons: ["release verification failed"],
+    }), { isolationMode: "legacy-host" });
+    assert.equal(
+      (plan as DoctorPlanWithVerifiedArtifacts).requiresVerifiedArtifacts,
+      true,
+      `${state} repair must not be executable with the installer's default unverified-artifact policy`,
+    );
+  }
+});
+
 test("SI-07 Doctor repair planner fails closed for unsupported platforms", () => {
   const plan = planManagedRuntimeRepair(readiness({
     state: "unsupported",
@@ -100,3 +116,7 @@ test("SI-07 Doctor repair planner fails closed for unsupported platforms", () =>
   assert.equal(plan.executionBlocker, "unsupported_platform");
   assert.equal(plan.requiresConfirmation, false);
 });
+
+interface DoctorPlanWithVerifiedArtifacts {
+  requiresVerifiedArtifacts?: boolean;
+}
