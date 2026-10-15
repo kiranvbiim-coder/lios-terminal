@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { StrictProvisioningAuthorityError, type ManagedRuntimeOperationResult, type ManagedRuntimeState } from "./pythonRuntimeManager";
 import { ensureLazyCapability } from "./lazyCapabilityInstaller";
+import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
 
 function state(selectedPackIds: string[], selectedReleasePackIds: string[] = []): ManagedRuntimeState {
   return {
-    manifestVersion: "test",
+    manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
     installedAt: "2026-10-15T00:00:00.000Z",
     runtimePath: "/tmp/lios-runtime/current",
     rollbackPath: null,
@@ -25,6 +26,7 @@ test("lazy capability install is a no-op when the required managed packs are alr
     {},
     {
       readState: () => state(["core", "forecasting", "fixed-income", "econometrics", "optimization", "ml"]),
+      pythonAvailable: () => true,
       installRuntime: async () => {
         installs += 1;
         throw new Error("installer must not run");
@@ -145,4 +147,34 @@ test("unknown capabilities are not converted into arbitrary package installs", a
   assert.equal(result.status, "not_managed");
   assert.equal(result.runtimePackId, null);
   assert.equal(installs, 0);
+});
+
+test("SI-07.09 a saved pack list is not availability when managed Python is missing", async () => {
+  let installs = 0;
+  const result = await ensureLazyCapability("forecasting", {}, {
+    readState: () => state(["core", "forecasting", "fixed-income", "econometrics", "optimization", "ml"]),
+    pythonAvailable: () => false,
+    installRuntime: async () => { installs++; throw new Error("silent repair forbidden"); },
+  });
+  assert.equal(result.status, "runtime_not_ready");
+  assert.match(result.detail, /corrupt/);
+  assert.equal(installs, 0, "Doctor must repair; lazy availability cannot trigger mutation");
+});
+
+test("SI-07.09 incompatible, unverified and integrity-failed runtime states are never labelled available", async () => {
+  const allPacks = ["core", "forecasting", "fixed-income", "econometrics", "optimization", "ml"];
+  const scenarios: Array<{ state: ManagedRuntimeState; expected: string }> = [
+    { state: { ...state(allPacks), manifestVersion: "outdated-manifest" }, expected: "incompatible" },
+    { state: { ...state(allPacks), hashVerified: false }, expected: "unverified" },
+    { state: { ...state(allPacks), verificationWarnings: ["Unexpected package"] }, expected: "integrity_failed" },
+  ];
+  for (const scenario of scenarios) {
+    const result = await ensureLazyCapability("forecasting", { consentToHeavyweight: true }, {
+      readState: () => scenario.state,
+      pythonAvailable: () => true,
+      installRuntime: async () => { throw new Error("must not silently mutate a broken runtime"); },
+    });
+    assert.equal(result.status, "runtime_not_ready");
+    assert.match(result.detail, new RegExp(scenario.expected));
+  }
 });
