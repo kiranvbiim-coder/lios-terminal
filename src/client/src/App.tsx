@@ -5,6 +5,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { P9DesktopNotificationBridge } from "@/components/terminal/P9DesktopNotificationBridge";
 import Terminal from "./pages/Terminal";
 import PublicProductPreview from "./pages/PublicProductPreview";
 import DomainPicker from "./pages/DomainPicker";
@@ -179,6 +180,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <P9DesktopNotificationBridge enabled={Boolean(session && !session.mustChangePassword)} />
       <GatewayProvider enabled={!!session && !session.mustChangePassword}>
       <div className="dark min-h-screen bg-[#030303]">
         {session && session.mustChangePassword ? (
