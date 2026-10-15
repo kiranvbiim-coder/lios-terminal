@@ -3,37 +3,67 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 
-// The archive itself is SHA-256 verified by sandboxImageProvisioning before
-// import. The exact image ID is then enforced by the existing GM-11 backend.
-function defaultLocalDockerSocket(home = os.homedir()) {
+const HOST_CONTAINER_PLATFORMS = Object.freeze({
+  darwin: Object.freeze({ arm64: 'linux/arm64', x64: 'linux/amd64' }),
+  win32: Object.freeze({ arm64: 'linux/arm64', x64: 'linux/amd64' }),
+  linux: Object.freeze({ arm64: 'linux/arm64', x64: 'linux/amd64' }),
+});
+
+function containerPlatformForHost(platform = process.platform, arch = process.arch) {
+  const target = HOST_CONTAINER_PLATFORMS[platform]?.[arch];
+  if (!target) throw new Error(`Packaged sandbox is not qualified for host ${platform}/${arch}.`);
+  return target;
+}
+
+function isSocket(candidate) {
+  try { return fs.statSync(candidate).isSocket(); }
+  catch { return false; }
+}
+
+function defaultLocalDockerTarget({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+  if (platform === 'win32') return 'npipe:////./pipe/docker_engine';
+
   const candidates = [
     path.join(home, '.docker', 'run', 'docker.sock'),
     path.join(home, '.colima', 'default', 'docker.sock'),
   ];
-  const socket = candidates.find((candidate) => {
-    try { return fs.statSync(candidate).isSocket(); }
-    catch { return false; }
-  });
-  return socket ? `unix://${socket}` : `unix://${candidates[0]}`;
+  if (platform === 'linux') {
+    const runtime = env.XDG_RUNTIME_DIR?.trim();
+    if (runtime) candidates.push(path.join(runtime, 'podman', 'podman.sock'));
+    if (typeof process.getuid === 'function') candidates.push(`/run/user/${process.getuid()}/podman/podman.sock`);
+    candidates.push('/var/run/docker.sock');
+  }
+  const socket = candidates.find(isSocket);
+  const fallback = platform === 'linux' ? '/var/run/docker.sock' : candidates[0];
+  return `unix://${socket || fallback}`;
 }
-function packagedSandboxEnvironment(resourcesPath, env = process.env, { resolveSocket = true } = {}) {
+
+function validLocalEngineTarget(target, platform) {
+  if (typeof target !== 'string' || target.includes('\0')) return false;
+  if (platform === 'win32') return /^npipe:\/\/\/\/\.\/pipe\/[A-Za-z0-9._-]+$/.test(target);
+  return /^unix:\/\/\/[^?#\0]+$/.test(target);
+}
+
+function packagedSandboxEnvironment(resourcesPath, env = process.env, options = {}) {
+  const platform = options.platform || process.platform;
+  const arch = options.arch || process.arch;
+  const resolveTarget = options.resolveTarget !== false && options.resolveSocket !== false;
+  const targetPlatform = containerPlatformForHost(platform, arch);
   const manifest = path.join(resourcesPath, 'sandbox-image-dist', 'sandbox-image.json');
   if (!fs.existsSync(manifest)) return null;
   const manifestStat = fs.lstatSync(manifest);
   if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error('Packaged sandbox manifest is not a regular file.');
   const release = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-  // The packaged sandbox image and its unix-socket engine are qualified for macOS on Apple silicon only.
-  if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Packaged sandbox is qualified only for macOS arm64.');
-  if (release.schemaVersion !== 1 || release.platform !== 'linux/arm64' || !/^sha256:[a-f0-9]{64}$/.test(release.image) || release.archive !== 'sandbox-image.tar.gz' || !/^[a-f0-9]{64}$/.test(release.archiveSha256)) {
-    throw new Error('Packaged sandbox manifest is invalid or incompatible with this Mac.');
+  if (release.schemaVersion !== 1 || release.platform !== targetPlatform || !/^sha256:[a-f0-9]{64}$/.test(release.image) || release.archive !== 'sandbox-image.tar.gz' || !/^[a-f0-9]{64}$/.test(release.archiveSha256)) {
+    throw new Error(`Packaged sandbox manifest is invalid or incompatible with host ${platform}/${arch}; expected ${targetPlatform}.`);
   }
   if (release.provenance?.sourceLock !== 'source-lock.json' || !/^[a-f0-9]{64}$/.test(release.provenance?.sourceLockSha256 || '')) throw new Error('Sandbox release provenance is missing or invalid.');
   const sourceLock = path.join(path.dirname(manifest), 'source-lock.json');
   const lockStat = fs.lstatSync(sourceLock);
   if (!lockStat.isFile() || lockStat.isSymbolicLink() || crypto.createHash('sha256').update(fs.readFileSync(sourceLock)).digest('hex') !== release.provenance.sourceLockSha256) throw new Error('Packaged sandbox source lock differs from release provenance.');
   const trusted = JSON.parse(fs.readFileSync(sourceLock, 'utf8'));
-  if (trusted.schemaVersion !== 1 || trusted.releaseStatus !== 'ready' || trusted.provenance?.verified !== true || !trusted.acceptedPlatforms?.includes(release.platform)) throw new Error('Packaged sandbox source lock is not release-qualified for this platform.');
-  if (trusted.baseImage?.platform !== release.platform || trusted.baseImage?.reference !== release.provenance.baseImage?.reference || trusted.node?.version !== release.provenance.node?.version || trusted.xlsx?.version !== release.provenance.xlsx?.version || trusted.docling?.version !== release.provenance.docling?.version) throw new Error('Sandbox release provenance differs from its trusted source lock.');
+  if (trusted.schemaVersion !== 1 || trusted.releaseStatus !== 'ready' || trusted.provenance?.verified !== true || !trusted.acceptedPlatforms?.includes(targetPlatform)) throw new Error(`Packaged sandbox source lock is not release-qualified for ${targetPlatform}.`);
+  if (trusted.baseImage?.platform !== targetPlatform || trusted.baseImage?.reference !== release.provenance.baseImage?.reference || trusted.node?.version !== release.provenance.node?.version || trusted.xlsx?.version !== release.provenance.xlsx?.version || trusted.docling?.version !== release.provenance.docling?.version) throw new Error('Sandbox release provenance differs from its trusted source lock.');
   const browser = trusted.browser;
   if (trusted.verifiedImageId !== release.image || browser?.qualification !== 'qualified'
     || browser.playwrightVersion !== '1.63.0' || browser.chromiumRevision !== '1243'
@@ -49,31 +79,28 @@ function packagedSandboxEnvironment(resourcesPath, env = process.env, { resolveS
   }
   if ((env.LIOS_EXECUTION_BROWSER_PLAYWRIGHT_MODULE && env.LIOS_EXECUTION_BROWSER_PLAYWRIGHT_MODULE !== browser.modulePath)
     || (env.LIOS_EXECUTION_BROWSER_CHROMIUM && env.LIOS_EXECUTION_BROWSER_CHROMIUM !== browser.executablePath)) throw new Error('Configured browser paths differ from the packaged runtime.');
-  if (env.LIOS_EXECUTION_ISOLATION && env.LIOS_EXECUTION_ISOLATION !== 'strict') {
-    throw new Error('A packaged sandbox cannot be downgraded to legacy host execution.');
-  }
-  if (env.LIOS_EXECUTION_SANDBOX_IMAGE && env.LIOS_EXECUTION_SANDBOX_IMAGE !== release.image) {
-    throw new Error('Configured sandbox image differs from the packaged immutable digest.');
-  }
-  if (!resolveSocket) return { LIOS_EXECUTION_SANDBOX_IMAGE: release.image };
-  const socket = env.LIOS_EXECUTION_SANDBOX_TARGET || defaultLocalDockerSocket();
+  if (env.LIOS_EXECUTION_ISOLATION && env.LIOS_EXECUTION_ISOLATION !== 'strict') throw new Error('A packaged sandbox cannot be downgraded to legacy host execution.');
+  if (env.LIOS_EXECUTION_SANDBOX_IMAGE && env.LIOS_EXECUTION_SANDBOX_IMAGE !== release.image) throw new Error('Configured sandbox image differs from the packaged immutable digest.');
+  if (!resolveTarget) return { LIOS_EXECUTION_SANDBOX_IMAGE: release.image };
+
+  const target = env.LIOS_EXECUTION_SANDBOX_TARGET || defaultLocalDockerTarget({ platform, home: options.home || os.homedir(), env });
   const engine = env.LIOS_EXECUTION_SANDBOX_ENGINE || 'docker';
-  if (!['docker', 'podman'].includes(engine) || !socket.startsWith('unix:///') || socket.includes('\0')) {
-    throw new Error('Packaged sandbox requires an explicit local Unix container engine socket.');
+  if (!['docker', 'podman'].includes(engine) || !validLocalEngineTarget(target, platform)) {
+    throw new Error(`Packaged sandbox requires an explicit local ${platform === 'win32' ? 'named-pipe' : 'Unix-socket'} container engine target.`);
   }
   return {
     LIOS_EXECUTION_ISOLATION: 'strict',
     LIOS_EXECUTION_SANDBOX_ENGINE: engine,
-    LIOS_EXECUTION_SANDBOX_TARGET: socket,
+    LIOS_EXECUTION_SANDBOX_TARGET: target,
     LIOS_EXECUTION_SANDBOX_IMAGE: release.image,
     LIOS_EXECUTION_BROWSER_PLAYWRIGHT_MODULE: browser.modulePath,
     LIOS_EXECUTION_BROWSER_CHROMIUM: browser.executablePath,
   };
 }
-function verifyPackagedSandboxRelease(resourcesPath) {
-  // Archive integrity is independent of which local container engine socket the user runs.
-  const environment = packagedSandboxEnvironment(resourcesPath, {}, { resolveSocket: false });
-  if (!environment) throw new Error('Signed macOS release requires sandbox-image-dist/sandbox-image.json.');
+
+function verifyPackagedSandboxRelease(resourcesPath, options = {}) {
+  const environment = packagedSandboxEnvironment(resourcesPath, {}, { ...options, resolveTarget: false });
+  if (!environment) throw new Error('Signed desktop release requires sandbox-image-dist/sandbox-image.json.');
   const directory = path.join(resourcesPath, 'sandbox-image-dist');
   const release = JSON.parse(fs.readFileSync(path.join(directory, 'sandbox-image.json'), 'utf8'));
   const archive = path.join(directory, release.archive);
@@ -89,9 +116,18 @@ function verifyPackagedSandboxRelease(resourcesPath) {
   if (checksum.digest('hex') !== release.archiveSha256) throw new Error('Sandbox image archive checksum differs from its release manifest.');
   return environment.LIOS_EXECUTION_SANDBOX_IMAGE;
 }
-function requirePackagedSandboxEnvironment(resourcesPath) {
-  const environment = packagedSandboxEnvironment(resourcesPath);
-  if (!environment) throw new Error('Packaged macOS desktop requires a verified sandbox image release.');
+
+function requirePackagedSandboxEnvironment(resourcesPath, env = process.env, options = {}) {
+  const environment = packagedSandboxEnvironment(resourcesPath, env, options);
+  if (!environment) throw new Error('Packaged desktop requires a verified sandbox image release for this host architecture.');
   return environment;
 }
-module.exports = { defaultLocalDockerSocket, packagedSandboxEnvironment, requirePackagedSandboxEnvironment, verifyPackagedSandboxRelease };
+
+module.exports = {
+  containerPlatformForHost,
+  defaultLocalDockerTarget,
+  packagedSandboxEnvironment,
+  requirePackagedSandboxEnvironment,
+  validLocalEngineTarget,
+  verifyPackagedSandboxRelease,
+};
