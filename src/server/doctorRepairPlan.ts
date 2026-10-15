@@ -33,6 +33,8 @@ export interface DoctorRepairPlan {
   executionStatus: DoctorRepairExecutionStatus;
   executionBlocker: DoctorRepairExecutionBlocker;
   requiresConfirmation: boolean;
+  /** True means a future executor must enforce verified release artifacts for this repair. */
+  requiresVerifiedArtifacts: boolean;
   summary: string;
   reasons: readonly string[];
   affectedPackIds: readonly string[];
@@ -48,6 +50,10 @@ function affectedPackIds(readiness: ManagedRuntimeReadiness): readonly string[] 
   if (readiness.missingPackIds.length > 0) return Object.freeze([...readiness.missingPackIds]);
   if (readiness.state === "ready") return Object.freeze([]);
   return Object.freeze([...readiness.requiredPackIds]);
+}
+
+function requiresVerifiedArtifactsFor(state: ManagedRuntimeReadinessState): boolean {
+  return state === "unverified" || state === "integrity_failed";
 }
 
 /**
@@ -76,6 +82,7 @@ export function planManagedRuntimeRepair(
       executionStatus: "not_required",
       executionBlocker: null,
       requiresConfirmation: false,
+      requiresVerifiedArtifacts: false,
       summary: "Managed runtime is healthy; no repair is required.",
       reasons: Object.freeze([...readiness.reasons]),
       affectedPackIds: Object.freeze([]),
@@ -94,6 +101,7 @@ export function planManagedRuntimeRepair(
       executionStatus: "manual_required",
       executionBlocker: "unsupported_platform",
       requiresConfirmation: false,
+      requiresVerifiedArtifacts: false,
       summary: "Managed runtime cannot be repaired automatically on this unsupported platform.",
       reasons: Object.freeze([...readiness.reasons]),
       affectedPackIds: affectedPackIds(readiness),
@@ -119,6 +127,7 @@ export function planManagedRuntimeRepair(
     executionStatus: strictBlocked ? "blocked" : "authority_available",
     executionBlocker: strictBlocked ? "strict_provisioning_authority_missing" : null,
     requiresConfirmation: true,
+    requiresVerifiedArtifacts: requiresVerifiedArtifactsFor(readiness.state),
     summary,
     reasons: Object.freeze([...readiness.reasons]),
     affectedPackIds: affectedPackIds(readiness),
