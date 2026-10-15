@@ -299,6 +299,35 @@ test("SI-07.12 restore refuses symlinked Home parent before importing database",
   }
 });
 
+
+test("SI-07.12 restore refuses a symlinked Home before creating extraction staging", async (t) => {
+  const root = path.join(base, "restore-home-link");
+  const outside = path.join(base, "restore-home-private");
+  const file = path.join(base, "irrelevant-unreadable.liosbak");
+  fs.mkdirSync(outside, { recursive: true });
+  fs.writeFileSync(path.join(outside, "private.txt"), "PRESERVE-ME");
+  try {
+    fs.symlinkSync(outside, root, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  process.env.LIOS_DATA_ROOT = root;
+  try {
+    // The archive deliberately does not exist. The Home path must be refused
+    // before a restore attempts to read the archive or create staging.
+    await assert.rejects(
+      restoreBackup(getDb(), file),
+      /destination must be a real Home directory/,
+    );
+    assert.deepEqual(fs.readdirSync(outside), ["private.txt"]);
+    assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "PRESERVE-ME");
+  } finally {
+    process.env.LIOS_DATA_ROOT = rootA;
+    fs.rmSync(root, { force: true });
+  }
+});
+
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
   const dest = path.join(base, "retention");
   for (const minute of [1, 2, 3]) {
