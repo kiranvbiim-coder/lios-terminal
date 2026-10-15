@@ -148,6 +148,11 @@ export async function ensureLazyCapability(
   const installRuntime = dependencies.installRuntime ?? installManagedRuntime;
   const runtimeInstallOptions: ManagedRuntimeInstallOptions = {
     ...(options.runtimeInstallOptions ?? {}),
+    // Lazy expansion is not a development-time package bootstrap. Require
+    // platform release hash locks even when an internal caller omits or
+    // explicitly disables verification; the canonical installer fails closed
+    // before staging if those release artifacts are unavailable.
+    requireVerified: true,
     isolationMode: "strict",
   };
   const operation = await installRuntime(targetPackIds, selectedReleasePackIds, runtimeInstallOptions);
