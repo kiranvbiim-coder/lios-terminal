@@ -218,3 +218,27 @@ test("fails closed before signing when rebuilt ASAR mutates a nested donor grant
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test("refuses symlinked donor legal grants before replacing a previously healthy archive", async (t) => {
+  const fixture = await createPackFixture();
+  const source = path.join(fixture.root, "third_party", "licenses", "donor", "NOTICE.txt");
+  const external = path.join(fixture.root, "unrelated-private-notes.txt");
+  const originalArchive = fs.readFileSync(fixture.asarPath);
+  fs.writeFileSync(external, "PRIVATE_DOCUMENT_MUST_NOT_BE_BUNDLED");
+  try {
+    fs.unlinkSync(source);
+    try {
+      fs.symlinkSync(external, source, "file");
+    } catch (error) {
+      t.skip("Host cannot create file symlinks: " + String(error));
+      return;
+    }
+    await assert.rejects(afterPack(fixture.context), /Symlinked root legal source is refused:/);
+    assert.deepEqual(fs.readFileSync(fixture.asarPath), originalArchive);
+    const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
+    assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, "original-hash");
+    assert.equal(fs.readFileSync(external, "utf8"), "PRIVATE_DOCUMENT_MUST_NOT_BE_BUNDLED");
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
