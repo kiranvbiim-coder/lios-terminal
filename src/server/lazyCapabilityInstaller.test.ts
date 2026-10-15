@@ -46,6 +46,7 @@ test("heavyweight capability packs require explicit consent before provisioning"
     {},
     {
       readState: () => state(["core"]),
+      pythonAvailable: () => true,
       installRuntime: async () => {
         installs += 1;
         throw new Error("installer must not run without consent");
@@ -78,6 +79,7 @@ test("approved lazy install preserves existing low-level packs and release-pack 
     },
     {
       readState: () => previous,
+      pythonAvailable: () => true,
       installRuntime: async (packIds, releasePackIds, options) => {
         receivedPackIds = packIds;
         receivedReleasePackIds = releasePackIds;
@@ -105,7 +107,7 @@ test("lazy installation cannot downgrade strict provisioning to legacy host pip"
         consentToHeavyweight: true,
         runtimeInstallOptions: { isolationMode: "legacy-host" },
       },
-      { readState: () => state(["core"]) },
+      { readState: () => state(["core"]), pythonAvailable: () => true },
     ),
     (error: unknown) => error instanceof StrictProvisioningAuthorityError && error.code === "strict_provisioning_authority_missing",
   );
@@ -177,4 +179,44 @@ test("SI-07.09 incompatible, unverified and integrity-failed runtime states are 
     assert.equal(result.status, "runtime_not_ready");
     assert.match(result.detail, new RegExp(scenario.expected));
   }
+});
+
+test("SI-07.09 broken installed base must go to Doctor rather than expand new packs", async () => {
+  const cases: Array<{ name: string; record: ManagedRuntimeState; pythonAvailable: boolean }> = [
+    { name: "missing executable", record: state(["core"]), pythonAvailable: false },
+    { name: "manifest drift", record: { ...state(["core"]), manifestVersion: "stale" }, pythonAvailable: true },
+    { name: "unverified installation", record: { ...state(["core"]), hashVerified: false }, pythonAvailable: true },
+    { name: "integrity failure", record: { ...state(["core"]), verificationWarnings: ["bad package"] }, pythonAvailable: true },
+  ];
+  for (const scenario of cases) {
+    let calls = 0;
+    const result = await ensureLazyCapability(
+      "forecasting",
+      { consentToHeavyweight: true },
+      {
+        readState: () => scenario.record,
+        pythonAvailable: () => scenario.pythonAvailable,
+        installRuntime: async () => {
+          calls += 1;
+          throw new Error("lazy expansion must not repair the existing managed runtime");
+        },
+      },
+    );
+    assert.equal(result.status, "runtime_not_ready", scenario.name);
+    assert.equal(calls, 0, scenario.name);
+  }
+});
+
+test("SI-07.09 fresh installation without an existing runtime still respects the consent gate", async () => {
+  let installed = 0;
+  const result = await ensureLazyCapability("forecasting", {}, {
+    readState: () => null,
+    pythonAvailable: () => { throw new Error("no current runtime to probe"); },
+    installRuntime: async () => {
+      installed += 1;
+      throw new Error("cannot install without approval");
+    },
+  });
+  assert.equal(result.status, "consent_required");
+  assert.equal(installed, 0);
 });
