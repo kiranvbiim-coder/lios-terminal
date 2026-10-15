@@ -58,6 +58,7 @@ import {
 } from "./p9AutomationStore";
 import {
   decideP9Notification,
+  executeMatchedP9EventWorkflows,
   p9AutomationEventMatches,
   p9NotificationTitle,
   p9UnseenObservedFilings,
@@ -581,11 +582,9 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
     organizationId: event.organizationId,
   });
   const matched = workflows.filter((workflow) => p9AutomationEventMatches(parseP9StoredWorkflow(workflow).trigger, event));
-  let executed = 0;
-  let failed = 0;
   const dedupeKey = eventDedupeKey(event);
-  for (const workflow of matched) {
-    const outcome = await executeP9Workflow({
+  const summary = await executeMatchedP9EventWorkflows(matched, (workflow) =>
+    executeP9Workflow({
       workflow,
       triggerType: "event",
       triggerDetail: {
@@ -595,11 +594,13 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
         payload: event.payload,
       },
       dedupeKey,
-    });
-    if (outcome.run) executed += 1;
-    if (outcome.error) failed += 1;
+    }),
+  );
+  if (summary.unexpectedFailures > 0) {
+    // Do not dump provider errors, credentials, or raw event payloads to logs.
+    console.warn("[p9Automation] unexpected event workflow failures:", summary.unexpectedFailures);
   }
-  return { matched: matched.length, executed, failed };
+  return { matched: summary.matched, executed: summary.executed, failed: summary.failed };
 }
 
 export async function runP9FilingObserverCycle(): Promise<{ observed: number; baselined: number; emitted: number; failed: number }> {
