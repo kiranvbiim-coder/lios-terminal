@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const test = require("node:test");
 const { configureAutoUpdater, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
 
@@ -170,4 +171,14 @@ test("desktop updater never logs raw external error text", async () => {
   assert.equal(logs.some((line) => line.includes(secret)), false);
   assert.equal(logs.some((line) => line.includes("token=")), false);
   assert.equal(logs.filter((line) => line.includes("Desktop update failed safely.")).length >= 1, true);
+});
+
+test("desktop main process supplies a native safe-default install confirmation", () => {
+  const mainSource = fs.readFileSync(require.resolve("./main.cjs"), "utf8");
+  assert.match(mainSource, /confirmInstall:\s*async\s*\(\{\s*version\s*\}\)\s*=>/);
+  assert.match(mainSource, /dialog\.showMessageBox\(mainWindow,\s*\{/);
+  assert.match(mainSource, /buttons:\s*\[\s*"Later"\s*,\s*"Restart and install"\s*\]/);
+  assert.match(mainSource, /defaultId:\s*0/);
+  assert.match(mainSource, /cancelId:\s*0/);
+  assert.match(mainSource, /return\s+confirmation\.response\s*===\s*1/);
 });
