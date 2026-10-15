@@ -8,6 +8,13 @@ const HOST_CONTAINER_PLATFORMS = Object.freeze({
   win32: Object.freeze({ arm64: 'linux/arm64', x64: 'linux/amd64' }),
   linux: Object.freeze({ arm64: 'linux/arm64', x64: 'linux/amd64' }),
 });
+const PACKAGED_SANDBOX_ENV_KEYS = Object.freeze([
+  'LIOS_EXECUTION_SANDBOX_ENGINE',
+  'LIOS_EXECUTION_SANDBOX_TARGET',
+  'LIOS_EXECUTION_SANDBOX_IMAGE',
+  'LIOS_EXECUTION_BROWSER_PLAYWRIGHT_MODULE',
+  'LIOS_EXECUTION_BROWSER_CHROMIUM',
+]);
 
 function containerPlatformForHost(platform = process.platform, arch = process.arch) {
   const target = HOST_CONTAINER_PLATFORMS[platform]?.[arch];
@@ -123,9 +130,42 @@ function requirePackagedSandboxEnvironment(resourcesPath, env = process.env, opt
   return environment;
 }
 
+function bootstrapPackagedSandboxEnvironment({
+  env = process.env,
+  resourcesPath = process.resourcesPath,
+  platform = process.platform,
+  arch = process.arch,
+  isPackaged = Boolean(process.versions?.electron) && process.defaultApp !== true,
+} = {}) {
+  if (!isPackaged) return Object.freeze({ active: false, error: null });
+
+  // Packaged desktop execution must never silently fall back to legacy host execution.
+  env.LIOS_EXECUTION_ISOLATION = 'strict';
+  try {
+    const resolved = requirePackagedSandboxEnvironment(resourcesPath, env, { platform, arch });
+    Object.assign(env, resolved);
+    delete env.LIOS_PACKAGED_SANDBOX_ERROR;
+    return Object.freeze({ active: true, error: null, platform: containerPlatformForHost(platform, arch) });
+  } catch (error) {
+    // Clear any partially supplied engine/image settings so an invalid or mismatched release cannot be used.
+    for (const key of PACKAGED_SANDBOX_ENV_KEYS) delete env[key];
+    env.LIOS_EXECUTION_ISOLATION = 'strict';
+    const message = error instanceof Error ? error.message : String(error);
+    env.LIOS_PACKAGED_SANDBOX_ERROR = message;
+    return Object.freeze({ active: true, error: message });
+  }
+}
+
+// main.cjs imports this module before it spawns the packaged server. Bootstrap here so all packaged
+// desktop hosts inherit the same verified strict sandbox environment; the existing explicit macOS
+// call remains an additional fail-visible assertion until main.cjs is simplified.
+const packagedSandboxBootstrap = bootstrapPackagedSandboxEnvironment();
+
 module.exports = {
+  bootstrapPackagedSandboxEnvironment,
   containerPlatformForHost,
   defaultLocalDockerTarget,
+  packagedSandboxBootstrap,
   packagedSandboxEnvironment,
   requirePackagedSandboxEnvironment,
   validLocalEngineTarget,
