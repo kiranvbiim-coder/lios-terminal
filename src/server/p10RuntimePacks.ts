@@ -4,6 +4,7 @@ export const P10_RUNTIME_PACK_IDS = ["core", "research", "quant", "modeling", "d
 export type P10RuntimePackId = typeof P10_RUNTIME_PACK_IDS[number];
 export const P10_OPTIONAL_MANAGED_ADDON_IDS = ["community-yahoo"] as const;
 export type P10OptionalManagedAddonId = typeof P10_OPTIONAL_MANAGED_ADDON_IDS[number];
+export type P10LazyInstallPolicy = "automatic" | "explicit-consent" | "external";
 
 export interface P10RuntimePackDefinition {
   id: P10RuntimePackId;
@@ -14,6 +15,7 @@ export interface P10RuntimePackDefinition {
   defaultEnabled: boolean;
   requiresNetwork: boolean;
   requiresUserCredential: boolean;
+  lazyInstallPolicy: P10LazyInstallPolicy;
   releaseNotes: string[];
 }
 
@@ -27,6 +29,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: true,
     requiresNetwork: false,
     requiresUserCredential: false,
+    lazyInstallPolicy: "automatic",
     releaseNotes: ["Always present.", "No hosted data credential is bundled."],
   },
   {
@@ -38,6 +41,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: false,
     requiresNetwork: true,
     requiresUserCredential: false,
+    lazyInstallPolicy: "explicit-consent",
     releaseNotes: ["SEC access follows sec.gov policy.", "Docling remains an opt-in local package."],
   },
   {
@@ -49,6 +53,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: false,
     requiresNetwork: false,
     requiresUserCredential: false,
+    lazyInstallPolicy: "explicit-consent",
     releaseNotes: ["Uses the signed managed-runtime allow-list.", "No provider data is bundled."],
   },
   {
@@ -60,6 +65,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: false,
     requiresNetwork: false,
     requiresUserCredential: false,
+    lazyInstallPolicy: "explicit-consent",
     releaseNotes: ["Builds on P6/P8 deterministic engines.", "AI remains explanatory/proposal-only unless explicitly approved."],
   },
   {
@@ -71,6 +77,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: false,
     requiresNetwork: false,
     requiresUserCredential: false,
+    lazyInstallPolicy: "explicit-consent",
     releaseNotes: ["Provider connectors remain BYOD/user-owned.", "External provider terms remain separate from LiOS code licensing."],
   },
   {
@@ -82,6 +89,7 @@ export const P10_RUNTIME_PACKS: readonly P10RuntimePackDefinition[] = Object.fre
     defaultEnabled: false,
     requiresNetwork: false,
     requiresUserCredential: false,
+    lazyInstallPolicy: "external",
     releaseNotes: ["User supplies the local model/runtime.", "Master AI switch and Project approvals remain authoritative."],
   },
 ]);
@@ -120,4 +128,10 @@ export function p10RuntimePackById(id: P10RuntimePackId): P10RuntimePackDefiniti
   const pack = P10_RUNTIME_PACKS.find((item) => item.id === id);
   if (!pack) throw new Error("Unknown P10 runtime pack: " + id);
   return pack;
+}
+
+export function p10RuntimePackForCapability(capability: string): P10RuntimePackDefinition | null {
+  const normalized = capability.trim().toLowerCase();
+  if (!normalized) return null;
+  return P10_RUNTIME_PACKS.find((pack) => pack.capabilities.some((item) => item.toLowerCase() === normalized)) ?? null;
 }
