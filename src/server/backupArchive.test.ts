@@ -328,6 +328,40 @@ test("SI-07.12 restore refuses a symlinked Home before creating extraction stagi
   }
 });
 
+test("SI-07.12 extraction refuses existing directories without deleting their contents", () => {
+  const reserved = path.join(base, "existing-extraction-not-owned");
+  fs.mkdirSync(reserved, { recursive: true });
+  fs.writeFileSync(path.join(reserved, "private.txt"), "PRESERVE-UNOWNED-DATA");
+  assert.throws(
+    () => extractBackup(path.join(base, "nonexistent-backup.tar.gz"), reserved),
+    /Extraction target already exists/,
+  );
+  assert.equal(fs.readFileSync(path.join(reserved, "private.txt"), "utf8"), "PRESERVE-UNOWNED-DATA");
+});
+
+test("SI-07.12 archive-open failure removes only the uniquely reserved extraction folder", async () => {
+  const reserved = path.join(base, "new-extraction-owned");
+  await assert.rejects(extractBackup(path.join(base, "missing-backup.tar.gz"), reserved), /ENOENT/);
+  assert.equal(fs.existsSync(reserved), false);
+});
+
+test("SI-07.12 refused restore preserves a pre-existing PID staging directory", async () => {
+  const legacy = path.join(rootA, `.lios-restore-${process.pid}`);
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, "private.txt"), "OLD-STAGING-MUST-SURVIVE");
+  const invalidArchive = path.join(base, "corrupt-staging-test.tar.gz");
+  fs.writeFileSync(invalidArchive, "not a gzipped LiOS backup");
+  const before = fs.readdirSync(rootA).filter((name) => name.startsWith(`.lios-restore-${process.pid}-`)).sort();
+  try {
+    await assert.rejects(restoreBackup(getDb(), invalidArchive));
+    assert.equal(fs.readFileSync(path.join(legacy, "private.txt"), "utf8"), "OLD-STAGING-MUST-SURVIVE");
+    const after = fs.readdirSync(rootA).filter((name) => name.startsWith(`.lios-restore-${process.pid}-`)).sort();
+    assert.deepEqual(after, before, "the failed restore must clean only the staging folder it reserved");
+  } finally {
+    fs.rmSync(legacy, { recursive: true, force: true });
+  }
+});
+
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
   const dest = path.join(base, "retention");
   for (const minute of [1, 2, 3]) {
