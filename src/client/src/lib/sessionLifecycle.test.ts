@@ -137,3 +137,50 @@ test("SI-07.19 transient service failures remain errors, never interpreted as ex
     await assert.rejects(signOutSession("/logout", { fetcher: respond(status) }), /confirm sign-out/);
   }
 });
+
+test("SI-07.19 caller secrets never become fetch AbortSignal reasons on restore or sign-out", async () => {
+  for (const action of ["restore", "sign-out"] as const) {
+    const caller = new AbortController();
+    const privateReason = { refreshToken: "PRIVATE_REFRESH_TOKEN" };
+    let requestSignal: AbortSignal | undefined;
+    let requests = 0;
+    const fetcher: typeof fetch = async (_url, init) => {
+      requests += 1;
+      requestSignal = init?.signal ?? undefined;
+      assert.ok(requestSignal);
+      return new Promise<Response>((_, reject) => {
+        requestSignal!.addEventListener("abort", () => reject(requestSignal!.reason), { once: true });
+      });
+    };
+
+    const pending = action === "restore"
+      ? restoreSession("/me", { fetcher, signal: caller.signal })
+      : signOutSession("/logout", { fetcher, signal: caller.signal });
+    assert.equal(requests, 1);
+    assert.ok(requestSignal);
+    assert.notStrictEqual(requestSignal, caller.signal, "network fetch uses a private signal");
+    caller.abort(privateReason);
+    await assert.rejects(pending, assertSafeCancellation);
+    assert.equal(caller.signal.reason, privateReason, "caller retains its own reason");
+    assert.equal(requestSignal.aborted, true);
+    assert.notStrictEqual(requestSignal.reason, privateReason,
+      "no secret reason can be forwarded into a transport or logged by a fetch adapter");
+    assert.doesNotMatch(inspect(requestSignal.reason), /PRIVATE_REFRESH_TOKEN/);
+  }
+});
+
+test("SI-07.19 caller cancellation after a completed request never mutates its result", async () => {
+  const caller = new AbortController();
+  let seenSignal: AbortSignal | undefined;
+  const restored = await restoreSession("/me", {
+    signal: caller.signal,
+    fetcher: async (_url, init) => {
+      seenSignal = init?.signal ?? undefined;
+      return new Response(JSON.stringify(identity), { status: 200 });
+    },
+  });
+  assert.deepEqual(restored, identity);
+  assert.equal(seenSignal?.aborted, false);
+  caller.abort({ refreshToken: "PRIVATE_REFRESH_TOKEN" });
+  assert.equal(seenSignal?.aborted, false, "settled requests detach the upstream abort listener");
+});
