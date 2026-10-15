@@ -134,13 +134,35 @@ export async function deleteP9Workflow(projectId: number, workflowId: string): P
   await apiRequest("DELETE", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`);
 }
 
-export async function runP9WorkflowNow(projectId: number, workflowId: string) {
+export interface P9ManualRunIdempotency {
+  idempotencyKey: string;
+  expectedUpdatedAt: string;
+}
+
+export async function runP9WorkflowNow(
+  projectId: number,
+  workflowId: string,
+  idempotency?: P9ManualRunIdempotency,
+) {
   return json<{
     run: P9RunRecord | null;
     notification: P9NotificationRecord | null;
     result: Record<string, unknown> | null;
     error: string | null;
-  }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, {}));
+    replayed?: boolean;
+    receiptStatus?: "in_progress" | "completed" | null;
+  }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, idempotency ?? {}));
+}
+
+/** Reconcile an ambiguous manual execution by read-only server receipt lookup. */
+export async function getP9ManualRunReceipt(projectId: number, workflowId: string, idempotencyKey: string) {
+  return json<{
+    run: P9RunRecord;
+    receiptStatus: "in_progress" | "completed";
+  }>(await apiRequest(
+    "GET",
+    `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/manual-requests/${encodeURIComponent(idempotencyKey)}`,
+  ));
 }
 
 export async function markP9NotificationRead(projectId: number, notificationId: string): Promise<P9NotificationRecord> {
