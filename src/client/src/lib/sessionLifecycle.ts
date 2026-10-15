@@ -24,10 +24,23 @@ async function withSessionDeadline<T>(
   let onAbort: (() => void) | undefined;
   try {
     const interrupted = new Promise<never>((_, reject) => {
-      onAbort = () => reject(signal.reason ?? new Error("Session request cancelled."));
-      if (signal.aborted) onAbort();
-      else signal.addEventListener("abort", onAbort, { once: true });
-      timer = setTimeout(() => controller.abort(new Error("LiOS took too long to respond. Please retry.")), options.timeoutMs ?? 15_000);
+      onAbort = () => {
+        // External AbortSignal.reason may contain credentials or sensitive
+        // caller state. Never read, throw, log or propagate that value.
+        if (controller.signal.aborted && !options.signal?.aborted) {
+          reject(new Error("LiOS took too long to respond. Please retry."));
+          return;
+        }
+        const error = new Error("Session request cancelled.");
+        error.name = "AbortError";
+        reject(error);
+      };
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+      timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
     });
     if (signal.aborted) return await interrupted;
     return await Promise.race([operation(signal), interrupted]);
