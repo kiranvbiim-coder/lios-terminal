@@ -41,6 +41,33 @@ export function p9AutomationEventMatches(trigger: P9WorkflowTrigger, event: P9Au
   );
 }
 
+/**
+ * Run one saved event workflow at a time without allowing an unexpected
+ * failure (for example, a deleted owner before beginP9Run) to prevent other
+ * matched workflows from running. A failed workflow is never reported as
+ * executed or successful; callers must separately surface unexpected failures.
+ * Tenant, entitlement and permission checks remain with executeP9Workflow.
+ */
+export async function executeMatchedP9EventWorkflows<T>(
+  workflows: readonly T[],
+  execute: (workflow: T) => Promise<{ run: unknown | null; error: string | null }>,
+): Promise<{ matched: number; executed: number; failed: number; unexpectedFailures: number }> {
+  let executed = 0;
+  let failed = 0;
+  let unexpectedFailures = 0;
+  for (const workflow of workflows) {
+    try {
+      const outcome = await execute(workflow);
+      if (outcome.run) executed += 1;
+      if (outcome.error) failed += 1;
+    } catch {
+      failed += 1;
+      unexpectedFailures += 1;
+    }
+  }
+  return { matched: workflows.length, executed, failed, unexpectedFailures };
+}
+
 export function p9UnseenObservedFilings<T extends { accessionNumber: string; filedDate: string }>(
   filingsNewestFirst: readonly T[],
   priorAccession: string,
