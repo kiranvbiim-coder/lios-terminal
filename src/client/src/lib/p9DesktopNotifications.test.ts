@@ -3,16 +3,25 @@ import test from "node:test";
 import {
   deliverP9DesktopNotifications,
   sanitizeP9DesktopNotificationText,
+  type P9DesktopNotificationPermission,
   type P9DesktopNotificationPort,
 } from "./p9DesktopNotifications";
 
 const NOW = new Date("2026-10-15T06:00:00.000Z");
 
-function port(permission: P9DesktopNotificationPort["permission"] = "granted") {
+function port(
+  permission: P9DesktopNotificationPort["permission"] = "granted",
+  requestedPermission: P9DesktopNotificationPermission = "granted",
+) {
   const delivered = new Set<string>();
   const shown: Array<{ id: string; title: string; body: string }> = [];
+  let permissionRequests = 0;
   const adapter: P9DesktopNotificationPort = {
     permission,
+    requestPermission: async () => {
+      permissionRequests += 1;
+      return requestedPermission;
+    },
     claimDelivery: (id) => {
       if (delivered.has(id)) return "duplicate";
       delivered.add(id);
@@ -20,7 +29,7 @@ function port(permission: P9DesktopNotificationPort["permission"] = "granted") {
     },
     show: (notification) => { shown.push(notification); },
   };
-  return { adapter, delivered, shown };
+  return { adapter, delivered, shown, permissionRequests: () => permissionRequests };
 }
 
 const canonical = {
@@ -75,11 +84,22 @@ test("SI-06 desktop delivery is durable-idempotent through the canonical notific
   assert.equal(shown.length, 1);
 });
 
-test("SI-06 desktop delivery attempts Electron default permission so Chromium can resolve the request", async () => {
-  const pending = port("default");
+test("SI-06 desktop delivery resolves Electron default permission before claiming or showing", async () => {
+  const pending = port("default", "granted");
   const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
   assert.equal(result.delivered, 1);
+  assert.equal(pending.permissionRequests(), 1);
   assert.deepEqual(pending.shown.map((item) => item.id), [canonical.id]);
+  assert.equal(pending.delivered.has(canonical.id), true);
+});
+
+test("SI-06 desktop delivery leaves canonical id unclaimed when permission request is denied", async () => {
+  const pending = port("default", "denied");
+  const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
+  assert.equal(result.unavailable, 1);
+  assert.equal(pending.permissionRequests(), 1);
+  assert.equal(pending.shown.length, 0);
+  assert.equal(pending.delivered.size, 0);
 });
 
 test("SI-06 desktop delivery does not fail the workflow when OS notifications are explicitly denied", async () => {
@@ -93,6 +113,7 @@ test("SI-06 desktop delivery does not fail the workflow when OS notifications ar
     unavailable: 1,
     failed: 0,
   });
+  assert.equal(denied.permissionRequests(), 0);
   assert.equal(denied.shown.length, 0);
   assert.equal(denied.delivered.size, 0);
 });
