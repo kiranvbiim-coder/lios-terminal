@@ -19,6 +19,8 @@ export type DoctorRepairExecutionBlocker =
 
 export interface DoctorRepairPlanningContext {
   isolationMode: SandboxIsolationMode;
+  /** Omitted or false means strict execution remains blocked. */
+  strictProvisioningAuthorityAvailable?: boolean;
 }
 
 export interface DoctorRepairPlan {
@@ -117,7 +119,7 @@ export function planManagedRuntimeRepair(
   const summary = action === "install_managed_runtime"
     ? "Managed runtime installation is required."
     : "Managed runtime verification or repair is required.";
-  const strictBlocked = context.isolationMode === "strict";
+  const strictBlocked = context.isolationMode === "strict" && context.strictProvisioningAuthorityAvailable !== true;
 
   return Object.freeze({
     schemaVersion: "1",
