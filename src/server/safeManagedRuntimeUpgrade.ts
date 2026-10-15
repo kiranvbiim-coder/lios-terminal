@@ -121,11 +121,14 @@ function defaultActivatedRuntimeValidator(
 ): boolean {
   const persisted = readState();
   return candidate.manifestVersion === targetManifestVersion
+    && candidate.runtimePath === expected.runtimePath
     && candidate.hashVerified === true
     && candidate.verificationWarnings.length === 0
     && sameStringSet(candidate.selectedPackIds, expected.selectedPackIds)
     && sameStringSet(candidate.selectedReleasePackIds, expected.selectedReleasePackIds)
     && persisted?.manifestVersion === targetManifestVersion
+    && persisted.runtimePath === candidate.runtimePath
+    && sameStringSet(persisted.installedSpecs, candidate.installedSpecs)
     && persisted.hashVerified === true
     && persisted.verificationWarnings.length === 0
     && sameStringSet(persisted.selectedPackIds, expected.selectedPackIds)
@@ -198,7 +201,9 @@ export async function upgradeManagedRuntimeSafely(
         // A successful return from the rollback function does not prove that
         // the original runtime was restored. Check the operation result AND
         // canonical persisted state; otherwise preserve the hard failure.
-        if (!sameRestoredRuntime(restored.state, current) || !sameRestoredRuntime(readState(), current)) {
+        if (!sameRestoredRuntime(restored.state, current)
+          || !sameRestoredRuntime(readState(), current)
+          || currentPythonPath() === null) {
           throw new ManagedRuntimeUpgradeError("rollback_failed");
         }
         return {
