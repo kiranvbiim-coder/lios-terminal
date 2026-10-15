@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -36,11 +37,14 @@ export function acquireManagedRuntimeLifecycleLock(root: string): () => void {
   }
 
   let owned: fs.Stats;
+  const token = randomUUID();
+  const record = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), token }) + "\n";
   try {
     owned = fs.fstatSync(fd);
-    // Diagnostic identity only. Never persist caller data, package names,
-    // user secrets or configuration in the lock file.
-    fs.writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + "\n");
+    // Local lifecycle identification only: no caller data, user secrets or
+    // package settings. A random ownership token also protects filesystems
+    // that do not expose a reliable or unique inode.
+    fs.writeSync(fd, record);
   } catch (error) {
     try { fs.closeSync(fd); } finally { fs.rmSync(lockPath, { force: true }); }
     throw error;
@@ -54,7 +58,8 @@ export function acquireManagedRuntimeLifecycleLock(root: string): () => void {
     const actual = fs.lstatSync(lockPath, { throwIfNoEntry: false });
     // A replacement lock belongs to another process and must never be removed.
     if (actual?.isFile() && !actual.isSymbolicLink()
-      && actual.dev === owned.dev && actual.ino === owned.ino) {
+      && actual.dev === owned.dev && actual.ino === owned.ino
+      && fs.readFileSync(lockPath, "utf8") === record) {
       fs.unlinkSync(lockPath);
     }
   };
