@@ -24,7 +24,13 @@ function safePercent(value) {
   return Math.max(0, Math.min(100, Math.round(percent)));
 }
 
-function configureAutoUpdater({ updater, isPackaged, env = process.env, log = () => {} }) {
+function configureAutoUpdater({
+  updater,
+  isPackaged,
+  env = process.env,
+  log = () => {},
+  confirmInstall = null,
+}) {
   if (!isPackaged) {
     return { enabled: false, reason: "Desktop updates are disabled for unpackaged development launches." };
   }
@@ -37,11 +43,13 @@ function configureAutoUpdater({ updater, isPackaged, env = process.env, log = ()
   }
 
   updater.autoDownload = true;
-  // Preserve the current usable install path until explicit confirmation UI
-  // is wired through the trusted desktop IPC boundary in a separate tranche.
-  updater.autoInstallOnAppQuit = true;
+  // Download automatically, but never install merely because the app quits.
+  // Installation requires the explicit confirmation callback below.
+  updater.autoInstallOnAppQuit = false;
   updater.allowPrerelease = false;
   updater.allowDowngrade = false;
+
+  let installConfirmationInFlight = false;
 
   updater.on("checking-for-update", () => log("Checking for a signed desktop update."));
   updater.on("update-available", (info) => log(`Signed desktop update available: ${safeVersion(info?.version)}.`));
@@ -50,8 +58,33 @@ function configureAutoUpdater({ updater, isPackaged, env = process.env, log = ()
     const percent = safePercent(progress?.percent);
     log(percent === null ? "Desktop update download is in progress." : `Desktop update download ${percent}%.`);
   });
-  updater.on("update-downloaded", (info) => {
-    log(`Signed desktop update downloaded: ${safeVersion(info?.version)}; it will install on a normal app quit.`);
+  updater.on("update-downloaded", async (info) => {
+    const version = safeVersion(info?.version);
+    log(`Signed desktop update downloaded: ${version}; awaiting install confirmation.`);
+
+    if (installConfirmationInFlight) {
+      log("Desktop update install confirmation is already pending.");
+      return;
+    }
+    if (typeof confirmInstall !== "function") {
+      log("Desktop update install confirmation is unavailable; update remains downloaded.");
+      return;
+    }
+
+    installConfirmationInFlight = true;
+    try {
+      const confirmed = await confirmInstall({ version });
+      if (!confirmed) {
+        log("Desktop update installation deferred by user.");
+        return;
+      }
+      log("Desktop update install confirmed; restarting to install.");
+      updater.quitAndInstall(false, true);
+    } catch {
+      log("Desktop update confirmation failed safely.");
+    } finally {
+      installConfirmationInFlight = false;
+    }
   });
   updater.on("error", () => log("Desktop update failed safely."));
   void updater.checkForUpdates().catch(() => log("Desktop update failed safely."));
