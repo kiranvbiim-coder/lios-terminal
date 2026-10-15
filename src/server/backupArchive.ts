@@ -304,8 +304,9 @@ async function readArchive(file: string, options: ReadOptions): Promise<BackupMa
   let current: { name: string; hash: crypto.Hash; bytes: number; fd: number | null } | null = null;
   let expanded = 0;
   let afterManifest = false;
+  // Only extractBackup() may reserve an extraction directory. Never
+  // create/assume ownership of an arbitrary caller-supplied path here.
   const extractRoot = options.extractTo ? path.resolve(options.extractTo) : null;
-  if (extractRoot) fs.mkdirSync(extractRoot, { recursive: true, mode: 0o700 });
 
   const reader = new TarReader({
     onEntry(rawName, size) {
@@ -391,10 +392,34 @@ export function verifyBackup(file: string, options: { passphrase?: string | unde
   return readArchive(file, options);
 }
 
-/** Decrypts/verifies and writes the archive's contents to a directory: db/ (logical export) and files/. */
+/** Decrypts/verifies and writes the archive's contents to a freshly owned directory. */
 export function extractBackup(file: string, directory: string, options: { passphrase?: string | undefined } = {}): Promise<BackupManifest> {
-  if (fs.existsSync(directory)) throw new BackupError(`Extraction target already exists: ${directory}`);
-  return readArchive(file, { ...options, extractTo: directory });
+  const destination = path.resolve(directory);
+  // lstat also detects dangling symlinks (existsSync does not). Reserve the
+  // new directory with an atomic, non-recursive mkdir so this invocation
+  // never writes into or deletes a pre-existing Home directory.
+  if (fs.lstatSync(destination, { throwIfNoEntry: false })) {
+    throw new BackupError(`Extraction target already exists: ${destination}`);
+  }
+  const parent = fs.lstatSync(path.dirname(destination), { throwIfNoEntry: false });
+  if (!parent?.isDirectory() || parent.isSymbolicLink()) {
+    throw new BackupError("Backup extraction requires a real existing parent directory.");
+  }
+  try {
+    fs.mkdirSync(destination, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new BackupError(`Extraction target already exists: ${destination}`);
+    }
+    throw error;
+  }
+  // Only after mkdir succeeds do we own this path. Clean it on failures,
+  // including errors during archive opening / header checks before the
+  // archive reader's own streaming cleanup path is established.
+  return readArchive(file, { ...options, extractTo: destination }).catch((error: unknown) => {
+    fs.rmSync(destination, { recursive: true, force: true });
+    throw error;
+  });
 }
 
 /**
@@ -458,9 +483,11 @@ export async function restoreBackup(
   if (!preparedRoot.isDirectory() || preparedRoot.isSymbolicLink()) {
     throw new BackupError("The LiOS restore destination must be a real Home directory.");
   }
-  const staging = path.join(root, `.lios-restore-${process.pid}`);
+  const staging = path.join(root, `.lios-restore-${process.pid}-${crypto.randomUUID()}`);
+  let extractionOwned = false;
   try {
     const manifest = await extractBackup(file, staging, options);
+    extractionOwned = true;
     // Validate all Home destinations before the database import. Otherwise a
     // symlinked parent could refuse the file stage after DB state changed.
     for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file"
@@ -500,7 +527,9 @@ export async function restoreBackup(
       credentialMigrationEnvelope,
     };
   } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+    // extractBackup cleans its own failed reservation. Do not delete a path
+    // whose ownership this restore never acquired (e.g. a collision).
+    if (extractionOwned) fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 
