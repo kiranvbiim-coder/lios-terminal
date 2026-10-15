@@ -38,18 +38,35 @@ export interface P9DesktopNotificationDeliveryOptions {
 const DESKTOP_DELIVERY_STORAGE_KEY = "lios.p9.desktop-notifications.v1";
 const MAX_PERSISTED_IDS = 2_000;
 const DEFAULT_FRESHNESS_MS = 5 * 60_000;
+const DESKTOP_TITLE_MAX_BYTES = 72;
+const DESKTOP_BODY_MAX_BYTES = 160;
 const CREDENTIAL_ASSIGNMENT = /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)\s*[:=]\s*[^\s,;]+/gi;
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+\/-]{12,}/gi;
 const OPENAI_STYLE_KEY = /\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}/gi;
+const UTF8 = new TextEncoder();
 
-export function sanitizeP9DesktopNotificationText(value: string, maxLength: number): string {
+function sliceUtf8(value: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  if (UTF8.encode(value).byteLength <= maxBytes) return value;
+  let result = "";
+  let bytes = 0;
+  for (const character of value) {
+    const size = UTF8.encode(character).byteLength;
+    if (bytes + size > maxBytes) break;
+    result += character;
+    bytes += size;
+  }
+  return result;
+}
+
+export function sanitizeP9DesktopNotificationText(value: string, maxBytes: number): string {
   const normalized = String(value ?? "")
     .replace(BEARER_TOKEN, "Bearer [REDACTED]")
     .replace(OPENAI_STYLE_KEY, "[REDACTED]")
     .replace(CREDENTIAL_ASSIGNMENT, "$1=[REDACTED]")
     .replace(/\s+/g, " ")
     .trim();
-  return normalized.slice(0, Math.max(0, maxLength));
+  return sliceUtf8(normalized, Math.max(0, maxBytes));
 }
 
 function isFreshNotification(
@@ -125,8 +142,8 @@ export async function deliverP9DesktopNotifications(
     try {
       await port.show({
         id: notification.id,
-        title: sanitizeP9DesktopNotificationText(notification.title || "LiOS", 120) || "LiOS",
-        body: sanitizeP9DesktopNotificationText(notification.body, 240),
+        title: sanitizeP9DesktopNotificationText(notification.title || "LiOS", DESKTOP_TITLE_MAX_BYTES) || "LiOS",
+        body: sanitizeP9DesktopNotificationText(notification.body, DESKTOP_BODY_MAX_BYTES),
       });
       result.delivered += 1;
     } catch {
