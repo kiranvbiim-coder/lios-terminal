@@ -75,7 +75,14 @@ test("SI-06 desktop delivery is durable-idempotent through the canonical notific
   assert.equal(shown.length, 1);
 });
 
-test("SI-06 desktop delivery does not fail the workflow when OS notifications are unavailable", async () => {
+test("SI-06 desktop delivery attempts Electron default permission so Chromium can resolve the request", async () => {
+  const pending = port("default");
+  const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
+  assert.equal(result.delivered, 1);
+  assert.deepEqual(pending.shown.map((item) => item.id), [canonical.id]);
+});
+
+test("SI-06 desktop delivery does not fail the workflow when OS notifications are explicitly denied", async () => {
   const denied = port("denied");
   const result = await deliverP9DesktopNotifications([canonical], denied.adapter, options);
   assert.deepEqual(result, {
