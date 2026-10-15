@@ -13,6 +13,7 @@ import {
   type StrictProvisioningAuthority,
 } from "./pythonRuntimeManager";
 import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
+import { MANAGED_RUNTIME_LIFECYCLE_LOCK_NAME, ManagedRuntimeBusyError } from "./managedRuntimeLifecycleLock";
 
 test("managed runtime state fails closed when no installation exists", () => {
   const previous = process.env.LIMURIA_DATA_DIR;
@@ -703,6 +704,109 @@ test("SI-07.10 symlinked managed-runtime storage root is refused before staging"
   } finally {
     if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
     else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 concurrent installer and rollback refuse a second writer before filesystem mutation", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this test host");
+    return;
+  }
+
+  const previousDataRoot = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-lifecycle-install-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const lockFile = path.join(root, MANAGED_RUNTIME_LIFECYCLE_LOCK_NAME);
+  let beginProvision!: () => void;
+  let finishProvision!: () => void;
+  const started = new Promise<void>((resolve) => { beginProvision = resolve; });
+  const finish = new Promise<void>((resolve) => { finishProvision = resolve; });
+  let calls = 0;
+  const authority: StrictProvisioningAuthority = {
+    async provisionManagedRuntime(request) {
+      calls += 1;
+      beginProvision();
+      await finish;
+      fs.mkdirSync(request.runtimePath, { recursive: true });
+      const core = MANAGED_RUNTIME_MANIFEST.packs.find(p => p.id === "core");
+      assert.ok(core);
+      return {
+        packageOutput: "controlled provisioning",
+        installedPackages: Object.fromEntries(core.packages.map(p => [p.name, p.version])),
+      };
+    },
+  };
+  try {
+    const first = installManagedRuntime(["core"], [], {
+      isolationMode: "strict", strictProvisioningAuthority: authority,
+    });
+    await started;
+    assert.equal(fs.existsSync(lockFile), true);
+    await assert.rejects(
+      installManagedRuntime(["core"], [], {
+        isolationMode: "strict", strictProvisioningAuthority: authority,
+      }),
+      (error: unknown) => error instanceof ManagedRuntimeBusyError,
+    );
+    await assert.rejects(rollbackManagedRuntime(),
+      (error: unknown) => error instanceof ManagedRuntimeBusyError);
+    assert.equal(calls, 1, "only the first installer was dispatched");
+    finishProvision();
+    const firstResult = await first;
+    assert.equal(firstResult.state.selectedPackIds.includes("core"), true);
+    assert.equal(fs.existsSync(lockFile), false, "lock is removed after activation");
+    const next = await installManagedRuntime(["core"], [], {
+      isolationMode: "strict", strictProvisioningAuthority: authority,
+    });
+    assert.equal(next.state.selectedPackIds.includes("core"), true);
+    assert.equal(calls, 2, "a new serial install is admitted after lock release");
+    assert.equal(fs.existsSync(lockFile), false);
+  } finally {
+    finishProvision();
+    if (previousDataRoot === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previousDataRoot;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 failed provision releases lifecycle lock for a later approved retry", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this test host");
+    return;
+  }
+  const oldRoot = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-lifecycle-retry-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const file = path.join(directory, "python-runtimes", MANAGED_RUNTIME_LIFECYCLE_LOCK_NAME);
+  let calls = 0;
+  const authority: StrictProvisioningAuthority = {
+    async provisionManagedRuntime(request) {
+      calls++;
+      if (calls === 1) throw new Error("simulated governed installer failure");
+      fs.mkdirSync(request.runtimePath, { recursive: true });
+      const core = MANAGED_RUNTIME_MANIFEST.packs.find(p => p.id === "core");
+      assert.ok(core);
+      return {
+        packageOutput: "retry succeeded",
+        installedPackages: Object.fromEntries(core.packages.map(p => [p.name, p.version])),
+      };
+    },
+  };
+  try {
+    await assert.rejects(
+      installManagedRuntime(["core"], [], { isolationMode: "strict", strictProvisioningAuthority: authority }),
+      /simulated governed installer failure/,
+    );
+    assert.equal(fs.existsSync(file), false, "failed installer releases the lifecycle lock");
+    const result = await installManagedRuntime(["core"], [], { isolationMode: "strict", strictProvisioningAuthority: authority });
+    assert.equal(result.state.selectedPackIds.includes("core"), true);
+    assert.equal(calls, 2);
+    assert.equal(fs.existsSync(file), false);
+  } finally {
+    if (oldRoot === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = oldRoot;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
