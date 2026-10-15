@@ -94,6 +94,24 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+/**
+ * A rollback result is not evidence of recovery unless both the returned
+ * state and the independently reread on-disk state agree with the original
+ * runtime's version, selections and verification evidence. A new installedAt
+ * time and a new rollbackPath are expected after the directory swap.
+ */
+function sameRestoredRuntime(actual: ManagedRuntimeState | null, original: ManagedRuntimeState): boolean {
+  return actual !== null
+    && actual.manifestVersion === original.manifestVersion
+    && actual.runtimePath === original.runtimePath
+    && sameStringSet(actual.selectedPackIds, original.selectedPackIds)
+    && sameStringSet(actual.selectedReleasePackIds, original.selectedReleasePackIds)
+    && sameStringSet(actual.installedSpecs, original.installedSpecs)
+    && actual.hashVerified === original.hashVerified
+    && actual.verificationWarnings.length === original.verificationWarnings.length
+    && actual.verificationWarnings.every((warning, index) => warning === original.verificationWarnings[index]);
+}
+
 function defaultActivatedRuntimeValidator(
   candidate: ManagedRuntimeState,
   expected: ManagedRuntimeState,
@@ -108,6 +126,8 @@ function defaultActivatedRuntimeValidator(
     && sameStringSet(candidate.selectedPackIds, expected.selectedPackIds)
     && sameStringSet(candidate.selectedReleasePackIds, expected.selectedReleasePackIds)
     && persisted?.manifestVersion === targetManifestVersion
+    && persisted.hashVerified === true
+    && persisted.verificationWarnings.length === 0
     && sameStringSet(persisted.selectedPackIds, expected.selectedPackIds)
     && sameStringSet(persisted.selectedReleasePackIds, expected.selectedReleasePackIds)
     && currentPythonPath() !== null;
@@ -175,6 +195,12 @@ export async function upgradeManagedRuntimeSafely(
     if (!healthy) {
       try {
         const restored = await rollbackRuntime();
+        // A successful return from the rollback function does not prove that
+        // the original runtime was restored. Check the operation result AND
+        // canonical persisted state; otherwise preserve the hard failure.
+        if (!sameRestoredRuntime(restored.state, current) || !sameRestoredRuntime(readState(), current)) {
+          throw new ManagedRuntimeUpgradeError("rollback_failed");
+        }
         return {
           status: "rollback_restored",
           state: restored.state,
