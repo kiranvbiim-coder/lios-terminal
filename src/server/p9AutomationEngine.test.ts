@@ -46,6 +46,40 @@ test("P9 event matching respects event type tenant fields and explicit filters",
   }), false);
 });
 
+test("SI-06 conditional filters cannot override canonical tenant or source identity with payload data", () => {
+  const event = {
+    eventType: "price_threshold" as const,
+    occurredAt: "2026-10-15T00:00:00.000Z",
+    projectId: 11,
+    ownerUserId: 7,
+    organizationId: 23,
+    sourceRef: "price-alert:real",
+    payload: {
+      symbol: "aapl",
+      projectId: 99,
+      ownerUserId: 8,
+      organizationId: 24,
+      sourceRef: "price-alert:forged",
+    },
+  };
+  const matches = (filters: Record<string, string | number>) =>
+    p9AutomationEventMatches({ type: "event", eventType: "price_threshold", filters }, event);
+
+  assert.equal(matches({ projectId: 11, ownerUserId: 7, organizationId: 23, sourceRef: "price-alert:real" }), true,
+    "authoritative envelope fields still match despite same-named payload keys");
+  for (const spoofed of [
+    { projectId: 99 },
+    { ownerUserId: 8 },
+    { organizationId: 24 },
+    { sourceRef: "price-alert:forged" },
+  ]) {
+    assert.equal(matches(spoofed), false, `forged payload identity must not satisfy ${Object.keys(spoofed)[0]}`);
+  }
+  assert.equal(matches({ symbol: "AAPL", projectId: 11 }), true,
+    "ordinary conditional payload filters remain functional");
+  assert.equal(matches({ symbol: "MSFT", projectId: 11 }), false);
+});
+
 test("P9 notification policy suppresses irrelevant/noisy runs and delivers material changes", () => {
   const policy = {
     enabled: true,
