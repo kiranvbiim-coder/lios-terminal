@@ -32,6 +32,7 @@ import { createLseDataProviderAdapter } from "./lseDataProvider";
 import { createEcbDataProviderAdapter } from "./ecbDataProvider";
 import { createOecdDataProviderAdapter } from "./oecdDataProvider";
 import { createImfDataProviderAdapter } from "./imfDataProvider";
+import { guardProviderStreamEntitlement, type ManagedProviderStreamSubscription } from "./providerStreamEntitlement";
 
 export interface ProviderAdapterResult {
   providerId?: string;
@@ -739,7 +740,7 @@ export async function startProviderStream(
   request: CanonicalDataRequest,
   context: TenantContext,
   registry: ProviderSdkRegistry = defaultProviderSdkRegistry,
-): Promise<ProviderStreamSubscription> {
+): Promise<ManagedProviderStreamSubscription> {
   const parsed = canonicalDataRequestSchema.parse(request);
   const adapter = registry.get(providerId);
   if (!adapter?.stream) throw new Error(`Provider ${providerId} does not expose a streaming adapter.`);
@@ -770,7 +771,20 @@ export async function startProviderStream(
   if (entitlement.decision !== "allowed" || !entitlement.permittedUses.includes("internal_research")) {
     throw new Error("Streaming provider entitlement does not permit internal research access.");
   }
-  return adapter.stream(parsed, context);
+  const source = await adapter.stream(parsed, context);
+  // Permissions can change while the provider is opening its connection.
+  // Verify the grant again before returning a usable subscription, then keep
+  // it under one managed recheck/stop lifecycle. On failed verification the
+  // just-opened stream is closed rather than given to the caller.
+  const managed = guardProviderStreamEntitlement(
+    source,
+    () => adapter.entitlement!(parsed, context),
+    entitlement,
+  );
+  if (!await managed.recheckEntitlement()) {
+    throw new Error("Streaming provider entitlement changed while connecting.");
+  }
+  return managed;
 }
 
 export const defaultProviderSdkRegistry = new ProviderSdkRegistry();
