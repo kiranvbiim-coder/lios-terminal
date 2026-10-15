@@ -11,6 +11,7 @@ import {
   useP9Runs,
   useP9Workflows,
 } from "@/lib/useP9Automation";
+import { queueNotificationRead } from "@/lib/p9NotificationReadOutbox";
 import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
 
 function time(value: string | null): string {
@@ -60,6 +61,29 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       invalidate(projectId);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const markNotificationRead = async (notificationId: string) => {
+    setMessage(null);
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const queued = queueNotificationRead(projectId, notificationId);
+      setMessage(queued
+        ? "Read receipt saved on this device; not yet confirmed by the server. It will be retried after reconnect."
+        : "Unable to save the read receipt offline. It remains unread.");
+      return;
+    }
+    try {
+      await markP9NotificationRead(projectId, notificationId);
+      invalidate(projectId);
+    } catch (error) {
+      // Fetch TypeErrors indicate a transport/network failure; API HTTP
+      // errors (auth, tenant or missing notification) must never be queued.
+      if (error instanceof TypeError && queueNotificationRead(projectId, notificationId)) {
+        setMessage("Read receipt saved locally after a connection failure; not yet server-confirmed.");
+      } else {
+        setMessage(error instanceof Error ? error.message : "Could not mark this notification read.");
+      }
     }
   };
 
@@ -188,7 +212,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         </div>
         <div className="space-y-1.5">
           {unread.slice(0, 5).map((item) => (
-            <button key={item.id} onClick={() => void markP9NotificationRead(projectId, item.id).then(() => invalidate(projectId))} className="block w-full rounded border border-border/45 bg-black/15 px-3 py-2 text-left hover:bg-white/[0.025]">
+            <button key={item.id} onClick={() => void markNotificationRead(item.id)} className="block w-full rounded border border-border/45 bg-black/15 px-3 py-2 text-left hover:bg-white/[0.025]">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-ui text-[13px] text-foreground">{item.title}</span>
                 <span className="font-terminal text-[12px] text-muted-foreground">{time(item.createdAt)}</span>
