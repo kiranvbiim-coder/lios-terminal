@@ -281,6 +281,38 @@ function dataFiles(root, current = root, entries = []) {
 }
 
 /**
+ * Resolve the destination without creating it or traversing the nearest
+ * user-chosen link. The lexical containment check alone is insufficient:
+ * "elsewhere/alias/new" can physically be "current/new" when alias is a
+ * symlink, making a copy recurse into its own staging destination.
+ *
+ * Resolve already-existing ancestors through realpath for physical overlap;
+ * reject a symlink at the requested target or closest existing ancestor.
+ * This does not reject legitimate system aliases in higher ancestors (e.g.
+ * macOS /var -> /private/var) when the closest existing parent is a real dir.
+ */
+function physicalMoveTarget(target) {
+  let existing = target;
+  const suffix = [];
+  while (true) {
+    const entry = fs.lstatSync(existing, { throwIfNoEntry: false });
+    if (entry) {
+      if (entry.isSymbolicLink()) {
+        throw new Error("The new data folder cannot use a symbolic link as its target or existing parent.");
+      }
+      if (suffix.length && !entry.isDirectory()) {
+        throw new Error("The new data folder must have an existing directory parent.");
+      }
+      return path.resolve(fs.realpathSync(existing), ...suffix);
+    }
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new Error("The new data folder has no accessible parent.");
+    suffix.unshift(path.basename(existing));
+    existing = parent;
+  }
+}
+
+/**
  * Moves the data folder to a folder the user chose: copy, verify every file by size and SHA-256, then point the home
  * at the new folder. The original is NOT deleted (it stays as the fallback until the user removes it). The caller must
  * have stopped LiOS first because a running PGlite database cannot be copied consistently.
@@ -294,8 +326,23 @@ function moveDataRoot({ from, to, env = process.env, homedir }) {
   if (target.startsWith(`${source}${path.sep}`) || source.startsWith(`${target}${path.sep}`)) {
     throw new Error("The new data folder cannot be inside the current one (or contain it).");
   }
-  if (!fs.existsSync(source)) throw new Error(`The current data folder ${source} does not exist.`);
-  if (fs.existsSync(target) && fs.readdirSync(target).length > 0) throw new Error("Choose an empty folder for the new data location.");
+  const sourceEntry = fs.lstatSync(source, { throwIfNoEntry: false });
+  if (!sourceEntry) throw new Error(`The current data folder ${source} does not exist.`);
+  if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink()) {
+    throw new Error("The current data folder must be a real directory for migration.");
+  }
+  const physicalSource = fs.realpathSync(source);
+  const physicalTarget = physicalMoveTarget(target);
+  if (physicalTarget === physicalSource
+    || physicalTarget.startsWith(`${physicalSource}${path.sep}`)
+    || physicalSource.startsWith(`${physicalTarget}${path.sep}`)) {
+    throw new Error("The new data folder cannot physically overlap the current one.");
+  }
+  const targetEntry = fs.lstatSync(target, { throwIfNoEntry: false });
+  if (targetEntry && (!targetEntry.isDirectory() || targetEntry.isSymbolicLink())) {
+    throw new Error("Choose a real directory, not a symbolic link, for the new data folder.");
+  }
+  if (targetEntry && fs.readdirSync(target).length > 0) throw new Error("Choose an empty folder for the new data location.");
   if (fs.existsSync(path.join(source, "pgdata", "postmaster.pid")) && processAlive(path.join(source, "pgdata", "postmaster.pid"))) {
     throw new Error("LiOS is still running with this data folder. Quit it first.");
   }
