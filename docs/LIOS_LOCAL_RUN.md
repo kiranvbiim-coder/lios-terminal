@@ -1,6 +1,6 @@
 # LiOS — Local Development & Verification
 
-**Repository:** `kiranvbiim-coder/lios-v1.0.0`
+**Repository:** `kiranvbiim-coder/lios-terminal`  
 **Default branch:** `main`  
 **Purpose:** technical runbook only. Read `AGENTS.md`, the final SI execution plan and mandatory `technical/SUPER_INTELLIGENCE_SHIPPING_POINT_CONTRACT.md` before the product/subsystem docs. Commands below are prospective checks, not evidence executed by this reconciliation.
 
@@ -14,8 +14,8 @@
 ## Install
 
 ```bash
-git clone <repo-url> lios-v1.0.0
-cd lios-v1.0.0/src
+git clone https://github.com/kiranvbiim-coder/lios-terminal.git
+cd lios-terminal/src
 npm ci
 ```
 
@@ -106,6 +106,8 @@ Windows distribution:
 ```bash
 npm run app:dist:win
 ```
+
+Desktop packaging is architecture-qualified and fail-closed. The bundled `sandbox-image-dist` must match the target host architecture: Apple Silicon/ARM64 uses a separately qualified `linux/arm64` sandbox release, while Windows x64 (and x64 desktop targets) require an independently qualified `linux/amd64` release. Do not reuse ARM image IDs, source locks, browser inventories, wheel locks or provenance as x64 evidence. If the matching sandbox release is absent or mismatched, packaging must stop rather than ship a legacy-host fallback.
 
 Public release remains fail-closed until signing/notarization/update/recovery prerequisites are satisfied.
 
