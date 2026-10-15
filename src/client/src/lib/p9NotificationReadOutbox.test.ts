@@ -180,3 +180,28 @@ test("SI-06.22 simultaneous replay calls share one verified attempt", async () =
     assert.equal(calls, 2, "one session recheck and one POST, not two replays");
   });
 });
+
+test("SI-06.22 valid authenticated-offline session can stage but cannot replay without online reauthorization", async () => {
+  await inBrowser(async () => {
+    setNotificationReadOutboxOwner(session(11, "authenticated_offline"));
+    assert.equal(queueNotificationRead(9, NOTIFICATION), true);
+    assert.equal(pendingNotificationReadCount(), 1);
+    let calls = 0;
+    const blocked = await replayNotificationReads(async () => {
+      calls += 1;
+      throw new Error("Offline identity must not send any request");
+    });
+    assert.equal(blocked.blocked, true);
+    assert.equal(calls, 0);
+
+    setNotificationReadOutboxOwner(session(11, "authenticated_online"));
+    const verified = await replayNotificationReads(async (url) => {
+      calls += 1;
+      return url === "/api/auth/me"
+        ? new Response(JSON.stringify({ authState: session(11, "authenticated_online") }), { status: 200 })
+        : new Response("{}", { status: 200 });
+    });
+    assert.deepEqual(verified, { confirmed: 1, remaining: 0, blocked: false });
+    assert.equal(calls, 2, "fresh identity verification and one authorized replay");
+  });
+});
