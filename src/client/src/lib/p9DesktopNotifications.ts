@@ -226,6 +226,10 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
     permission,
     requestPermission: async () => window.Notification.requestPermission() as Promise<P9DesktopNotificationPermission>,
     claimDelivery: (id) => {
+      // Multiple already-open browser ports can share the same localStorage.
+      // Refresh before every claim so a delivery persisted by another port is
+      // observed before this port decides whether the canonical id is new.
+      for (const persistedId of readDeliveredIds(storage)) deliveredIds.add(persistedId);
       if (deliveredIds.has(id)) return "duplicate";
       deliveredIds.add(id);
       const values = [...deliveredIds].slice(-MAX_PERSISTED_IDS);
