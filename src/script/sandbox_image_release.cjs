@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Offline release assembler. Trusted pins live in sandbox-image/source-lock.json,
-// separately from the mutable payload descriptor.
+// Offline release assembler. Trusted pins live in a separately reviewed source lock,
+// apart from the mutable payload descriptor. The default remains the shipped ARM64 lock;
+// an independently qualified AMD64 lock can be supplied with LIOS_SANDBOX_SOURCE_LOCK.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -10,16 +11,20 @@ const payload = path.resolve(process.argv[2] || path.join(root, 'sandbox-image-i
 const output = path.resolve(process.argv[3] || path.join(root, 'sandbox-image-dist'));
 const candidate = process.argv.includes('--candidate');
 const reuseRuntimeBase = process.argv.includes('--reuse-runtime-base');
-// Independently recorded custody of the previously shipped SI-01 release.
-// This is only a build input pin; it never qualifies the extended browser image.
+// Independently recorded custody of the previously shipped SI-01 ARM64 release.
+// This is only a build input pin; it never qualifies an AMD64 or extended browser image.
 const runtimeBasePin = Object.freeze({
+  platform: 'linux/arm64',
   image: 'sha256:f17d897b7f01fb8e9389faf83ca9db7178cb620c2f8fd8f95b18eda95deb7cde',
   sourceLockSha256: 'c229904193c2e290fc277e501b62f9e5ca433ae14e76fdec5ca55fa586955818',
   manifestSha256: '82e36b1a88b8b39a9f29040670150bbc26c70cd64fac432c4e787d15710822b6',
   archiveSha256: '5a7280f4551dd41ec35ac4bc81ef6f14ec662aa156d09bb4d09e3039e9401816',
 });
 let dockerTarget;
-const lockPath = path.join(root, 'sandbox-image', 'source-lock.json');
+const lockPath = path.resolve(
+  process.env.LIOS_SANDBOX_SOURCE_LOCK?.trim() || path.join(root, 'sandbox-image', 'source-lock.json'),
+);
+const lockDirectory = path.dirname(lockPath);
 const hash = (file, algorithm = 'sha256') => {
   const h = crypto.createHash(algorithm);
   const fd = fs.openSync(file, 'r');
@@ -57,6 +62,7 @@ function regularFile(base, relative) {
   return resolved;
 }
 function verifiedRuntimeBase(trusted, platform) {
+  if (platform !== runtimeBasePin.platform) throw new Error(`Runtime-base reuse is qualified only for ${runtimeBasePin.platform}; ${platform} requires a full source build.`);
   const directory = path.resolve(process.env.LIOS_SI01_SANDBOX_RUNTIME_BASE_RELEASE?.trim() || path.join(root, 'sandbox-image-dist'));
   const lockFile = regularFile(directory, 'source-lock.json');
   const manifestFile = regularFile(directory, 'sandbox-image.json');
@@ -122,9 +128,12 @@ async function acquire(entry, relative) {
 async function main() {
   const lockBytes = fs.readFileSync(lockPath);
   const trusted = JSON.parse(lockBytes.toString('utf8'));
+  const trustedPlatform = trusted.baseImage?.platform;
+  if (!['linux/arm64', 'linux/amd64'].includes(trustedPlatform)) throw new Error('Trusted source lock must target an explicitly supported linux/arm64 or linux/amd64 sandbox platform.');
+  const trustedArch = trustedPlatform.slice('linux/'.length);
   const readInventory = (pin) => {
     if (!pin || typeof pin.file !== 'string' || !sha256(pin.sha256)) throw new Error('Trusted inventory pin is missing or malformed.');
-    const file = regularFile(path.join(root, 'sandbox-image'), pin.file);
+    const file = regularFile(lockDirectory, pin.file);
     if (hash(file) !== pin.sha256) throw new Error(`Trusted source inventory checksum mismatch: ${pin.file}`);
     const inventory = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!Array.isArray(inventory) || !inventory.length) throw new Error(`Trusted inventory is empty: ${pin.file}`);
@@ -140,7 +149,7 @@ async function main() {
   const browserDependencies = readInventory(trusted.browser.dependencyInventory);
   if (new Set(browserArtifacts.map((entry) => entry.filename)).size !== browserArtifacts.length
     || new Set(browserDependencies.map((entry) => entry.filename)).size !== browserDependencies.length
-    || browserDependencies.some((entry) => !['arm64', 'all'].includes(entry.architecture) || !entry.filename.endsWith('.deb') || !entry.sourceReference || !entry.copyrightPath)) throw new Error('Browser dependency inventory is malformed.');
+    || browserDependencies.some((entry) => ![trustedArch, 'all'].includes(entry.architecture) || !entry.filename.endsWith('.deb') || !entry.sourceReference || !entry.copyrightPath)) throw new Error(`Browser dependency inventory is malformed for ${trustedPlatform}.`);
   if (process.argv.includes('--acquire-browser')) {
     const descriptorPath = regularFile(payload, 'inputs.json');
     const descriptor = JSON.parse(fs.readFileSync(descriptorPath, 'utf8'));
@@ -159,15 +168,15 @@ async function main() {
     return;
   }
   if (trusted.schemaVersion !== 1 || (candidate ? trusted.releaseStatus !== 'inputs-locked' : trusted.releaseStatus !== 'ready') || trusted.provenance?.verified !== true) {
-    throw new Error(`Sandbox image release blocked: trusted source lock is incomplete. ${trusted.docling?.blocker || 'Verified source provenance is required.'} Required: base-image archive+SHA-256+image ID; exact default-model file/layout SHA-256 inventory; every linux/arm64 wheel filename, version, and SHA-256; independently verified provenance.`);
+    throw new Error(`Sandbox image release blocked: trusted ${trustedPlatform} source lock is incomplete. ${trusted.docling?.blocker || 'Verified source provenance is required.'} Required: base-image archive+SHA-256+image ID; exact default-model file/layout SHA-256 inventory; every target-platform wheel filename, version, and SHA-256; independently verified provenance.`);
   }
   dockerTarget = process.env.LIOS_EXECUTION_SANDBOX_TARGET?.trim() || process.env.DOCKER_HOST?.trim();
-  if (!dockerTarget || !/^unix:\/\/\/[^?#\0]+$/.test(dockerTarget)) throw new Error('Offline image assembly requires an explicit local Unix Docker target in LIOS_EXECUTION_SANDBOX_TARGET or DOCKER_HOST.');
-  if (trusted.baseImage?.platform !== 'linux/arm64' || !trusted.node?.archive || !sha256(trusted.node.sha256) || !trusted.xlsx?.version || !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(trusted.xlsx?.npmLockIntegrity || '') || !Array.isArray(trusted.docling?.models) || !trusted.docling.models.length || !Array.isArray(trusted.docling?.wheels) || !trusted.docling.wheels.length || !Array.isArray(trusted.docling?.buildSources) || !trusted.docling.buildSources.length || !sha256(trusted.docling?.modelsArchiveSha256) || !sha256(trusted.docling?.requirementsSha256)) throw new Error('Trusted source lock is missing exact base-image, model, wheel, or source-build pins.');
+  if (!dockerTarget || !/^unix:\/\/\/[^?#\0]+$/.test(dockerTarget)) throw new Error('Offline image assembly requires an explicit local Unix Docker target in LIOS_EXECUTION_SANDBOX_TARGET or DOCKER_HOST. The produced OCI image may target ARM64 or AMD64 independently of the build host.');
+  if (trusted.baseImage?.platform !== trustedPlatform || !trusted.node?.archive || !sha256(trusted.node.sha256) || !trusted.xlsx?.version || !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(trusted.xlsx?.npmLockIntegrity || '') || !Array.isArray(trusted.docling?.models) || !trusted.docling.models.length || !Array.isArray(trusted.docling?.wheels) || !trusted.docling.wheels.length || !Array.isArray(trusted.docling?.buildSources) || !trusted.docling.buildSources.length || !sha256(trusted.docling?.modelsArchiveSha256) || !sha256(trusted.docling?.requirementsSha256)) throw new Error('Trusted source lock is missing exact base-image, model, wheel, or source-build pins.');
   if (payload === output || output.startsWith(payload + path.sep)) throw new Error('Release output must be outside the input directory.');
   const descriptor = JSON.parse(fs.readFileSync(regularFile(payload, 'inputs.json'), 'utf8'));
   const { platform, baseImage, nodeVersion, files } = descriptor;
-  if (!trusted.acceptedPlatforms.includes(platform) || platform !== 'linux/arm64') throw new Error('Only the independently qualified linux/arm64 sandbox image is accepted.');
+  if (!trusted.acceptedPlatforms.includes(platform) || platform !== trustedPlatform) throw new Error(`Payload platform ${platform || '<missing>'} is not the independently qualified ${trustedPlatform} platform in this source lock.`);
   if (baseImage !== trusted.baseImage.reference || nodeVersion !== trusted.node.version) throw new Error('Descriptor base image or Node version differs from the separately trusted source lock.');
   if (!sha256(trusted.baseImage.archiveSha256) || !/^sha256:[a-f0-9]{64}$/.test(trusted.baseImage.imageId || '') || trusted.baseImage.archive !== 'base-image.tar') throw new Error('Trusted source lock lacks the exact verified base image archive, digest, and image ID.');
   if (!files || typeof files !== 'object' || Array.isArray(files)) throw new Error('Payload descriptor has no valid file inventory.');
@@ -235,7 +244,7 @@ async function main() {
   )) throw new Error('Wheel inventory contains an untrusted, unhashed, non-CPU, or non-wheel runtime artifact.');
   if (lockedRequirements.size !== trustedRequirements.size || [...trustedRequirements].some(([name, pin]) => lockedRequirements.get(name) !== pin)) throw new Error('requirements.lock.txt does not exactly match trusted resolved wheel/version/hash inventory.');
   const headlessWheel = trusted.docling.wheels.filter((wheel) => wheel.package.toLowerCase().replace(/[-_.]+/g, '-') === 'opencv-python-headless');
-  if (headlessWheel.length !== 1 || headlessWheel[0].version !== '5.0.0.93' || !sha256(headlessWheel[0].sha256)) throw new Error('Trusted linux/arm64 wheel lock must pin exactly opencv-python-headless==5.0.0.93 with SHA-256.');
+  if (headlessWheel.length !== 1 || headlessWheel[0].version !== '5.0.0.93' || !sha256(headlessWheel[0].sha256)) throw new Error(`Trusted ${trustedPlatform} wheel lock must pin exactly opencv-python-headless==5.0.0.93 with SHA-256.`);
   if (hash(regularFile(payload, 'xlsx.tgz'), 'sha512') !== trusted.xlsx.npmLockIntegrity.slice('sha512-'.length)) throw new Error('SheetJS tarball differs from vendored npm-lock SRI.');
   const packageLock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   if (packageLock.packages?.['node_modules/xlsx']?.version !== trusted.xlsx.version || packageLock.packages?.['node_modules/xlsx']?.integrity !== trusted.xlsx.npmLockIntegrity) throw new Error('Trusted SheetJS pins differ from the checked-in npm lock.');
@@ -249,60 +258,58 @@ async function main() {
     const baseActual = run('docker', ['image', 'inspect', trusted.baseImage.imageId, '--format', '{{.Id}} {{.Os}}/{{.Architecture}}']);
     if (baseActual !== `${trusted.baseImage.imageId} ${platform}`) throw new Error(`Loaded base image differs from trusted ID/platform: ${baseActual}`);
   }
-  const tag = process.env.LIOS_SI01_SANDBOX_BUILD_TAG?.trim() || `lios-si01-sandbox:arm64-${trusted.node.version}-${trusted.docling.version}`;
+  const tag = process.env.LIOS_SI01_SANDBOX_BUILD_TAG?.trim() || `lios-si01-sandbox:${trustedArch}-${trusted.node.version}-${trusted.docling.version}`;
   if (!/^[a-z0-9][a-z0-9._-]{0,127}:[a-z0-9][a-z0-9._-]{0,127}$/i.test(tag)) throw new Error('Sandbox build tag is invalid.');
   if (process.argv.includes('--reuse-verified')) {
     if (!/^sha256:[a-f0-9]{64}$/.test(trusted.verifiedImageId || '')) throw new Error('Reusing a sandbox image requires an independently pinned verifiedImageId.');
     const localImage = run('docker', ['image', 'inspect', trusted.verifiedImageId, '--format', '{{.Id}} {{.Os}}/{{.Architecture}}']);
     if (localImage !== `${trusted.verifiedImageId} ${platform}`) throw new Error('Local image differs from the pinned, V2-qualified image ID/platform.');
   } else {
-  const context = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'lios-sandbox-image-'));
-  try {
-    fs.mkdirSync(path.join(context, 'wheelhouse'), { recursive: true });
-    const copyInput = (name, destination = name) => fs.copyFileSync(regularFile(payload, name), path.join(context, destination), fs.constants.COPYFILE_FICLONE);
-    fs.mkdirSync(path.join(context, 'browser-inputs', 'browser-debs'), { recursive: true });
-    for (const entry of browserArtifacts) copyInput(entry.filename, `browser-inputs/${entry.filename}`);
-    for (const entry of browserDependencies) copyInput(`browser-debs/${entry.filename}`, `browser-inputs/browser-debs/${entry.filename}`);
-    for (const pin of [trusted.browser.artifactInventory, trusted.browser.dependencyInventory]) fs.copyFileSync(regularFile(path.join(root, 'sandbox-image'), pin.file), path.join(context, 'browser-inputs', pin.file));
-    fs.copyFileSync(lockPath, path.join(context, 'source-lock.json'));
-    fs.copyFileSync(path.join(root, 'sandbox-image', 'install-browser.py'), path.join(context, 'install-browser.py'));
-    if (!runtimeBase) {
-    copyInput(trusted.node.archive, 'node.tar.gz');
-    copyInput('xlsx.tgz');
-    copyInput('docling-models.tar');
-    copyInput('requirements.lock.txt');
-    for (const wheel of trusted.docling.wheels) copyInput(`wheelhouse/${wheel.filename}`);
-    fs.writeFileSync(path.join(context, 'docling-models.manifest.json'), JSON.stringify(trusted.docling.models, null, 2) + '\n', { flag: 'w' });
-    }
-    fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke.py'), path.join(context, 'smoke.py'));
-    fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke-xlsx.cjs'), path.join(context, 'smoke-xlsx.cjs'));
-    fs.writeFileSync(path.join(context, 'opencv-headless.lock.txt'), `opencv-python-headless==${headlessWheel[0].version} --hash=sha256:${headlessWheel[0].sha256}\n`, { flag: 'wx' });
-    const dockerfile = runtimeBase ? 'Dockerfile.runtime-base' : 'Dockerfile';
-    // Buildx interprets a bare image ID as a Docker Hub repository. The local alias is not an
-    // accepted input: it is minted from the independently verified ID and its inherited layers are checked.
-    const runtimeBaseReference = runtimeBase ? `lios-qualified-runtime-base:${runtimeBase.slice(7)}` : null;
-    if (runtimeBaseReference) {
-      run('docker', ['tag', runtimeBase, runtimeBaseReference]);
-      if (run('docker', ['image', 'inspect', runtimeBaseReference, '--format', '{{.Id}}']) !== runtimeBase) throw new Error('Runtime-base alias does not resolve to the verified immutable image.');
-    }
-    const baseArgument = runtimeBase ? `RUNTIME_BASE=${runtimeBaseReference}` : `BASE_IMAGE=${baseImage}`;
+    const context = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'lios-sandbox-image-'));
     try {
-      run('docker', ['buildx', 'version']);
-    } catch {
-      throw new Error('Offline sandbox release requires the Docker Buildx plugin; Docker legacy builder cannot enforce RUN --network=none.');
-    }
-    run('docker', ['buildx', 'build', '--builder', 'default', '--load', '--pull=false', '--network=none', '--platform', platform, '-f', path.join(root, 'sandbox-image', dockerfile), '--build-arg', baseArgument, '--build-arg', `NODE_VERSION=${nodeVersion}`, '--build-arg', `XLSX_VERSION=${trusted.xlsx.version}`, '--build-arg', `DOCLING_VERSION=${trusted.docling.version}`, '-t', tag, context], { stdio: 'inherit' });
-    if (runtimeBase) {
-      const inheritedLayers = JSON.parse(run('docker', ['image', 'inspect', runtimeBase, '--format', '{{json .RootFS.Layers}}']));
-      const builtLayers = JSON.parse(run('docker', ['image', 'inspect', tag, '--format', '{{json .RootFS.Layers}}']));
-      if (!Array.isArray(inheritedLayers) || !Array.isArray(builtLayers)
-        || inheritedLayers.some((layer, index) => layer !== builtLayers[index])) {
-        throw new Error('Built browser image does not inherit the exact independently verified runtime layers.');
+      fs.mkdirSync(path.join(context, 'wheelhouse'), { recursive: true });
+      const copyInput = (name, destination = name) => fs.copyFileSync(regularFile(payload, name), path.join(context, destination), fs.constants.COPYFILE_FICLONE);
+      fs.mkdirSync(path.join(context, 'browser-inputs', 'browser-debs'), { recursive: true });
+      for (const entry of browserArtifacts) copyInput(entry.filename, `browser-inputs/${entry.filename}`);
+      for (const entry of browserDependencies) copyInput(`browser-debs/${entry.filename}`, `browser-inputs/browser-debs/${entry.filename}`);
+      for (const pin of [trusted.browser.artifactInventory, trusted.browser.dependencyInventory]) fs.copyFileSync(regularFile(lockDirectory, pin.file), path.join(context, 'browser-inputs', pin.file));
+      fs.copyFileSync(lockPath, path.join(context, 'source-lock.json'));
+      fs.copyFileSync(path.join(root, 'sandbox-image', 'install-browser.py'), path.join(context, 'install-browser.py'));
+      if (!runtimeBase) {
+        copyInput(trusted.node.archive, 'node.tar.gz');
+        copyInput('xlsx.tgz');
+        copyInput('docling-models.tar');
+        copyInput('requirements.lock.txt');
+        for (const wheel of trusted.docling.wheels) copyInput(`wheelhouse/${wheel.filename}`);
+        fs.writeFileSync(path.join(context, 'docling-models.manifest.json'), JSON.stringify(trusted.docling.models, null, 2) + '\n', { flag: 'w' });
       }
+      fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke.py'), path.join(context, 'smoke.py'));
+      fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke-xlsx.cjs'), path.join(context, 'smoke-xlsx.cjs'));
+      fs.writeFileSync(path.join(context, 'opencv-headless.lock.txt'), `opencv-python-headless==${headlessWheel[0].version} --hash=sha256:${headlessWheel[0].sha256}\n`, { flag: 'wx' });
+      const dockerfile = runtimeBase ? 'Dockerfile.runtime-base' : 'Dockerfile';
+      const runtimeBaseReference = runtimeBase ? `lios-qualified-runtime-base:${runtimeBase.slice(7)}` : null;
+      if (runtimeBaseReference) {
+        run('docker', ['tag', runtimeBase, runtimeBaseReference]);
+        if (run('docker', ['image', 'inspect', runtimeBaseReference, '--format', '{{.Id}}']) !== runtimeBase) throw new Error('Runtime-base alias does not resolve to the verified immutable image.');
+      }
+      const baseArgument = runtimeBase ? `RUNTIME_BASE=${runtimeBaseReference}` : `BASE_IMAGE=${baseImage}`;
+      try {
+        run('docker', ['buildx', 'version']);
+      } catch {
+        throw new Error('Offline sandbox release requires the Docker Buildx plugin; Docker legacy builder cannot enforce RUN --network=none.');
+      }
+      run('docker', ['buildx', 'build', '--builder', 'default', '--load', '--pull=false', '--network=none', '--platform', platform, '-f', path.join(root, 'sandbox-image', dockerfile), '--build-arg', baseArgument, '--build-arg', `NODE_VERSION=${nodeVersion}`, '--build-arg', `XLSX_VERSION=${trusted.xlsx.version}`, '--build-arg', `DOCLING_VERSION=${trusted.docling.version}`, '-t', tag, context], { stdio: 'inherit' });
+      if (runtimeBase) {
+        const inheritedLayers = JSON.parse(run('docker', ['image', 'inspect', runtimeBase, '--format', '{{json .RootFS.Layers}}']));
+        const builtLayers = JSON.parse(run('docker', ['image', 'inspect', tag, '--format', '{{json .RootFS.Layers}}']));
+        if (!Array.isArray(inheritedLayers) || !Array.isArray(builtLayers)
+          || inheritedLayers.some((layer, index) => layer !== builtLayers[index])) {
+          throw new Error('Built browser image does not inherit the exact independently verified runtime layers.');
+        }
+      }
+    } finally {
+      fs.rmSync(context, { recursive: true, force: true });
     }
-  } finally {
-    fs.rmSync(context, { recursive: true, force: true });
-  }
   }
   const reference = process.argv.includes('--reuse-verified') ? trusted.verifiedImageId : tag;
   const image = run('docker', ['image', 'inspect', reference, '--format', '{{.Id}}']);
@@ -325,7 +332,7 @@ async function main() {
     fs.copyFileSync(lockPath, path.join(staging, 'source-lock.json'));
     for (const pin of [trusted.docling.modelInventory, trusted.docling.wheelInventory, trusted.browser.artifactInventory, trusted.browser.dependencyInventory]) {
       fs.copyFileSync(
-        regularFile(path.join(root, 'sandbox-image'), pin.file),
+        regularFile(lockDirectory, pin.file),
         path.join(staging, pin.file),
       );
     }
