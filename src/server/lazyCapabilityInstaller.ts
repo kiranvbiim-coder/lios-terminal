@@ -1,10 +1,12 @@
 import {
   installManagedRuntime,
   readManagedRuntimeState,
+  managedRuntimePythonPath,
   type ManagedRuntimeInstallOptions,
   type ManagedRuntimeOperationResult,
   type ManagedRuntimeState,
 } from "./pythonRuntimeManager";
+import { evaluateManagedRuntimeReadiness } from "./provisioningReadiness";
 import {
   expandP10RuntimePacks,
   p10RuntimePackForCapability,
@@ -13,6 +15,7 @@ import {
 
 export type LazyCapabilityInstallStatus =
   | "already_available"
+  | "runtime_not_ready"
   | "consent_required"
   | "installed"
   | "external_setup_required"
@@ -43,6 +46,8 @@ type InstallRuntime = (
 
 export interface LazyCapabilityInstallerDependencies {
   readState?: () => ManagedRuntimeState | null;
+  /** Testable adapter for the canonical managed-Python executable check. */
+  pythonAvailable?: () => boolean;
   installRuntime?: InstallRuntime;
 }
 
@@ -95,13 +100,32 @@ export async function ensureLazyCapability(
   const missingManagedPackIds = requiredManagedPackIds.filter((id) => !installed.has(id));
 
   if (missingManagedPackIds.length === 0) {
+    // Saved pack IDs are not health evidence. A missing Python executable,
+    // stale manifest, corrupt package inventory or unverified installation
+    // must never be advertised as an invocable capability. Doctor remains
+    // the canonical repair owner; lazy installation does not silently repair.
+    const readiness = evaluateManagedRuntimeReadiness({
+      state: currentState,
+      requiredPackIds: requiredManagedPackIds,
+      pythonAvailable: (dependencies.pythonAvailable ?? (() => managedRuntimePythonPath() !== null))(),
+    });
+    if (!readiness.ready) {
+      return {
+        status: "runtime_not_ready",
+        capability: normalizedCapability,
+        runtimePackId: runtimePack.id,
+        requiredManagedPackIds,
+        requiresConsent: false,
+        detail: `${runtimePack.name} is recorded as installed but managed runtime readiness is ${readiness.state}. Verify or repair it through Doctor before use.`,
+      };
+    }
     return {
       status: "already_available",
       capability: normalizedCapability,
       runtimePackId: runtimePack.id,
       requiredManagedPackIds,
       requiresConsent: false,
-      detail: `${runtimePack.name} is already available in the managed runtime.`,
+      detail: `${runtimePack.name} is already available in the verified managed runtime.`,
     };
   }
 
