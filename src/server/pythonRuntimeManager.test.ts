@@ -171,6 +171,13 @@ test("managed runtime rollback restores the previous runtime pack-selection meta
     assert.ok(result.state.rollbackPath);
     assert.equal(fs.readFileSync(path.join(result.state.rollbackPath!, "current-marker.txt"), "utf8"), "current");
     assert.deepEqual(readManagedRuntimeState()?.selectedReleasePackIds, ["core", "research"]);
+    // The replaced runtime is kept under the authorized rollback name. A
+    // second explicitly requested rollback must still be reversible.
+    assert.match(path.basename(result.state.rollbackPath!), /^rollback-\d+$/);
+    const reversed = await rollbackManagedRuntime();
+    assert.deepEqual(reversed.state.selectedReleasePackIds, ["core", "quant"]);
+    assert.deepEqual(reversed.state.selectedPackIds, ["core", "ml"]);
+    assert.equal(fs.readFileSync(path.join(current, "current-marker.txt"), "utf8"), "current");
   } finally {
     if (previous === undefined) delete process.env.LIMURIA_DATA_DIR;
     else process.env.LIMURIA_DATA_DIR = previous;
