@@ -383,31 +383,54 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
   if (!state || !previousPath) {
     throw new Error("No safe managed runtime rollback is available.");
   }
-  const currentPath = path.join(runtimeRoot(), "current");
-  // A replaced/missing current installation cannot be the source of an
-  // atomic rollback; in particular do not write its snapshot via a symlink.
+  const root = runtimeRoot();
+  const currentPath = path.join(root, "current");
   const currentEntry = fs.lstatSync(currentPath, { throwIfNoEntry: false });
   if (!currentEntry?.isDirectory() || currentEntry.isSymbolicLink()) {
     throw new Error("Managed runtime current directory is unavailable or unsafe for rollback.");
   }
-  const previousState = readRuntimeStateSnapshot(previousPath);
-  const failedPath = path.join(runtimeRoot(), `failed-${Date.now()}`);
-  if (fs.existsSync(currentPath)) writeRuntimeStateSnapshot(currentPath, state);
-  fs.renameSync(currentPath, failedPath);
-  fs.renameSync(previousPath, currentPath);
 
+  // A rollback destination must never replace an existing file, directory or
+  // dangling symlink. Use the same authorized rollback naming contract so the
+  // just-replaced runtime remains eligible for a later deliberate rollback.
+  let replacedPath: string | null = null;
+  for (let n = 0; n < 1_000; n += 1) {
+    const candidate = path.join(root, `rollback-${Date.now() + n}`);
+    if (!fs.lstatSync(candidate, { throwIfNoEntry: false })) {
+      replacedPath = candidate;
+      break;
+    }
+  }
+  if (!replacedPath) throw new Error("No free managed runtime rollback destination is available.");
+
+  const rollbackSnapshotPath = runtimeStateSnapshotPath(previousPath);
+  const currentSnapshotPath = runtimeStateSnapshotPath(currentPath);
+  // Reject metadata symlinks before any write; folder containment alone is
+  // insufficient if .lios-runtime-state.json points to a different location.
+  for (const snapshot of [rollbackSnapshotPath, currentSnapshotPath]) {
+    const entry = fs.lstatSync(snapshot, { throwIfNoEntry: false });
+    if (entry && (!entry.isFile() || entry.isSymbolicLink())) {
+      throw new Error("Managed runtime state snapshot path is unsafe for rollback.");
+    }
+  }
+  const originalCurrentSnapshot = fs.existsSync(currentSnapshotPath)
+    ? fs.readFileSync(currentSnapshotPath, "utf8") : null;
+  const originalRollbackSnapshot = fs.existsSync(rollbackSnapshotPath)
+    ? fs.readFileSync(rollbackSnapshotPath, "utf8") : null;
+  const originalState = fs.readFileSync(statePath(), "utf8");
+  const previousState = readRuntimeStateSnapshot(previousPath);
   const rollbackState: ManagedRuntimeState = previousState
     ? {
         ...previousState,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: failedPath,
+        rollbackPath: replacedPath,
       }
     : {
         ...state,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: failedPath,
+        rollbackPath: replacedPath,
         selectedReleasePackIds: [],
         verificationWarnings: [
           ...state.verificationWarnings,
@@ -415,8 +438,49 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
         ],
       };
 
-  writeRuntimeStateSnapshot(currentPath, rollbackState);
-  fs.writeFileSync(statePath(), JSON.stringify(rollbackState, null, 2), { mode: 0o600 });
+  let currentMovedAside = false;
+  let rollbackActivated = false;
+  let stateWriteAttempted = false;
+  try {
+    writeRuntimeStateSnapshot(currentPath, state);
+    fs.renameSync(currentPath, replacedPath);
+    currentMovedAside = true;
+    fs.renameSync(previousPath, currentPath);
+    rollbackActivated = true;
+    writeRuntimeStateSnapshot(currentPath, rollbackState);
+    stateWriteAttempted = true;
+    fs.writeFileSync(statePath(), JSON.stringify(rollbackState, null, 2), { mode: 0o600 });
+  } catch (error) {
+    // On a failed second rename or metadata write, restore *both* runtime
+    // directories and their prior snapshots rather than leaving no "current".
+    // Keep the original failure and report any recovery failure as well.
+    const recoveryErrors: unknown[] = [];
+    const recover = (step: () => void) => {
+      try { step(); } catch (cause) { recoveryErrors.push(cause); }
+    };
+    if (rollbackActivated) {
+      recover(() => fs.renameSync(currentPath, previousPath));
+      recover(() => {
+        if (originalRollbackSnapshot === null) fs.rmSync(rollbackSnapshotPath, { force: true });
+        else fs.writeFileSync(rollbackSnapshotPath, originalRollbackSnapshot, { mode: 0o600 });
+      });
+    }
+    if (currentMovedAside) {
+      recover(() => fs.renameSync(replacedPath, currentPath));
+    }
+    recover(() => {
+      if (!fs.existsSync(currentPath)) return;
+      if (originalCurrentSnapshot === null) fs.rmSync(currentSnapshotPath, { force: true });
+      else fs.writeFileSync(currentSnapshotPath, originalCurrentSnapshot, { mode: 0o600 });
+    });
+    if (stateWriteAttempted) {
+      recover(() => fs.writeFileSync(statePath(), originalState, { mode: 0o600 }));
+    }
+    if (recoveryErrors.length) {
+      throw new AggregateError([error, ...recoveryErrors], "Managed runtime rollback failed and recovery was incomplete.");
+    }
+    throw error;
+  }
   return {
     state: rollbackState,
     detail: previousState
