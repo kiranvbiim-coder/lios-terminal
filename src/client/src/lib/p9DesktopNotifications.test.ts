@@ -97,13 +97,19 @@ test("SI-06 desktop delivery does not fail the workflow when OS notifications ar
   assert.equal(denied.delivered.size, 0);
 });
 
-test("SI-06 desktop notification text is capped and credential-shaped content is redacted", () => {
+test("SI-06 desktop notification text is byte-capped and credential-shaped content is redacted", () => {
   const raw = "Provider failed with api_key=super-secret-token-value and Authorization: Bearer abcdefghijklmnopqrstuvwxyz " + "x".repeat(500);
-  const safe = sanitizeP9DesktopNotificationText(raw, 240);
-  assert.ok(safe.length <= 240);
+  const safe = sanitizeP9DesktopNotificationText(raw, 160);
+  assert.ok(new TextEncoder().encode(safe).byteLength <= 160);
   assert.doesNotMatch(safe, /super-secret-token-value/);
   assert.doesNotMatch(safe, /abcdefghijklmnopqrstuvwxyz/);
   assert.match(safe, /\[REDACTED\]/);
+});
+
+test("SI-06 desktop notification byte cap does not split Tamil or other multi-byte characters", () => {
+  const safe = sanitizeP9DesktopNotificationText("தமிழ் அறிவிப்பு ".repeat(20), 64);
+  assert.ok(new TextEncoder().encode(safe).byteLength <= 64);
+  assert.doesNotMatch(safe, /�/);
 });
 
 test("SI-06 desktop delivery reserves the canonical id before OS show so a failure cannot duplicate after restart", async () => {
