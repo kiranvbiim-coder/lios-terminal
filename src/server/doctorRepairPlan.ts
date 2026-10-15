@@ -53,7 +53,10 @@ function affectedPackIds(readiness: ManagedRuntimeReadiness): readonly string[] 
 }
 
 function requiresVerifiedArtifactsFor(state: ManagedRuntimeReadinessState): boolean {
-  return state === "unverified" || state === "integrity_failed";
+  return state === "corrupt"
+    || state === "incompatible"
+    || state === "unverified"
+    || state === "integrity_failed";
 }
 
 /**
