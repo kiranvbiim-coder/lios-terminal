@@ -30,19 +30,18 @@ function configureAutoUpdater({ updater, isPackaged, env = process.env, log = ()
   }
 
   // Signed distribution builds embed the canonical generic provider into
-  // resources/app-update.yml. A runtime environment variable must never be
-  // allowed to replace that packaged trust decision after installation.
+  // resources/app-update.yml. Runtime environment must not be able to replace
+  // that packaged release authority after installation.
   if (String(env.LIOS_UPDATE_URL || "").trim()) {
     log("Runtime desktop update feed override ignored; packaged update configuration remains authoritative.");
   }
 
   updater.autoDownload = true;
-  updater.autoInstallOnAppQuit = false;
+  // Preserve the current usable install path until explicit confirmation UI
+  // is wired through the trusted desktop IPC boundary in a separate tranche.
+  updater.autoInstallOnAppQuit = true;
   updater.allowPrerelease = false;
   updater.allowDowngrade = false;
-
-  let downloaded = false;
-  let installStarted = false;
 
   updater.on("checking-for-update", () => log("Checking for a signed desktop update."));
   updater.on("update-available", (info) => log(`Signed desktop update available: ${safeVersion(info?.version)}.`));
@@ -52,37 +51,12 @@ function configureAutoUpdater({ updater, isPackaged, env = process.env, log = ()
     log(percent === null ? "Desktop update download is in progress." : `Desktop update download ${percent}%.`);
   });
   updater.on("update-downloaded", (info) => {
-    downloaded = true;
-    log(`Signed desktop update downloaded: ${safeVersion(info?.version)}; explicit confirmation is required to install and restart.`);
+    log(`Signed desktop update downloaded: ${safeVersion(info?.version)}; it will install on a normal app quit.`);
   });
   updater.on("error", () => log("Desktop update failed safely."));
   void updater.checkForUpdates().catch(() => log("Desktop update failed safely."));
 
-  return {
-    enabled: true,
-    url: null,
-    source: "packaged_config",
-    installDownloaded(options = {}) {
-      if (options.confirmed !== true) {
-        return { started: false, reason: "confirmation-required" };
-      }
-      if (!downloaded) {
-        return { started: false, reason: "update-not-downloaded" };
-      }
-      if (installStarted) {
-        return { started: false, reason: "install-already-started" };
-      }
-      installStarted = true;
-      try {
-        updater.quitAndInstall(false, true);
-        return { started: true, reason: "install-started" };
-      } catch {
-        installStarted = false;
-        log("Desktop update install failed safely.");
-        return { started: false, reason: "install-failed" };
-      }
-    },
-  };
+  return { enabled: true, url: null, source: "packaged_config" };
 }
 
 module.exports = { DEFAULT_UPDATE_URL, resolveUpdateUrl, configureAutoUpdater };
