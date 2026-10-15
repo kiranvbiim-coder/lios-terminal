@@ -35,8 +35,9 @@ function port(
 const canonical = {
   id: "workflow-notification:1",
   status: "delivered" as const,
-  title: "Material change detected",
-  body: "Three new source changes were found.",
+  reason: "change_detected" as const,
+  title: "Secret acquisition target changed",
+  body: "Confidential target EBITDA changed. api_key=super-secret-token-value",
   createdAt: "2026-10-15T05:59:00.000Z",
 };
 
@@ -51,6 +52,20 @@ test("SI-06 desktop delivery projects only canonical delivered P9 notifications"
   assert.equal(result.delivered, 1);
   assert.equal(result.suppressed, 1);
   assert.deepEqual(shown.map((item) => item.id), ["workflow-notification:1"]);
+});
+
+test("SI-06 desktop popup never copies canonical workflow title/body onto the OS lock screen", async () => {
+  const { adapter, shown } = port();
+  await deliverP9DesktopNotifications([canonical], adapter, options);
+  assert.deepEqual(shown, [{
+    id: canonical.id,
+    title: "LiOS · Material change detected",
+    body: "Open LiOS to review this Project update.",
+  }]);
+  const serialized = JSON.stringify(shown);
+  assert.doesNotMatch(serialized, /Secret acquisition target/i);
+  assert.doesNotMatch(serialized, /Confidential target EBITDA/i);
+  assert.doesNotMatch(serialized, /super-secret-token-value/i);
 });
 
 test("SI-06 desktop delivery baselines historical records instead of replaying them on first upgrade/start", async () => {
