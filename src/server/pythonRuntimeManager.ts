@@ -78,6 +78,22 @@ function statePath(): string {
 }
 
 /**
+ * Runtime state is user-owned metadata, not permission to write elsewhere.
+ * In particular, refuse a redirected managed-state.json before activating
+ * or rolling back an installation.
+ */
+function assertRuntimeStateStorageSafe(): void {
+  const root = fs.lstatSync(runtimeRoot(), { throwIfNoEntry: false });
+  if (root && (!root.isDirectory() || root.isSymbolicLink())) {
+    throw new Error("Managed runtime storage root is unsafe.");
+  }
+  const state = fs.lstatSync(statePath(), { throwIfNoEntry: false });
+  if (state && (!state.isFile() || state.isSymbolicLink())) {
+    throw new Error("Managed runtime saved state path is unsafe.");
+  }
+}
+
+/**
  * Persisted rollback metadata is not filesystem authority. Only a direct,
  * non-symlink rollback directory created by the managed-runtime lifecycle
  * can be moved or recursively deleted. Older/untrusted paths fail closed.
@@ -310,7 +326,9 @@ export async function installManagedRuntime(
   }
 
   const root = runtimeRoot();
+  assertRuntimeStateStorageSafe();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  assertRuntimeStateStorageSafe();
   const currentPath = path.join(root, "current");
   const currentExists = validateCurrentRuntimeDirectory(currentPath);
   const temporaryPath = unoccupiedRuntimePath(root, "install");
@@ -366,6 +384,7 @@ export async function installManagedRuntime(
     // Provisioning is asynchronous. Recheck the active directory and target
     // just before mutation so a replaced current symlink or occupied rollback
     // destination cannot redirect or clobber a filesystem write.
+    assertRuntimeStateStorageSafe();
     const stillCurrent = validateCurrentRuntimeDirectory(currentPath);
     if (stillCurrent !== currentExists) {
       throw new Error("Managed runtime current directory changed during provisioning.");
@@ -416,6 +435,7 @@ export async function installManagedRuntime(
 }
 
 export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationResult> {
+  assertRuntimeStateStorageSafe();
   const state = readManagedRuntimeState();
   const previousPath = authorizedRollbackPath(state?.rollbackPath);
   if (!state || !previousPath) {
