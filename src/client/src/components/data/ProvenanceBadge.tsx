@@ -1,3 +1,5 @@
+// Direct node:tsx/server-rendered tests use the classic JSX transform.
+import * as React from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useAudience } from "@/lib/audience";
