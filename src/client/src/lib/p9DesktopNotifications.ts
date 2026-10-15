@@ -36,9 +36,9 @@ const OPENAI_STYLE_KEY = /\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}/gi;
 
 export function sanitizeP9DesktopNotificationText(value: string, maxLength: number): string {
   const normalized = String(value ?? "")
-    .replace(CREDENTIAL_ASSIGNMENT, "$1=[REDACTED]")
     .replace(BEARER_TOKEN, "Bearer [REDACTED]")
     .replace(OPENAI_STYLE_KEY, "[REDACTED]")
+    .replace(CREDENTIAL_ASSIGNMENT, "$1=[REDACTED]")
     .replace(/\s+/g, " ")
     .trim();
   return normalized.slice(0, Math.max(0, maxLength));
