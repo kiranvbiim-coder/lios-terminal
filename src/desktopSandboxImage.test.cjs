@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {
+  bootstrapPackagedSandboxEnvironment,
   containerPlatformForHost,
   defaultLocalDockerTarget,
   packagedSandboxEnvironment,
@@ -88,6 +89,48 @@ test('packaged release must be qualified for the actual host architecture', (t) 
   assert.equal(packagedSandboxEnvironment(x64.root, UNIX_ENV, { platform: 'linux', arch: 'x64' }).LIOS_EXECUTION_SANDBOX_IMAGE, x64.release.image);
   assert.equal(packagedSandboxEnvironment(x64.root, WINDOWS_ENV, { platform: 'win32', arch: 'x64' }).LIOS_EXECUTION_SANDBOX_IMAGE, x64.release.image);
   assert.throws(() => packagedSandboxEnvironment(x64.root, UNIX_ENV, { platform: 'linux', arch: 'arm64' }), /expected linux\/arm64/);
+});
+
+test('packaged desktop bootstrap installs strict verified settings on Windows x64', (t) => {
+  const { root, release } = releaseFixture(t, 'linux/amd64');
+  const env = {};
+  const result = bootstrapPackagedSandboxEnvironment({
+    env,
+    resourcesPath: root,
+    platform: 'win32',
+    arch: 'x64',
+    isPackaged: true,
+  });
+  assert.equal(result.active, true);
+  assert.equal(result.error, null);
+  assert.equal(env.LIOS_EXECUTION_ISOLATION, 'strict');
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_ENGINE, 'docker');
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_TARGET, 'npipe:////./pipe/docker_engine');
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_IMAGE, release.image);
+});
+
+test('packaged desktop bootstrap fails closed when its architecture release is missing or mismatched', (t) => {
+  const { root } = releaseFixture(t, 'linux/arm64');
+  const env = {
+    LIOS_EXECUTION_ISOLATION: 'legacy-host',
+    LIOS_EXECUTION_SANDBOX_ENGINE: 'docker',
+    LIOS_EXECUTION_SANDBOX_TARGET: 'tcp://10.0.0.2:2375',
+    LIOS_EXECUTION_SANDBOX_IMAGE: 'sha256:' + 'c'.repeat(64),
+  };
+  const result = bootstrapPackagedSandboxEnvironment({
+    env,
+    resourcesPath: root,
+    platform: 'win32',
+    arch: 'x64',
+    isPackaged: true,
+  });
+  assert.equal(result.active, true);
+  assert.match(result.error, /expected linux\/amd64/);
+  assert.equal(env.LIOS_EXECUTION_ISOLATION, 'strict');
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_ENGINE, undefined);
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_TARGET, undefined);
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_IMAGE, undefined);
+  assert.match(env.LIOS_PACKAGED_SANDBOX_ERROR, /expected linux\/amd64/);
 });
 
 test('Windows uses a local named pipe while macOS and Linux use local Unix sockets', () => {
