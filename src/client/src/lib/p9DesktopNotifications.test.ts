@@ -6,6 +6,8 @@ import {
   type P9DesktopNotificationPort,
 } from "./p9DesktopNotifications";
 
+const NOW = new Date("2026-10-15T06:00:00.000Z");
+
 function port(permission: P9DesktopNotificationPort["permission"] = "granted") {
   const delivered = new Set<string>();
   const shown: Array<{ id: string; title: string; body: string }> = [];
@@ -26,33 +28,60 @@ const canonical = {
   status: "delivered" as const,
   title: "Material change detected",
   body: "Three new source changes were found.",
+  createdAt: "2026-10-15T05:59:00.000Z",
 };
+
+const options = { now: NOW, freshnessMs: 5 * 60_000 };
 
 test("SI-06 desktop delivery projects only canonical delivered P9 notifications", async () => {
   const { adapter, shown } = port();
   const result = await deliverP9DesktopNotifications([
     canonical,
     { ...canonical, id: "workflow-notification:2", status: "suppressed" as const },
-  ], adapter);
+  ], adapter, options);
   assert.equal(result.delivered, 1);
   assert.equal(result.suppressed, 1);
   assert.deepEqual(shown.map((item) => item.id), ["workflow-notification:1"]);
 });
 
+test("SI-06 desktop delivery baselines historical records instead of replaying them on first upgrade/start", async () => {
+  const { adapter, shown, delivered } = port();
+  const historical = {
+    ...canonical,
+    id: "workflow-notification:historical",
+    createdAt: "2026-10-15T04:00:00.000Z",
+  };
+  const result = await deliverP9DesktopNotifications([historical, canonical], adapter, options);
+  assert.equal(result.baselined, 1);
+  assert.equal(result.delivered, 1);
+  assert.deepEqual(shown.map((item) => item.id), [canonical.id]);
+  assert.equal(delivered.has(historical.id), true);
+});
+
+test("SI-06 desktop delivery fails closed and baselines notifications with invalid timestamps", async () => {
+  const { adapter, shown, delivered } = port();
+  const invalid = { ...canonical, id: "workflow-notification:invalid-time", createdAt: "not-a-date" };
+  const result = await deliverP9DesktopNotifications([invalid], adapter, options);
+  assert.equal(result.baselined, 1);
+  assert.equal(shown.length, 0);
+  assert.equal(delivered.has(invalid.id), true);
+});
+
 test("SI-06 desktop delivery is durable-idempotent through the canonical notification id", async () => {
   const { adapter, shown } = port();
-  await deliverP9DesktopNotifications([canonical], adapter);
-  const second = await deliverP9DesktopNotifications([canonical], adapter);
+  await deliverP9DesktopNotifications([canonical], adapter, options);
+  const second = await deliverP9DesktopNotifications([canonical], adapter, options);
   assert.equal(second.duplicate, 1);
   assert.equal(shown.length, 1);
 });
 
 test("SI-06 desktop delivery does not fail the workflow when OS notifications are unavailable", async () => {
   const denied = port("denied");
-  const result = await deliverP9DesktopNotifications([canonical], denied.adapter);
+  const result = await deliverP9DesktopNotifications([canonical], denied.adapter, options);
   assert.deepEqual(result, {
     delivered: 0,
     duplicate: 0,
+    baselined: 0,
     suppressed: 0,
     unavailable: 1,
     failed: 0,
@@ -73,8 +102,8 @@ test("SI-06 desktop notification text is capped and credential-shaped content is
 test("SI-06 desktop delivery reserves the canonical id before OS show so a failure cannot duplicate after restart", async () => {
   const { adapter, delivered } = port();
   adapter.show = () => { throw new Error("OS notification service unavailable"); };
-  const first = await deliverP9DesktopNotifications([canonical], adapter);
-  const second = await deliverP9DesktopNotifications([canonical], adapter);
+  const first = await deliverP9DesktopNotifications([canonical], adapter, options);
+  const second = await deliverP9DesktopNotifications([canonical], adapter, options);
   assert.equal(first.failed, 1);
   assert.equal(second.duplicate, 1);
   assert.deepEqual([...delivered], [canonical.id]);
@@ -83,7 +112,7 @@ test("SI-06 desktop delivery reserves the canonical id before OS show so a failu
 test("SI-06 desktop delivery refuses to show when durable local dedupe state cannot be persisted", async () => {
   const { adapter, shown } = port();
   adapter.claimDelivery = () => "unavailable";
-  const result = await deliverP9DesktopNotifications([canonical], adapter);
+  const result = await deliverP9DesktopNotifications([canonical], adapter, options);
   assert.equal(result.unavailable, 1);
   assert.equal(shown.length, 0);
 });
