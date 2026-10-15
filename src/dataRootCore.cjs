@@ -127,6 +127,10 @@ function recordLedger(home, root, rootId) {
   writeJsonAtomic(ledgerPath(home), { version: MARKER_VERSION, roots });
 }
 
+function writeDataRootPointer(home, value) {
+  writeJsonAtomic(pointerPath(home), { version: MARKER_VERSION, ...value });
+}
+
 function describe(resolution) {
   return `${resolution.root} (from ${resolution.source})`;
 }
@@ -303,7 +307,7 @@ function moveDataRoot({ from, to, env = process.env, homedir }) {
     if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error("The copied data does not match the original; nothing was changed.");
     const marker = readMarker(source);
     if (marker) recordLedger(home, target, marker.rootId);
-    writeJsonAtomic(pointerPath(home), { version: 1, root: target, movedFrom: source, movedAt: new Date().toISOString() });
+    writeDataRootPointer(home, { root: target, movedFrom: source, movedAt: new Date().toISOString() });
     return { from: source, to: target, files: actual.length, bytes: actual.reduce((sum, file) => sum + file.size, 0) };
   } catch (error) {
     fs.rmSync(target, { recursive: true, force: true });
@@ -320,6 +324,18 @@ function processAlive(pidFile) {
   } catch (error) {
     return error && error.code === "EPERM";
   }
+}
+
+/** Re-selects a previously initialized data root without copying or deleting user data. */
+function restoreDataRootPointer({ root, env = process.env, homedir }) {
+  if (typeof root !== "string" || !path.isAbsolute(root)) throw new Error("LiOS data root restoration requires an absolute folder path.");
+  const home = homeOf({ env, homedir });
+  const target = path.resolve(root);
+  const marker = readMarker(target);
+  if (!marker) throw new Error("LiOS data root restoration requires an existing verified root marker.");
+  recordLedger(home, target, marker.rootId);
+  writeDataRootPointer(home, { root: target, restoredAt: new Date().toISOString() });
+  return { root: target, rootId: marker.rootId };
 }
 
 /** Points this home back at its default data folder (does not move any data). */
@@ -340,5 +356,6 @@ module.exports = {
   prepareDataRoot,
   readMarker,
   resolveDataRoot,
+  restoreDataRootPointer,
   stateDir,
 };
