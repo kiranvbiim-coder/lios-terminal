@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { installManagedRuntime, ManagedRuntimeVerificationError, managedRuntimePythonPath, readManagedRuntimeState, rollbackManagedRuntime } from "./pythonRuntimeManager";
+import {
+  installManagedRuntime,
+  ManagedRuntimeVerificationError,
+  StrictProvisioningAuthorityError,
+  managedRuntimePythonPath,
+  readManagedRuntimeState,
+  rollbackManagedRuntime,
+  type StrictProvisioningAuthority,
+} from "./pythonRuntimeManager";
 import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
 
 test("managed runtime state fails closed when no installation exists", () => {
@@ -20,6 +28,73 @@ test("managed runtime state fails closed when no installation exists", () => {
   }
 });
 
+test("strict managed runtime provisioning fails closed before mutation without an authority", async () => {
+  const previous = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-runtime-strict-missing-authority-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  try {
+    await assert.rejects(
+      installManagedRuntime(["core"], [], { isolationMode: "strict" }),
+      (error: unknown) => error instanceof StrictProvisioningAuthorityError
+        && error.code === "strict_provisioning_authority_missing",
+    );
+    assert.equal(fs.existsSync(path.join(directory, "python-runtimes")), false);
+    assert.equal(readManagedRuntimeState(), null);
+  } finally {
+    if (previous === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("strict managed runtime provisioning delegates the staging mutation to the governed authority", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("The managed runtime does not support this test host.");
+    return;
+  }
+  const previous = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-runtime-strict-authority-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const calls: string[] = [];
+  const authority: StrictProvisioningAuthority = {
+    async provisionManagedRuntime(request) {
+      calls.push(request.runtimePath);
+      assert.ok(request.runtimePath.startsWith(path.join(directory, "python-runtimes", "install-")));
+      assert.deepEqual(request.selectedPackIds, ["core"]);
+      assert.ok(request.packageSpecs.length > 0);
+      assert.equal(request.hashVerified, false);
+
+      const python = process.platform === "win32"
+        ? path.join(request.runtimePath, "Scripts", "python.exe")
+        : path.join(request.runtimePath, "bin", "python3");
+      fs.mkdirSync(path.dirname(python), { recursive: true });
+      fs.writeFileSync(python, "governed-runtime");
+
+      const core = MANAGED_RUNTIME_MANIFEST.packs.find((pack) => pack.id === "core");
+      assert.ok(core);
+      const installedPackages = Object.fromEntries(core.packages.map((pkg) => [pkg.name, pkg.version]));
+      return {
+        packageOutput: "provisioned by strict authority",
+        installedPackages,
+      };
+    },
+  };
+
+  try {
+    const result = await installManagedRuntime(["core"], [], {
+      isolationMode: "strict",
+      strictProvisioningAuthority: authority,
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(result.state.packageOutput, "provisioned by strict authority");
+    assert.equal(result.state.runtimePath, path.join(directory, "python-runtimes", "current"));
+    assert.ok(managedRuntimePythonPath());
+  } finally {
+    if (previous === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("release-qualified install refuses absent platform wheel hashes before staging", async (t) => {
   if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
