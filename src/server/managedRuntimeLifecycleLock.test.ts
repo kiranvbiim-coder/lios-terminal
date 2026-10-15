@@ -63,3 +63,18 @@ test("SI-07.10 lock acquisition refuses a symlinked runtime root", async (t) => 
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+test("SI-07.10 releasing a replaced lock never deletes a different process's ownership", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-lifecycle-replaced-"));
+  const lockFile = path.join(root, MANAGED_RUNTIME_LIFECYCLE_LOCK_NAME);
+  try {
+    const release = acquireManagedRuntimeLifecycleLock(root);
+    fs.unlinkSync(lockFile);
+    fs.writeFileSync(lockFile, "replacement-owner-must-survive");
+    release();
+    assert.equal(fs.readFileSync(lockFile, "utf8"), "replacement-owner-must-survive");
+    assert.throws(() => acquireManagedRuntimeLifecycleLock(root), ManagedRuntimeBusyError);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
