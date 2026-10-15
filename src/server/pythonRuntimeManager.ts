@@ -5,6 +5,7 @@ import path from "node:path";
 import { MANAGED_RUNTIME_MANIFEST, type ManagedRuntimeManifest } from "./runtimeManifest";
 import { dataRoot } from "./dataRoot";
 import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { acquireManagedRuntimeLifecycleLock } from "./managedRuntimeLifecycleLock";
 
 const INSTALL_TIMEOUT_MS = 15 * 60 * 1_000;
 const RUNTIME_STATE_SNAPSHOT = ".lios-runtime-state.json";
@@ -329,6 +330,8 @@ export async function installManagedRuntime(
   assertRuntimeStateStorageSafe();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   assertRuntimeStateStorageSafe();
+  const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(root);
+  try {
   const currentPath = path.join(root, "current");
   const currentExists = validateCurrentRuntimeDirectory(currentPath);
   const temporaryPath = unoccupiedRuntimePath(root, "install");
@@ -432,10 +435,19 @@ export async function installManagedRuntime(
     fs.rmSync(temporaryPath, { recursive: true, force: true });
     throw error;
   }
+  } finally {
+    releaseLifecycleLock();
+  }
 }
 
 export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationResult> {
   assertRuntimeStateStorageSafe();
+  const lifecycleRoot = runtimeRoot();
+  if (!fs.lstatSync(lifecycleRoot, { throwIfNoEntry: false })) {
+    throw new Error("No safe managed runtime rollback is available.");
+  }
+  const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(lifecycleRoot);
+  try {
   const state = readManagedRuntimeState();
   const previousPath = authorizedRollbackPath(state?.rollbackPath);
   if (!state || !previousPath) {
@@ -546,4 +558,7 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
       ? "Managed Python runtime rolled back with its previous pack-selection state."
       : "Managed Python runtime rolled back; legacy rollback metadata was unavailable and release-pack selection was reset.",
   };
+  } finally {
+    releaseLifecycleLock();
+  }
 }
