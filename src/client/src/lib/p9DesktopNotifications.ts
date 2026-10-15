@@ -17,6 +17,7 @@ export interface P9DesktopNotificationPayload {
 
 export interface P9DesktopNotificationPort {
   permission: P9DesktopNotificationPermission;
+  requestPermission?(): Promise<P9DesktopNotificationPermission>;
   claimDelivery(id: string): P9DesktopDeliveryClaim;
   show(notification: P9DesktopNotificationPayload): void | Promise<void>;
 }
@@ -80,6 +81,16 @@ function isFreshNotification(
   return ageMs >= 0 && ageMs <= freshnessMs;
 }
 
+async function resolvePermission(port: P9DesktopNotificationPort): Promise<P9DesktopNotificationPermission> {
+  if (port.permission !== "default") return port.permission;
+  if (!port.requestPermission) return "unsupported";
+  try {
+    return await port.requestPermission();
+  } catch {
+    return "unsupported";
+  }
+}
+
 export async function deliverP9DesktopNotifications(
   notifications: readonly CanonicalP9NotificationForDesktop[],
   port: P9DesktopNotificationPort,
@@ -95,6 +106,7 @@ export async function deliverP9DesktopNotifications(
   };
   const now = options.now ?? new Date();
   const freshnessMs = Math.max(0, options.freshnessMs ?? DEFAULT_FRESHNESS_MS);
+  let resolvedPermission: P9DesktopNotificationPermission | null = null;
 
   for (const notification of notifications) {
     if (notification.status !== "delivered") {
@@ -119,12 +131,12 @@ export async function deliverP9DesktopNotifications(
       continue;
     }
 
-    // In Electron, the Web Notification constructor is itself the request
-    // path and Electron approves permission requests by default unless the app
-    // installs a custom permission handler. Blocking the "default" state here
-    // would prevent Chromium from resolving that request at all. Only an
-    // explicit denial or an unsupported runtime is a pre-show blocker.
-    if (port.permission === "denied" || port.permission === "unsupported") {
+    // Resolve Chromium/Electron's default notification permission before the
+    // durable delivery claim. A denied request therefore leaves the canonical
+    // id unclaimed and still available inside LiOS rather than pretending an
+    // OS alert was attempted.
+    if (resolvedPermission === null) resolvedPermission = await resolvePermission(port);
+    if (resolvedPermission !== "granted") {
       result.unavailable += 1;
       continue;
     }
@@ -199,6 +211,7 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
 
   return {
     permission,
+    requestPermission: async () => window.Notification.requestPermission() as Promise<P9DesktopNotificationPermission>,
     claimDelivery: (id) => {
       if (deliveredIds.has(id)) return "duplicate";
       deliveredIds.add(id);
