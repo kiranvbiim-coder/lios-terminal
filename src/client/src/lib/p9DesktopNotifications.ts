@@ -6,6 +6,7 @@ export interface CanonicalP9NotificationForDesktop {
   status: "delivered" | "suppressed";
   title: string;
   body: string;
+  createdAt: string;
 }
 
 export interface P9DesktopNotificationPayload {
@@ -23,13 +24,20 @@ export interface P9DesktopNotificationPort {
 export interface P9DesktopNotificationDeliveryResult {
   delivered: number;
   duplicate: number;
+  baselined: number;
   suppressed: number;
   unavailable: number;
   failed: number;
 }
 
+export interface P9DesktopNotificationDeliveryOptions {
+  now?: Date;
+  freshnessMs?: number;
+}
+
 const DESKTOP_DELIVERY_STORAGE_KEY = "lios.p9.desktop-notifications.v1";
 const MAX_PERSISTED_IDS = 2_000;
+const DEFAULT_FRESHNESS_MS = 5 * 60_000;
 const CREDENTIAL_ASSIGNMENT = /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)\s*[:=]\s*[^\s,;]+/gi;
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+\/-]{12,}/gi;
 const OPENAI_STYLE_KEY = /\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}/gi;
@@ -44,17 +52,32 @@ export function sanitizeP9DesktopNotificationText(value: string, maxLength: numb
   return normalized.slice(0, Math.max(0, maxLength));
 }
 
+function isFreshNotification(
+  createdAt: string,
+  now: Date,
+  freshnessMs: number,
+): boolean {
+  const createdAtMs = Date.parse(createdAt);
+  if (!Number.isFinite(createdAtMs)) return false;
+  const ageMs = now.getTime() - createdAtMs;
+  return ageMs >= 0 && ageMs <= freshnessMs;
+}
+
 export async function deliverP9DesktopNotifications(
   notifications: readonly CanonicalP9NotificationForDesktop[],
   port: P9DesktopNotificationPort,
+  options: P9DesktopNotificationDeliveryOptions = {},
 ): Promise<P9DesktopNotificationDeliveryResult> {
   const result: P9DesktopNotificationDeliveryResult = {
     delivered: 0,
     duplicate: 0,
+    baselined: 0,
     suppressed: 0,
     unavailable: 0,
     failed: 0,
   };
+  const now = options.now ?? new Date();
+  const freshnessMs = Math.max(0, options.freshnessMs ?? DEFAULT_FRESHNESS_MS);
 
   for (const notification of notifications) {
     if (notification.status !== "delivered") {
@@ -65,6 +88,20 @@ export async function deliverP9DesktopNotifications(
       result.failed += 1;
       continue;
     }
+
+    // Old in-app history is canonical and should remain visible inside LiOS,
+    // but replaying it as an OS notification after an upgrade/start would
+    // create a noisy notification storm. Persist the canonical ids as a local
+    // baseline without showing them. Invalid/future timestamps also fail
+    // closed into this non-show path.
+    if (!isFreshNotification(notification.createdAt, now, freshnessMs)) {
+      const claim = port.claimDelivery(notification.id);
+      if (claim === "duplicate") result.duplicate += 1;
+      else if (claim === "unavailable") result.unavailable += 1;
+      else result.baselined += 1;
+      continue;
+    }
+
     if (port.permission !== "granted") {
       result.unavailable += 1;
       continue;
