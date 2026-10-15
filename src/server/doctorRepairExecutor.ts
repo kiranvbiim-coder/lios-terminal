@@ -1,4 +1,4 @@
-import type { SandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { effectiveSandboxIsolationMode, type SandboxIsolationMode } from "./exec/sandbox-runtime-profile";
 import {
   installManagedRuntime,
   managedRuntimePythonPath,
@@ -96,9 +96,11 @@ export async function executeManagedRuntimeRepair(
 
   repairInProgress = true;
   try {
+    // Server strict-mode policy overrides a requested legacy-host mode.
+    const isolationMode = effectiveSandboxIsolationMode(request.isolationMode);
     const current = dependencies.readCurrentRuntimeContext();
     const plan = planManagedRuntimeRepair(current.readiness, {
-      isolationMode: request.isolationMode,
+      isolationMode,
       strictProvisioningAuthorityAvailable: Boolean(request.strictProvisioningAuthority),
     });
 
@@ -119,7 +121,7 @@ export async function executeManagedRuntimeRepair(
     const packIds = [...current.readiness.requiredPackIds];
     const selectedReleasePackIds = [...current.selectedReleasePackIds];
     const installOptions: ManagedRuntimeInstallOptions = {
-      isolationMode: request.isolationMode,
+      isolationMode,
       requireVerified: plan.requiresVerifiedArtifacts,
     };
     if (request.strictProvisioningAuthority) {
