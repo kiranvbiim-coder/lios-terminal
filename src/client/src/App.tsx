@@ -22,6 +22,7 @@ import {
   replayNotificationReads,
   setNotificationReadOutboxOwner,
 } from "@/lib/p9NotificationReadOutbox";
+import { clearP9ManualRunDrafts, setP9ManualRunDraftOwner } from "@/lib/p9ManualRunDrafts";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -84,6 +85,7 @@ function App() {
     // email, determines which recent analytical history is visible.
     setSessionMemoryOwner(data?.authState ?? null);
     setNotificationReadOutboxOwner(data?.authState ?? null);
+    setP9ManualRunDraftOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -164,7 +166,7 @@ function App() {
     setEnvironmentSetupOpen(false);
     try {
       queryClient.clear();
-      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearResearchTray, clearTerminalPersonalization]) {
+      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearP9ManualRunDrafts, clearResearchTray, clearTerminalPersonalization]) {
         try { clear(); } catch { /* Continue clearing the remaining account-scoped state. */ }
       }
       try { localStorage.removeItem(LAST_DOMAIN_STORAGE_KEY); } catch { /* Storage can be disabled. */ }
@@ -173,6 +175,7 @@ function App() {
       // selected; always disarm the memory owner after server sign-out.
       setSessionMemoryOwner(null);
       setNotificationReadOutboxOwner(null);
+      setP9ManualRunDraftOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
