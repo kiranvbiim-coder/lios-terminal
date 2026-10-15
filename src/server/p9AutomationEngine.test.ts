@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   decideP9Notification,
+  executeMatchedP9EventWorkflows,
   nextP9ScheduledRun,
   p9AutomationEventMatches,
   p9UnseenObservedFilings,
@@ -78,6 +79,41 @@ test("SI-06 conditional filters cannot override canonical tenant or source ident
   assert.equal(matches({ symbol: "AAPL", projectId: 11 }), true,
     "ordinary conditional payload filters remain functional");
   assert.equal(matches({ symbol: "MSFT", projectId: 11 }), false);
+});
+
+test("SI-06 event fanout continues after an unexpected workflow failure and reports failure truthfully", async () => {
+  const attempted: number[] = [];
+  let inFlight = false;
+  const summary = await executeMatchedP9EventWorkflows([1, 2, 3, 4], async (id) => {
+    assert.equal(inFlight, false, "the event dispatcher must preserve serial execution");
+    inFlight = true;
+    attempted.push(id);
+    try {
+      await Promise.resolve();
+      if (id === 2) throw new Error("owner removed before a run was created");
+      if (id === 3) return { run: { id }, error: "action failed with a captured receipt" };
+      if (id === 4) return { run: null, error: null }; // deduplicated, no new execution
+      return { run: { id }, error: null };
+    } finally {
+      inFlight = false;
+    }
+  });
+  assert.deepEqual(attempted, [1, 2, 3, 4], "failed workflow must not starve later matches");
+  assert.deepEqual(summary, {
+    matched: 4, executed: 2, failed: 2, unexpectedFailures: 1,
+  });
+});
+
+test("SI-06 event fanout reports all-healthy and empty batches without fabricated actions", async () => {
+  let calls = 0;
+  const handler = async () => { calls += 1; return { run: { id: calls }, error: null }; };
+  assert.deepEqual(await executeMatchedP9EventWorkflows([], handler), {
+    matched: 0, executed: 0, failed: 0, unexpectedFailures: 0,
+  });
+  assert.equal(calls, 0);
+  assert.deepEqual(await executeMatchedP9EventWorkflows([1, 2], handler), {
+    matched: 2, executed: 2, failed: 0, unexpectedFailures: 0,
+  });
 });
 
 test("P9 notification policy suppresses irrelevant/noisy runs and delivers material changes", () => {
