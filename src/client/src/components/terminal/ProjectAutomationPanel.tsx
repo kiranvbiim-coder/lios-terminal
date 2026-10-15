@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, Pause, Play, RefreshCw, Trash2, Workflow } from "lucide-react";
 import {
   createP9Workflow,
@@ -12,6 +12,13 @@ import {
   useP9Workflows,
 } from "@/lib/useP9Automation";
 import { queueNotificationRead } from "@/lib/p9NotificationReadOutbox";
+import {
+  discardP9ManualRunDraft,
+  listP9ManualRunDrafts,
+  prepareP9ManualRunConfirmation,
+  saveP9ManualRunDraft,
+  subscribeP9ManualRunDrafts,
+} from "@/lib/p9ManualRunDrafts";
 import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
 
 function time(value: string | null): string {
@@ -38,6 +45,14 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const invalidate = useInvalidateP9Automation();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
+  const confirming = useRef(false);
+
+  useEffect(() => {
+    const refresh = () => setDrafts(listP9ManualRunDrafts(projectId));
+    refresh();
+    return subscribeP9ManualRunDrafts(refresh);
+  }, [projectId]);
 
   const workflows = workflowsQuery.data ?? [];
   const runs = runsQuery.data ?? [];
@@ -49,7 +64,14 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   }, [runs]);
   const unread = notifications.filter((item) => item.status === "delivered" && !item.readAt);
 
-  const run = async (id: string) => {
+  const run = async (id: string, updatedAt: string) => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const saved = saveP9ManualRunDraft(projectId, id, updatedAt);
+      setMessage(saved
+        ? "Manual run saved as an offline draft. It will NOT execute automatically; review and confirm after reconnect."
+        : "Could not save an offline run draft; nothing has been scheduled.");
+      return;
+    }
     setBusyId(id);
     setMessage(null);
     try {
@@ -60,6 +82,32 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       setMessage(cause instanceof Error ? cause.message : "Workflow run failed.");
       invalidate(projectId);
     } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmDraft = async (id: string) => {
+    if (confirming.current) return;
+    confirming.current = true;
+    setBusyId("confirm:" + id);
+    setMessage(null);
+    try {
+      const permitted = await prepareP9ManualRunConfirmation(projectId, id);
+      if (!permitted) {
+        setMessage("Confirmation blocked. Reconnect, sign in and verify that this workflow has not changed; discard any stale draft.");
+        return;
+      }
+      // Exactly one normal P9 manual-run request after the fresh-user,
+      // project, workflow revision and explicit human confirmation gates.
+      const outcome = await runP9WorkflowNow(projectId, id);
+      setMessage(outcome.error || outcome.run?.summary || "Run request completed; check workflow history.");
+    } catch {
+      // Network failure AFTER issuing a manual POST has an ambiguous result.
+      // The consumed draft is not auto-retried; inspect P9 run history first.
+      setMessage("Run outcome unconfirmed. Check server run history before initiating another request. No automatic retry was scheduled.");
+    } finally {
+      invalidate(projectId);
+      confirming.current = false;
       setBusyId(null);
     }
   };
@@ -187,7 +235,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   {last?.summary && <div className="mt-2 line-clamp-2 font-ui text-[13px] leading-4 text-muted-foreground/90">{last.summary}</div>}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button disabled={busyId === workflow.id} onClick={() => void run(workflow.id)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now">
+                  <button disabled={busyId === workflow.id} onClick={() => void run(workflow.id, workflow.updatedAt)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now">
                     <RefreshCw className={`h-3 w-3 ${busyId === workflow.id ? "animate-spin" : ""}`} />
                   </button>
                   <button onClick={() => void deleteP9Workflow(projectId, workflow.id).then(() => invalidate(projectId))} className="rounded p-1.5 text-muted-foreground hover:bg-white/[0.03] hover:text-red-300" title="Delete workflow">
@@ -204,6 +252,37 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           </div>
         )}
       </div>
+
+      {drafts.length > 0 && (
+        <div className="mt-4 border-t border-border/50 pt-3" data-p9-manual-run-drafts>
+          <h3 className="font-ui text-[13px] font-semibold text-foreground">Offline manual-run drafts — confirmation required</h3>
+          <p className="mt-1 font-ui text-[12px] text-muted-foreground">
+            Nothing is queued for automatic execution. After reconnect, review the current workflow and explicitly confirm each request.
+          </p>
+          {drafts.map((draft) => {
+            const workflow = workflows.find((item) => item.id === draft.workflowId);
+            const current = workflow?.updatedAt === draft.expectedUpdatedAt;
+            return (
+              <div key={draft.workflowId} className="mt-2 flex flex-wrap items-center gap-2 rounded border border-border/50 px-3 py-2">
+                <span className="flex-1 font-ui text-[13px]">
+                  {workflow?.name ?? "Workflow unavailable"}
+                  {!current && <span className="ml-2 text-amber-300">Changed or unavailable — discard</span>}
+                </span>
+                <button type="button" disabled={Boolean(busyId) || !current}
+                  onClick={() => void confirmDraft(draft.workflowId)}
+                  className="rounded border border-border/60 px-2 py-1 text-[12px] disabled:opacity-40">
+                  Confirm run now
+                </button>
+                <button type="button" disabled={Boolean(busyId)}
+                  onClick={() => { discardP9ManualRunDraft(projectId, draft.workflowId); setMessage("Offline draft discarded; no workflow was run."); }}
+                  className="rounded border border-border/60 px-2 py-1 text-[12px] text-muted-foreground disabled:opacity-40">
+                  Discard
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-4 border-t border-border/50 pt-3">
         <div className="mb-2 flex items-center justify-between">
