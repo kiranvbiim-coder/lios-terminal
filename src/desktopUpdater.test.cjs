@@ -1,13 +1,13 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { configureAutoUpdater, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
+const { configureAutoUpdater, createDesktopUpdateInstallController, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
 
 function makeUpdater({ checkError = null } = {}) {
   const events = new Map();
   const calls = [];
   const updater = {
     autoDownload: false,
-    autoInstallOnAppQuit: false,
+    autoInstallOnAppQuit: true,
     allowDowngrade: true,
     allowPrerelease: true,
     setFeedURL(value) { calls.push(["feed", value]); },
@@ -16,6 +16,7 @@ function makeUpdater({ checkError = null } = {}) {
       calls.push(["check"]);
       return checkError ? Promise.reject(checkError) : Promise.resolve();
     },
+    quitAndInstall(...args) { calls.push(["install", ...args]); },
   };
   return { updater, events, calls };
 }
@@ -47,7 +48,7 @@ test("development is disabled while packaged builds use only embedded app-update
     source: "packaged_config",
   });
   assert.equal(packaged.updater.autoDownload, true);
-  assert.equal(packaged.updater.autoInstallOnAppQuit, true);
+  assert.equal(packaged.updater.autoInstallOnAppQuit, false);
   assert.equal(packaged.updater.allowDowngrade, false);
   assert.equal(packaged.updater.allowPrerelease, false);
   assert.deepEqual(packaged.calls, [["check"]]);
@@ -90,4 +91,74 @@ test("desktop updater never logs raw external error text", async () => {
   assert.equal(logs.some((line) => line.includes(secret)), false);
   assert.equal(logs.some((line) => line.includes("token=")), false);
   assert.equal(logs.filter((line) => line.includes("Desktop update failed safely.")).length >= 1, true);
+});
+
+test("desktop update install requires explicit approval and never installs on decline", async () => {
+  const { updater, calls } = makeUpdater();
+  let approved = false;
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "1.2.3");
+      return approved;
+    },
+    log() {},
+  });
+
+  assert.deepEqual(await controller.handleDownloaded({ version: "1.2.3" }), {
+    accepted: false,
+    reason: "cancelled",
+    version: "1.2.3",
+  });
+  assert.equal(calls.some(([name]) => name === "install"), false);
+
+  approved = true;
+  assert.deepEqual(await controller.handleDownloaded({ version: "1.2.3" }), {
+    accepted: true,
+    version: "1.2.3",
+  });
+  assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
+});
+
+test("desktop update confirmation receives only a bounded version and failures never log raw external text", async () => {
+  const secret = "credential-secret";
+  const { updater } = makeUpdater();
+  const logs = [];
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "unknown");
+      throw new Error(`dialog failed with ${secret}`);
+    },
+    log(message) { logs.push(String(message)); },
+  });
+
+  assert.deepEqual(await controller.handleDownloaded({ version: `1.2.3?token=${secret}` }), {
+    accepted: false,
+    reason: "confirmation_failed",
+    version: "unknown",
+  });
+  assert.equal(logs.some((line) => line.includes(secret)), false);
+});
+
+test("downloaded packaged updates are routed through explicit confirmation before install", async () => {
+  const { updater, events, calls } = makeUpdater();
+  let approved = false;
+  configureAutoUpdater({
+    updater,
+    isPackaged: true,
+    env: {},
+    log() {},
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "2.0.0");
+      return approved;
+    },
+  });
+
+  await events.get("update-downloaded")({ version: "2.0.0" });
+  assert.equal(calls.some(([name]) => name === "install"), false);
+
+  approved = true;
+  await events.get("update-downloaded")({ version: "2.0.0" });
+  assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
 });
