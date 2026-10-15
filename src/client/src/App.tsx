@@ -23,6 +23,7 @@ import {
   setNotificationReadOutboxOwner,
 } from "@/lib/p9NotificationReadOutbox";
 import { clearP9ManualRunDrafts, setP9ManualRunDraftOwner } from "@/lib/p9ManualRunDrafts";
+import { clearP9ManualRunAttempts, setP9ManualRunAttemptOwner } from "@/lib/p9ManualRunAttemptLedger";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -86,6 +87,7 @@ function App() {
     setSessionMemoryOwner(data?.authState ?? null);
     setNotificationReadOutboxOwner(data?.authState ?? null);
     setP9ManualRunDraftOwner(data?.authState ?? null);
+    setP9ManualRunAttemptOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -166,7 +168,7 @@ function App() {
     setEnvironmentSetupOpen(false);
     try {
       queryClient.clear();
-      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearP9ManualRunDrafts, clearResearchTray, clearTerminalPersonalization]) {
+      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearP9ManualRunDrafts, clearP9ManualRunAttempts, clearResearchTray, clearTerminalPersonalization]) {
         try { clear(); } catch { /* Continue clearing the remaining account-scoped state. */ }
       }
       try { localStorage.removeItem(LAST_DOMAIN_STORAGE_KEY); } catch { /* Storage can be disabled. */ }
@@ -176,6 +178,7 @@ function App() {
       setSessionMemoryOwner(null);
       setNotificationReadOutboxOwner(null);
       setP9ManualRunDraftOwner(null);
+      setP9ManualRunAttemptOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
