@@ -65,6 +65,7 @@ test("approved lazy install preserves existing low-level packs and release-pack 
   let receivedPackIds: string[] = [];
   let receivedReleasePackIds: string[] = [];
   let receivedStrictAuthority: unknown;
+  let receivedRequireVerified: boolean | undefined;
   const installedState = state(["core", "research-sec", "fixed-income", "econometrics", "forecasting", "optimization", "ml"], ["research"]);
   const operation: ManagedRuntimeOperationResult = { state: installedState, detail: "installed" };
   const strictProvisioningAuthority = {
@@ -84,6 +85,7 @@ test("approved lazy install preserves existing low-level packs and release-pack 
         receivedPackIds = packIds;
         receivedReleasePackIds = releasePackIds;
         receivedStrictAuthority = options.strictProvisioningAuthority;
+        receivedRequireVerified = options.requireVerified;
         return operation;
       },
     },
@@ -97,6 +99,7 @@ test("approved lazy install preserves existing low-level packs and release-pack 
   }
   assert.deepEqual(receivedReleasePackIds, ["research"]);
   assert.equal(receivedStrictAuthority, strictProvisioningAuthority);
+  assert.equal(receivedRequireVerified, true, "approved lazy installs require verified release artifacts");
 });
 
 test("lazy installation cannot downgrade strict provisioning to legacy host pip", async () => {
@@ -219,4 +222,35 @@ test("SI-07.09 fresh installation without an existing runtime still respects the
   });
   assert.equal(result.status, "consent_required");
   assert.equal(installed, 0);
+});
+
+test("SI-07.09 caller cannot disable strict release-hash verification for lazy expansion", async () => {
+  const seen: Array<{ requireVerified?: boolean; isolationMode?: string }> = [];
+  const operation: ManagedRuntimeOperationResult = {
+    state: state(["core", "research-sec", "research-docs"]),
+    detail: "installed",
+  };
+  const result = await ensureLazyCapability(
+    "document-intelligence",
+    {
+      consentToHeavyweight: true,
+      runtimeInstallOptions: {
+        isolationMode: "legacy-host",
+        requireVerified: false,
+        strictProvisioningAuthority: {
+          provisionManagedRuntime: async () => ({ packageOutput: "", installedPackages: {} }),
+        },
+      },
+    },
+    {
+      readState: () => state(["core"]),
+      pythonAvailable: () => true,
+      installRuntime: async (_packs, _releasePacks, options) => {
+        seen.push({ isolationMode: options.isolationMode, requireVerified: options.requireVerified });
+        return operation;
+      },
+    },
+  );
+  assert.equal(result.status, "installed");
+  assert.deepEqual(seen, [{ isolationMode: "strict", requireVerified: true }]);
 });
