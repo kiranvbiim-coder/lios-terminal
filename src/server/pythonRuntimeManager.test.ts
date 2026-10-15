@@ -458,3 +458,126 @@ test("SI-07.10 rollback rejects a symlinked runtime state snapshot before moving
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("SI-07.10 strict install refuses a symlinked current runtime before provisioning", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this host");
+    return;
+  }
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-install-current-symlink-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const outside = path.join(directory, "private-user-data");
+  fs.mkdirSync(root);
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "sentinel.txt"), "unchanged");
+  let provisions = 0;
+  try {
+    try {
+      fs.symlinkSync(outside, path.join(root, "current"), process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      t.skip("Host cannot make a directory symlink: " + String(error));
+      return;
+    }
+    const authority: StrictProvisioningAuthority = {
+      async provisionManagedRuntime() {
+        provisions += 1;
+        throw new Error("unsafe current must be rejected before provisioning");
+      },
+    };
+    await assert.rejects(
+      installManagedRuntime(["core"], [], { isolationMode: "strict", strictProvisioningAuthority: authority }),
+      /current directory is unavailable or unsafe/,
+    );
+    assert.equal(provisions, 0);
+    assert.equal(fs.readFileSync(path.join(outside, "sentinel.txt"), "utf8"), "unchanged");
+    assert.equal(fs.existsSync(path.join(outside, ".lios-runtime-state.json")), false);
+  } finally {
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 managed install preserves an occupied rollback slot and chooses a new one", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this host");
+    return;
+  }
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-install-rollback-collision-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const occupied = path.join(root, "rollback-123456789");
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(occupied);
+  fs.writeFileSync(path.join(current, "original.txt"), "original");
+  fs.writeFileSync(path.join(occupied, "sentinel.txt"), "must not be overwritten");
+  const clock = t.mock.method(Date, "now", () => 123456789);
+  const authority: StrictProvisioningAuthority = {
+    async provisionManagedRuntime(request) {
+      fs.mkdirSync(request.runtimePath, { recursive: true });
+      const core = MANAGED_RUNTIME_MANIFEST.packs.find(p => p.id === "core");
+      assert.ok(core);
+      return {
+        packageOutput: "test",
+        installedPackages: Object.fromEntries(core.packages.map(p => [p.name, p.version])),
+      };
+    },
+  };
+  try {
+    const result = await installManagedRuntime(["core"], [], { isolationMode: "strict", strictProvisioningAuthority: authority });
+    assert.equal(result.state.rollbackPath, path.join(root, "rollback-123456790"));
+    assert.equal(fs.readFileSync(path.join(occupied, "sentinel.txt"), "utf8"), "must not be overwritten");
+    assert.equal(fs.readFileSync(path.join(result.state.rollbackPath!, "original.txt"), "utf8"), "original");
+  } finally {
+    clock.mock.restore();
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("SI-07.10 install rejects a symlinked current snapshot before writing metadata", async (t) => {
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    t.skip("Managed runtime unsupported on this host");
+    return;
+  }
+  const before = process.env.LIMURIA_DATA_DIR;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-install-snapshot-symlink-"));
+  process.env.LIMURIA_DATA_DIR = directory;
+  const root = path.join(directory, "python-runtimes");
+  const current = path.join(root, "current");
+  const outside = path.join(directory, "private-snapshot");
+  fs.mkdirSync(current, { recursive: true });
+  fs.writeFileSync(outside, "untouched");
+  let provisions = 0;
+  try {
+    try {
+      fs.symlinkSync(outside, path.join(current, ".lios-runtime-state.json"), "file");
+    } catch (error) {
+      t.skip("Host cannot create file symlinks: " + String(error));
+      return;
+    }
+    await assert.rejects(
+      installManagedRuntime(["core"], [], {
+        isolationMode: "strict",
+        strictProvisioningAuthority: {
+          async provisionManagedRuntime() {
+            provisions += 1;
+            throw new Error("must not provision unsafe snapshot");
+          },
+        },
+      }),
+      /current snapshot path is unsafe/,
+    );
+    assert.equal(provisions, 0);
+    assert.equal(fs.readFileSync(outside, "utf8"), "untouched");
+  } finally {
+    if (before === undefined) delete process.env.LIMURIA_DATA_DIR;
+    else process.env.LIMURIA_DATA_DIR = before;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
