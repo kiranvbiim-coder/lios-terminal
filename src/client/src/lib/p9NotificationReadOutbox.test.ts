@@ -205,3 +205,50 @@ test("SI-06.22 valid authenticated-offline session can stage but cannot replay w
     assert.equal(calls, 2, "fresh identity verification and one authorized replay");
   });
 });
+
+test("SI-06.22 account switch during uncached identity verification cannot send a stale replay", async () => {
+  await inBrowser(async ({ items }) => {
+    assert.equal(queueNotificationRead(7, NOTIFICATION), true);
+    let finishIdentity!: (response: Response) => void;
+    const pendingIdentity = new Promise<Response>((resolve) => { finishIdentity = resolve; });
+    let posts = 0;
+    const replay = replayNotificationReads(async (url) => {
+      if (url === "/api/auth/me") return pendingIdentity;
+      posts += 1;
+      return new Response("{}", { status: 200 });
+    });
+    setNotificationReadOutboxOwner(session(12));
+    finishIdentity(new Response(JSON.stringify({ authState: session(11) }), { status: 200 }));
+    const result = await replay;
+    assert.equal(result.blocked, true);
+    assert.equal(result.confirmed, 0);
+    assert.equal(posts, 0, "old account must never POST after an account switch");
+    assert.equal(items.has(key(11)), true, "the old user's unsent receipt remains recoverable");
+    assert.equal(pendingNotificationReadCount(), 0, "new account cannot see the old owner's receipt");
+  });
+});
+
+test("SI-06.22 a successful late POST response after sign-out cannot clear or confirm old queued state", async () => {
+  await inBrowser(async ({ items }) => {
+    assert.equal(queueNotificationRead(7, NOTIFICATION), true);
+    let releasePost!: (response: Response) => void;
+    let signalPostStarted!: () => void;
+    const pendingPost = new Promise<Response>((resolve) => { releasePost = resolve; });
+    const postStarted = new Promise<void>((resolve) => { signalPostStarted = resolve; });
+    const replay = replayNotificationReads(async (url) => {
+      if (url === "/api/auth/me") {
+        return new Response(JSON.stringify({ authState: session() }), { status: 200 });
+      }
+      signalPostStarted();
+      return pendingPost;
+    });
+    await postStarted;
+    setNotificationReadOutboxOwner(null);
+    releasePost(new Response("{}", { status: 200 }));
+    const result = await replay;
+    assert.equal(result.confirmed, 0, "stale in-flight response is not a client confirmation");
+    assert.equal(result.blocked, true);
+    assert.equal(items.has(key(11)), true, "the receipt stays queued for fresh authorization");
+    assert.equal(pendingNotificationReadCount(), 0, "signed-out users have no visible owner queue");
+  });
+});
