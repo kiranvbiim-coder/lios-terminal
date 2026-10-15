@@ -19,6 +19,14 @@ function request(runtimePath: string) {
   } as const;
 }
 
+test("SI-07 strict provisioning authority requires an explicit trusted runner binding", () => {
+  const root = path.join(os.tmpdir(), "lios-runtime-root");
+  assert.throws(
+    () => createStrictProvisioningAuthority({ runtimeRoot: root, pythonExecutable: "python3", platform: "linux" }),
+    (error: unknown) => error instanceof StrictProvisioningRequestError && error.code === "authority_runner_missing",
+  );
+});
+
 test("SI-07 strict provisioning authority rejects staging outside the managed runtime root before execution", async () => {
   const calls: unknown[] = [];
   const run: StrictProvisioningCommandRunner = async (input) => {
