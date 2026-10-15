@@ -99,6 +99,32 @@ function runtimeStateSnapshotPath(runtimePath: string): string {
   return path.join(runtimePath, RUNTIME_STATE_SNAPSHOT);
 }
 
+/** Refuse symlinked or non-directory active runtimes before recording state. */
+function validateCurrentRuntimeDirectory(currentPath: string): boolean {
+  const current = fs.lstatSync(currentPath, { throwIfNoEntry: false });
+  if (!current) return false;
+  if (!current.isDirectory() || current.isSymbolicLink()) {
+    throw new Error("Managed runtime current directory is unavailable or unsafe for installation.");
+  }
+  const snapshot = fs.lstatSync(runtimeStateSnapshotPath(currentPath), { throwIfNoEntry: false });
+  if (snapshot && (!snapshot.isFile() || snapshot.isSymbolicLink())) {
+    throw new Error("Managed runtime current snapshot path is unsafe for installation.");
+  }
+  return true;
+}
+
+/** Never rename over a pre-existing rollback, staging, or dangling symlink. */
+function unoccupiedRuntimePath(root: string, prefix: "rollback" | "install"): string {
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const name = prefix === "install"
+      ? `install-${process.pid}-${Date.now() + attempt}`
+      : `rollback-${Date.now() + attempt}`;
+    const candidate = path.join(root, name);
+    if (!fs.lstatSync(candidate, { throwIfNoEntry: false })) return candidate;
+  }
+  throw new Error("No unused managed runtime destination is available.");
+}
+
 function writeRuntimeStateSnapshot(runtimePath: string, state: ManagedRuntimeState): void {
   fs.writeFileSync(runtimeStateSnapshotPath(runtimePath), JSON.stringify(state, null, 2), { mode: 0o600 });
 }
@@ -285,9 +311,10 @@ export async function installManagedRuntime(
 
   const root = runtimeRoot();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-  const temporaryPath = path.join(root, `install-${process.pid}-${Date.now()}`);
   const currentPath = path.join(root, "current");
-  const previousPath = fs.existsSync(currentPath) ? path.join(root, `rollback-${Date.now()}`) : null;
+  const currentExists = validateCurrentRuntimeDirectory(currentPath);
+  const temporaryPath = unoccupiedRuntimePath(root, "install");
+  const previousPath = currentExists ? unoccupiedRuntimePath(root, "rollback") : null;
   const previousState = readManagedRuntimeState();
   let currentMovedAside = false;
   let temporaryActivated = false;
@@ -326,8 +353,9 @@ export async function installManagedRuntime(
       installedPackages = await readInstalledPackages(pip);
     }
 
-    if (!fs.existsSync(temporaryPath)) {
-      throw new Error("Managed runtime provisioning did not create the LiOS staging runtime.");
+    const staged = fs.lstatSync(temporaryPath, { throwIfNoEntry: false });
+    if (!staged?.isDirectory() || staged.isSymbolicLink()) {
+      throw new Error("Managed runtime provisioning did not create a safe LiOS staging runtime.");
     }
 
     const verificationWarnings = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, resolvedPackIds, installedPackages);
@@ -335,7 +363,17 @@ export async function installManagedRuntime(
       throw new ManagedRuntimeVerificationError("integrity_failed");
     }
 
+    // Provisioning is asynchronous. Recheck the active directory and target
+    // just before mutation so a replaced current symlink or occupied rollback
+    // destination cannot redirect or clobber a filesystem write.
+    const stillCurrent = validateCurrentRuntimeDirectory(currentPath);
+    if (stillCurrent !== currentExists) {
+      throw new Error("Managed runtime current directory changed during provisioning.");
+    }
     if (previousPath) {
+      if (fs.lstatSync(previousPath, { throwIfNoEntry: false })) {
+        throw new Error("Managed runtime rollback destination became occupied.");
+      }
       if (previousState) writeRuntimeStateSnapshot(currentPath, previousState);
       fs.renameSync(currentPath, previousPath);
       currentMovedAside = true;
