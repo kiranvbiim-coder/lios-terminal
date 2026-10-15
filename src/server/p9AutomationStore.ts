@@ -314,6 +314,28 @@ export async function beginP9Run(
   return row;
 }
 
+/**
+ * Tenant-scoped lookup of an existing manual idempotency receipt.
+ * The unique (workflow_id, dedupe_key) index on project_automation_runs
+ * provides race-safe durable single-writer admission across server restarts.
+ * Do not select unscoped receipts by a client-provided request UUID alone.
+ */
+export async function findP9ManualRunReceipt(
+  ctx: TenantContext,
+  projectId: number,
+  workflowId: string,
+  dedupeKey: string,
+): Promise<ProjectAutomationRun | null> {
+  const [row] = await getDb().select().from(projectAutomationRuns).where(and(
+    runTenantFilter(ctx),
+    eq(projectAutomationRuns.projectId, projectId),
+    eq(projectAutomationRuns.workflowId, workflowId),
+    eq(projectAutomationRuns.triggerType, "manual"),
+    eq(projectAutomationRuns.dedupeKey, dedupeKey),
+  )).limit(1);
+  return row ?? null;
+}
+
 export async function completeP9Run(
   ctx: TenantContext,
   workflow: ProjectAutomationWorkflow,
