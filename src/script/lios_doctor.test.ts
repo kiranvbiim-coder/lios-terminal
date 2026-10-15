@@ -74,6 +74,7 @@ test("SI-01.16 doctor reports a missing default Core runtime and the strict prov
       executionStatus: "blocked",
       executionBlocker: "strict_provisioning_authority_missing",
       requiresConfirmation: true,
+      requiresVerifiedArtifacts: false,
       summary: "Managed runtime installation is required.",
       reasons: ["Managed runtime is not installed."],
       affectedPackIds: ["core"],
