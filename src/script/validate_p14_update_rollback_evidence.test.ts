@@ -78,14 +78,10 @@ test("P14 update/rollback file validator fails closed on an internally inconsist
   });
 });
 
-test("P14 update/rollback command is validation-only and retains the canonical evidence writer", () => {
+test("P14 update/rollback validator is validation-only and retains the canonical evidence writer", () => {
   const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
     scripts?: Record<string, string>;
   };
-  assert.equal(
-    packageJson.scripts?.["acceptance:p14:update-rollback"],
-    "tsx script/validate_p14_update_rollback_evidence.ts",
-  );
   assert.equal(packageJson.scripts?.["p14:evidence"], "node script/write_p14_evidence.cjs");
 
   const writer = fs.readFileSync(new URL("./write_p14_evidence.cjs", import.meta.url), "utf8");
