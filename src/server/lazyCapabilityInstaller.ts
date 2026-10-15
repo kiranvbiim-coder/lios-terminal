@@ -37,8 +37,8 @@ export interface LazyCapabilityInstallResult {
 
 type InstallRuntime = (
   packIds: string[],
-  selectedReleasePackIds?: string[],
-  options?: ManagedRuntimeInstallOptions,
+  selectedReleasePackIds: string[],
+  options: ManagedRuntimeInstallOptions,
 ) => Promise<ManagedRuntimeOperationResult>;
 
 export interface LazyCapabilityInstallerDependencies {
