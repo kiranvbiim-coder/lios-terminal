@@ -94,7 +94,12 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-/** Verify rollback against both the operation and independently reread state. */
+/**
+ * A rollback result is not evidence of recovery unless both the returned
+ * state and the independently reread on-disk state agree with the original
+ * runtime's version, selections and verification evidence. A new installedAt
+ * time and a new rollbackPath are expected after the directory swap.
+ */
 function sameRestoredRuntime(actual: ManagedRuntimeState | null, original: ManagedRuntimeState): boolean {
   return actual !== null
     && actual.manifestVersion === original.manifestVersion
@@ -106,6 +111,7 @@ function sameRestoredRuntime(actual: ManagedRuntimeState | null, original: Manag
     && actual.verificationWarnings.length === original.verificationWarnings.length
     && actual.verificationWarnings.every((warning, index) => warning === original.verificationWarnings[index]);
 }
+
 function defaultActivatedRuntimeValidator(
   candidate: ManagedRuntimeState,
   expected: ManagedRuntimeState,
@@ -192,6 +198,9 @@ export async function upgradeManagedRuntimeSafely(
     if (!healthy) {
       try {
         const restored = await rollbackRuntime();
+        // A successful return from the rollback function does not prove that
+        // the original runtime was restored. Check the operation result AND
+        // canonical persisted state; otherwise preserve the hard failure.
         if (!sameRestoredRuntime(restored.state, current)
           || !sameRestoredRuntime(readState(), current)
           || currentPythonPath() === null) {
