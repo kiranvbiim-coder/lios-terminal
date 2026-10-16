@@ -282,6 +282,19 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   <div className="mt-1 font-ui text-[13px] leading-4 text-muted-foreground">
                     {workflow.description || "Saved Project workflow."}
                   </div>
+                  {workflow.trigger.type === "schedule" && <p className="mt-1 text-xs text-muted-foreground">
+                    {workflow.trigger.schedule.kind === "daily_utc"
+                      ? `Daily at ${String(workflow.trigger.schedule.hour).padStart(2, "0")}:${String(workflow.trigger.schedule.minute).padStart(2, "0")} UTC`
+                      : `Every ${workflow.trigger.schedule.everyMinutes} minutes`}
+                    {" · Requires a running Home"}
+                  </p>}
+                  {workflow.trigger.type === "event" && <p className="mt-1 text-xs text-muted-foreground">
+                    {workflow.trigger.eventType}{" · "}
+                    {Object.entries(workflow.trigger.filters).map(([key, value]) => `${key} = ${String(value)}`).join(", ") || "All permitted matching events"}
+                    {Array.isArray(workflow.eventCursor.pendingAutomationEvents) && workflow.eventCursor.pendingAutomationEvents.length > 0
+                      ? ` · ${workflow.eventCursor.pendingAutomationEvents.length} pending delivery`
+                      : ""}
+                  </p>}
                   {workflow.action.kind === "conversation_rerun" && workflow.action.acceptedArtifact && <details className="mt-2 text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Accepted monitor baseline · v{workflow.action.acceptedArtifact.version}</summary>
                     <p className="mt-1 break-all">{workflow.action.acceptedArtifact.artifactId}</p>

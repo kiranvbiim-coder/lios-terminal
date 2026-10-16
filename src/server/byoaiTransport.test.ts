@@ -740,3 +740,44 @@ test("BYOAI Ollama requests bound output and context through native options inst
     restoreEnv("OLLAMA_BASE_URL", previousBase);
   }
 });
+
+test("local AI providers cannot send local-only prompts to a remote endpoint", async () => {
+  const previousOllama = process.env.OLLAMA_BASE_URL;
+  const previousStudio = process.env.LM_STUDIO_BASE_URL;
+  const previousFetch = globalThis.fetch;
+  let transmitted = 0;
+  globalThis.fetch = (async () => {
+    transmitted += 1;
+    return new Response(JSON.stringify({ message: { content: "must not be reached" }, choices: [{ message: { content: "must not be reached" } }] }));
+  }) as typeof fetch;
+  try {
+    for (const endpoint of ["https://remote.example", "http://192.168.1.2:11434", "http://127.0.0.1.remote.example", "http://[2001:db8::1]"]) {
+      process.env.OLLAMA_BASE_URL = endpoint;
+      process.env.LM_STUDIO_BASE_URL = endpoint;
+      for (const provider of ["ollama", "lm_studio"] as const) {
+        await assert.rejects(invokeAIRoutedCompletion({
+          preferredProvider: provider, fallback: "none", providerPolicy: { localOnly: true },
+          messages: [{ role: "user", content: "local-only verification input" }],
+        }), (error: unknown) => assertProviderError(error, "policy_denied").provider === provider);
+      }
+    }
+    assert.equal(transmitted, 0, "local-only data must not leave the loopback endpoint boundary");
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv("OLLAMA_BASE_URL", previousOllama);
+    restoreEnv("LM_STUDIO_BASE_URL", previousStudio);
+  }
+});
+
+test("provider attempt ceilings stop before a connected fallback could incur another call", async () => {
+  await withProviderKeys(async contacted => {
+    await assert.rejects(invokeAIRoutedCompletion({ preferredProvider: "openai", maxAttempts: 1, messages: question }),
+      (error: unknown) => assertProviderError(error, "rate_limited").provider === "openai");
+    assert.deepEqual(contacted, ["openai"], "the otherwise healthy Gemini fallback must not receive the prompt");
+    for (const maxAttempts of [0, 4, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await assert.rejects(invokeAIRoutedCompletion({ preferredProvider: "openai", maxAttempts, messages: question }),
+        (error: unknown) => assertProviderError(error, "invalid_request").code === "invalid_request");
+    }
+    assert.deepEqual(contacted, ["openai"], "invalid budgets fail before any additional provider call");
+  });
+});

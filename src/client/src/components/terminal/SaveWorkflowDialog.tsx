@@ -27,6 +27,7 @@ function defaultEvent(template: P9WorkflowTemplate): P9AutomationEventType {
 export function SaveWorkflowDialog({
   projectId,
   chatId,
+  sourceRequestId,
   request,
   activeArtifactRef,
   onClose,
@@ -34,6 +35,7 @@ export function SaveWorkflowDialog({
 }: {
   projectId: number;
   chatId: number;
+  sourceRequestId: string;
   request: Omit<ConversationRequest, "requestId" | "continuationOf">;
   activeArtifactRef?: string | null;
   onClose: () => void;
@@ -41,8 +43,10 @@ export function SaveWorkflowDialog({
 }) {
   const [name, setName] = useState(() => request.message.slice(0, 80) || "Saved analysis");
   const [template, setTemplate] = useState<P9WorkflowTemplate>("custom");
-  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "event">("interval");
+  const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "event">("interval");
   const [intervalMinutes, setIntervalMinutes] = useState(60);
+  const [dailyHour, setDailyHour] = useState(9);
+  const [dailyMinute, setDailyMinute] = useState(0);
   const [eventType, setEventType] = useState<P9AutomationEventType>("data_refresh");
   const [eventFilterKey, setEventFilterKey] = useState(request.context?.symbol ? "symbol" : "");
   const [eventFilterValue, setEventFilterValue] = useState(request.context?.symbol ?? "");
@@ -71,10 +75,13 @@ export function SaveWorkflowDialog({
     if (triggerMode === "interval") {
       return { type: "schedule", schedule: { kind: "interval", everyMinutes: Math.min(Math.max(Math.round(intervalMinutes || 60), 5), 10_080) } };
     }
+    if (triggerMode === "daily") {
+      return { type: "schedule", schedule: { kind: "daily_utc", hour: dailyHour, minute: dailyMinute } };
+    }
     const filters: Record<string, string> = {};
     if (eventFilterKey.trim() && eventFilterValue.trim()) filters[eventFilterKey.trim()] = eventFilterValue.trim();
     return { type: "event", eventType, filters };
-  }, [eventFilterKey, eventFilterValue, eventType, intervalMinutes, triggerMode]);
+  }, [dailyHour, dailyMinute, eventFilterKey, eventFilterValue, eventType, intervalMinutes, triggerMode]);
 
   const changeTemplate = (next: P9WorkflowTemplate) => {
     setTemplate(next);
@@ -96,6 +103,7 @@ export function SaveWorkflowDialog({
         description: "Saved from Project chat. Reruns preserve the original execution mode, approvals, transmission policy and active context.",
         template,
         chatId,
+        sourceRequestId,
         request: financeMonitor && accepted?.version.refreshSpec ? {
           ...request,
           message: accepted.version.refreshSpec.message ?? request.message,
@@ -162,6 +170,7 @@ export function SaveWorkflowDialog({
               <select value={triggerMode} onChange={(event) => setTriggerMode(event.target.value as typeof triggerMode)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-2 font-ui text-[8px] text-foreground">
                 <option value="manual">Manual / Run now</option>
                 <option value="interval">Schedule / interval</option>
+                <option value="daily">Schedule / daily UTC</option>
                 <option value="event">Event</option>
               </select>
             </label>
@@ -193,6 +202,18 @@ export function SaveWorkflowDialog({
               <div className="mt-2 font-ui text-[7px] text-muted-foreground">Minimum 5 minutes. The definition survives application restarts; overdue work is reclaimed by the P9 scheduler.</div>
             </label>
           )}
+          {triggerMode === "daily" && <fieldset className="rounded border border-border/50 bg-black/15 p-3">
+            <legend className="text-sm font-medium">Daily schedule · UTC</legend>
+            <div className="mt-2 flex gap-3">
+              <label className="text-sm">UTC hour
+                <input aria-label="Daily UTC hour" type="number" min={0} max={23} step={1} value={dailyHour} onChange={event => setDailyHour(Number(event.target.value))} className="ml-2 w-20 rounded border border-border/60 bg-black px-2 py-1" />
+              </label>
+              <label className="text-sm">UTC minute
+                <input aria-label="Daily UTC minute" type="number" min={0} max={59} step={1} value={dailyMinute} onChange={event => setDailyMinute(Number(event.target.value))} className="ml-2 w-20 rounded border border-border/60 bg-black px-2 py-1" />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Runs at this UTC time while your Home is running. After downtime, due work is reclaimed once; LiOS does not invent missed execution receipts or replay every missed day.</p>
+          </fieldset>}
 
           {triggerMode === "event" && (
             <div className="rounded border border-border/50 bg-black/15 p-3">
@@ -217,6 +238,7 @@ export function SaveWorkflowDialog({
                   <input value={eventFilterValue} onChange={(event) => setEventFilterValue(event.target.value)} placeholder="AAPL" className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-[7px] text-foreground" />
                 </label>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">Only observed events matching this Project/account and filter can run the recipe. Accepted deliveries survive Home restart. Current permissions are rechecked; already-started actions are not blindly replayed.</p>
             </div>
           )}
 

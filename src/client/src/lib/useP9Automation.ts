@@ -30,6 +30,7 @@ export interface P9WorkflowRecord {
   sourceRefs: string[];
   engineRefs: string[];
   artifactRefs: string[];
+  eventCursor: Record<string, unknown>;
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastSuccessAt: string | null;
@@ -201,6 +202,7 @@ export async function saveConversationAsP9Workflow(projectId: number, input: {
   description?: string;
   template?: P9WorkflowTemplate;
   chatId: number;
+  sourceRequestId: string;
   request: Omit<ConversationRequest, "requestId" | "continuationOf">;
   acceptedArtifact?: P9AcceptedArtifact;
   currentPersonalFinanceResourceId?: string;

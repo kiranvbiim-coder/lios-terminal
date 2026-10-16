@@ -2163,7 +2163,7 @@ export default function ProjectExperienceShell({
                               <DropdownMenuItem title="Save Session" onSelect={() => void saveCurrentSession()}>Save session</DropdownMenuItem>
                             </>
                           )}
-                          {chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && (
+                          {chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && runtimeEvents.some(event => event.type === "done" && event.requestId === runtimeRequestId && event.status === "completed") && (
                             <DropdownMenuItem onSelect={() => setShowSaveWorkflow(true)}>Save workflow</DropdownMenuItem>
                           )}
                           {voiceOutputAvailable && (
@@ -2284,10 +2284,11 @@ export default function ProjectExperienceShell({
         )}
       </main>
 
-      {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && (
+      {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
           chatId={activeChat.id}
+          sourceRequestId={runtimeRequestId}
           activeArtifactRef={conversationArtifactRef}
           request={lastWorkflowRequest}
           onClose={() => setShowSaveWorkflow(false)}
@@ -2354,6 +2355,13 @@ export default function ProjectExperienceShell({
               placeholder="openai, anthropic"
               className="mt-1 w-full rounded border border-border/50 bg-black/25 px-2 py-1.5 font-ui text-[12px] text-foreground outline-none placeholder:text-muted-foreground/40"
             />
+            <label className="mt-2 block text-xs text-muted-foreground">Provider attempts per AI call
+              <select aria-label="Provider attempts per AI call" value={transmissionPolicy.maxProviderAttempts ?? 2} onChange={event => updateTransmissionPolicy({ maxProviderAttempts: Number(event.target.value) })} className="ml-2 rounded border border-border/50 bg-black px-2 py-1"><option value={1}>1 · no fallback</option><option value={2}>2 · bounded fallback</option><option value={3}>3 · wider fallback</option></select>
+            </label>
+            <label className="mt-2 block text-xs text-muted-foreground">Maximum output tokens per AI call
+              <select aria-label="Maximum AI output tokens" value={transmissionPolicy.maxAiOutputTokens ?? 1800} onChange={event => updateTransmissionPolicy({ maxAiOutputTokens: Number(event.target.value) })} className="ml-2 rounded border border-border/50 bg-black px-2 py-1">{[512, 1024, 1800, 4096, 8192].map(tokens => <option key={tokens} value={tokens}>{tokens}</option>)}</select>
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">Hard call/output ceilings, not a currency quote. Agent steps have separate run limits. Private files and financial inputs never cross-provider fallback.</p>
             <label className="mt-2 flex items-center justify-between gap-2 font-ui text-[12px] text-muted-foreground">
               Share Project instructions
               <input type="checkbox" checked={transmissionPolicy.allowProjectInstructions} onChange={(event) => updateTransmissionPolicy({ allowProjectInstructions: event.target.checked })} />

@@ -22,10 +22,13 @@ import {
 } from "@shared/p9AutomationContracts";
 import type { TenantContext } from "./tenantContext";
 import { getDb } from "./db";
-import { requireAcceptedP9Workflow } from "./p9AcceptedWorkflow";
+import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
+import { acknowledgeP9ConditionalEvent, enqueueP9ConditionalEvent, listPendingP9ConditionalEvents, p9EventDefinitionHash, recordP9ConditionalAttempt } from "./p9ConditionalInbox";
+import { recoverInterruptedP9Runs, renewP9RunLease } from "./p9RunContinuity";
 import { getProject } from "./projectStore";
 import { getProjectChat, listProjectChatMessages } from "./projectChatStore";
 import { listProjectResources } from "./projectResourceStore";
+import { resolveProjectConversationAttachments } from "./projectAttachmentService";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { parseDataStackPins } from "@shared/dataStackPins";
 import { loadOrganizationCredentials } from "./organizationCredentialVault";
@@ -127,6 +130,13 @@ async function runProjectWhatChanged(ctx: TenantContext, workflow: ProjectAutoma
   const delta = prior && prior.id !== rebuilt.snapshot.id
     ? await projectIntelligenceDelta(ctx, workflow.projectId, prior.id, rebuilt.snapshot.id)
     : null;
+  // The Ledger is audit history, not monitored source content. Keep it in the
+  // canonical index, but do not let this monitor's own receipts trigger itself.
+  if (delta) {
+    delta.added = delta.added.filter(item => item.sourceType !== "ledger_event");
+    delta.changed = delta.changed.filter(item => item.after.sourceType !== "ledger_event");
+    delta.removed = delta.removed.filter(item => item.sourceType !== "ledger_event");
+  }
   const changedCount = delta ? delta.added.length + delta.changed.length + delta.removed.length : 0;
   const sourceRefs = delta
     ? unique([
@@ -309,6 +319,12 @@ async function runConversationRerun(
     requestId: crypto.randomUUID(),
     continuationOf: null,
   });
+  const resolvedAttachments = await resolveProjectConversationAttachments(
+    ctx, workflow.projectId, resources,
+    request.sourceScope === "web" ? [] : request.attachments,
+    request.transmissionPolicy.allowResourceReferences,
+  );
+  request.attachments = resolvedAttachments.map(attachment => attachment.reference);
   const plan = planConversationWorkflow(request);
   if (plan.intent.requiresAI) {
     const [user] = await getDb().select({
@@ -353,6 +369,7 @@ async function runConversationRerun(
       tenant: ctx,
       scope: "project",
       chatId: chat.id,
+      resolvedAttachments,
       projectId: workflow.projectId,
       projectName: project.name,
       projectInstructions: project.instructions,
@@ -500,6 +517,12 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
   );
   if (!run) return { run: null, notification: null, result: null, error: null };
 
+  const runHeartbeat = setInterval(() => {
+    void renewP9RunLease(run.id).catch(() => {
+      console.warn("[p9Automation] run lease renewal failed; interrupted outcome will require inspection.");
+    });
+  }, 60_000);
+  runHeartbeat.unref?.();
   let claimHeartbeat: NodeJS.Timeout | null = null;
   if (input.claimToken) {
     claimHeartbeat = setInterval(() => {
@@ -512,6 +535,9 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
 
   try {
     const action = p9WorkflowActionSchema.parse(input.workflow.action);
+    if (action.kind === "conversation_rerun" && action.sourceRequestId) {
+      await requireSuccessfulP9Recipe(ctx, input.workflow.projectId, action);
+    }
     if (action.kind === "conversation_rerun" && (action.acceptedArtifact || action.currentPersonalFinanceResourceId || P9_ACCEPTED_FINANCE_TEMPLATES.includes(input.workflow.template as P9WorkflowTemplate))) {
       await requireAcceptedP9Workflow(ctx, input.workflow.projectId, action);
     }
@@ -539,6 +565,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
     const notification = await createP9Notification(ctx, input.workflow, completed.id, { result: null, error });
     return { run: completed, notification, result: null, error };
   } finally {
+    clearInterval(runHeartbeat);
     if (claimHeartbeat) clearInterval(claimHeartbeat);
   }
 }
@@ -645,24 +672,57 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
   });
   const matched = workflows.filter((workflow) => p9AutomationEventMatches(parseP9StoredWorkflow(workflow).trigger, event));
   const dedupeKey = eventDedupeKey(event);
-  const summary = await executeMatchedP9EventWorkflows(matched, (workflow) =>
-    executeP9Workflow({
+  let admissionFailures = 0;
+  const admitted: ProjectAutomationWorkflow[] = [];
+  for (const workflow of matched) {
+    try {
+      if (await enqueueP9ConditionalEvent(workflow, event, dedupeKey)) admitted.push(workflow);
+    } catch {
+      admissionFailures += 1;
+    }
+  }
+  const summary = await executeMatchedP9EventWorkflows(admitted, async workflow => {
+    const outcome = await executeP9Workflow({
       workflow,
       triggerType: "event",
-      triggerDetail: {
-        eventType: event.eventType,
-        occurredAt: event.occurredAt,
-        sourceRef: event.sourceRef,
-        payload: event.payload,
-      },
+      triggerDetail: { eventType: event.eventType, occurredAt: event.occurredAt, sourceRef: event.sourceRef, payload: event.payload },
       dedupeKey,
-    }),
-  );
+    });
+    await acknowledgeP9ConditionalEvent(workflow.id, dedupeKey);
+    return outcome;
+  });
   if (summary.unexpectedFailures > 0) {
     // Do not dump provider errors, credentials, or raw event payloads to logs.
     console.warn("[p9Automation] unexpected event workflow failures:", summary.unexpectedFailures);
   }
-  return { matched: summary.matched, executed: summary.executed, failed: summary.failed };
+  return { matched: matched.length, executed: summary.executed, failed: summary.failed + admissionFailures };
+}
+
+/** Replay only accepted pending deliveries; canonical run dedupe prevents replay of already-started actions. */
+export async function drainPendingP9ConditionalEvents(): Promise<{ succeeded: number; failed: number }> {
+  let succeeded = 0;
+  let failed = 0;
+  // Rotate bounded batches so denied owners cannot indefinitely starve other pending workflows.
+  for (const { workflow, entry } of await listPendingP9ConditionalEvents()) {
+    await recordP9ConditionalAttempt(workflow.id);
+    if (p9EventDefinitionHash(workflow) !== entry.definitionHash) {
+      await acknowledgeP9ConditionalEvent(workflow.id, entry.key);
+      continue;
+    }
+    try {
+      const outcome = await executeP9Workflow({
+        workflow, triggerType: "event", dedupeKey: entry.key,
+        triggerDetail: { eventType: entry.event.eventType, occurredAt: entry.event.occurredAt, sourceRef: entry.event.sourceRef, payload: entry.event.payload },
+      });
+      await acknowledgeP9ConditionalEvent(workflow.id, entry.key);
+      if (outcome.error) failed += 1;
+      else if (outcome.run) succeeded += 1;
+    } catch {
+      // Keep unadmitted events durable. Current owner/source authority is checked again on the next cycle.
+      failed += 1;
+    }
+  }
+  return { succeeded, failed };
 }
 
 export async function runP9FilingObserverCycle(
@@ -751,7 +811,9 @@ export function startP9AutomationRuntime(intervalMs = 30_000): () => void {
     if (running || stopped) return;
     running = true;
     try {
+      await recoverInterruptedP9Runs();
       await runDueP9Workflows();
+      await drainPendingP9ConditionalEvents();
       const now = Date.now();
       if (now - lastFilingObserverAt >= 5 * 60_000) {
         lastFilingObserverAt = now;

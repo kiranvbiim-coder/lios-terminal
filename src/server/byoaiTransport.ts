@@ -39,6 +39,8 @@ export type AIRoutedCompletionRequest = Omit<AICompletionRequest, "provider"> & 
   preferredProvider?: string | null;
   preferredModel?: string | null;
   fallbackProviders?: string[];
+  /** Hard per-invocation provider-attempt ceiling, including the first request. Default: two. */
+  maxAttempts?: number;
   /**
    * Whether another connected provider may answer if the first fails. "configured" (default) tries
    * other providers the user has connected, honouring allow/deny/local-only policy. "none" keeps the
@@ -112,9 +114,19 @@ export function resolveOllamaChatEndpoint(baseUrl: string): string {
   return url.toString();
 }
 
+function localProviderEndpoint(provider: "ollama" | "lm_studio", baseUrl: string): string {
+  const url = resolveHttpUrl(baseUrl, provider === "ollama" ? "OLLAMA_BASE_URL" : "LM_STUDIO_BASE_URL");
+  const host = url.hostname.toLowerCase();
+  if (host !== "localhost" && host !== "[::1]" && !/^127(?:\.\d{1,3}){3}$/.test(host)) {
+    throw new AIProviderError("policy_denied", "Local AI requires a loopback endpoint. Configure remote inference as an explicitly external provider.", { provider });
+  }
+  // Avoid depending on DNS or a hosts-file entry to keep a local-only prompt on this machine.
+  if (host === "localhost") url.hostname = "127.0.0.1";
+  return provider === "ollama" ? resolveOllamaChatEndpoint(url.toString()) : resolveOpenAICompatibleChatEndpoint(url.toString(), "LM_STUDIO_BASE_URL");
+}
+
 function openAiEndpoint(provider: AIProviderType, credential: string): { url: string; headers: Record<string, string> } {
-  if (provider === "ollama") return { url: resolveOllamaChatEndpoint(credential), headers: {} };
-  if (provider === "lm_studio") return { url: resolveOpenAICompatibleChatEndpoint(credential, "LM_STUDIO_BASE_URL"), headers: {} };
+  if (provider === "ollama" || provider === "lm_studio") return { url: localProviderEndpoint(provider, credential), headers: {} };
   if (provider === "mistral") return { url: "https://api.mistral.ai/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
   if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
   if (provider === "together") return { url: "https://api.together.xyz/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
@@ -390,6 +402,8 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
   const preferredProvider = normalizeRequestedProvider(request.preferredProvider, "preferredProvider");
   const preferredModel = normalizeRequestedModel(request.preferredModel, "preferredModel");
   const requestModel = normalizeRequestedModel(request.model, "model");
+  const maxAttempts = request.maxAttempts ?? 2;
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 3) throw new AIProviderError("invalid_request", "AI provider attempts must be an integer from 1 to 3.");
   const candidates = routedProviderCandidates(request);
   if (candidates.length === 0) {
     throw new AIProviderError("not_configured", "No configured AI providers are available.");
@@ -419,7 +433,8 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
   }
   const failures: AIProviderError[] = [];
   const attempts: AIFallbackAttempt[] = [];
-  for (const provider of candidates) {
+  for (let attempt = 0; attempt < candidates.length && attempt < maxAttempts; attempt += 1) {
+    const provider = candidates[attempt]!;
     try {
       const model = provider === preferredProvider ? preferredModel ?? requestModel : requestModel;
       const answered = await invokeAIProvider({ ...request, provider, ...(model ? { model } : {}) });
@@ -485,7 +500,7 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
       }
     } else {
       const endpoint = openAiEndpoint(request.provider, credential);
-      response = await fetch(endpoint.url, { method: "POST", headers: { "content-type": "application/json", ...endpoint.headers }, body: JSON.stringify(openAiBody(request, model, request.provider === "ollama")), signal });
+      response = await fetch(endpoint.url, { method: "POST", headers: { "content-type": "application/json", ...endpoint.headers }, body: JSON.stringify(openAiBody(request, model, request.provider === "ollama")), signal, ...(config.isLocal ? { redirect: "error" as const } : {}) });
       if (!response.ok) throw responseError(config, request.provider, response, await readError(response));
       const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }>; message?: { content?: string } };
       text = request.provider === "ollama" ? payload.message?.content ?? "" : payload.choices?.[0]?.message?.content ?? "";
