@@ -119,6 +119,7 @@ export async function ensureLazyCapability(
       };
     }
   }
+
   if (missingManagedPackIds.length === 0) {
     return {
       status: "already_available",
