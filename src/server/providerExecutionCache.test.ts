@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCanonicalDataRequest, ProviderSdkRegistry } from "./providerSdk";
+import { createCanonicalDataRequest, ProviderSdkRegistry, startProviderStream } from "./providerSdk";
 import { clearProviderExecutionCache, executeCanonicalDataRequestCached, prefetchCanonicalDataRequests } from "./providerExecutionCache";
 import type { TenantContext } from "./tenantContext";
 
@@ -246,5 +246,56 @@ test("SI-06.06 an entitlement change during a deduped request never serves the s
   assert.equal(followResult.cache, "miss");
   assert.equal(followResult.response.observation, null);
   assert.equal(fetches, 1);
+  clearProviderExecutionCache();
+});
+
+test("SI-06 integration revocation blocks cached observation and stops an active provider stream", async () => {
+  clearProviderExecutionCache();
+  let state: "allowed" | "denied" = "allowed";
+  let policyId = "live-policy:v1";
+  let fetched = 0;
+  let stops = 0;
+  const registry = new ProviderSdkRegistry();
+  const currentEntitlement = () => ({
+    decision: state,
+    policyId,
+    permittedUses: state === "allowed" ? ["internal_research"] : [],
+    reasons: [],
+  });
+  registry.register({
+    id: "combined-rights",
+    label: "Combined entitlement fixture",
+    priority: 1,
+    capabilities: ["prices"],
+    pointInTimeModes: ["latest"],
+    async entitlement() { return currentEntitlement(); },
+    async fetch() {
+      fetched += 1;
+      return { data: { price: fetched }, normalized: true, entitlement: currentEntitlement() };
+    },
+    async stream() {
+      return {
+        lifecycle: { state: "streaming", reason: null } as never,
+        async stop() { stops += 1; },
+      };
+    },
+  });
+  const request = req();
+  assert.equal((await executeCanonicalDataRequestCached(request, ctx, registry)).cache, "miss");
+  const active = await startProviderStream("combined-rights", request, ctx, registry);
+  assert.equal((await executeCanonicalDataRequestCached(request, ctx, registry)).cache, "hit");
+  state = "denied";
+  assert.equal(await active.recheckEntitlement(), false, "an active stream must revoke");
+  assert.equal(stops, 1);
+  const cached = await executeCanonicalDataRequestCached(request, ctx, registry);
+  assert.equal(cached.cache, "miss", "the cached result must not be reused after revocation");
+  assert.equal(cached.response.observation, null);
+  assert.equal(fetched, 1, "denied entitlements never reach the provider fetch");
+  policyId = "live-policy:v2";
+  state = "allowed";
+  const fresh = await executeCanonicalDataRequestCached(request, ctx, registry);
+  assert.equal(fresh.cache, "miss");
+  assert.equal(fetched, 2);
+  assert.equal(await active.recheckEntitlement(), false, "a stopped stream cannot silently rearm on renewed rights");
   clearProviderExecutionCache();
 });
