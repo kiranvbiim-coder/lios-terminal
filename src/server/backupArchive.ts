@@ -179,6 +179,25 @@ export interface BackupResult {
   pruned: string[];
 }
 
+/** Resolve a proposed backup path through existing ancestors without creating it. */
+function physicalBackupDestination(destination: string): string {
+  let existing = destination;
+  const tail: string[] = [];
+  for (;;) {
+    const entry = fs.lstatSync(existing, { throwIfNoEntry: false });
+    if (entry) {
+      if (tail.length && !entry.isDirectory() && !entry.isSymbolicLink()) {
+        throw new BackupError("Backup destination must have an existing directory ancestor.");
+      }
+      return path.resolve(fs.realpathSync(existing), ...tail);
+    }
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new BackupError("Backup destination has no accessible directory ancestor.");
+    tail.unshift(path.basename(existing));
+    existing = parent;
+  }
+}
+
 export async function createBackup(db: DrizzleDb, options: CreateBackupOptions): Promise<BackupResult> {
   const root = dataRoot();
   const destination = path.resolve(options.destination);
@@ -187,6 +206,11 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
   }
   const dbDir = databaseDir();
   if (dbDir === root) throw new BackupError("This data root stores the database at its top level; move it into a pgdata folder first.");
+  const physicalRoot = fs.realpathSync(root);
+  const plannedDestination = physicalBackupDestination(destination);
+  if (plannedDestination === physicalRoot || plannedDestination.startsWith(`${physicalRoot}${path.sep}`)) {
+    throw new BackupError("Choose a backup destination outside the LiOS data folder.");
+  }
   const priorDestination = fs.lstatSync(destination, { throwIfNoEntry: false });
   if (priorDestination && (!priorDestination.isDirectory() || priorDestination.isSymbolicLink())) {
     throw new BackupError("Backup destination must be a real directory, not a symbolic link.");
@@ -198,7 +222,6 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
   }
   // A path can be lexically outside Home but physically inside it through an
   // existing parent alias. Refuse that physical overlap before any staging.
-  const physicalRoot = fs.realpathSync(root);
   const physicalDestination = fs.realpathSync(destination);
   if (physicalDestination === physicalRoot || physicalDestination.startsWith(`${physicalRoot}${path.sep}`)) {
     throw new BackupError("Choose a backup destination outside the LiOS data folder.");
