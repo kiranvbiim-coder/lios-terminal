@@ -192,7 +192,7 @@
     "express-session": "^1.18.1",
     "fast-xml-parser": "^5.11.0",
     "fflate": "^0.8.3",
-    "framer-motion": "^11.13.1",
+    "framer-motion": "^14.1.0",
     "input-otp": "^1.4.2",
     "ipaddr.js": "^2.5.0",
     "jspdf": "^4.2.1",
