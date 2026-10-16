@@ -25,6 +25,7 @@ import {
 } from "@/lib/p9NotificationReadOutbox";
 import { clearP9ManualRunDrafts, setP9ManualRunDraftOwner } from "@/lib/p9ManualRunDrafts";
 import { clearP9ManualRunAttempts, setP9ManualRunAttemptOwner } from "@/lib/p9ManualRunAttemptLedger";
+import { setP9DesktopNotificationOwner } from "@/lib/p9DesktopNotifications";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -89,6 +90,7 @@ function App() {
     setNotificationReadOutboxOwner(data?.authState ?? null);
     setP9ManualRunDraftOwner(data?.authState ?? null);
     setP9ManualRunAttemptOwner(data?.authState ?? null);
+    setP9DesktopNotificationOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -180,6 +182,7 @@ function App() {
       setNotificationReadOutboxOwner(null);
       setP9ManualRunDraftOwner(null);
       setP9ManualRunAttemptOwner(null);
+      setP9DesktopNotificationOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
@@ -215,7 +218,11 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <P9DesktopNotificationBridge enabled={Boolean(session && !session.mustChangePassword)} />
+      <P9DesktopNotificationBridge enabled={Boolean(
+        session && !session.mustChangePassword
+        && session.authState?.state === "authenticated_online"
+        && typeof window !== "undefined" && (window as any).limuriaDesktop?.isElectron
+      )} />
       <GatewayProvider enabled={!!session && !session.mustChangePassword}>
       <div className="dark min-h-screen bg-[#030303]">
         {session && session.mustChangePassword ? (

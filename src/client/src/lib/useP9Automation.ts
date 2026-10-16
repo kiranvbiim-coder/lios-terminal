@@ -175,7 +175,9 @@ export async function runP9WorkflowNow(
     replayed?: boolean;
     receiptStatus?: "in_progress" | "completed" | null;
   }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, idempotency ?? {}));
-  if (outcome.notification) await projectDeliveredNotificationsToDesktop([outcome.notification]);
+  if (outcome.notification && !outcome.replayed) {
+    await projectDeliveredNotificationsToDesktop([outcome.notification]);
+  }
   return outcome;
 }
 
