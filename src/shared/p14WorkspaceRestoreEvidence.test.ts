@@ -65,6 +65,13 @@ test("P14 workspace restore mirrors supported packaged desktop targets", () => {
   assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ platform: "linux", arch: "x64" })), /platform/i);
 });
 
+test("P14 workspace restore requires unique source evidence basenames", () => {
+  assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ sourceEvidence: ["nested/restore-worker.json"] })), /sourceEvidence.*basename/i);
+  assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ sourceEvidence: ["nested\\restore-worker.json"] })), /sourceEvidence.*basename/i);
+  assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ sourceEvidence: ["."] })), /sourceEvidence.*basename/i);
+  assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ sourceEvidence: [".."] })), /sourceEvidence.*basename/i);
+});
+
 test("P14 workspace restore rejects malformed archive hashes, duplicate support identifiers and unknown fields", () => {
   assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ archiveSha256: "abc" })), /sha256/i);
   assert.throws(() => validateP14WorkspaceRestoreObservation(validObservation({ sourceEvidence: [] })), /sourceEvidence/i);
