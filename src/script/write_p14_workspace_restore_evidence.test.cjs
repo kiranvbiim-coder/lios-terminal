@@ -80,6 +80,18 @@ test("canonical P14 writer refuses observation support artifacts that are named 
   }
 });
 
+test("canonical P14 writer refuses path-like sourceEvidence aliases instead of collapsing them to basenames", () => {
+  const value = observation({ sourceEvidence: ["backup-create.json", "nested/restore-worker.json", "reopen-walkthrough.json"] });
+  const run = runWriter(value, ["backup-create.json", "restore-worker.json", "reopen-walkthrough.json"]);
+  try {
+    assert.notEqual(run.result.status, 0);
+    assert.equal(fs.existsSync(run.output), false);
+    assert.match(run.result.stderr, /sourceEvidence.*basename/i);
+  } finally {
+    fs.rmSync(run.directory, { recursive: true, force: true });
+  }
+});
+
 test("canonical P14 writer hashes the observation and every named workspace restore support artifact", () => {
   const run = runWriter(observation(), ["backup-create.json", "restore-worker.json", "reopen-walkthrough.json"]);
   try {
