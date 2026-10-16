@@ -253,15 +253,29 @@ test("SI-07.12 restore rejects misleading archive kinds and cross-platform filen
     { path: "files/cases/child.txt", body: "nested" },
   ]);
   assert.throws(
-    () => assertRestorableHomeManifest(ambiguous as Parameters<typeof assertRestorableHomeManifest>[0]),
+    () => assertRestorableHomeManifest(ambiguous as unknown as Parameters<typeof assertRestorableHomeManifest>[0]),
     /file\/directory collision/,
   );
   const mismatched = manifestFor([{ path: "files/project.txt", body: "content" }]);
   mismatched.entries[0]!.kind = "db";
   assert.throws(
-    () => assertRestorableHomeManifest(mismatched as Parameters<typeof assertRestorableHomeManifest>[0]),
+    () => assertRestorableHomeManifest(mismatched as unknown as Parameters<typeof assertRestorableHomeManifest>[0]),
     /invalid restoration kind/,
   );
+});
+
+test("SI-07.12 plaintext archives cannot claim encrypted rights or install protected secrets", async () => {
+  const protectedSecret = { name: "files/vault.key", path: "files/vault.key", body: "FORGED-SECRET" };
+  const plain = path.join(base, "forged-plaintext-secret.tar.gz");
+  fs.writeFileSync(plain, handmade([protectedSecret], manifestFor([protectedSecret])));
+  const verified = await verifyBackup(plain);
+  assert.equal(verified.encrypted, false);
+  assert.throws(() => assertRestorableHomeManifest(verified), /Protected LiOS Home path/);
+  const falseEncryption = manifestFor([protectedSecret]);
+  falseEncryption.encrypted = true;
+  const forged = path.join(base, "forged-envelope-claim.tar.gz");
+  fs.writeFileSync(forged, handmade([protectedSecret], falseEncryption));
+  await assert.rejects(verifyBackup(forged), /encryption disagrees with the actual archive envelope/);
 });
 
 test("restore recreates database, files and keys in a fresh Home and keeps replaced files", async () => {
