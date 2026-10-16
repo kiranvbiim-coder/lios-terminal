@@ -523,7 +523,7 @@ test("SI-07.12 colliding final backup publication never overwrites another write
   assert.deepEqual(fs.readdirSync(destination).filter((n) => n.startsWith(`.lios-backup-${process.pid}-`)), []);
 });
 
-test("SI-07.12 backup refuses a symlink alias physically nested inside Home before creating destination", (t) => {
+test("SI-07.12 backup refuses a symlink alias physically nested inside Home before creating destination", async (t) => {
   const alias = path.join(base, "backup-home-alias");
   const target = path.join(alias, "data", "backup-must-not-appear");
   try {
@@ -532,8 +532,8 @@ test("SI-07.12 backup refuses a symlink alias physically nested inside Home befo
     t.skip("Host cannot create a directory symlink: " + String(error));
     return;
   }
-  assert.throws(
-    () => createBackup(getDb(), { ...common, destination: target }),
+  await assert.rejects(
+    createBackup(getDb(), { ...common, destination: target }),
     /outside the LiOS data folder/,
   );
   assert.equal(fs.existsSync(path.join(rootA, "data", "backup-must-not-appear")), false);
