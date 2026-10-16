@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const test = require("node:test");
-const { configureAutoUpdater, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
+const { configureAutoUpdater, createDesktopUpdateInstallController, resolveUpdateUrl, DEFAULT_UPDATE_URL } = require("./desktopUpdater.cjs");
 
 function makeUpdater({ checkError = null } = {}) {
   const events = new Map();
@@ -17,22 +17,9 @@ function makeUpdater({ checkError = null } = {}) {
       calls.push(["check"]);
       return checkError ? Promise.reject(checkError) : Promise.resolve();
     },
-    quitAndInstall(isSilent, isForceRunAfter) {
-      calls.push(["quitAndInstall", isSilent, isForceRunAfter]);
-    },
+    quitAndInstall(...args) { calls.push(["install", ...args]); },
   };
   return { updater, events, calls };
-}
-
-function packagedOptions(updater, overrides = {}) {
-  return {
-    updater,
-    isPackaged: true,
-    env: {},
-    confirmInstall: async () => false,
-    log() {},
-    ...overrides,
-  };
 }
 
 test("desktop updater accepts HTTPS syntax for build-time feed validation and has no source-code default feed", () => {
@@ -56,7 +43,7 @@ test("development is disabled while packaged builds use only embedded app-update
   assert.deepEqual(dev.calls, []);
 
   const packaged = makeUpdater();
-  assert.deepEqual(configureAutoUpdater(packagedOptions(packaged.updater)), {
+  assert.deepEqual(configureAutoUpdater({ updater: packaged.updater, isPackaged: true, env: {}, log() {} }), {
     enabled: true,
     url: null,
     source: "packaged_config",
@@ -72,10 +59,12 @@ test("development is disabled while packaged builds use only embedded app-update
 test("packaged runtime environment cannot replace the embedded release feed", () => {
   const { updater, calls } = makeUpdater();
   const logs = [];
-  const configured = configureAutoUpdater(packagedOptions(updater, {
+  const configured = configureAutoUpdater({
+    updater,
+    isPackaged: true,
     env: { LIOS_UPDATE_URL: "https://attacker-controlled.example/lios" },
     log(message) { logs.push(String(message)); },
-  }));
+  });
   assert.deepEqual(configured, {
     enabled: true,
     url: null,
@@ -85,86 +74,18 @@ test("packaged runtime environment cannot replace the embedded release feed", ()
   assert.equal(logs.some((line) => line.includes("attacker-controlled.example")), false);
 });
 
-test("downloaded desktop update installs only after explicit confirmation", async () => {
-  const { updater, events, calls } = makeUpdater();
-  const confirmations = [];
-  configureAutoUpdater(packagedOptions(updater, {
-    confirmInstall: async ({ version }) => {
-      confirmations.push(version);
-      return true;
-    },
-  }));
-
-  await events.get("update-downloaded")({ version: "1.2.3" });
-
-  assert.deepEqual(confirmations, ["1.2.3"]);
-  assert.deepEqual(calls, [["check"], ["quitAndInstall", false, true]]);
-});
-
-test("declining desktop update confirmation never installs on quit or restart", async () => {
-  const { updater, events, calls } = makeUpdater();
-  const logs = [];
-  configureAutoUpdater(packagedOptions(updater, {
-    confirmInstall: async () => false,
-    log(message) { logs.push(String(message)); },
-  }));
-
-  await events.get("update-downloaded")({ version: "1.2.3" });
-
-  assert.equal(updater.autoInstallOnAppQuit, false);
-  assert.deepEqual(calls, [["check"]]);
-  assert.equal(logs.some((line) => line.includes("deferred by user")), true);
-});
-
-test("desktop update confirmation failure fails closed without raw external text", async () => {
-  const secret = "prompt-secret-token";
-  const { updater, events, calls } = makeUpdater();
-  const logs = [];
-  configureAutoUpdater(packagedOptions(updater, {
-    confirmInstall: async () => {
-      throw new Error(`native prompt failed ${secret}`);
-    },
-    log(message) { logs.push(String(message)); },
-  }));
-
-  await events.get("update-downloaded")({ version: "1.2.3" });
-
-  assert.deepEqual(calls, [["check"]]);
-  assert.equal(logs.some((line) => line.includes(secret)), false);
-  assert.equal(logs.some((line) => line.includes("confirmation failed safely")), true);
-});
-
-test("duplicate downloaded events cannot open concurrent install confirmations", async () => {
-  const { updater, events, calls } = makeUpdater();
-  let resolveConfirmation;
-  let confirmationCount = 0;
-  const pendingConfirmation = new Promise((resolve) => { resolveConfirmation = resolve; });
-  configureAutoUpdater(packagedOptions(updater, {
-    confirmInstall: async () => {
-      confirmationCount += 1;
-      return pendingConfirmation;
-    },
-  }));
-
-  const first = events.get("update-downloaded")({ version: "1.2.3" });
-  const second = events.get("update-downloaded")({ version: "1.2.3" });
-  assert.equal(confirmationCount, 1);
-  resolveConfirmation(true);
-  await Promise.all([first, second]);
-
-  assert.equal(confirmationCount, 1);
-  assert.deepEqual(calls, [["check"], ["quitAndInstall", false, true]]);
-});
-
 test("desktop updater never logs raw external error text", async () => {
   const secret = "super-secret-token";
   const { updater, events } = makeUpdater({
     checkError: new Error(`request failed https://updates.example.test/?token=${secret}`),
   });
   const logs = [];
-  configureAutoUpdater(packagedOptions(updater, {
+  configureAutoUpdater({
+    updater,
+    isPackaged: true,
+    env: {},
     log(message) { logs.push(String(message)); },
-  }));
+  });
   events.get("error")(new Error(`provider rejected credential ${secret}`));
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -173,42 +94,151 @@ test("desktop updater never logs raw external error text", async () => {
   assert.equal(logs.filter((line) => line.includes("Desktop update failed safely.")).length >= 1, true);
 });
 
-test("default production confirmation uses a native safe-default dialog", async () => {
-  const originalLoad = Module._load;
-  const prompts = [];
-  const fakeWindow = { isDestroyed: () => false };
-  Module._load = function patchedLoad(request, parent, isMain) {
-    if (request === "electron") {
-      return {
-        BrowserWindow: {
-          getFocusedWindow: () => fakeWindow,
-          getAllWindows: () => [fakeWindow],
-        },
-        dialog: {
-          async showMessageBox(parentWindow, options) {
-            prompts.push({ parentWindow, options });
-            return { response: 1 };
-          },
-        },
-      };
-    }
-    return originalLoad.call(this, request, parent, isMain);
-  };
+test("desktop update install requires explicit approval and never installs on decline", async () => {
+  const { updater, calls } = makeUpdater();
+  let approved = false;
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "1.2.3");
+      return approved;
+    },
+    log() {},
+  });
 
+  assert.deepEqual(await controller.handleDownloaded({ version: "1.2.3" }), {
+    accepted: false,
+    reason: "cancelled",
+    version: "1.2.3",
+  });
+  assert.equal(calls.some(([name]) => name === "install"), false);
+
+  approved = true;
+  assert.deepEqual(await controller.handleDownloaded({ version: "1.2.3" }), {
+    accepted: true,
+    version: "1.2.3",
+  });
+  assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
+});
+
+test("desktop update confirmation receives only a bounded version and failures never log raw external text", async () => {
+  const secret = "credential-secret";
+  const { updater } = makeUpdater();
+  const logs = [];
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "unknown");
+      throw new Error(`dialog failed with ${secret}`);
+    },
+    log(message) { logs.push(String(message)); },
+  });
+
+  assert.deepEqual(await controller.handleDownloaded({ version: `1.2.3?token=${secret}` }), {
+    accepted: false,
+    reason: "confirmation_failed",
+    version: "unknown",
+  });
+  assert.equal(logs.some((line) => line.includes(secret)), false);
+});
+
+test("downloaded packaged updates are routed through explicit confirmation before install", async () => {
+  const { updater, events, calls } = makeUpdater();
+  let approved = false;
+  configureAutoUpdater({
+    updater,
+    isPackaged: true,
+    env: {},
+    log() {},
+    confirmInstall: async ({ version }) => {
+      assert.equal(version, "2.0.0");
+      return approved;
+    },
+  });
+
+  await events.get("update-downloaded")({ version: "2.0.0" });
+  assert.equal(calls.some(([name]) => name === "install"), false);
+
+  approved = true;
+  await events.get("update-downloaded")({ version: "2.0.0" });
+  assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
+});
+
+test("canonical desktop update controller allows only one in-flight prompt and one install", async () => {
+  const { updater, calls } = makeUpdater();
+  let release;
+  let confirms = 0;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async () => {
+      confirms += 1;
+      return pending;
+    },
+    log() {},
+  });
+  const first = controller.handleDownloaded({ version: "1.2.3" });
+  const duplicate = await controller.handleDownloaded({ version: "1.2.3" });
+  assert.deepEqual(duplicate, { accepted: false, reason: "busy", version: "1.2.3" });
+  assert.equal(confirms, 1);
+  release(true);
+  assert.deepEqual(await first, { accepted: true, version: "1.2.3" });
+  const repeated = await controller.handleDownloaded({ version: "1.2.3" });
+  assert.equal(repeated.reason, "busy", "a second event cannot invoke quitAndInstall twice");
+  assert.equal(confirms, 1);
+  assert.deepEqual(calls.filter(([action]) => action === "install"), [["install", false, true]]);
+});
+
+test("canonical desktop update controller fails closed when quitAndInstall throws", async () => {
+  const { updater } = makeUpdater();
+  let attempts = 0;
+  updater.quitAndInstall = () => { attempts += 1; throw new Error("sensitive native error"); };
+  const logs = [];
+  const controller = createDesktopUpdateInstallController({
+    updater,
+    confirmInstall: async () => true,
+    log(message) { logs.push(String(message)); },
+  });
+  assert.deepEqual(await controller.handleDownloaded({ version: "1.2.3" }), {
+    accepted: false, reason: "install_failed", version: "1.2.3",
+  });
+  assert.equal(attempts, 1);
+  assert.equal(logs.some((message) => message.includes("sensitive native error")), false);
+});
+
+test("canonical production confirmation uses a safe-default native dialog and live window", async () => {
+  const initialLoad = Module._load;
+  const prompts = [];
+  const staleWindow = { isDestroyed: () => true };
+  const healthyWindow = { isDestroyed: () => false };
+  Module._load = function mockedLoad(request, parent, isMain) {
+    if (request === "electron") return {
+      BrowserWindow: {
+        getFocusedWindow: () => staleWindow,
+        getAllWindows: () => [staleWindow, healthyWindow],
+      },
+      dialog: {
+        async showMessageBox(parentWindow, options) {
+          prompts.push({ parentWindow, options });
+          return { response: 1 };
+        },
+      },
+    };
+    return initialLoad.call(this, request, parent, isMain);
+  };
   const { updater, events, calls } = makeUpdater();
   try {
     configureAutoUpdater({ updater, isPackaged: true, env: {}, log() {} });
     await events.get("update-downloaded")({ version: "1.2.3" });
   } finally {
-    Module._load = originalLoad;
+    Module._load = initialLoad;
   }
-
   assert.equal(prompts.length, 1);
-  assert.equal(prompts[0].parentWindow, fakeWindow);
-  assert.deepEqual(prompts[0].options.buttons, ["Later", "Restart and install"]);
+  assert.equal(prompts[0].parentWindow, healthyWindow);
+  assert.deepEqual(prompts[0].options.buttons, ["Later", "Install and restart"]);
   assert.equal(prompts[0].options.defaultId, 0);
   assert.equal(prompts[0].options.cancelId, 0);
   assert.equal(prompts[0].options.noLink, true);
-  assert.match(prompts[0].options.message, /1\.2\.3/);
-  assert.deepEqual(calls, [["check"], ["quitAndInstall", false, true]]);
+  assert.match(prompts[0].options.message, /1[.]2[.]3/);
+  assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
 });
