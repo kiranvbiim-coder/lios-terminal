@@ -503,7 +503,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
   let claimHeartbeat: NodeJS.Timeout | null = null;
   if (input.claimToken) {
     claimHeartbeat = setInterval(() => {
-      void renewP9WorkflowClaimSystem(input.workflow.id, input.claimToken!).catch((error) => {
+      void renewP9WorkflowClaimSystem(input.workflow.id, input.claimToken!).catch(() => {
         console.warn("[p9Automation] workflow claim heartbeat failed for workflow", input.workflow.id);
       });
     }, 60_000);
@@ -735,7 +735,7 @@ export async function runP9FilingObserverCycle(
         filingFiledDate: latest.filedDate,
         filingObservedAt: new Date().toISOString(),
       });
-    } catch (error) {
+    } catch {
       failed += 1;
       console.warn("[p9Automation] filing observer failed for workflow", workflow.id);
     }
@@ -757,7 +757,7 @@ export function startP9AutomationRuntime(intervalMs = 30_000): () => void {
         lastFilingObserverAt = now;
         await runP9FilingObserverCycle();
       }
-    } catch (error) {
+    } catch {
       console.warn("[p9Automation] scheduler cycle failed; inspect current workflow state and receipts.");
     } finally {
       running = false;
