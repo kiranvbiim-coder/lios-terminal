@@ -135,7 +135,11 @@ export function validateP14WorkspaceRestoreObservation(value: unknown): P14Works
     if (typeof item !== "string" || item.trim().length === 0 || item.length > 500) {
       throw new Error("sourceEvidence entries must be non-empty bounded strings.");
     }
-    return item.trim();
+    const normalized = item.trim();
+    if (normalized === "." || normalized === ".." || normalized.includes("/") || normalized.includes("\\")) {
+      throw new Error("sourceEvidence identifiers must be unique artifact basenames.");
+    }
+    return normalized;
   });
   if (new Set(sourceEvidence).size !== sourceEvidence.length) {
     throw new Error("sourceEvidence must not contain duplicate identifiers.");
