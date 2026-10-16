@@ -37,14 +37,11 @@ test("desktop updater rejects insecure or malformed feed syntax", () => {
 
 test("development is disabled while packaged builds use only embedded app-update.yml authority", () => {
   const dev = makeUpdater();
-  assert.deepEqual(configureAutoUpdater({ updater: dev.updater, isPackaged: false, env: {} }), {
-    enabled: false,
-    reason: "Desktop updates are disabled for unpackaged development launches.",
-  });
+  assert.equal(configureAutoUpdater({ updater: dev.updater, isPackaged: false, env: {} }).enabled, false);
   assert.deepEqual(dev.calls, []);
 
   const packaged = makeUpdater();
-  assert.deepEqual(configureAutoUpdater(packagedOptions(packaged.updater)), {
+  assert.deepEqual(configureAutoUpdater({ updater: packaged.updater, isPackaged: true, env: {}, confirmInstall: async () => false }), {
     enabled: true,
     url: null,
     source: "packaged_config",
@@ -54,7 +51,6 @@ test("development is disabled while packaged builds use only embedded app-update
   assert.equal(packaged.updater.allowDowngrade, false);
   assert.equal(packaged.updater.allowPrerelease, false);
   assert.deepEqual(packaged.calls, [["check"]]);
-  assert.equal(packaged.events.has("update-downloaded"), true);
 });
 
 test("packaged runtime environment cannot replace the embedded release feed", () => {

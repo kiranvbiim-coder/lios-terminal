@@ -4,6 +4,16 @@
 
 **Owner direction:** work exclusively in `kiranvbiim-coder/lios-terminal` (`/Users/kiran/Projects/lios-terminal-public`). SI-01–SI-05 are paused and hidden below, not deleted or completed. Complete product coding using existing public PRs first; keep focused behavior/security tests, typecheck and short runtime smoke. Full shipping, repeated Electron packaging, native-device and cross-platform campaigns are deferred. Track **coding / journey / shipping** independently. Neither an open PR nor a locally integrated module means the whole workstream is complete.
 
+### Public PR consolidation — 2026-10-16
+
+The owner authorized publishing the preserved local integration and consolidating the open public PRs into protected `main`. This maintenance operation does not mark unfinished SI workstreams complete. Continue new work from updated public `main`, using the coding/journey/shipping rows below; keep SI-01–SI-05 paused.
+
+- Inventory: 51 open PR heads through #58, including superseded #10/#41; all unique source changes were integrated in dependency order. Superseded implementations use the stronger #48/#57 controllers rather than duplicate paths. The native transfer inventory remains `apps/provenance.json`; no private credentials, signing material, personal data or private history is published.
+- Preserved verified local product changes: accepted/current-source Finance monitors, thesis review proposals, low-noise notification admission, owner-bound scheduling, canonical device continuity and Doctor/Home UI. Retained stronger verified-runtime readiness, physical containment and independent rollback checks during conflict resolution.
+- Newly included public work: safeguards/secret guard (#2/#7), sandbox portability (#9), owner-scoped desktop notification integration (#57), cache/stream revocation integration (#58), protected restore members/owned backup publication (#54/#55), and source validators for update/pack/restore evidence (#51/#53/#56). Source validators do not constitute packaged release evidence.
+- Four pre-existing integration stashes remain untouched as recovery backups. No unrelated files are discarded and no protected-main force push or status-check bypass is authorized.
+- Follow-on queue is **not all complete**: SI-06.05 and SI-06.08 have implemented source paths; the remaining Open/Partial rows retain their concrete boundaries. Native builds need their missing target tooling, and full shipping/release qualification remains deferred by the owner.
+
 ### Current integration evidence
 
 - Local branch `omp/si06-si07-integration`, public `origin/main` base `c62099cc21dfc5f918a718a21747c2a1d0776b49`. Existing public PR implementations were combined locally in dependency order, without GitHub merges, commits or pushes. Subsequent owner-approved selective native-source migration is recorded below; the private checkout remains read-only.
