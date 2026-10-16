@@ -1,5 +1,7 @@
 # LiOS — Agent Instructions
 
+> **PUBLIC SOURCE SECURITY GATE:** This repository is publicly readable but original LiOS source remains proprietary under `LICENSE`; donor/asset/data rights remain independent. Before any source, agent, donor or workflow PR, read [`docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md`](docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md). Never commit secrets, private data, non-redistributable material or unreviewed privileged CI; do not treat source CI as native shipping acceptance. Report suspected vulnerabilities privately under `SECURITY.md`.
+
 > **CURRENT PENDING WORK (agent execution queue):** [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — titled **pending work**, a code-first 138-workstream SI-01→SI-05 checklist rechecked 2026-10-13. **Read this before claiming SI-01–05 work**, then verify live `main`, [#192](https://github.com/kiranvbiim-coder/lios-v1.0.0/issues/192), [#696](https://github.com/kiranvbiim-coder/lios-v1.0.0/issues/696) and active PRs. The checklist is an index only; it does not supersede the canonical execution plan, shipping/CI contracts or issue ownership. Never mark a code anchor, merged PR or donor fork as accepted without real tested/shipping evidence.
 
 ## 0. FINAL EXECUTION AUTHORITY — SUPER INTELLIGENCE — 2026-10-03
