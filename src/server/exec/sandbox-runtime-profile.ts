@@ -100,7 +100,7 @@ export function resolveSandboxRuntimeProfile(
   const engineTarget = env.LIOS_EXECUTION_SANDBOX_TARGET?.trim();
   if (!engineTarget) {
     throw new SandboxRuntimeConfigurationError(
-      "Strict isolation requires LIOS_EXECUTION_SANDBOX_TARGET with an explicit local unix:// engine endpoint.",
+      "Strict isolation requires LIOS_EXECUTION_SANDBOX_TARGET with an explicit local Unix socket or Windows named-pipe engine endpoint.",
     );
   }
   const image = env.LIOS_EXECUTION_SANDBOX_IMAGE?.trim();

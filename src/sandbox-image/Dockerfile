@@ -19,7 +19,7 @@ COPY browser-inputs /tmp/browser-inputs
 COPY source-lock.json /opt/lios/browser-source-lock.json
 COPY install-browser.py /opt/lios/install-browser.py
 RUN --network=none set -eu; \
-    test "$TARGETARCH" = 'arm64'; \
+    case "$TARGETARCH" in arm64|amd64) ;; *) echo "Unsupported sandbox TARGETARCH: $TARGETARCH" >&2; exit 1;; esac; \
     mkdir -p /opt/lios/node_modules/xlsx /opt/lios/docling-models /opt/node; \
     tar -xzf /tmp/node.tar.gz -C /opt/node --strip-components=1; \
     tar -xzf /tmp/xlsx.tgz -C /opt/lios/node_modules/xlsx --strip-components=1; \
