@@ -239,6 +239,6 @@ test("canonical production confirmation uses a safe-default native dialog and li
   assert.equal(prompts[0].options.defaultId, 0);
   assert.equal(prompts[0].options.cancelId, 0);
   assert.equal(prompts[0].options.noLink, true);
-  assert.match(prompts[0].options.message, /1\\.2\\.3/);
+  assert.match(prompts[0].options.message, /1[.]2[.]3/);
   assert.deepEqual(calls.filter(([name]) => name === "install"), [["install", false, true]]);
 });
