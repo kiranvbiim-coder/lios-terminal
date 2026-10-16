@@ -136,6 +136,32 @@ function stamp(now: Date): string {
 
 const ARCHIVE_NAME = /^lios-backup-\d{8}T\d{6}Z\.(tar\.gz|liosbak)$/;
 
+/**
+ * Reserve an exclusive, per-restore directory for overwritten Home files.
+ * Timestamp-only names can collide during repeated restores in the same
+ * second and cause renameSync to overwrite the *earlier* recovery copy.
+ * Never reuse an existing directory, including a dangling symlink.
+ */
+export function reserveRestorePreviousDirectory(root: string, now = new Date()): string {
+  const entry = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (!entry?.isDirectory() || entry.isSymbolicLink()) {
+    throw new BackupError("Previous-file preservation requires a real Home directory.");
+  }
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = path.join(root, `restore-previous-${stamp(now)}-${crypto.randomUUID()}`);
+    try {
+      // Atomic and non-recursive: this invocation owns only a fresh slot.
+      fs.mkdirSync(candidate, { mode: 0o700 });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw error;
+    }
+  }
+  throw new BackupError("Unable to reserve an unused directory for prior restore files.");
+}
+
+
 export interface CreateBackupOptions {
   destination: string;
   engine: DatabaseExportManifest["sourceEngine"];
@@ -498,8 +524,7 @@ export async function restoreBackup(
     readExportManifest(path.join(staging, "db"));
     await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
 
-    const previous = path.join(root, `restore-previous-${stamp(new Date())}`);
-    let moved = false;
+    let previous: string | null = null;
     let restored = 0;
     let credentialMigrationEnvelope: Buffer | null = null;
     for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file")) {
@@ -512,10 +537,10 @@ export async function restoreBackup(
       const target = assertSafeRestoreFileTarget(root, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       if (fs.existsSync(target)) {
+        if (!previous) previous = reserveRestorePreviousDirectory(root);
         const keep = path.join(previous, relative);
         fs.mkdirSync(path.dirname(keep), { recursive: true, mode: 0o700 });
         fs.renameSync(target, keep);
-        moved = true;
       }
       fs.renameSync(path.join(staging, entry.path), target);
       restored += 1;
@@ -523,7 +548,7 @@ export async function restoreBackup(
     return {
       manifest,
       filesRestored: restored,
-      previousFilesDir: moved ? previous : null,
+      previousFilesDir: previous,
       credentialMigrationEnvelope,
     };
   } finally {
