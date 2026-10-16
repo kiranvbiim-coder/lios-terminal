@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
+import { createBrowserP9DesktopNotificationPort, deliverP9DesktopNotifications } from "./p9DesktopNotifications";
 import type {
   P9NotificationPolicy,
   P9WorkflowAction,
@@ -73,6 +74,15 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function projectDeliveredNotificationsToDesktop(notifications: readonly P9NotificationRecord[]): Promise<void> {
+  try {
+    await deliverP9DesktopNotifications(notifications, createBrowserP9DesktopNotificationPort());
+  } catch {
+    // Optional OS notification projection must never change the canonical P9
+    // workflow result, in-app history, or idempotent execution receipts.
+  }
+}
+
 export function useP9Workflows(projectId: number | null) {
   return useQuery<P9WorkflowRecord[]>({
     queryKey: ["/api/projects", projectId, "automation", "workflows"],
@@ -103,9 +113,13 @@ export function useP9Notifications(projectId: number | null) {
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/automation/notifications?limit=100`);
       if (!res.ok) throw new Error("Failed to load workflow notifications.");
-      return res.json();
+      const notifications = await res.json() as P9NotificationRecord[];
+      await projectDeliveredNotificationsToDesktop(notifications);
+      return notifications;
     },
     enabled: Boolean(projectId),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -144,7 +158,7 @@ export async function runP9WorkflowNow(
   workflowId: string,
   idempotency?: P9ManualRunIdempotency,
 ) {
-  return json<{
+  const outcome = await json<{
     run: P9RunRecord | null;
     notification: P9NotificationRecord | null;
     result: Record<string, unknown> | null;
@@ -152,6 +166,10 @@ export async function runP9WorkflowNow(
     replayed?: boolean;
     receiptStatus?: "in_progress" | "completed" | null;
   }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, idempotency ?? {}));
+  if (outcome.notification && !outcome.replayed) {
+    await projectDeliveredNotificationsToDesktop([outcome.notification]);
+  }
+  return outcome;
 }
 
 /** Reconcile an ambiguous manual execution by read-only server receipt lookup. */
