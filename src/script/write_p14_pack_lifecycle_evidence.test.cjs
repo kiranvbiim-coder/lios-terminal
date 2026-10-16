@@ -45,6 +45,11 @@ function runWriter(value) {
   const input = path.join(directory, "observation.json");
   const output = path.join(directory, "evidence.json");
   fs.writeFileSync(input, JSON.stringify(value), "utf8");
+  const supports = (value.sourceEvidence || []).map((name) => {
+    const file = path.join(directory, path.basename(name));
+    fs.writeFileSync(file, `support:${name}\n`, "utf8");
+    return file;
+  });
   const result = spawnSync(process.execPath, [
     path.resolve(__dirname, "write_p14_evidence.cjs"),
     "pack_lifecycle",
@@ -52,6 +57,7 @@ function runWriter(value) {
     "automated",
     "v1.0.0",
     input,
+    ...supports,
   ], {
     cwd: path.resolve(__dirname, ".."),
     encoding: "utf8",
@@ -71,15 +77,20 @@ test("canonical P14 writer refuses invalid pack lifecycle observations before wr
   }
 });
 
-test("canonical P14 writer accepts a valid pack lifecycle observation and hashes it", () => {
+test("canonical P14 writer accepts a valid pack lifecycle observation and hashes all bound support", () => {
   const run = runWriter(observation());
   try {
     assert.equal(run.result.status, 0, run.result.stderr || run.result.stdout);
     const evidence = JSON.parse(fs.readFileSync(run.output, "utf8"));
     assert.equal(evidence.category, "pack_lifecycle");
     assert.equal(evidence.status, "passed");
-    assert.equal(evidence.sourceArtifacts.length, 1);
-    assert.match(evidence.sourceArtifacts[0].sha256, /^[a-f0-9]{64}$/);
+    assert.deepEqual(evidence.sourceArtifacts.map((item) => item.name), [
+      "observation.json",
+      "pack-install.json",
+      "pack-retry.json",
+      "pack-rollback.json",
+    ]);
+    for (const item of evidence.sourceArtifacts) assert.match(item.sha256, /^[a-f0-9]{64}$/);
   } finally {
     fs.rmSync(run.directory, { recursive: true, force: true });
   }
