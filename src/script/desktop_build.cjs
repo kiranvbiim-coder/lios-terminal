@@ -52,14 +52,18 @@ if (mode === "mac" || mode === "win") {
   }
 }
 
-if ((mode === "mac" || (mode === "pack" && process.platform === "darwin")) && process.platform === "darwin") {
-  try {
-    verifyPackagedSandboxRelease(path.join(__dirname, ".."));
-  } catch (error) {
-    console.error(`Mac sandbox image release is missing or invalid: ${error.message}`);
-    process.exit(1);
-  }
+const sandboxTarget = mode === "win"
+  ? { platform: "win32", arch: "x64" }
+  : mode === "mac"
+    ? { platform: "darwin", arch: process.arch }
+    : { platform: process.platform, arch: process.arch };
+try {
+  verifyPackagedSandboxRelease(path.join(__dirname, ".."), sandboxTarget);
+} catch (error) {
+  console.error(`Desktop sandbox image release is missing, invalid, or not qualified for ${sandboxTarget.platform}/${sandboxTarget.arch}: ${error.message}`);
+  process.exit(1);
 }
+
 const executable = path.join(
   __dirname,
   "..",
@@ -68,9 +72,7 @@ const executable = path.join(
   process.platform === "win32" ? "electron-builder.cmd" : "electron-builder",
 );
 
-const args = [
-  "build",
-];
+const args = ["build"];
 if (mode === "pack") {
   args.push("--dir");
   if (process.platform === "darwin") {

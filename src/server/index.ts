@@ -43,6 +43,7 @@ import { GATEWAY_DEVICE_PATH, GATEWAY_PATH } from "@shared/gatewayProtocol";
 import { deviceNetwork, devicePairing } from "./deviceRuntime";
 import { gatewayHub, notifyDataChanged, publishQuoteUpdate } from "./gatewayRuntime";
 import { registerGatewayConversation } from "./gatewayConversation";
+import { registerDeviceContinuityGateway } from "./gatewayDeviceContinuity";
 import { configurePassport, ensureDeviceBindingCookie, initializeServerHomeOwner, isHomeOwner } from "./auth";
 import { getSessionSecret } from "./sessionSecret";
 import { installEgressGuard } from "./egressPolicy";
@@ -333,6 +334,7 @@ app.use((req, res, next) => {
     });
 
     registerGatewayConversation(gatewayHub);
+    registerDeviceContinuityGateway(gatewayHub);
     gatewayHub.start();
     try {
       await deviceNetwork.start();

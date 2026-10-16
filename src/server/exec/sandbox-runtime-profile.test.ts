@@ -9,6 +9,7 @@ import {
 
 const IMAGE = "ghcr.io/limuria/lios-sandbox@sha256:" + "a".repeat(64);
 const DOCKER_TARGET = "unix:///var/run/docker.sock";
+const WINDOWS_DOCKER_TARGET = "npipe:////./pipe/docker_engine";
 const PODMAN_TARGET = "unix:///run/user/1000/podman/podman.sock";
 
 test("sandbox runtime defaults to explicit legacy-host compatibility", () => {
@@ -57,8 +58,21 @@ test("strict sandbox profile requires engine, explicit local target and immutabl
       LIOS_EXECUTION_SANDBOX_TARGET: "tcp://127.0.0.1:2375",
       LIOS_EXECUTION_SANDBOX_IMAGE: IMAGE,
     }),
-    /local unix:\/\/ endpoint/,
+    /explicit local unix:\/\/ socket or Windows npipe:\/\/ endpoint/,
   );
+});
+
+test("strict profile accepts the explicit local Windows Docker named pipe", () => {
+  const profile = resolveSandboxRuntimeProfile({
+    LIOS_EXECUTION_ISOLATION: "strict",
+    LIOS_EXECUTION_SANDBOX_ENGINE: "docker",
+    LIOS_EXECUTION_SANDBOX_TARGET: WINDOWS_DOCKER_TARGET,
+    LIOS_EXECUTION_SANDBOX_IMAGE: IMAGE,
+  });
+  assert.equal(profile.mode, "strict");
+  assert.equal(profile.engine, "docker");
+  assert.equal(profile.engineTarget, WINDOWS_DOCKER_TARGET);
+  assert.equal(profile.backend?.id, "lios.execution.docker");
 });
 
 test("strict profile builds the canonical container backend and pinned in-image tools", () => {

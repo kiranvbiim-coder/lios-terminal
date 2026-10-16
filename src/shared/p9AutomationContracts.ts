@@ -61,11 +61,20 @@ const savedConversationRequestSchema = conversationRequestSchema.omit({
   continuationOf: true,
 });
 
+export const p9AcceptedArtifactSchema = z.object({
+  artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i),
+  version: z.number().int().positive(),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+export type P9AcceptedArtifact = z.infer<typeof p9AcceptedArtifactSchema>;
+
 export const p9WorkflowActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("conversation_rerun"),
     chatId: z.number().int().positive(),
     request: savedConversationRequestSchema,
+    acceptedArtifact: p9AcceptedArtifactSchema.optional(),
+    currentPersonalFinanceResourceId: z.string().trim().min(1).max(300).optional(),
   }).strict(),
   z.object({
     kind: z.literal("project_what_changed"),
@@ -98,6 +107,10 @@ export const p9NotificationPolicySchema = z.object({
 }).strict();
 export type P9NotificationPolicy = z.infer<typeof p9NotificationPolicySchema>;
 
+export const P9_ACCEPTED_FINANCE_TEMPLATES: readonly P9WorkflowTemplate[] = [
+  "filing_monitor", "earnings_monitor", "valuation_refresh", "portfolio_monitor", "report_refresh",
+];
+
 export const p9WorkflowDefinitionInputSchema = z.object({
   schemaVersion: z.literal(P9_AUTOMATION_SCHEMA_VERSION).default(P9_AUTOMATION_SCHEMA_VERSION),
   name: z.string().trim().min(1).max(200),
@@ -111,15 +124,18 @@ export const p9WorkflowDefinitionInputSchema = z.object({
   artifactRefs: z.array(z.string().trim().min(1).max(500)).max(200).default([]),
   enabled: z.boolean().default(true),
 }).strict().superRefine((value, ctx) => {
-  const conversationTemplates = new Set(["filing_monitor", "earnings_monitor", "valuation_refresh", "portfolio_monitor", "report_refresh"]);
+  const requiresAcceptance = P9_ACCEPTED_FINANCE_TEMPLATES.includes(value.template);
   if (value.template === "thesis_refresh" && value.action.kind !== "thesis_refresh") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action"], message: "Thesis refresh template requires the thesis_refresh action." });
   }
   if (value.template === "provider_health" && value.action.kind !== "provider_health") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action"], message: "Provider health template requires the provider_health action." });
   }
-  if (conversationTemplates.has(value.template) && value.action.kind !== "conversation_rerun") {
+  if (requiresAcceptance && value.action.kind !== "conversation_rerun") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action"], message: value.template + " requires a saved conversation rerun action." });
+  }
+  if (requiresAcceptance && value.action.kind === "conversation_rerun" && !value.action.acceptedArtifact) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["action", "acceptedArtifact"], message: "Finance monitors require an explicitly accepted retained Artifact version." });
   }
 });
 export type P9WorkflowDefinitionInput = z.infer<typeof p9WorkflowDefinitionInputSchema>;

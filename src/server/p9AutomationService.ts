@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
+import { p6PersonalFinanceRequestSchema } from "@shared/p6FinanceContracts";
 import {
   users,
   type ProjectAutomationNotification,
@@ -14,11 +15,14 @@ import {
 import {
   p9AutomationEventSchema,
   p9WorkflowActionSchema,
+  P9_ACCEPTED_FINANCE_TEMPLATES,
   type P9AutomationEvent,
   type P9WorkflowRunResult,
+  type P9WorkflowTemplate,
 } from "@shared/p9AutomationContracts";
 import type { TenantContext } from "./tenantContext";
 import { getDb } from "./db";
+import { requireAcceptedP9Workflow } from "./p9AcceptedWorkflow";
 import { getProject } from "./projectStore";
 import { getProjectChat, listProjectChatMessages } from "./projectChatStore";
 import { listProjectResources } from "./projectResourceStore";
@@ -32,7 +36,8 @@ import { runOnConversationSpine } from "./conversationSpineRun";
 import { requireMasterAiOn } from "./masterAiGate";
 import type { PersonaPreferenceUser } from "./personaPreferenceService";
 import { createConversationLedgerRecorder } from "./ledgerReproducibility";
-import { createArtifactVersion, getArtifact, getArtifactVersion } from "./artifactStore";
+import { createArtifactProposal, listArtifactProposals, getArtifact, getArtifactVersion, persistProjectConversationDraft } from "./artifactStore";
+import { normalizeConversationDraft } from "./artifactDiff";
 import {
   listProjectIntelligenceSnapshots,
   projectIntelligenceDelta,
@@ -49,7 +54,6 @@ import {
   claimDueP9Workflows,
   completeP9Run,
   createP9Notification,
-  latestDeliveredP9Notification,
   latestSuccessfulP9Run,
   listP9EventWorkflows,
   parseP9StoredWorkflow,
@@ -57,9 +61,9 @@ import {
   updateP9WorkflowEventCursorSystem,
 } from "./p9AutomationStore";
 import {
-  decideP9Notification,
+
+  executeMatchedP9EventWorkflows,
   p9AutomationEventMatches,
-  p9NotificationTitle,
   p9UnseenObservedFilings,
 } from "./p9AutomationEngine";
 
@@ -72,8 +76,14 @@ async function tenantForWorkflow(workflow: ProjectAutomationWorkflow): Promise<T
     id: users.id,
     organizationId: users.organizationId,
     role: users.role,
+    active: users.active,
+    mustChangePassword: users.mustChangePassword,
+    lockedUntil: users.lockedUntil,
   }).from(users).where(eq(users.id, workflow.ownerUserId)).limit(1);
   if (!user) throw new Error("Automation workflow owner no longer exists.");
+  if (!user.active || user.mustChangePassword || (user.lockedUntil && user.lockedUntil.getTime() > Date.now())) {
+    throw new Error("Automation workflow owner has no current execution authority: account inactive, locked or password change required.");
+  }
   const organizationId = user.organizationId ?? null;
   if (organizationId !== workflow.organizationId) throw new Error("Automation workflow owner organization no longer matches the saved workflow.");
   return { userId: user.id, organizationId, role: user.role };
@@ -166,29 +176,40 @@ async function runThesisRefresh(ctx: TenantContext, workflow: ProjectAutomationW
     snapshot: rebuilt.snapshot,
     delta,
   });
-  const material = refreshed.changes.length > 0 || refreshed.contradictions.length > 0 || refreshed.thesis.status !== thesis.status;
-  let newVersion: number | null = null;
+  // Observation timestamps/snapshot churn are not a change to the owner's thesis.
+  const patch = {
+    ...refreshed.thesis,
+    refresh: thesis.refresh,
+    claims: refreshed.thesis.claims.map((claim, index) => ({ ...claim, updatedAt: thesis.claims[index].updatedAt })),
+  };
+  const material = hashLedgerValue(patch) !== hashLedgerValue(thesis);
+  let proposalId: string | null = null;
+  let newlyProposed = false;
   if (material) {
-    const created = await createArtifactVersion(ctx, {
+    const proposalHash = hashLedgerValue(patch);
+    const previousProposals = await listArtifactProposals(ctx, artifact.id);
+    const existing = previousProposals.find(proposal => proposal.baseVersion === artifact.headVersion
+      && proposal.proposalType === "artifact_patch" && hashLedgerValue(proposal.patch) === proposalHash);
+    const proposal = existing ?? await createArtifactProposal(ctx, {
       artifactId: artifact.id,
       baseVersion: artifact.headVersion,
-      content: refreshed.thesis,
-      adapterId: "lios.thesis.native",
-      sourceRefs: collectThesisEvidence(refreshed.thesis),
-      actorType: "system",
-      note: "P9 continuous-intelligence Thesis refresh from Project Intelligence snapshot " + rebuilt.snapshot.id,
-    });
-    newVersion = created.version;
-    await rebuildProjectIntelligence(ctx, workflow.projectId);
+      type: "artifact_patch",
+      patch,
+      actorType: "conversation",
+      summary: "Review observed Thesis evidence before changing owner state. " + refreshed.review.summary,
+    }, { key: `thesis-monitor:${artifact.headVersion}:${proposalHash}`, payloadHash: proposalHash });
+    proposalId = proposal.id;
+    newlyProposed = !existing;
   }
   const invalidated = refreshed.thesis.status === "invalidated";
   return {
-    summary: material
-      ? refreshed.changes.length + " Thesis change(s), " + refreshed.contradictions.length + " contradiction(s)."
-      : "Thesis refresh found no material state change.",
-    changed: material,
-    conditionMet: invalidated || refreshed.contradictions.length > 0,
-    relevanceScore: invalidated ? 1 : refreshed.contradictions.length ? 0.9 : material ? 0.7 : 0.1,
+    summary: newlyProposed
+      ? "Thesis evidence requires review; a canonical change proposal was saved. The owner's thesis was not changed."
+      : material ? "This Thesis evidence already has a review proposal; no duplicate change was created."
+        : "Thesis refresh found no material state change.",
+    changed: newlyProposed,
+    conditionMet: newlyProposed && (invalidated || refreshed.contradictions.length > 0),
+    relevanceScore: newlyProposed ? (invalidated ? 1 : refreshed.contradictions.length ? 0.9 : 0.7) : 0.1,
     sourceRefs: unique([...workflow.sourceRefs, ...collectThesisEvidence(refreshed.thesis)]),
     engineRefs: unique([...workflow.engineRefs, "lios.thesis.native", "lios.project-intelligence"]),
     artifactRefs: unique([...workflow.artifactRefs, artifact.id]),
@@ -196,9 +217,11 @@ async function runThesisRefresh(ctx: TenantContext, workflow: ProjectAutomationW
     output: {
       artifactId: artifact.id,
       fromVersion: artifact.headVersion,
-      toVersion: newVersion,
+      toVersion: null,
+      proposalId,
       snapshotId: rebuilt.snapshot.id,
-      status: refreshed.thesis.status,
+      status: thesis.status,
+      proposedStatus: refreshed.thesis.status,
       changes: refreshed.changes.slice(0, 100),
       contradictions: refreshed.contradictions.slice(0, 100),
     },
@@ -273,8 +296,16 @@ async function runConversationRerun(
     listProjectResources(ctx, workflow.projectId),
     getEnvironmentSetupForUser(ctx.userId),
   ]);
+  const currentProfileResource = action.currentPersonalFinanceResourceId
+    ? resources.find(resource => resource.id === action.currentPersonalFinanceResourceId && resource.kind === "personal_finance_profile")
+    : null;
+  if (action.currentPersonalFinanceResourceId && !currentProfileResource) {
+    throw new Error("The explicitly selected personal-finance source is unavailable; no frozen-input fallback was used.");
+  }
+  const currentProfile = currentProfileResource ? p6PersonalFinanceRequestSchema.parse(currentProfileResource.metadata.profile) : null;
   const request = conversationRequestSchema.parse({
     ...action.request,
+    ...(currentProfile ? { context: { ...action.request.context, personalFinance: currentProfile } } : {}),
     requestId: crypto.randomUUID(),
     continuationOf: null,
   });
@@ -309,12 +340,16 @@ async function runConversationRerun(
   const receiptIds = new Set<string>();
   const artifactRefs = new Set<string>(workflow.artifactRefs);
   const runtimeEvents: ConversationRuntimeEvent[] = [];
+  const pendingArtifacts: Extract<ConversationRuntimeEvent, { type: "artifact" }>[] = [];
+  const retainedVersions: Array<{ artifactId: string; version: number; contentHash: string }> = [];
+  let runtimeFailed = false;
   // Automation reruns run on the chat spine: registry entry, encrypted journal record, one cancellation tree (SI-02.07).
   const result = await runOnConversationSpine({
     requestId: request.requestId,
     owner: { userId: ctx.userId, projectId: workflow.projectId, chatId: chat.id },
     label: "Automation rerun",
-    run: ({ signal, emit }) => executeConversationRuntime({
+    run: async ({ signal, emit }) => {
+      const result = await executeConversationRuntime({
       tenant: ctx,
       scope: "project",
       chatId: chat.id,
@@ -337,6 +372,11 @@ async function runConversationRerun(
       preferredModel: setup?.aiModelId,
       signal,
       emit: async (event) => {
+        if (event.type === "error" || (event.type === "done" && event.status === "failed")) runtimeFailed = true;
+        if (event.type === "artifact") {
+          pendingArtifacts.push(event);
+          return;
+        }
         runtimeEvents.push(event);
         await ledger.recordRuntimeEvent(event);
         if (event.type === "tool_result") event.sourceRefs.forEach((ref) => sourceRefs.add(ref));
@@ -344,10 +384,39 @@ async function runConversationRerun(
           receiptIds.add(event.receipt.id);
           event.receipt.sourceRefs.forEach((ref) => sourceRefs.add(ref));
         }
-        if (event.type === "artifact") artifactRefs.add(event.artifact.artifactId);
         await emit(event);
       },
-    }),
+      });
+      if (runtimeFailed) throw new Error("Saved workflow runtime failed; no output was accepted as a successful financial refresh.");
+      if (!result.cancelled && !result.awaitingApproval) {
+        const capabilityIds = result.plan.capabilities.map(capability => capability.id);
+        const selection = request.context?.selection;
+        for (const event of pendingArtifacts) {
+          const saved = await persistProjectConversationDraft(ctx, {
+            projectId: workflow.projectId,
+            requestId: request.requestId,
+            draft: event.artifact,
+            trustManifest: result.trustManifest ?? null,
+            dependencyRefs: [...event.artifact.sourceRefs, ...capabilityIds.map(id => `capability:${id}`)],
+            refreshSpec: {
+              kind: "conversation",
+              sourceScope: request.sourceScope,
+              executionMode: request.executionMode,
+              capabilityIds,
+              message: request.message,
+              selection: selection ? { kind: selection.kind, id: selection.id, label: selection.label, view: selection.view, symbol: selection.symbol } : null,
+              engineRef: null,
+            },
+          });
+          artifactRefs.add(saved.artifact.id);
+          retainedVersions.push({ artifactId: saved.artifact.id, version: saved.version.version, contentHash: saved.version.contentHash });
+          const retained = { ...event, persistedArtifact: { id: saved.artifact.id, version: saved.version.version } };
+          await ledger.recordRuntimeEvent(retained);
+          await emit(retained);
+        }
+      }
+      return result;
+    },
   });
   if (result.cancelled) throw new Error("Saved workflow execution was cancelled.");
   if (result.awaitingApproval) {
@@ -356,8 +425,7 @@ async function runConversationRerun(
   const outputHash = hashLedgerValue({
     text: result.text,
     label: result.label,
-    receiptIds: result.receiptIds,
-    artifactIds: result.artifacts.map((artifact) => artifact.artifactId),
+    artifacts: result.artifacts.map(artifact => normalizeConversationDraft(artifact)),
   });
   const previousHash = typeof previous?.output?.outputHash === "string" ? previous.output.outputHash : null;
   const changed = previousHash !== null && previousHash !== outputHash;
@@ -368,13 +436,19 @@ async function runConversationRerun(
     relevanceScore: changed ? 0.75 : 0.15,
     sourceRefs: unique([...sourceRefs]),
     engineRefs: unique([...workflow.engineRefs, "lios.conversation-runtime"]),
-    artifactRefs: unique([...artifactRefs, ...result.artifacts.map((artifact) => artifact.artifactId)]),
+    artifactRefs: unique([...artifactRefs]),
     executionReceiptIds: unique([...receiptIds, ...result.receiptIds]),
     output: {
       outputHash,
       label: result.label,
       text: result.text.slice(0, 50_000),
       runtimeEventCount: runtimeEvents.length,
+      retainedVersions,
+      currentInput: currentProfileResource && currentProfile ? {
+        resourceId: currentProfileResource.id,
+        inputHash: hashLedgerValue(currentProfile),
+        asOf: currentProfile.asOf,
+      } : null,
     },
   };
 }
@@ -391,38 +465,14 @@ async function executeP9Action(
   return runConversationRerun(ctx, workflow, action, previous);
 }
 
-async function persistP9Notification(
-  ctx: TenantContext,
-  workflow: ProjectAutomationWorkflow,
-  run: ProjectAutomationRun,
-  result: P9WorkflowRunResult | null,
-  error: string | null,
-): Promise<ProjectAutomationNotification> {
-  const { notificationPolicy } = parseP9StoredWorkflow(workflow);
-  const last = await latestDeliveredP9Notification(ctx, workflow.id);
-  const decision = decideP9Notification({
-    policy: notificationPolicy,
-    status: error ? "failed" : "succeeded",
-    result,
-    lastDeliveredAt: last?.createdAt ?? null,
-    now: new Date(),
-  });
-  const relevanceScore = result?.relevanceScore ?? 1;
-  return createP9Notification(ctx, workflow, run.id, {
-    status: decision.status,
-    reason: decision.reason,
-    title: p9NotificationTitle(workflow.name, decision.reason),
-    body: (error || result?.summary || decision.explanation).slice(0, 20_000),
-    relevanceScore,
-  });
-}
-
 export interface ExecuteP9WorkflowInput {
   workflow: ProjectAutomationWorkflow;
   ctx?: TenantContext;
   triggerType: "manual" | "schedule" | "event";
   triggerDetail?: Record<string, unknown>;
   dedupeKey?: string | null;
+  // Only a keyed, human-approved manual run may pass this revision claim.
+  expectedWorkflowUpdatedAt?: Date | null;
   claimToken?: string | null;
 }
 
@@ -432,7 +482,10 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
   result: P9WorkflowRunResult | null;
   error: string | null;
 }> {
-  const ctx = input.ctx ?? await tenantForWorkflow(input.workflow);
+  const ctx = await tenantForWorkflow(input.workflow);
+  if (input.ctx && (input.ctx.userId !== ctx.userId || input.ctx.organizationId !== ctx.organizationId || input.ctx.role !== ctx.role)) {
+    throw new Error("Automation caller authority changed; inspect current account permissions before running.");
+  }
   if (input.triggerType !== "manual" && !input.workflow.enabled) {
     return { run: null, notification: null, result: null, error: null };
   }
@@ -443,6 +496,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
     input.triggerType,
     input.triggerDetail ?? {},
     input.dedupeKey ?? null,
+    input.expectedWorkflowUpdatedAt ?? null,
   );
   if (!run) return { run: null, notification: null, result: null, error: null };
 
@@ -458,6 +512,9 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
 
   try {
     const action = p9WorkflowActionSchema.parse(input.workflow.action);
+    if (action.kind === "conversation_rerun" && (action.acceptedArtifact || action.currentPersonalFinanceResourceId || P9_ACCEPTED_FINANCE_TEMPLATES.includes(input.workflow.template as P9WorkflowTemplate))) {
+      await requireAcceptedP9Workflow(ctx, input.workflow.projectId, action);
+    }
     const result = await workflowIdentity(ctx, () => withP10Span(
       "automation.workflow.run",
       {
@@ -471,7 +528,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
       result,
       claimToken: input.claimToken ?? null,
     });
-    const notification = await persistP9Notification(ctx, input.workflow, completed, result, null);
+    const notification = await createP9Notification(ctx, input.workflow, completed.id, { result, error: null });
     return { run: completed, notification, result, error: null };
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : "Automation workflow failed.";
@@ -479,7 +536,7 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
       error,
       claimToken: input.claimToken ?? null,
     });
-    const notification = await persistP9Notification(ctx, input.workflow, completed, null, error);
+    const notification = await createP9Notification(ctx, input.workflow, completed.id, { result: null, error });
     return { run: completed, notification, result: null, error };
   } finally {
     if (claimHeartbeat) clearInterval(claimHeartbeat);
@@ -491,14 +548,20 @@ export async function runDueP9Workflows(now = new Date()): Promise<{ claimed: nu
   let succeeded = 0;
   let failed = 0;
   for (const item of claimed) {
-    const outcome = await executeP9Workflow({
-      workflow: item.workflow,
-      triggerType: "schedule",
-      triggerDetail: { dueAt: item.workflow.nextRunAt?.toISOString() ?? now.toISOString() },
-      claimToken: item.claimToken,
-    });
-    if (outcome.error) failed += 1;
-    else if (outcome.run) succeeded += 1;
+    try {
+      const outcome = await executeP9Workflow({
+        workflow: item.workflow,
+        triggerType: "schedule",
+        triggerDetail: { dueAt: item.workflow.nextRunAt?.toISOString() ?? now.toISOString() },
+        claimToken: item.claimToken,
+      });
+      if (outcome.error) failed += 1;
+      else if (outcome.run) succeeded += 1;
+    } catch {
+      // Current-authority denial is a failure, not permission to stop other owners' due work.
+      // Its lease expires normally; no unreceipted action is retried within this cycle.
+      failed += 1;
+    }
   }
   return { claimed: claimed.length, succeeded, failed };
 }
@@ -581,11 +644,9 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
     organizationId: event.organizationId,
   });
   const matched = workflows.filter((workflow) => p9AutomationEventMatches(parseP9StoredWorkflow(workflow).trigger, event));
-  let executed = 0;
-  let failed = 0;
   const dedupeKey = eventDedupeKey(event);
-  for (const workflow of matched) {
-    const outcome = await executeP9Workflow({
+  const summary = await executeMatchedP9EventWorkflows(matched, (workflow) =>
+    executeP9Workflow({
       workflow,
       triggerType: "event",
       triggerDetail: {
@@ -595,14 +656,18 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
         payload: event.payload,
       },
       dedupeKey,
-    });
-    if (outcome.run) executed += 1;
-    if (outcome.error) failed += 1;
+    }),
+  );
+  if (summary.unexpectedFailures > 0) {
+    // Do not dump provider errors, credentials, or raw event payloads to logs.
+    console.warn("[p9Automation] unexpected event workflow failures:", summary.unexpectedFailures);
   }
-  return { matched: matched.length, executed, failed };
+  return { matched: summary.matched, executed: summary.executed, failed: summary.failed };
 }
 
-export async function runP9FilingObserverCycle(): Promise<{ observed: number; baselined: number; emitted: number; failed: number }> {
+export async function runP9FilingObserverCycle(
+  sources: { filings: typeof getCompanyFilings } = { filings: getCompanyFilings },
+): Promise<{ observed: number; baselined: number; emitted: number; failed: number }> {
   const workflows = await listP9EventWorkflows("filing", {
     projectId: null,
     ownerUserId: null,
@@ -626,7 +691,8 @@ export async function runP9FilingObserverCycle(): Promise<{ observed: number; ba
         : null;
 
     try {
-      const filings = (await getCompanyFilings(symbol, 40))
+      const ctx = await tenantForWorkflow(workflow);
+      const filings = (await workflowIdentity(ctx, () => sources.filings(symbol, 40)))
         .filter((filing) => !formFilter || filing.formType.toUpperCase() === formFilter);
       const latest = filings[0] ?? null;
       if (!latest) continue;

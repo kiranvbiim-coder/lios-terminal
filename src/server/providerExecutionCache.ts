@@ -11,6 +11,10 @@ interface Entry {
 const CACHE_LIMIT = 500;
 const cache = new Map<string, Entry>();
 const inflight = new Map<string, Promise<CanonicalDataResponse>>();
+// Incremented whenever cache state is explicitly invalidated (e.g. changed
+// provider configuration/entitlement). Old requests may finish for their
+// existing callers, but must not reintroduce stale observations.
+let cacheGeneration = 0;
 
 function ttlMs(request: CanonicalDataRequest): number {
   if (request.pointInTime.mode !== "latest") return 5 * 60_000;
@@ -35,6 +39,8 @@ function key(request: CanonicalDataRequest, ctx: TenantContext, registry: Provid
   return hashLedgerValue({
     userId: ctx.userId,
     organizationId: ctx.organizationId,
+    role: ctx.role,
+    projectId: request.projectId,
     capability: request.capability,
     entity: request.entity,
     fields: request.fields,
@@ -45,6 +51,38 @@ function key(request: CanonicalDataRequest, ctx: TenantContext, registry: Provid
     providerSet,
   });
 }
+/**
+ * A fresh entitlement decision is required before an old provider observation
+ * can be reused whenever the adapter offers a live entitlement callback.
+ * Changed policy identity/use rights and unknown/denied status all force a
+ * normal SDK execution (which preserves provider fallback and gap semantics).
+ * Providers without that callback still rely on their existing SDK checks,
+ * context-isolated cache keys, TTL and explicit invalidation.
+ */
+async function canReuseProviderObservation(
+  request: CanonicalDataRequest,
+  context: TenantContext,
+  registry: ProviderSdkRegistry,
+  response: CanonicalDataResponse,
+): Promise<boolean> {
+  const observation = response.observation;
+  if (!observation) return false;
+  const adapter = registry.get(observation.providerId);
+  if (!adapter) return false;
+  if (!adapter.entitlement) return true;
+  try {
+    const live = await adapter.entitlement(request, context);
+    const prior = observation.entitlement;
+    return live.decision === "allowed"
+      && prior.decision === "allowed"
+      && live.policyId === prior.policyId
+      && JSON.stringify([...live.permittedUses].sort()) === JSON.stringify([...prior.permittedUses].sort());
+  } catch {
+    // Entitlement backend errors must never authorize a cached response.
+    return false;
+  }
+}
+
 function touch(k: string, entry: Entry) {
   cache.delete(k);
   cache.set(k, entry);
@@ -61,15 +99,28 @@ export async function executeCanonicalDataRequestCached(
   registry: ProviderSdkRegistry,
 ): Promise<{ response: CanonicalDataResponse; cache: "hit" | "miss" | "deduped" }> {
   const k = key(request, context, registry);
+  const generation = cacheGeneration;
   const now = Date.now();
   const hit = cache.get(k);
   if (hit && hit.expiresAt > now) {
-    touch(k, hit);
-    return { response: hit.response, cache: "hit" };
+    const allowed = await canReuseProviderObservation(request, context, registry, hit.response);
+    // A clear or a replacement may happen while entitlement is being checked.
+    if (allowed && generation === cacheGeneration && cache.get(k) === hit) {
+      touch(k, hit);
+      return { response: hit.response, cache: "hit" };
+    }
   }
-  if (hit) cache.delete(k);
+  if (hit && cache.get(k) === hit) cache.delete(k);
   const pending = inflight.get(k);
-  if (pending) return { response: await pending, cache: "deduped" };
+  if (pending) {
+    const response = await pending;
+    if (generation === cacheGeneration && await canReuseProviderObservation(request, context, registry, response)) {
+      return { response, cache: "deduped" };
+    }
+    // Permission changed during execution: rerun through the canonical SDK
+    // rather than handing a newly unauthorized observation to this caller.
+    return { response: await executeCanonicalDataRequest(request, context, registry), cache: "miss" };
+  }
 
   const promise = executeCanonicalDataRequest(request, context, registry);
   inflight.set(k, promise);
@@ -77,13 +128,15 @@ export async function executeCanonicalDataRequestCached(
     const response = await promise;
     // Gaps/errors are intentionally not cached: a just-connected provider or renewed
     // entitlement must take effect immediately.
-    if (response.observation) {
+    if (response.observation && generation === cacheGeneration) {
       const entry = { response, createdAt: now, expiresAt: now + ttlMs(request) };
       touch(k, entry);
     }
     return { response, cache: "miss" };
   } finally {
-    inflight.delete(k);
+    // An invalidation may have started a newer request for this same key.
+    // Old cleanup may remove only its own promise, never the replacement.
+    if (inflight.get(k) === promise) inflight.delete(k);
   }
 }
 
@@ -112,6 +165,7 @@ export async function prefetchCanonicalDataRequests(
 }
 
 export function clearProviderExecutionCache(): void {
+  cacheGeneration += 1;
   cache.clear();
   inflight.clear();
 }

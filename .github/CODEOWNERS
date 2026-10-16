@@ -9,3 +9,22 @@
 /src/server/auth.ts @kiranvbiim-coder
 /src/server/exec/ @kiranvbiim-coder
 /src/server/p13Plugin* @kiranvbiim-coder
+
+# Public-distribution governance and release-input boundaries.
+/AGENTS.md @kiranvbiim-coder
+/.gitignore @kiranvbiim-coder
+/src/.gitignore @kiranvbiim-coder
+/src/.dockerignore @kiranvbiim-coder
+/src/Dockerfile @kiranvbiim-coder
+/src/package.json @kiranvbiim-coder
+/src/package-lock.json @kiranvbiim-coder
+/src/python-service/requirements.txt @kiranvbiim-coder
+/src/main.cjs @kiranvbiim-coder
+/src/preload.cjs @kiranvbiim-coder
+/src/desktopSecretCustody.cjs @kiranvbiim-coder
+/src/desktopIpcSecurity.cjs @kiranvbiim-coder
+/src/server/netPolicy/ @kiranvbiim-coder
+/src/server/sessionSecret.ts @kiranvbiim-coder
+/src/script/check_public_repository_safety.mjs @kiranvbiim-coder
+/src/script/check_public_repository_safety.test.mjs @kiranvbiim-coder
+/docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md @kiranvbiim-coder

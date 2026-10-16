@@ -136,6 +136,32 @@ function stamp(now: Date): string {
 
 const ARCHIVE_NAME = /^lios-backup-\d{8}T\d{6}Z\.(tar\.gz|liosbak)$/;
 
+/**
+ * Reserve an exclusive, per-restore directory for overwritten Home files.
+ * Timestamp-only names can collide during repeated restores in the same
+ * second and cause renameSync to overwrite the *earlier* recovery copy.
+ * Never reuse an existing directory, including a dangling symlink.
+ */
+export function reserveRestorePreviousDirectory(root: string, now = new Date()): string {
+  const entry = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (!entry?.isDirectory() || entry.isSymbolicLink()) {
+    throw new BackupError("Previous-file preservation requires a real Home directory.");
+  }
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = path.join(root, `restore-previous-${stamp(now)}-${crypto.randomUUID()}`);
+    try {
+      // Atomic and non-recursive: this invocation owns only a fresh slot.
+      fs.mkdirSync(candidate, { mode: 0o700 });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw error;
+    }
+  }
+  throw new BackupError("Unable to reserve an unused directory for prior restore files.");
+}
+
+
 export interface CreateBackupOptions {
   destination: string;
   engine: DatabaseExportManifest["sourceEngine"];
@@ -153,6 +179,25 @@ export interface BackupResult {
   pruned: string[];
 }
 
+/** Resolve a proposed backup path through existing ancestors without creating it. */
+function physicalBackupDestination(destination: string): string {
+  let existing = destination;
+  const tail: string[] = [];
+  for (;;) {
+    const entry = fs.lstatSync(existing, { throwIfNoEntry: false });
+    if (entry) {
+      if (tail.length && !entry.isDirectory() && !entry.isSymbolicLink()) {
+        throw new BackupError("Backup destination must have an existing directory ancestor.");
+      }
+      return path.resolve(fs.realpathSync(existing), ...tail);
+    }
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new BackupError("Backup destination has no accessible directory ancestor.");
+    tail.unshift(path.basename(existing));
+    existing = parent;
+  }
+}
+
 export async function createBackup(db: DrizzleDb, options: CreateBackupOptions): Promise<BackupResult> {
   const root = dataRoot();
   const destination = path.resolve(options.destination);
@@ -161,15 +206,44 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
   }
   const dbDir = databaseDir();
   if (dbDir === root) throw new BackupError("This data root stores the database at its top level; move it into a pgdata folder first.");
+  const physicalRoot = fs.realpathSync(root);
+  const plannedDestination = physicalBackupDestination(destination);
+  if (plannedDestination === physicalRoot || plannedDestination.startsWith(`${physicalRoot}${path.sep}`)) {
+    throw new BackupError("Choose a backup destination outside the LiOS data folder.");
+  }
+  const priorDestination = fs.lstatSync(destination, { throwIfNoEntry: false });
+  if (priorDestination && (!priorDestination.isDirectory() || priorDestination.isSymbolicLink())) {
+    throw new BackupError("Backup destination must be a real directory, not a symbolic link.");
+  }
   fs.mkdirSync(destination, { recursive: true, mode: 0o700 });
+  const destinationEntry = fs.lstatSync(destination);
+  if (!destinationEntry.isDirectory() || destinationEntry.isSymbolicLink()) {
+    throw new BackupError("Backup destination must be a real directory, not a symbolic link.");
+  }
+  // A path can be lexically outside Home but physically inside it through an
+  // existing parent alias. Refuse that physical overlap before any staging.
+  const physicalDestination = fs.realpathSync(destination);
+  if (physicalDestination === physicalRoot || physicalDestination.startsWith(`${physicalRoot}${path.sep}`)) {
+    throw new BackupError("Choose a backup destination outside the LiOS data folder.");
+  }
 
   const now = options.now ?? new Date();
   const encrypted = options.passphrase !== undefined;
   const file = path.join(destination, `lios-backup-${stamp(now)}.${encrypted ? "liosbak" : "tar.gz"}`);
-  if (fs.existsSync(file)) throw new BackupError(`${path.basename(file)} already exists.`);
-  const partial = `${file}.${process.pid}.partial`;
-  const staging = path.join(destination, `.lios-backup-${process.pid}`);
-  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+  if (fs.lstatSync(file, { throwIfNoEntry: false })) throw new BackupError(`${path.basename(file)} already exists.`);
+  const staging = path.join(destination, `.lios-backup-${process.pid}-${crypto.randomUUID()}`);
+  // Non-recursive mkdir is an atomic reservation. Never adopt an existing
+  // staging directory, even an abandoned one from an earlier invocation.
+  try {
+    fs.mkdirSync(staging, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new BackupError("Backup staging directory is already occupied.");
+    }
+    throw error;
+  }
+  const partial = path.join(staging, "archive.partial");
+  let published = false;
   let vaultMigrationEnvelope: Buffer | null = null;
 
   try {
@@ -255,15 +329,19 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
     } finally {
       fs.closeSync(handle);
     }
-    fs.renameSync(partial, file);
 
-    // A backup that cannot be read back is not a backup: verify before reporting success or pruning.
-    const manifest = await verifyBackup(file, { passphrase: options.passphrase });
+    // Verify the completed private staging file before publishing. A hard
+    // link publishes only when the final pathname is unoccupied; unlike
+    // renameSync this cannot replace a backup another process just created.
+    const manifest = await verifyBackup(partial, { passphrase: options.passphrase });
+    fs.linkSync(partial, file);
+    published = true;
     const pruned = options.keep === undefined ? [] : pruneBackups(destination, Math.max(1, options.keep));
     return { file, manifest, pruned };
   } catch (error) {
-    fs.rmSync(partial, { force: true });
-    fs.rmSync(file, { force: true });
+    // Only this invocation's successfully linked final archive can be
+    // removed. Never delete another writer's same-name archive on EEXIST.
+    if (published) fs.rmSync(file, { force: true });
     throw error;
   } finally {
     vaultMigrationEnvelope?.fill(0);
@@ -304,8 +382,9 @@ async function readArchive(file: string, options: ReadOptions): Promise<BackupMa
   let current: { name: string; hash: crypto.Hash; bytes: number; fd: number | null } | null = null;
   let expanded = 0;
   let afterManifest = false;
+  // Only extractBackup() may reserve an extraction directory. Never
+  // create/assume ownership of an arbitrary caller-supplied path here.
   const extractRoot = options.extractTo ? path.resolve(options.extractTo) : null;
-  if (extractRoot) fs.mkdirSync(extractRoot, { recursive: true, mode: 0o700 });
 
   const reader = new TarReader({
     onEntry(rawName, size) {
@@ -371,6 +450,10 @@ async function readArchive(file: string, options: ReadOptions): Promise<BackupMa
   const parsed = manifestSchema.safeParse(JSON.parse(Buffer.concat(manifestBody).toString("utf8")));
   if (!parsed.success) throw new BackupError("The backup manifest is unsupported or damaged.");
   const manifest = parsed.data;
+  if (manifest.encrypted !== encrypted) {
+    if (extractRoot) fs.rmSync(extractRoot, { recursive: true, force: true });
+    throw new BackupError("Backup manifest encryption disagrees with the actual archive envelope.");
+  }
   const problems: string[] = [];
   const listed = new Set<string>();
   for (const entry of manifest.entries) {
@@ -391,10 +474,114 @@ export function verifyBackup(file: string, options: { passphrase?: string | unde
   return readArchive(file, options);
 }
 
-/** Decrypts/verifies and writes the archive's contents to a directory: db/ (logical export) and files/. */
+/** Decrypts/verifies and writes the archive's contents to a freshly owned directory. */
 export function extractBackup(file: string, directory: string, options: { passphrase?: string | undefined } = {}): Promise<BackupManifest> {
-  if (fs.existsSync(directory)) throw new BackupError(`Extraction target already exists: ${directory}`);
-  return readArchive(file, { ...options, extractTo: directory });
+  const destination = path.resolve(directory);
+  // lstat also detects dangling symlinks (existsSync does not). Reserve the
+  // new directory with an atomic, non-recursive mkdir so this invocation
+  // never writes into or deletes a pre-existing Home directory.
+  if (fs.lstatSync(destination, { throwIfNoEntry: false })) {
+    throw new BackupError(`Extraction target already exists: ${destination}`);
+  }
+  const parent = fs.lstatSync(path.dirname(destination), { throwIfNoEntry: false });
+  if (!parent?.isDirectory() || parent.isSymbolicLink()) {
+    throw new BackupError("Backup extraction requires a real existing parent directory.");
+  }
+  try {
+    fs.mkdirSync(destination, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new BackupError(`Extraction target already exists: ${destination}`);
+    }
+    throw error;
+  }
+  // Only after mkdir succeeds do we own this path. Clean it on failures,
+  // including errors during archive opening / header checks before the
+  // archive reader's own streaming cleanup path is established.
+  return readArchive(file, { ...options, extractTo: destination }).catch((error: unknown) => {
+    fs.rmSync(destination, { recursive: true, force: true });
+    throw error;
+  });
+}
+
+/**
+ * Refuse existing Home symlinks that redirect an otherwise valid archive
+ * entry outside the user-owned root. Check once before DB import and again
+ * immediately before file mutation; aliases above the Home root are allowed.
+ */
+export function assertSafeRestoreFileTarget(root: string, relative: string): string {
+  const resolvedRoot = path.resolve(root);
+  const rootEntry = fs.lstatSync(resolvedRoot, { throwIfNoEntry: false });
+  if (!rootEntry?.isDirectory() || rootEntry.isSymbolicLink()) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
+  const target = path.resolve(resolvedRoot, relative);
+  if (!target.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new BackupError(`Unsafe path in backup: ${relative}`);
+  }
+  const parts = path.relative(resolvedRoot, target).split(path.sep);
+  let current = resolvedRoot;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    const entry = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!entry) continue;
+    if (entry.isSymbolicLink()) {
+      throw new BackupError(`Refusing linked restore destination: ${relative}`);
+    }
+    if (index < parts.length - 1 && !entry.isDirectory()) {
+      throw new BackupError(`Restore parent is not a directory: ${relative}`);
+    }
+    if (index === parts.length - 1 && !entry.isFile()) {
+      throw new BackupError(`Restore target is not a regular file: ${relative}`);
+    }
+  }
+  return target;
+}
+
+/**
+ * Archive authentication only establishes that payload bytes match the
+ * archive's own manifest. It does not authorize arbitrary Home mutation.
+ * Check this before database import or any move of extracted files.
+ */
+export function assertRestorableHomeManifest(manifest: BackupManifest): void {
+  const files = new Set<string>();
+  for (const entry of manifest.entries) {
+    const isDb = entry.path.startsWith("db/");
+    const isFile = entry.path.startsWith("files/");
+    if ((!isDb && !isFile) || (isDb && entry.kind !== "db") || (isFile && entry.kind !== "file")) {
+      throw new BackupError(`Backup entry has an invalid restoration kind: ${entry.path}`);
+    }
+    if (!isFile) continue;
+    if (entry.path === BACKUP_VAULT_MIGRATION_ENTRY) continue;
+    const relative = entry.path.slice("files/".length);
+    // The actual database is imported from db/**, never copied from files/**.
+    // Also preserve root identity and transient state LiOS deliberately omits
+    // when *creating* a backup; a self-consistent forged manifest is not
+    // permission to overwrite those files during restoration.
+    if (!relative
+      || relative === "pgdata" || relative.startsWith("pgdata/")
+      || relative === "PG_VERSION"
+      || NEVER_ARCHIVED.some(([pattern]) => pattern.test(relative))
+      || (!manifest.encrypted && (Boolean(SECRET_KEY_FILES[relative]) || relative.startsWith("execution-journal/")))) {
+      throw new BackupError(`Protected LiOS Home path cannot be restored: ${entry.path}`);
+    }
+    // macOS/Windows volumes may be case-insensitive even when the backup
+    // originated on a case-sensitive filesystem. Never allow ambiguous
+    // archive paths to overwrite each other after the DB is imported.
+    const key = relative.toLowerCase();
+    if (files.has(key)) {
+      throw new BackupError(`Colliding restore file names: ${entry.path}`);
+    }
+    files.add(key);
+  }
+  for (const relative of files) {
+    const segments = relative.split("/");
+    for (let i = 1; i < segments.length; i += 1) {
+      if (files.has(segments.slice(0, i).join("/"))) {
+        throw new BackupError(`Restore archive contains a file/directory collision: ${relative}`);
+      }
+    }
+  }
 }
 
 export interface RestoreResult {
@@ -412,16 +599,35 @@ export async function restoreBackup(
   options: { passphrase?: string | undefined; replace?: boolean } = {},
 ): Promise<RestoreResult> {
   const root = dataRoot();
+  // Reject redirected Home storage *before* creating the extraction staging
+  // folder. A later per-file preflight cannot undo writes through a
+  // symlinked Home root made during archive extraction.
+  const existingRoot = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (existingRoot && (!existingRoot.isDirectory() || existingRoot.isSymbolicLink())) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-  const staging = path.join(root, `.lios-restore-${process.pid}`);
+  const preparedRoot = fs.lstatSync(root);
+  if (!preparedRoot.isDirectory() || preparedRoot.isSymbolicLink()) {
+    throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  }
+  const staging = path.join(root, `.lios-restore-${process.pid}-${crypto.randomUUID()}`);
+  let extractionOwned = false;
   try {
     const manifest = await extractBackup(file, staging, options);
+    extractionOwned = true;
+    assertRestorableHomeManifest(manifest);
+    // Validate all Home destinations before the database import. Otherwise a
+    // symlinked parent could refuse the file stage after DB state changed.
+    for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file"
+      && candidate.path !== BACKUP_VAULT_MIGRATION_ENTRY)) {
+      assertSafeRestoreFileTarget(root, entry.path.slice("files/".length));
+    }
     // Re-check the database export itself, then load it atomically. A refused or failed import changes nothing.
     readExportManifest(path.join(staging, "db"));
     await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
 
-    const previous = path.join(root, `restore-previous-${stamp(new Date())}`);
-    let moved = false;
+    let previous: string | null = null;
     let restored = 0;
     let credentialMigrationEnvelope: Buffer | null = null;
     for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file")) {
@@ -430,14 +636,14 @@ export async function restoreBackup(
         continue;
       }
       const relative = entry.path.slice("files/".length);
-      const target = path.resolve(root, relative);
-      if (!target.startsWith(`${root}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${entry.path}`);
+      // The DB import is async, so verify the filesystem boundary again.
+      const target = assertSafeRestoreFileTarget(root, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       if (fs.existsSync(target)) {
+        if (!previous) previous = reserveRestorePreviousDirectory(root);
         const keep = path.join(previous, relative);
         fs.mkdirSync(path.dirname(keep), { recursive: true, mode: 0o700 });
         fs.renameSync(target, keep);
-        moved = true;
       }
       fs.renameSync(path.join(staging, entry.path), target);
       restored += 1;
@@ -445,11 +651,13 @@ export async function restoreBackup(
     return {
       manifest,
       filesRestored: restored,
-      previousFilesDir: moved ? previous : null,
+      previousFilesDir: previous,
       credentialMigrationEnvelope,
     };
   } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+    // extractBackup cleans its own failed reservation. Do not delete a path
+    // whose ownership this restore never acquired (e.g. a collision).
+    if (extractionOwned) fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 

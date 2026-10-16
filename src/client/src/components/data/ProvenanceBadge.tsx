@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+// Direct node:tsx/server-rendered tests use the classic JSX transform.
+import * as React from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useAudience } from "@/lib/audience";
 
@@ -57,20 +59,66 @@ export default function ProvenanceBadge({
   retailVisible?: boolean;
 }) {
   const isClient = useAudience() === "client";
+  const visible = !isClient || retailVisible;
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const meta = META[details.kind];
+
+  useEffect(() => {
+    if (!open || !visible) return;
+    const trigger = triggerRef.current;
+    const panel = panelRef.current;
+    closeRef.current?.focus();
+
+    const onDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      ));
+      if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !panel.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onDialogKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onDialogKeyDown);
+      trigger?.focus();
+    };
+  }, [open, visible]);
   const limitations = Array.isArray(details.limitations) ? details.limitations : details.limitations ? [details.limitations] : [];
 
-  if (isClient && !retailVisible) return null;
+  if (!visible) return null;
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={(event) => { event.stopPropagation(); setOpen(true); }}
         className={`inline-flex items-center gap-1 border px-1.5 py-0.5 font-terminal font-semibold tracking-widest transition-colors hover:brightness-125 ${compact ? "text-[7px]" : "text-[8px]"} ${meta.className} ${className}`}
         aria-haspopup="dialog"
+        aria-expanded={open}
         aria-controls={panelId}
         title={`Inspect provenance: ${meta.label}`}
       >
@@ -81,7 +129,9 @@ export default function ProvenanceBadge({
       {open && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
           <section
+            ref={panelRef}
             id={panelId}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={`${meta.label} provenance`}
@@ -91,7 +141,7 @@ export default function ProvenanceBadge({
             <header className="flex items-center gap-2 border-b border-border bg-[#0c0c0c] px-4 py-3">
               <span className={`border px-1.5 py-0.5 font-terminal text-[8px] tracking-widest ${meta.className}`}>{meta.symbol} {meta.label}</span>
               <span className="ml-auto font-terminal text-[8px] tracking-widest text-muted-foreground">TRUST INSPECTOR</span>
-              <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close provenance inspector"><X className="h-4 w-4" /></button>
+              <button ref={closeRef} type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close provenance inspector"><X className="h-4 w-4" /></button>
             </header>
             <div className="px-4 py-2">
               <DetailRow label="SOURCE" value={details.source} />
@@ -112,15 +162,16 @@ export default function ProvenanceBadge({
 
 export function ProvenanceDisclosure({ details, label = "PROVENANCE" }: { details: ProvenanceDetails; label?: string }) {
   const [open, setOpen] = useState(false);
+  const contentId = useId();
   const meta = META[details.kind];
   return (
     <div className="border border-border/70 bg-[#080808]">
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+      <button type="button" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen((value) => !value)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
         <span className={`font-terminal text-[8px] font-semibold tracking-widest ${meta.className.split(" ").find((value) => value.startsWith("text-")) ?? "text-foreground"}`}>{meta.symbol} {meta.label}</span>
         <span className="ml-auto font-terminal text-[8px] tracking-widest text-muted-foreground">{label}</span>
         {open ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
       </button>
-      {open && <div className="border-t border-border/60 px-3 py-1"><DetailRow label="SOURCE" value={details.source} /><DetailRow label="METHOD" value={details.method} /><DetailRow label="INPUTS" value={details.inputs?.join(" · ")} /><DetailRow label="TIMESTAMP" value={formatTimestamp(details.timestamp)} /><DetailRow label="LOGIC" value={details.logic} /><DetailRow label="LIMITATIONS" value={Array.isArray(details.limitations) ? details.limitations.join(" · ") : details.limitations} /></div>}
+      {open && <div id={contentId} role="region" aria-label={`${label} details`} className="border-t border-border/60 px-3 py-1"><DetailRow label="SOURCE" value={details.source} /><DetailRow label="METHOD" value={details.method} /><DetailRow label="INPUTS" value={details.inputs?.join(" · ")} /><DetailRow label="TIMESTAMP" value={formatTimestamp(details.timestamp)} /><DetailRow label="LOGIC" value={details.logic} /><DetailRow label="LIMITATIONS" value={Array.isArray(details.limitations) ? details.limitations.join(" · ") : details.limitations} /></div>}
     </div>
   );
 }

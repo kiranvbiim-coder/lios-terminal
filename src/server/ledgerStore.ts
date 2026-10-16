@@ -280,6 +280,25 @@ export async function getLedgerEventByReceiptId(ctx: TenantContext, receiptId: s
   return row;
 }
 
+/** Exact tenant-owned request custody; never infer a recipe from a recent unrelated event. */
+export async function getConversationRequestLedgerEvent(
+  ctx: TenantContext,
+  projectId: number,
+  chatId: number,
+  requestId: string,
+): Promise<ProjectLedgerEvent> {
+  await assertLedgerScopeWithDb(getDb(), ctx, { projectId, chatId, sessionId: null });
+  const [row] = await getDb().select().from(projectLedgerEvents).where(and(
+    eventTenantFilter(ctx),
+    eq(projectLedgerEvents.projectId, projectId),
+    eq(projectLedgerEvents.chatId, chatId),
+    eq(projectLedgerEvents.requestId, requestId),
+    eq(projectLedgerEvents.eventType, "conversation.requested"),
+  )).limit(1);
+  if (!row) throw new Error("Accepted workflow request custody was not found.");
+  return row;
+}
+
 export async function findLedgerRevert(ctx: TenantContext, eventId: string): Promise<ProjectLedgerEvent | null> {
   const [row] = await getDb().select().from(projectLedgerEvents)
     .where(and(

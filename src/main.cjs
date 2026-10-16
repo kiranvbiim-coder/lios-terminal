@@ -10,7 +10,8 @@ const { configureAutoUpdater } = require("./desktopUpdater.cjs");
 const { ensureLocalWorkspace } = require("./desktopWorkspace.cjs");
 const { choosePersistentPort } = require("./desktopPort.cjs");
 const { mayAttachLocalToken } = require("./desktopRequestTrust.cjs");
-const { DATA_ROOT_EXIT_CODE, DataRootUnavailableError, foldLegacyWorkspace, moveDataRoot, prepareDataRoot, resolveDataRoot } = require("./dataRootCore.cjs");
+const { DATA_ROOT_EXIT_CODE, DataRootUnavailableError, foldLegacyWorkspace, prepareDataRoot, resolveDataRoot } = require("./dataRootCore.cjs");
+const { migrateDataRootSafely } = require("./governedDataMigration.cjs");
 const { imgSrcDirective } = require("./desktopCsp.cjs");
 const { loadOrCreateProtectedSecret } = require("./desktopSecretCustody.cjs");
 const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
@@ -506,11 +507,16 @@ ipcMain.handle("limuria:data-folder", (event) => {
 ipcMain.handle("limuria:move-data-folder", async (event, targetPath) => {
   assertTrustedIpcSender(event, mainWindow, serverPort);
   if (typeof targetPath !== "string" || !path.isAbsolute(targetPath)) throw new Error("Choose an absolute folder path.");
-  const { root } = resolveDataRoot({ env: dataRootEnvironment() });
   // Stop the local server first so PGlite releases its files; no auto-restart while moving.
   await stopLocalServerForMaintenance();
   try {
-    moveDataRoot({ from: root, to: targetPath });
+    const migration = await migrateDataRootSafely({
+      targetRoot: targetPath,
+      env: dataRootEnvironment(),
+    });
+    if (migration.status === "rollback_restored") {
+      throw new Error("LiOS verified the copied data but could not activate the new data folder, so the previous folder was restored.");
+    }
   } catch (error) {
     // Relaunch so the user is not left without a running server; the renderer receives the readable refusal first.
     scheduleDesktopRelaunch(500);

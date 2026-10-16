@@ -59,6 +59,7 @@ import { livingThesisTool } from "./livingThesisTool";
 import { estimateRecommendationEvidenceTool } from "./estimateRecommendationEvidenceTool";
 import { tradingAgentsResearchTool } from "./tradingAgentsResearchTool";
 import { knowledgeStateTool } from "./knowledgeStateTool";
+import { runtimeDoctorTool } from "./runtimeDoctorTool";
 import { projectFinancialEventsTool } from "./projectFinancialEventsTool";
 import { numericalEvidenceTool } from "./numericalEvidenceTool";
 import { qlibRiskChallengerTool } from "./qlibRiskChallengerTool";
@@ -1096,6 +1097,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(estimateRecommendationEvidenceTool);
   registerConversationTool(tradingAgentsResearchTool);
   registerConversationTool(knowledgeStateTool);
+  registerConversationTool(runtimeDoctorTool);
   registerConversationTool(projectFinancialEventsTool);
   registerConversationTool(numericalEvidenceTool);
   registerConversationTool(qlibRiskChallengerTool);
@@ -1402,7 +1404,12 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
   const artifactId = activeArtifactId(request.context);
   const artifactEdit = artifactId ? parseArtifactEditInstruction(request.message) : null;
 
-  if (artifactId && artifactEdit) {
+  const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
+  if (runtimeDiagnosis) {
+    capabilities = [];
+    intent = { action: "research", confidence: 0.99, entityRefs: [], parameters: { workflow: "runtime_doctor" }, requiresAI: false, requiresDeterministicCompute: false };
+    steps.push({ id: "runtime-doctor", kind: "resolve", label: "Inspect current runtime readiness", componentId: "lios.runtime.doctor", permissionClass: "safe_auto", dependsOn: [] });
+  } else if (artifactId && artifactEdit) {
     capabilities = [{
       id: "artifact.edit",
       label: "Edit active Artifact",
@@ -2195,6 +2202,28 @@ async function executeP7ProjectIntelligence(
     output: tool.output,
     sourceRefs: tool.sourceRefs,
   });
+  await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
+  await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
+  return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
+}
+
+async function executeRuntimeDoctor(input: ConversationRuntimeInput, plan: WorkflowPlan, signal: AbortSignal): Promise<ConversationRuntimeResult> {
+  const requestId = input.request.requestId;
+  const componentId = runtimeDoctorTool.id;
+  const startedAt = nowIso();
+  await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "runtime-doctor", label: runtimeDoctorTool.label, componentId });
+  const tool = await invokeConversationTool(componentId, {}, signal, createConversationToolCall(input, "workflow"));
+  const output = tool.output as ReturnType<typeof import("./runtimeDoctorTool").inspectRuntimeDoctor>;
+  const text = [
+    "### LiOS runtime diagnosis",
+    tool.summary,
+    ...output.readiness.reasons.map(reason => "- " + reason),
+    output.repair.requiresConfirmation
+      ? "Review runtime diagnosis in Connections → Advanced → Runtime & Python packs. Only an authorized administrator can explicitly confirm a supported repair; source permissions and consequential task approval are separate."
+      : "No runtime repair is required.",
+    "This diagnosis does not certify optional engines, provider access, sandbox readiness or shipping acceptance.",
+  ].join("\n");
+  const receipt = createReceipt({ requestId, operation: "runtime_doctor", componentId, startedAt, deterministic: true, aiDerived: false, input: {}, output: tool.output, sourceRefs: tool.sourceRefs });
   await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
@@ -4703,6 +4732,8 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
       result = await executeAgentLoop(runtimeInput, context, plan, budgetSignal);
     } else if (plan.intent.action === "edit_artifact") {
       result = await executeArtifactEditProposal(runtimeInput, plan, budgetSignal);
+    } else if (plan.intent.parameters.workflow === "runtime_doctor") {
+      result = await executeRuntimeDoctor(runtimeInput, plan, budgetSignal);
     } else if (["p6_project_continuity", "p7_project_search", "p7_project_changes", "p7_insight_lens"].includes(String(plan.intent.parameters.workflow || ""))) {
       result = await executeP7ProjectIntelligence(runtimeInput, plan, budgetSignal);
     } else if (plan.intent.parameters.workflow === "p5_professional_bundle") {

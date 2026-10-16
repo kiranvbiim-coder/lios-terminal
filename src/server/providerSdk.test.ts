@@ -5,6 +5,7 @@ import {
   createCanonicalDataRequest,
   describeProviderAccess,
   executeCanonicalDataRequest,
+  startProviderStream,
   type LiOSDataProviderAdapter,
 } from "./providerSdk";
 import type { TenantContext } from "./tenantContext";
@@ -246,4 +247,174 @@ test("SI-03.23 provider policy exclusion is explicit and access inspection never
   assert.deepEqual(filtered.accessPostures, []);
   assert.equal(fetchCalls, 0);
   assert.equal(entitlementCalls, 0);
+});
+
+const streamingRequest = (overrides: { capability?: "prices" | "statements"; providerAllow?: string[]; providerDeny?: string[]; asKnownOn?: boolean } = {}) => createCanonicalDataRequest({
+  projectId: 17,
+  capability: overrides.capability ?? "prices",
+  entity: { ref: "ABC", symbol: "ABC", identifiers: {} },
+  fields: [], parameters: {},
+  pointInTime: overrides.asKnownOn
+    ? { mode: "as_known_on", asKnownOn: "2025-01-01T00:00:00.000Z", revision: null, requirePublicationTime: true, allowLaterRevisions: false }
+    : { mode: "latest", asKnownOn: null, revision: null, requirePublicationTime: false, allowLaterRevisions: false },
+  providerAllow: overrides.providerAllow ?? [],
+  providerDeny: overrides.providerDeny ?? [],
+});
+
+test("SI-06.31 streaming checks capability, source policy, and point-in-time before opening a connection", async () => {
+  const registry = new ProviderSdkRegistry();
+  let entitlementCalls = 0;
+  let streamCalls = 0;
+  registry.register({
+    id: "stream-source", label: "Stream", priority: 1,
+    capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() {
+      entitlementCalls += 1;
+      return { decision: "allowed", policyId: "live:1", permittedUses: ["internal_research"], reasons: [] };
+    },
+    async fetch() { return null; },
+    async stream(request) {
+      streamCalls += 1;
+      assert.equal(request.projectId, 17);
+      return { lifecycle: {} as never, stop: async () => {} };
+    },
+  });
+  for (const request of [
+    streamingRequest({ capability: "statements" }),
+    streamingRequest({ providerAllow: ["some-other-source"] }),
+    streamingRequest({ providerDeny: ["stream-source"] }),
+    streamingRequest({ asKnownOn: true }),
+  ]) {
+    await assert.rejects(startProviderStream("stream-source", request, ctx, registry));
+  }
+  assert.equal(streamCalls, 0);
+  assert.equal(entitlementCalls, 0, "policy-incompatible requests must not contact credentials or providers");
+  const subscription = await startProviderStream("stream-source", streamingRequest(), ctx, registry);
+  assert.equal(streamCalls, 1);
+  assert.equal(entitlementCalls, 2, "grant must also be rechecked after opening the connection");
+  assert.equal(await subscription.recheckEntitlement(), true);
+  assert.equal(entitlementCalls, 3);
+  await subscription.stop();
+});
+
+test("SI-06.31 stream launch refuses revoked, unknown, missing-use or unverifiable entitlements", async () => {
+  const registry = new ProviderSdkRegistry();
+  let mode: "allowed" | "denied" | "unknown" | "error" = "denied";
+  let permittedUses = ["internal_research"];
+  let streamCalls = 0;
+  registry.register({
+    id: "entitled-stream", label: "Stream", priority: 1, capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() {
+      if (mode === "error") throw new Error("secret=DO_NOT_LOG provider oauth refresh failed");
+      return { decision: mode, policyId: "live", permittedUses, reasons: [] };
+    },
+    async fetch() { return null; },
+    async stream() { streamCalls += 1; return { lifecycle: {} as never, stop: async () => {} }; },
+  });
+  for (const denied of ["denied", "unknown", "allowed"] as const) {
+    mode = denied;
+    permittedUses = denied === "allowed" ? ["redistribution"] : ["internal_research"];
+    await assert.rejects(startProviderStream("entitled-stream", streamingRequest(), ctx, registry), /does not permit/);
+  }
+  mode = "error";
+  await assert.rejects(startProviderStream("entitled-stream", streamingRequest(), ctx, registry), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /could not be verified/);
+    assert.doesNotMatch(error.message, /secret|DO_NOT_LOG|oauth/);
+    return true;
+  });
+  assert.equal(streamCalls, 0);
+  const noHook = new ProviderSdkRegistry();
+  noHook.register({
+    id: "no-entitlement", label: "Legacy", priority: 1, capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async fetch() { return null; },
+    async stream() { streamCalls += 1; return { lifecycle: {} as never, stop: async () => {} }; },
+  });
+  await assert.rejects(startProviderStream("no-entitlement", streamingRequest(), ctx, noHook), /no live entitlement/);
+  assert.equal(streamCalls, 0);
+});
+
+test("SI-06.31 one failed entitlement check does not block the next eligible data provider", async () => {
+  const registry = new ProviderSdkRegistry();
+  let unsafeFetches = 0;
+  registry.register({
+    id: "provider-with-outage", label: "Outage", priority: 1, capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() { throw new Error("secret=DO_NOT_LOG provider grant service offline"); },
+    async fetch() { unsafeFetches += 1; return { data: { price: 0 } }; },
+  });
+  registry.register({
+    id: "safe-fallback", label: "Fallback", priority: 2, capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() {
+      return { decision: "allowed", policyId: null, permittedUses: ["internal_research"], reasons: [] };
+    },
+    async fetch() { return { data: { price: 42 }, normalized: true }; },
+  });
+  const result = await executeCanonicalDataRequest(streamingRequest(), ctx, registry);
+  assert.equal(unsafeFetches, 0);
+  assert.equal(result.observation?.providerId, "safe-fallback");
+  assert.equal(result.attempts[0].status, "failed");
+  assert.equal(result.attempts[1].status, "returned");
+  assert.doesNotMatch(JSON.stringify(result), /DO_NOT_LOG|secret=|grant service offline/);
+
+  const outageOnly = new ProviderSdkRegistry();
+  outageOnly.register(registry.get("provider-with-outage")!);
+  const gap = await executeCanonicalDataRequest(streamingRequest(), ctx, outageOnly);
+  assert.equal(gap.observation, null);
+  assert.equal(gap.gap?.reason, "provider_error");
+  assert.equal(gap.attempts.length, 1);
+  assert.doesNotMatch(JSON.stringify(gap), /DO_NOT_LOG|secret=/);
+});
+
+test("SI-06.31 revocation during stream connection closes the underlying source before returning access", async () => {
+  const registry = new ProviderSdkRegistry();
+  let checks = 0;
+  let opened = 0;
+  let stopped = 0;
+  registry.register({
+    id: "connect-revocation",
+    label: "Connect-time revocation",
+    priority: 1,
+    capabilities: ["prices"],
+    pointInTimeModes: ["latest"],
+    async entitlement() {
+      checks += 1;
+      return checks === 1
+        ? { decision: "allowed", policyId: "v1", permittedUses: ["internal_research"], reasons: [] }
+        : { decision: "denied", policyId: "v1", permittedUses: [], reasons: ["secret=DO_NOT_EXPOSE"] };
+    },
+    async fetch() { return null; },
+    async stream() {
+      opened += 1;
+      return { lifecycle: { state: "streaming", reason: null } as never, async stop() { stopped += 1; } };
+    },
+  });
+  await assert.rejects(startProviderStream("connect-revocation", streamingRequest(), ctx, registry), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /entitlement changed/);
+    assert.doesNotMatch(error.message, /DO_NOT_EXPOSE|secret=/);
+    return true;
+  });
+  assert.equal(checks, 2);
+  assert.equal(opened, 1);
+  assert.equal(stopped, 1, "just-opened stream must be closed on lost entitlement");
+});
+
+test("SI-06.31 policy change while connecting closes stream even if provider still reports allowed", async () => {
+  const registry = new ProviderSdkRegistry();
+  let checks = 0;
+  let stopped = 0;
+  registry.register({
+    id: "connecting-policy-change", label: "Policy changed", priority: 1,
+    capabilities: ["prices"], pointInTimeModes: ["latest"],
+    async entitlement() {
+      checks += 1;
+      return { decision: "allowed", policyId: checks === 1 ? "old-policy" : "new-policy", permittedUses: ["internal_research"], reasons: [] };
+    },
+    async fetch() { return null; },
+    async stream() {
+      return { lifecycle: { state: "streaming", reason: null } as never, async stop() { stopped += 1; } };
+    },
+  });
+  await assert.rejects(startProviderStream("connecting-policy-change", streamingRequest(), ctx, registry), /entitlement changed/);
+  assert.equal(stopped, 1);
 });

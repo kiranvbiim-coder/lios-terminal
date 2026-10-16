@@ -26,6 +26,15 @@ function availabilityWeight(capability: LiOSCapability): number {
   }
 }
 
+/**
+ * Registry invocability describes what can be called now, not merely what
+ * was wired for a possible future execution. Authorization, entitlement and
+ * live health are still rechecked by the canonical execution authority.
+ */
+function isInvocableNow(capability: LiOSCapability): boolean {
+  return capability.aiHints.invocable && capability.availability.state === "available";
+}
+
 function rankCapability(capability: LiOSCapability, rawQuery: string): { score: number; matchedOn: string[] } | null {
   const query = normalize(rawQuery);
   const queryTokens = tokens(query);
@@ -46,7 +55,7 @@ function rankCapability(capability: LiOSCapability, rawQuery: string): { score: 
   const matchedOn = new Set<string>();
 
   if (!query) {
-    if (capability.aiHints.invocable) score += 5;
+    if (isInvocableNow(capability)) score += 5;
     if (capability.uiHints.preferredView) score += 3;
     return { score, matchedOn: [] };
   }
@@ -69,7 +78,7 @@ function rankCapability(capability: LiOSCapability, rawQuery: string): { score: 
     if (description.includes(token)) { score += 5; matchedOn.add("description"); }
   }
 
-  if (capability.aiHints.invocable) score += 5;
+  if (isInvocableNow(capability)) score += 5;
   if (capability.uiHints.preferredView) score += 3;
   return { score, matchedOn: [...matchedOn] };
 }
@@ -85,7 +94,7 @@ export function discoverCapabilities(
   return registry.list()
     .filter((capability) => capability.surfaces.includes(surface))
     .filter((capability) => !options.invocableOnly || (
-      capability.aiHints.invocable && capability.availability.state === "available"
+      isInvocableNow(capability)
     ))
     .map((capability) => ({ capability, ranking: rankCapability(capability, query) }))
     .filter((entry): entry is { capability: LiOSCapability; ranking: { score: number; matchedOn: string[] } } => Boolean(entry.ranking))
@@ -102,7 +111,7 @@ export function discoverCapabilities(
       availability: capability.availability,
       executionTarget: capability.execution.target,
       sourceKind: capability.source.kind,
-      invocable: capability.aiHints.invocable,
+      invocable: isInvocableNow(capability),
       preferredView: capability.uiHints.preferredView ?? null,
       existingSurfaces: capability.uiHints.existingSurfaces,
       score: ranking.score,

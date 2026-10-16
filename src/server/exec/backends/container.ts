@@ -43,6 +43,7 @@ export interface ContainerExecutionBackendDependencies {
 
 const IMAGE_DIGEST = /^(?:sha256:[a-f0-9]{64}|[a-z0-9][a-z0-9._/:+-]*@sha256:[a-f0-9]{64})$/i;
 const NON_ROOT_USER = /^[1-9][0-9]*:[1-9][0-9]*$/;
+const WINDOWS_NPIPE = /^npipe:\/\/\/\/\.\/pipe\/[A-Za-z0-9._-]+$/;
 const CONTAINER_EMPTY_WORKDIR = "/tmp";
 const MAX_WALL_TIME_MS = 5 * 60_000;
 const MAX_CAPTURED_OUTPUT_CHARS = 1024 * 1024;
@@ -68,21 +69,26 @@ function invalid(backendId: string, reason: ConstructorParameters<typeof Executi
   throw new ExecutionBackendUnavailableError(backendId, reason);
 }
 
+function localTargetError(): Error {
+  return new Error(
+    "Container execution engineTarget must be an explicit local unix:// socket or Windows npipe:// endpoint.",
+  );
+}
+
 function normalizeLocalEngineTarget(value: string): string {
-  if (typeof value !== "string" || !value || value.includes("\0")) {
-    throw new Error("Container execution engineTarget must be a local unix:// endpoint.");
-  }
+  if (typeof value !== "string" || !value || value.includes("\0")) throw localTargetError();
+  if (WINDOWS_NPIPE.test(value)) return value;
   let target: URL;
   try {
     target = new URL(value);
   } catch {
-    throw new Error("Container execution engineTarget must be a local unix:// endpoint.");
+    throw localTargetError();
   }
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(target.pathname);
   } catch {
-    throw new Error("Container execution engineTarget must contain a valid absolute socket path.");
+    throw localTargetError();
   }
   if (
     target.protocol !== "unix:" ||
@@ -96,7 +102,7 @@ function normalizeLocalEngineTarget(value: string): string {
     decodedPath === "/" ||
     decodedPath.includes("\0")
   ) {
-    throw new Error("Container execution engineTarget must be a local unix:// endpoint.");
+    throw localTargetError();
   }
   return target.href;
 }

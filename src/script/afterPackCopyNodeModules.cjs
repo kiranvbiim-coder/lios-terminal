@@ -36,6 +36,40 @@ const EXCLUDE_EXTENSIONS = new Set([".md", ".map", ".ts", ".flow"]);
 // licenses/<component>/README.md, including case variants.
 const LEGAL_PATH_NAME = /^(?:third[-_]?party[-_])?(?:licen[cs]es?|copying|notices?)(?:[._-].*)?$/i;
 
+/** Enumerate every bundled root-rights source so verification cannot miss nested donor grants. */
+function rootRightsFiles(repoRoot) {
+  const paths = [];
+  function collect(relative) {
+    const source = path.join(repoRoot, relative);
+    // Root legal files are code-signing evidence, not an arbitrary file-copy
+    // capability. Dereferencing a linked grant can bundle outside-user files
+    // and conceal the real license source under a plausible archive path.
+    const entry = fs.lstatSync(source);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`[afterPackCopyNodeModules] Symlinked root legal source is refused: ${relative}`);
+    }
+    if (entry.isDirectory()) {
+      for (const child of fs.readdirSync(source).sort()) collect(path.join(relative, child));
+    } else if (entry.isFile()) {
+      paths.push(relative);
+    } else {
+      throw new Error(`[afterPackCopyNodeModules] Unsupported root legal source: ${relative}`);
+    }
+  }
+  for (const relative of ["LICENSE", "THIRD_PARTY_NOTICES.md", "third_party/licenses"]) collect(relative);
+  return paths;
+}
+
+function verifyRootRightsBytes(repoRoot, asarPath, files) {
+  for (const relative of files) {
+    const expected = fs.readFileSync(path.join(repoRoot, relative));
+    const archived = asar.extractFile(asarPath, path.normalize(relative));
+    if (!archived.equals(expected)) {
+      throw new Error(`[afterPackCopyNodeModules] Root legal bytes changed in rebuilt ASAR: ${relative}; package signing refused.`);
+    }
+  }
+}
+
 function updateMacEmbeddedAsarIntegrity(contentsDir, asarPath) {
   const infoPlistPath = path.join(contentsDir, "Info.plist");
   const infoPlist = plist.parse(fs.readFileSync(infoPlistPath, "utf8"));
@@ -109,11 +143,14 @@ module.exports = async function afterPack(context) {
     // Root rights/notice sources are outside electron-builder's src projectDir.
     // Put their actual bytes in the rebuilt archive, not only in a source tree.
     const repoRoot = path.resolve(projectDir, "..");
+    const requiredRights = rootRightsFiles(repoRoot);
     for (const relativePath of ["LICENSE", "THIRD_PARTY_NOTICES.md", "third_party/licenses"]) {
+      // Legal grants are small and must be byte-for-byte stable across APFS,
+      // case variants and Electron ASAR rebuilds. Do not use the optional
+      // reflink optimisation intended for large immutable runtime archives.
       fs.cpSync(path.join(repoRoot, relativePath), path.join(stagingDir, relativePath), {
         recursive: true,
         dereference: true,
-        mode: fs.constants.COPYFILE_FICLONE,
       });
     }
 
@@ -164,6 +201,11 @@ module.exports = async function afterPack(context) {
     // extractAll cached the old index under this same archive path.
     // Consumers in this process must inspect the newly rebuilt notice files.
     asar.uncache(asarPath);
+
+    // Signing must never bless an archive with silently zero-filled or
+    // otherwise modified proprietary/donor terms, even when the header and
+    // integrity hash themselves are internally consistent.
+    verifyRootRightsBytes(repoRoot, asarPath, requiredRights);
 
     if (electronPlatformName === "darwin") {
       const hash = updateMacEmbeddedAsarIntegrity(path.dirname(resourcesDir), asarPath);

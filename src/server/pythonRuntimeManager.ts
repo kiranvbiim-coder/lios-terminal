@@ -5,6 +5,7 @@ import path from "node:path";
 import { MANAGED_RUNTIME_MANIFEST, type ManagedRuntimeManifest } from "./runtimeManifest";
 import { dataRoot } from "./dataRoot";
 import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { acquireManagedRuntimeLifecycleLock } from "./managedRuntimeLifecycleLock";
 
 const INSTALL_TIMEOUT_MS = 15 * 60 * 1_000;
 const RUNTIME_STATE_SNAPSHOT = ".lios-runtime-state.json";
@@ -15,19 +16,10 @@ export interface ManagedRuntimeState {
   runtimePath: string;
   rollbackPath: string | null;
   selectedPackIds: string[];
-  /** P10 user-facing release-pack selections persisted beside the expanded low-level allow-list. */
   selectedReleasePackIds: string[];
   packageOutput: string;
-  /** P0.5: which allow-listed specs this install actually requested. */
   installedSpecs: string[];
-  /** P0.5: true only when every spec was installed under pip --require-hashes
-   * against a real committed lock file. False means pinned-version-only
-   * install (no wheel hashes available for this pack/platform yet) -- recorded
-   * honestly rather than implying a stronger guarantee than was enforced. */
   hashVerified: boolean;
-  /** P0.5: post-install allow-list audit -- every installed distribution is
-   * checked against the manifest. Non-empty means something outside the
-   * signed allow-list (or at an unexpected version) landed in the venv. */
   verificationWarnings: string[];
 }
 
@@ -45,6 +37,39 @@ export class ManagedRuntimeVerificationError extends Error {
   }
 }
 
+export class StrictProvisioningAuthorityError extends Error {
+  constructor(readonly code: "strict_provisioning_authority_missing") {
+    super("Strict managed-runtime provisioning requires a governed provisioning authority; host pip/venv fallback is refused.");
+    this.name = "StrictProvisioningAuthorityError";
+  }
+}
+
+export interface StrictProvisioningRequest {
+  /** LiOS-generated staging path. The authority must not provision outside this path. */
+  runtimePath: string;
+  /** Manifest-resolved low-level pack IDs, including core. */
+  selectedPackIds: readonly string[];
+  /** Exact/range pip requirements derived only from the signed runtime manifest. */
+  packageSpecs: readonly string[];
+  /** Trusted release lock files derived by LiOS for the selected packs. */
+  lockFiles: readonly string[];
+  /** True only when every selected pack has a release wheel-hash lock. */
+  hashVerified: boolean;
+  /** Whether the caller requires release-qualified verification. */
+  requireVerified: boolean;
+}
+
+export interface StrictProvisioningResult {
+  /** Diagnostic package-manager output produced inside the governed authority. */
+  packageOutput: string;
+  /** Package inventory observed by the authority after provisioning. */
+  installedPackages: Record<string, string>;
+}
+
+export interface StrictProvisioningAuthority {
+  provisionManagedRuntime(request: StrictProvisioningRequest): Promise<StrictProvisioningResult>;
+}
+
 function runtimeRoot(): string {
   return path.join(dataRoot(), "python-runtimes");
 }
@@ -53,8 +78,68 @@ function statePath(): string {
   return path.join(runtimeRoot(), "managed-state.json");
 }
 
+/**
+ * Runtime state is user-owned metadata, not permission to write elsewhere.
+ * In particular, refuse a redirected managed-state.json before activating
+ * or rolling back an installation.
+ */
+function assertRuntimeStateStorageSafe(): void {
+  const root = fs.lstatSync(runtimeRoot(), { throwIfNoEntry: false });
+  if (root && (!root.isDirectory() || root.isSymbolicLink())) {
+    throw new Error("Managed runtime storage root is unsafe.");
+  }
+  const state = fs.lstatSync(statePath(), { throwIfNoEntry: false });
+  if (state && (!state.isFile() || state.isSymbolicLink())) {
+    throw new Error("Managed runtime saved state path is unsafe.");
+  }
+}
+
+/**
+ * Persisted rollback metadata is not filesystem authority. Only a direct,
+ * non-symlink rollback directory created by the managed-runtime lifecycle
+ * can be moved or recursively deleted. Older/untrusted paths fail closed.
+ */
+function authorizedRollbackPath(candidate: unknown): string | null {
+  if (typeof candidate !== "string" || !path.isAbsolute(candidate)) return null;
+  const normalized = path.resolve(candidate);
+  if (path.dirname(normalized) !== path.resolve(runtimeRoot())
+    || !/^rollback-\d+$/.test(path.basename(normalized))) return null;
+  try {
+    const entry = fs.lstatSync(normalized);
+    return entry.isDirectory() && !entry.isSymbolicLink() ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 function runtimeStateSnapshotPath(runtimePath: string): string {
   return path.join(runtimePath, RUNTIME_STATE_SNAPSHOT);
+}
+
+/** Refuse symlinked or non-directory active runtimes before recording state. */
+function validateCurrentRuntimeDirectory(currentPath: string): boolean {
+  const current = fs.lstatSync(currentPath, { throwIfNoEntry: false });
+  if (!current) return false;
+  if (!current.isDirectory() || current.isSymbolicLink()) {
+    throw new Error("Managed runtime current directory is unavailable or unsafe for installation.");
+  }
+  const snapshot = fs.lstatSync(runtimeStateSnapshotPath(currentPath), { throwIfNoEntry: false });
+  if (snapshot && (!snapshot.isFile() || snapshot.isSymbolicLink())) {
+    throw new Error("Managed runtime current snapshot path is unsafe for installation.");
+  }
+  return true;
+}
+
+/** Never rename over a pre-existing rollback, staging, or dangling symlink. */
+function unoccupiedRuntimePath(root: string, prefix: "rollback" | "install"): string {
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const name = prefix === "install"
+      ? `install-${process.pid}-${Date.now() + attempt}`
+      : `rollback-${Date.now() + attempt}`;
+    const candidate = path.join(root, name);
+    if (!fs.lstatSync(candidate, { throwIfNoEntry: false })) return candidate;
+  }
+  throw new Error("No unused managed runtime destination is available.");
 }
 
 function writeRuntimeStateSnapshot(runtimePath: string, state: ManagedRuntimeState): void {
@@ -71,7 +156,9 @@ function readRuntimeStateSnapshot(runtimePath: string): ManagedRuntimeState | nu
       runtimePath,
       rollbackPath: parsed.rollbackPath ?? null,
       selectedPackIds: parsed.selectedPackIds,
-      selectedReleasePackIds: Array.isArray(parsed.selectedReleasePackIds) ? parsed.selectedReleasePackIds.filter((item): item is string => typeof item === "string") : [],
+      selectedReleasePackIds: Array.isArray(parsed.selectedReleasePackIds)
+        ? parsed.selectedReleasePackIds.filter((item): item is string => typeof item === "string")
+        : [],
       packageOutput: parsed.packageOutput ?? "",
       installedSpecs: parsed.installedSpecs ?? [],
       hashVerified: parsed.hashVerified ?? false,
@@ -82,19 +169,6 @@ function readRuntimeStateSnapshot(runtimePath: string): ManagedRuntimeState | nu
   }
 }
 
-function requirementsPath(): string {
-  const resourcesBase = (process as { resourcesPath?: string }).resourcesPath || process.env.ELECTRON_RESOURCES_PATH;
-  return resourcesBase
-    ? path.join(resourcesBase, "python-service", "requirements.txt")
-    : path.resolve(path.dirname(typeof __dirname !== "undefined" ? __dirname : process.argv[1] || process.cwd()), "../python-service/requirements.txt");
-}
-
-/** Release-artifact lock file carrying real `--hash=sha256:...` lines for a
- * pack. Absent by design in-repo: platform-specific wheel hashes are
- * produced at release time, and this code must never invent them (see
- * runtimeManifest.ts's own note). When present, the install switches to
- * pip --require-hashes; when absent, it installs pinned versions and
- * records hashVerified:false. */
 function packLockPath(packId: string): string {
   const resourcesBase = (process as { resourcesPath?: string }).resourcesPath || process.env.ELECTRON_RESOURCES_PATH;
   const base = resourcesBase
@@ -118,16 +192,15 @@ export function readManagedRuntimeState(): ManagedRuntimeState | null {
   try {
     const parsed = JSON.parse(fs.readFileSync(statePath(), "utf8")) as Partial<ManagedRuntimeState>;
     if (!parsed.runtimePath || !parsed.manifestVersion || !Array.isArray(parsed.selectedPackIds)) return null;
-    // A state file written before P0.5 has no verification fields. Default
-    // them to the honest weaker answer (not hash-verified, no audit
-    // performed) rather than implying guarantees that install never made.
     return {
       manifestVersion: parsed.manifestVersion,
       installedAt: parsed.installedAt ?? "",
       runtimePath: parsed.runtimePath,
       rollbackPath: parsed.rollbackPath ?? null,
       selectedPackIds: parsed.selectedPackIds,
-      selectedReleasePackIds: Array.isArray(parsed.selectedReleasePackIds) ? parsed.selectedReleasePackIds.filter((item): item is string => typeof item === "string") : [],
+      selectedReleasePackIds: Array.isArray(parsed.selectedReleasePackIds)
+        ? parsed.selectedReleasePackIds.filter((item): item is string => typeof item === "string")
+        : [],
       packageOutput: parsed.packageOutput ?? "",
       installedSpecs: parsed.installedSpecs ?? [],
       hashVerified: parsed.hashVerified ?? false,
@@ -144,12 +217,6 @@ function pythonExecutable(): string {
   return process.platform === "win32" ? "python" : "python3";
 }
 
-/**
- * How a manifest version string translates to a pip requirement. A naive
- * "starts with a digit means exact pin" is wrong for range-style entries
- * such as numpy's "2.x", and non-pip runtime components such as
- * "managed-sidecar" must never be concatenated into bogus wheel specs.
- */
 export type ManifestVersionKind = "exact" | "range" | "not-pip-installable";
 
 export function classifyManifestVersion(version: string): ManifestVersionKind {
@@ -159,9 +226,6 @@ export function classifyManifestVersion(version: string): ManifestVersionKind {
   return "not-pip-installable";
 }
 
-/** Returns null for a component that is not installed by pip at all (for
- * example a separately managed sidecar), so it is never handed to pip as
- * a bogus wheel requirement. */
 export function packSpec(pkg: { name: string; version: string }): string | null {
   const kind = classifyManifestVersion(pkg.version);
   if (kind === "not-pip-installable") return null;
@@ -176,9 +240,6 @@ export function packSpec(pkg: { name: string; version: string }): string | null 
 
 export function resolveSelectedPacks(manifest: ManagedRuntimeManifest, packIds: string[]): ManagedRuntimeManifest["packs"] {
   const selected = new Set(packIds);
-  // Core is the retail default and is always installed: every other pack's
-  // engines import from it. Selecting nothing therefore means "core only",
-  // which is exactly P0.5's "ship/install core only by default for retail".
   selected.add("core");
   const packs = manifest.packs.filter((pack) => selected.has(pack.id));
   if (packs.length !== selected.size) throw new Error("Requested runtime pack is not present in the signed manifest.");
@@ -191,14 +252,6 @@ function selectedPackages(manifest: ManagedRuntimeManifest, packIds: string[]): 
     .filter((spec): spec is string => spec !== null);
 }
 
-/** Post-install allow-list audit. Every distribution pip actually put in
- * the venv is compared against the manifest: a manifest package pinned to
- * an exact version must match it exactly, and anything installed that the
- * manifest never listed is reported (transitive dependencies are expected
- * and reported separately from unexpected direct drift, so the caller can
- * tell a normal dependency tree from a substituted package). Returns
- * human-readable warnings; an empty array means the venv matches the
- * signed allow-list exactly. */
 export function auditInstalledPackages(
   manifest: ManagedRuntimeManifest,
   packIds: string[],
@@ -208,8 +261,6 @@ export function auditInstalledPackages(
   const normalized = new Map(Object.entries(installed).map(([name, version]) => [name.toLowerCase().replace(/[_.]+/g, "-"), version]));
   for (const pack of resolveSelectedPacks(manifest, packIds)) {
     for (const pkg of pack.packages) {
-      // A component pip never installs (for example a managed sidecar)
-      // cannot be audited against the venv and must not be reported missing.
       if (classifyManifestVersion(pkg.version) === "not-pip-installable") continue;
       const key = pkg.name.toLowerCase().replace(/[_.]+/g, "-");
       const actual = normalized.get(key);
@@ -217,9 +268,6 @@ export function auditInstalledPackages(
         warnings.push(`${pkg.name} (pack ${pack.id}) is in the signed manifest but is not installed in the runtime.`);
         continue;
       }
-      // Only exact pins are enforceable here. Range pins ("<3.0", "2.x")
-      // are satisfied by pip's own resolver and are not re-derived, and a
-      // non-pip component is not expected in the venv at all.
       if (classifyManifestVersion(pkg.version) === "exact" && actual !== pkg.version) {
         warnings.push(`${pkg.name} is pinned to ${pkg.version} in the signed manifest but ${actual} is installed.`);
       }
@@ -244,8 +292,6 @@ async function command(file: string, args: string[], cwd?: string): Promise<stri
     cwd,
     timeoutMs: INSTALL_TIMEOUT_MS,
     maxOutputChars: 2 * 1024 * 1024,
-    // Retain the existing user-managed interpreter, package-index and network settings through a
-    // fixed profile. PATH remains inherited, and unsupported keys are rejected at launch.
     env: pythonRuntimeEnvOverlay(),
     envProfile: "python-runtime",
   });
@@ -255,6 +301,7 @@ async function command(file: string, args: string[], cwd?: string): Promise<stri
 export interface ManagedRuntimeInstallOptions {
   isolationMode?: "legacy-host" | "strict";
   requireVerified?: boolean;
+  strictProvisioningAuthority?: StrictProvisioningAuthority;
 }
 
 export async function installManagedRuntime(
@@ -262,12 +309,14 @@ export async function installManagedRuntime(
   selectedReleasePackIds: string[] = [],
   options: ManagedRuntimeInstallOptions = {},
 ): Promise<ManagedRuntimeOperationResult> {
-  if (effectiveSandboxIsolationMode(options.isolationMode) === "strict") {
-    throw new Error(
-      "Strict SI-01.12 isolation is unavailable for managed Python provisioning; governed package-network and runtime-root write authority are not implemented, so host pip/venv fallback is refused.",
-    );
+  const strictIsolation = effectiveSandboxIsolationMode(options.isolationMode) === "strict";
+  if (strictIsolation && !options.strictProvisioningAuthority) {
+    throw new StrictProvisioningAuthorityError("strict_provisioning_authority_missing");
   }
-  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) throw new Error("This platform is not supported by the managed Python runtime manifest.");
+  if (!MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`)) {
+    throw new Error("This platform is not supported by the managed Python runtime manifest.");
+  }
+
   const packs = resolveSelectedPacks(MANAGED_RUNTIME_MANIFEST, packIds);
   const resolvedPackIds = packs.map((pack) => pack.id);
   const specs = selectedPackages(MANAGED_RUNTIME_MANIFEST, packIds);
@@ -276,46 +325,84 @@ export async function installManagedRuntime(
   if (options.requireVerified && !hashVerified) {
     throw new ManagedRuntimeVerificationError("unverified_release_hashes");
   }
+
   const root = runtimeRoot();
+  assertRuntimeStateStorageSafe();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-  const temporaryPath = path.join(root, `install-${process.pid}-${Date.now()}`);
+  assertRuntimeStateStorageSafe();
+  const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(root);
+  try {
   const currentPath = path.join(root, "current");
-  const previousPath = fs.existsSync(currentPath) ? path.join(root, `rollback-${Date.now()}`) : null;
+  const currentExists = validateCurrentRuntimeDirectory(currentPath);
+  const temporaryPath = unoccupiedRuntimePath(root, "install");
+  const previousPath = currentExists ? unoccupiedRuntimePath(root, "rollback") : null;
   const previousState = readManagedRuntimeState();
   let currentMovedAside = false;
   let temporaryActivated = false;
+
   try {
-    await command(pythonExecutable(), ["-m", "venv", temporaryPath]);
-    const pip = process.platform === "win32" ? path.join(temporaryPath, "Scripts", "pip.exe") : path.join(temporaryPath, "bin", "pip");
+    let packageOutput: string;
+    let installedPackages: Record<string, string>;
 
-    // Install ONLY the selected packs' allow-listed specs. This used
-    // to install python-service/requirements.txt wholesale -- the entire
-    // superset including yfinance -- regardless of which packs the user
-    // actually selected, which made the pack model decorative.
-    // A release-qualified request has already checked that every selected pack has a lock.
-    const installArgs = ["install", "--disable-pip-version-check"];
-    if (hashVerified) {
-      // Release build: every selected pack has a real hash lock file, so
-      // pip is required to verify each wheel against it.
-      installArgs.push("--require-hashes");
-      for (const file of lockFiles) installArgs.push("--requirement", file);
+    if (strictIsolation) {
+      const result = await options.strictProvisioningAuthority!.provisionManagedRuntime({
+        runtimePath: temporaryPath,
+        selectedPackIds: [...resolvedPackIds],
+        packageSpecs: [...specs],
+        lockFiles: [...lockFiles],
+        hashVerified,
+        requireVerified: options.requireVerified === true,
+      });
+      if (!result || typeof result.packageOutput !== "string" || !result.installedPackages || typeof result.installedPackages !== "object") {
+        throw new Error("Strict provisioning authority returned invalid provisioning evidence.");
+      }
+      packageOutput = result.packageOutput;
+      installedPackages = result.installedPackages;
     } else {
-      installArgs.push(...specs);
+      await command(pythonExecutable(), ["-m", "venv", temporaryPath]);
+      const pip = process.platform === "win32"
+        ? path.join(temporaryPath, "Scripts", "pip.exe")
+        : path.join(temporaryPath, "bin", "pip");
+      const installArgs = ["install", "--disable-pip-version-check"];
+      if (hashVerified) {
+        installArgs.push("--require-hashes");
+        for (const file of lockFiles) installArgs.push("--requirement", file);
+      } else {
+        installArgs.push(...specs);
+      }
+      packageOutput = await command(pip, installArgs, temporaryPath);
+      installedPackages = await readInstalledPackages(pip);
     }
-    const packageOutput = await command(pip, installArgs, temporaryPath);
 
-    const verificationWarnings = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, resolvedPackIds, await readInstalledPackages(pip));
+    const staged = fs.lstatSync(temporaryPath, { throwIfNoEntry: false });
+    if (!staged?.isDirectory() || staged.isSymbolicLink()) {
+      throw new Error("Managed runtime provisioning did not create a safe LiOS staging runtime.");
+    }
+
+    const verificationWarnings = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, resolvedPackIds, installedPackages);
     if (options.requireVerified && verificationWarnings.length > 0) {
       throw new ManagedRuntimeVerificationError("integrity_failed");
     }
 
+    // Provisioning is asynchronous. Recheck the active directory and target
+    // just before mutation so a replaced current symlink or occupied rollback
+    // destination cannot redirect or clobber a filesystem write.
+    assertRuntimeStateStorageSafe();
+    const stillCurrent = validateCurrentRuntimeDirectory(currentPath);
+    if (stillCurrent !== currentExists) {
+      throw new Error("Managed runtime current directory changed during provisioning.");
+    }
     if (previousPath) {
+      if (fs.lstatSync(previousPath, { throwIfNoEntry: false })) {
+        throw new Error("Managed runtime rollback destination became occupied.");
+      }
       if (previousState) writeRuntimeStateSnapshot(currentPath, previousState);
       fs.renameSync(currentPath, previousPath);
       currentMovedAside = true;
     }
     fs.renameSync(temporaryPath, currentPath);
     temporaryActivated = true;
+
     const state: ManagedRuntimeState = {
       manifestVersion: MANAGED_RUNTIME_MANIFEST.manifestVersion,
       installedAt: new Date().toISOString(),
@@ -330,8 +417,9 @@ export async function installManagedRuntime(
     };
     writeRuntimeStateSnapshot(currentPath, state);
     fs.writeFileSync(statePath(), JSON.stringify(state, null, 2), { mode: 0o600 });
-    if (previousState?.rollbackPath && previousState.rollbackPath !== previousPath) {
-      fs.rmSync(previousState.rollbackPath, { recursive: true, force: true });
+    const obsoleteRollback = authorizedRollbackPath(previousState?.rollbackPath);
+    if (obsoleteRollback && obsoleteRollback !== previousPath) {
+      fs.rmSync(obsoleteRollback, { recursive: true, force: true });
     }
     const detail = verificationWarnings.length
       ? `Managed Python runtime installed with ${verificationWarnings.length} allow-list warning(s).`
@@ -347,42 +435,130 @@ export async function installManagedRuntime(
     fs.rmSync(temporaryPath, { recursive: true, force: true });
     throw error;
   }
+  } finally {
+    releaseLifecycleLock();
+  }
 }
 
 export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationResult> {
+  assertRuntimeStateStorageSafe();
+  const lifecycleRoot = runtimeRoot();
+  if (!fs.lstatSync(lifecycleRoot, { throwIfNoEntry: false })) {
+    throw new Error("No safe managed runtime rollback is available.");
+  }
+  const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(lifecycleRoot);
+  try {
   const state = readManagedRuntimeState();
-  if (!state?.rollbackPath || !fs.existsSync(state.rollbackPath)) throw new Error("No managed runtime rollback is available.");
-  const currentPath = path.join(runtimeRoot(), "current");
-  const previousPath = state.rollbackPath;
+  const previousPath = authorizedRollbackPath(state?.rollbackPath);
+  if (!state || !previousPath) {
+    throw new Error("No safe managed runtime rollback is available.");
+  }
+  const root = runtimeRoot();
+  const currentPath = path.join(root, "current");
+  const currentEntry = fs.lstatSync(currentPath, { throwIfNoEntry: false });
+  if (!currentEntry?.isDirectory() || currentEntry.isSymbolicLink()) {
+    throw new Error("Managed runtime current directory is unavailable or unsafe for rollback.");
+  }
+
+  // A rollback destination must never replace an existing file, directory or
+  // dangling symlink. Use the same authorized rollback naming contract so the
+  // just-replaced runtime remains eligible for a later deliberate rollback.
+  let replacedPath: string | null = null;
+  for (let n = 0; n < 1_000; n += 1) {
+    const candidate = path.join(root, `rollback-${Date.now() + n}`);
+    if (!fs.lstatSync(candidate, { throwIfNoEntry: false })) {
+      replacedPath = candidate;
+      break;
+    }
+  }
+  if (!replacedPath) throw new Error("No free managed runtime rollback destination is available.");
+  const safeReplacedPath = replacedPath;
+
+  const rollbackSnapshotPath = runtimeStateSnapshotPath(previousPath);
+  const currentSnapshotPath = runtimeStateSnapshotPath(currentPath);
+  // Reject metadata symlinks before any write; folder containment alone is
+  // insufficient if .lios-runtime-state.json points to a different location.
+  for (const snapshot of [rollbackSnapshotPath, currentSnapshotPath]) {
+    const entry = fs.lstatSync(snapshot, { throwIfNoEntry: false });
+    if (entry && (!entry.isFile() || entry.isSymbolicLink())) {
+      throw new Error("Managed runtime state snapshot path is unsafe for rollback.");
+    }
+  }
+  const originalCurrentSnapshot = fs.existsSync(currentSnapshotPath)
+    ? fs.readFileSync(currentSnapshotPath, "utf8") : null;
+  const originalRollbackSnapshot = fs.existsSync(rollbackSnapshotPath)
+    ? fs.readFileSync(rollbackSnapshotPath, "utf8") : null;
+  const originalState = fs.readFileSync(statePath(), "utf8");
   const previousState = readRuntimeStateSnapshot(previousPath);
-  const failedPath = path.join(runtimeRoot(), `failed-${Date.now()}`);
-  if (fs.existsSync(currentPath)) writeRuntimeStateSnapshot(currentPath, state);
-  fs.renameSync(currentPath, failedPath);
-  fs.renameSync(previousPath, currentPath);
   const rollbackState: ManagedRuntimeState = previousState
     ? {
         ...previousState,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: failedPath,
+        rollbackPath: safeReplacedPath,
       }
     : {
         ...state,
         installedAt: new Date().toISOString(),
         runtimePath: currentPath,
-        rollbackPath: failedPath,
+        rollbackPath: safeReplacedPath,
         selectedReleasePackIds: [],
         verificationWarnings: [
           ...state.verificationWarnings,
           "Rollback runtime predates pack-state snapshots; release-pack selection metadata was reset.",
         ],
       };
-  writeRuntimeStateSnapshot(currentPath, rollbackState);
-  fs.writeFileSync(statePath(), JSON.stringify(rollbackState, null, 2), { mode: 0o600 });
+
+  let currentMovedAside = false;
+  let rollbackActivated = false;
+  let stateWriteAttempted = false;
+  try {
+    writeRuntimeStateSnapshot(currentPath, state);
+    fs.renameSync(currentPath, safeReplacedPath);
+    currentMovedAside = true;
+    fs.renameSync(previousPath, currentPath);
+    rollbackActivated = true;
+    writeRuntimeStateSnapshot(currentPath, rollbackState);
+    stateWriteAttempted = true;
+    fs.writeFileSync(statePath(), JSON.stringify(rollbackState, null, 2), { mode: 0o600 });
+  } catch (error) {
+    // On a failed second rename or metadata write, restore *both* runtime
+    // directories and their prior snapshots rather than leaving no "current".
+    // Keep the original failure and report any recovery failure as well.
+    const recoveryErrors: unknown[] = [];
+    const recover = (step: () => void) => {
+      try { step(); } catch (cause) { recoveryErrors.push(cause); }
+    };
+    if (rollbackActivated) {
+      recover(() => fs.renameSync(currentPath, previousPath));
+      recover(() => {
+        if (originalRollbackSnapshot === null) fs.rmSync(rollbackSnapshotPath, { force: true });
+        else fs.writeFileSync(rollbackSnapshotPath, originalRollbackSnapshot, { mode: 0o600 });
+      });
+    }
+    if (currentMovedAside) {
+      recover(() => fs.renameSync(safeReplacedPath, currentPath));
+    }
+    recover(() => {
+      if (!fs.existsSync(currentPath)) return;
+      if (originalCurrentSnapshot === null) fs.rmSync(currentSnapshotPath, { force: true });
+      else fs.writeFileSync(currentSnapshotPath, originalCurrentSnapshot, { mode: 0o600 });
+    });
+    if (stateWriteAttempted) {
+      recover(() => fs.writeFileSync(statePath(), originalState, { mode: 0o600 }));
+    }
+    if (recoveryErrors.length) {
+      throw new AggregateError([error, ...recoveryErrors], "Managed runtime rollback failed and recovery was incomplete.");
+    }
+    throw error;
+  }
   return {
     state: rollbackState,
     detail: previousState
       ? "Managed Python runtime rolled back with its previous pack-selection state."
       : "Managed Python runtime rolled back; legacy rollback metadata was unavailable and release-pack selection was reset.",
   };
+  } finally {
+    releaseLifecycleLock();
+  }
 }

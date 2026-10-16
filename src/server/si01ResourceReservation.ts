@@ -36,6 +36,8 @@ export type LocalCapacitySnapshotReader = (
  */
 export class LocalResourceReservationPool {
   #activeHeavyReservations = 0;
+  #reservedMemoryBytes = 0;
+  #reservedDiskBytes = 0;
 
   constructor(
     private readonly snapshotReader: LocalCapacitySnapshotReader = (active) =>
@@ -46,19 +48,40 @@ export class LocalResourceReservationPool {
     return this.#activeHeavyReservations;
   }
 
+  get reservedMemoryBytes(): number {
+    return this.#reservedMemoryBytes;
+  }
+
+  get reservedDiskBytes(): number {
+    return this.#reservedDiskBytes;
+  }
+
   acquire(request: LocalResourceRequest): LocalResourceReservation {
-    const admission = evaluateLocalResourceAdmission(
-      this.snapshotReader(this.#activeHeavyReservations),
-      request,
-    );
+    // All workload classes consume memory/disk, not just heavy-job slots.
+    // The process-local reservation ledger protects against back-to-back
+    // admissions using the same OS free-capacity observation before native
+    // allocations become visible in telemetry.
+    const hardware = this.snapshotReader(this.#activeHeavyReservations);
+    const capacity: LocalCapacitySnapshot = {
+      ...hardware,
+      freeMemoryBytes: Math.max(0, hardware.freeMemoryBytes - this.#reservedMemoryBytes),
+      freeDiskBytes: hardware.freeDiskBytes === null
+        ? null
+        : Math.max(0, hardware.freeDiskBytes - this.#reservedDiskBytes),
+    };
+    const admission = evaluateLocalResourceAdmission(capacity, request);
     if (admission.state === "unavailable") {
       throw new LocalResourceAdmissionError(admission);
     }
 
+    const memoryBytes = request.memoryBytes;
+    const diskBytes = request.diskBytes;
     const ownsHeavySlot = request.workload === "heavy";
-    if (ownsHeavySlot) {
-      this.#activeHeavyReservations += 1;
-    }
+    // Acquiring a reservation is synchronous, so accounting and admission
+    // remain atomic within this process's event loop.
+    this.#reservedMemoryBytes += memoryBytes;
+    this.#reservedDiskBytes += diskBytes;
+    if (ownsHeavySlot) this.#activeHeavyReservations += 1;
 
     let released = false;
     return Object.freeze({
@@ -66,8 +89,9 @@ export class LocalResourceReservationPool {
       release: () => {
         if (released) return;
         released = true;
-        if (!ownsHeavySlot) return;
-        this.#activeHeavyReservations = Math.max(0, this.#activeHeavyReservations - 1);
+        this.#reservedMemoryBytes -= memoryBytes;
+        this.#reservedDiskBytes -= diskBytes;
+        if (ownsHeavySlot) this.#activeHeavyReservations -= 1;
       },
     });
   }

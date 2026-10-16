@@ -31,7 +31,7 @@ function config(engine: "docker" | "podman", engineTarget: string) {
   } as const;
 }
 
-test("Docker launch pins the configured local engine target before run", async () => {
+test("Docker launch pins the configured local Unix engine target before run", async () => {
   const backend = createContainerExecutionBackend(
     config("docker", "unix:///var/run/docker.sock"),
   );
@@ -40,6 +40,19 @@ test("Docker launch pins the configured local engine target before run", async (
   assert.deepEqual(plan.spawn.argv.slice(0, 3), [
     "docker",
     "--host=unix:///var/run/docker.sock",
+    "run",
+  ]);
+});
+
+test("Docker launch supports the explicit local Windows named pipe without inheriting a context", async () => {
+  const backend = createContainerExecutionBackend(
+    config("docker", "npipe:////./pipe/docker_engine"),
+  );
+
+  const plan = await backend.prepare(request());
+  assert.deepEqual(plan.spawn.argv.slice(0, 3), [
+    "docker",
+    "--host=npipe:////./pipe/docker_engine",
     "run",
   ]);
 });
@@ -64,10 +77,12 @@ test("remote or ambiguous engine targets are rejected instead of inheriting CLI 
     "unix://remote/run/docker.sock",
     "unix:relative.sock",
     "unix:///",
+    "npipe:////remote/pipe/docker_engine",
+    "npipe:////./pipe/../escape",
   ]) {
     assert.throws(
       () => createContainerExecutionBackend(config("docker", engineTarget)),
-      /local unix:\/\/ endpoint/,
+      /explicit local unix:\/\/ socket or Windows npipe:\/\/ endpoint/,
     );
   }
 });

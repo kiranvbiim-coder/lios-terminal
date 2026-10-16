@@ -6,7 +6,7 @@ This policy applies to LiOS Desktop Local / LiOS Home, user-owned server/cloud d
 
 ## Development and release rule
 
-Security changes use ordinary task branches and pull requests against `main`. V0/V1 focused checks and applicable V2 integration evidence are required under `docs/technical/LIOS_PROGRESSIVE_VALIDATION_CI_STRATEGY.md`; the manual `.github/workflows/lios-hardening.yml` is the deliberate V3/V4 complete gate. Public hosted source CI does not replace packaged or release qualification.
+Security changes use ordinary task branches and pull requests against `main`. V0/V1 focused checks and applicable V2 integration evidence are required under `docs/technical/LIOS_PROGRESSIVE_VALIDATION_CI_STRATEGY.md`; the complete V3/V4 hardening gate must be performed in the separate trusted release environment; it is not included in this public snapshot. Public hosted source CI does not replace packaged or release qualification.
 
 No security-sensitive PR is merged while its applicable validation is failed, cancelled or still running.
 
@@ -43,12 +43,12 @@ Do not disclose suspected vulnerability details in a public issue. Contact the r
 - Require review for workflow/security changes and approval of external-contributor workflows. Do not put production secrets, customer databases, credential vaults or private documents into CI artifacts or logs.
 - Report vulnerabilities privately through the repository's private security-reporting channel when enabled; otherwise contact maintainers privately. Do not test against another user's LiOS Home.
 
-### Publication checklist — not yet cleared
+### Public distribution verification — not yet certified
 
 - This public distribution starts from a sanitized source snapshot without the original private Git history, provider/academic dataset payloads, customer databases, credentials, installers, model weights or old CI/discussion exports.
 - Shiller and provider-catalog observations require independently permitted local inputs; free download and connector licenses do not grant redistribution permission.
 - There are no self-hosted runners or binary release workflows in this repository. Unprivileged Linux/macOS/Windows source CI contains no production/signing/provider secrets.
-- Code-owner review and protected-branch rules govern workflow/security changes. External-contributor workflow approval and private vulnerability reporting are configured separately at GitHub.
+- CODEOWNERS declares workflow/security owners, and `main` reports protection with required source checks. Review requirements, bypass restrictions, external-contributor workflow approval and private vulnerability reporting must be independently confirmed in GitHub settings; do not infer their enforcement from source files.
 - Source CI does not accept any Shipping Point or signed binary. Exact dependency-license obligations, copied-graph vulnerabilities, native components, models/assets/data rights, signatures and native user journeys remain separate release prerequisites.
 
 The proprietary original-code notice does not override third-party licenses. Source-dependency licenses and notices are preserved; generated local dependencies/builds remain excluded from source publication.
@@ -56,6 +56,8 @@ The proprietary original-code notice does not override third-party licenses. Sou
 Primary references: [Nasdaq copyright/disclaimer](https://www.nasdaqtrader.com/trader.aspx?id=copydisclaimmain), [CoinGecko API terms](https://www.coingecko.com/en/api_terms), [Shiller source page](https://shillerdata.com/).
 
 
+
+See [Public Repository Safeguards](docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md) for the implemented guard, remaining publication checks and GitHub owner/operator settings.
 
 ## Current hardening source of truth
 

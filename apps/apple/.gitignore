@@ -1,0 +1,10 @@
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+*.xcarchive
+*.xcresult
+Phone/Info.plist
+Watch/Info.plist
+*.p12
+*.mobileprovision

@@ -77,3 +77,77 @@ test("a move is refused for non-empty targets, nested folders, a running databas
   assert.equal(fs.existsSync(path.join(home, ".limuria-terminal", "data-root.json")), false);
   assert.equal(fs.readFileSync(path.join(occupied, "keep.txt"), "utf8"), "x");
 });
+
+test("SI-07.11 migration refuses a symlinked empty destination without modifying unrelated data or selection", (t) => {
+  const { base, home, opts } = setup(t);
+  const source = path.join(home, ".limuria-terminal");
+  plant(source);
+  prepareDataRoot({ ...opts, localDatabase: true });
+  const unrelated = path.join(base, "unrelated-empty");
+  const redirected = path.join(base, "new-data-root");
+  fs.mkdirSync(unrelated);
+  try {
+    fs.symlinkSync(unrelated, redirected, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  assert.throws(
+    () => moveDataRoot({ from: source, to: redirected, ...opts }),
+    /symbolic link/,
+  );
+  assert.deepEqual(fs.readdirSync(unrelated), [], "unrelated folder must remain untouched");
+  assert.equal(fs.readFileSync(path.join(source, "vault.key"), "utf8"), "KEY");
+  assert.equal(resolveDataRoot(opts).root, source);
+  assert.equal(readDataRootPointer(home), null);
+});
+
+test("SI-07.11 migration refuses a symlinked destination parent before creating folders", (t) => {
+  const { base, home, opts } = setup(t);
+  const source = path.join(home, ".limuria-terminal");
+  plant(source);
+  prepareDataRoot({ ...opts, localDatabase: true });
+  const outside = path.join(base, "outside-user-files");
+  const alias = path.join(base, "alias-to-outside");
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "private.txt"), "PRIVATE");
+  try {
+    fs.symlinkSync(outside, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  assert.throws(
+    () => moveDataRoot({ from: source, to: path.join(alias, "new-lios-home"), ...opts }),
+    /symbolic link/,
+  );
+  assert.deepEqual(fs.readdirSync(outside), ["private.txt"]);
+  assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "PRIVATE");
+  assert.equal(fs.existsSync(path.join(outside, "new-lios-home")), false);
+  assert.equal(resolveDataRoot(opts).root, source);
+});
+
+test("SI-07.11 migration checks physical overlap through an existing nested alias", (t) => {
+  const { base, home, opts } = setup(t);
+  const source = path.join(home, ".limuria-terminal");
+  plant(source);
+  prepareDataRoot({ ...opts, localDatabase: true });
+  const alias = path.join(base, "outside-alias");
+  try {
+    fs.symlinkSync(source, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  // "alias/pgdata/base" is an existing *directory*, not a symlink,
+  // but its real path is inside the active data root. Lexical path checks
+  // alone would allow creation of pgdata/base/nested-migration there.
+  const malicious = path.join(alias, "pgdata", "base", "nested-migration");
+  assert.throws(
+    () => moveDataRoot({ from: source, to: malicious, ...opts }),
+    /physically overlap/,
+  );
+  assert.equal(fs.existsSync(path.join(source, "pgdata", "base", "nested-migration")), false);
+  assert.equal(resolveDataRoot(opts).root, source);
+  assert.equal(fs.readFileSync(path.join(source, "pgdata", "base", "rel"), "utf8"), "relation-bytes");
+});

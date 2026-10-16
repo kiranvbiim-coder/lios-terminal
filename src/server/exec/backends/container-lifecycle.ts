@@ -16,6 +16,7 @@ const CONTROL_MAX_OUTPUT_CHARS = 64 * 1024;
 const DEFAULT_FINALIZE_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 50;
 const NOT_FOUND = /no such (?:container|object)|does not exist|no container with name or id/i;
+const WINDOWS_DOCKER_NPIPE = /^npipe:\/\/\/\/\.\/pipe\/[A-Za-z0-9._-]+$/;
 
 export async function runContainerControlCommand(
   argv: readonly string[],
@@ -38,12 +39,41 @@ export async function runContainerControlCommand(
   };
 }
 
-
 function engineTargetArg(engine: "docker" | "podman", target: string): string {
-  if (!target.startsWith("unix:///") || target.includes("\0")) {
-    throw new Error("Container lifecycle requires the exact local unix:// engine target.");
+  if (target.includes("\0")) {
+    throw new Error("Container lifecycle requires an explicit local unix:// socket or Windows Docker npipe:// endpoint.");
   }
-  return engine === "docker" ? "--host=" + target : "--url=" + target;
+  if (engine === "docker" && WINDOWS_DOCKER_NPIPE.test(target)) return "--host=" + target;
+  if (!target.startsWith("unix:///")) {
+    throw new Error("Container lifecycle requires an explicit local unix:// socket or Windows Docker npipe:// endpoint.");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    throw new Error("Container lifecycle requires an explicit local unix:// socket or Windows Docker npipe:// endpoint.");
+  }
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(parsed.pathname);
+  } catch {
+    throw new Error("Container lifecycle requires an explicit local unix:// socket or Windows Docker npipe:// endpoint.");
+  }
+  if (
+    parsed.protocol !== "unix:" ||
+    parsed.hostname ||
+    parsed.username ||
+    parsed.password ||
+    parsed.port ||
+    parsed.search ||
+    parsed.hash ||
+    !decodedPath.startsWith("/") ||
+    decodedPath === "/" ||
+    decodedPath.includes("\0")
+  ) {
+    throw new Error("Container lifecycle requires an explicit local unix:// socket or Windows Docker npipe:// endpoint.");
+  }
+  return engine === "docker" ? "--host=" + parsed.href : "--url=" + parsed.href;
 }
 
 export class ContainerExtinctionError extends Error {

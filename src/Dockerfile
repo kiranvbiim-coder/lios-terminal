@@ -12,6 +12,7 @@ RUN apt-get update \
        curl \
        xz-utils \
        build-essential \
+       tini \
        gfortran \
        libopenblas-dev \
     && DETECTED_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
@@ -29,7 +30,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY vendor ./vendor
-RUN npm ci --include=dev
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --include=dev
 
 COPY python-service/requirements.txt ./python-service/requirements.txt
 RUN python -m pip install --no-cache-dir --upgrade pip \
@@ -38,10 +39,16 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY . .
 RUN npm run build
 
+RUN groupadd --gid 10001 lios \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin lios \
+    && install -d -m 0700 -o lios -g lios /data/lios
+
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=10000
 ENV LIOS_DATA_ROOT=/data/lios
+ENV LIOS_EXECUTION_ISOLATION=strict
+USER 10001:10001
 VOLUME /data/lios
 EXPOSE 10000
 
@@ -49,4 +56,5 @@ EXPOSE 10000
 # proxy (TRUST_PROXY=1 only if the container port is reachable exclusively from that proxy).
 # The first owner is enrolled via the one-time token or LIOS_OWNER_PASSWORD_FILE; no default
 # account, password-in-env or vendor runtime server.
-CMD ["npm", "run", "start"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "dist/index.cjs"]
