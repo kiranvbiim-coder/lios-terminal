@@ -187,15 +187,40 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
   }
   const dbDir = databaseDir();
   if (dbDir === root) throw new BackupError("This data root stores the database at its top level; move it into a pgdata folder first.");
+  const priorDestination = fs.lstatSync(destination, { throwIfNoEntry: false });
+  if (priorDestination && (!priorDestination.isDirectory() || priorDestination.isSymbolicLink())) {
+    throw new BackupError("Backup destination must be a real directory, not a symbolic link.");
+  }
   fs.mkdirSync(destination, { recursive: true, mode: 0o700 });
+  const destinationEntry = fs.lstatSync(destination);
+  if (!destinationEntry.isDirectory() || destinationEntry.isSymbolicLink()) {
+    throw new BackupError("Backup destination must be a real directory, not a symbolic link.");
+  }
+  // A path can be lexically outside Home but physically inside it through an
+  // existing parent alias. Refuse that physical overlap before any staging.
+  const physicalRoot = fs.realpathSync(root);
+  const physicalDestination = fs.realpathSync(destination);
+  if (physicalDestination === physicalRoot || physicalDestination.startsWith(`${physicalRoot}${path.sep}`)) {
+    throw new BackupError("Choose a backup destination outside the LiOS data folder.");
+  }
 
   const now = options.now ?? new Date();
   const encrypted = options.passphrase !== undefined;
   const file = path.join(destination, `lios-backup-${stamp(now)}.${encrypted ? "liosbak" : "tar.gz"}`);
-  if (fs.existsSync(file)) throw new BackupError(`${path.basename(file)} already exists.`);
-  const partial = `${file}.${process.pid}.partial`;
-  const staging = path.join(destination, `.lios-backup-${process.pid}`);
-  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+  if (fs.lstatSync(file, { throwIfNoEntry: false })) throw new BackupError(`${path.basename(file)} already exists.`);
+  const staging = path.join(destination, `.lios-backup-${process.pid}-${crypto.randomUUID()}`);
+  // Non-recursive mkdir is an atomic reservation. Never adopt an existing
+  // staging directory, even an abandoned one from an earlier invocation.
+  try {
+    fs.mkdirSync(staging, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new BackupError("Backup staging directory is already occupied.");
+    }
+    throw error;
+  }
+  const partial = path.join(staging, "archive.partial");
+  let published = false;
   let vaultMigrationEnvelope: Buffer | null = null;
 
   try {
@@ -281,15 +306,19 @@ export async function createBackup(db: DrizzleDb, options: CreateBackupOptions):
     } finally {
       fs.closeSync(handle);
     }
-    fs.renameSync(partial, file);
 
-    // A backup that cannot be read back is not a backup: verify before reporting success or pruning.
-    const manifest = await verifyBackup(file, { passphrase: options.passphrase });
+    // Verify the completed private staging file before publishing. A hard
+    // link publishes only when the final pathname is unoccupied; unlike
+    // renameSync this cannot replace a backup another process just created.
+    const manifest = await verifyBackup(partial, { passphrase: options.passphrase });
+    fs.linkSync(partial, file);
+    published = true;
     const pruned = options.keep === undefined ? [] : pruneBackups(destination, Math.max(1, options.keep));
     return { file, manifest, pruned };
   } catch (error) {
-    fs.rmSync(partial, { force: true });
-    fs.rmSync(file, { force: true });
+    // Only this invocation's successfully linked final archive can be
+    // removed. Never delete another writer's same-name archive on EEXIST.
+    if (published) fs.rmSync(file, { force: true });
     throw error;
   } finally {
     vaultMigrationEnvelope?.fill(0);
