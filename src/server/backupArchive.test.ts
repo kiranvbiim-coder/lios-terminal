@@ -26,6 +26,7 @@ const {
   assertSafeRestoreFileTarget,
   createBackup,
   extractBackup,
+  reserveRestorePreviousDirectory,
   restoreBackup,
   verifyBackup,
 } = await import("./backupArchive");
@@ -230,7 +231,14 @@ test("restore recreates database, files and keys in a fresh Home and keeps repla
   fs.writeFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "edited-after-restore");
   await assert.rejects(restoreBackup(db, file, { passphrase: PASS }), /user account/);
   assert.equal(fs.readFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "utf8"), "edited-after-restore");
-  await restoreBackup(db, file, { passphrase: PASS, replace: true });
+  const secondRestore = await restoreBackup(db, file, { passphrase: PASS, replace: true });
+  assert.ok(secondRestore.previousFilesDir);
+  assert.notEqual(secondRestore.previousFilesDir, result.previousFilesDir,
+    "each restore must preserve overwritten files in a newly owned recovery slot");
+  assert.equal(fs.readFileSync(path.join(result.previousFilesDir as string, "vault.key"), "utf8"),
+    "DIFFERENT-OLD-KEY", "the earlier restore's recovery files must survive later restores");
+  assert.equal(fs.readFileSync(path.join(secondRestore.previousFilesDir as string, "project-attachments/1/2/a.blob"), "utf8"),
+    "edited-after-restore", "the second restore keeps its own replaced file");
   assert.equal(fs.readFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "utf8"), "attachment-one");
   await closeDb();
   process.env.LIOS_DATA_ROOT = rootA;
@@ -360,6 +368,44 @@ test("SI-07.12 refused restore preserves a pre-existing PID staging directory", 
   } finally {
     fs.rmSync(legacy, { recursive: true, force: true });
   }
+});
+
+test("SI-07.12 recovery slots are unique even at an identical timestamp, and never touch prior copies", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-restore-history-reservation-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const when = new Date("2026-10-16T08:00:00.000Z");
+  const legacy = path.join(root, "restore-previous-20261016T080000Z");
+  fs.mkdirSync(legacy);
+  fs.writeFileSync(path.join(legacy, "sentinel.txt"), "HISTORICAL-COPY");
+  const first = reserveRestorePreviousDirectory(root, when);
+  fs.writeFileSync(path.join(first, "a.txt"), "FIRST-RECOVERY");
+  const second = reserveRestorePreviousDirectory(root, when);
+  fs.writeFileSync(path.join(second, "a.txt"), "SECOND-RECOVERY");
+  assert.notEqual(first, second);
+  assert.notEqual(first, legacy);
+  assert.notEqual(second, legacy);
+  assert.match(path.basename(first), /^restore-previous-20261016T080000Z-/);
+  assert.match(path.basename(second), /^restore-previous-20261016T080000Z-/);
+  assert.equal(fs.readFileSync(path.join(legacy, "sentinel.txt"), "utf8"), "HISTORICAL-COPY");
+  assert.equal(fs.readFileSync(path.join(first, "a.txt"), "utf8"), "FIRST-RECOVERY");
+  assert.equal(fs.readFileSync(path.join(second, "a.txt"), "utf8"), "SECOND-RECOVERY");
+});
+
+test("SI-07.12 recovery reservation refuses a linked root without changing outside files", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "lios-restore-recovery-root-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const real = path.join(base, "outside");
+  const linked = path.join(base, "home-link");
+  fs.mkdirSync(real);
+  fs.writeFileSync(path.join(real, "private.txt"), "PRIVATE");
+  try {
+    fs.symlinkSync(real, linked, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create a directory symlink: " + String(error));
+    return;
+  }
+  assert.throws(() => reserveRestorePreviousDirectory(linked), /real Home directory/);
+  assert.deepEqual(fs.readdirSync(real), ["private.txt"]);
 });
 
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
