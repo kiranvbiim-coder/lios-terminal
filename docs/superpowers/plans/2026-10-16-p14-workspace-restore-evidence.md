@@ -71,6 +71,8 @@ node script/write_p14_evidence.cjs \
 
 For `workspace_restore`, the canonical writer validates source artifact #1 before hashing or writing. It also requires every support artifact named by the validated observation to be supplied and hashed into the final evidence record. Missing named support fails closed and produces no passed P14 evidence file.
 
+`sourceEvidence` identifiers are unique artifact basenames only. Path-like aliases, `.`/`..`, slash/backslash-qualified names, duplicate identifiers, and duplicate supplied support basenames are rejected rather than normalized to a different artifact identity.
+
 The same support-binding rule now applies to the existing observation-backed `update_rollback` and `pack_lifecycle` categories, closing the earlier possibility of validating an observation while omitting one of its named underlying support artifacts from the final hash bundle.
 
 ## Relationship to SI-07.12
@@ -82,6 +84,8 @@ P14-05 does not claim those source tests are a packaged acceptance result. It ra
 ## TDD / regression boundary
 
 The P14-05 raw observation tests were committed before `p14WorkspaceRestoreEvidence.ts` existed. Writer tests were added before the support-binding implementation and include a negative case where the observation names `reopen-walkthrough.json` but the writer is not given that artifact; the writer must fail and must not emit passed evidence.
+
+A follow-on RED contract was committed before basename enforcement for an observation that names `nested/restore-worker.json` while only `restore-worker.json` is supplied. The canonical writer now rejects that alias instead of silently collapsing it with `path.basename()`.
 
 Existing P14-03 and P14-04 writer tests were then updated to provide and assert hashes for their named support artifacts, ensuring the stronger generic writer rule does not silently weaken those prior tranches.
 
