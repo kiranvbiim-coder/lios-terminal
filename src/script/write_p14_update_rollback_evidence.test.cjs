@@ -41,6 +41,11 @@ function runWriter(observation) {
   const input = path.join(directory, "update-observation.json");
   const output = path.join(directory, "update-evidence.json");
   fs.writeFileSync(input, JSON.stringify(observation), "utf8");
+  const supports = (observation.sourceEvidence || []).map((name) => {
+    const file = path.join(directory, path.basename(name));
+    fs.writeFileSync(file, `support:${name}\n`, "utf8");
+    return file;
+  });
   const result = spawnSync(process.execPath, [
     WRITER,
     "update_rollback",
@@ -48,6 +53,7 @@ function runWriter(observation) {
     "automated",
     "v1.0.0",
     input,
+    ...supports,
   ], {
     cwd: SRC_ROOT,
     encoding: "utf8",
@@ -67,16 +73,19 @@ test("canonical P14 writer refuses invalid update_rollback observations", () => 
   }
 });
 
-test("canonical P14 writer accepts a validated update_rollback observation and hashes it", () => {
+test("canonical P14 writer accepts a validated update_rollback observation and hashes all bound support", () => {
   const run = runWriter(validObservation());
   try {
     assert.equal(run.result.status, 0, run.result.stderr || run.result.stdout);
     const evidence = JSON.parse(fs.readFileSync(run.output, "utf8"));
     assert.equal(evidence.category, "update_rollback");
     assert.equal(evidence.status, "passed");
-    assert.equal(evidence.sourceArtifacts.length, 1);
-    assert.equal(evidence.sourceArtifacts[0].name, "update-observation.json");
-    assert.match(evidence.sourceArtifacts[0].sha256, /^[a-f0-9]{64}$/);
+    assert.deepEqual(evidence.sourceArtifacts.map((item) => item.name), [
+      "update-observation.json",
+      "signed-update-journey.json",
+      "workspace-continuity.json",
+    ]);
+    for (const item of evidence.sourceArtifacts) assert.match(item.sha256, /^[a-f0-9]{64}$/);
   } finally {
     fs.rmSync(run.directory, { recursive: true, force: true });
   }
