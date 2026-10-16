@@ -71,6 +71,7 @@ test("SI-07 Doctor repair planner reports explicitly composed strict provisionin
   assert.equal(plan.executionBlocker, null);
   assert.equal(plan.requiresConfirmation, true);
 });
+
 test("SI-07 Doctor repair planner reports existing legacy-host provisioning authority without executing it", () => {
   const plan = planManagedRuntimeRepair(readiness({
     state: "missing",
