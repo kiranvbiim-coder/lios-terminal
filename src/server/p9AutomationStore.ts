@@ -24,7 +24,7 @@ import { getProject, touchProjectActivity } from "./projectStore";
 import { appendLedgerEvent } from "./ledgerStore";
 import { decideP9Notification, nextP9ScheduledRun, p9NotificationTitle } from "./p9AutomationEngine";
 import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
-import { requireAcceptedP9Workflow } from "./p9AcceptedWorkflow";
+import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
@@ -81,6 +81,9 @@ export async function createP9Workflow(
   await getProject(ctx, projectId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "conversation_rerun" && input.action.sourceRequestId) {
+    input.action.request = await requireSuccessfulP9Recipe(ctx, projectId, input.action);
+  }
   if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
     await requireAcceptedP9Workflow(ctx, projectId, input.action);
   }
@@ -146,6 +149,9 @@ export async function replaceP9Workflow(
   const current = await getP9Workflow(ctx, workflowId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "conversation_rerun" && input.action.sourceRequestId) {
+    input.action.request = await requireSuccessfulP9Recipe(ctx, current.projectId, input.action);
+  }
   if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
     await requireAcceptedP9Workflow(ctx, current.projectId, input.action);
   }
@@ -265,8 +271,9 @@ export async function updateP9WorkflowEventCursorSystem(
   workflowId: string,
   eventCursor: Record<string, unknown>,
 ): Promise<void> {
+  const { pendingAutomationEvents: _pending, pendingAutomationAttemptedAt: _attempted, ...observerCursor } = eventCursor;
   await getDb().update(projectAutomationWorkflows).set({
-    eventCursor,
+    eventCursor: sql`${projectAutomationWorkflows.eventCursor} || ${JSON.stringify(observerCursor)}::jsonb`,
     updatedAt: new Date(),
   }).where(eq(projectAutomationWorkflows.id, workflowId));
 }
@@ -311,6 +318,7 @@ export async function beginP9Run(
     dedupeKey,
     status: "running",
     startedAt,
+    leaseExpiresAt: new Date(startedAt.getTime() + CLAIM_LEASE_MS),
   };
 
   const row = triggerType === "manual" && dedupeKey && expectedWorkflowUpdatedAt
@@ -404,6 +412,7 @@ export async function completeP9Run(
   const [run] = await getDb().update(projectAutomationRuns).set({
     status: success ? "succeeded" : "failed",
     completedAt: now,
+    leaseExpiresAt: null,
     summary: result.summary,
     changed: result.changed,
     conditionMet: result.conditionMet,
@@ -414,7 +423,7 @@ export async function completeP9Run(
     executionReceiptIds: result.executionReceiptIds,
     output: result.output,
     error: success ? null : input.error || result.summary,
-  }).where(and(eq(projectAutomationRuns.id, runId), runTenantFilter(ctx))).returning();
+  }).where(and(eq(projectAutomationRuns.id, runId), runTenantFilter(ctx), eq(projectAutomationRuns.status, "running"))).returning();
   if (!run) throw new Error("Automation run not found or not owned by the requesting user.");
 
   const trigger = p9WorkflowTriggerSchema.parse(workflow.trigger);

@@ -575,6 +575,13 @@
       "when": 1791849600000,
       "tag": "0081_lios_decision_review_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792108800000,
+      "tag": "0082_lios_automation_run_continuity",
+      "breakpoints": true
     }
   ]
 }

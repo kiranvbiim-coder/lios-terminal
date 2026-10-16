@@ -72,6 +72,7 @@ export const p9WorkflowActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("conversation_rerun"),
     chatId: z.number().int().positive(),
+    sourceRequestId: z.string().uuid().optional(),
     request: savedConversationRequestSchema,
     acceptedArtifact: p9AcceptedArtifactSchema.optional(),
     currentPersonalFinanceResourceId: z.string().trim().min(1).max(300).optional(),

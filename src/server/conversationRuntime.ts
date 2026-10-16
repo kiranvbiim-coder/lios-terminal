@@ -1203,7 +1203,14 @@ async function invokeGovernedAi(
 ): Promise<AICompletionResult> {
   const privateReason = privateAiContentReason(input, plan);
   try {
-    const answered = await invokeAI({ ...request, ...(privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}), fallback: privateReason ? "none" : "configured" });
+    const policy = input.request.transmissionPolicy;
+    const answered = await invokeAI({
+      ...request,
+      maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
+      maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
+      ...(privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
+      fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
+    });
     if (answered.fallback?.attempts.length) {
       const failed = answered.fallback.attempts.map((attempt) => `${attempt.provider} (${attempt.code.replaceAll("_", " ")})`).join(", ");
       await emit(input, {

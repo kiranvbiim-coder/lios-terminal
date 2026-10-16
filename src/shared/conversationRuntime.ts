@@ -97,6 +97,8 @@ export const aiTransmissionPolicySchema = z.object({
   allowSelection: z.boolean().default(true),
   allowToolCalling: z.boolean().default(true),
   dataClassification: z.enum(["public", "organization", "private"]).default("private"),
+  maxProviderAttempts: z.number().int().min(1).max(3).optional(),
+  maxAiOutputTokens: z.number().int().min(64).max(8_192).optional(),
 }).strict().superRefine((value, ctx) => {
   const denied = new Set(value.providerDeny.map((item) => item.toLowerCase()));
   for (const provider of value.providerAllow) {
