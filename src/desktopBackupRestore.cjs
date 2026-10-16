@@ -16,7 +16,11 @@ function validateRestoreArchive(file) {
     throw new Error("Choose an absolute LiOS backup file.");
   }
   const resolved = path.resolve(file);
-  const stat = fs.statSync(resolved);
+  // statSync follows symlinks. A restore worker must not be pointed at an
+  // unrelated user file through a .liosbak/.tar.gz symlink selected by a
+  // native file dialog or supplied to this internal launch boundary.
+  const stat = fs.lstatSync(resolved);
+  if (stat.isSymbolicLink()) throw new Error("The selected LiOS backup must not be a symbolic link.");
   if (!stat.isFile() || stat.size <= 0) throw new Error("The selected LiOS backup is not a readable file.");
   if (!(resolved.endsWith(".liosbak") || resolved.endsWith(".tar.gz"))) {
     throw new Error("Choose a LiOS .liosbak or .tar.gz backup.");
@@ -31,8 +35,15 @@ function resolveRestoreWorkerPath({ appPath, isPackaged }) {
         path.join(appPath, "dist", "desktop-restore.cjs"),
       ]
     : [path.join(__dirname, "dist", "desktop-restore.cjs")];
-  const found = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!found) throw new Error("The packaged LiOS restore worker is missing.");
+  const found = candidates.find((candidate) => {
+    try {
+      const entry = fs.lstatSync(candidate);
+      return entry.isFile() && !entry.isSymbolicLink();
+    } catch {
+      return false;
+    }
+  });
+  if (!found) throw new Error("The packaged LiOS restore worker is missing or unsafe.");
   return found;
 }
 
@@ -48,7 +59,15 @@ function createRestoreWorkerLaunchPlan({
   env = process.env,
 }) {
   if (typeof executable !== "string" || !executable) throw new Error("Restore worker executable is missing.");
-  if (typeof workerPath !== "string" || !path.isAbsolute(workerPath)) throw new Error("Restore worker path is invalid.");
+  if (typeof workerPath !== "string" || !path.isAbsolute(workerPath)
+    || path.basename(workerPath) !== "desktop-restore.cjs") throw new Error("Restore worker path is invalid.");
+  // Revalidate at the process-launch boundary: a previously selected
+  // unpacked worker must not become a symlink or non-file before spawning.
+  let workerFile;
+  try { workerFile = fs.lstatSync(workerPath); } catch { /* handled below */ }
+  if (!workerFile?.isFile() || workerFile.isSymbolicLink()) {
+    throw new Error("Restore worker is missing or unsafe.");
+  }
   if (typeof dataRoot !== "string" || !path.isAbsolute(dataRoot)) throw new Error("LiOS data root is invalid.");
   const archive = validateRestoreArchive(archivePath);
   const secret = normalizeRestorePassphrase(passphrase);

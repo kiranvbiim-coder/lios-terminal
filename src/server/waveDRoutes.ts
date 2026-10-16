@@ -286,16 +286,19 @@ function pulseFilterFromRequest(req: Request) {
   const parsed = pulseFilterSchema.safeParse({ channel: query.channel, kinds: asList(query.kinds), subjectKeys: asList(query.subjectKeys), unreadOnly: query.unreadOnly === "true" });
   return parsed.success ? parsed.data : { channel: "for_you" as const, unreadOnly: false };
 }
+type PulseSources = Readonly<{ quotes: typeof getQuotes; news: typeof getNews }>;
+const LIVE_PULSE_SOURCES: PulseSources = { quotes: getQuotes, news: getNews };
 
-async function buildPulseForUser(req: Request) {
+
+async function buildPulseForUser(req: Request, sources: PulseSources) {
   const now = new Date();
   const [alerts, watchlist, storedState] = await Promise.all([
     storage.getAlerts(req.user!.id),
     storage.getWatchlist(req.user!.id),
-    getWaveDState(waveUser(req)).catch(() => null),
+    getWaveDState(waveUser(req)),
   ]);
   const symbols = Array.from(new Set(watchlist.map((item) => item.symbol.toUpperCase()))).slice(0, 40);
-  const quotes = symbols.length ? await getQuotes(symbols).catch(() => []) : [];
+  const quotes = symbols.length ? await sources.quotes(symbols).catch(() => []) : [];
   const quoteBySymbol = new Map(quotes.map((quote) => [quote.symbol.toUpperCase(), quote]));
   const cards: PulseCardDraft[] = [];
 
@@ -305,7 +308,7 @@ async function buildPulseForUser(req: Request) {
   // because every item carries its feed provider, URL and publication time.
   // Keep this bounded so Pulse remains responsive; licensed feeds can be
   // added later through the same attributed card contract.
-  const newsBySymbol = await Promise.all(symbols.slice(0, 4).map(async (symbol) => [symbol, await getNews(symbol).catch(() => [])] as const));
+  const newsBySymbol = await Promise.all(symbols.slice(0, 4).map(async (symbol) => [symbol, await sources.news(symbol).catch(() => [])] as const));
   for (const [symbol, items] of newsBySymbol) {
     for (const item of items.slice(0, 2)) {
       cards.push({
@@ -382,7 +385,8 @@ async function buildPulseForUser(req: Request) {
 
   for (const quote of quotes) {
     if (!Number.isFinite(quote.changePercent) || Math.abs(quote.changePercent) < 3) continue;
-    const observedAt = now.toISOString();
+    const observedAt = quote.status.asOf;
+    if (!observedAt || !Number.isFinite(Date.parse(observedAt))) continue;
     cards.push({
       id: `market-move:${quote.symbol.toUpperCase()}:${observedAt.slice(0, 13)}`,
       kind: "market_move",
@@ -396,30 +400,35 @@ async function buildPulseForUser(req: Request) {
       subjectKey: quote.symbol.toUpperCase(),
       unread: true,
       magnitude: quote.changePercent,
-      portfolioExposure: 0.2,
       evidence: [{ id: `quote:${quote.symbol.toUpperCase()}:${observedAt}`, source: "market quote", provider: quote.quoteSource, availableAt: observedAt }],
     });
   }
 
   const ranked = rankPulseCards(cards, now);
   const actionInbox = deriveActionInbox(ranked).map((item) => ({ ...item, status: storedState?.inboxStatuses[item.id] ?? item.status }));
-  return { now, alerts, watchlist, quotes, cards: ranked, actionInbox, storedState };
+  const controlledCards = ranked.map((card) => {
+    const status = storedState?.inboxStatuses[`inbox:${card.id}`];
+    return status === "resolved" || status === "snoozed"
+      ? { ...card, unread: false, status: "read" as const }
+      : card;
+  });
+  return { now, alerts, watchlist, quotes, cards: controlledCards, actionInbox, storedState };
 }
 
-export function registerWaveDRoutes(app: Express): void {
+export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_PULSE_SOURCES): void {
   app.get("/api/readiness/wave-d", requireRole(...READ_ROLES), (_req, res) => {
     res.json({ wave: "D", ...getWaveDReadiness() });
   });
 
   app.get("/api/wave-d/pulse", requireWaveDRetailRead, async (req, res) => {
     try {
-      const result = await buildPulseForUser(req);
+      const result = await buildPulseForUser(req, sources);
       const requestedFilter = pulseFilterFromRequest(req);
       const filter = requestedFilter.channel === "following" && !requestedFilter.subjectKeys?.length
         ? { ...requestedFilter, subjectKeys: result.watchlist.map((item) => item.symbol.toUpperCase()) }
         : requestedFilter;
       const cards = filterPulseCards(result.cards, filter);
-      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.length ? "attention" : "caught_up", filter, cards, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
+      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Pulse data unavailable." });
     }
@@ -429,7 +438,7 @@ export function registerWaveDRoutes(app: Express): void {
     const mode = req.params.mode as BriefMode;
     if (mode !== "morning" && mode !== "evening") return res.status(400).json({ error: "Brief mode must be morning or evening." });
     try {
-      const result = await buildPulseForUser(req);
+      const result = await buildPulseForUser(req, sources);
       res.json(buildPulseBrief(mode, result.cards, result.actionInbox, result.now));
     } catch (error) { res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Brief unavailable." }); }
   });
@@ -457,7 +466,7 @@ export function registerWaveDRoutes(app: Express): void {
     const parsed = contextualAskSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "cardId and question are required.", issues: parsed.error.issues });
     try {
-      const result = await buildPulseForUser(req);
+      const result = await buildPulseForUser(req, sources);
       const card = result.cards.find((item) => item.id === parsed.data.cardId);
       const ask = buildContextualAsk(card, parsed.data.question);
       const answer = ask.status === "ready" ? await answerContextualQuestion(card, parsed.data.question) : { status: "unavailable" as const, reason: ask.reason };
@@ -541,8 +550,8 @@ export function registerWaveDRoutes(app: Express): void {
 
   app.get("/api/wave-d/action-inbox", requireWaveDRetailRead, async (req, res) => {
     try {
-      const result = await buildPulseForUser(req);
-      res.json({ asOf: result.now.toISOString(), items: result.actionInbox, status: result.actionInbox.length ? "needs_attention" : "caught_up" });
+      const result = await buildPulseForUser(req, sources);
+      res.json({ asOf: result.now.toISOString(), items: result.actionInbox, status: result.actionInbox.some((item) => item.status === "open") ? "needs_attention" : "caught_up" });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Action inbox unavailable." });
     }
@@ -661,7 +670,7 @@ export function registerWaveDRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/wave-d/action-inbox/:id", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/wave-d/action-inbox/:id", requireWaveDRetailRead, async (req, res) => {
     const parsed = inboxActionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid Action Inbox update.", issues: parsed.error.issues });
     const itemId = String(req.params.id);

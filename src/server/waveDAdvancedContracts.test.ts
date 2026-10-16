@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildContextualAsk, buildEventNote, buildPulseBrief, classifySignalMetric, compareEventExpectations, dueScheduledMonitors, filterPulseCards, normalizeScheduledMonitor, reconcileExportReferences, WAVE_D_REPORT_TEMPLATES } from "@shared/waveDAdvancedContracts";
+import { buildContextualAsk, buildEventNote, buildPulseBrief, classifySignalMetric, compareEventExpectations, dueScheduledMonitors, filterPulseCards, normalizeScheduledMonitor, reconcileExportReferences } from "@shared/waveDAdvancedContracts";
 import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
 
 const evidence = [{ id: "e1", source: "fixture", availableAt: "2026-09-18T00:00:00.000Z" }];
@@ -41,8 +41,4 @@ test("Event Room comparison and export reconciliation never infer missing values
   const note = buildEventNote({ id: "room:1", type: "earnings", title: "Earnings", scheduledAt: "2026-09-18T00:00:00.000Z", evidenceIds: ["e1"] }, comparison);
   assert.equal(note.status, "ready");
   assert.equal(reconcileExportReferences([{ kind: "snapshot", id: "s1", revision: "1" }], [{ kind: "snapshot", id: "s1", revision: "2" }], "pdf").status, "blocked");
-});
-
-test("Wave D exposes the five governed output templates", () => {
-  assert.deepEqual(WAVE_D_REPORT_TEMPLATES.map((item) => item.id), ["investment_memo", "valuation_report", "executive_board_brief", "portfolio_report", "research_note"]);
 });

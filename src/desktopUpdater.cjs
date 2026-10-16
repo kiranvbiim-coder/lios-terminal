@@ -13,39 +13,106 @@ function resolveUpdateUrl(env = process.env) {
   return parsed.toString().endsWith("/") ? parsed.toString() : `${parsed.toString()}/`;
 }
 
-function configureAutoUpdater({ updater, isPackaged, env = process.env, log = () => {} }) {
+function safeVersion(value) {
+  const version = typeof value === "string" ? value.trim() : "";
+  return /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(version) ? version : "unknown";
+}
+
+function safePercent(value) {
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) return null;
+  return Math.max(0, Math.min(100, Math.round(percent)));
+}
+
+async function confirmDesktopUpdateInstall({ version }) {
+  // This module is only invoked from Electron's trusted main process. Keep the
+  // install decision in a native dialog instead of exposing restart/install
+  // authority to renderer JavaScript or preload IPC.
+  const { dialog, BrowserWindow } = require("electron");
+  const options = {
+    type: "info",
+    title: "LiOS update ready",
+    message: version === "unknown"
+      ? "A signed LiOS Intelligence Terminal update is ready to install."
+      : `LiOS Intelligence Terminal ${version} is ready to install.`,
+    detail: "Restart LiOS now to install the downloaded signed update. Choose Later to keep working.",
+    buttons: ["Later", "Restart and install"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  };
+
+  const focusedWindow = BrowserWindow.getFocusedWindow?.() ?? null;
+  const fallbackWindow = BrowserWindow.getAllWindows?.().find((window) => !window.isDestroyed?.()) ?? null;
+  const parentWindow = focusedWindow && !focusedWindow.isDestroyed?.() ? focusedWindow : fallbackWindow;
+  const confirmation = parentWindow
+    ? await dialog.showMessageBox(parentWindow, options)
+    : await dialog.showMessageBox(options);
+  return confirmation.response === 1;
+}
+
+function configureAutoUpdater({
+  updater,
+  isPackaged,
+  env = process.env,
+  log = () => {},
+  confirmInstall = confirmDesktopUpdateInstall,
+}) {
   if (!isPackaged) {
     return { enabled: false, reason: "Desktop updates are disabled for unpackaged development launches." };
   }
 
-  const rawOverride = String(env.LIOS_UPDATE_URL || "").trim();
-  const overrideUrl = resolveUpdateUrl(env);
-  if (rawOverride && !overrideUrl) {
-    return { enabled: false, reason: "LIOS_UPDATE_URL is present but is not a valid HTTPS update feed." };
-  }
-
-  // A signed distribution build embeds its canonical generic provider in
-  // app-update.yml through electron-builder's publish configuration. When no
-  // runtime override is present, electron-updater reads that packaged config
-  // automatically; calling setFeedURL here would unnecessarily discard it.
-  if (overrideUrl) {
-    updater.setFeedURL({ provider: "generic", url: overrideUrl });
+  // Signed distribution builds embed the canonical generic provider into
+  // resources/app-update.yml. Runtime environment must not be able to replace
+  // that packaged release authority after installation.
+  if (String(env.LIOS_UPDATE_URL || "").trim()) {
+    log("Runtime desktop update feed override ignored; packaged update configuration remains authoritative.");
   }
 
   updater.autoDownload = true;
-  updater.autoInstallOnAppQuit = true;
+  // Download automatically, but never install merely because the app quits.
+  // Installation requires the explicit confirmation callback below.
+  updater.autoInstallOnAppQuit = false;
+  updater.allowPrerelease = false;
   updater.allowDowngrade = false;
-  updater.on("checking-for-update", () => log("Checking for a signed desktop update."));
-  updater.on("update-available", (info) => log(`Signed desktop update available: ${info.version}.`));
-  updater.on("update-not-available", (info) => log(`Desktop update check complete; current version ${info.version}.`));
-  updater.on("download-progress", (progress) => log(`Desktop update download ${Math.round(progress.percent)}%.`));
-  updater.on("update-downloaded", (info) => log(`Signed desktop update downloaded: ${info.version}; it will install on quit.`));
-  updater.on("error", (error) => log(`Desktop update failed: ${error && error.message ? error.message : error}`));
-  void updater.checkForUpdates().catch((error) => log(`Desktop update check failed: ${error && error.message ? error.message : error}`));
 
-  return overrideUrl
-    ? { enabled: true, url: overrideUrl, source: "runtime_override" }
-    : { enabled: true, url: null, source: "packaged_config" };
+  let installConfirmationInFlight = false;
+
+  updater.on("checking-for-update", () => log("Checking for a signed desktop update."));
+  updater.on("update-available", (info) => log(`Signed desktop update available: ${safeVersion(info?.version)}.`));
+  updater.on("update-not-available", (info) => log(`Desktop update check complete; current version ${safeVersion(info?.version)}.`));
+  updater.on("download-progress", (progress) => {
+    const percent = safePercent(progress?.percent);
+    log(percent === null ? "Desktop update download is in progress." : `Desktop update download ${percent}%.`);
+  });
+  updater.on("update-downloaded", async (info) => {
+    const version = safeVersion(info?.version);
+    log(`Signed desktop update downloaded: ${version}; awaiting install confirmation.`);
+
+    if (installConfirmationInFlight) {
+      log("Desktop update install confirmation is already pending.");
+      return;
+    }
+
+    installConfirmationInFlight = true;
+    try {
+      const confirmed = await confirmInstall({ version });
+      if (!confirmed) {
+        log("Desktop update installation deferred by user.");
+        return;
+      }
+      log("Desktop update install confirmed; restarting to install.");
+      updater.quitAndInstall(false, true);
+    } catch {
+      log("Desktop update confirmation failed safely.");
+    } finally {
+      installConfirmationInFlight = false;
+    }
+  });
+  updater.on("error", () => log("Desktop update failed safely."));
+  void updater.checkForUpdates().catch(() => log("Desktop update failed safely."));
+
+  return { enabled: true, url: null, source: "packaged_config" };
 }
 
 module.exports = { DEFAULT_UPDATE_URL, resolveUpdateUrl, configureAutoUpdater };

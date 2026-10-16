@@ -7,6 +7,7 @@ import { getProject } from "./projectStore";
 import {
   createP9Workflow,
   deleteP9Workflow,
+  findP9ManualRunReceipt,
   getP9Workflow,
   listP9Notifications,
   listP9Runs,
@@ -17,8 +18,15 @@ import {
 } from "./p9AutomationStore";
 import { executeP9Workflow } from "./p9AutomationService";
 import {
+  p9ManualRunDedupeKey,
+  p9ManualRunReceiptStatus,
+  p9ManualRunRequestSchema,
+  p9ManualRunRevisionMatches,
+} from "./p9ManualRunIdempotency";
+import {
   P9_CANONICAL_WORKFLOW_TEMPLATES,
   p9NotificationPolicySchema,
+  p9AcceptedArtifactSchema,
   p9WorkflowDefinitionInputSchema,
   p9WorkflowTemplateSchema,
   p9WorkflowTriggerSchema,
@@ -126,15 +134,77 @@ export function registerP9AutomationRoutes(app: Express): void {
   app.post("/api/projects/:projectId/automation/workflows/:workflowId/run", async (req, res) => {
     try {
       const pid = projectId(req);
-      const current = await getP9Workflow(ctx(req), String(req.params.workflowId));
+      const owner = ctx(req);
+      const current = await getP9Workflow(owner, String(req.params.workflowId));
       if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
+      const request = p9ManualRunRequestSchema.parse(req.body ?? {});
+      const keyed = "idempotencyKey" in request ? request : null;
+      const key = keyed ? p9ManualRunDedupeKey(keyed.idempotencyKey) : null;
+
+      // Return the original durable receipt for a repeated key, even if the
+      // workflow was subsequently edited. Never execute a second action.
+      if (key && keyed) {
+        const previous = await findP9ManualRunReceipt(owner, pid, current.id, key);
+        if (previous) {
+          res.status(previous.status === "running" ? 202 : 200).json({
+            run: previous, notification: null, result: null,
+            error: previous.error, replayed: true,
+            receiptStatus: p9ManualRunReceiptStatus(previous.status),
+          });
+          return;
+        }
+        if (!p9ManualRunRevisionMatches(current.updatedAt, keyed.expectedUpdatedAt)) {
+          res.status(409).json({ error: "Workflow changed since approval. Review and confirm again." });
+          return;
+        }
+      }
       const result = await executeP9Workflow({
         workflow: current,
-        ctx: ctx(req),
+        ctx: owner,
         triggerType: "manual",
         triggerDetail: { requestedAt: new Date().toISOString() },
+        dedupeKey: key,
+        // beginP9Run locks the canonical row and compares this exact approved
+        // snapshot before insert; the earlier route check is only a fast reject.
+        expectedWorkflowUpdatedAt: keyed
+          ? new Date(keyed.expectedUpdatedAt)
+          : null,
       });
-      res.status(result.error ? 409 : 200).json(result);
+      if (!result.run && key) {
+        // Another process won the DB unique-key race. Its P9 run row is the
+        // receipt; never retry execution just because our insert conflicted.
+        const previous = await findP9ManualRunReceipt(owner, pid, current.id, key);
+        if (!previous) {
+          res.status(409).json({ error: "Workflow changed during admission or request already claimed. Review current workflow and reconcile the receipt; no new execution was admitted." });
+          return;
+        }
+        res.status(previous.status === "running" ? 202 : 200).json({
+          run: previous, notification: null, result: null,
+          error: previous.error, replayed: true,
+          receiptStatus: p9ManualRunReceiptStatus(previous.status),
+        });
+        return;
+      }
+      res.status(result.error ? 409 : 200).json({
+        ...result, replayed: false,
+        receiptStatus: result.run ? p9ManualRunReceiptStatus(result.run.status) : null,
+      });
+    } catch (error) { fail(res, error); }
+  });
+
+  app.get("/api/projects/:projectId/automation/workflows/:workflowId/manual-requests/:requestKey", async (req, res) => {
+    try {
+      const pid = projectId(req);
+      const owner = ctx(req);
+      const current = await getP9Workflow(owner, String(req.params.workflowId));
+      if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
+      const key = p9ManualRunDedupeKey(String(req.params.requestKey));
+      const receipt = await findP9ManualRunReceipt(owner, pid, current.id, key);
+      if (!receipt) {
+        res.status(404).json({ error: "Manual execution receipt not found." });
+        return;
+      }
+      res.json({ run: receipt, receiptStatus: p9ManualRunReceiptStatus(receipt.status) });
     } catch (error) { fail(res, error); }
   });
 
@@ -171,6 +241,8 @@ export function registerP9AutomationRoutes(app: Express): void {
         template: p9WorkflowTemplateSchema.default("custom"),
         chatId: z.number().int().positive(),
         request: savedConversationRequestSchema,
+        acceptedArtifact: p9AcceptedArtifactSchema.optional(),
+        currentPersonalFinanceResourceId: z.string().trim().min(1).max(300).optional(),
         trigger: p9WorkflowTriggerSchema,
         notificationPolicy: p9NotificationPolicySchema.default({}),
         sourceRefs: z.array(z.string().trim().min(1).max(1_000)).max(500).default([]),
@@ -186,7 +258,7 @@ export function registerP9AutomationRoutes(app: Express): void {
         description: body.description,
         template: body.template,
         trigger: body.trigger,
-        action: { kind: "conversation_rerun", chatId: body.chatId, request: body.request },
+        action: { kind: "conversation_rerun", chatId: body.chatId, request: body.request, acceptedArtifact: body.acceptedArtifact, currentPersonalFinanceResourceId: body.currentPersonalFinanceResourceId },
         notificationPolicy: body.notificationPolicy,
         sourceRefs: body.sourceRefs,
         engineRefs: body.engineRefs,

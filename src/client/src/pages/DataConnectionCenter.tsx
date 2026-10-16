@@ -83,6 +83,8 @@ interface RuntimeResponse {
   packs: Array<{ id: string; name: string; description?: string; packages: string[]; installed: boolean }>;
   releasePacks: RuntimeReleasePack[];
   managedState: ManagedRuntimeStateView | null;
+  managedRuntimeReadiness: { state: string; ready: boolean; reasons: string[] };
+  doctorRepairPlan?: { summary: string; executionStatus: string; executionBlocker: string | null; requiresConfirmation: boolean };
   status: { state: string; detail: string; installedPacks: string[] };
 }
 interface ManagedRuntimeStateView {
@@ -797,7 +799,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
   // P10 release-pack UX expands into the existing signed low-level runtime allow-list.
   const [selectedReleasePackIds, setSelectedReleasePackIds] = useState<string[]>(["core"]);
   const [selectedAddonPackIds, setSelectedAddonPackIds] = useState<string[]>([]);
-  const [runtimeBusy, setRuntimeBusy] = useState<null | "install" | "rollback">(null);
+  const [runtimeBusy, setRuntimeBusy] = useState<null | "install" | "rollback" | "repair">(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeNotice, setRuntimeNotice] = useState<string | null>(null);
   const setupQuery = useQuery<SetupResponse>({ queryKey: ["/api/setup/status"], queryFn: async () => (await apiRequest("GET", "/api/setup/status")).json(), staleTime: 15_000 });
@@ -879,6 +881,24 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     setSelectedAddonPackIds((current) => (
       checked ? Array.from(new Set([...current, packId])) : current.filter((id) => id !== packId)
     ));
+  }
+
+  async function runRuntimeRepair(): Promise<void> {
+    if (!window.confirm("Repair the saved managed-runtime selection using the current Home policy? Existing work stays saved. Installation can download approved packages; consequential tasks will not resume automatically.")) return;
+    setRuntimeBusy("repair");
+    setRuntimeError(null);
+    setRuntimeNotice(null);
+    try {
+      const response = await apiRequest("POST", "/api/setup/python-runtime/install", { repair: true, confirmed: true });
+      const payload = await response.json() as { result: { detail: string }; state: ManagedRuntimeStateView };
+      setManagedState(payload.state);
+      setRuntimeNotice(payload.result.detail);
+    } catch (error) {
+      setRuntimeError(error instanceof Error ? error.message : "Doctor repair did not complete.");
+    } finally {
+      await runtimeQuery.refetch();
+      setRuntimeBusy(null);
+    }
   }
 
   async function runRuntimeInstall(): Promise<void> {
@@ -1625,6 +1645,12 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 {runtimeQuery.data?.profiles.filter((p) => p.supported).map((p) => <option key={p.id} value={p.id}>{p.name}{p.recommended ? " (recommended)" : ""}</option>)}
               </select>
               <p className="font-terminal text-[8px] text-muted-foreground mt-1">{runtimeQuery.data?.status.detail}</p>
+              {pythonRuntimeId === "lios-managed" && runtimeQuery.data?.managedRuntimeReadiness && <div role="status" className="mt-2 border border-border/60 p-2 font-terminal text-[8px]" data-testid="runtime-doctor-diagnosis">
+                <p>Managed runtime: {runtimeQuery.data.managedRuntimeReadiness.state}. {runtimeQuery.data.doctorRepairPlan?.summary}</p>
+                <p className="mt-1 text-muted-foreground">{runtimeQuery.data.managedRuntimeReadiness.reasons.join(" ")}</p>
+                {runtimeQuery.data.doctorRepairPlan?.executionStatus === "blocked" && <p className="mt-1 text-amber-300">Repair blocked: {runtimeQuery.data.doctorRepairPlan.executionBlocker}. No host fallback or automatic installation is authorized.</p>}
+                {runtimeQuery.data.doctorRepairPlan?.executionStatus === "authority_available" && ["internal_admin", "client_admin"].includes(session.role) && <button type="button" disabled={runtimeBusy !== null} onClick={() => void runRuntimeRepair()} className="mt-2 border border-border px-2 py-1 disabled:opacity-40" data-testid="runtime-doctor-repair">{runtimeBusy === "repair" ? "Repairing…" : "Review and repair saved runtime"}</button>}
+              </div>}
               {(pythonRuntimeId === "external-path" || pythonRuntimeId === "remote-service") && (
                 <div className="mt-3">
                   <span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Python environment path or remote endpoint</span>
@@ -1648,7 +1674,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               <div className="space-y-2 border border-border/60 p-3" data-testid="runtime-pack-installer">
                 <span className="font-terminal text-[8px] text-muted-foreground uppercase block">LiOS Runtime Packs</span>
                 <p className="font-terminal text-[8px] text-muted-foreground leading-relaxed">
-                  Choose capabilities, not Python libraries. Core is always present; Research, Quant, Modeling, Data Lab and Local AI are opt-in. LiOS expands these choices into the signed managed-runtime allow-list.
+                  Choose capabilities, not Python libraries. Core is required, not assumed installed; Research, Quant, Modeling, Data Lab and Local AI are opt-in. LiOS expands these choices into the managed-runtime allow-list. Availability requires verified runtime readiness.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                   {(runtimeQuery.data?.releasePacks ?? []).map((pack) => {
@@ -1663,7 +1689,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                           onChange={(e) => toggleReleasePack(pack.id, e.target.checked)}
                         />
                         <span className="min-w-0">
-                          <span className="text-foreground">{pack.name}{isCore ? " (always)" : ""}</span>
+                          <span className="text-foreground">{pack.name}{isCore ? " (required)" : ""}</span>
                           <span className="block mt-0.5 text-[7px]">{pack.description}</span>
                           <span className="block mt-0.5 text-[7px] text-cyan-300/80">{pack.capabilities.slice(0, 5).join(" · ")}</span>
                           {installed && <span className="block mt-0.5 text-[7px] text-emerald-400">Installed selection</span>}

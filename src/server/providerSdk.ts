@@ -32,6 +32,7 @@ import { createLseDataProviderAdapter } from "./lseDataProvider";
 import { createEcbDataProviderAdapter } from "./ecbDataProvider";
 import { createOecdDataProviderAdapter } from "./oecdDataProvider";
 import { createImfDataProviderAdapter } from "./imfDataProvider";
+import { guardProviderStreamEntitlement, type ManagedProviderStreamSubscription } from "./providerStreamEntitlement";
 
 export interface ProviderAdapterResult {
   providerId?: string;
@@ -546,7 +547,34 @@ export async function executeCanonicalDataRequest(
       }));
       continue;
     }
-    const entitlement = adapter.entitlement ? await adapter.entitlement(request, context) : null;
+    // An entitlement service failure belongs to this candidate, not the
+    // entire provider chain. Do not fetch from a source whose access check
+    // failed; allow the next eligible adapter to provide data instead.
+    let entitlement: ProviderEntitlementDecision | null = null;
+    if (adapter.entitlement) {
+      try {
+        entitlement = await adapter.entitlement(request, context);
+      } catch (error) {
+        const status = attemptStatus(error);
+        // Do not expose entitlement-provider exception messages: they can
+        // contain private account, token or endpoint information.
+        const detail = status === "entitlement_denied"
+          ? "Provider entitlement denied access."
+          : status === "rate_limited"
+            ? "Provider entitlement check is rate limited."
+            : "Provider entitlement could not be verified.";
+        attempts.push({ providerId: adapter.id, status, detail, latencyMs: 0, quota: null, entitlement: null });
+        accessPostures.push(buildProviderAccessPosture({
+          adapter,
+          capability: request.capability,
+          requestedMode: request.pointInTime.mode,
+          status,
+          entitlement: null,
+          detail,
+        }));
+        continue;
+      }
+    }
     if (entitlement?.decision === "denied") {
       const detail = entitlement.reasons.join(" ");
       attempts.push({ providerId: adapter.id, status: "entitlement_denied", detail, latencyMs: 0, quota: null, entitlement });
@@ -712,10 +740,51 @@ export async function startProviderStream(
   request: CanonicalDataRequest,
   context: TenantContext,
   registry: ProviderSdkRegistry = defaultProviderSdkRegistry,
-): Promise<ProviderStreamSubscription> {
+): Promise<ManagedProviderStreamSubscription> {
+  const parsed = canonicalDataRequestSchema.parse(request);
   const adapter = registry.get(providerId);
   if (!adapter?.stream) throw new Error(`Provider ${providerId} does not expose a streaming adapter.`);
-  return adapter.stream(request, context);
+  if (!adapter.capabilities.includes(parsed.capability)) {
+    throw new Error("Provider does not support the requested streaming capability.");
+  }
+  if ((parsed.providerAllow.length && !parsed.providerAllow.includes(providerId))
+      || parsed.providerDeny.includes(providerId)) {
+    throw new Error("Provider streaming is excluded by the requested source policy.");
+  }
+  if (!adapter.pointInTimeModes.includes(parsed.pointInTime.mode)) {
+    throw new Error("Provider does not support the requested point-in-time streaming mode.");
+  }
+  // Unlike a one-time fetch, a stream is an ongoing source of external
+  // observations. Without a live entitlement hook, an explicit current grant
+  // cannot be established. This is a fail-closed launch gate; the provider
+  // must continue enforcing its own grant for the lifetime of the stream.
+  if (!adapter.entitlement) {
+    throw new Error("Streaming provider has no live entitlement verification.");
+  }
+  let entitlement: ProviderEntitlementDecision;
+  try {
+    entitlement = await adapter.entitlement(parsed, context);
+  } catch {
+    // Never propagate secret-bearing account/provider failure messages.
+    throw new Error("Streaming provider entitlement could not be verified.");
+  }
+  if (entitlement.decision !== "allowed" || !entitlement.permittedUses.includes("internal_research")) {
+    throw new Error("Streaming provider entitlement does not permit internal research access.");
+  }
+  const source = await adapter.stream(parsed, context);
+  // Permissions can change while the provider is opening its connection.
+  // Verify the grant again before returning a usable subscription, then keep
+  // it under one managed recheck/stop lifecycle. On failed verification the
+  // just-opened stream is closed rather than given to the caller.
+  const managed = guardProviderStreamEntitlement(
+    source,
+    () => adapter.entitlement!(parsed, context),
+    entitlement,
+  );
+  if (!await managed.recheckEntitlement()) {
+    throw new Error("Streaming provider entitlement changed while connecting.");
+  }
+  return managed;
 }
 
 export const defaultProviderSdkRegistry = new ProviderSdkRegistry();

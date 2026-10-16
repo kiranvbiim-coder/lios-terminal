@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { checkPasswordPolicy } from "@shared/passwordPolicy";
 import type { SessionData } from "@/App";
+import { restoreSession } from "@/lib/sessionLifecycle";
 
 interface FirstRunAdminSetupProps {
   onComplete: (session: SessionData) => void;
@@ -64,12 +65,12 @@ export default function FirstRunAdminSetup({ onComplete, requiresToken }: FirstR
         return;
       }
 
-      onComplete({
-        email: data.user.email,
-        role: data.user.role,
-        name: data.user.name,
-        mustChangePassword: Boolean(data.user.mustChangePassword),
-      });
+      const session = await restoreSession<SessionData>("/api/auth/me");
+      if (!session?.authState?.principal) {
+        setErrorMsg("Administrator created, but its session could not be verified. Sign in again.");
+        return;
+      }
+      onComplete(session);
     } catch {
       setErrorMsg("The local LiOS server could not complete administrator setup.");
     } finally {

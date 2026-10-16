@@ -3,6 +3,10 @@ import { Clock3, Save, X } from "lucide-react";
 import type { ConversationRequest } from "@shared/conversationRuntime";
 import type { P9AutomationEventType, P9WorkflowTemplate, P9WorkflowTrigger } from "@shared/p9AutomationContracts";
 import { saveConversationAsP9Workflow } from "@/lib/useP9Automation";
+import { P9_ACCEPTED_FINANCE_TEMPLATES } from "@shared/p9AutomationContracts";
+import { useArtifact } from "@/lib/useArtifacts";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 const TEMPLATES: Array<{ value: P9WorkflowTemplate; label: string }> = [
   { value: "custom", label: "Saved analysis" },
@@ -47,6 +51,20 @@ export function SaveWorkflowDialog({
   const [cooldownMinutes, setCooldownMinutes] = useState(60);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const acceptedArtifactQuery = useArtifact(activeArtifactRef?.startsWith("artifact:") ? activeArtifactRef : null);
+  const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
+  const accepted = acceptedArtifactQuery.data;
+  const acceptedIdentity = accepted ? `${accepted.artifact.id}:${accepted.version.version}:${accepted.version.contentHash}` : null;
+  const financeMonitor = P9_ACCEPTED_FINANCE_TEMPLATES.includes(template);
+  const acceptedCurrent = acceptedIdentity !== null && acceptedVersion === acceptedIdentity;
+  const [followCurrentProfile, setFollowCurrentProfile] = useState(false);
+  const canFollowProfile = financeMonitor && Boolean(request.context?.personalFinance)
+    && accepted?.version.refreshSpec?.executionMode === "deterministic_first";
+  const currentProfileQuery = useQuery<{ resourceId: string | null }>({
+    queryKey: ["/api/projects", projectId, "personal-finance-profile", "monitor-source"],
+    enabled: canFollowProfile,
+    queryFn: async () => (await apiRequest("GET", `/api/projects/${projectId}/personal-finance-profile`)).json(),
+  });
 
   const trigger = useMemo<P9WorkflowTrigger>(() => {
     if (triggerMode === "manual") return { type: "manual" };
@@ -66,6 +84,10 @@ export function SaveWorkflowDialog({
 
   const save = async () => {
     if (!name.trim()) return;
+    if (financeMonitor && (!accepted || !acceptedCurrent)) {
+      setError("Inspect and explicitly accept the retained financial Artifact version before saving this monitor.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -74,7 +96,19 @@ export function SaveWorkflowDialog({
         description: "Saved from Project chat. Reruns preserve the original execution mode, approvals, transmission policy and active context.",
         template,
         chatId,
-        request,
+        request: financeMonitor && accepted?.version.refreshSpec ? {
+          ...request,
+          message: accepted.version.refreshSpec.message ?? request.message,
+          executionMode: accepted.version.refreshSpec.executionMode,
+          sourceScope: accepted.version.refreshSpec.sourceScope,
+        } : request,
+        ...(financeMonitor && accepted ? { acceptedArtifact: {
+          artifactId: accepted.artifact.id,
+          version: accepted.version.version,
+          contentHash: accepted.version.contentHash,
+        } } : {}),
+        ...(canFollowProfile && followCurrentProfile && currentProfileQuery.data?.resourceId
+          ? { currentPersonalFinanceResourceId: currentProfileQuery.data.resourceId } : {}),
         trigger,
         notificationPolicy: {
           enabled: notify,
@@ -100,14 +134,14 @@ export function SaveWorkflowDialog({
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-3" onMouseDown={onClose}>
-      <section className="w-full max-w-2xl rounded-xl border border-border bg-[#080808] shadow-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="Save workflow">
+      <section className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-[#080808] shadow-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="Save workflow">
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <Save className="h-4 w-4 text-amber-300" />
           <div className="min-w-0 flex-1">
             <div className="font-ui text-[10px] font-semibold text-foreground">Save Workflow</div>
             <div className="mt-0.5 font-ui text-[7px] text-muted-foreground">Run this analysis again on fresh data without changing its permission or AI-sharing policy.</div>
           </div>
-          <button onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-white/5 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label="Close Save Workflow" onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-white/5 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </header>
 
         <div className="space-y-4 p-4">
@@ -133,6 +167,25 @@ export function SaveWorkflowDialog({
             </label>
           </div>
 
+          {financeMonitor && <div className="rounded border border-amber-300/20 p-3 text-sm">
+            {accepted ? <>
+              <p>Monitor baseline: {accepted.artifact.title} · v{accepted.version.version}</p>
+              <p className="mt-1 break-all text-xs text-muted-foreground">Content hash: {accepted.version.contentHash}</p>
+              <label className="mt-2 flex items-start gap-2">
+                <input type="checkbox" checked={acceptedCurrent} onChange={event => setAcceptedVersion(event.target.checked ? acceptedIdentity : null)} />
+                <span>I accept this retained version as the monitor baseline. This does not approve a financial Decision or execution. Changed or missing baseline custody stops future runs.</span>
+              </label>
+            </> : <p role="status">A retained financial Artifact from this successful conversation is required. Keep/open the output, then save this monitor.</p>}
+          </div>}
+
+          {canFollowProfile && <label className="flex items-start gap-2 rounded border border-border/50 p-3 text-sm">
+            <input type="checkbox" checked={followCurrentProfile} disabled={!currentProfileQuery.data?.resourceId}
+              onChange={event => setFollowCurrentProfile(event.target.checked)} />
+            <span>Use the latest saved Personal Finance profile on each run, with the deterministic engine only.
+              <span className="mt-1 block text-xs text-muted-foreground">Explicit opt-in: the selected Project resource stays private and excluded from ordinary AI context. Missing/deleted/invalid input stops the run; no frozen-input fallback. Without this option, the accepted original inputs are replayed.</span>
+              {!currentProfileQuery.data?.resourceId && <span className="mt-1 block text-xs text-amber-200">A current saved Project profile is required for source-following refresh.</span>}
+            </span>
+          </label>}
           {triggerMode === "interval" && (
             <label className="block rounded border border-border/50 bg-black/15 p-3">
               <span className="flex items-center gap-2 font-terminal text-[6px] uppercase tracking-wider text-muted-foreground"><Clock3 className="h-3 w-3" /> Repeat every minutes</span>
@@ -182,19 +235,19 @@ export function SaveWorkflowDialog({
                 <input type="number" min={0} max={43200} value={cooldownMinutes} onChange={(event) => setCooldownMinutes(Number(event.target.value))} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-terminal text-[8px] text-foreground" />
               </label>
             </div>
-            <div className="mt-2 font-ui text-[7px] leading-4 text-muted-foreground">Unchanged runs are suppressed by default. Delivery is in-app only in P9 and remains scoped to this Project.</div>
+            <div className="mt-2 font-ui text-[7px] leading-4 text-muted-foreground">Unchanged runs are suppressed by default. Canonical notifications remain in this Project; permitted desktop alerts show redacted text. Your current notification policy is rechecked when a run finishes.</div>
           </div>
 
           <div className="rounded border border-cyan-300/15 bg-cyan-300/[0.025] p-3 font-ui text-[7px] leading-4 text-muted-foreground">
             Saved request: <span className="text-foreground">{request.message.slice(0, 180)}</span>{request.message.length > 180 ? "…" : ""}<br />
-            Execution: {request.executionMode} · Project approvals carried by this workflow: {request.approvals.length ? request.approvals.map((item) => item.action).join(", ") : "none"}. Missing high-impact approval stops the background run rather than auto-approving it.
+            Execution: {financeMonitor ? accepted?.version.refreshSpec?.executionMode ?? request.executionMode : request.executionMode} · Project approvals carried by this workflow: {request.approvals.length ? request.approvals.map((item) => item.action).join(", ") : "none"}. Missing high-impact approval stops the background run rather than auto-approving it.
           </div>
 
           {error && <div className="rounded border border-red-400/25 bg-red-400/[0.04] px-3 py-2 font-ui text-[8px] text-red-200">{error}</div>}
 
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="rounded px-3 py-2 font-ui text-[8px] text-muted-foreground hover:text-foreground">Cancel</button>
-            <button disabled={saving || !name.trim()} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-[8px] font-medium text-amber-200 disabled:opacity-40">
+            <button disabled={saving || !name.trim() || (financeMonitor && !acceptedCurrent)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-[8px] font-medium text-amber-200 disabled:opacity-40">
               {saving ? "Saving…" : "Save Workflow"}
             </button>
           </div>

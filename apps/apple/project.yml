@@ -1,0 +1,64 @@
+name: LiOSApple
+options:
+  minimumXcodeGenVersion: 2.42.0
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "$(LIOS_DEVELOPMENT_TEAM)"
+    LIOS_BUNDLE_PREFIX: org.lios.owner
+targets:
+  LiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [Shared, Phone]
+    resources: [Resources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(LIOS_BUNDLE_PREFIX).ios"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: Phone/Info.plist
+      properties:
+        CFBundleDisplayName: LiOS
+        UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: Connect to your user-owned LiOS Home over pinned TLS.
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    dependencies:
+      - target: LiOSWatch
+        embed: true
+  LiOSWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources: [Watch]
+    resources: [Resources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(LIOS_BUNDLE_PREFIX).ios.watch"
+        SKIP_INSTALL: YES
+    info:
+      path: Watch/Info.plist
+      properties:
+        CFBundleDisplayName: LiOS
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: "$(LIOS_BUNDLE_PREFIX).ios"
+  LiOSAppleTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [Tests]
+    dependencies:
+      - target: LiOS
+schemes:
+  LiOS:
+    build:
+      targets:
+        LiOS: all
+        LiOSWatch: all
+    test:
+      targets: [LiOSAppleTests]

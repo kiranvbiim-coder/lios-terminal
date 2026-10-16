@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "authorization": "Owner-authorized selective review and migration into kiranvbiim-coder/lios-terminal; no private repository history, secrets, signing material, personal data or restricted donor code transferred.",
+  "transferredSource": [
+    {
+      "source": "apps/apple/project.yml",
+      "destination": "apps/apple/project.yml",
+      "sourceSha256": "a24356bf1bae6ee4e4ade64017350e905df0d231786e905ad159acdd3a585e53"
+    },
+    {
+      "source": "apps/apple/Watch/LiOSWatchApp.swift",
+      "destination": "apps/apple/Watch/LiOSWatchApp.swift",
+      "sourceSha256": "9bce8fcf8ca0d104036038ce75e42771a11e58ed98b20e72cc78103eb78899fa"
+    },
+    {
+      "source": "apps/apple/Phone/PhoneWatchBridge.swift",
+      "destination": "apps/apple/Phone/PhoneWatchBridge.swift",
+      "sourceSha256": "6e0ec46eb2bba92f8214ad910884580204254d5e70b4db4f168a69244a18fdf0"
+    },
+    {
+      "source": "apps/apple/Phone/HomeModel.swift",
+      "destination": "apps/apple/Phone/HomeModel.swift",
+      "sourceSha256": "3e40ca98f5341de5dffcf58ba538786a2cd80453574f20151573d2373dc555c2"
+    },
+    {
+      "source": "apps/apple/Phone/LiOSApp.swift",
+      "destination": "apps/apple/Phone/LiOSApp.swift",
+      "sourceSha256": "df9ad66b533d5f8d8177e79d644710e58b4d7e3d70b510af1ac9fc93e2426077"
+    },
+    {
+      "source": "apps/apple/Tests/DeviceProtocolTests.swift",
+      "destination": "apps/apple/Tests/DeviceProtocolTests.swift",
+      "sourceSha256": "6974d450bdcbed91b7547dd13f6c4554908ebea2bdb28f59b4e5468d8167985a"
+    },
+    {
+      "source": "apps/apple/Shared/ReviewOutbox.swift",
+      "destination": "apps/apple/Shared/ReviewOutbox.swift",
+      "sourceSha256": "7ef62eb1c1c00dcd93c993a7e46b67325978fdba91a35102413b879f89184223"
+    },
+    {
+      "source": "apps/apple/Shared/HomeGateway.swift",
+      "destination": "apps/apple/Shared/HomeGateway.swift",
+      "sourceSha256": "51581e8503624573b3cb81f3168dfa91001f2bec50502d9a87983849d476c9f9"
+    },
+    {
+      "source": "apps/apple/Shared/DeviceSecurity.swift",
+      "destination": "apps/apple/Shared/DeviceSecurity.swift",
+      "sourceSha256": "fab8297d00a8c0c2011a15092c9e653abdc8b773bfaaefbb7e662341661ea8c3"
+    },
+    {
+      "source": "apps/apple/Resources/OpenClaw-LICENSE.txt",
+      "destination": "apps/apple/Resources/OpenClaw-LICENSE.txt",
+      "sourceSha256": "73571b25326281d369087f469842c02444fe39faaecebda4d82ed21ff3a1c29d"
+    },
+    {
+      "source": "apps/android/settings.gradle.kts",
+      "destination": "apps/android/settings.gradle.kts",
+      "sourceSha256": "0dedab9d82581c41eda2e68fc370785fba8fbabf9e7b0b110add58610dea88db"
+    },
+    {
+      "source": "apps/android/build.gradle.kts",
+      "destination": "apps/android/build.gradle.kts",
+      "sourceSha256": "d58e4f7becd94b4566a39a8c53ea046a336d88bdc872f67ea9a7c59a7a614894"
+    },
+    {
+      "source": "apps/android/.gitignore",
+      "destination": "apps/android/.gitignore",
+      "sourceSha256": "76bbf877c87000883b47bd677e72fd554ef3077bd394c2051a61850a06a937de"
+    },
+    {
+      "source": "apps/android/wear/build.gradle.kts",
+      "destination": "apps/android/wear/build.gradle.kts",
+      "sourceSha256": "6ce658f475c2ac4ef5a46000d4d198c22d2beb3d1cace1060242734d5f15cabc"
+    },
+    {
+      "source": "apps/android/wear/src/main/AndroidManifest.xml",
+      "destination": "apps/android/wear/src/main/AndroidManifest.xml",
+      "sourceSha256": "774526481493b1bc89f81dca0b2ac50700fb799144cd99c83d171b06c6e6ce4e"
+    },
+    {
+      "source": "apps/android/wear/src/main/java/com/lios/nativeclient/wear/WearActivity.kt",
+      "destination": "apps/android/wear/src/main/java/com/lios/nativeclient/wear/WearActivity.kt",
+      "sourceSha256": "4eb3136bdf62499359be30a5d555eb8c89fbc6337fb8ac20dfe70240ccc06b36"
+    },
+    {
+      "source": "apps/android/phone/build.gradle.kts",
+      "destination": "apps/android/phone/build.gradle.kts",
+      "sourceSha256": "76ba45603cdd9eebfa4fce62fbd2c73aaad50d4c19d71a458bf8c110322d6cd3"
+    },
+    {
+      "source": "apps/android/phone/src/main/AndroidManifest.xml",
+      "destination": "apps/android/phone/src/main/AndroidManifest.xml",
+      "sourceSha256": "2f89c8e39eb2dda8800a1f53854c758f68ef93a41fd1be185fb119f1cc846f80"
+    },
+    {
+      "source": "apps/android/phone/src/main/java/com/lios/nativeclient/phone/PhoneActivity.kt",
+      "destination": "apps/android/phone/src/main/java/com/lios/nativeclient/phone/PhoneActivity.kt",
+      "sourceSha256": "6e4555bcd3b453b7069efa04476ef63516718891a19bddca1dc5f91a2f720553"
+    },
+    {
+      "source": "apps/android/core/build.gradle.kts",
+      "destination": "apps/android/core/build.gradle.kts",
+      "sourceSha256": "7a91f571c78ab3376838c6d564f5d1828be63ff0935ca65ff6200c0ab42eefdf"
+    },
+    {
+      "source": "apps/android/core/src/main/AndroidManifest.xml",
+      "destination": "apps/android/core/src/main/AndroidManifest.xml",
+      "sourceSha256": "571f2735faf5e857752ee057ac8ef63425576a721616c60b86ee5d4c0a2d682f"
+    },
+    {
+      "source": "apps/android/core/src/main/java/com/lios/nativeclient/ReviewOutbox.kt",
+      "destination": "apps/android/core/src/main/java/com/lios/nativeclient/ReviewOutbox.kt",
+      "sourceSha256": "0eb28c1073bc1f3c98b1c81b9e7c4d88de7648e686865451dbb89d1046d185bc"
+    },
+    {
+      "source": "apps/android/core/src/main/java/com/lios/nativeclient/HomeGateway.kt",
+      "destination": "apps/android/core/src/main/java/com/lios/nativeclient/HomeGateway.kt",
+      "sourceSha256": "53416190d21caca4bf6b656df9308152d686a445bdacf6c7154ff4bdc9d1daca"
+    },
+    {
+      "source": "apps/android/core/src/main/java/com/lios/nativeclient/HomeActivity.kt",
+      "destination": "apps/android/core/src/main/java/com/lios/nativeclient/HomeActivity.kt",
+      "sourceSha256": "e811c736e2adb335180aeb948a24c0f3b8793dc8e7607f9d4b690f0106030a2f"
+    },
+    {
+      "source": "apps/android/core/src/main/java/com/lios/nativeclient/DeviceIdentity.kt",
+      "destination": "apps/android/core/src/main/java/com/lios/nativeclient/DeviceIdentity.kt",
+      "sourceSha256": "36ea969bcf0c2a21bb40fab59c1554947f7da52220968341c9e2743c1f3d8907"
+    }
+  ],
+  "homeContracts": [
+    "src/shared/deviceOutbox.ts",
+    "src/server/gatewayDeviceContinuity.ts",
+    "src/server/gatewayDeviceContinuity.test.ts",
+    "src/migrations/0081_lios_decision_review_requests.sql"
+  ],
+  "selectedAdaptations": [
+    {
+      "source": "src/server/decisionRoutes.ts",
+      "symbols": [
+        "decisionApprovalInputSchema",
+        "DecisionReviewError",
+        "decisionReviewHead",
+        "readCanonicalDecisionReview",
+        "submitCanonicalDecisionReview"
+      ],
+      "excluded": "Unrelated financial model and scenario pipeline changes were not imported."
+    }
+  ],
+  "donor": {
+    "repository": "openclaw/openclaw",
+    "commit": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+    "license": "MIT",
+    "paths": [
+      "apps/shared/OpenClawKit/Sources/OpenClawKit/DeviceIdentity.swift",
+      "apps/shared/OpenClawKit/Sources/OpenClawKit/GenericPasswordKeychainStore.swift",
+      "apps/shared/OpenClawKit/Sources/OpenClawKit/GatewayTLSPinning.swift",
+      "apps/ios/Sources/Services/WatchConnectivityTransport.swift",
+      "apps/ios/WatchApp/Sources/WatchConnectivityReceiver.swift",
+      "apps/android/app/src/main/java/ai/openclaw/app/gateway/DeviceIdentityStore.kt",
+      "apps/android/app/src/main/java/ai/openclaw/app/gateway/GatewaySession.kt",
+      "apps/android/app/src/main/java/ai/openclaw/app/chat/ChatCommandOutbox.kt"
+    ],
+    "scope": "Adapted identity storage, pinned TLS, bounded outbox and watch snapshot mechanisms only. LiOS Home owns protocol, identity, permission, canonical receipts and explicit review release.",
+    "bundledNotices": [
+      "apple/Resources/OpenClaw-LICENSE.txt",
+      "android/core/src/main/assets/OpenClaw-LICENSE.txt"
+    ]
+  },
+  "publicChanges": [
+    "Generic lock-screen notification text on Apple, Android and Wear.",
+    "Android ambiguous delivery reconciles the exact prior request via canonical Home, not a changed review head or local success assumption.",
+    "Apple handshake completion rejects stale connection generations and mismatched authenticated device identity.",
+    "Approval migration is additive to the public schema; private snapshots were not copied."
+  ],
+  "verification": {
+    "homeContracts": "PASS: typecheck; 39 continuity/Decision checks; 45 existing pairing/TLS/Gateway/conversation checks passed with one Windows-only skip; production source build passed.",
+    "homeRuntime": "PASS: compiled retained Home, owner-pinned TLS, signed pairing and explicit owner approval, canonical Chat continuity, explicit rejection and exact replay, changed-payload and read-only release refusals. Native-created Chat observed on existing desktop web surface.",
+    "appleProtocol": "PASS: production identity/endpoint code compiled and ran Ed25519/tamper/unsafe-endpoint smoke; Gateway code typechecked on macOS; all Apple source parsed. Not an iOS/watchOS app build.",
+    "appleNativeBuild": "NOT_RUN: full Xcode and XcodeGen unavailable",
+    "androidNativeBuild": "NOT_RUN: Java, Gradle and Android SDK unavailable",
+    "shipping": "Deferred by owner; source migration is not shipping acceptance"
+  }
+}

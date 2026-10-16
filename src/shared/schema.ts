@@ -1828,10 +1828,13 @@ export const decisionApprovals = pgTable("decision_approvals", {
   note: text("note"),
   waiverReason: text("waiver_reason"),
   reviewerUserId: integer("reviewer_user_id").notNull().references(() => users.id),
+  reviewRequestId: text("review_request_id"),
+  reviewRequestHash: text("review_request_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("decision_approval_decision_idx").on(table.decisionId, table.createdAt),
   uniqueIndex("decision_approval_reviewer_receipt_unique").on(table.receiptVersionId, table.reviewerUserId),
+  uniqueIndex("decision_approval_reviewer_request_unique").on(table.reviewerUserId, table.reviewRequestId),
 ]);
 
 export const decisionMonitoringRules = pgTable("decision_monitoring_rules", {

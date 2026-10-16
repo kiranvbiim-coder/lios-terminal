@@ -42,4 +42,5 @@ export function readMarker(root: string): DataRootMarker | null;
 export function foldLegacyWorkspace(input: { legacyRoot: string; targetRoot: string }): WorkspaceFoldResult;
 export function readDataRootPointer(home: string): string | null;
 export function moveDataRoot(input: { from: string; to: string; env?: NodeJS.ProcessEnv; homedir?: string }): { from: string; to: string; files: number; bytes: number };
+export function restoreDataRootPointer(input: { root: string; env?: NodeJS.ProcessEnv; homedir?: string }): { root: string; rootId: string };
 export function clearDataRootPointer(input?: { env?: NodeJS.ProcessEnv; homedir?: string }): void;

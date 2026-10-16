@@ -23,6 +23,8 @@ const { BackupDecryptStream, BackupEncryptStream } = await import("./backupCrypt
 const {
   BACKUP_VAULT_MIGRATION_ENTRY,
   BackupError,
+  assertSafeRestoreFileTarget,
+  reserveRestorePreviousDirectory,
   createBackup,
   extractBackup,
   restoreBackup,
@@ -229,11 +231,63 @@ test("restore recreates database, files and keys in a fresh Home and keeps repla
   fs.writeFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "edited-after-restore");
   await assert.rejects(restoreBackup(db, file, { passphrase: PASS }), /user account/);
   assert.equal(fs.readFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "utf8"), "edited-after-restore");
-  await restoreBackup(db, file, { passphrase: PASS, replace: true });
+  const secondRestore = await restoreBackup(db, file, { passphrase: PASS, replace: true });
+  assert.ok(secondRestore.previousFilesDir);
+  assert.notEqual(secondRestore.previousFilesDir, result.previousFilesDir);
+  assert.equal(fs.readFileSync(path.join(result.previousFilesDir as string, "vault.key"), "utf8"), "DIFFERENT-OLD-KEY");
+  assert.equal(fs.readFileSync(path.join(secondRestore.previousFilesDir, "project-attachments/1/2/a.blob"), "utf8"), "edited-after-restore");
   assert.equal(fs.readFileSync(path.join(rootB, "project-attachments/1/2/a.blob"), "utf8"), "attachment-one");
   await closeDb();
   process.env.LIOS_DATA_ROOT = rootA;
   await initDb();
+});
+
+test("restore reservations preserve unowned staging and same-second historical copies", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-restore-reservation-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const prior = path.join(root, "existing");
+  fs.mkdirSync(prior);
+  fs.writeFileSync(path.join(prior, "private.txt"), "KEEP");
+  assert.throws(() => extractBackup(path.join(root, "missing"), prior), /already exists/);
+  assert.equal(fs.readFileSync(path.join(prior, "private.txt"), "utf8"), "KEEP");
+  const owned = path.join(root, "fresh");
+  await assert.rejects(extractBackup(path.join(root, "missing"), owned), /ENOENT/);
+  assert.equal(fs.existsSync(owned), false);
+  const when = new Date("2026-10-16T08:00:00.000Z");
+  const first = reserveRestorePreviousDirectory(root, when);
+  fs.writeFileSync(path.join(first, "a.txt"), "FIRST");
+  const second = reserveRestorePreviousDirectory(root, when);
+  fs.writeFileSync(path.join(second, "a.txt"), "SECOND");
+  assert.notEqual(first, second);
+  assert.equal(fs.readFileSync(path.join(first, "a.txt"), "utf8"), "FIRST");
+  assert.equal(fs.readFileSync(path.join(second, "a.txt"), "utf8"), "SECOND");
+});
+
+test("restore refuses linked Home destinations before archive or database mutation", async (t) => {
+  const home = path.join(base, "linked-restore-home");
+  const outside = path.join(base, "linked-restore-private");
+  fs.mkdirSync(home, { recursive: true });
+  fs.mkdirSync(outside, { recursive: true });
+  fs.writeFileSync(path.join(outside, "private.txt"), "PRESERVE");
+  const linked = path.join(home, "project-attachments");
+  try {
+    fs.symlinkSync(outside, linked, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create directory symlinks: " + String(error));
+    return;
+  }
+  assert.throws(() => assertSafeRestoreFileTarget(home, "project-attachments/private.txt"), /linked restore/);
+  const file = (await createBackup(getDb(), { ...common, destination: path.join(base, "linked-preflight-source"), passphrase: PASS })).file;
+  const before = (await getDb().select().from(users)).map(user => user.email).sort();
+  process.env.LIOS_DATA_ROOT = home;
+  try {
+    await assert.rejects(restoreBackup(getDb(), file, { passphrase: PASS, replace: true }), /linked restore/);
+    assert.deepEqual((await getDb().select().from(users)).map(user => user.email).sort(), before);
+    assert.equal(fs.readFileSync(path.join(outside, "private.txt"), "utf8"), "PRESERVE");
+    assert.deepEqual(fs.readdirSync(home), ["project-attachments"]);
+  } finally {
+    process.env.LIOS_DATA_ROOT = rootA;
+  }
 });
 
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {

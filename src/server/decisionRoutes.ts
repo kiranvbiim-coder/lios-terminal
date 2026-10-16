@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
+import type { DeviceReviewBinding } from "@shared/deviceOutbox";
 import type { Express, Request, Response } from "express";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "./auth";
 import { auditActor, recordAuditEvent } from "./auditEvents";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import {
   brainRuns,
   brainTasks,
@@ -438,6 +440,106 @@ function exposeScenarioArtifact(receipt: typeof decisionReceiptVersions.$inferSe
   };
 }
 
+export const decisionApprovalInputSchema = z.object({
+  receiptVersionId: z.number().int().positive(),
+  outcome: z.enum(["approved", "rejected", "waived"]),
+  finalDecision: z.string().trim().min(1).max(5000),
+  rationale: z.string().trim().min(1).max(10000),
+  note: z.string().trim().max(3000).optional(),
+  waiverReason: z.string().trim().max(3000).optional(),
+  requestId: z.string().uuid().optional(),
+});
+
+export class DecisionReviewError extends Error {
+  constructor(readonly statusCode: number, message: string, readonly details?: Record<string, unknown>) {
+    super(message);
+  }
+}
+
+/** Canonical DecisionCase head, excluding recency-only timestamps. */
+export function decisionReviewHead(decision: DecisionCaseRow): string {
+  return decisionSnapshotHash({
+    id: decision.id, ownerUserId: decision.ownerUserId, organizationId: decision.organizationId,
+    title: decision.title, question: decision.question, materiality: decision.materiality,
+    status: decision.status, finalDecision: decision.finalDecision, rationale: decision.decisionRationale,
+    approvedReceiptVersionId: decision.approvedReceiptVersionId, expiresAt: decision.expiresAt,
+    investigationId: decision.investigationId, brainRunId: decision.brainRunId,
+  });
+}
+
+export async function readCanonicalDecisionReview(id: number, user: Express.User) {
+  if (!(READ_ROLES as readonly string[]).includes(user.role)) throw new DecisionReviewError(403, "This account cannot read financial decisions.");
+  const scope = await loadDecisionScope(id, user);
+  if (!scope) throw new DecisionReviewError(404, "Decision not found.");
+  const db = getDb();
+  const [receipt] = await db.select().from(decisionReceiptVersions).where(eq(decisionReceiptVersions.decisionId, id)).orderBy(desc(decisionReceiptVersions.version)).limit(1);
+  if (!receipt) throw new DecisionReviewError(409, "A current receipt is required before review.");
+  if (decisionSnapshotHash(receiptHashPayload(receipt)) !== receipt.snapshotHash) throw new DecisionReviewError(409, "Receipt hash verification failed.");
+  const [approval] = await db.select().from(decisionApprovals).where(and(eq(decisionApprovals.receiptVersionId, receipt.id), eq(decisionApprovals.reviewerUserId, user.id))).limit(1);
+  return { decision: scope.decision, receipt, approval: approval ?? null, canReview: (REVIEW_ROLES as readonly string[]).includes(user.role) };
+}
+
+/** One approval authority for HTTP and paired Gateway; outbox release never executes an action. */
+export async function submitCanonicalDecisionReview(
+  id: number, user: Express.User, input: z.infer<typeof decisionApprovalInputSchema>,
+  continuation?: { binding: DeviceReviewBinding; revalidate: (db: DrizzleDb) => Promise<string> },
+) {
+  if (!(REVIEW_ROLES as readonly string[]).includes(user.role)) throw new DecisionReviewError(403, "This account cannot review financial decisions.");
+  const scope = await loadDecisionScope(id, user);
+  if (!scope) throw new DecisionReviewError(404, "Decision not found.");
+  const requestId = input.requestId ?? randomUUID();
+  const requestHash = decisionSnapshotHash({ decisionId: id, ...input, requestId, binding: continuation?.binding ?? null });
+  const result = await getDb().transaction(async (transaction) => {
+    const tx = transaction as unknown as DrizzleDb;
+    // Row locks linearize revocation/current authority and DecisionCase finalization with review.
+    const policyDigest = continuation ? await continuation.revalidate(tx) : null;
+    const [decision] = await tx.select().from(decisionCases).where(eq(decisionCases.id, id)).for("update").limit(1);
+    if (!decision || !canAccessOwner(user, decision.ownerUserId, false)) throw new DecisionReviewError(404, "Decision not found.");
+    const [latest] = await tx.select().from(decisionReceiptVersions).where(eq(decisionReceiptVersions.decisionId, id)).orderBy(desc(decisionReceiptVersions.version)).limit(1);
+    if (!latest || latest.id !== input.receiptVersionId) throw new DecisionReviewError(409, "Only the latest receipt version can be reviewed.");
+    if (decisionSnapshotHash(receiptHashPayload(latest)) !== latest.snapshotHash) throw new DecisionReviewError(409, "Receipt hash verification failed.");
+    if (decision.expiresAt && decision.expiresAt.getTime() <= Date.now()) throw new DecisionReviewError(409, "This decision has expired.");
+    const completeness = latest.completeness as { complete?: boolean; missing?: string[] };
+    if (input.outcome === "approved" && !completeness.complete) throw new DecisionReviewError(409, "Receipt is incomplete and cannot be approved.", { missing: completeness.missing ?? [] });
+    const storedConfidence = storedConfidenceSchema.safeParse(latest.confidence);
+    const outputCriticality = criticalityForDecision(decision.materiality, decision.organizationId);
+    const assuranceGate = evaluateAssuranceArtifactForDecision(storedConfidence.success ? storedConfidence.data.assurance ?? null : null, outputCriticality, new Date().toISOString());
+    if (input.outcome === "approved" && !assuranceGate.permitted) throw new DecisionReviewError(409, "Decision assurance gate rejected approval.", { assuranceGate });
+    if (input.outcome === "waived" && outputCriticality === "material_decision" && !assuranceGate.permitted) throw new DecisionReviewError(409, "Institutional assurance cannot be waived for a material decision.", { assuranceGate });
+    if (input.outcome === "waived") {
+      if (user.role !== "internal_admin") throw new DecisionReviewError(403, "Only an internal administrator can document a waiver.");
+      if (!input.waiverReason?.trim()) throw new DecisionReviewError(400, "waiverReason is required for a waiver.");
+    }
+    const binding = continuation?.binding;
+    if (binding && (binding.decisionId !== id || binding.userId !== user.id || binding.receiptVersionId !== latest.id || binding.snapshotHash !== latest.snapshotHash || binding.policyDigest !== policyDigest)) throw new DecisionReviewError(409, "Review identity, receipt or current policy changed; inspect the current decision.");
+    if (binding && (Date.parse(binding.expiresAt) <= Date.now() || Date.parse(binding.issuedAt) > Date.now() || Date.parse(binding.expiresAt) - Date.parse(binding.issuedAt) > 24 * 60 * 60 * 1000)) throw new DecisionReviewError(409, "This offline review binding has expired or is invalid.");
+    const [existing] = await tx.select().from(decisionApprovals).where(and(eq(decisionApprovals.reviewerUserId, user.id), eq(decisionApprovals.reviewRequestId, requestId))).limit(1);
+    const status = input.outcome === "rejected" ? "rejected" : "approved";
+    if (existing) {
+      if (existing.reviewRequestHash !== requestHash || existing.receiptVersionId !== latest.id || existing.snapshotHash !== latest.snapshotHash || decision.status !== status || decision.finalDecision !== input.finalDecision || decision.decisionRationale !== input.rationale || decision.approvedReceiptVersionId !== (input.outcome === "rejected" ? null : latest.id)) throw new DecisionReviewError(409, "Review request changed or its previously reviewed head is no longer current.");
+      return { approval: existing, idempotent: true, assuranceGate, outputCriticality };
+    }
+    if (binding && binding.decisionHead !== decisionReviewHead(decision)) throw new DecisionReviewError(409, "Decision head changed; inspect the current decision before releasing a new review.");
+    // Device continuations cannot overwrite a finalized head; ordinary HTTP review retains its current semantics.
+    if (binding && ["approved", "rejected", "superseded", "expired"].includes(decision.status)) throw new DecisionReviewError(409, "This decision is already finalized or expired.");
+    const [other] = await tx.select().from(decisionApprovals).where(and(eq(decisionApprovals.reviewerUserId, user.id), eq(decisionApprovals.receiptVersionId, latest.id))).limit(1);
+    if (other) throw new DecisionReviewError(409, "This receipt already has a review from this account.");
+    const [approval] = await tx.insert(decisionApprovals).values({
+      decisionId: id, receiptVersionId: latest.id, outcome: input.outcome, snapshotHash: latest.snapshotHash,
+      note: input.note, waiverReason: input.waiverReason, reviewerUserId: user.id, reviewRequestId: requestId, reviewRequestHash: requestHash,
+    }).returning();
+    await tx.update(decisionCases).set({ status, finalDecision: input.finalDecision, decisionRationale: input.rationale, approvedReceiptVersionId: input.outcome === "rejected" ? null : latest.id, updatedAt: new Date() }).where(eq(decisionCases.id, id));
+    return { approval, idempotent: false, assuranceGate, outputCriticality };
+  });
+  if (!result.idempotent) await recordAuditEvent(user.id, "decision_reviewed", {
+    decisionId: id, receiptId: result.approval.receiptVersionId, outcome: input.outcome,
+    snapshotHash: result.approval.snapshotHash, requestId, requestHash,
+    assuranceCriticality: result.outputCriticality, assurancePermitted: result.assuranceGate.permitted,
+    assuranceReasonCodes: result.assuranceGate.reasonCodes, ...auditActor(user),
+  });
+  return result;
+}
+
 export function registerDecisionRoutes(app: Express): void {
   app.get("/api/decisions", requireRole(...READ_ROLES), async (req, res) => {
     const db = getDb();
@@ -760,79 +862,15 @@ export function registerDecisionRoutes(app: Express): void {
   app.post("/api/decisions/:id/approval", requireRole(...REVIEW_ROLES), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
-    const parsed = z.object({
-      receiptVersionId: z.number().int().positive(),
-      outcome: z.enum(["approved", "rejected", "waived"]),
-      finalDecision: z.string().trim().min(1).max(5000),
-      rationale: z.string().trim().min(1).max(10000),
-      note: z.string().trim().max(3000).optional(),
-      waiverReason: z.string().trim().max(3000).optional(),
-    }).safeParse(req.body);
+    const parsed = decisionApprovalInputSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const scope = await loadDecisionScope(id, req.user!);
-    if (!scope) return res.status(404).json({ error: "Decision not found." });
-    const { decision } = scope;
-    const db = getDb();
-    const [latest] = await db.select().from(decisionReceiptVersions).where(eq(decisionReceiptVersions.decisionId, id)).orderBy(desc(decisionReceiptVersions.version)).limit(1);
-    if (!latest || latest.id !== parsed.data.receiptVersionId) return res.status(409).json({ error: "Only the latest receipt version can be reviewed." });
-    if (decisionSnapshotHash(receiptHashPayload(latest)) !== latest.snapshotHash) return res.status(409).json({ error: "Receipt hash verification failed." });
-    const completeness = latest.completeness as { complete?: boolean; missing?: string[] };
-    if (parsed.data.outcome === "approved" && !completeness.complete) {
-      return res.status(409).json({ error: "Receipt is incomplete and cannot be approved.", missing: completeness.missing ?? [] });
+    try {
+      const result = await submitCanonicalDecisionReview(id, req.user!, parsed.data);
+      return res.status(result.idempotent ? 200 : 201).json(result.approval);
+    } catch (error) {
+      if (error instanceof DecisionReviewError) return res.status(error.statusCode).json({ error: error.message, ...error.details });
+      throw error;
     }
-
-    const storedConfidence = storedConfidenceSchema.safeParse(latest.confidence);
-    const outputCriticality = criticalityForDecision(decision.materiality, decision.organizationId);
-    const assuranceArtifact = storedConfidence.success ? storedConfidence.data.assurance ?? null : null;
-    const assuranceGate = evaluateAssuranceArtifactForDecision(
-      assuranceArtifact,
-      outputCriticality,
-      new Date().toISOString(),
-    );
-    if (parsed.data.outcome === "approved" && !assuranceGate.permitted) {
-      return res.status(409).json({
-        error: "Decision assurance gate rejected approval.",
-        assuranceGate,
-      });
-    }
-    if (parsed.data.outcome === "waived" && outputCriticality === "material_decision" && !assuranceGate.permitted) {
-      return res.status(409).json({
-        error: "Institutional assurance cannot be waived for a material decision.",
-        assuranceGate,
-      });
-    }
-    if (parsed.data.outcome === "waived") {
-      if (req.user!.role !== "internal_admin") return res.status(403).json({ error: "Only an internal administrator can document a waiver." });
-      if (!parsed.data.waiverReason?.trim()) return res.status(400).json({ error: "waiverReason is required for a waiver." });
-    }
-    const [approval] = await db.insert(decisionApprovals).values({
-      decisionId: id,
-      receiptVersionId: latest.id,
-      outcome: parsed.data.outcome,
-      snapshotHash: latest.snapshotHash,
-      note: parsed.data.note,
-      waiverReason: parsed.data.waiverReason,
-      reviewerUserId: req.user!.id,
-    }).returning();
-    const status = parsed.data.outcome === "rejected" ? "rejected" : "approved";
-    await db.update(decisionCases).set({
-      status,
-      finalDecision: parsed.data.finalDecision,
-      decisionRationale: parsed.data.rationale,
-      approvedReceiptVersionId: parsed.data.outcome === "rejected" ? null : latest.id,
-      updatedAt: new Date(),
-    }).where(eq(decisionCases.id, id));
-    await recordAuditEvent(req.user!.id, "decision_reviewed", {
-      decisionId: id,
-      receiptId: latest.id,
-      outcome: parsed.data.outcome,
-      snapshotHash: latest.snapshotHash,
-      assuranceCriticality: outputCriticality,
-      assurancePermitted: assuranceGate.permitted,
-      assuranceReasonCodes: assuranceGate.reasonCodes,
-      ...auditActor(req.user!),
-    });
-    res.status(201).json(approval);
   });
 
   app.post("/api/decisions/:id/replay", requireRole(...AUTHOR_ROLES), async (req, res) => {

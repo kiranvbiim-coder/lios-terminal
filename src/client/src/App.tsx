@@ -5,6 +5,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { P9DesktopNotificationBridge } from "@/components/terminal/P9DesktopNotificationBridge";
 import Terminal from "./pages/Terminal";
 import PublicProductPreview from "./pages/PublicProductPreview";
 import DomainPicker from "./pages/DomainPicker";
@@ -16,7 +17,14 @@ import { setAudienceFromRole, useAudience } from "@/lib/audience";
 import { clearTerminalTabs } from "@/lib/terminalTabs";
 import { clearTerminalLinkedContextState } from "@/lib/terminalLinkedContextStore";
 import { clearActiveWorkspace } from "@/lib/terminalWorkspace";
-import { clearSessionMemory } from "@/lib/terminalSessionMemory";
+import { clearSessionMemory, setSessionMemoryOwner } from "@/lib/terminalSessionMemory";
+import {
+  clearNotificationReadOutbox,
+  replayNotificationReads,
+  setNotificationReadOutboxOwner,
+} from "@/lib/p9NotificationReadOutbox";
+import { clearP9ManualRunDrafts, setP9ManualRunDraftOwner } from "@/lib/p9ManualRunDrafts";
+import { clearP9ManualRunAttempts, setP9ManualRunAttemptOwner } from "@/lib/p9ManualRunAttemptLedger";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
@@ -75,6 +83,12 @@ function App() {
   const audience = useAudience();
 
   const acceptSession = (data: SessionData | null) => {
+    // The server-restored principal, not editable browser storage or display
+    // email, determines which recent analytical history is visible.
+    setSessionMemoryOwner(data?.authState ?? null);
+    setNotificationReadOutboxOwner(data?.authState ?? null);
+    setP9ManualRunDraftOwner(data?.authState ?? null);
+    setP9ManualRunAttemptOwner(data?.authState ?? null);
     setAudienceFromRole(data ? String(data.role) : null);
     setSession(data);
     if (data) setActiveDomain((current) => current ?? FALLBACK_FINANCE_DOMAIN);
@@ -116,6 +130,22 @@ function App() {
     }
   }, [session]);
 
+  // Replay only the safe notification-read receipts. Each reconnect obtains a
+  // fresh server session and the P9 endpoint rechecks ownership before update.
+  useEffect(() => {
+    if (!session || session.authState?.state !== "authenticated_online") return;
+    const flush = () => {
+      void replayNotificationReads().then((result) => {
+        if (result.confirmed > 0) {
+          void queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        }
+      });
+    };
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [session?.authState?.principal?.userId, session?.authState?.principal?.organizationId, session?.authState?.state]);
+
   useEffect(() => subscribeOpenEnvironmentCenter(() => setEnvironmentSetupOpen(true)), []);
 
   const handleLogout = async () => {
@@ -139,11 +169,17 @@ function App() {
     setEnvironmentSetupOpen(false);
     try {
       queryClient.clear();
-      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearResearchTray, clearTerminalPersonalization]) {
+      for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearP9ManualRunDrafts, clearP9ManualRunAttempts, clearResearchTray, clearTerminalPersonalization]) {
         try { clear(); } catch { /* Continue clearing the remaining account-scoped state. */ }
       }
       try { localStorage.removeItem(LAST_DOMAIN_STORAGE_KEY); } catch { /* Storage can be disabled. */ }
     } finally {
+      // Cleanup is attempted while the prior verified principal is still
+      // selected; always disarm the memory owner after server sign-out.
+      setSessionMemoryOwner(null);
+      setNotificationReadOutboxOwner(null);
+      setP9ManualRunDraftOwner(null);
+      setP9ManualRunAttemptOwner(null);
       signOutPending.current = false;
       setSigningOut(false);
     }
@@ -179,6 +215,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <P9DesktopNotificationBridge enabled={Boolean(session && !session.mustChangePassword)} />
       <GatewayProvider enabled={!!session && !session.mustChangePassword}>
       <div className="dark min-h-screen bg-[#030303]">
         {session && session.mustChangePassword ? (

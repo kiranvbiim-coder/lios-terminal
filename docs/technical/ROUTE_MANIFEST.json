@@ -5165,6 +5165,18 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/projects/:projectId/automation/workflows/:workflowId/manual-requests/:requestKey",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/projects/:projectId/automation/workflows/:workflowId/run",
    "reachableBy": [
@@ -7842,6 +7854,7 @@
    "path": "/api/wave-d/action-inbox/:id",
    "reachableBy": [
     "internal_analyst",
+    "internal_compliance",
     "internal_admin"
    ],
    "unprobed": false

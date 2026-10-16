@@ -58,14 +58,36 @@ export async function runAlertEvaluationCycle(deps: AlertMonitorDependencies) {
   return triggered.length;
 }
 
-export function createAlertMonitor(startCycle: () => Promise<number>, intervalMs: number) {
+/**
+ * Resilient, non-overlapping polling for the existing alert, decision and
+ * ingestion monitors. Failures remain visible via an optional operator-owned
+ * reporter; a failed tick must not become an unhandled rejection or prevent
+ * future polling. No external action, alert or task is accepted by this helper.
+ */
+export function createAlertMonitor(
+  startCycle: () => Promise<number>,
+  intervalMs: number,
+  onError?: (error: unknown) => void | Promise<void>,
+) {
+  if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
+    throw new RangeError("Monitor polling interval must be a positive integer.");
+  }
   let running = false;
+  let stopped = false;
 
   const tick = async () => {
-    if (running) return;
+    if (running || stopped) return;
     running = true;
     try {
       await startCycle();
+    } catch (error) {
+      try {
+        if (onError) await onError(error);
+        else console.warn("LiOS monitoring cycle failed; the next tick will retry.");
+      } catch {
+        // Never let an operator diagnostics failure crash the monitor loop.
+        console.warn("LiOS monitoring error reporter failed; the next tick will retry.");
+      }
     } finally {
       running = false;
     }
@@ -77,5 +99,8 @@ export function createAlertMonitor(startCycle: () => Promise<number>, intervalMs
   timer.unref?.();
   void tick();
 
-  return () => clearInterval(timer);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
 }

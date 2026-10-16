@@ -1,12 +1,17 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
+import {
+  createBrowserP9DesktopNotificationPort,
+  deliverP9DesktopNotifications,
+} from "./p9DesktopNotifications";
 import type {
   P9NotificationPolicy,
   P9WorkflowAction,
   P9WorkflowDefinitionInput,
   P9WorkflowTemplate,
   P9WorkflowTrigger,
+  P9AcceptedArtifact,
 } from "@shared/p9AutomationContracts";
 import type { ConversationRequest } from "@shared/conversationRuntime";
 
@@ -73,6 +78,15 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function projectDeliveredNotificationsToDesktop(notifications: readonly P9NotificationRecord[]): Promise<void> {
+  try {
+    await deliverP9DesktopNotifications(notifications, createBrowserP9DesktopNotificationPort());
+  } catch {
+    // Desktop notification delivery is an optional local projection. It must
+    // never fail the canonical P9 workflow, in-app history, or query refresh.
+  }
+}
+
 export function useP9Workflows(projectId: number | null) {
   return useQuery<P9WorkflowRecord[]>({
     queryKey: ["/api/projects", projectId, "automation", "workflows"],
@@ -82,6 +96,8 @@ export function useP9Workflows(projectId: number | null) {
       return res.json();
     },
     enabled: Boolean(projectId),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
   });
 }
 
@@ -94,6 +110,8 @@ export function useP9Runs(projectId: number | null) {
       return res.json();
     },
     enabled: Boolean(projectId),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
   });
 }
 
@@ -103,9 +121,14 @@ export function useP9Notifications(projectId: number | null) {
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/automation/notifications?limit=100`);
       if (!res.ok) throw new Error("Failed to load workflow notifications.");
-      return res.json();
+      const notifications = await res.json() as P9NotificationRecord[];
+      await projectDeliveredNotificationsToDesktop(notifications);
+      return notifications;
     },
     enabled: Boolean(projectId),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: "always",
   });
 }
 
@@ -134,13 +157,37 @@ export async function deleteP9Workflow(projectId: number, workflowId: string): P
   await apiRequest("DELETE", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`);
 }
 
-export async function runP9WorkflowNow(projectId: number, workflowId: string) {
-  return json<{
+export interface P9ManualRunIdempotency {
+  idempotencyKey: string;
+  expectedUpdatedAt: string;
+}
+
+export async function runP9WorkflowNow(
+  projectId: number,
+  workflowId: string,
+  idempotency?: P9ManualRunIdempotency,
+) {
+  const outcome = await json<{
     run: P9RunRecord | null;
     notification: P9NotificationRecord | null;
     result: Record<string, unknown> | null;
     error: string | null;
-  }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, {}));
+    replayed?: boolean;
+    receiptStatus?: "in_progress" | "completed" | null;
+  }>(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/run`, idempotency ?? {}));
+  if (outcome.notification) await projectDeliveredNotificationsToDesktop([outcome.notification]);
+  return outcome;
+}
+
+/** Reconcile an ambiguous manual execution by read-only server receipt lookup. */
+export async function getP9ManualRunReceipt(projectId: number, workflowId: string, idempotencyKey: string) {
+  return json<{
+    run: P9RunRecord;
+    receiptStatus: "in_progress" | "completed";
+  }>(await apiRequest(
+    "GET",
+    `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/manual-requests/${encodeURIComponent(idempotencyKey)}`,
+  ));
 }
 
 export async function markP9NotificationRead(projectId: number, notificationId: string): Promise<P9NotificationRecord> {
@@ -153,6 +200,8 @@ export async function saveConversationAsP9Workflow(projectId: number, input: {
   template?: P9WorkflowTemplate;
   chatId: number;
   request: Omit<ConversationRequest, "requestId" | "continuationOf">;
+  acceptedArtifact?: P9AcceptedArtifact;
+  currentPersonalFinanceResourceId?: string;
   trigger: P9WorkflowTrigger;
   notificationPolicy?: P9NotificationPolicy;
   sourceRefs?: string[];

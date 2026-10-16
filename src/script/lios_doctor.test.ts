@@ -12,7 +12,7 @@ test("P10 doctor reports all diagnostic domains without credential values or ten
     FRED_API_KEY: "should-never-appear-abcdef",
   });
   const serialized = JSON.stringify(snapshot);
-  for (const key of ["system","runtimePacks","sp01Dependencies","connectors","observability","jobsAgents","dataDiagnostics","releaseGovernance"]) {
+  for (const key of ["system","runtimePacks","repairPlan","sp01Dependencies","connectors","observability","jobsAgents","dataDiagnostics","releaseGovernance"]) {
     assert.ok(key in snapshot);
   }
   assert.doesNotMatch(serialized, /should-never-appear/i);
@@ -23,6 +23,10 @@ test("P10 doctor reports all diagnostic domains without credential values or ten
   assert.deepEqual(snapshot.runtimePacks.engineFabricValidationErrors, []);
   assert.equal(typeof snapshot.runtimePacks.managedRuntimeReadiness?.state, "string");
   assert.equal(typeof snapshot.runtimePacks.managedRuntimeReadiness?.repairAction, "string");
+  assert.equal(typeof snapshot.repairPlan.action, "string");
+  assert.equal(typeof snapshot.repairPlan.executionStatus, "string");
+  assert.equal(typeof snapshot.repairPlan.futureAutomaticCandidate, "boolean");
+  assert.equal("command" in snapshot.repairPlan, false);
   assert.equal(snapshot.sp01Dependencies.components.length, 8);
 });
 
@@ -42,12 +46,15 @@ test("P10 doctor does not expose absolute local paths in shareable diagnostics",
   }
 });
 
-test("SI-01.16 doctor reports a missing default Core runtime as installable rather than healthy", () => {
+test("SI-01.16 doctor reports a missing default Core runtime and the strict provisioning blocker honestly", () => {
   const previous = process.env.LIMURIA_DATA_DIR;
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lios-doctor-provisioning-"));
   process.env.LIMURIA_DATA_DIR = directory;
   try {
-    const snapshot = buildLiosDoctorSnapshot({ ...process.env });
+    const snapshot = buildLiosDoctorSnapshot({
+      ...process.env,
+      LIOS_EXECUTION_ISOLATION: "strict",
+    });
     assert.deepEqual(snapshot.runtimePacks.managedRuntimeReadiness, {
       state: "missing",
       ready: false,
@@ -56,7 +63,25 @@ test("SI-01.16 doctor reports a missing default Core runtime as installable rath
       missingPackIds: ["core"],
       reasons: ["Managed runtime is not installed."],
     });
+    assert.deepEqual(snapshot.repairPlan, {
+      schemaVersion: "1",
+      component: "managed_runtime",
+      state: "missing",
+      isolationMode: "strict",
+      severity: "warning",
+      action: "install_managed_runtime",
+      futureAutomaticCandidate: true,
+      executionStatus: "blocked",
+      executionBlocker: "strict_provisioning_authority_missing",
+      requiresConfirmation: true,
+      requiresVerifiedArtifacts: false,
+      summary: "Managed runtime installation is required.",
+      reasons: ["Managed runtime is not installed."],
+      affectedPackIds: ["core"],
+    });
+    assert.equal(snapshot.system.executionIsolationMode, "strict");
     assert.ok(snapshot.warnings.some((warning: string) => /managed-runtime readiness: missing/.test(warning)));
+    assert.ok(snapshot.warnings.some((warning: string) => /strict_provisioning_authority_missing/.test(warning)));
   } finally {
     if (previous === undefined) delete process.env.LIMURIA_DATA_DIR;
     else process.env.LIMURIA_DATA_DIR = previous;

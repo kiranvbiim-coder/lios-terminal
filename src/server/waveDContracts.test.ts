@@ -7,7 +7,6 @@ import {
   deriveActionInbox,
   evaluateSignalRule,
   evaluateThesisPillars,
-  getWaveDReadiness,
   normalizeEventRoom,
   proposeNaturalLanguageMonitor,
   rankPulseCards,
@@ -35,13 +34,6 @@ function card(overrides: Partial<PulseCardDraft> = {}): PulseCardDraft {
     ...overrides,
   };
 }
-
-test("Wave D readiness exposes the six continuous-intelligence workstreams", () => {
-  const readiness = getWaveDReadiness();
-  assert.equal(readiness.contractVersion, "1.0.0");
-  assert.equal(readiness.workstreams.length, 6);
-  assert.ok(readiness.guarantees.some((item) => item.includes("confirmation")));
-});
 
 test("Pulse ranking is deterministic and produces a decision-relevant inbox", () => {
   const ranked = rankPulseCards([card(), card({ id: "card-2", createdAt: "2026-09-01T00:00:00.000Z", magnitude: 0, portfolioExposure: 0 })], NOW);

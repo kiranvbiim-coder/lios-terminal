@@ -136,6 +136,23 @@ function stamp(now: Date): string {
 
 const ARCHIVE_NAME = /^lios-backup-\d{8}T\d{6}Z\.(tar\.gz|liosbak)$/;
 
+/** Reserve exclusive recovery storage; repeated restores never reuse prior copies. */
+export function reserveRestorePreviousDirectory(root: string, now = new Date()): string {
+  const entry = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (!entry?.isDirectory() || entry.isSymbolicLink()) throw new BackupError("Previous-file preservation requires a real Home directory.");
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = path.join(root, `restore-previous-${stamp(now)}-${crypto.randomUUID()}`);
+    try {
+      fs.mkdirSync(candidate, { mode: 0o700 });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw error;
+    }
+  }
+  throw new BackupError("Unable to reserve an unused directory for prior restore files.");
+}
+
 export interface CreateBackupOptions {
   destination: string;
   engine: DatabaseExportManifest["sourceEngine"];
@@ -305,7 +322,6 @@ async function readArchive(file: string, options: ReadOptions): Promise<BackupMa
   let expanded = 0;
   let afterManifest = false;
   const extractRoot = options.extractTo ? path.resolve(options.extractTo) : null;
-  if (extractRoot) fs.mkdirSync(extractRoot, { recursive: true, mode: 0o700 });
 
   const reader = new TarReader({
     onEntry(rawName, size) {
@@ -391,10 +407,42 @@ export function verifyBackup(file: string, options: { passphrase?: string | unde
   return readArchive(file, options);
 }
 
-/** Decrypts/verifies and writes the archive's contents to a directory: db/ (logical export) and files/. */
+/** Extract only into a freshly reserved directory; never clean an unowned path. */
 export function extractBackup(file: string, directory: string, options: { passphrase?: string | undefined } = {}): Promise<BackupManifest> {
-  if (fs.existsSync(directory)) throw new BackupError(`Extraction target already exists: ${directory}`);
-  return readArchive(file, { ...options, extractTo: directory });
+  const destination = path.resolve(directory);
+  if (fs.lstatSync(destination, { throwIfNoEntry: false })) throw new BackupError(`Extraction target already exists: ${destination}`);
+  const parent = fs.lstatSync(path.dirname(destination), { throwIfNoEntry: false });
+  if (!parent?.isDirectory() || parent.isSymbolicLink()) throw new BackupError("Backup extraction requires a real existing parent directory.");
+  try {
+    fs.mkdirSync(destination, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new BackupError(`Extraction target already exists: ${destination}`);
+    throw error;
+  }
+  return readArchive(file, { ...options, extractTo: destination }).catch((error: unknown) => {
+    fs.rmSync(destination, { recursive: true, force: true });
+    throw error;
+  });
+}
+
+/** Reject links before database import and again immediately before each file mutation. */
+export function assertSafeRestoreFileTarget(root: string, relative: string): string {
+  const resolvedRoot = path.resolve(root);
+  const rootEntry = fs.lstatSync(resolvedRoot, { throwIfNoEntry: false });
+  if (!rootEntry?.isDirectory() || rootEntry.isSymbolicLink()) throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  const target = path.resolve(resolvedRoot, relative);
+  if (!target.startsWith(`${resolvedRoot}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${relative}`);
+  const parts = path.relative(resolvedRoot, target).split(path.sep);
+  let current = resolvedRoot;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    const entry = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!entry) continue;
+    if (entry.isSymbolicLink()) throw new BackupError(`Refusing linked restore destination: ${relative}`);
+    if (index < parts.length - 1 && !entry.isDirectory()) throw new BackupError(`Restore parent is not a directory: ${relative}`);
+    if (index === parts.length - 1 && !entry.isFile()) throw new BackupError(`Restore target is not a regular file: ${relative}`);
+  }
+  return target;
 }
 
 export interface RestoreResult {
@@ -412,16 +460,24 @@ export async function restoreBackup(
   options: { passphrase?: string | undefined; replace?: boolean } = {},
 ): Promise<RestoreResult> {
   const root = dataRoot();
+  const existingRoot = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (existingRoot && (!existingRoot.isDirectory() || existingRoot.isSymbolicLink())) throw new BackupError("The LiOS restore destination must be a real Home directory.");
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-  const staging = path.join(root, `.lios-restore-${process.pid}`);
+  const preparedRoot = fs.lstatSync(root);
+  if (!preparedRoot.isDirectory() || preparedRoot.isSymbolicLink()) throw new BackupError("The LiOS restore destination must be a real Home directory.");
+  const staging = path.join(root, `.lios-restore-${process.pid}-${crypto.randomUUID()}`);
+  let extractionOwned = false;
   try {
     const manifest = await extractBackup(file, staging, options);
+    extractionOwned = true;
+    for (const entry of manifest.entries.filter(candidate => candidate.kind === "file" && candidate.path !== BACKUP_VAULT_MIGRATION_ENTRY)) {
+      assertSafeRestoreFileTarget(root, entry.path.slice("files/".length));
+    }
     // Re-check the database export itself, then load it atomically. A refused or failed import changes nothing.
     readExportManifest(path.join(staging, "db"));
     await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
 
-    const previous = path.join(root, `restore-previous-${stamp(new Date())}`);
-    let moved = false;
+    let previous: string | null = null;
     let restored = 0;
     let credentialMigrationEnvelope: Buffer | null = null;
     for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file")) {
@@ -430,14 +486,13 @@ export async function restoreBackup(
         continue;
       }
       const relative = entry.path.slice("files/".length);
-      const target = path.resolve(root, relative);
-      if (!target.startsWith(`${root}${path.sep}`)) throw new BackupError(`Unsafe path in backup: ${entry.path}`);
+      const target = assertSafeRestoreFileTarget(root, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       if (fs.existsSync(target)) {
+        if (!previous) previous = reserveRestorePreviousDirectory(root);
         const keep = path.join(previous, relative);
         fs.mkdirSync(path.dirname(keep), { recursive: true, mode: 0o700 });
         fs.renameSync(target, keep);
-        moved = true;
       }
       fs.renameSync(path.join(staging, entry.path), target);
       restored += 1;
@@ -445,11 +500,11 @@ export async function restoreBackup(
     return {
       manifest,
       filesRestored: restored,
-      previousFilesDir: moved ? previous : null,
+      previousFilesDir: previous,
       credentialMigrationEnvelope,
     };
   } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+    if (extractionOwned) fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { P10_RUNTIME_PACK_IDS, P10_RUNTIME_PACKS, expandP10RuntimePacks, validateP10RuntimePackCatalog } from "./p10RuntimePacks";
+import { P10_RUNTIME_PACK_IDS, P10_RUNTIME_PACKS, expandP10RuntimePacks, p10RuntimePackForCapability, validateP10RuntimePackCatalog } from "./p10RuntimePacks";
 
 test("P10 exposes exactly the six canonical runtime packs", () => {
   assert.deepEqual(P10_RUNTIME_PACK_IDS, ["core", "research", "quant", "modeling", "data-lab", "local-ai"]);
@@ -24,10 +24,19 @@ test("P10 pack expansion preserves the low-level signed allow-list and always in
   for (const id of ["core", "fixed-income", "econometrics", "forecasting", "optimization", "ml"]) assert.ok(quant.includes(id));
 });
 
+test("lazy installation policy lives in the canonical P10 pack catalog", () => {
+  assert.equal(p10RuntimePackForCapability("statistics")?.lazyInstallPolicy, "automatic");
+  assert.equal(p10RuntimePackForCapability("document-intelligence")?.lazyInstallPolicy, "explicit-consent");
+  assert.equal(p10RuntimePackForCapability("fixed-income")?.lazyInstallPolicy, "explicit-consent");
+  assert.equal(p10RuntimePackForCapability("local-model")?.lazyInstallPolicy, "external");
+  assert.equal(p10RuntimePackForCapability("not-a-capability"), null);
+});
+
 test("Local AI is a capability pack and does not silently install a model/runtime package", () => {
   const local = P10_RUNTIME_PACKS.find((pack) => pack.id === "local-ai");
   assert.ok(local);
   assert.deepEqual(local.includedManagedPackIds, []);
   assert.equal(local.defaultEnabled, false);
+  assert.equal(local.lazyInstallPolicy, "external");
   assert.ok(local.releaseNotes.some((note) => /does not silently|user supplies/i.test(note)));
 });

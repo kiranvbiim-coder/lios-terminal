@@ -30,6 +30,9 @@ import {
 import { installManagedRuntime, ManagedRuntimeVerificationError, managedRuntimePythonPath, readManagedRuntimeState, rollbackManagedRuntime } from "./pythonRuntimeManager";
 import { ManagedRuntimeProvisioningError, reconcileManagedRuntime } from "./managedRuntimeReconciler";
 import { evaluateManagedRuntimeReadiness } from "./provisioningReadiness";
+import { planManagedRuntimeRepair } from "./doctorRepairPlan";
+import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { executeManagedRuntimeRepair, DoctorRepairExecutionRefusedError } from "./doctorRepairExecutor";
 import { SP01_DEPENDENCY_INVENTORY } from "./sp01DependencyInventory";
 import { P10_OPTIONAL_MANAGED_ADDON_IDS, P10_RUNTIME_PACK_IDS, P10_RUNTIME_PACKS, expandP10RuntimePacks } from "./p10RuntimePacks";
 import { inspectSandboxImageReadiness, repairSandboxImage } from "./sandboxImageProvisioning";
@@ -221,15 +224,19 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
         environmentPath: setup?.pythonEnvironmentPath,
       });
       const managedState = readManagedRuntimeState();
+      const managedRuntimeReadiness = evaluateManagedRuntimeReadiness({
+        state: managedState,
+        pythonAvailable: Boolean(managedRuntimePythonPath()),
+        requiredPackIds: ["core"],
+      });
       res.json({
         profiles: PYTHON_RUNTIME_PROFILES,
         packs: PYTHON_ENGINE_PACKS,
         releasePacks: P10_RUNTIME_PACKS,
         managedState,
-        managedRuntimeReadiness: evaluateManagedRuntimeReadiness({
-          state: managedState,
-          pythonAvailable: Boolean(managedRuntimePythonPath()),
-          requiredPackIds: ["core"],
+        managedRuntimeReadiness,
+        doctorRepairPlan: planManagedRuntimeRepair(managedRuntimeReadiness, {
+          isolationMode: effectiveSandboxIsolationMode(undefined),
         }),
         sp01Dependencies: SP01_DEPENDENCY_INVENTORY,
         status,
@@ -241,12 +248,20 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
   app.post("/api/setup/python-runtime/install", requireRole("internal_admin", "client_admin"), async (req, res, next) => {
     const parsed = z.object({
       reconcile: z.boolean().optional(),
+      repair: z.boolean().optional(),
+      confirmed: z.boolean().optional(),
       packIds: z.array(z.string().trim().min(1)).max(20).optional(),
       releasePackIds: z.array(z.enum(P10_RUNTIME_PACK_IDS)).max(P10_RUNTIME_PACK_IDS.length).optional(),
       additionalPackIds: z.array(z.enum(P10_OPTIONAL_MANAGED_ADDON_IDS)).max(P10_OPTIONAL_MANAGED_ADDON_IDS.length).optional(),
     }).superRefine((value, issue) => {
       if (value.packIds?.length && (value.releasePackIds?.length || value.additionalPackIds?.length)) {
         issue.addIssue({ code: z.ZodIssueCode.custom, message: "Choose legacy low-level packIds or releasePackIds/additionalPackIds, not both." });
+      }
+      if (value.repair && (value.reconcile || value.packIds?.length || value.releasePackIds?.length || value.additionalPackIds?.length)) {
+        issue.addIssue({ code: z.ZodIssueCode.custom, message: "Doctor repair uses the saved runtime selection; do not combine it with pack changes or reconciliation." });
+      }
+      if (value.repair && value.confirmed !== true) {
+        issue.addIssue({ code: z.ZodIssueCode.custom, message: "Doctor repair requires explicit confirmation." });
       }
     }).safeParse(req.body);
     if (!parsed.success) {
@@ -264,7 +279,7 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
       // Installing it without that consent record would be a second,
       // ungated door to the same data -- refuse rather than silently
       // installing it.
-      const blocked = await unconsentedRuntimePacks(req.user!.id, parsed.data.reconcile
+      const blocked = await unconsentedRuntimePacks(req.user!.id, parsed.data.reconcile || parsed.data.repair
         ? [...new Set([...managedPackIds, ...(readManagedRuntimeState()?.selectedPackIds ?? [])])]
         : managedPackIds);
       if (blocked.length) {
@@ -272,6 +287,32 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
           error: "A selected runtime pack requires community-data consent that has not been accepted.",
           blockedPacks: blocked,
         });
+        return;
+      }
+      if (parsed.data.repair) {
+        try {
+          const repaired = await executeManagedRuntimeRepair({
+            confirmed: parsed.data.confirmed === true,
+            isolationMode: effectiveSandboxIsolationMode(undefined),
+          });
+          const state = readManagedRuntimeState();
+          const readiness = evaluateManagedRuntimeReadiness({
+            state, pythonAvailable: Boolean(managedRuntimePythonPath()),
+            requiredPackIds: state?.selectedPackIds.length ? state.selectedPackIds : ["core"],
+          });
+          await recordAuditEvent(req.user!.id, "python_runtime_doctor_repair", {
+            action: repaired.plan.action, readiness: readiness.state, ...auditActor(req.user!),
+          });
+          res.status(readiness.ready ? 200 : 409).json({
+            result: repaired.operation, state, readiness,
+            error: readiness.ready ? undefined : "Repair returned without verified managed-runtime readiness; the capability remains unavailable.",
+          });
+        } catch (error) {
+          const code = error instanceof DoctorRepairExecutionRefusedError
+            ? error.code : error instanceof ManagedRuntimeVerificationError ? error.code : "repair_failed";
+          await recordAuditEvent(req.user!.id, "python_runtime_doctor_repair_refused", { code, ...auditActor(req.user!) });
+          res.status(409).json({ error: "Managed runtime repair could not complete safely.", code });
+        }
         return;
       }
       if (parsed.data.reconcile) {

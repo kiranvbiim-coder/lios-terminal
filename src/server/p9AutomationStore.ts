@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { and, desc, eq, isNull, lt, lte, or } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
+import { and, desc, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   projectAutomationNotifications,
   projectAutomationRuns,
@@ -21,7 +22,9 @@ import { getDb } from "./db";
 import type { TenantContext } from "./tenantContext";
 import { getProject, touchProjectActivity } from "./projectStore";
 import { appendLedgerEvent } from "./ledgerStore";
-import { nextP9ScheduledRun } from "./p9AutomationEngine";
+import { decideP9Notification, nextP9ScheduledRun, p9NotificationTitle } from "./p9AutomationEngine";
+import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
+import { requireAcceptedP9Workflow } from "./p9AcceptedWorkflow";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
@@ -78,6 +81,9 @@ export async function createP9Workflow(
   await getProject(ctx, projectId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
+    await requireAcceptedP9Workflow(ctx, projectId, input.action);
+  }
   const now = new Date();
   const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
   const id = "workflow:" + crypto.randomUUID();
@@ -140,6 +146,9 @@ export async function replaceP9Workflow(
   const current = await getP9Workflow(ctx, workflowId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
+    await requireAcceptedP9Workflow(ctx, current.projectId, input.action);
+  }
   const now = new Date();
   const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
   const [row] = await getDb().update(projectAutomationWorkflows).set({
@@ -286,11 +295,12 @@ export async function beginP9Run(
   triggerType: "manual" | "schedule" | "event",
   triggerDetail: Record<string, unknown>,
   dedupeKey: string | null = null,
+  expectedWorkflowUpdatedAt: Date | null = null,
 ): Promise<ProjectAutomationRun | null> {
   await getProject(ctx, workflow.projectId);
   const id = "workflow-run:" + crypto.randomUUID();
   const startedAt = new Date();
-  const [row] = await getDb().insert(projectAutomationRuns).values({
+  const values = {
     id,
     workflowId: workflow.id,
     projectId: workflow.projectId,
@@ -301,7 +311,43 @@ export async function beginP9Run(
     dedupeKey,
     status: "running",
     startedAt,
-  }).onConflictDoNothing().returning();
+  };
+
+  const row = triggerType === "manual" && dedupeKey && expectedWorkflowUpdatedAt
+    ? await getDb().transaction(async (tx) => admitP9ApprovedManualRun(
+        async () => {
+          // Serialize against UPDATE/DELETE of this canonical workflow row.
+          // The lock and unique-key run insert MUST share this transaction:
+          // a route-level revision check alone is a TOCTOU vulnerability.
+          const [locked] = await tx.select().from(projectAutomationWorkflows)
+            .where(and(
+              workflowTenantFilter(ctx, workflow.id),
+              eq(projectAutomationWorkflows.projectId, workflow.projectId),
+            ))
+            .limit(1)
+            .for("update");
+          return locked ?? null;
+        },
+        async () => {
+          const [admitted] = await tx.insert(projectAutomationRuns).values(values)
+            .onConflictDoNothing().returning();
+          return admitted ?? null;
+        },
+        workflow,
+        expectedWorkflowUpdatedAt,
+      ))
+    : await getDb().transaction(async (tx) => {
+      const [current] = await tx.select().from(projectAutomationWorkflows)
+        .where(and(workflowTenantFilter(ctx, workflow.id), eq(projectAutomationWorkflows.projectId, workflow.projectId)))
+        .for("update").limit(1);
+      if (!current) return null;
+      if (triggerType !== "manual" && (!current.enabled || !isDeepStrictEqual(
+        [current.trigger, current.action, current.sourceRefs, current.engineRefs, current.artifactRefs],
+        [workflow.trigger, workflow.action, workflow.sourceRefs, workflow.engineRefs, workflow.artifactRefs],
+      ))) return null;
+      const [admitted] = await tx.insert(projectAutomationRuns).values(values).onConflictDoNothing().returning();
+      return admitted ?? null;
+    });
   if (!row) return null;
   await appendLedgerEvent(ctx, {
     projectId: workflow.projectId,
@@ -312,6 +358,28 @@ export async function beginP9Run(
     payload: { workflowId: workflow.id, workflowRunId: id, triggerType, template: workflow.template },
   });
   return row;
+}
+
+/**
+ * Tenant-scoped lookup of an existing manual idempotency receipt.
+ * The unique (workflow_id, dedupe_key) index on project_automation_runs
+ * provides race-safe durable single-writer admission across server restarts.
+ * Do not select unscoped receipts by a client-provided request UUID alone.
+ */
+export async function findP9ManualRunReceipt(
+  ctx: TenantContext,
+  projectId: number,
+  workflowId: string,
+  dedupeKey: string,
+): Promise<ProjectAutomationRun | null> {
+  const [row] = await getDb().select().from(projectAutomationRuns).where(and(
+    runTenantFilter(ctx),
+    eq(projectAutomationRuns.projectId, projectId),
+    eq(projectAutomationRuns.workflowId, workflowId),
+    eq(projectAutomationRuns.triggerType, "manual"),
+    eq(projectAutomationRuns.dedupeKey, dedupeKey),
+  )).limit(1);
+  return row ?? null;
 }
 
 export async function completeP9Run(
@@ -412,42 +480,60 @@ export async function latestSuccessfulP9Run(ctx: TenantContext, workflowId: stri
   return row ?? null;
 }
 
-export async function latestDeliveredP9Notification(ctx: TenantContext, workflowId: string): Promise<ProjectAutomationNotification | null> {
-  const [row] = await getDb().select().from(projectAutomationNotifications).where(and(
-    notificationTenantFilter(ctx),
-    eq(projectAutomationNotifications.workflowId, workflowId),
-    eq(projectAutomationNotifications.status, "delivered"),
-  )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(1);
-  return row ?? null;
-}
-
 export async function createP9Notification(
   ctx: TenantContext,
   workflow: ProjectAutomationWorkflow,
   runId: string,
   input: {
-    status: "delivered" | "suppressed";
-    reason: "success" | "failure" | "condition_met" | "change_detected";
-    title: string;
-    body: string;
-    relevanceScore: number;
+    result: P9WorkflowRunResult | null;
+    error: string | null;
   },
-): Promise<ProjectAutomationNotification> {
-  const [row] = await getDb().insert(projectAutomationNotifications).values({
-    id: "workflow-notification:" + crypto.randomUUID(),
-    workflowId: workflow.id,
-    runId,
-    projectId: workflow.projectId,
-    ownerUserId: ctx.userId,
-    organizationId: ctx.organizationId,
-    channel: "in_app",
-    status: input.status,
-    reason: input.reason,
-    title: input.title.slice(0, 500),
-    body: input.body.slice(0, 20_000),
-    relevanceScore: input.relevanceScore,
-  }).returning();
-  return row;
+): Promise<ProjectAutomationNotification | null> {
+  await getProject(ctx, workflow.projectId);
+  return getDb().transaction(async (tx) => {
+    // The current policy read, cooldown check and insert share one workflow lock.
+    // Run-start snapshots cannot override a later mute or race another completion.
+    const [current] = await tx.select().from(projectAutomationWorkflows).where(and(
+      workflowTenantFilter(ctx, workflow.id),
+      eq(projectAutomationWorkflows.projectId, workflow.projectId),
+    )).for("update").limit(1);
+    if (!current) return null;
+    const [existing] = await tx.select().from(projectAutomationNotifications).where(and(
+      notificationTenantFilter(ctx),
+      eq(projectAutomationNotifications.workflowId, current.id),
+      eq(projectAutomationNotifications.runId, runId),
+    )).limit(1);
+    if (existing) return existing;
+    const [last] = await tx.select().from(projectAutomationNotifications).where(and(
+      notificationTenantFilter(ctx),
+      eq(projectAutomationNotifications.workflowId, current.id),
+      eq(projectAutomationNotifications.status, "delivered"),
+    )).orderBy(desc(projectAutomationNotifications.createdAt)).limit(1);
+    const now = new Date();
+    const decision = decideP9Notification({
+      policy: p9NotificationPolicySchema.parse(current.notificationPolicy),
+      status: input.error ? "failed" : "succeeded",
+      result: input.result,
+      lastDeliveredAt: last?.createdAt ?? null,
+      now,
+    });
+    const [row] = await tx.insert(projectAutomationNotifications).values({
+      id: "workflow-notification:" + crypto.randomUUID(),
+      workflowId: current.id,
+      runId,
+      projectId: current.projectId,
+      ownerUserId: ctx.userId,
+      organizationId: ctx.organizationId,
+      channel: "in_app",
+      status: decision.status,
+      reason: decision.reason,
+      title: p9NotificationTitle(current.name, decision.reason).slice(0, 500),
+      body: (input.error || input.result?.summary || decision.explanation).slice(0, 20_000),
+      relevanceScore: input.result?.relevanceScore ?? 1,
+      createdAt: now,
+    }).returning();
+    return row;
+  });
 }
 
 export async function listP9Notifications(
@@ -468,7 +554,11 @@ export async function markP9NotificationRead(
   notificationId: string,
 ): Promise<ProjectAutomationNotification> {
   await getProject(ctx, projectId);
-  const [row] = await getDb().update(projectAutomationNotifications).set({ readAt: new Date() }).where(and(
+  // Offline retries must be idempotent: preserve the first server-confirmed
+  // read timestamp if a prior successful response was lost in transit.
+  const [row] = await getDb().update(projectAutomationNotifications).set({
+    readAt: sql<Date>`COALESCE(${projectAutomationNotifications.readAt}, NOW())`,
+  }).where(and(
     notificationTenantFilter(ctx),
     eq(projectAutomationNotifications.projectId, projectId),
     eq(projectAutomationNotifications.id, notificationId),
