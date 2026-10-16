@@ -36,7 +36,12 @@ async function nativeConfirmDesktopUpdate({ version }) {
     cancelId: 0,
     noLink: true,
   };
-  const owner = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+  // Prefer a usable window, but do not parent a system modal to a
+  // destroyed window when the last foreground window is closing.
+  const focused = BrowserWindow.getFocusedWindow?.() ?? null;
+  const owner = focused && !focused.isDestroyed?.()
+    ? focused
+    : (BrowserWindow.getAllWindows?.() ?? []).find((window) => !window.isDestroyed?.()) ?? null;
   const result = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options);
   return result.response === 1;
 }
