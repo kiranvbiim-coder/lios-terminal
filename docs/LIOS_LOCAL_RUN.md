@@ -44,11 +44,31 @@ docker compose -f deploy/home/compose.yaml up --build -d
 
 The service runs as UID/GID `10001`, drops Linux capabilities, uses a read-only root filesystem and bounded temporary storage, and persists the canonical Home in the `home-data` volume. It binds **only** `127.0.0.1:10000` on the host; `LIOS_HOME_PORT` changes that local port. Do not expose it publicly without your own HTTPS reverse proxy and access policy. No LiOS-operated runtime cloud is required.
 
+`HOME=/data/lios/.home` keeps canonical root identity, operator control files and user configuration inside the persistent writable mount, not the read-only image filesystem.
+
 For first-owner enrollment, obtain the one-time token from the private Home file `/data/lios/owner-setup.token` or the initial operator-only service log. Do not publish logs containing that token. Finish setup through HTTPS or direct loopback; the canonical owner bootstrap closes after the first owner exists. Credentials/session state remain in the persistent Home, never baked into the image. Preserve the volume when updating; removing it deletes your Home.
 
 Strict execution remains enabled. This pack does not mount a host Docker socket, install arbitrary packages, grant a provider entitlement or silently fall back to host execution. Governed computation that requires an absent backend stays unavailable until that backend is separately configured and approved. Stop/restart retains saved work and does not authorize replay of uncertain side effects.
 
 **Qualification boundary:** YAML semantics and the canonical production server can be verified locally without building an installer. A container build, cloud deployment, clean-host recovery and SP-06/SP-07 qualification are separate evidence; do not treat this recipe as a passed deployment.
+
+### User-owned AWS / Azure / GCP / Kubernetes packs
+
+`src/deploy/home/render-cloud-pack.mjs` renders Kubernetes resources for an **existing user-owned** EKS (`aws`), AKS (`azure`), GKE (`gcp`) or generic (`kubernetes`) cluster. It never creates cloud accounts/clusters, applies resources, provisions public load balancers or claims deployment success. Build/publish the existing `src/Dockerfile` image to your own registry, resolve its actual `@sha256:` digest, and set `IMAGE` to that full immutable reference.
+
+```bash
+node deploy/home/render-cloud-pack.mjs --target=aws --image="${IMAGE:?owner image digest required}" > /tmp/lios-home-pack.json
+kubectl apply --dry-run=server -f /tmp/lios-home-pack.json
+kubectl apply -f /tmp/lios-home-pack.json
+kubectl -n lios-home rollout status deployment/lios-home
+kubectl -n lios-home port-forward service/lios-home 10000:10000
+```
+
+The pack keeps **one Recreate writer**, a persistent Home PVC, strict execution, non-root UID/GID/fsGroup 10001, no service-account token, no privilege escalation/host sockets, a read-only root filesystem, bounded memory/CPU/scratch space and startup/readiness/liveness probes. The Service is ClusterIP, not public. Its ingress policy permits only same-namespace pods labeled `lios-home-access=approved`; use direct loopback port-forward for initial setup. A NetworkPolicy-capable cluster is required to enforce that rule. Provider egress still requires the owner's network/data policies; this pack does not certify egress isolation.
+
+AWS defaults to installed `gp3` (EBS CSI/add-on and an actual `gp3` StorageClass required), Azure to `managed-csi`, GCP to `standard-rwo`; generic Kubernetes uses the cluster default. Use `--storage-class=owner-installed-class`, `--namespace=owner-namespace` and `--storage=20Gi` to match your cluster. Ensure the image architecture, private registry access and CSI permissions are configured by the owner. Storage creates billable user-cloud resources only when the owner applies the manifest; the renderer itself creates none.
+
+Read the one-time owner token privately with `kubectl -n lios-home exec deployment/lios-home -- cat /data/lios/owner-setup.token`, enroll through loopback, and retain the canonical PVC across updates. Do not publish the token or delete the PVC/namespace to “restart” Home. Back up/verify restore before updating the pinned digest. Do not increase replicas against embedded PGlite. Configure your own TLS/access boundary before remote exposure. No live cluster, provider-storage or restore qualification is implied by a successful local render.
 
 ### Native Apple, Android and watch clients
 
