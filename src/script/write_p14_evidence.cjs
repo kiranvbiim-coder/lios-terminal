@@ -44,15 +44,27 @@ if (observationValidator) {
   } catch {
     fail(category + " observation could not be read after validation");
   }
-  const requiredSupport = Array.isArray(observation.sourceEvidence) ? observation.sourceEvidence : [];
+  const requiredSupportRaw = Array.isArray(observation.sourceEvidence) ? observation.sourceEvidence : [];
+  const requiredSupport = requiredSupportRaw.map((identifier) => {
+    if (typeof identifier !== "string") {
+      fail(category + " sourceEvidence identifiers must be unique basenames");
+    }
+    const normalized = identifier.trim();
+    if (!normalized || normalized === "." || normalized === ".." || normalized.includes("/") || normalized.includes("\\")) {
+      fail(category + " sourceEvidence identifiers must be unique basenames");
+    }
+    return normalized;
+  });
+  if (new Set(requiredSupport).size !== requiredSupport.length) {
+    fail(category + " sourceEvidence identifiers must be unique basenames");
+  }
   const suppliedSupport = sourcePaths.slice(1).map((sourcePath) => path.basename(path.resolve(sourcePath)));
   if (new Set(suppliedSupport).size !== suppliedSupport.length) {
     fail(category + " support artifacts must have unique basenames");
   }
   for (const identifier of requiredSupport) {
-    const expectedName = path.basename(String(identifier));
-    if (!suppliedSupport.includes(expectedName)) {
-      fail(category + " support artifact named by observation was not supplied: " + expectedName);
+    if (!suppliedSupport.includes(identifier)) {
+      fail(category + " support artifact named by observation was not supplied: " + identifier);
     }
   }
 }
