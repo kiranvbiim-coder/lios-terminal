@@ -485,6 +485,60 @@ test("SI-07.12 recovery reservation refuses a linked root without changing outsi
   assert.deepEqual(fs.readdirSync(real), ["private.txt"]);
 });
 
+test("SI-07.12 backup uses privately owned staging and preserves abandoned prior PID data", async () => {
+  const destination = path.join(base, "backup-owned-staging");
+  const old = path.join(destination, `.lios-backup-${process.pid}`);
+  fs.mkdirSync(old, { recursive: true });
+  fs.writeFileSync(path.join(old, "private.txt"), "UNOWNED-HISTORY");
+  const now = new Date("2026-10-16T07:00:00.000Z");
+  const result = await createBackup(getDb(), { ...common, destination, now });
+  assert.equal(fs.readFileSync(path.join(old, "private.txt"), "utf8"), "UNOWNED-HISTORY");
+  assert.equal((await verifyBackup(result.file)).format, "lios-backup/1");
+  assert.deepEqual(fs.readdirSync(destination).filter((n) => n.startsWith(`.lios-backup-${process.pid}-`)), []);
+  await assert.rejects(createBackup(getDb(), { ...common, destination, now }), /already exists/);
+  assert.equal(fs.readFileSync(path.join(old, "private.txt"), "utf8"), "UNOWNED-HISTORY");
+});
+
+test("SI-07.12 colliding final backup publication never overwrites another writer", async (t) => {
+  const destination = path.join(base, "backup-publish-collision");
+  const now = new Date("2026-10-16T07:01:00.000Z");
+  const output = path.join(destination, "lios-backup-20261016T070100Z.tar.gz");
+  const actualLink = fs.linkSync.bind(fs);
+  let intercepted = false;
+  const stub = t.mock.method(fs, "linkSync", (source: fs.PathLike, target: fs.PathLike) => {
+    if (String(target) === output) {
+      intercepted = true;
+      fs.writeFileSync(output, "OTHER-WRITER-ARCHIVE");
+    }
+    return actualLink(source, target);
+  });
+  try {
+    await assert.rejects(createBackup(getDb(), { ...common, destination, now }), (error: unknown) =>
+      (error as NodeJS.ErrnoException).code === "EEXIST");
+  } finally {
+    stub.mock.restore();
+  }
+  assert.equal(intercepted, true, "the test simulates a different writer winning immediately before publication");
+  assert.equal(fs.readFileSync(output, "utf8"), "OTHER-WRITER-ARCHIVE");
+  assert.deepEqual(fs.readdirSync(destination).filter((n) => n.startsWith(`.lios-backup-${process.pid}-`)), []);
+});
+
+test("SI-07.12 backup refuses a symlink alias physically nested inside Home before creating destination", (t) => {
+  const alias = path.join(base, "backup-home-alias");
+  const target = path.join(alias, "data", "backup-must-not-appear");
+  try {
+    fs.symlinkSync(rootA, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip("Host cannot create a directory symlink: " + String(error));
+    return;
+  }
+  assert.throws(
+    () => createBackup(getDb(), { ...common, destination: target }),
+    /outside the LiOS data folder/,
+  );
+  assert.equal(fs.existsSync(path.join(rootA, "data", "backup-must-not-appear")), false);
+});
+
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
   const dest = path.join(base, "retention");
   for (const minute of [1, 2, 3]) {
