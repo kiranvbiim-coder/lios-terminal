@@ -61,6 +61,7 @@ import {
   updateP9WorkflowEventCursorSystem,
 } from "./p9AutomationStore";
 import {
+
   executeMatchedP9EventWorkflows,
   p9AutomationEventMatches,
   p9UnseenObservedFilings,
@@ -658,6 +659,7 @@ export async function emitP9AutomationEvent(raw: unknown): Promise<{ matched: nu
     }),
   );
   if (summary.unexpectedFailures > 0) {
+    // Do not dump provider errors, credentials, or raw event payloads to logs.
     console.warn("[p9Automation] unexpected event workflow failures:", summary.unexpectedFailures);
   }
   return { matched: summary.matched, executed: summary.executed, failed: summary.failed };
