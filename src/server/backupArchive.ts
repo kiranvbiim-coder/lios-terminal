@@ -398,6 +398,10 @@ async function readArchive(file: string, options: ReadOptions): Promise<BackupMa
   const parsed = manifestSchema.safeParse(JSON.parse(Buffer.concat(manifestBody).toString("utf8")));
   if (!parsed.success) throw new BackupError("The backup manifest is unsupported or damaged.");
   const manifest = parsed.data;
+  if (manifest.encrypted !== encrypted) {
+    if (extractRoot) fs.rmSync(extractRoot, { recursive: true, force: true });
+    throw new BackupError("Backup manifest encryption disagrees with the actual archive envelope.");
+  }
   const problems: string[] = [];
   const listed = new Set<string>();
   for (const entry of manifest.entries) {
@@ -505,7 +509,8 @@ export function assertRestorableHomeManifest(manifest: BackupManifest): void {
     if (!relative
       || relative === "pgdata" || relative.startsWith("pgdata/")
       || relative === "PG_VERSION"
-      || NEVER_ARCHIVED.some(([pattern]) => pattern.test(relative))) {
+      || NEVER_ARCHIVED.some(([pattern]) => pattern.test(relative))
+      || (!manifest.encrypted && (Boolean(SECRET_KEY_FILES[relative]) || relative.startsWith("execution-journal/")))) {
       throw new BackupError(`Protected LiOS Home path cannot be restored: ${entry.path}`);
     }
     // macOS/Windows volumes may be case-insensitive even when the backup
