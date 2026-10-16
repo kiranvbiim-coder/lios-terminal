@@ -482,6 +482,51 @@ export function assertSafeRestoreFileTarget(root: string, relative: string): str
   return target;
 }
 
+/**
+ * Archive authentication only establishes that payload bytes match the
+ * archive's own manifest. It does not authorize arbitrary Home mutation.
+ * Check this before database import or any move of extracted files.
+ */
+export function assertRestorableHomeManifest(manifest: BackupManifest): void {
+  const files = new Set<string>();
+  for (const entry of manifest.entries) {
+    const isDb = entry.path.startsWith("db/");
+    const isFile = entry.path.startsWith("files/");
+    if ((!isDb && !isFile) || (isDb && entry.kind !== "db") || (isFile && entry.kind !== "file")) {
+      throw new BackupError(`Backup entry has an invalid restoration kind: ${entry.path}`);
+    }
+    if (!isFile) continue;
+    if (entry.path === BACKUP_VAULT_MIGRATION_ENTRY) continue;
+    const relative = entry.path.slice("files/".length);
+    // The actual database is imported from db/**, never copied from files/**.
+    // Also preserve root identity and transient state LiOS deliberately omits
+    // when *creating* a backup; a self-consistent forged manifest is not
+    // permission to overwrite those files during restoration.
+    if (!relative
+      || relative === "pgdata" || relative.startsWith("pgdata/")
+      || relative === "PG_VERSION"
+      || NEVER_ARCHIVED.some(([pattern]) => pattern.test(relative))) {
+      throw new BackupError(`Protected LiOS Home path cannot be restored: ${entry.path}`);
+    }
+    // macOS/Windows volumes may be case-insensitive even when the backup
+    // originated on a case-sensitive filesystem. Never allow ambiguous
+    // archive paths to overwrite each other after the DB is imported.
+    const key = relative.toLowerCase();
+    if (files.has(key)) {
+      throw new BackupError(`Colliding restore file names: ${entry.path}`);
+    }
+    files.add(key);
+  }
+  for (const relative of files) {
+    const segments = relative.split("/");
+    for (let i = 1; i < segments.length; i += 1) {
+      if (files.has(segments.slice(0, i).join("/"))) {
+        throw new BackupError(`Restore archive contains a file/directory collision: ${relative}`);
+      }
+    }
+  }
+}
+
 export interface RestoreResult {
   manifest: BackupManifest;
   filesRestored: number;
@@ -514,6 +559,7 @@ export async function restoreBackup(
   try {
     const manifest = await extractBackup(file, staging, options);
     extractionOwned = true;
+    assertRestorableHomeManifest(manifest);
     // Validate all Home destinations before the database import. Otherwise a
     // symlinked parent could refuse the file stage after DB state changed.
     for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file"
