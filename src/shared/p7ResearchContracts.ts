@@ -206,6 +206,35 @@ export const p7SearchHitSchema = z.object({
 }).strict();
 export type P7SearchHit = z.infer<typeof p7SearchHitSchema>;
 
+export const p7LocalSearchRequestSchema = p7SearchRequestSchema.extend({
+  queryEmbedding: z.null().default(null),
+  semanticWeight: z.number().min(0.1).max(1).default(0.6),
+  localEmbedding: z.object({
+    provider: z.enum(["ollama", "lm_studio"]),
+    model: z.string().trim().min(1).max(200),
+  }).strict(),
+});
+export type P7LocalSearchRequest = z.infer<typeof p7LocalSearchRequestSchema>;
+export interface P7LocalSearchResult {
+  hits: P7SearchHit[];
+  retrieval: {
+    mode: "local_embedding";
+    status: "generated" | "no_permitted_sources";
+    provider: "ollama" | "lm_studio";
+    requestedModel: string;
+    servedModel: string | null;
+    spaceId: string;
+    dimensions: number | null;
+    generatedAt: string;
+    sourceCount: number;
+    omittedSourceCount: number;
+    rightsBlockedSourceCount: number;
+    truncatedSourceCount: number;
+    sourceRevisions: Array<{ documentId: string; contentHash: string }>;
+    persistence: "request_only";
+  };
+}
+
 export const p7SnapshotManifestEntrySchema = z.object({
   id: z.string().trim().min(1).max(300),
   sourceType: p7SourceTypeSchema,

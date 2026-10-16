@@ -226,4 +226,12 @@ test("SI-03.04 Project knowledge makes permitted attachment text retrievable wit
     allowedSourceRefs: [structured.sourceRef],
   });
   assert.ok(reopenedStructuredHits.some((hit) => hit.sourceRef.includes("#table:")), "structured P7 children persist across reopen");
+  await t.test("changing current source eligibility revokes indexed text and derived sections without manual rebuild", async () => {
+    const loaded = await loadProjectAttachment(ctx, project.id, reference.id);
+    await setProjectResourceContextMode(ctx, loaded.resource.id, "excluded");
+    assert.deepEqual(await searchProjectIntelligence(ctx, project.id, { query: searchableToken, limit: 10 }), []);
+    const structuredLoaded = await loadProjectAttachment(ctx, project.id, structured.id);
+    await setProjectResourceContextMode(ctx, structuredLoaded.resource.id, "excluded");
+    assert.deepEqual(await searchProjectIntelligence(ctx, project.id, { query: "FY2026E", limit: 20, allowedSourceRefs: [structured.sourceRef] }), []);
+  });
 });

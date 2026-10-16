@@ -5441,6 +5441,18 @@
    "unprobed": false
   },
   {
+   "method": "POST",
+   "path": "/api/projects/:projectId/intelligence/search/local",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "GET",
    "path": "/api/projects/:projectId/intelligence/snapshots",
    "reachableBy": [
