@@ -44,7 +44,7 @@ statsmodels==0.14.4
 # `durbin_watson` import chain breaks on pandas 3.0's `deprecate_kwarg`
 # signature change) -- pin below 3.0 explicitly rather than letting pip
 # resolve to whatever's latest at install time.
-pandas<3.0
+pandas<4.0
 
 # Econometrics: panel data (Fixed/Random effects, Hausman test), 2SLS
 # instrumental variables -- statsmodels doesn't cover panel estimators,
