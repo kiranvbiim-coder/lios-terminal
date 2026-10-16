@@ -24,6 +24,7 @@ const {
   BACKUP_VAULT_MIGRATION_ENTRY,
   BackupError,
   assertSafeRestoreFileTarget,
+  assertRestorableHomeManifest,
   createBackup,
   extractBackup,
   reserveRestorePreviousDirectory,
@@ -199,6 +200,68 @@ test("verification rejects path traversal, duplicates, unlisted, changed and mis
   await assert.rejects(verifyBackup(write("missing.tar.gz", handmade([], manifestFor(ok)))), /missing files\/a\.txt/);
   await assert.rejects(verifyBackup(write("nomanifest.tar.gz", handmade(ok, null))), /no manifest/);
   await assert.rejects(verifyBackup(write("other.tar.gz", handmade([{ name: "elsewhere/a.txt", body: "x" }], manifestFor([])))), /Unexpected entry/);
+});
+
+test("SI-07.12 internally verified archives cannot overwrite protected Home state before DB import", async () => {
+  const originalRoot = process.env.LIOS_DATA_ROOT;
+  process.env.LIOS_DATA_ROOT = rootA;
+  try {
+    const before = (await getDb().select().from(users)).map((user) => user.email).sort();
+    const existing = fs.readdirSync(rootA).filter((name) => name.startsWith(".lios-restore-")).sort();
+    const protectedPaths = [
+      "files/pgdata/PG_VERSION",
+      "files/.lios-root.json",
+      "files/data/session-secret",
+      "files/restore-previous-old/private.txt",
+      "files/data/observability/log.txt",
+    ];
+    for (const [index, entryPath] of protectedPaths.entries()) {
+      const entry = { name: entryPath, path: entryPath, body: "FORGED-BUT-HASH-VERIFIED" };
+      const file = path.join(base, `protected-member-${index}.tar.gz`);
+      fs.writeFileSync(file, handmade([entry], manifestFor([entry])));
+      const verified = await verifyBackup(file);
+      assert.equal(verified.entries[0]?.path, entryPath, "archive SHA/manifest verification itself succeeds");
+      await assert.rejects(restoreBackup(getDb(), file), /Protected LiOS Home path cannot be restored/);
+      assert.deepEqual(
+        (await getDb().select().from(users)).map((user) => user.email).sort(),
+        before,
+        "the protected file must be refused before database import",
+      );
+      assert.deepEqual(
+        fs.readdirSync(rootA).filter((name) => name.startsWith(".lios-restore-")).sort(),
+        existing,
+        "a refused restore must clean its owned extraction slot",
+      );
+    }
+  } finally {
+    if (originalRoot === undefined) delete process.env.LIOS_DATA_ROOT;
+    else process.env.LIOS_DATA_ROOT = originalRoot;
+  }
+});
+
+test("SI-07.12 restore rejects misleading archive kinds and cross-platform filename collisions", async () => {
+  const fixture = [
+    { name: "files/Reports.txt", path: "files/Reports.txt", body: "first" },
+    { name: "files/reports.TXT", path: "files/reports.TXT", body: "second" },
+  ];
+  const file = path.join(base, "ambiguous-restore.tar.gz");
+  fs.writeFileSync(file, handmade(fixture, manifestFor(fixture)));
+  const verified = await verifyBackup(file);
+  assert.throws(() => assertRestorableHomeManifest(verified), /Colliding restore file names/);
+  const ambiguous = manifestFor([
+    { path: "files/cases", body: "file" },
+    { path: "files/cases/child.txt", body: "nested" },
+  ]);
+  assert.throws(
+    () => assertRestorableHomeManifest(ambiguous as Parameters<typeof assertRestorableHomeManifest>[0]),
+    /file\/directory collision/,
+  );
+  const mismatched = manifestFor([{ path: "files/project.txt", body: "content" }]);
+  mismatched.entries[0]!.kind = "db";
+  assert.throws(
+    () => assertRestorableHomeManifest(mismatched as Parameters<typeof assertRestorableHomeManifest>[0]),
+    /invalid restoration kind/,
+  );
 });
 
 test("restore recreates database, files and keys in a fresh Home and keeps replaced files", async () => {
