@@ -106,7 +106,6 @@ function sameRestoredRuntime(actual: ManagedRuntimeState | null, original: Manag
     && actual.verificationWarnings.length === original.verificationWarnings.length
     && actual.verificationWarnings.every((warning, index) => warning === original.verificationWarnings[index]);
 }
-
 function defaultActivatedRuntimeValidator(
   candidate: ManagedRuntimeState,
   expected: ManagedRuntimeState,

@@ -24,31 +24,67 @@ function safePercent(value) {
   return Math.max(0, Math.min(100, Math.round(percent)));
 }
 
-async function confirmDesktopUpdateInstall({ version }) {
-  // This module is only invoked from Electron's trusted main process. Keep the
-  // install decision in a native dialog instead of exposing restart/install
-  // authority to renderer JavaScript or preload IPC.
-  const { dialog, BrowserWindow } = require("electron");
+async function nativeConfirmDesktopUpdate({ version }) {
+  const { BrowserWindow, dialog } = require("electron");
   const options = {
     type: "info",
     title: "LiOS update ready",
-    message: version === "unknown"
-      ? "A signed LiOS Intelligence Terminal update is ready to install."
-      : `LiOS Intelligence Terminal ${version} is ready to install.`,
-    detail: "Restart LiOS now to install the downloaded signed update. Choose Later to keep working.",
-    buttons: ["Later", "Restart and install"],
+    message: version === "unknown" ? "A signed LiOS update is ready to install." : `LiOS ${version} is ready to install.`,
+    detail: "LiOS will close and restart to finish installing this signed update.",
+    buttons: ["Later", "Install and restart"],
     defaultId: 0,
     cancelId: 0,
     noLink: true,
   };
+  const owner = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+  const result = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options);
+  return result.response === 1;
+}
 
-  const focusedWindow = BrowserWindow.getFocusedWindow?.() ?? null;
-  const fallbackWindow = BrowserWindow.getAllWindows?.().find((window) => !window.isDestroyed?.()) ?? null;
-  const parentWindow = focusedWindow && !focusedWindow.isDestroyed?.() ? focusedWindow : fallbackWindow;
-  const confirmation = parentWindow
-    ? await dialog.showMessageBox(parentWindow, options)
-    : await dialog.showMessageBox(options);
-  return confirmation.response === 1;
+function createDesktopUpdateInstallController({ updater, confirmInstall, log = () => {} }) {
+  if (!updater || typeof updater.quitAndInstall !== "function") {
+    throw new TypeError("Desktop updater install controller requires quitAndInstall().");
+  }
+  if (typeof confirmInstall !== "function") {
+    throw new TypeError("Desktop updater install controller requires a confirmation callback.");
+  }
+
+  let promptActive = false;
+  let installRequested = false;
+
+  return {
+    async handleDownloaded(info) {
+      const version = safeVersion(info?.version);
+      if (promptActive || installRequested) {
+        return { accepted: false, reason: "busy", version };
+      }
+
+      promptActive = true;
+      try {
+        const approved = await confirmInstall({ version });
+        if (!approved) {
+          log(`Signed desktop update ${version} was not approved for immediate install.`);
+          return { accepted: false, reason: "cancelled", version };
+        }
+
+        installRequested = true;
+        try {
+          updater.quitAndInstall(false, true);
+        } catch {
+          installRequested = false;
+          log("Desktop update install failed safely before restart.");
+          return { accepted: false, reason: "install_failed", version };
+        }
+        log(`User approved signed desktop update ${version}; restarting to install.`);
+        return { accepted: true, version };
+      } catch {
+        log("Desktop update install confirmation failed safely.");
+        return { accepted: false, reason: "confirmation_failed", version };
+      } finally {
+        promptActive = false;
+      }
+    },
+  };
 }
 
 function configureAutoUpdater({
@@ -56,7 +92,7 @@ function configureAutoUpdater({
   isPackaged,
   env = process.env,
   log = () => {},
-  confirmInstall = confirmDesktopUpdateInstall,
+  confirmInstall = nativeConfirmDesktopUpdate,
 }) {
   if (!isPackaged) {
     return { enabled: false, reason: "Desktop updates are disabled for unpackaged development launches." };
@@ -70,13 +106,13 @@ function configureAutoUpdater({
   }
 
   updater.autoDownload = true;
-  // Download automatically, but never install merely because the app quits.
-  // Installation requires the explicit confirmation callback below.
+  // A downloaded update may only install after the trusted main-process native
+  // confirmation returns approval. Normal app quit must never bypass that gate.
   updater.autoInstallOnAppQuit = false;
   updater.allowPrerelease = false;
   updater.allowDowngrade = false;
 
-  let installConfirmationInFlight = false;
+  const installController = createDesktopUpdateInstallController({ updater, confirmInstall, log });
 
   updater.on("checking-for-update", () => log("Checking for a signed desktop update."));
   updater.on("update-available", (info) => log(`Signed desktop update available: ${safeVersion(info?.version)}.`));
@@ -86,28 +122,8 @@ function configureAutoUpdater({
     log(percent === null ? "Desktop update download is in progress." : `Desktop update download ${percent}%.`);
   });
   updater.on("update-downloaded", async (info) => {
-    const version = safeVersion(info?.version);
-    log(`Signed desktop update downloaded: ${version}; awaiting install confirmation.`);
-
-    if (installConfirmationInFlight) {
-      log("Desktop update install confirmation is already pending.");
-      return;
-    }
-
-    installConfirmationInFlight = true;
-    try {
-      const confirmed = await confirmInstall({ version });
-      if (!confirmed) {
-        log("Desktop update installation deferred by user.");
-        return;
-      }
-      log("Desktop update install confirmed; restarting to install.");
-      updater.quitAndInstall(false, true);
-    } catch {
-      log("Desktop update confirmation failed safely.");
-    } finally {
-      installConfirmationInFlight = false;
-    }
+    log(`Signed desktop update downloaded: ${safeVersion(info?.version)}; awaiting explicit install confirmation.`);
+    await installController.handleDownloaded(info);
   });
   updater.on("error", () => log("Desktop update failed safely."));
   void updater.checkForUpdates().catch(() => log("Desktop update failed safely."));
@@ -115,4 +131,9 @@ function configureAutoUpdater({
   return { enabled: true, url: null, source: "packaged_config" };
 }
 
-module.exports = { DEFAULT_UPDATE_URL, resolveUpdateUrl, configureAutoUpdater };
+module.exports = {
+  DEFAULT_UPDATE_URL,
+  resolveUpdateUrl,
+  configureAutoUpdater,
+  createDesktopUpdateInstallController,
+};
