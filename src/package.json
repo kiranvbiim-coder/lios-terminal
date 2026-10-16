@@ -198,7 +198,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lightweight-charts": "^5.1.0",
-    "lucide-react": "^0.453.0",
+    "lucide-react": "^1.56.0",
     "memorystore": "^1.6.7",
     "multer": "^2.3.0",
     "mysql2": "^3.24.2",
