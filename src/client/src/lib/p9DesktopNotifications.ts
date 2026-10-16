@@ -1,3 +1,5 @@
+import { authSessionStateSchema, type AuthSessionState } from "@shared/identityContracts";
+
 export type P9DesktopNotificationPermission = "granted" | "denied" | "default" | "unsupported";
 export type P9DesktopDeliveryClaim = "claimed" | "duplicate" | "unavailable";
 export type P9DesktopNotificationReason = "success" | "failure" | "condition_met" | "change_detected";
@@ -38,7 +40,21 @@ export interface P9DesktopNotificationDeliveryOptions {
   freshnessMs?: number;
 }
 
-const DESKTOP_DELIVERY_STORAGE_KEY = "lios.p9.desktop-notifications.v1";
+// V2 intentionally does not inherit unscoped delivery receipts from PR #10.
+const DESKTOP_DELIVERY_PREFIX = "lios.p9.desktop-notifications.v2.";
+let activeOwnerKey: string | null = null;
+let ownerGeneration = 0;
+
+export function setP9DesktopNotificationOwner(session: AuthSessionState | null): void {
+  const parsed = authSessionStateSchema.safeParse(session);
+  const principal = parsed.success && parsed.data.state === "authenticated_online"
+    ? parsed.data.principal : null;
+  const key = principal
+    ? `${DESKTOP_DELIVERY_PREFIX}${principal.userId}.${principal.organizationId ?? "internal"}` : null;
+  if (activeOwnerKey === key) return;
+  activeOwnerKey = key;
+  ownerGeneration += 1;
+}
 const MAX_PERSISTED_IDS = 2_000;
 const DEFAULT_FRESHNESS_MS = 5 * 60_000;
 const DESKTOP_TITLE_MAX_BYTES = 72;
@@ -182,9 +198,9 @@ export async function deliverP9DesktopNotifications(
   return result;
 }
 
-function readDeliveredIds(storage: Storage): string[] {
+function readDeliveredIds(storage: Storage, key: string): string[] {
   try {
-    const parsed = JSON.parse(storage.getItem(DESKTOP_DELIVERY_STORAGE_KEY) || "[]");
+    const parsed = JSON.parse(storage.getItem(key) || "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((value): value is string => typeof value === "string" && value.startsWith("workflow-notification:"))
@@ -209,7 +225,10 @@ function unsupportedPort(): P9DesktopNotificationPort {
  * of truth; localStorage records only delivery ids for restart-safe dedupe.
  */
 export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationPort {
-  if (typeof window === "undefined" || !(window as any).limuriaDesktop?.isElectron || typeof window.Notification === "undefined") {
+  const selectedKey = activeOwnerKey;
+  const selectedGeneration = ownerGeneration;
+  if (!selectedKey || typeof window === "undefined"
+    || !(window as any).limuriaDesktop?.isElectron || typeof window.Notification === "undefined") {
     return unsupportedPort();
   }
 
@@ -219,22 +238,26 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
   } catch {
     return unsupportedPort();
   }
-  const deliveredIds = new Set(readDeliveredIds(storage));
+  const deliveredIds = new Set(readDeliveredIds(storage, selectedKey));
+  const authorized = () => activeOwnerKey === selectedKey && ownerGeneration === selectedGeneration;
   const permission = window.Notification.permission as P9DesktopNotificationPermission;
 
   return {
     permission,
     requestPermission: async () => window.Notification.requestPermission() as Promise<P9DesktopNotificationPermission>,
     claimDelivery: (id) => {
+      // A session switch invalidates ports created for the previous principal,
+      // including an in-flight permission prompt that resolved after logout.
+      if (!authorized()) return "unavailable";
       // Multiple already-open browser ports can share the same localStorage.
       // Refresh before every claim so a delivery persisted by another port is
       // observed before this port decides whether the canonical id is new.
-      for (const persistedId of readDeliveredIds(storage)) deliveredIds.add(persistedId);
+      for (const persistedId of readDeliveredIds(storage, selectedKey)) deliveredIds.add(persistedId);
       if (deliveredIds.has(id)) return "duplicate";
       deliveredIds.add(id);
       const values = [...deliveredIds].slice(-MAX_PERSISTED_IDS);
       try {
-        storage.setItem(DESKTOP_DELIVERY_STORAGE_KEY, JSON.stringify(values));
+        storage.setItem(selectedKey, JSON.stringify(values));
         return "claimed";
       } catch {
         deliveredIds.delete(id);
@@ -242,6 +265,7 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
       }
     },
     show: ({ id, title, body }) => {
+      if (!authorized()) throw new Error("Desktop notification principal changed.");
       new window.Notification(title, { body, tag: id });
     },
   };
