@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AuthSessionState } from "@shared/identityContracts";
 import {
   createBrowserP9DesktopNotificationPort,
   deliverP9DesktopNotifications,
   sanitizeP9DesktopNotificationText,
+  setP9DesktopNotificationOwner,
   type P9DesktopNotificationPermission,
   type P9DesktopNotificationPort,
 } from "./p9DesktopNotifications";
+
+function onlineSession(userId: number, state: AuthSessionState["state"] = "authenticated_online"): AuthSessionState {
+  return {
+    version: 1, state,
+    principal: { version: 1, kind: "human", userId, organizationId: 22,
+      email: `user${userId}@example.test`, name: "Example", role: "client_user", audience: "client" },
+    restoredAt: "2026-10-15T06:00:00.000Z",
+    reason: state === "authenticated_online" ? null : "unavailable",
+  };
+}
 
 const NOW = new Date("2026-10-15T06:00:00.000Z");
 
@@ -191,11 +203,26 @@ test("SI-06 browser delivery rechecks persisted ids when concurrent ports claim 
   });
 
   try {
+    setP9DesktopNotificationOwner(onlineSession(11));
     const first = createBrowserP9DesktopNotificationPort();
     const concurrent = createBrowserP9DesktopNotificationPort();
     assert.equal(first.claimDelivery(canonical.id), "claimed");
     assert.equal(concurrent.claimDelivery(canonical.id), "duplicate");
+
+    // Signing in as another verified principal does not inherit a previous
+    // account's deduplication receipts even if IDs happen to match.
+    setP9DesktopNotificationOwner(onlineSession(12));
+    const secondAccount = createBrowserP9DesktopNotificationPort();
+    assert.equal(first.claimDelivery(canonical.id), "unavailable", "stale ports are disarmed");
+    assert.equal(secondAccount.claimDelivery(canonical.id), "claimed");
+    assert.equal(concurrent.claimDelivery("workflow-notification:new"), "unavailable");
+    assert.equal(storageValues.size, 2, "each owner has its own receipt namespace");
+    setP9DesktopNotificationOwner(onlineSession(11));
+    assert.equal(createBrowserP9DesktopNotificationPort().claimDelivery(canonical.id), "duplicate");
+    setP9DesktopNotificationOwner(onlineSession(12, "authenticated_offline"));
+    assert.equal(createBrowserP9DesktopNotificationPort().claimDelivery(canonical.id), "unavailable");
   } finally {
+    setP9DesktopNotificationOwner(null);
     if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
     else Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: originalWindow });
   }
