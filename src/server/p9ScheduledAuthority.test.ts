@@ -58,4 +58,26 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     assert.equal(result.failed, 1);
     assert.equal(result.observed, 0, "empty fixture source is not invented filing evidence");
   });
+  await t.test("provider exceptions never disclose upstream detail in automation observer logs", async () => {
+    const secret = "PRIVATE_PROVIDER_DETAIL_DO_NOT_LOG_20261016";
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(args.map(value => String(value)).join(" ")); };
+    try {
+      let calls = 0;
+      const result = await runP9FilingObserverCycle({
+        filings: async () => {
+          calls += 1;
+          throw new Error(`Provider rejected sensitive credential: ${secret}`);
+        },
+      });
+      assert.equal(calls, 1, "disabled owner never invokes provider source");
+      assert.equal(result.failed, 2, "denied owner and failing provider count as failures");
+      assert.equal(result.observed, 0, "failed fetch cannot become a successful observation");
+      assert.ok(warnings.some(line => line.includes("[p9Automation] filing observer failed for workflow")));
+      assert.ok(!warnings.join("\n").includes(secret), "server logs must not contain provider failure or credential bytes");
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
 });
