@@ -35,6 +35,7 @@ import { P10_RUNTIME_PACKS } from "./p10RuntimePacks";
 import { inspectSandboxImageReadiness, repairSandboxImage } from "./sandboxImageProvisioning";
 import { runtimeLifecycleRequestSchema } from "@shared/runtimeLifecycle";
 import { applyRuntimeLifecycle, previewRuntimeLifecycle, RuntimeLifecycleRefusal, type RuntimeLifecycleDependencies } from "./runtimeLifecycle";
+import { createProductionProvisioningAuthority } from "./managedRuntimeProvisioning";
 
 const CREDENTIAL_NAMES = new Set([
   ...BUILT_IN_CONNECTORS.filter((connector) => connector.vaultKey).map((connector) => connector.vaultKey!),
@@ -60,7 +61,7 @@ function aiVerificationStatus(error: AIProviderError): number {
   return 502;
 }
 
-export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependencies: RuntimeLifecycleDependencies = {}): void {
+export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependencies: RuntimeLifecycleDependencies = { strictProvisioningAuthority: createProductionProvisioningAuthority() }): void {
   app.get("/api/setup/sandbox-image", requireAuth, async (_req, res, next) => {
     try {
       res.json(await inspectSandboxImageReadiness());

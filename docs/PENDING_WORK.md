@@ -2,7 +2,21 @@
 
 ## Active work — public SI-06 / SI-07 only
 
-**Owner direction:** work exclusively in `kiranvbiim-coder/lios-terminal` (`/Users/kiran/Projects/lios-terminal-public`). SI-01–SI-05 are paused and hidden below, not deleted or completed. Complete product coding using existing public PRs first; keep focused behavior/security tests, typecheck and short runtime smoke. Full shipping, repeated Electron packaging, native-device and cross-platform campaigns are deferred. Track **coding / journey / shipping** independently. Neither an open PR nor a locally integrated module means the whole workstream is complete.
+**Owner direction (updated 2026-10-17): production readiness is now the priority.** Work exclusively in `kiranvbiim-coder/lios-terminal` (`/Users/kiran/Projects/lios-terminal-public`). SI-01–SI-05 stay paused below, not deleted or completed. Track **coding / journey / shipping** independently; a merged PR or green source gate is never packaged, signed, SP or P14 acceptance.
+
+### Production readiness register — candidate `main` after PR #73
+
+| Blocker | Class | State / evidence |
+|---|---|---|
+| Moderate Apache ECharts XSS advisory (GHSA-fgmj-fm8m-jvvx, `<6.1.0`) in the production graph | Code | **Fixed in source:** `echarts@6.1.0`/`zrender@6.1.0`; `npm run audit:prod` reports 0 vulnerabilities; chart adapter checks, donor/license validators and the full local source gate passed. Packaged footprint/accessibility still unmeasured. |
+| Strict managed-runtime provisioning authority had no production composition (`registerEnvironmentSetupRoutes(app)` passed none) | Code | **Fixed in source:** `managedRuntimeProvisioning.ts` composes the closed authority over the canonical `runCommand`; root/interpreter are resolved per call; HTTP cannot supply a runner. Real run on this macOS arm64 host: core wheel closure qualified (offline hash install, `pip check`, native import smoke), then a strict `requireVerified` install through the production authority reached `hashVerified: true`, readiness `ready`. |
+| Release wheel-hash locks | Release artifact | Per-platform; generate on each target host with `tsx script/qualify_runtime_wheels.ts --output <new-dir> --packs core,…`. Locks are **not committed** (they differ per OS/arch); the darwin-arm64 core closure was proven and its scratch removed. Windows x64 and non-core packs remain **NOT_RUN**. |
+| Sandbox release bundle (`sandbox-image-dist/`), Docker/Podman engine and imported immutable image | Release artifact / operator | Source lock approves `linux/arm64` only (`sha256:3e66d904…`); payload, engine daemon and image import are absent here. Windows needs an independent `linux/amd64` release. Required even for unsigned `app:pack`. |
+| Python sidecar (`python-sidecar-dist/`), `LIOS_UPDATE_URL`, Developer ID signing, notarization | Operator/release | `release:preflight` (desktop, `NODE_ENV=production`) reports these BLOCKED; they cannot be fabricated or defaulted. |
+| Release/P14/SP workflows and datasets | Distribution boundary | Deliberately withheld from the public tree (`third_party/source-distribution.json`); `acceptance:p14*` are unreachable here. Signed, clean-machine, N→N+1 update, VoiceOver/Narrator, performance and flagship evidence remain NOT_RUN. |
+| Local capacity | Environment | ~7.5 GiB free on a 229 GiB volume (97% used); only this work's own scratch may be removed. Packaging and image import need more headroom. |
+
+Next, in order: restore capacity and supply the approved sandbox bundle/engine → `acceptance:sp01-packaged` on an exact unsigned macOS arm64 package (bind app bytes/SHA, not only the checkout SHA) → backup/restore journey on the packaged app → obtain signing/notarization/update-feed inputs → exact-tag release evidence. Only observed results may be recorded.
 
 ### Public PR consolidation — 2026-10-16
 
