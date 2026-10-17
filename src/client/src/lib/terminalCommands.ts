@@ -1,9 +1,52 @@
 import type { ViewMode } from "./terminalTypes";
+import type { WorkSearchResult } from "@shared/workSearch";
+
+export type CanonicalNavigationTarget = "conversation" | "projects" | "chats" | "library" | "automations" | "plugins" | "connections" | "doctor" | "search";
+
+// These are destinations in the existing shell, not analytical functions or tools.
+export const CANONICAL_NAVIGATION = [
+  { target: "conversation", label: "Conversation", aliases: ["conversation", "back to conversation"], description: "Return to the selected conversation without sending a message." },
+  { target: "projects", label: "Projects", aliases: ["projects", "project"], description: "Browse your accessible Projects; no Project is created." },
+  { target: "chats", label: "Chats & history", aliases: ["chats", "chat", "history", "chat history"], description: "Browse your saved conversations." },
+  { target: "search", label: "Search saved work", aliases: ["search", "saved work", "search saved work", "files"], description: "Search your permitted Projects, Chats, exact Artifacts and Project files using existing work search." },
+  { target: "library", label: "Library · saved Artifacts", aliases: ["library", "artifacts", "saved artifacts", "saved reports"], description: "Open the selected Project's saved Artifacts and files; choose a Project if none is selected." },
+  { target: "automations", label: "Project Automations", aliases: ["automations", "automation", "workflows"], description: "Open the selected Project's Automations. Opening does not run a workflow." },
+  { target: "plugins", label: "Governed extensions", aliases: ["plugins", "extensions"], description: "Inspect supported extension configuration; no marketplace availability is implied." },
+  { target: "connections", label: "Connections & AI", aliases: ["connections", "connection", "connectors", "ai", "connections & ai", "connections and ai", "ai settings"], description: "Open existing Connection Center; configuration and repair remain subject to your account access." },
+  { target: "doctor", label: "Doctor · runtime inspection", aliases: ["doctor", "lios doctor", "runtime doctor"], description: "Open Connection Center for runtime inspection. Does not send a diagnosis message or run a repair." },
+] as const satisfies readonly { target: CanonicalNavigationTarget; label: string; aliases: readonly string[]; description: string }[];
+
+export function parseCanonicalNavigation(input: string): CanonicalNavigationTarget | null {
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ").replace(/^(?:open|go to|show)\s+/, "");
+  return CANONICAL_NAVIGATION.find((entry) => (entry.aliases as readonly string[]).includes(normalized))?.target ?? null;
+}
+
+export function searchCanonicalNavigation(input: string) {
+  const normalized = input.trim().toLowerCase();
+  const exact = parseCanonicalNavigation(input);
+  return CANONICAL_NAVIGATION.filter((entry) => !normalized || entry.target === exact || [entry.label, ...entry.aliases].some((term) => term.toLowerCase().includes(normalized)));
+}
 
 export interface ParsedTerminalCommand {
   raw: string;
   symbol?: string;
   view: ViewMode;
+  navigation?: CanonicalNavigationTarget;
+}
+
+export function dispatchCanonicalNavigation(
+  target: CanonicalNavigationTarget,
+  actions: { openConnections: () => void; openProjectSection: (section: Exclude<CanonicalNavigationTarget, "connections" | "doctor">) => void },
+): void {
+  if (target === "connections" || target === "doctor") actions.openConnections();
+  else actions.openProjectSection(target);
+}
+
+export function resolveWorkSearchLibraryTarget(result: WorkSearchResult): { projectId: number; artifactId: string | null; resourceId: string | null } | null {
+  if (!result.projectId) return null;
+  if (result.kind === "artifact" && result.artifactId) return { projectId: result.projectId, artifactId: result.artifactId, resourceId: null };
+  if (result.kind === "file" && result.resourceId) return { projectId: result.projectId, artifactId: null, resourceId: result.resourceId };
+  return null;
 }
 
 const VIEW_ALIASES: Record<string, ViewMode> = {
@@ -279,6 +322,8 @@ export function getCommandAliasView(token: string | undefined): ViewMode | null 
 export function parseTerminalCommand(input: string): ParsedTerminalCommand | null {
   const raw = input.trim().toUpperCase().replace(/\s+/g, " ");
   if (!raw) return null;
+  const navigation = parseCanonicalNavigation(raw);
+  if (navigation) return { raw, view: "missioncontrol", navigation };
 
   const tokens = raw.split(" ");
   const singleTokenView = getCommandAliasView(tokens[0]);

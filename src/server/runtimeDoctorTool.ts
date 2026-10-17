@@ -8,7 +8,8 @@ import { assertNotAborted } from "./conversationRuntimeCore";
 import { readManagedRuntimeState, managedRuntimePythonPath } from "./pythonRuntimeManager";
 import { evaluateManagedRuntimeReadiness } from "./provisioningReadiness";
 import { planManagedRuntimeRepair } from "./doctorRepairPlan";
-import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { getEnvironmentSetupStatus } from "./environmentSetupService";
+import { inspectRunningPythonService } from "./pythonService";
 
 const tenantSchema = z.object({
   userId: z.number().int().positive(),
@@ -23,8 +24,8 @@ export function inspectRuntimeDoctor() {
     pythonAvailable: managedRuntimePythonPath() !== null,
     requiredPackIds: ["core"],
   });
-  const repair = planManagedRuntimeRepair(readiness, { isolationMode: effectiveSandboxIsolationMode(undefined) });
-  return { readiness, repair, mutationPerformed: false as const, credentialValuesRead: false as const };
+  const repair = planManagedRuntimeRepair(readiness, { isolationMode: "strict" });
+  return { readiness, repair, mutationPerformed: false as const, credentialValuesExposed: false as const };
 }
 
 export const runtimeDoctorTool: ConversationToolDefinition = {
@@ -41,21 +42,33 @@ export const runtimeDoctorTool: ConversationToolDefinition = {
     if ((call.source !== "workflow" && call.source !== "agent") || !call.requestId || call.userId !== tenant.userId) {
       throw new Error("Runtime diagnosis requires an authenticated governed call.");
     }
-    const [actor] = await getDb().select({ id: users.id }).from(users).where(and(
+    const [actor] = await getDb().select({ id: users.id, mustChangePassword: users.mustChangePassword, lockedUntil: users.lockedUntil }).from(users).where(and(
       eq(users.id, tenant.userId), eq(users.role, tenant.role), eq(users.active, true),
       tenant.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, tenant.organizationId),
     )).limit(1);
-    if (!actor) throw new Error("Runtime diagnosis requires a current active account.");
+    if (!actor || actor.mustChangePassword || (actor.lockedUntil && actor.lockedUntil.getTime() > Date.now())) throw new Error("Runtime diagnosis requires a current active account.");
     if (call.projectId !== null && call.projectId !== undefined) {
       const projectId = Number(call.projectId);
       if (!Number.isSafeInteger(projectId) || projectId <= 0) throw new Error("Invalid diagnostic Project scope.");
       await getProject(tenant, projectId);
     }
-    const output = inspectRuntimeDoctor();
+    const [environment, pythonService] = await Promise.all([getEnvironmentSetupStatus(tenant.userId), inspectRunningPythonService()]);
+    const selectedConnectorIds = environment.setup?.selectedConnectorIds ?? [];
+    const output = {
+      ...inspectRuntimeDoctor(),
+      pythonService,
+      account: { role: tenant.role, administratorRepairRequired: true },
+      connectors: environment.connectors.health.filter((entry) => selectedConnectorIds.includes(entry.connectorId)),
+      onboarding: {
+        aiRequired: false, selectedConnectorCount: selectedConnectorIds.length,
+        availableWithoutAi: ["Projects", "Chats", "Artifact Library", "LiOS Doctor"],
+        nextAction: "Use Connections to inspect current runtime prerequisites; missing AI or providers never blocks local Project organization or this diagnosis.",
+      },
+    };
     assertNotAborted(signal);
     return {
       output,
-      summary: `Managed runtime: ${output.readiness.state}. ${output.repair.summary} ${output.repair.executionBlocker ? `Repair blocked: ${output.repair.executionBlocker}.` : ""} No repair, download or task execution was performed.`,
+      summary: `Managed runtime: ${output.readiness.state}. ${output.repair.summary} ${output.repair.executionBlocker ? `Repair blocked: ${output.repair.executionBlocker}.` : ""} Selected connectors: ${selectedConnectorIds.length}; ${output.connectors.filter((entry) => entry.state === "live_verified").length} live verified. ${pythonService.reason} Projects, Chats and Library remain available without AI. No repair, download or task execution was performed.`,
       deterministic: true, sourceRefs: ["runtime:managed-python", "policy:managed-runtime-readiness"],
     };
   },

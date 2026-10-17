@@ -72,6 +72,15 @@ struct HomeView: View {
                                 Button(row["title"] as? String ?? id) { Task { await model.perform { try await model.readArtifact(id) } } }
                             }
                         }
+                        Button("First Artifact page") { Task { await model.perform { try await model.firstArtifacts() } } }.disabled(!gateway.connected)
+                        Button("Next Artifact page") { Task { await model.perform { try await model.nextArtifacts() } } }.disabled(!gateway.connected)
+                        ForEach(Array(model.artifactVersions.enumerated()), id: \.offset) { _, row in
+                            if let version = row["version"] as? Int {
+                                Button("Inspect historical version \(version)") { Task { await model.perform { try await model.inspectVersion(version) } } }.disabled(!gateway.connected)
+                            }
+                        }
+                        Button("First version page") { Task { await model.perform { try await model.firstVersions() } } }.disabled(!gateway.connected)
+                        Button("Next version page") { Task { await model.perform { try await model.nextVersions() } } }.disabled(!gateway.connected)
                         if !model.artifact.isEmpty { NavigationLink("Inspect Artifact / revision / sources") { RecordView(title: "Canonical Artifact", record: model.artifact) } }
                     }
                     Section("Home notifications") {
@@ -80,7 +89,7 @@ struct HomeView: View {
                             VStack(alignment: .leading) {
                                 Text(row["title"] as? String ?? "Home notification")
                                 Text(row["body"] as? String ?? HomeModel.pretty(row)).font(.caption)
-                                if let id = row["id"] as? String { Button("Mark read on Home") { Task { await model.perform { try await model.markRead(id) } } }.disabled(!gateway.connected) }
+                                if let id = row["id"] as? String { Button(gateway.connected ? "Mark read on Home" : "Retain read intent — replay to same owner on reconnect") { Task { await model.perform { try await model.markRead(id) } } } }
                             }
                         }
                     }

@@ -112,3 +112,19 @@ test("discovery clamps result limits", () => {
   assert.ok(discoverCapabilities("", { limit: 500 }, registry).length <= 50);
   assert.ok(discoverCapabilities("", { limit: 0 }, registry).length >= 1);
 });
+
+test("current-user readiness narrows catalog invocability without mutating registered capability facts", () => {
+  const registry = new CapabilityRegistry();
+  registry.registerMany([
+    capability("read.safe", "Safe readiness", { permissions: ["current_authenticated_account"], aiHints: { invocable: true, requiresConfirmation: false } }),
+    capability("read.permission", "Restricted readiness", { permissions: ["current_role_grant"], aiHints: { invocable: true, requiresConfirmation: false } }),
+    capability("read.python", "Python readiness", { execution: { target: "python_sidecar", deterministic: true, seeded: false }, aiHints: { invocable: true, requiresConfirmation: false } }),
+  ]);
+  const currentUser = { role: "internal_analyst", accountActive: true, selectedConnectorIds: [], connectors: { connectors: [], health: [] }, runtimeState: null, pythonAvailable: false, pythonService: { ready: false, packages: {}, reason: "No current local service is running." } };
+  const visible = discoverCapabilities("readiness", { currentUser }, registry);
+  assert.equal(visible.find(item => item.capabilityId === "read.safe")?.invocable, true);
+  assert.equal(visible.find(item => item.capabilityId === "read.permission")?.invocable, false);
+  assert.equal(visible.find(item => item.capabilityId === "read.python")?.invocable, false);
+  assert.deepEqual(discoverCapabilities("readiness", { currentUser: { ...currentUser, accountActive: false }, invocableOnly: true }, registry), []);
+  assert.ok(discoverCapabilities("readiness", {}, registry).every(item => item.invocable), "request-specific revocation must not permanently mutate the shared catalog");
+});

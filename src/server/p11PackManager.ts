@@ -230,6 +230,36 @@ export class P11PackManager {
     return this.install(await fetcher());
   }
 
+  /** Inspect a local archive using exactly the same trust/platform gates as install. */
+  preview(artifact: P11PackArtifact): P11PackVerification {
+    return verifyP11PackArtifact(artifact, this.options);
+  }
+  previewPublisher(artifact: P11PackArtifact, keyId: string, publicKey: crypto.KeyObject): P11PackVerification {
+    return verifyP11PackArtifact(artifact, { ...this.options, publisherKeys: { ...this.options.publisherKeys, [keyId]: publicKey } });
+  }
+
+  trustPublisher(keyId: string, publicKey: crypto.KeyObject): void {
+    const existing = this.options.publisherKeys[keyId];
+    if (existing) {
+      const key = existing instanceof crypto.KeyObject ? existing : crypto.createPublicKey(existing);
+      if (!key.export({ type: "spki", format: "der" }).equals(publicKey.export({ type: "spki", format: "der" }))) {
+        throw new Error("Pack publisher key id is already bound.");
+      }
+    }
+    this.options.publisherKeys[keyId] = publicKey;
+  }
+
+  publisherFingerprint(keyId: string): string | null {
+    const value = this.options.publisherKeys[keyId];
+    if (!value) return null;
+    const key = value instanceof crypto.KeyObject ? value : crypto.createPublicKey(value);
+    return crypto.createHash("sha256").update(key.export({ type: "spki", format: "der" })).digest("hex");
+  }
+
+  inspectManifest(packId: string, version: string): P11PackVerification {
+    return verifyP11InstalledPack({ rootDir: this.versionDir(packId, version), options: this.options });
+  }
+
   install(artifact: P11PackArtifact): P11InstalledPackState {
     const verification = verifyP11PackArtifact(artifact, this.options);
     if (!verification.ok) throw new Error("P11 pack verification failed: " + verification.errors.join(" "));

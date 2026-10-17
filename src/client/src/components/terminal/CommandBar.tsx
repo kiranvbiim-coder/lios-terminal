@@ -5,7 +5,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { CapabilityDiscoveryResult } from "@shared/capabilityDiscovery";
 import { searchDynamicAnalyticsCatalog, type DynamicAnalyticsField } from "@shared/waveCContracts";
-import type { ParsedTerminalCommand } from "@/lib/terminalCommands";
+import { CANONICAL_NAVIGATION, searchCanonicalNavigation, type CanonicalNavigationTarget, type ParsedTerminalCommand } from "@/lib/terminalCommands";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { parseFlexibleTerminalCommand } from "@/lib/terminalIntentCommands";
@@ -30,6 +30,7 @@ interface Props {
   onAskLios?: (question: string) => void;
   onExploreField?: (fieldId: string) => void;
   audience: WorkspaceAudience;
+  navigationContext?: string;
 }
 
 type LauncherMode = "all" | "tools" | "entities" | "mine" | "favorites" | "recent";
@@ -100,8 +101,19 @@ function resultFromCapability(capability: TerminalCapability, type: "tool" | "fa
     capability,
   };
 }
+const DISCOVERY_NAVIGATION_TARGETS: Readonly<Record<string, CanonicalNavigationTarget | undefined>> = {
+  "lios.runtime.doctor": "doctor", "lios.projects": "projects",
+  "lios.artifacts": "library", "lios.automations": "automations",
+};
 
 function resultFromUniversalCapability(result: CapabilityDiscoveryResult): LauncherResult | null {
+  const navigationTarget = DISCOVERY_NAVIGATION_TARGETS[result.capabilityId];
+  const navigation = CANONICAL_NAVIGATION.find((entry) => entry.target === navigationTarget);
+  if (navigation) return {
+    key: `navigation:${navigation.target}`, type: "intent", title: navigation.label,
+    subtitle: navigation.description, meta: "OPEN · EXISTING SURFACE · NO AI", icon: Layers3,
+    command: { raw: result.name, view: "missioncontrol", navigation: navigation.target },
+  };
   const view = capabilityDiscoveryView(result);
   if (!view) return null;
   const capability = getTerminalCapability(view);
@@ -161,7 +173,7 @@ function resultFromSecurity(security: SecuritySearchResult): LauncherResult {
   };
 }
 
-export default function CommandBar({ onClose, onExecute, onAskLios, onExploreField, audience }: Props) {
+export default function CommandBar({ onClose, onExecute, onAskLios, onExploreField, audience, navigationContext }: Props) {
   const isClient = useAudience() === "client";
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<LauncherMode>("all");
@@ -183,7 +195,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
 
   useEffect(() => {
     const raw = normalizedQuery;
-    if (raw.length < 2 || mode === "tools" || mode === "mine" || mode === "favorites" || mode === "recent") {
+    if (parsedCommand?.navigation || raw.length < 2 || mode === "tools" || mode === "mine" || mode === "favorites" || mode === "recent") {
       setRemoteEntities([]);
       setSearching(false);
       return;
@@ -213,7 +225,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
   }, [normalizedQuery, mode, parsedCommand]);
 
   useEffect(() => {
-    if (audience !== "internal" || normalizedQuery.length < 2 || mode === "entities" || mode === "mine" || mode === "favorites" || mode === "recent") {
+    if (parsedCommand?.navigation || audience !== "internal" || normalizedQuery.length < 2 || mode === "entities" || mode === "mine" || mode === "favorites" || mode === "recent") {
       setUniversalCapabilities([]);
       setDiscoveringTools(false);
       return;
@@ -235,7 +247,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
     }, 90);
 
     return () => { controller.abort(); window.clearTimeout(timeout); };
-  }, [audience, mode, normalizedQuery]);
+  }, [audience, mode, normalizedQuery, parsedCommand?.navigation]);
 
   const toolResults = useMemo(() => {
     if (mode === "entities" || mode === "recent") return [];
@@ -286,8 +298,18 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
       .map(resultFromDataField);
   }, [mode, normalizedQuery, onExploreField]);
 
+  const navigationResults = useMemo<LauncherResult[]>(() => {
+    if (mode === "entities" || mode === "favorites" || mode === "recent") return [];
+    return searchCanonicalNavigation(normalizedQuery).map((entry) => ({
+      key: `navigation:${entry.target}`, type: "intent", title: entry.label,
+      subtitle: `${entry.description}${navigationContext ? ` Current context: ${navigationContext}.` : " Current selection is retained."}`,
+      meta: "OPEN · EXISTING SURFACE · NO AI", icon: Layers3,
+      command: { raw: entry.label, view: "missioncontrol", navigation: entry.target },
+    }));
+  }, [mode, normalizedQuery, navigationContext]);
+
   const intentResult = useMemo<LauncherResult[]>(() => {
-    if (!normalizedQuery || !parsedCommand || mode === "mine" || mode === "favorites" || mode === "recent") return [];
+    if (!normalizedQuery || !parsedCommand || parsedCommand.navigation || mode === "mine" || mode === "favorites" || mode === "recent") return [];
     if (!isViewVisibleToAudience(parsedCommand.view, audience)) return [];
     const capability = getTerminalCapability(parsedCommand.view);
     const symbol = parsedCommand.symbol;
@@ -322,10 +344,11 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
     const seen = new Set<string>();
     const questionLike = NATURAL_QUESTION.test(normalizedQuery) || normalizedQuery.endsWith("?");
     const ordered = questionLike
-      ? [...askResult, ...intentResult, ...entityResults, ...dataResults, ...recentResults, ...universalToolResults, ...toolResults]
-      : [...intentResult, ...entityResults, ...dataResults, ...recentResults, ...universalToolResults, ...toolResults, ...askResult];
+      ? [...navigationResults, ...askResult, ...intentResult, ...entityResults, ...dataResults, ...recentResults, ...universalToolResults, ...toolResults]
+      : [...navigationResults, ...intentResult, ...entityResults, ...dataResults, ...recentResults, ...universalToolResults, ...toolResults, ...askResult];
     return ordered.filter((result) => {
-      const identity = result.type === "ask"
+      if (parsedCommand?.navigation && !result.command.navigation) return false;
+      const identity = result.command.navigation ? `navigation:${result.command.navigation}` : result.type === "ask"
         ? `ask:${result.askQuestion}`
         : result.type === "data"
           ? `data:${result.fieldId}`
@@ -334,7 +357,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
       seen.add(identity);
       return true;
     }).slice(0, 24);
-  }, [askResult, dataResults, entityResults, intentResult, normalizedQuery, recentResults, toolResults, universalToolResults]);
+  }, [askResult, dataResults, entityResults, intentResult, navigationResults, normalizedQuery, parsedCommand?.navigation, recentResults, toolResults, universalToolResults]);
 
   useEffect(() => {
     setSelected((current) => Math.max(0, Math.min(current, Math.max(0, results.length - 1))));
@@ -343,11 +366,12 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
   const selectedResult = results[selected] ?? null;
 
   useEffect(() => {
-    if (!selectedResult || selectedResult.type === "ask" || selectedResult.type === "data") return;
+    if (!selectedResult || selectedResult.command.navigation || selectedResult.type === "ask" || selectedResult.type === "data") return;
     prefetchLikelyDestination(selectedResult.command.view, selectedResult.command.symbol);
   }, [selectedResult]);
 
   function execute(result: LauncherResult) {
+    if (result.command.navigation) { onExecute(result.command); return; }
     if (result.type === "data" && result.fieldId && onExploreField) {
       onExploreField(result.fieldId);
       onClose();
@@ -402,7 +426,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
               const active = index === selected;
               const section = resultSection(result);
               const previousSection = index > 0 ? resultSection(results[index - 1]) : null;
-              return <div key={result.key}>{section !== previousSection && <div className="px-3 pb-1 pt-2 font-ui text-[7px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">{section}</div>}<button onMouseEnter={() => { setSelected(index); if (result.type !== "ask" && result.type !== "data") prefetchLikelyDestination(result.command.view, result.command.symbol); }} onClick={() => execute(result)} className={`group mb-1 flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${active ? "border-amber-400/20 bg-amber-400/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,.018)]" : "border-transparent hover:border-border/55 hover:bg-white/[0.018]"}`}><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${RESULT_TONE[result.type]}`}><Icon className="h-3.5 w-3.5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-ui truncate text-[10px] font-semibold text-foreground">{result.title}</span>{result.capability?.hero && <span className="font-ui hidden rounded-full border border-amber-500/18 px-1.5 py-0.5 text-[6px] font-medium text-amber-300/75 sm:inline">Core</span>}</div><div className="font-ui mt-1 truncate text-[8px] text-muted-foreground">{result.subtitle}</div></div><div className="hidden shrink-0 text-right sm:block"><div className="lios-pane-code text-[6px] tracking-wide text-muted-foreground/55">{result.meta}</div><div className={`font-ui mt-1 text-[7px] font-medium ${active ? "text-amber-300/85" : "text-muted-foreground/40"}`}>{result.type === "ask" ? "Ask" : result.type === "data" ? "Explore" : "Open"} <ArrowRight className="ml-1 inline h-2.5 w-2.5" /></div></div></button></div>;
+              return <div key={result.key}>{section !== previousSection && <div className="px-3 pb-1 pt-2 font-ui text-[7px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">{section}</div>}<button onMouseEnter={() => { setSelected(index); if (!result.command.navigation && result.type !== "ask" && result.type !== "data") prefetchLikelyDestination(result.command.view, result.command.symbol); }} onClick={() => execute(result)} className={`group mb-1 flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${active ? "border-amber-400/20 bg-amber-400/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,.018)]" : "border-transparent hover:border-border/55 hover:bg-white/[0.018]"}`}><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${RESULT_TONE[result.type]}`}><Icon className="h-3.5 w-3.5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-ui truncate text-[10px] font-semibold text-foreground">{result.title}</span>{result.capability?.hero && <span className="font-ui hidden rounded-full border border-amber-500/18 px-1.5 py-0.5 text-[6px] font-medium text-amber-300/75 sm:inline">Core</span>}</div><div className="font-ui mt-1 truncate text-[8px] text-muted-foreground">{result.subtitle}</div></div><div className="hidden shrink-0 text-right sm:block"><div className="lios-pane-code text-[6px] tracking-wide text-muted-foreground/55">{result.meta}</div><div className={`font-ui mt-1 text-[7px] font-medium ${active ? "text-amber-300/85" : "text-muted-foreground/40"}`}>{result.type === "ask" ? "Ask" : result.type === "data" ? "Explore" : "Open"} <ArrowRight className="ml-1 inline h-2.5 w-2.5" /></div></div></button></div>;
             })}
           </div>
 

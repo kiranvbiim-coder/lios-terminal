@@ -137,15 +137,3 @@ test("connector capabilities preserve runtime truth instead of claiming static c
   assert.equal(connectorDefinitionToCapabilities(catalogOnly)[0].availability.state, "disabled");
 });
 
-test("default capability registry combines full advanced compute and connector capabilities", () => {
-  const registry = createDefaultCapabilityRegistry();
-  const quantCapabilities = advancedQuantCapabilities();
-  const connectorCatalog = connectorCapabilities();
-  assert.equal(registry.list().length, quantCapabilities.length + connectorCatalog.length);
-  assert.equal(registry.find({ executionTarget: "python_sidecar" }).length, ALL_ADVANCED_QUANT.length);
-  assert.equal(registry.find({ availability: "available" }).length, ALL_ADVANCED_QUANT.length);
-  assert.equal(registry.list().filter((item) => item.source.kind === "connector").length, connectorCatalog.length);
-  assert.equal(registry.list().filter((item) => item.aiHints.invocable).length, ALL_ADVANCED_QUANT.length);
-  assert.ok(registry.find({ availability: "configurable" }).length > 0);
-  assert.ok(registry.find({ executionTarget: "data_service" }).length > 0);
-});

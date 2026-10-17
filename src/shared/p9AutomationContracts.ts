@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { conversationRequestSchema } from "./conversationRuntime";
+import { p9PortfolioMaterialityActionSchema } from "./p9PortfolioMateriality";
 
 export const P9_AUTOMATION_SCHEMA_VERSION = "1" as const;
 
@@ -18,6 +19,7 @@ export type P9WorkflowTemplate = z.infer<typeof p9WorkflowTemplateSchema>;
 export const p9AutomationEventTypeSchema = z.enum([
   "filing",
   "earnings",
+  "estimate_revision",
   "data_refresh",
   "price_threshold",
   "risk_threshold",
@@ -87,6 +89,13 @@ export const p9WorkflowActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("provider_health"),
   }).strict(),
+  z.object({
+    kind: z.literal("model_refresh_review"),
+    acceptedArtifact: p9AcceptedArtifactSchema,
+    sourceProvider: z.string().trim().min(1).max(240),
+    engineRev: z.string().trim().min(1).max(240),
+  }).strict(),
+  p9PortfolioMaterialityActionSchema,
 ]);
 export type P9WorkflowAction = z.infer<typeof p9WorkflowActionSchema>;
 

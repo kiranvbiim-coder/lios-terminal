@@ -145,6 +145,27 @@ export class GatewayHub {
     return this.connections.size;
   }
 
+  /** Snapshot of the canonical live connections; feature discovery does not create another device registry. */
+  readyConnections(): readonly GatewayConnection[] {
+    return [...this.connections].filter((connection) => connection.ready && connection.socket.readyState === connection.socket.OPEN);
+  }
+
+  isReadyConnection(connection: GatewayConnection): boolean {
+    const candidate = connection as Connection;
+    return this.connections.has(candidate) && candidate.ready && candidate.socket.readyState === candidate.socket.OPEN;
+  }
+
+  /** Server-owned composition on an existing authenticated connection; same scopes/schemas/handlers as wire RPC. */
+  async invokeForConnection(method: string, rawParams: unknown, connection: GatewayConnection): Promise<unknown> {
+    if (!this.isReadyConnection(connection)) throw new GatewayMethodError(gatewayError("UNAVAILABLE", "The exact authenticated Gateway connection is no longer live."));
+    const handler = this.handlers.get(method);
+    if (!handler) throw new GatewayMethodError(gatewayError("NOT_FOUND", "The requested Gateway method is not registered."));
+    if (!satisfies(connection.scopes, handler.scope)) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This connection lacks the method's required scope."));
+    const params = handler.params.safeParse(rawParams);
+    if (!params.success) throw new GatewayMethodError(gatewayError("INVALID_REQUEST", "Parameters do not match the method schema."));
+    return handler.result.parse(await handler.run(params.data, connection));
+  }
+
   register<M extends GatewayMethodName>(method: M, handler: MethodHandler<M>): void {
     if (this.handlers.has(method)) throw new Error(`Gateway method ${method} is already registered.`);
     const definition = GATEWAY_METHODS[method];

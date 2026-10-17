@@ -25,6 +25,8 @@ import { appendLedgerEvent } from "./ledgerStore";
 import { decideP9Notification, nextP9ScheduledRun, p9NotificationTitle } from "./p9AutomationEngine";
 import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
+import { requireP9ModelRefreshReview } from "./p9ModelRefresh";
+import { requireP9PortfolioMateriality } from "./p9PortfolioMateriality";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
@@ -81,6 +83,8 @@ export async function createP9Workflow(
   await getProject(ctx, projectId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "model_refresh_review") await requireP9ModelRefreshReview(ctx, projectId, input.action);
+  if (input.action.kind === "portfolio_materiality") await requireP9PortfolioMateriality(ctx, projectId, input.action);
   if (input.action.kind === "conversation_rerun" && input.action.sourceRequestId) {
     input.action.request = await requireSuccessfulP9Recipe(ctx, projectId, input.action);
   }
@@ -149,6 +153,8 @@ export async function replaceP9Workflow(
   const current = await getP9Workflow(ctx, workflowId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
   assertSecretFree(input);
+  if (input.action.kind === "model_refresh_review") await requireP9ModelRefreshReview(ctx, current.projectId, input.action);
+  if (input.action.kind === "portfolio_materiality") await requireP9PortfolioMateriality(ctx, current.projectId, input.action);
   if (input.action.kind === "conversation_rerun" && input.action.sourceRequestId) {
     input.action.request = await requireSuccessfulP9Recipe(ctx, current.projectId, input.action);
   }
@@ -526,6 +532,20 @@ export async function createP9Notification(
       lastDeliveredAt: last?.createdAt ?? null,
       now,
     });
+    const materiality = input.result?.output;
+    if (decision.status === "delivered" && materiality?.kind === "portfolio_materiality" && materiality.currentArtifact && typeof materiality.currentArtifact === "object") {
+      const source = materiality.currentArtifact as Record<string, unknown>;
+      // Same workflow lock serializes evidence admission even when two real runs completed concurrently.
+      const [alreadyDelivered] = await tx.select({ id: projectAutomationNotifications.id }).from(projectAutomationNotifications)
+        .innerJoin(projectAutomationRuns, eq(projectAutomationRuns.id, projectAutomationNotifications.runId))
+        .where(and(notificationTenantFilter(ctx), eq(projectAutomationNotifications.workflowId, current.id),
+          eq(projectAutomationNotifications.status, "delivered"),
+          sql`${projectAutomationRuns.output}->>'actionHash' = ${String(materiality.actionHash)}`,
+          sql`${projectAutomationRuns.output}->'currentArtifact'->>'contentHash' = ${String(source.contentHash)}`,
+          sql`${projectAutomationRuns.output}->'currentArtifact'->>'version' = ${String(source.version)}`,
+        )).limit(1);
+      if (alreadyDelivered) decision.status = "suppressed";
+    }
     const [row] = await tx.insert(projectAutomationNotifications).values({
       id: "workflow-notification:" + crypto.randomUUID(),
       workflowId: current.id,

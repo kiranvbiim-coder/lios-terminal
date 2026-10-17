@@ -914,7 +914,7 @@ export async function currentPermittedProjectSearchDocuments(ctx: TenantContext,
   }
   // Current eligibility is authoritative even if source changes raced snapshot construction.
   const [resources, chats, artifacts] = await Promise.all([
-    listProjectResources(ctx, projectId), listProjectChats(ctx, { projectId, status: "active" }), listProjectArtifacts(ctx, projectId),
+    listProjectResources(ctx, projectId), listProjectChats(ctx, { projectId, status: "active" }), listProjectArtifacts(ctx, projectId, { limit: 500 }),
   ]);
   const resourceIds = new Set(resources.filter(resource => resource.contextMode !== "excluded").map(resource => resource.id));
   const chatIds = new Set(chats.map(chat => chat.id));

@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { eq } from "drizzle-orm";
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-financial-events-"));
+process.env.LIOS_DATA_ROOT = root;
+process.env.LIMURIA_DATA_DIR = root;
+delete process.env.DATABASE_URL;
+const { initDb, closeDb, getDb } = await import("./db");
+const { users, dataEntitlementPolicies, datasetSnapshots, projectAutomationRuns } = await import("@shared/schema");
+const { createProject } = await import("./projectStore");
+const { createProjectChat } = await import("./projectChatStore");
+const { captureAlternativeDataset } = await import("./alternativeDatasetStore");
+const { createP9Workflow } = await import("./p9AutomationStore");
+const { readCurrentP9FinancialEvents } = await import("./p9FinancialEventSource");
+const { runP9FinancialObserverCycle } = await import("./p9AutomationService");
+
+test("retained estimate and reported-actual observations baseline then dispatch once with current rights", { timeout: 120_000 }, async t => {
+  await initDb();
+  t.after(async () => { await closeDb(); fs.rmSync(root, { recursive: true, force: true }); });
+  const [owner, stranger] = await getDb().insert(users).values(["Owner", "Stranger"].map(name => ({ name, email: `${crypto.randomUUID()}@example.test`, passwordHash: "verification-only", role: "internal_admin" as const, organizationId: null }))).returning();
+  assert.ok(owner && stranger);
+  const ctx = { userId: owner.id, organizationId: null, role: owner.role };
+  const project = await createProject(ctx, { name: "Retained source observations" });
+  const chat = await createProjectChat(ctx, { projectId: project.id, scope: "project", title: "Observed event diagnostic" });
+  const workflows = [];
+  for (const eventType of ["earnings", "estimate_revision"] as const) workflows.push(await createP9Workflow(ctx, project.id, { name: eventType, enabled: true, trigger: { type: "event", eventType, filters: { symbol: "VERIFICATION" } }, action: { kind: "conversation_rerun", chatId: chat.id, request: { message: "LiOS doctor", executionMode: "deterministic_first", sourceScope: "my_data" } }, notificationPolicy: { enabled: false } }));
+  const observedAt = "2026-01-01T00:00:00.000Z";
+  const capture = (value: number, vintage: string) => captureAlternativeDataset({ dataClass: "estimates", entityKey: "VERIFICATION", provider: "user_supplied", source: "Explicit verification input, not provider evidence", frequency: "quarterly", currency: "USD", effectiveAt: vintage, publishedAt: vintage, retrievedAt: vintage, availableAt: vintage, organizationId: null, payload: { symbol: "VERIFICATION", observations: [{ symbol: "VERIFICATION", metric: "eps", fiscalPeriod: "FY2025Q4", periodEnd: "2025-12-31", contributor: "explicit-verification", value, currency: "USD", unit: "USD/share", publishedAt: vintage, availableAt: vintage }], actuals: [{ metric: "eps", fiscalPeriod: "FY2025Q4", periodEnd: "2025-12-31", value, reportedAt: vintage, availableAt: vintage }] } }, owner.id);
+  const initial = await capture(1, observedAt);
+  assert.deepEqual(await runP9FinancialObserverCycle(), { observed: 2, baselined: 2, emitted: 0, failed: 0 });
+  const revision = await capture(2, "2026-01-02T00:00:00.000Z");
+  const outcome = await runP9FinancialObserverCycle();
+  assert.equal(outcome.emitted, 2);
+  assert.equal(outcome.failed, 0);
+  const repeated = await runP9FinancialObserverCycle();
+  assert.equal(repeated.emitted, 0, "unchanged retained actual/estimate rows do not invent new observations");
+  for (const workflow of workflows) {
+    const runs = await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, workflow.id));
+    assert.deepEqual(runs.map(run => run.status), ["succeeded"]);
+    assert.equal((runs[0]!.triggerDetail.payload as Record<string, unknown>).contentHash, revision.snapshot.contentHash);
+    assert.ok(runs[0]!.executionReceiptIds.length);
+  }
+  await assert.rejects(readCurrentP9FinancialEvents({ userId: stranger.id, organizationId: null, role: stranger.role }, project.id, "VERIFICATION", "earnings"), /accessible/);
+  const policyId = initial.snapshot.entitlementPolicyId!;
+  await getDb().update(dataEntitlementPolicies).set({ permittedUses: [] }).where(eq(dataEntitlementPolicies.id, policyId));
+  await assert.rejects(readCurrentP9FinancialEvents(ctx, project.id, "VERIFICATION", "estimate_revision"), /rights/);
+  const denied = await runP9FinancialObserverCycle();
+  assert.equal(denied.failed, 2, "current rights revocation fails both observers before further work");
+  assert.equal(denied.emitted, 0);
+  await getDb().update(dataEntitlementPolicies).set({ permittedUses: ["internal_research", "display"] }).where(eq(dataEntitlementPolicies.id, policyId));
+  await getDb().update(datasetSnapshots).set({ payload: { symbol: "tampered" } }).where(eq(datasetSnapshots.id, revision.snapshot.id));
+  await assert.rejects(readCurrentP9FinancialEvents(ctx, project.id, "VERIFICATION", "earnings"), /retained revision/);
+});

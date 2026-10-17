@@ -35,6 +35,13 @@ export interface InstalledPluginSnapshot {
   manifest: LiosPluginManifestV1;
 }
 
+export interface PluginActivationPreview {
+  manifest: LiosPluginManifestV1;
+  trust: PluginTrustDecision;
+  compatible: boolean;
+  reasons: string[];
+}
+
 export interface P13PluginInstallInput extends PluginManifestPackageInput {
   broker?: P13PluginInvocationBroker | null;
 }
@@ -400,6 +407,24 @@ export class P13PluginManager {
     };
   }
 
+  /** Pure activation assessment; it never registers adapters or creates a broker. */
+  preview(input: P13PluginInstallInput): PluginActivationPreview {
+    const plugin = definePluginPackageManifest(input);
+    const reasons = negotiatePluginCompatibility(plugin.manifest, this.liosVersion, this.installedVersions()).reasons;
+    const trust = this.trustStore.verify(plugin.manifest, plugin.observedPackageDigest);
+    try {
+      if (this.installed.has(plugin.manifest.id)) throw new PluginInstallError("Plugin is already installed.");
+      this.assertDependencyGraph(plugin.manifest);
+      this.validateForActivation(plugin, this.installedVersions(), input.broker ?? null);
+      for (const id of [pluginDescriptor(plugin.manifest).id, ...plugin.manifest.connectors.map(item => item.componentId), ...plugin.manifest.tools.map(item => item.componentId), ...plugin.manifest.artifacts.map(item => item.componentId), ...plugin.manifest.agents.map(item => item.componentId), ...plugin.manifest.skills.map(item => item.componentId)]) {
+        if (this.registry.has(id)) throw new PluginInstallError("Runtime component is already registered: " + id);
+      }
+    } catch (error) {
+      reasons.push(error instanceof Error ? error.message : "Plugin activation refused.");
+    }
+    return { manifest: plugin.manifest, trust, compatible: reasons.length === 0, reasons: [...new Set(reasons)] };
+  }
+
   install(input: P13PluginInstallInput): InstalledPluginSnapshot {
     const broker = input.broker ?? null;
     let plugin: PluginManifestPackage;
@@ -511,6 +536,38 @@ export class P13PluginManager {
     this.installedBrokers.delete(pluginId);
     return true;
   }
+  /** Revoke the exact package and dependent adapters, leaf-first, through the canonical manager. */
+  revoke(pluginId: string): string[] {
+    const current = this.installed.get(pluginId);
+    if (!current) return [];
+    const revoked = new Set([pluginId]);
+    if (current.trust.packageDigest) {
+      for (const item of this.installed.values()) {
+        if (item.trust.packageDigest === current.trust.packageDigest) revoked.add(item.id);
+      }
+    }
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const item of this.installed.values()) {
+        if (!revoked.has(item.id) && item.manifest.dependencies.some(dep => revoked.has(dep.pluginId))) {
+          revoked.add(item.id);
+          expanded = true;
+        }
+      }
+    }
+    const removed: string[] = [];
+    while (revoked.size > 0) {
+      const leaf = [...revoked].find(id => ![...this.installed.values()].some(item => item.id !== id && item.manifest.dependencies.some(dep => dep.pluginId === id)));
+      if (!leaf) throw new PluginInstallError("Cannot revoke cyclic plugin dependencies.");
+      this.remove(leaf);
+      removed.push(leaf);
+      revoked.delete(leaf);
+    }
+    if (current.trust.packageDigest) this.trustStore.revokeDigest(current.trust.packageDigest);
+    return removed;
+  }
+
 
   get(pluginId: string): InstalledPluginSnapshot | null {
     const snapshot = this.installed.get(pluginId);

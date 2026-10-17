@@ -3,7 +3,8 @@ import type { DeviceReviewBinding } from "@shared/deviceOutbox";
 import type { Express, Request, Response } from "express";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { requireRole } from "./auth";
+import { assertDecisionPermission, DecisionAuthorizationError, getDecisionAuthorization, requireDecisionPermission } from "./decisionAuthorization";
+import type { DecisionAuthorization } from "./decisionAuthorization";
 import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getDb, type DrizzleDb } from "./db";
 import {
@@ -45,9 +46,6 @@ import {
 import { criticalityForDecision, evaluateAssuranceArtifactForDecision } from "./decisionAssuranceGate";
 import type { ScenarioActionInput } from "./scenarioActionEngine";
 
-const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
-const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
-const REVIEW_ROLES = ["internal_admin", "internal_compliance"] as const;
 const nullableId = z.number().int().positive().nullable().optional();
 const finite = z.number().finite();
 const score = finite.min(0).max(1);
@@ -251,6 +249,7 @@ function canAccessOwner(user: Express.User, ownerUserId: number, write: boolean)
 async function loadDecisionScope(id: number, user: Express.User, write = false): Promise<DecisionScope | null> {
   const decision = await loadDecision(id);
   if (!decision || !canAccessOwner(user, decision.ownerUserId, write)) return null;
+  if (decision.organizationId !== null && decision.organizationId !== user.organizationId) return null;
   const db = getDb();
   let investigation: typeof researchInvestigations.$inferSelect | null = null;
   let brainRun: typeof brainRuns.$inferSelect | null = null;
@@ -294,6 +293,7 @@ async function validateNewDecisionScope(
   if (investigation && brainRun && investigationOrg !== brainOrg) return { organizationId: null, error: "Investigation and Brain organization scopes must match.", status: 400 };
   const organizationId = investigation ? investigationOrg : brainRun ? brainOrg : null;
   if ((input.organizationId ?? null) !== organizationId) return { organizationId: null, error: "Decision organization scope must match its linked resources.", status: 400 };
+  if (organizationId !== null && organizationId !== user.organizationId) return { organizationId: null, error: "Decision belongs to another organization.", status: 403 };
   if (organizationId != null) {
     const [organization] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
     if (!organization) return { organizationId: null, error: "Organization not found.", status: 400 };
@@ -448,12 +448,29 @@ export const decisionApprovalInputSchema = z.object({
   note: z.string().trim().max(3000).optional(),
   waiverReason: z.string().trim().max(3000).optional(),
   requestId: z.string().uuid().optional(),
+  policyDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 export class DecisionReviewError extends Error {
   constructor(readonly statusCode: number, message: string, readonly details?: Record<string, unknown>) {
     super(message);
   }
+}
+
+async function decisionAuthority(user: Express.User, permission: "read_decisions" | "author_decisions" | "review_decisions", db = getDb(), lock = false, organizationId?: number | null) {
+  try {
+    const authority = await getDecisionAuthorization(user, db, lock);
+    assertDecisionPermission(authority, permission, organizationId);
+    return authority;
+  } catch (error) {
+    if (error instanceof DecisionAuthorizationError) throw new DecisionReviewError(error.statusCode, error.message);
+    throw error;
+  }
+}
+
+function reviewDeniedReason(authority: DecisionAuthorization) {
+  try { assertDecisionPermission(authority, "review_decisions"); return null; }
+  catch (error) { if (error instanceof DecisionAuthorizationError) return error.message; throw error; }
 }
 
 /** Canonical DecisionCase head, excluding recency-only timestamps. */
@@ -468,7 +485,7 @@ export function decisionReviewHead(decision: DecisionCaseRow): string {
 }
 
 export async function readCanonicalDecisionReview(id: number, user: Express.User) {
-  if (!(READ_ROLES as readonly string[]).includes(user.role)) throw new DecisionReviewError(403, "This account cannot read financial decisions.");
+  const authority = await decisionAuthority(user, "read_decisions");
   const scope = await loadDecisionScope(id, user);
   if (!scope) throw new DecisionReviewError(404, "Decision not found.");
   const db = getDb();
@@ -476,7 +493,7 @@ export async function readCanonicalDecisionReview(id: number, user: Express.User
   if (!receipt) throw new DecisionReviewError(409, "A current receipt is required before review.");
   if (decisionSnapshotHash(receiptHashPayload(receipt)) !== receipt.snapshotHash) throw new DecisionReviewError(409, "Receipt hash verification failed.");
   const [approval] = await db.select().from(decisionApprovals).where(and(eq(decisionApprovals.receiptVersionId, receipt.id), eq(decisionApprovals.reviewerUserId, user.id))).limit(1);
-  return { decision: scope.decision, receipt, approval: approval ?? null, canReview: (REVIEW_ROLES as readonly string[]).includes(user.role) };
+  return { decision: scope.decision, receipt, approval: approval ?? null, canReview: authority.grants.review_decisions, policyDigest: authority.digest, permissions: authority.grants, reviewDeniedReason: reviewDeniedReason(authority) };
 }
 
 /** One approval authority for HTTP and paired Gateway; outbox release never executes an action. */
@@ -484,17 +501,20 @@ export async function submitCanonicalDecisionReview(
   id: number, user: Express.User, input: z.infer<typeof decisionApprovalInputSchema>,
   continuation?: { binding: DeviceReviewBinding; revalidate: (db: DrizzleDb) => Promise<string> },
 ) {
-  if (!(REVIEW_ROLES as readonly string[]).includes(user.role)) throw new DecisionReviewError(403, "This account cannot review financial decisions.");
+  await decisionAuthority(user, "review_decisions");
   const scope = await loadDecisionScope(id, user);
   if (!scope) throw new DecisionReviewError(404, "Decision not found.");
   const requestId = input.requestId ?? randomUUID();
-  const requestHash = decisionSnapshotHash({ decisionId: id, ...input, requestId, binding: continuation?.binding ?? null });
   const result = await getDb().transaction(async (transaction) => {
     const tx = transaction as unknown as DrizzleDb;
     // Row locks linearize revocation/current authority and DecisionCase finalization with review.
     const policyDigest = continuation ? await continuation.revalidate(tx) : null;
+    const authority = await decisionAuthority(user, "review_decisions", tx, true);
+    if (!continuation && input.policyDigest !== authority.digest) throw new DecisionReviewError(409, "Organization policy changed or is not bound to this review; inspect the current decision.");
+    const requestHash = decisionSnapshotHash({ decisionId: id, ...input, requestId, binding: continuation?.binding ?? null, enterprisePolicyDigest: authority.digest });
     const [decision] = await tx.select().from(decisionCases).where(eq(decisionCases.id, id)).for("update").limit(1);
     if (!decision || !canAccessOwner(user, decision.ownerUserId, false)) throw new DecisionReviewError(404, "Decision not found.");
+    if (decision.organizationId !== null && decision.organizationId !== authority.user.organizationId) throw new DecisionReviewError(403, "Decision belongs to another organization.");
     const [latest] = await tx.select().from(decisionReceiptVersions).where(eq(decisionReceiptVersions.decisionId, id)).orderBy(desc(decisionReceiptVersions.version)).limit(1);
     if (!latest || latest.id !== input.receiptVersionId) throw new DecisionReviewError(409, "Only the latest receipt version can be reviewed.");
     if (decisionSnapshotHash(receiptHashPayload(latest)) !== latest.snapshotHash) throw new DecisionReviewError(409, "Receipt hash verification failed.");
@@ -517,7 +537,7 @@ export async function submitCanonicalDecisionReview(
     const status = input.outcome === "rejected" ? "rejected" : "approved";
     if (existing) {
       if (existing.reviewRequestHash !== requestHash || existing.receiptVersionId !== latest.id || existing.snapshotHash !== latest.snapshotHash || decision.status !== status || decision.finalDecision !== input.finalDecision || decision.decisionRationale !== input.rationale || decision.approvedReceiptVersionId !== (input.outcome === "rejected" ? null : latest.id)) throw new DecisionReviewError(409, "Review request changed or its previously reviewed head is no longer current.");
-      return { approval: existing, idempotent: true, assuranceGate, outputCriticality };
+      return { approval: existing, idempotent: true, assuranceGate, outputCriticality, requestHash };
     }
     if (binding && binding.decisionHead !== decisionReviewHead(decision)) throw new DecisionReviewError(409, "Decision head changed; inspect the current decision before releasing a new review.");
     // Device continuations cannot overwrite a finalized head; ordinary HTTP review retains its current semantics.
@@ -529,11 +549,11 @@ export async function submitCanonicalDecisionReview(
       note: input.note, waiverReason: input.waiverReason, reviewerUserId: user.id, reviewRequestId: requestId, reviewRequestHash: requestHash,
     }).returning();
     await tx.update(decisionCases).set({ status, finalDecision: input.finalDecision, decisionRationale: input.rationale, approvedReceiptVersionId: input.outcome === "rejected" ? null : latest.id, updatedAt: new Date() }).where(eq(decisionCases.id, id));
-    return { approval, idempotent: false, assuranceGate, outputCriticality };
+    return { approval, idempotent: false, assuranceGate, outputCriticality, requestHash };
   });
   if (!result.idempotent) await recordAuditEvent(user.id, "decision_reviewed", {
     decisionId: id, receiptId: result.approval.receiptVersionId, outcome: input.outcome,
-    snapshotHash: result.approval.snapshotHash, requestId, requestHash,
+    snapshotHash: result.approval.snapshotHash, requestId, requestHash: result.requestHash,
     assuranceCriticality: result.outputCriticality, assurancePermitted: result.assuranceGate.permitted,
     assuranceReasonCodes: result.assuranceGate.reasonCodes, ...auditActor(user),
   });
@@ -541,13 +561,13 @@ export async function submitCanonicalDecisionReview(
 }
 
 export function registerDecisionRoutes(app: Express): void {
-  app.get("/api/decisions", requireRole(...READ_ROLES), async (req, res) => {
+  app.get("/api/decisions", requireDecisionPermission("read_decisions"), async (req, res) => {
     const db = getDb();
     const rows = await db.select().from(decisionCases).orderBy(desc(decisionCases.updatedAt)).limit(200);
-    res.json(rows.filter((item) => canAccessOwner(req.user!, item.ownerUserId, false)));
+    res.json(rows.filter((item) => canAccessOwner(req.user!, item.ownerUserId, false) && (item.organizationId === null || item.organizationId === req.user!.organizationId)));
   });
 
-  app.post("/api/decisions", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/decisions", requireDecisionPermission("author_decisions"), async (req, res) => {
     const parsed = createCaseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const scopeResult = await validateNewDecisionScope(parsed.data, req.user!);
@@ -562,7 +582,7 @@ export function registerDecisionRoutes(app: Express): void {
     res.status(201).json(decision);
   });
 
-  app.get("/api/decisions/:id", requireRole(...READ_ROLES), async (req, res) => {
+  app.get("/api/decisions/:id", requireDecisionPermission("read_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const scope = await loadDecisionScope(id, req.user!);
@@ -575,10 +595,11 @@ export function registerDecisionRoutes(app: Express): void {
       db.select().from(decisionMonitoringRules).where(eq(decisionMonitoringRules.decisionId, id)).orderBy(asc(decisionMonitoringRules.id)),
       db.select().from(decisionReplays).where(eq(decisionReplays.decisionId, id)).orderBy(desc(decisionReplays.createdAt)),
     ]);
-    res.json({ decision, receipts: receipts.map(exposeScenarioArtifact), approvals, monitoringRules, replays });
+    const authority = await decisionAuthority(req.user!, "read_decisions", db, false, decision.organizationId);
+    res.json({ decision, receipts: receipts.map(exposeScenarioArtifact), approvals, monitoringRules, replays, policyDigest: authority.digest, permissions: authority.grants, reviewDeniedReason: reviewDeniedReason(authority) });
   });
 
-  app.post("/api/decisions/:id/receipts", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/decisions/:id/receipts", requireDecisionPermission("author_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const parsed = receiptSchema.safeParse(req.body);
@@ -704,11 +725,11 @@ export function registerDecisionRoutes(app: Express): void {
 
   app.post(
     "/api/decisions/:id/scenario-pipeline",
-    requireRole(...AUTHOR_ROLES),
+    requireDecisionPermission("author_decisions"),
     scenarioPipelineAttachmentRouteHandler,
   );
 
-  app.post("/api/decisions/:id/scenario-actions", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/decisions/:id/scenario-actions", requireDecisionPermission("author_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const parsed = scenarioArtifactRequestSchema.safeParse(req.body);
@@ -790,7 +811,7 @@ export function registerDecisionRoutes(app: Express): void {
     res.status(201).json({ ...exposeScenarioArtifact(receipt), candidateHash: artifact.candidateHash });
   });
 
-  app.post("/api/decisions/:id/scenario-actions/monitor", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/decisions/:id/scenario-actions/monitor", requireDecisionPermission("author_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const parsed = z.object({
@@ -859,7 +880,7 @@ export function registerDecisionRoutes(app: Express): void {
     res.status(201).json(monitor);
   });
 
-  app.post("/api/decisions/:id/approval", requireRole(...REVIEW_ROLES), async (req, res) => {
+  app.post("/api/decisions/:id/approval", requireDecisionPermission("review_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const parsed = decisionApprovalInputSchema.safeParse(req.body);
@@ -873,7 +894,7 @@ export function registerDecisionRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/decisions/:id/replay", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.post("/api/decisions/:id/replay", requireDecisionPermission("author_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid decision id." });
     const parsed = z.object({ receiptVersionId: z.number().int().positive(), asOf: z.coerce.date(), inputs: z.record(z.unknown()).default({}) }).safeParse(req.body);
@@ -904,7 +925,7 @@ export function registerDecisionRoutes(app: Express): void {
     res.status(201).json(replay);
   });
 
-  app.patch("/api/decision-monitors/:id/evaluate", requireRole(...AUTHOR_ROLES), async (req, res) => {
+  app.patch("/api/decision-monitors/:id/evaluate", requireDecisionPermission("author_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid monitoring rule id." });
     const parsed = z.object({ currentValue: finite, sourceUrl: z.string().url().max(4000).optional() }).safeParse(req.body);
@@ -912,6 +933,7 @@ export function registerDecisionRoutes(app: Express): void {
     const db = getDb();
     const [rule] = await db.select().from(decisionMonitoringRules).where(eq(decisionMonitoringRules.id, id)).limit(1);
     if (!rule) return res.status(404).json({ error: "Monitoring rule not found." });
+    if (!await loadDecisionScope(rule.decisionId, req.user!, true)) return res.status(404).json({ error: "Decision not found." });
     const breached = evaluateMonitoringRule(rule.operator, rule.threshold, parsed.data.currentValue);
     const now = new Date();
     const [updated] = await db.update(decisionMonitoringRules).set({
@@ -926,10 +948,12 @@ export function registerDecisionRoutes(app: Express): void {
     res.json(updated);
   });
 
-  app.patch("/api/decision-monitors/:id/acknowledge", requireRole(...REVIEW_ROLES), async (req, res) => {
+  app.patch("/api/decision-monitors/:id/acknowledge", requireDecisionPermission("review_decisions"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid monitoring rule id." });
     const db = getDb();
+    const [rule] = await db.select().from(decisionMonitoringRules).where(eq(decisionMonitoringRules.id, id)).limit(1);
+    if (!rule || !await loadDecisionScope(rule.decisionId, req.user!)) return res.status(404).json({ error: "Decision not found." });
     const [updated] = await db.update(decisionMonitoringRules).set({ status: "acknowledged", acknowledgedAt: new Date() })
       .where(and(eq(decisionMonitoringRules.id, id), eq(decisionMonitoringRules.status, "breached"))).returning();
     if (!updated) return res.status(409).json({ error: "Only a breached trigger can be acknowledged." });
@@ -937,7 +961,7 @@ export function registerDecisionRoutes(app: Express): void {
     res.json(updated);
   });
 
-  app.post("/api/decision-analysis", requireRole(...READ_ROLES), (req, res) => {
+  app.post("/api/decision-analysis", requireDecisionPermission("read_decisions"), (req, res) => {
     const parsed = analysisSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const input = parsed.data;
@@ -948,7 +972,7 @@ export function registerDecisionRoutes(app: Express): void {
     });
   });
 
-  app.post("/api/decision-analysis/reverse-dcf", requireRole(...READ_ROLES), (req, res) => {
+  app.post("/api/decision-analysis/reverse-dcf", requireDecisionPermission("read_decisions"), (req, res) => {
     const parsed = z.object({
       enterpriseValue: finite.positive(), currentFreeCashFlow: finite.positive(), forecastYears: z.number().int().min(1).max(30),
       discountRate: finite.gt(-1).lt(5), terminalGrowthRate: finite.gt(-1).lt(1),

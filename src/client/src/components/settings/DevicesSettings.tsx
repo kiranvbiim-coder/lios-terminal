@@ -7,6 +7,7 @@ import type { DeviceRecord, PendingPairing } from "@shared/devicePairing";
 import { apiRequest } from "@/lib/queryClient";
 import { serverErrorText } from "@/lib/apiErrorText";
 import { formatCountdown } from "@/lib/devicesSettingsFormat";
+import { RemoteNodeCapabilities } from "./RemoteNodeCapabilities";
 import {
   chooseActiveDeviceHome,
   forgetDeviceHome,
@@ -156,6 +157,7 @@ export default function DevicesSettings() {
       <p className="font-terminal text-[7px] text-muted-foreground">
         Paired devices act as you with read and conversation access only. They can never manage backups, the licence or the data folder.
       </p>
+      {data && <RemoteNodeCapabilities />}
 
       {data?.canPair && (
         <div className="space-y-3 border-t border-border/50 pt-3">

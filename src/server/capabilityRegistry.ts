@@ -282,10 +282,30 @@ export function connectorCapabilities(definitions: readonly ConnectorDefinition[
   return definitions.flatMap(connectorDefinitionToCapabilities);
 }
 
+export function projectRuntimeCapabilities(): LiOSCapability[] {
+  return [
+    { id: "lios.runtime.doctor", name: "LiOS Doctor", description: "Read current managed runtime readiness and safe repair prerequisites without AI, installation or task execution.", view: "connectors", handlerId: "lios.runtime.doctor", endpoint: "/api/setup/python-runtime" },
+    { id: "lios.projects", name: "Projects", description: "Open the existing owner-scoped Projects surface. Project actions recheck current ownership.", view: "projects" },
+    { id: "lios.artifacts", name: "Artifact Library", description: "Open the existing Project Library and retained Artifact versions; no new Artifact store.", view: "library" },
+    { id: "lios.automations", name: "Project Automations", description: "Open existing Project workflows, monitoring runs and notifications; no automatic workflow execution.", view: "automations" },
+  ].map((entry) => liosCapabilitySchema.parse({
+    id: entry.id, name: entry.name, description: entry.description,
+    category: entry.id === "lios.runtime.doctor" ? "system.runtime" : "project.navigation",
+    version: "1.0.0", availability: { state: "available" },
+    execution: { target: "typescript", handlerId: entry.handlerId, endpoint: entry.endpoint, deterministic: true, seeded: false },
+    surfaces: ["api", "command_palette", "master_ai", "workspace"],
+    permissions: ["current_authenticated_account"], entitlements: [], contextRequirements: [], tags: ["local", "no-ai", entry.view],
+    schemaRefs: {}, uiHints: { preferredView: entry.view, existingSurfaces: [entry.id === "lios.runtime.doctor" ? "Connection Center" : "Project shell"] },
+    aiHints: { invocable: Boolean(entry.handlerId), requiresConfirmation: false },
+    source: { kind: "internal", sourceId: "canonical-project-runtime", files: entry.id === "lios.runtime.doctor" ? ["server/runtimeDoctorTool.ts"] : ["client/src/components/terminal/ProjectExperienceShell.tsx"] },
+  }));
+}
+
 export function createDefaultCapabilityRegistry(): CapabilityRegistry {
   const registry = new CapabilityRegistry();
   registry.registerMany(advancedQuantCapabilities());
   registry.registerMany(connectorCapabilities());
+  registry.registerMany(projectRuntimeCapabilities());
   return registry;
 }
 

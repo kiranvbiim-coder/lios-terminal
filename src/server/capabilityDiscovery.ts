@@ -1,11 +1,26 @@
 import type { CapabilitySurface, LiOSCapability } from "@shared/capability";
 import type { CapabilityDiscoveryResult } from "@shared/capabilityDiscovery";
 import { capabilityRegistry, type CapabilityRegistry } from "./capabilityRegistry";
+import type { ConnectorRegistrySnapshot } from "@shared/connectorRegistry";
+import type { ManagedRuntimeState } from "./pythonRuntimeManager";
+import { evaluateManagedRuntimeReadiness } from "./provisioningReadiness";
+import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
+
+export interface CurrentUserCapabilityReadiness {
+  role: string;
+  accountActive: boolean;
+  selectedConnectorIds: readonly string[];
+  connectors: ConnectorRegistrySnapshot;
+  runtimeState: ManagedRuntimeState | null;
+  pythonAvailable: boolean;
+  pythonService: { ready: boolean; packages: Record<string, string>; reason: string };
+}
 
 export type CapabilityDiscoveryOptions = {
   surface?: CapabilitySurface;
   limit?: number;
   invocableOnly?: boolean;
+  currentUser?: CurrentUserCapabilityReadiness;
 };
 
 function normalize(value: string): string {
@@ -83,6 +98,39 @@ function rankCapability(capability: LiOSCapability, rawQuery: string): { score: 
   return { score, matchedOn: [...matchedOn] };
 }
 
+/** Catalog facts remain unchanged; only a fresh request context can claim current-user readiness. */
+function resolveCurrentUserReadiness(capability: LiOSCapability, current: CurrentUserCapabilityReadiness): LiOSCapability {
+  if (capability.availability.state === "disabled" || capability.availability.state === "experimental") return { ...capability, aiHints: { ...capability.aiHints, invocable: false } };
+  let reason: string | null = null;
+  if (!current.accountActive) reason = "Current account is inactive, locked or requires a password change.";
+  else if (capability.permissions.some((permission) => permission !== "current_authenticated_account")) reason = "Capability permissions require a canonical execution-policy decision; catalog presence is not authorization.";
+  else if (capability.entitlements.length) reason = "Entitlement admission must be resolved by the canonical capability caller.";
+  else if (capability.source.kind === "connector") {
+    const id = capability.source.sourceId;
+    const health = current.connectors.health.find((entry) => entry.connectorId === id);
+    if (!id || !current.selectedConnectorIds.includes(id)) reason = "Connector is not selected in this user's current Connections setup.";
+    else if (health?.state !== "live_verified") reason = health?.detail ?? "No current user-scoped connector verification is available.";
+    // A verified connector still has no generic callable handler in this registry.
+    return { ...capability, availability: reason ? { state: "configurable", reason: reason.slice(0, 1_000) } : { state: "available", reason: health?.detail.slice(0, 1_000) }, aiHints: { ...capability.aiHints, invocable: false } };
+  } else if (capability.execution.target === "python_sidecar") {
+    if (!["internal_admin", "internal_analyst", "internal_compliance"].includes(current.role)) reason = "Advanced quant endpoints require the existing internal role boundary.";
+    else if (!current.pythonService.ready) reason = current.pythonService.reason;
+    else {
+      const readiness = evaluateManagedRuntimeReadiness({ state: current.runtimeState, pythonAvailable: current.pythonAvailable, requiredPackIds: ["core"] });
+      if (!readiness.ready) reason = `Managed runtime is ${readiness.state}. Review LiOS Doctor in Connections.`;
+      else {
+        const installed = new Map(Object.entries(current.pythonService.packages).map(([name, version]) => [name.toLowerCase().replace(/[_.]+/g, "-"), version]));
+        // Advanced quant spans optional scientific imports; a verified Core alone cannot prove it runnable.
+        const missing = MANAGED_RUNTIME_MANIFEST.packs.filter((pack) => ["core", "fixed-income", "forecasting", "econometrics", "ml", "optimization"].includes(pack.id))
+          .flatMap((pack) => pack.packages).filter((pkg) => !installed.get(pkg.name.toLowerCase().replace(/[_.]+/g, "-")) || installed.get(pkg.name.toLowerCase().replace(/[_.]+/g, "-")) === "unavailable");
+        if (missing.length) reason = `Current Python inventory lacks advanced-quant dependencies: ${missing.map((pkg) => pkg.name).join(", ")}. Review the Quant pack in Connections.`;
+      }
+    }
+  }
+  if (!reason) return capability;
+  return { ...capability, availability: { state: "configurable", reason: reason.slice(0, 1_000) }, aiHints: { ...capability.aiHints, invocable: false } };
+}
+
 export function discoverCapabilities(
   query: string,
   options: CapabilityDiscoveryOptions = {},
@@ -93,6 +141,7 @@ export function discoverCapabilities(
 
   return registry.list()
     .filter((capability) => capability.surfaces.includes(surface))
+    .map((capability) => options.currentUser ? resolveCurrentUserReadiness(capability, options.currentUser) : capability)
     .filter((capability) => !options.invocableOnly || (
       isInvocableNow(capability)
     ))

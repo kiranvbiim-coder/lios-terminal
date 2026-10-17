@@ -25,6 +25,9 @@ import { getDb } from "./db";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 import { acknowledgeP9ConditionalEvent, enqueueP9ConditionalEvent, listPendingP9ConditionalEvents, p9EventDefinitionHash, recordP9ConditionalAttempt } from "./p9ConditionalInbox";
 import { recoverInterruptedP9Runs, renewP9RunLease } from "./p9RunContinuity";
+import { readCurrentP9FinancialEvents } from "./p9FinancialEventSource";
+import { runP9ModelRefreshReview } from "./p9ModelRefresh";
+import { runP9PortfolioMateriality } from "./p9PortfolioMateriality";
 import { getProject } from "./projectStore";
 import { getProjectChat, listProjectChatMessages } from "./projectChatStore";
 import { listProjectResources } from "./projectResourceStore";
@@ -479,6 +482,8 @@ async function executeP9Action(
   if (action.kind === "project_what_changed") return runProjectWhatChanged(ctx, workflow);
   if (action.kind === "thesis_refresh") return runThesisRefresh(ctx, workflow, action.artifactId);
   if (action.kind === "provider_health") return runProviderHealth(ctx, workflow, previous);
+  if (action.kind === "model_refresh_review") return runP9ModelRefreshReview(ctx, workflow, action, previous);
+  if (action.kind === "portfolio_materiality") return runP9PortfolioMateriality(ctx, workflow, action, previous);
   return runConversationRerun(ctx, workflow, action, previous);
 }
 
@@ -803,6 +808,46 @@ export async function runP9FilingObserverCycle(
   return { observed, baselined, emitted, failed };
 }
 
+/** Observes retained canonical actuals/estimate vintages; initial state is a baseline, never an invented event. */
+export async function runP9FinancialObserverCycle(): Promise<{ observed: number; baselined: number; emitted: number; failed: number }> {
+  let observed = 0, baselined = 0, emitted = 0, failed = 0;
+  for (const eventType of ["earnings", "estimate_revision"] as const) {
+    const workflows = await listP9EventWorkflows(eventType, { projectId: null, ownerUserId: null, organizationId: null });
+    for (const workflow of workflows) {
+      const { trigger } = parseP9StoredWorkflow(workflow);
+      if (trigger.type !== "event") continue;
+      const rawSymbol = trigger.filters.symbol ?? trigger.filters.ticker;
+      if (typeof rawSymbol !== "string" || !rawSymbol.trim()) continue;
+      try {
+        const ctx = await tenantForWorkflow(workflow);
+        const rows = await workflowIdentity(ctx, () => readCurrentP9FinancialEvents(ctx, workflow.projectId, rawSymbol.trim().toUpperCase(), eventType));
+        if (!rows.length) continue;
+        observed += rows.length;
+        const cursorKey = eventType === "earnings" ? "financialActualKeys" : "financialEstimateKeys";
+        const previous = workflow.eventCursor[cursorKey];
+        if (previous !== undefined && (!Array.isArray(previous) || previous.some(key => typeof key !== "string"))) throw new Error("Financial observer cursor is invalid.");
+        if (previous === undefined) {
+          await updateP9WorkflowEventCursorSystem(workflow.id, { [cursorKey]: rows.map(row => row.key) });
+          baselined += 1;
+          continue;
+        }
+        const seen = new Set(previous as string[]);
+        for (const row of rows) {
+          if (seen.has(row.key)) continue;
+          const outcome = await emitP9AutomationEvent(row.event);
+          if (outcome.failed) throw new Error("Financial event delivery did not complete; retained observations remain inspectable.");
+          emitted += outcome.executed;
+        }
+        await updateP9WorkflowEventCursorSystem(workflow.id, { [cursorKey]: rows.map(row => row.key) });
+      } catch {
+        failed += 1;
+        console.warn("[p9Automation] financial observation unavailable for workflow", workflow.id);
+      }
+    }
+  }
+  return { observed, baselined, emitted, failed };
+}
+
 export function startP9AutomationRuntime(intervalMs = 30_000): () => void {
   let running = false;
   let stopped = false;
@@ -818,6 +863,7 @@ export function startP9AutomationRuntime(intervalMs = 30_000): () => void {
       if (now - lastFilingObserverAt >= 5 * 60_000) {
         lastFilingObserverAt = now;
         await runP9FilingObserverCycle();
+        await runP9FinancialObserverCycle();
       }
     } catch (error) {
       console.warn("[p9Automation] scheduler cycle failed:", error);

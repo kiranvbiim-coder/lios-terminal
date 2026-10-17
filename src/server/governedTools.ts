@@ -60,6 +60,8 @@ export interface GovernedToolCall {
   role?: string;
   /** Server-held canonical authorization. Request/model/body objects cannot manufacture authority. */
   authorization?: unknown;
+  /** Exact authenticated Gateway session supplied by the server; never model/request data. */
+  nodeFinanceGateway?: import("./nodeFinanceTool").NodeFinanceGatewaySession;
   /**
    * L13 server-only delegation context. It is injected by the parent agent loop after plan validation;
    * model/request input cannot supply owner, lineage, context or budget authority.

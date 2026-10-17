@@ -34,6 +34,7 @@ import { WebSocketServer } from "ws";
 import { initLiveStream } from "./liveStream";
 import { closeDb, initDb } from "./db";
 import { DATA_ROOT_EXIT_CODE, DataRootUnavailableError, prepareDataRoot, stateDir } from "./dataRoot";
+import { markHomeRuntimeActive } from "./backupRestoreState";
 import { migrateLegacyConfigCredentials, migrateVaultToCurrentKey } from "./credentialVault";
 import { hasLocalTrust, requireLocalDesktopTrust } from "./localDesktopTrust";
 import { isAllowedWebSocketOrigin } from "./webSocketOrigin";
@@ -44,6 +45,7 @@ import { deviceNetwork, devicePairing } from "./deviceRuntime";
 import { gatewayHub, notifyDataChanged, publishQuoteUpdate } from "./gatewayRuntime";
 import { registerGatewayConversation } from "./gatewayConversation";
 import { registerDeviceContinuityGateway } from "./gatewayDeviceContinuity";
+import { registerRemoteNodeGateway } from "./gatewayRemoteNode";
 import { configurePassport, ensureDeviceBindingCookie, initializeServerHomeOwner, isHomeOwner } from "./auth";
 import { getSessionSecret } from "./sessionSecret";
 import { installEgressGuard } from "./egressPolicy";
@@ -128,6 +130,7 @@ app.use(express.urlencoded({ extended: false }));
 // code as "do not restart-loop; tell the user".
 try {
   const dataRootState = prepareDataRoot();
+  markHomeRuntimeActive(dataRootState.root);
   try {
     const migrated = migrateVaultToCurrentKey();
     if (migrated > 0) console.log(`Re-encrypted ${migrated} saved credential(s) under the current vault key.`);
@@ -335,6 +338,7 @@ app.use((req, res, next) => {
 
     registerGatewayConversation(gatewayHub);
     registerDeviceContinuityGateway(gatewayHub);
+    registerRemoteNodeGateway(gatewayHub);
     gatewayHub.start();
     try {
       await deviceNetwork.start();

@@ -106,7 +106,7 @@ export function refreshThesisArtifact(input: {
     const counters = docsBySignal.get("contradicts:" + claim.id) ?? [];
     const evidenceRefs = unique([...claim.evidenceRefs, ...supports.map(({ doc }) => doc.sourceRef)]);
     const counterEvidenceRefs = unique([...claim.counterEvidenceRefs, ...counters.map(({ doc }) => doc.sourceRef)]);
-    const nextStatus = counterEvidenceRefs.length ? "contradicted" : evidenceRefs.length ? "supported" : claim.status === "invalidated" ? "invalidated" : "open";
+    const nextStatus = claim.status === "invalidated" ? "invalidated" : counterEvidenceRefs.length ? "contradicted" : evidenceRefs.length ? "supported" : "open";
     if (nextStatus !== claim.status) changes.push("Claim \"" + claim.text + "\" changed " + claim.status + " → " + nextStatus + ".");
     if (counterEvidenceRefs.length) {
       const notes = counters.map(({ signal, doc }) => signal.note || doc.title);

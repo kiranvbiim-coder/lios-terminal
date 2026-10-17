@@ -52,6 +52,19 @@ test("P7 thesis invalidation and postmortem remain explicit and version-friendly
   assert.equal(post.postmortems[0].outcome,"invalidated");
 });
 
+test("observed supporting or counter evidence cannot reopen an explicitly invalidated claim", () => {
+  for (const type of ["supports", "contradicts"]) {
+    const invalidated = thesisArtifactContentSchema.parse({ ...thesis, claims: [{ ...thesis.claims[0], status: "invalidated", evidenceRefs: ["user:prior-invalidation"] }] });
+    const documents = [signalDoc(`observation:${type}`, [{ type, targetId: "c1" }])];
+    const snapshot = createProjectSnapshot({ projectId: 1, graph: buildReactiveContextGraph({ projectId: 1, documents }), documents });
+    const result = refreshThesisArtifact({ thesis: invalidated, documents, snapshot });
+    assert.equal(result.thesis.claims[0].status, "invalidated");
+    assert.equal(result.thesis.status, "invalidated");
+    assert.equal(result.review.posture, "invalidated");
+    assert.equal(result.thesis.claims[0][type === "supports" ? "evidenceRefs" : "counterEvidenceRefs"].includes(`observation:${type}`), true);
+  }
+});
+
 
 test("SI-03.19 derives explicit base-case, counter-thesis and unresolved posture without numeric invention", () => {
   const initial=buildThesisCounterThesisReview(thesis);

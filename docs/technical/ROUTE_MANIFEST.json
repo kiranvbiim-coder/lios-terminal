@@ -947,6 +947,18 @@
   },
   {
    "method": "POST",
+   "path": "/api/artifacts/:artifactId/inspect",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/artifacts/:artifactId/integrated-model-review",
    "reachableBy": [
     "internal_analyst",
@@ -2866,122 +2878,79 @@
   {
    "method": "POST",
    "path": "/api/decision-analysis",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decision-analysis/reverse-dcf",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "PATCH",
    "path": "/api/decision-monitors/:id/acknowledge",
-   "reachableBy": [
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "PATCH",
    "path": "/api/decision-monitors/:id/evaluate",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "GET",
    "path": "/api/decisions",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "GET",
    "path": "/api/decisions/:id",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/approval",
-   "reachableBy": [
-    "internal_compliance",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/receipts",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/replay",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/scenario-actions",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/scenario-actions/monitor",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
    "method": "POST",
    "path": "/api/decisions/:id/scenario-pipeline",
-   "reachableBy": [
-    "internal_analyst",
-    "internal_admin"
-   ],
+   "reachableBy": [],
    "unprobed": false
   },
   {
@@ -7300,7 +7269,7 @@
   },
   {
    "method": "POST",
-   "path": "/api/setup/python-runtime/install",
+   "path": "/api/setup/python-runtime/lifecycle/apply",
    "reachableBy": [
     "client_admin",
     "internal_admin"
@@ -7309,7 +7278,7 @@
   },
   {
    "method": "POST",
-   "path": "/api/setup/python-runtime/rollback",
+   "path": "/api/setup/python-runtime/lifecycle/preview",
    "reachableBy": [
     "client_admin",
     "internal_admin"

@@ -41,6 +41,7 @@ export class ManagedRuntimeUpgradeError extends Error {
 
 export interface ManagedRuntimeUpgradeOptions {
   strictProvisioningAuthority?: StrictProvisioningAuthority;
+  expectedCustodyHash?: string;
 }
 
 export interface ManagedRuntimeUpgradeResult {
@@ -183,6 +184,7 @@ export async function upgradeManagedRuntimeSafely(
         isolationMode: "strict",
         requireVerified: true,
         strictProvisioningAuthority: options.strictProvisioningAuthority,
+        expectedCustodyHash: options.expectedCustodyHash,
       },
     );
 

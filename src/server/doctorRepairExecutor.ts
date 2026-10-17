@@ -21,6 +21,7 @@ export interface DoctorRepairExecutionRequest {
   confirmed: boolean;
   isolationMode: SandboxIsolationMode;
   strictProvisioningAuthority?: StrictProvisioningAuthority;
+  expectedCustodyHash?: string;
 }
 
 export interface DoctorRepairExecutionDependencies {
@@ -123,6 +124,7 @@ export async function executeManagedRuntimeRepair(
     const installOptions: ManagedRuntimeInstallOptions = {
       isolationMode,
       requireVerified: plan.requiresVerifiedArtifacts,
+      expectedCustodyHash: request.expectedCustodyHash,
     };
     if (request.strictProvisioningAuthority) {
       installOptions.strictProvisioningAuthority = request.strictProvisioningAuthority;

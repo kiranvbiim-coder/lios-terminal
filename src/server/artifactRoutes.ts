@@ -71,6 +71,7 @@ import {
   linkDecisionObjectArtifactApproval,
   unlinkDecisionObjectArtifactApproval,
 } from "./decisionObjectArtifact";
+import { inspectArtifact } from "./artifactInspection";
 
 const spreadsheetArtifactImportUpload = createMemoryUpload(
   ["xlsx", "csv", "xlsm"],
@@ -263,6 +264,12 @@ export function registerArtifactRoutes(app: Express): void {
       const artifact = await getArtifact(ctx(req), pathText(req.params.artifactId));
       const version = await getArtifactVersion(ctx(req), artifact.id);
       res.json({ artifact, version });
+    } catch (error) { fail(res, error); }
+  });
+  app.post("/api/artifacts/:artifactId/inspect", requireAuth, async (req, res) => {
+    try {
+      if (req.body?.artifactId !== pathText(req.params.artifactId)) throw new Error("Artifact inspection identity does not match the route.");
+      res.json(await inspectArtifact(ctx(req), req.body));
     } catch (error) { fail(res, error); }
   });
   app.get("/api/artifacts/:artifactId/review-notes", async (req, res) => {

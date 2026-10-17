@@ -29,6 +29,8 @@ const { reviewArtifactIntegratedModelInputs, parseMaintenanceWorkbookInputs } = 
 const { listArtifactModelMaintenanceOptions, reviewArtifactModelMaintenance, applyArtifactModelMaintenance, artifactModelMaintenanceApplySchema, compareMaintenanceSources } = await import("./artifactModelMaintenance");
 const { createModelChangeReport } = await import("./artifactModelChangeReport");
 const { createArtifactReviewPackage } = await import("./artifactReviewPackage");
+const { createP9Workflow } = await import("./p9AutomationStore");
+const { executeP9Workflow } = await import("./p9AutomationService");
 const payload = financialDatasetPayloadSchema.parse({ symbol: "MAINT", periods: [{ fiscalYear: "2023", period: "FY", periodEnd: "2023-12-31", filingDate: "2024-02-15", availableAt: "2024-02-15T00:00:00.000Z", currency: "USD", sources: [{ statementType: "income", provider: "user_supplied" }], income: { revenue: 1000.125, costOfRevenue: 600, sellingGeneralAndAdministrativeExpenses: 200, incomeBeforeTax: 140, incomeTaxExpense: 28, netIncome: 112, weightedAverageShsOutDil: 100 }, balance: { cashAndCashEquivalents: 100, netReceivables: 100, inventory: 100, propertyPlantEquipmentNet: 500, accountPayables: 100, shortTermDebt: 50, longTermDebt: 150, totalAssets: 800, totalLiabilities: 300, totalStockholdersEquity: 500 }, cashflow: { depreciationAndAmortization: 50, investmentsInPropertyPlantAndEquipment: -60 } }] });
 
 function findCell(book: SpreadsheetContent, sheetId: string, path: string, year?: string) {
@@ -96,6 +98,26 @@ test("SI-04.25 explicit source maintenance keeps one P4 identity, all user work 
     assert.ok(review.preservedCells.some(item => item.cell === formula.ref && item.reason === "formula" && item.raw === "=B2*1.075"));
     assert.ok(review.preservedCells.some(item => item.sheetId === "actuals" && item.cell === actualOverride.ref && item.reason === "user_override"));
     assert.ok(review.preservedCells.some(item => item.sheetId === "analyst-work" && item.raw === "0.18750000000000001"));
+  });
+  await t.test("recurring source refresh produces a stable exact review without applying or recalculating owner work", async () => {
+    const beforeRuns = await getDb().select().from(financialModelRuns);
+    const workflow = await createP9Workflow(ctx, project.id, {
+      name: "Review source changes", enabled: false, trigger: { type: "manual" },
+      action: { kind: "model_refresh_review", acceptedArtifact: { artifactId: retained.artifact.id, version: editedVersion.version, contentHash: editedVersion.contentHash }, sourceProvider: "user_supplied", engineRev: review.engineRev },
+      notificationPolicy: { enabled: false },
+    });
+    const first = await executeP9Workflow({ workflow, ctx, triggerType: "manual" });
+    assert.equal(first.run?.status, "succeeded");
+    assert.equal(first.result?.changed, true);
+    assert.equal(first.result?.output.applied, false);
+    const captured = first.result?.output.review as { reviewHash: string; target: { contentHash: string }; preservedCells: unknown[] };
+    assert.equal(captured.reviewHash, review.reviewHash);
+    assert.equal(captured.target.contentHash, target.contentHash);
+    assert.ok(captured.preservedCells.length);
+    assert.equal((await getArtifact(ctx, retained.artifact.id)).headVersion, editedVersion.version);
+    assert.deepEqual((await getArtifactVersion(ctx, retained.artifact.id, editedVersion.version)).content, edited);
+    assert.equal((await getDb().select().from(financialModelRuns)).length, beforeRuns.length, "review-only observation must not invent a new model calculation");
+    assert.equal((await executeP9Workflow({ workflow, ctx, triggerType: "manual" })).result?.changed, false);
   });
   await t.test("foreign actors/snapshots, stale head/content/review hashes and fabricated proof fields fail closed", async () => {
     await assert.rejects(reviewArtifactModelMaintenance(otherCtx, retained.artifact.id, request));

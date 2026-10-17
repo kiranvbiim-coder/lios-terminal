@@ -44,7 +44,7 @@ import WatchConnectivity
             if received.count >= 100 { received.removeAll() }
             received.insert(request)
             onReviewRequest?(id)
-            replyHandler(["ok": true, "message": "Review opened on phone. No approval submitted."])
+            replyHandler(["ok": true, "message": "Review request received on phone. Reading and approval still require phone interaction."])
         }
     }
 }

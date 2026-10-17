@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { runCommand } from "./exec/run-command";
 import { pythonRuntimeEnvOverlay } from "./exec/env";
 import fs from "node:fs";
@@ -211,6 +212,43 @@ export function readManagedRuntimeState(): ManagedRuntimeState | null {
   }
 }
 
+/** Read-only approval custody. No executable is launched and no files are created. */
+export function inspectManagedRuntimeCustody(packIds: readonly string[]) {
+  const packs = resolveSelectedPacks(MANAGED_RUNTIME_MANIFEST, [...packIds]);
+  const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  const fileHash = (file: string): string | null => {
+    const entry = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (!entry) return null;
+    if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("Runtime custody requires regular, non-symlink metadata and release locks.");
+    return hash(fs.readFileSync(file, "utf8"));
+  };
+  assertRuntimeStateStorageSafe();
+  validateCurrentRuntimeDirectory(path.join(runtimeRoot(), "current"));
+  const state = readManagedRuntimeState();
+  const previousPath = authorizedRollbackPath(state?.rollbackPath);
+  const rollbackSnapshotHash = previousPath ? fileHash(runtimeStateSnapshotPath(previousPath)) : null;
+  const sourceStateHash = hash(JSON.stringify({
+    stateHash: fileHash(statePath()),
+    currentSnapshotHash: fileHash(runtimeStateSnapshotPath(path.join(runtimeRoot(), "current"))),
+    rollbackPath: previousPath, rollbackSnapshotHash,
+    pythonAvailable: managedRuntimePythonPath() !== null,
+  }));
+  const targetManifestHash = hash(JSON.stringify(MANAGED_RUNTIME_MANIFEST));
+  const releaseLocks = packs.map((pack) => ({ packId: pack.id, sha256: fileHash(packLockPath(pack.id)) }));
+  const custodyHash = hash(JSON.stringify({ sourceStateHash, targetManifestHash, releaseLocks }));
+  return {
+    sourceStateHash, targetManifestHash, releaseLocks, custodyHash,
+    rollbackAvailable: previousPath !== null && rollbackSnapshotHash !== null,
+    supportedPlatform: MANAGED_RUNTIME_MANIFEST.supportedPlatforms.includes(`${process.platform}-${process.arch}`),
+  };
+}
+
+function assertExpectedRuntimeCustody(packIds: readonly string[], expected?: string): void {
+  if (expected && inspectManagedRuntimeCustody(packIds).custodyHash !== expected) {
+    throw new Error("Runtime approval is stale; inspect and confirm the current operation again.");
+  }
+}
+
 function pythonExecutable(): string {
   const configured = process.env.PYTHON_EXECUTABLE?.trim();
   if (configured) return configured;
@@ -302,6 +340,8 @@ export interface ManagedRuntimeInstallOptions {
   isolationMode?: "legacy-host" | "strict";
   requireVerified?: boolean;
   strictProvisioningAuthority?: StrictProvisioningAuthority;
+  /** Exact preview custody, rechecked while holding the canonical writer lock. */
+  expectedCustodyHash?: string;
 }
 
 export async function installManagedRuntime(
@@ -332,6 +372,7 @@ export async function installManagedRuntime(
   assertRuntimeStateStorageSafe();
   const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(root);
   try {
+  assertExpectedRuntimeCustody(resolvedPackIds, options.expectedCustodyHash);
   const currentPath = path.join(root, "current");
   const currentExists = validateCurrentRuntimeDirectory(currentPath);
   const temporaryPath = unoccupiedRuntimePath(root, "install");
@@ -440,7 +481,7 @@ export async function installManagedRuntime(
   }
 }
 
-export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationResult> {
+export async function rollbackManagedRuntime(options: { expectedCustodyHash?: string; packIds?: readonly string[] } = {}): Promise<ManagedRuntimeOperationResult> {
   assertRuntimeStateStorageSafe();
   const lifecycleRoot = runtimeRoot();
   if (!fs.lstatSync(lifecycleRoot, { throwIfNoEntry: false })) {
@@ -448,6 +489,7 @@ export async function rollbackManagedRuntime(): Promise<ManagedRuntimeOperationR
   }
   const releaseLifecycleLock = acquireManagedRuntimeLifecycleLock(lifecycleRoot);
   try {
+  assertExpectedRuntimeCustody(options.packIds ?? ["core"], options.expectedCustodyHash);
   const state = readManagedRuntimeState();
   const previousPath = authorizedRollbackPath(state?.rollbackPath);
   if (!state || !previousPath) {

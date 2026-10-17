@@ -40,4 +40,29 @@ final class DeviceProtocolTests: XCTestCase {
         XCTAssertTrue(binding(policy: "one").sameAuthority(binding(policy: "one")))
         XCTAssertFalse(binding(policy: "one").sameAuthority(binding(policy: "two")))
     }
+    func testRunCursorAcceptsEarlyEventsAndIgnoresOtherRunsAndDuplicates() {
+        var cursor = RunCursor()
+        cursor.begin("one")
+        XCTAssertTrue(cursor.receive(["requestId": "one", "runSeq": 0, "event": ["type": "delta"]]))
+        XCTAssertFalse(cursor.receive(["requestId": "other", "runSeq": 99, "event": ["type": "done"]]))
+        XCTAssertFalse(cursor.receive(["requestId": "one", "runSeq": 0]))
+        XCTAssertEqual(cursor.sequence, 0)
+        cursor.subscribed("other", status: "finished")
+        XCTAssertEqual(cursor.requestId, "one")
+        XCTAssertTrue(cursor.receive(["requestId": "one", "runSeq": 1, "event": ["type": "done"]]))
+        XCTAssertNil(cursor.requestId)
+        cursor.begin("two")
+        XCTAssertEqual(cursor.sequence, -1)
+        cursor.subscribed("two", status: "finished")
+        XCTAssertNil(cursor.requestId)
+    }
+    func testWaitingApprovalKeepsRunIdentityForExplicitHomeReview() {
+        var cursor = RunCursor()
+        cursor.begin("waiting")
+        XCTAssertTrue(cursor.receive(["requestId": "waiting", "runSeq": 4, "event": ["type": "done", "status": "waiting_approval"]]))
+        XCTAssertEqual(cursor.requestId, "waiting")
+        XCTAssertEqual(cursor.sequence, 4)
+        cursor.subscribed("waiting", status: "running")
+        XCTAssertEqual(cursor.requestId, "waiting")
+    }
 }

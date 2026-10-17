@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { remoteNodePlacementPolicySchema } from "./remoteNode";
 import {
   conversationSourceScopeSchema,
   CONVERSATION_SOURCE_SCOPE_LABELS,
@@ -282,6 +283,7 @@ export const conversationRequestSchema = z.object({
     activeObjectRefs: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
     selection: conversationSelectionSchema.nullable().optional(),
     personalFinance: p6PersonalFinanceRequestSchema.optional(),
+    nodeFinancePolicy: remoteNodePlacementPolicySchema.options[1].optional(),
   }).strict().optional(),
 }).strict();
 export type ConversationRequest = z.infer<typeof conversationRequestSchema>;

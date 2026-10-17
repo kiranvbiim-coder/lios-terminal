@@ -7,6 +7,7 @@ import {
   useDecisionArtifactApproval, useDecisionArtifactApprovalOptions,
 } from "@/lib/useArtifacts";
 import { useQueryClient } from "@tanstack/react-query";
+import { openDecisionReview } from "@/lib/decisionReviewNavigation";
 
 type DecisionContent = Extract<ArtifactContent, { kind: "decision" }>;
 const inputClass = "w-full rounded border border-border/50 bg-black/20 px-3 py-2 font-ui text-[13px] outline-none disabled:opacity-50";
@@ -80,14 +81,14 @@ function DecisionApprovalInspector({ artifactId, version, contentHash, blocked }
       <div>Linked receipt hash: {current.link.receiptHash}</div>
       <div>Bound Artifact version: v{current.link.artifactVersion} · hash {current.link.artifactContentHash}</div>
       <div>Recorded server review: {current.link.outcome} · reviewer {current.link.reviewerUserId} · approval ID {current.link.serverApprovalId} · reviewed {current.link.approvedAt} · linked {current.link.linkedAt}</div>
-      <div><a className="underline" href={`/api/decisions/${current.link.decisionId}`} target="_blank" rel="noreferrer">Inspect existing Decision review API</a></div>
+      <div><button type="button" className="underline" onClick={() => openDecisionReview(current.link!.decisionId)}>Open existing canonical Decision review</button></div>
     </dl>}
     {current?.currentApproval && <p className="break-all text-xs">Current server review: {current.currentApproval.outcome} · review ID {current.currentApproval.serverApprovalId} · reviewer {current.currentApproval.reviewerUserId} · receipt hash {current.currentApproval.receiptHash}</p>}
     {current?.state === "stale" && <p role="alert" className="text-sm text-amber-200">Stale linkage is not current approval. Explicitly select and link an eligible reviewed receipt, or clear the linkage.</p>}
     {blocked && <p className="text-xs text-amber-200">Save or discard the local draft and resolve revision conflicts before changing version-bound review linkage.</p>}
     <label className="block space-y-1 text-sm">Existing owned decision case<select aria-label="Existing decision case" className={inputClass} disabled={mutationBlocked} value={caseId} onChange={event => { setCaseId(event.target.value); setReceiptId(""); }}><option value="">Explicitly select a case</option>{options.data?.cases.map(item => <option key={item.id} value={item.id}>{item.title} · case {item.id} · {item.status}</option>)}</select></label>
     <label className="block space-y-1 text-sm">Existing reviewed receipt<select aria-label="Existing decision receipt" className={inputClass} disabled={mutationBlocked || !selectedCase} value={receiptId} onChange={event => setReceiptId(event.target.value)}><option value="">Explicitly select a receipt</option>{selectedCase?.receipts.map(item => <option key={item.id} value={item.id}>Receipt v{item.version} · ID {item.id} · {item.eligible ? "eligible" : item.reason ?? "ineligible"}</option>)}</select></label>
-    {selectedCase && <a className="block text-sm underline" href={`/api/decisions/${selectedCase.id}`} target="_blank" rel="noreferrer">Open selected case's existing review API</a>}
+    {selectedCase && <button type="button" className="block text-sm underline" onClick={() => openDecisionReview(selectedCase.id)}>Open selected case in canonical review</button>}
     {selectedReceipt && <div className="space-y-1 text-xs"><p className="break-all">Selected receipt hash: {selectedReceipt.snapshotHash}</p><p>Recorded recommendation: {selectedReceipt.recommendation}</p>{!selectedReceipt.eligible && <p role="alert" className="text-amber-200">{selectedReceipt.reason ?? "This receipt is not eligible for linkage."}</p>}</div>}
     {options.isError && <p role="alert" className="text-sm text-amber-200">Existing receipt choices unavailable. No approval state is inferred.</p>}
     <div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={mutationBlocked || !selectedReceipt?.eligible} onClick={() => void changeLink("link")}>Link selected existing review to v{version}</button><button type="button" className={buttonClass} disabled={mutationBlocked || !current?.link} onClick={() => void changeLink("unlink")}>Clear this version's approval link</button><button type="button" className={buttonClass} disabled={busy || inspection.isFetching || options.isFetching} onClick={() => { void inspection.refetch(); void options.refetch(); }}>Refresh server review state</button></div>

@@ -150,6 +150,32 @@ For accepted deterministic Personal Finance work, **Use the latest saved Persona
 
 Thesis monitors propose substantive typed-evidence changes through the existing Artifact review queue. They do not automatically advance the owner's thesis version or conclusion. Review the proposal in **Library**, inspect evidence, then explicitly Accept or Reject. Repeated identical evidence reuses the proposal and does not produce repeated material-change alerts; observation timestamps alone do not count as thesis changes.
 
+For retained model maintenance, open the active model in **Library**, choose a currently permitted source provider and **Monitor this model/provider hourly · review only**. Automations produces a source-linked change review; it does not apply source changes, overwrite assumptions or run a new valuation. Inspect and explicitly apply changes through the existing maintenance review.
+
+For portfolio materiality, open the active saved PortfolioArtifact, provide explicit same-currency holding `marketValue` values and `summary.portfolioId/name/asOf/baseCurrency/cash`, choose thresholds and accept the exact baseline. **Save hourly portfolio materiality monitor** observes canonical descendant revisions. Concentration uses gross absolute securities exposure, not net exposure; cash is excluded and disclosed. Weight drift is percentage points from the accepted baseline. Persistent breaches remain quiet and recovery beyond the re-arm buffer permits a later new alert. This does not fetch live prices, FX or submit trades.
+
+### Paired-node finance and canonical reports
+
+An owner-approved live pinned worker can expose only the closed runtime-diagnosis and locally approved owned-profile P6 capabilities. In **Connections → Devices → Refresh executable nodes**, inspect exact source hash and current generation. **Compute node-local profile summary** returns bounded results; **Compute and save report in selected Chat** additionally uses the existing Project conversation, receipt and retained report. Choose an existing Project and Chat explicitly. Raw account IDs and profile paths stay on the node. Authentication verifies device/operation binding, not independent financial/hardware attestation. There is no Home fallback, inference, shell or broker execution. After disconnect/unknown outcome, inspect retained Chat/journal before explicitly retrying; no automatic replay occurs.
+
+### Navigation, inspection and local extensions
+
+**Cmd-K** opens capability/navigation commands. `automations`, `library`, `plugins`, `connections` and `doctor` open existing surfaces without running analytics or creating a Project. **Cmd-Shift-K** searches permitted saved work. **Inspect exact saved source** and focused cell **Alt-I** inspect saved Artifact id/version/hash rather than unsaved draft values. Recorded historical provenance is not a current freshness/entitlement grant; absent numerical provenance remains explicitly absent. Advanced detail changes presentation, not permission.
+
+**Plugins** accepts owner-supplied signed P13 JSON envelopes and verified P11 archives. Obtain the publisher key separately, compare the complete SPKI SHA-256 fingerprint, and explicitly consent to publisher trust and exact package rights/permissions. This screen activates only supported declarative contributions for the current Home session; restarting requires reimport/review. P11 storage is inactive, not executable readiness. Inspect before exact-digest revocation. Unknown/revoked signatures, incompatible manifests and missing supervised executable authority remain unavailable. No public catalog, automatic download or third-party license/identity certification is implied.
+
+### Runtime lifecycle and interrupted restore recovery
+
+In **Connections → Advanced → Runtime & Python packs**, review the exact operation, manifest/release locks and source custody before confirming install, repair, capability installation, upgrade or rollback. Missing verified platform locks or trusted governed provisioning authority blocks mutation; local AI is user-supplied and never silently installed. Changed custody/current role/consent or expired confirmation requires a new review.
+
+Stop Home and every writer before restore. Restore keeps a durable prior database export and overwritten-file copies while publishing DB/files and desktop credential re-keying together. An interrupted/ambiguous commit blocks ordinary startup. Preserve `.lios-restore-active`, prior-file directories and the database; do not delete markers to bypass recovery. From `src/`, with the affected `LIOS_DATA_ROOT` selected, run:
+
+```bash
+npm run backup:restore -- --recover
+```
+
+Recovery restores the prior DB/files and retains audit/copies for inspection. It refuses a live/unverifiable restore owner or active Home. Review output before restarting; this procedure does not establish sudden-power-loss durability or installed-target qualification.
+
 ## Core verification
 
 Run from `src/`:

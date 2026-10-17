@@ -20,6 +20,8 @@ import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContex
 import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
 import {
   isExperienceHomeSurface,
   loadExperienceSurface,
@@ -29,7 +31,7 @@ import {
 } from "@/lib/experienceShell";
 import type { ExperienceShellSurface } from "@shared/waveCContracts";
 import { prefetchPanelData } from "@/lib/prefetch";
-import type { ParsedTerminalCommand } from "@/lib/terminalCommands";
+import { dispatchCanonicalNavigation, type CanonicalNavigationTarget, type ParsedTerminalCommand } from "@/lib/terminalCommands";
 import { useAudience } from "@/lib/audience";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkspaceShortcutAction, shouldIgnoreCommandShortcut } from "@/lib/terminalChrome";
@@ -276,6 +278,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const [askLiosContext, setAskLiosContext] = useState<ClientAiContext | null>(null);
   const [askLiosPrompt, setAskLiosPrompt] = useState<string | null>(null);
   const [pendingWorkspaceProposal, setPendingWorkspaceProposal] = useState<SafeWorkspaceActionRequest | null>(null);
+  const [reviewDecisionId, setReviewDecisionId] = useState<number | null>(null);
   const historyRef = useRef<Record<string, TerminalNavigationHistory>>({});
   const undoRef = useRef<Record<string, TerminalUndoState<WorkspaceState>>>({});
   const canOpenView = useCallback((view: ViewMode) => isViewVisibleToAudience(view, audience), [audience]);
@@ -308,6 +311,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const isWorkbenchSurface = experienceSurface === "workbench";
   const showDenseChrome = isWorkbenchSurface;
   const showSidebarNav = !isProjectsSurface;
+  const [projectNavigation, setProjectNavigation] = useState<{ id: number; section: Exclude<CanonicalNavigationTarget, "connections" | "doctor"> } | null>(null);
+  const [navigationContext, setNavigationContext] = useState("Saved Project/Chat selection");
   const activeCapability = getTerminalCapability(activePane.view);
   const intelligentCalm = uxPreferences.adaptiveCalm && isWorkbenchSurface && !presentationMode && (
     activeCapability.workspace === "modeling"
@@ -618,10 +623,20 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, [activePane.symbol, audience, handleSurface, pendingWorkspaceProposal, setWorkspace]);
 
   const handleCommand = useCallback((command: ParsedTerminalCommand) => {
-    if (command.symbol) handleOpenAction(command.view, "tab", command.symbol);
+    if (command.navigation) {
+      dispatchCanonicalNavigation(command.navigation, {
+        openConnections: onOpenEnvironment,
+        openProjectSection: (section) => {
+          setProjectNavigation((current) => ({ id: (current?.id ?? 0) + 1, section }));
+          handleSurface("projects");
+        },
+      });
+    } else if (command.symbol) handleOpenAction(command.view, "tab", command.symbol);
     else handleOpenAction(command.view, "current");
     setCmdOpen(false);
-  }, [handleOpenAction]);
+  }, [handleOpenAction, handleSurface, onOpenEnvironment]);
+
+  useEffect(() => subscribeDecisionReview(setReviewDecisionId), []);
 
   const handleNewTab = useCallback(() => setTabsState((current) => openTerminalTab(current)), []);
 
@@ -823,7 +838,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         handleHistoryForward();
         return;
       }
-      if (event.key.toLowerCase() === "k" && modifier && isProjectsSurface) {
+      if (event.key.toLowerCase() === "k" && modifier && event.shiftKey && isProjectsSurface) {
         event.preventDefault();
         window.dispatchEvent(new Event("lios:open-work-search"));
         return;
@@ -948,6 +963,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
           <div className="relative z-[1] h-full min-h-0 min-w-0">
           {experienceSurface === "projects" ? (
             <ProjectExperienceShell
+              navigationRequest={projectNavigation}
+              onNavigationContext={setNavigationContext}
+              onOpenCommand={() => setCmdOpen(true)}
               account={{ name: session.name, email: session.email }}
               onLogout={onLogout}
               onOpenSettings={() => openTerminalUxSurface("settings")}
@@ -992,11 +1010,20 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         )}
       </div>
 
-      {cmdOpen && <CommandBar audience={audience} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
+      {cmdOpen && <CommandBar audience={audience} navigationContext={isProjectsSurface ? navigationContext : `Workspace · ${activePane.symbol ?? "no security selected"}; saved Project/Chat retained`} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
 
       {switcherOpen && <QuickSwitcher tabs={tabsState.tabs} activeTabId={tabsState.activeTabId} favorites={loadTerminalFavorites()} recents={recentContexts} onActivateTab={(tabId) => setTabsState((current) => activateTerminalTab(current, tabId))} onOpenView={handleNav} onOpenRecent={handleOpenRecent} onClose={() => setSwitcherOpen(false)} />}
 
       {layoutOpen && <LayoutManager onClose={() => setLayoutOpen(false)} currentWorkspace={workspace} onApplyLayout={(layout) => setWorkspace(() => sanitizeWorkspaceForAudience(layout, audience), "Apply workspace layout")} />}
+      <Dialog open={reviewDecisionId !== null} onOpenChange={open => { if (!open) setReviewDecisionId(null); }}>
+        <DialogContent className="flex h-[90dvh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-3">
+          <DialogTitle>Canonical Decision review · case {reviewDecisionId}</DialogTitle>
+          <DialogDescription>Review the exact case without leaving your Project, Chat or saved Artifact. Closing returns to the same work. Reading is not approval or execution; current server grants apply.</DialogDescription>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {reviewDecisionId !== null && <PanelErrorBoundary paneLabel="Canonical Decision review"><Suspense fallback={<p role="status">Loading exact canonical case…</p>}><DecisionEnginePanel key={reviewDecisionId} initialDecisionId={reviewDecisionId} symbol="" role={session.role} /></Suspense></PanelErrorBoundary>}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {uxPreferences.showMacroTickerTape && !focusMode && !presentationMode && showDenseChrome && <MacroTickerTape onSymbol={handleSymbol} />}
       {showDenseChrome && !isClient && uxPreferences.density === "terminal" && !intelligentCalm && !focusMode && !presentationMode && <FunctionBar onNav={handleNav} onOpenCmd={() => setCmdOpen(true)} onOpenLayouts={() => setLayoutOpen(true)} onOpenWorkbench={() => handleSurface("workbench")} />}

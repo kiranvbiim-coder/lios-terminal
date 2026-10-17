@@ -2,6 +2,7 @@ import { z } from "zod";
 import { conversationRuntimeEventSchema } from "./conversationRuntime";
 import { deviceProofSchema, pairingRequestSchema } from "./devicePairing";
 import { deviceContinuityMethods } from "./deviceOutbox";
+import { remoteNodeMethods } from "./remoteNode";
 
 /**
  * LiOS Gateway protocol, version 1 (GM-08).
@@ -195,6 +196,7 @@ const executionSessionHistoryRecordSchema = z.object({
 
 export const GATEWAY_METHODS = {
   ...deviceContinuityMethods,
+  ...remoteNodeMethods,
   "gateway.ping": {
     scope: "read",
     params: z.object({}).strict().optional(),

@@ -5,6 +5,7 @@ import { type CatalogProvider } from "@/lib/providerCatalog";
 import { connectionRecoveryPresentation, isConnectorConnectable, summarizeConnectionCenter } from "@/lib/connectionCenterPresentation";
 import { aiModelAccessMessage, resolveAiModelAccess } from "@/lib/aiModelAccess";
 import { normalizeProviderApiCredential } from "@shared/providerCredentialNormalize";
+import type { RuntimeLifecyclePreview, RuntimeLifecycleRequest } from "@shared/runtimeLifecycle";
 import {
   CheckCircle2, XCircle, AlertTriangle, KeyRound, Database, Globe, Cloud, Upload,
   Plus, RefreshCw, ChevronDown, ChevronRight, Terminal, Plug, Zap,
@@ -799,7 +800,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
   // P10 release-pack UX expands into the existing signed low-level runtime allow-list.
   const [selectedReleasePackIds, setSelectedReleasePackIds] = useState<string[]>(["core"]);
   const [selectedAddonPackIds, setSelectedAddonPackIds] = useState<string[]>([]);
-  const [runtimeBusy, setRuntimeBusy] = useState<null | "install" | "rollback" | "repair">(null);
+  const [runtimeBusy, setRuntimeBusy] = useState<null | "preview" | "apply">(null);
+  const [runtimePreview, setRuntimePreview] = useState<RuntimeLifecyclePreview | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeNotice, setRuntimeNotice] = useState<string | null>(null);
   const setupQuery = useQuery<SetupResponse>({ queryKey: ["/api/setup/status"], queryFn: async () => (await apiRequest("GET", "/api/setup/status")).json(), staleTime: 15_000 });
@@ -883,70 +885,38 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     ));
   }
 
-  async function runRuntimeRepair(): Promise<void> {
-    if (!window.confirm("Repair the saved managed-runtime selection using the current Home policy? Existing work stays saved. Installation can download approved packages; consequential tasks will not resume automatically.")) return;
-    setRuntimeBusy("repair");
+  async function previewRuntimeOperation(request: RuntimeLifecycleRequest): Promise<void> {
+    setRuntimeBusy("preview");
     setRuntimeError(null);
     setRuntimeNotice(null);
+    setRuntimePreview(null);
     try {
-      const response = await apiRequest("POST", "/api/setup/python-runtime/install", { repair: true, confirmed: true });
-      const payload = await response.json() as { result: { detail: string }; state: ManagedRuntimeStateView };
-      setManagedState(payload.state);
-      setRuntimeNotice(payload.result.detail);
+      const response = await apiRequest("POST", "/api/setup/python-runtime/lifecycle/preview", request);
+      setRuntimePreview(await response.json() as RuntimeLifecyclePreview);
     } catch (error) {
-      setRuntimeError(error instanceof Error ? error.message : "Doctor repair did not complete.");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime preview is unavailable.");
     } finally {
-      await runtimeQuery.refetch();
       setRuntimeBusy(null);
     }
   }
 
-  async function runRuntimeInstall(): Promise<void> {
-    setRuntimeBusy("install");
+  async function applyRuntimeOperation(): Promise<void> {
+    if (!runtimePreview || runtimePreview.blockers.length) return;
+    setRuntimeBusy("apply");
     setRuntimeError(null);
-    setRuntimeNotice(null);
     try {
-      const response = await apiRequest("POST", "/api/setup/python-runtime/install", {
-        releasePackIds: selectedReleasePackIds,
-        additionalPackIds: selectedAddonPackIds,
+      const response = await apiRequest("POST", "/api/setup/python-runtime/lifecycle/apply", {
+        request: runtimePreview.request, operationHash: runtimePreview.operationHash,
+        confirmationToken: runtimePreview.confirmationToken, expiresAt: runtimePreview.expiresAt, confirmed: true,
       });
-      const payload = await response.json() as { result?: { detail: string }; state?: ManagedRuntimeStateView; error?: string; blockedPacks?: Array<{ packId: string; scope: string }> };
-      if (!response.ok) {
-        // A pack blocked for missing consent is the one failure with a
-        // specific, actionable next step, so it gets its own message
-        // pointing at the consent checkbox directly above.
-        setRuntimeError(payload.blockedPacks?.length
-          ? `${payload.blockedPacks.map((p) => p.packId).join(", ")} requires the matching consent above before it can be installed.`
-          : payload.error ?? "Runtime install failed.");
-        return;
-      }
-      setManagedState(payload.state ?? null);
-      setRuntimeNotice(payload.result?.detail ?? "Runtime installed.");
-      await runtimeQuery.refetch();
+      const payload = await response.json() as { result: { detail: string }; state: ManagedRuntimeStateView | null; readiness: { ready: boolean; state: string } };
+      setManagedState(payload.state);
+      setRuntimeNotice(`${payload.result.detail} Current readiness: ${payload.readiness.state}.${payload.readiness.ready ? "" : " Runtime remains unavailable; review Doctor. No task was resumed."}`);
     } catch (error) {
-      setRuntimeError(error instanceof Error ? error.message : "Runtime install failed.");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime operation did not complete safely; inspect current Doctor state before retrying.");
     } finally {
-      setRuntimeBusy(null);
-    }
-  }
-
-  async function runRuntimeRollback(): Promise<void> {
-    setRuntimeBusy("rollback");
-    setRuntimeError(null);
-    setRuntimeNotice(null);
-    try {
-      const response = await apiRequest("POST", "/api/setup/python-runtime/rollback", {});
-      const payload = await response.json() as { result?: { detail: string }; state?: ManagedRuntimeStateView; error?: string };
-      if (!response.ok) {
-        setRuntimeError(payload.error ?? "Runtime rollback failed.");
-        return;
-      }
-      setManagedState(payload.state ?? null);
-      setRuntimeNotice(payload.result?.detail ?? "Runtime rolled back.");
+      setRuntimePreview(null);
       await runtimeQuery.refetch();
-    } catch (error) {
-      setRuntimeError(error instanceof Error ? error.message : "Runtime rollback failed.");
-    } finally {
       setRuntimeBusy(null);
     }
   }
@@ -1649,7 +1619,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 <p>Managed runtime: {runtimeQuery.data.managedRuntimeReadiness.state}. {runtimeQuery.data.doctorRepairPlan?.summary}</p>
                 <p className="mt-1 text-muted-foreground">{runtimeQuery.data.managedRuntimeReadiness.reasons.join(" ")}</p>
                 {runtimeQuery.data.doctorRepairPlan?.executionStatus === "blocked" && <p className="mt-1 text-amber-300">Repair blocked: {runtimeQuery.data.doctorRepairPlan.executionBlocker}. No host fallback or automatic installation is authorized.</p>}
-                {runtimeQuery.data.doctorRepairPlan?.executionStatus === "authority_available" && ["internal_admin", "client_admin"].includes(session.role) && <button type="button" disabled={runtimeBusy !== null} onClick={() => void runRuntimeRepair()} className="mt-2 border border-border px-2 py-1 disabled:opacity-40" data-testid="runtime-doctor-repair">{runtimeBusy === "repair" ? "Repairing…" : "Review and repair saved runtime"}</button>}
+                {["internal_admin", "client_admin"].includes(session.role) && <button type="button" disabled={runtimeBusy !== null} onClick={() => void previewRuntimeOperation({ operation: "repair" })} className="mt-2 border border-border px-2 py-1 disabled:opacity-40" data-testid="runtime-doctor-repair">Review saved runtime repair</button>}
               </div>}
               {(pythonRuntimeId === "external-path" || pythonRuntimeId === "remote-service") && (
                 <div className="mt-3">
@@ -1693,6 +1663,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                           <span className="block mt-0.5 text-[7px]">{pack.description}</span>
                           <span className="block mt-0.5 text-[7px] text-cyan-300/80">{pack.capabilities.slice(0, 5).join(" · ")}</span>
                           {installed && <span className="block mt-0.5 text-[7px] text-emerald-400">Installed selection</span>}
+                          {!isCore && ["internal_admin", "client_admin"].includes(session.role) && <button type="button" className="block mt-1 border border-border px-2 py-1 disabled:opacity-40" disabled={runtimeBusy !== null} onClick={(event) => { event.preventDefault(); void previewRuntimeOperation({ operation: "lazy_install", capability: pack.capabilities[0] }); }} data-testid={`runtime-lazy-${pack.id}`}>Review capability installation</button>}
                         </span>
                       </label>
                     );
@@ -1721,25 +1692,34 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                   <button
                     type="button"
                     data-testid="runtime-pack-install"
-                    onClick={() => void runRuntimeInstall()}
-                    disabled={runtimeBusy !== null}
+                    onClick={() => void previewRuntimeOperation({ operation: "install", releasePackIds: selectedReleasePackIds as Extract<RuntimeLifecycleRequest, { operation: "install" }>["releasePackIds"], additionalPackIds: selectedAddonPackIds as ["community-yahoo"] })}
+                    disabled={runtimeBusy !== null || !["internal_admin", "client_admin"].includes(session.role)}
                     className="border border-[hsl(38,95%,55%)]/50 text-[hsl(38,95%,55%)] px-2 py-1 font-terminal text-[8px] uppercase tracking-widest hover:bg-[hsl(38,95%,55%)]/10 disabled:opacity-40"
                   >
-                    {runtimeBusy === "install" ? "Installing…" : runtimeError ? "Retry install" : "Install selected packs"}
+                    Review selected packs
                   </button>
                   <button
                     type="button"
                     data-testid="runtime-pack-rollback"
-                    onClick={() => void runRuntimeRollback()}
-                    disabled={runtimeBusy !== null}
+                    onClick={() => void previewRuntimeOperation({ operation: "rollback" })}
+                    disabled={runtimeBusy !== null || !["internal_admin", "client_admin"].includes(session.role)}
                     className="border border-border text-muted-foreground px-2 py-1 font-terminal text-[8px] uppercase tracking-widest hover:text-foreground disabled:opacity-40"
                   >
-                    {runtimeBusy === "rollback" ? "Rolling back…" : "Roll back"}
+                    Review rollback
                   </button>
+                  <button type="button" data-testid="runtime-pack-upgrade" onClick={() => void previewRuntimeOperation({ operation: "upgrade" })} disabled={runtimeBusy !== null || !["internal_admin", "client_admin"].includes(session.role)} className="border border-border px-2 py-1 font-terminal text-[8px] disabled:opacity-40">Review safe upgrade</button>
                 </div>
-                {runtimeBusy === "install" && (
-                  <p className="font-terminal text-[8px] text-muted-foreground">Building the runtime and installing allow-listed packages. This can take several minutes on first install.</p>
-                )}
+                {runtimeBusy && <p role="status" className="font-terminal text-[8px] text-muted-foreground">{runtimeBusy === "preview" ? "Reading current operation and prerequisites; no installation is performed." : "Applying the exact administrator-confirmed operation through the governed runtime authority."}</p>}
+                {runtimePreview && <div className="border border-border p-2 font-terminal text-[8px] break-all space-y-1" data-testid="runtime-lifecycle-preview">
+                  <p>{runtimePreview.summary}</p>
+                  <p>Source state SHA-256: {runtimePreview.sourceStateHash}</p>
+                  <p>Target manifest {runtimePreview.targetManifestVersion} SHA-256: {runtimePreview.targetManifestHash}</p>
+                  <p>Operation SHA-256: {runtimePreview.operationHash}</p>
+                  <p>Release locks: {runtimePreview.releaseLocks.map((lock) => `${lock.packId}: ${lock.sha256 ?? "MISSING"}`).join(" · ")}</p>
+                  {runtimePreview.blockers.length > 0 && <p role="status" className="text-amber-300">Blocked prerequisites: {runtimePreview.blockers.join("; ")}. No host fallback, download, repair success or task resumption is implied.</p>}
+                  <button type="button" data-testid="runtime-lifecycle-confirm" disabled={runtimeBusy !== null || runtimePreview.blockers.length > 0} onClick={() => void applyRuntimeOperation()} className="border border-border px-2 py-1 disabled:opacity-40">Confirm this exact {runtimePreview.request.operation}</button>
+                  <button type="button" disabled={runtimeBusy !== null} onClick={() => setRuntimePreview(null)} className="ml-2 border border-border px-2 py-1">Cancel</button>
+                </div>}
                 {runtimeError && <p className="font-terminal text-[8px] text-[hsl(0,80%,60%)]" data-testid="runtime-pack-error">{runtimeError}</p>}
                 {runtimeNotice && !runtimeError && <p className="font-terminal text-[8px] text-emerald-400">{runtimeNotice}</p>}
                 {managedState && (

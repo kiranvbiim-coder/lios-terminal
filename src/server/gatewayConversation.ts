@@ -156,7 +156,9 @@ export function registerGatewayConversation(hub: GatewayHub, deps: GatewayConver
     // Observe before the first event can be produced: the run starts executing as soon as it is registered.
     let started;
     try {
-      started = chatId === null ? await deps.startTemporary(user, body) : await deps.startProject(user, chatId, body);
+      started = chatId === null ? await deps.startTemporary(user, body) : await deps.startProject(user, chatId, body, {
+        nodeFinanceGateway: { userId, request: (method, params) => hub.invokeForConnection(method, params, connection) },
+      });
     } catch (error) {
       throw toGatewayError(error);
     }

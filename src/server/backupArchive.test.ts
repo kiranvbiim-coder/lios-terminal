@@ -538,6 +538,41 @@ test("SI-07.12 backup refuses a symlink alias physically nested inside Home befo
   );
   assert.equal(fs.existsSync(path.join(rootA, "data", "backup-must-not-appear")), false);
 });
+test("late credential finalization failure restores prior database and overwritten files without publishing imported additions", async () => {
+  const backup = await createBackup(getDb(), { ...common, destination: path.join(base, "late-failure"), passphrase: PASS });
+  const target = path.join(base, "home-late-failure");
+  await closeDb();
+  process.env.LIOS_DATA_ROOT = target;
+  try {
+    await initDb();
+    await getDb().insert(users).values({ email: "prior@example.test", passwordHash: "prior-hash", role: "internal_admin", name: "Prior owner", active: true });
+    const attachment = path.join(target, "project-attachments/1/2/a.blob");
+    fs.mkdirSync(path.dirname(attachment), { recursive: true });
+    fs.writeFileSync(attachment, "prior attachment");
+    fs.writeFileSync(path.join(target, "vault.key"), "PRIOR-VAULT");
+    await assert.rejects(restoreBackup(getDb(), backup.file, {
+      passphrase: PASS, replace: true,
+      finalizeCredentials: () => {
+        assert.equal(fs.readFileSync(attachment, "utf8"), "attachment-one");
+        assert.equal(fs.readFileSync(path.join(target, LONG), "utf8"), "long-named");
+        throw new Error("Destination custody unavailable after publication");
+      },
+    }), /prior database and Home files were restored.*Destination custody unavailable/);
+    assert.deepEqual((await getDb().select().from(users)).map((row) => row.email), ["prior@example.test"]);
+    assert.equal(fs.readFileSync(attachment, "utf8"), "prior attachment");
+    assert.equal(fs.readFileSync(path.join(target, "vault.key"), "utf8"), "PRIOR-VAULT");
+    assert.equal(fs.existsSync(path.join(target, LONG)), false);
+    assert.equal(fs.existsSync(path.join(target, ".lios-restore-active")), false);
+    await closeDb();
+    await initDb();
+    assert.deepEqual((await getDb().select().from(users)).map((row) => row.email), ["prior@example.test"]);
+  } finally {
+    await closeDb();
+    process.env.LIOS_DATA_ROOT = rootA;
+    await initDb();
+  }
+});
+
 test("retention keeps the newest backups only after a verified success; destinations inside the data root are refused", async () => {
   const dest = path.join(base, "retention");
   for (const minute of [1, 2, 3]) {

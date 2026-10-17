@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { getDb } from "./db";
 import { withOrganizationId } from "./tenantDb";
 import { recordSecurityAuditEvent, auditActor } from "./auditEvents";
@@ -14,6 +15,7 @@ import {
   DEFAULT_ENTERPRISE_POLICY,
   assessEnterprisePolicy,
   normalizeEnterprisePolicy,
+  enterprisePolicySchema,
   type EnterprisePolicy,
 } from "@shared/enterpriseContracts";
 
@@ -74,9 +76,10 @@ export async function saveEnterprisePolicy(
   input: unknown,
   actor: Pick<User, "id" | "email">,
 ): Promise<EnterprisePolicyRecord> {
-  const policy = normalizeEnterprisePolicy(input);
+  // Writes must be valid; normalization is only the explicit legacy migration.
+  const policy = normalizeEnterprisePolicy(enterprisePolicySchema.parse(input));
   const record = await withOrganizationId(organizationId, async (tx) => {
-    const [organization] = await tx.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    const [organization] = await tx.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).for("update").limit(1);
     if (!organization) throw new Error("Organization not found.");
     const [existing] = await tx.select().from(organizationEnterprisePolicies)
       .where(eq(organizationEnterprisePolicies.organizationId, organizationId)).limit(1);
@@ -88,7 +91,7 @@ export async function saveEnterprisePolicy(
         updatedByUserId: actor.id,
         updatedAt: now,
       }).where(eq(organizationEnterprisePolicies.organizationId, organizationId)).returning();
-      return { organizationId, policy, revision: updated.revision, updatedByUserId: actor.id, updatedAt: updated.updatedAt };
+      return { organizationId, policy, revision: updated.revision, updatedByUserId: actor.id, updatedAt: updated.updatedAt, previousPolicyDigest: createHash("sha256").update(JSON.stringify(existing.policy)).digest("hex") };
     }
     const [created] = await tx.insert(organizationEnterprisePolicies).values({
       organizationId,
@@ -98,10 +101,15 @@ export async function saveEnterprisePolicy(
       createdAt: now,
       updatedAt: now,
     }).returning();
-    return { organizationId, policy, revision: created.revision, updatedByUserId: actor.id, updatedAt: created.updatedAt };
+    return { organizationId, policy, revision: created.revision, updatedByUserId: actor.id, updatedAt: created.updatedAt, previousPolicyDigest: null };
   });
-  await recordSecurityAuditEvent(actor.id, "enterprise_policy_updated", { organizationId, revision: record.revision, ...auditActor(actor) });
-  return record;
+  const { previousPolicyDigest, ...saved } = record;
+  await recordSecurityAuditEvent(actor.id, "enterprise_policy_updated", {
+    organizationId, revision: saved.revision, previousPolicyDigest,
+    policyDigest: createHash("sha256").update(JSON.stringify(policy)).digest("hex"),
+    decisionGrants: policy.roles.grants, ...auditActor(actor),
+  });
+  return saved;
 }
 
 export async function getEnterpriseOrganizationOverview(organizationId: number): Promise<EnterpriseOrganizationOverview | null> {

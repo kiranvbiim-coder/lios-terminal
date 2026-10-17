@@ -60,17 +60,25 @@ export function sameDeviceReviewAuthority(a: DeviceReviewBinding, b: DeviceRevie
     && a.snapshotHash === b.snapshotHash && a.decisionHead === b.decisionHead && a.policyDigest === b.policyDigest;
 }
 
+/** Only an idempotent notification-read intent may be replayed automatically. */
+export const deviceNotificationReadIntentSchema = z.object({
+  homeId: z.string().uuid(), userId: id,
+  deviceId: z.string().regex(/^[a-f0-9]{32}$/),
+  projectId: id, notificationId: z.string().min(1).max(300),
+}).strict();
 const record = z.record(z.unknown());
 export const deviceContinuityMethods = {
   "projects.list": { scope: "read", params: z.object({}).strict(), result: z.object({ projects: z.array(record) }).strict() },
   "chats.create": { scope: "write", params: z.object({ projectId: id, title: z.string().trim().min(1).max(200).optional() }).strict(), result: z.object({ chat: record }).strict() },
   "device.continuity.read": {
-    scope: "read", params: z.object({ projectId: id, chatId: id.optional(), offset: z.number().int().min(0).max(1_000_000).default(0), limit: z.number().int().min(1).max(100).default(50) }).strict(),
-    result: z.object({ homeId: z.string().uuid(), userId: id, project: record, chats: z.array(record), messages: z.array(record), artifacts: z.array(record), nextOffset: z.number().int().nullable() }).strict(),
+    scope: "read", params: z.object({ projectId: id, chatId: id.optional(), offset: z.number().int().min(0).max(1_000_000).default(0), limit: z.number().int().min(1).max(100).default(50), artifactsOffset: z.number().int().min(0).max(1_000_000).default(0), artifactsLimit: z.number().int().min(1).max(100).default(100) }).strict(),
+    result: z.object({ homeId: z.string().uuid(), userId: id, project: record, chats: z.array(record), messages: z.array(record), artifacts: z.array(record), nextOffset: z.number().int().nullable(), nextArtifactsOffset: z.number().int().nullable() }).strict(),
   },
   "artifacts.read": { scope: "read", params: z.object({ artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i), version: id.optional() }).strict(), result: z.object({ artifact: record, revision: record }).strict() },
+  "artifacts.versions.list": { scope: "read", params: z.object({ artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i), offset: z.number().int().min(0).max(1_000_000).default(0), limit: z.number().int().min(1).max(100).default(50) }).strict(), result: z.object({ versions: z.array(record), nextOffset: z.number().int().nullable() }).strict() },
   "notifications.list": { scope: "read", params: z.object({ projectId: id, limit: z.number().int().min(1).max(100).default(50) }).strict(), result: z.object({ notifications: z.array(record) }).strict() },
   "notifications.read": { scope: "write", params: z.object({ projectId: id, notificationId: z.string().min(1).max(300) }).strict(), result: z.object({ notification: record }).strict() },
+  "notifications.read.replay": { scope: "write", params: deviceNotificationReadIntentSchema, result: z.object({ notification: record }).strict() },
   "decision.review.read": { scope: "read", params: z.object({ decisionId: id }).strict(), result: z.object({ binding: deviceReviewBindingSchema, decision: record, receipt: record, canReview: z.boolean(), approval: record.nullable() }).strict() },
   "decision.review.submit": { scope: "write", params: deviceReviewSubmissionSchema, result: deviceReviewResultSchema },
 } as const;

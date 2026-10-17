@@ -94,15 +94,15 @@ export async function exportDatabase(
   db: DrizzleDb,
   outDir: string,
   sourceEngine: DatabaseExportManifest["sourceEngine"],
+  options: { existingTransaction?: boolean } = {},
 ): Promise<DatabaseExportManifest> {
   const target = path.resolve(outDir);
   if (fs.existsSync(target)) throw new DatabaseTransferError(`Export destination already exists: ${target}`);
   const partial = `${target}.partial-${process.pid}`;
   fs.mkdirSync(path.join(partial, "tables"), { recursive: true, mode: 0o700 });
   try {
-    const manifest = await db.transaction(async (tx) => {
-      // One snapshot for the whole export, so a Home that is still being written to stays consistent.
-      await tx.execute(sql`set transaction isolation level repeatable read read only`);
+    const snapshot = async (tx: Executor): Promise<DatabaseExportManifest> => {
+      if (!options.existingTransaction) await tx.execute(sql`set transaction isolation level repeatable read read only`);
       const tables = await publicTables(tx);
       const entries: DatabaseExportManifest["tables"] = [];
       for (const table of tables) {
@@ -137,7 +137,8 @@ export async function exportDatabase(
         migrations: await appliedMigrations(tx),
         tables: entries,
       } satisfies DatabaseExportManifest;
-    });
+    };
+    const manifest = options.existingTransaction ? await snapshot(db) : await db.transaction(snapshot);
     fs.writeFileSync(path.join(partial, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
     fs.renameSync(partial, target);
     return manifest;
@@ -170,12 +171,23 @@ export interface DatabaseImportResult {
   replaced: boolean;
 }
 
-export async function importDatabase(db: DrizzleDb, srcDir: string, options: { replace?: boolean } = {}): Promise<DatabaseImportResult> {
+export async function importDatabase(
+  db: DrizzleDb,
+  srcDir: string,
+  options: {
+    replace?: boolean;
+    /** Restore publishes Home files while DB locks/rollback are still held. */
+    beforeCommit?: () => void | Promise<void>;
+    existingTransaction?: boolean;
+    /** Offline restore must refuse a concurrent writer, not wait behind one. */
+    refuseConcurrentWrites?: boolean;
+  } = {},
+): Promise<DatabaseImportResult> {
   const manifest = readExportManifest(srcDir);
   // Verify every file before touching the destination.
   const files = new Map(manifest.tables.map((table) => [table.name, verifyTableFile(srcDir, table)]));
 
-  return db.transaction(async (tx) => {
+  const load = async (tx: Executor): Promise<DatabaseImportResult> => {
     const destMigrations = await appliedMigrations(tx);
     if (destMigrations.length !== manifest.migrations.length || destMigrations.some((hash, index) => hash !== manifest.migrations[index])) {
       throw new DatabaseTransferError(
@@ -198,7 +210,7 @@ export async function importDatabase(db: DrizzleDb, srcDir: string, options: { r
 
     // Strictly inside the transaction: any failure below rolls the destination back untouched.
     const allTables = sql.join(destTables.map((name) => sql.identifier(name)), sql`, `);
-    await tx.execute(sql`lock table ${allTables} in access exclusive mode`);
+    await tx.execute(sql`lock table ${allTables} in access exclusive mode${options.refuseConcurrentWrites ? sql` nowait` : sql``}`);
     await tx.execute(sql`truncate table ${allTables} restart identity cascade`);
     await tx.execute(sql`create temp table lios_transfer_stage (doc jsonb not null) on commit drop`);
 
@@ -225,13 +237,25 @@ export async function importDatabase(db: DrizzleDb, srcDir: string, options: { r
 
     const sequenced = await rows<{ table_name: string; column_name: string }>(tx, sql`
       select table_name, column_name from information_schema.columns
-      where table_schema = 'public' and pg_get_serial_sequence(quote_ident(table_name), column_name) is not null`);
+      where table_schema = 'public' and pg_get_serial_sequence(quote_ident(table_schema) || '.' || quote_ident(table_name), column_name) is not null`);
     for (const { table_name: table, column_name: column } of sequenced) {
       await tx.execute(sql`
         select setval(pg_get_serial_sequence(quote_ident(${table}), ${column}), coalesce(max(${sql.identifier(column)}), 1), max(${sql.identifier(column)}) is not null)
         from ${sql.identifier(table)}`);
     }
+    await options.beforeCommit?.();
     return { tables: destTables.length, rows: total, replaced: hasUserData };
+  };
+  return options.existingTransaction ? load(db) : db.transaction(load);
+}
+
+/** Hold every canonical table across the prior snapshot, file publication and DB commit. */
+export async function withExclusiveDatabaseRestore<T>(db: DrizzleDb, restore: (tx: DrizzleDb) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    const tables = await publicTables(tx);
+    const allTables = sql.join(tables.map((name) => sql.identifier(name)), sql`, `);
+    await tx.execute(sql`lock table ${allTables} in access exclusive mode nowait`);
+    return restore(tx as unknown as DrizzleDb);
   });
 }
 
