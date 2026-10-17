@@ -14,6 +14,7 @@ import {
   p7HistoricalStateSchema,
   p7ProjectDocumentSchema,
   p7ProjectSnapshotSchema,
+  p7SearchRequestSchema,
   type P7ContextGraph,
   type P7Delta,
   type P7HistoricalState,
@@ -562,6 +563,10 @@ export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: 
   const resources = (await listProjectResources(ctx, projectId)).filter((resource) => resource.contextMode !== "excluded");
   for (const resource of resources) {
     const metadata = resource.metadata ?? {};
+    const sourceRightsMetadata = {
+      ...(typeof metadata.provider === "string" ? { provider: metadata.provider } : {}),
+      ...(metadata.researchSource !== undefined ? { researchSource: metadata.researchSource } : {}),
+    };
     let attachmentText = "";
     let attachmentProjection: Record<string, unknown> = {};
     let attachmentStructure: P7StructuredDocument | null = null;
@@ -659,6 +664,7 @@ export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: 
         contextMode: resource.contextMode,
         resourceRef: resource.resourceRef,
         contextRefs: metadata.contextRefs,
+        ...sourceRightsMetadata,
         ...attachmentProjection,
       },
     }));
@@ -679,6 +685,7 @@ export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: 
           sourceRefs: structureSourceRefs,
           entityRefs: inheritedEntityRefs,
           metadata: {
+            ...sourceRightsMetadata,
             structureKind: "section",
             parentSourceRef: resource.id,
             attachmentSourceRef: resource.resourceRef,
@@ -715,6 +722,7 @@ export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: 
             currency: currencies,
           },
           metadata: {
+            ...sourceRightsMetadata,
             structureKind: "table",
             parentSourceRef: resource.id,
             attachmentSourceRef: resource.resourceRef,
@@ -894,10 +902,37 @@ export async function currentProjectIntelligence(ctx: TenantContext, projectId: 
   return { documents, graph, researchGraph: buildResearchGraph(graph), timeline: buildUnifiedTimeline(documents) };
 }
 
+export async function currentPermittedProjectSearchDocuments(ctx: TenantContext, projectId: number): Promise<P7ProjectDocument[]> {
+  const [project, indexed, snapshots] = await Promise.all([
+    getProject(ctx, projectId),
+    listProjectIntelligenceDocuments(ctx, projectId),
+    listProjectIntelligenceSnapshots(ctx, projectId, 1),
+  ]);
+  let documents = indexed;
+  if (!documents.length || !snapshots[0] || Math.max(project.updatedAt.getTime(), project.lastActivityAt.getTime()) >= Date.parse(snapshots[0].generatedAt)) {
+    documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
+  }
+  // Current eligibility is authoritative even if source changes raced snapshot construction.
+  const [resources, chats, artifacts] = await Promise.all([
+    listProjectResources(ctx, projectId), listProjectChats(ctx, { projectId, status: "active" }), listProjectArtifacts(ctx, projectId),
+  ]);
+  const resourceIds = new Set(resources.filter(resource => resource.contextMode !== "excluded").map(resource => resource.id));
+  const chatIds = new Set(chats.map(chat => chat.id));
+  const artifactIds = new Set(artifacts.map(artifact => artifact.id));
+  documents = documents.filter(document => {
+    const parent = typeof document.metadata.parentSourceRef === "string" ? document.metadata.parentSourceRef : document.sourceRef;
+    if (parent.startsWith("prjres:") && !resourceIds.has(parent.split("#", 1)[0])) return false;
+    if (typeof document.metadata.chatId === "number" && !chatIds.has(document.metadata.chatId)) return false;
+    const artifactId = document.metadata.artifactId;
+    if (typeof artifactId === "string" && /^artifact:[0-9a-f-]{36}$/i.test(artifactId) && !artifactIds.has(artifactId)) return false;
+    return true;
+  });
+  return documents;
+}
+
 export async function searchProjectIntelligence(ctx: TenantContext, projectId: number, request: unknown): Promise<P7SearchHit[]> {
-  let documents = await listProjectIntelligenceDocuments(ctx, projectId);
-  if (!documents.length) documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
-  return searchProjectDocuments(documents, request);
+  const parsed = p7SearchRequestSchema.parse(request);
+  return searchProjectDocuments(await currentPermittedProjectSearchDocuments(ctx, projectId), parsed);
 }
 
 export async function projectIntelligenceDelta(ctx: TenantContext, projectId: number, fromId: string, toId: string): Promise<P7Delta> {

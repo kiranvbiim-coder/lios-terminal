@@ -33,6 +33,17 @@ The [SI execution plan](../LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md) governs st
 | LIOS-P7-15 | Intelligence Timeline events retain source/entity/artifact/model/decision refs. The timeline API supports deterministic event/source/entity/model/artifact/decision/time filters, and Project Home exposes compact event/reference filtering. |
 | LIOS-P7-16 | `lios.project.what_changed` is a first-class deterministic Conversation Runtime workflow backed by immutable Project snapshots/deltas and covered by runtime + engine tests. |
 
+### Explicit local embedding retrieval
+
+Project Intelligence defaults to **Lexical · no model**. Select **Local embeddings · Ollama / LM Studio** and enter the exact installed, rights-approved embedding model to opt into the existing P7 fusion ranker with generated vectors. `POST /api/projects/:projectId/intelligence/search/local` uses the same current owner/Project/source filters before generation and before results are presented. Ordinary search now refreshes stale projections using the canonical Project edit/activity clock; excluded, archived or removed resource children cannot remain searchable merely because their old index rows exist.
+
+The existing BYOAI transport owns the local embedding request. Only configured loopback endpoints are permitted; redirects, remote fallback, downloads and automatic model selection are forbidden. Organization AI policy is enforced. Query and at most 64 permitted source passages (4096 characters each) are embedded in one batch. Provider-bound research is withheld from model input rather than treating a retained entitlement record as a current model-use grant. Explicit source AI restrictions are honored; the UI reports withheld, omitted and truncated counts.
+
+Vectors are **request-only derived values**: finite, nonzero, consistent-dimensional and normalized. The response must name its served model. Query/source vectors share one response space; no vector from another model or source revision is reused or written into immutable source history. Results expose space id, model, dimensions, exact source revisions and limits. Request-only recomputation trades inference cost for bounded, straightforward custody; it does not create a second vector store.
+
+Missing/unavailable local endpoints fail explicitly. Lexical retrieval remains selectable without a model. Synthetic HTTP protocol/vector fixtures verify transport, authorization, malformed-space rejection and ranking integration, not installed model quality. Real installed-model semantic quality/rights and native shipping qualification remain separate prerequisites.
+
+
 ## ResearchArtifact workflow state
 
 P7 extends the existing P4 `ResearchArtifact` rather than creating a competing research object. It now carries:

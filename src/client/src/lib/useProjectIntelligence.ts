@@ -6,6 +6,8 @@ import type {
   P7InsightLens,
   P7ProjectSnapshot,
   P7SearchHit,
+  P7LocalSearchRequest,
+  P7LocalSearchResult,
   P7TimelineEvent,
 } from "@shared/p7ResearchContracts";
 
@@ -54,6 +56,10 @@ export function useProjectIntelligenceSnapshots(projectId: number | null) {
 
 export async function searchProjectIntelligence(projectId: number, query: string): Promise<P7SearchHit[]> {
   return (await apiRequest("POST", `/api/projects/${projectId}/intelligence/search`, { query, limit: 30 })).json();
+}
+
+export async function searchProjectIntelligenceLocally(projectId: number, query: string, localEmbedding: P7LocalSearchRequest["localEmbedding"]): Promise<P7LocalSearchResult> {
+  return (await apiRequest("POST", `/api/projects/${projectId}/intelligence/search/local`, { query, limit: 30, localEmbedding })).json();
 }
 
 export async function getProjectIntelligenceAsKnownOn(projectId: number, at: string): Promise<P7HistoricalState> {

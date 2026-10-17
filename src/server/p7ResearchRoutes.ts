@@ -24,6 +24,7 @@ import {
   searchProjectIntelligence,
 } from "./p7ProjectIntelligenceStore";
 import { parseLocalDocumentWithDocling, p7DocumentRuntimeStatus } from "./p7DocumentIntelligence";
+import { searchProjectIntelligenceLocally } from "./p7LocalSearch";
 import { comparePrimarySourceFilings } from "./p7FilingDiff";
 import { p7Hash } from "./p7ProjectIntelligence";
 import { appendThesisPostmortem, refreshThesisArtifact } from "./p7ThesisEngine";
@@ -122,6 +123,11 @@ export function registerP7ResearchRoutes(app: Express): void {
       const request = p7SearchRequestSchema.parse(req.body);
       res.json(await searchProjectIntelligence(ctx(req), projectId(req), request));
     } catch (error) { fail(res, error); }
+  });
+
+  app.post("/api/projects/:projectId/intelligence/search/local", async (req, res) => {
+    try { res.json(await searchProjectIntelligenceLocally(ctx(req), projectId(req), req.body)); }
+    catch (error) { fail(res, error); }
   });
 
   app.get("/api/projects/:projectId/intelligence/insights", async (req, res) => {

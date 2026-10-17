@@ -19,6 +19,7 @@ services:
       HOST: 0.0.0.0
       PORT: "10000"
       LIOS_DATA_ROOT: /data/lios
+      HOME: /data/lios/.home
       LIOS_EXECUTION_ISOLATION: strict
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONPYCACHEPREFIX: /tmp/pycache

@@ -16,6 +16,7 @@ import { recordConnectorVerification } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
 import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
 import { evaluateEnterpriseAiProvider } from "@shared/enterpriseContracts";
+import { readBoundedText } from "./sourceConnectionPolicy";
 
 export interface AICompletionRequest {
   provider: AIProviderType;
@@ -518,4 +519,71 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
     ...(message.images?.length ? { images: message.images.map((image) => ({ mimeType: image.mimeType, byteLength: Buffer.from(image.base64, "base64").byteLength })) } : {}),
   }));
   return { provider: request.provider, model, text, attribution: createAttribution({ provider: request.provider, model, prompt: JSON.stringify({ system: request.system, messages: attributionMessages }), output: text }) };
+}
+
+/** Explicit local-only embedding operation; never uses completion fallback or downloads a model. */
+export async function invokeLocalEmbeddings(request: {
+  provider: "ollama" | "lm_studio";
+  model: string;
+  inputs: string[];
+  signal?: AbortSignal;
+}): Promise<{ vectors: number[][]; model: string; dimensions: number }> {
+  const config = getProviderConfig(request.provider);
+  const model = request.model.trim();
+  if (!config?.isLocal || !model || model.length > 200 || !request.inputs.length || request.inputs.length > 65
+    || request.inputs.some(text => !text.trim() || text.length > 4_096)
+    || Buffer.byteLength(JSON.stringify(request.inputs), "utf8") > 1_048_576) {
+    throw new AIProviderError("invalid_request", "Local embedding input exceeds its bounded model/text contract.");
+  }
+  const credential = providerCredential(request.provider);
+  if (!credential) throw new AIProviderError("not_configured", "The selected local embedding endpoint is not configured.", { provider: request.provider });
+  await enforceEnterpriseAiPolicy({ provider: request.provider, model, messages: [], dataClassification: "organization" }, config, model);
+  const endpoint = new URL(localProviderEndpoint(request.provider, credential));
+  endpoint.pathname = request.provider === "ollama"
+    ? endpoint.pathname.replace(/\/chat$/, "/embed")
+    : endpoint.pathname.replace(/\/chat\/completions$/, "/embeddings");
+  let response: Response;
+  let value: unknown;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST", redirect: "error", signal: request.signal ?? AbortSignal.timeout(60_000),
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, input: request.inputs, ...(request.provider === "ollama" ? { truncate: false } : {}) }),
+    });
+    if (!response.ok) throw new AIProviderError("unavailable", `Local embedding endpoint returned HTTP ${response.status}.`, { provider: request.provider, status: response.status });
+    value = JSON.parse(await readBoundedText(response, 8 * 1024 * 1024));
+  } catch (error) {
+    if (error instanceof AIProviderError) throw error;
+    throw new AIProviderError("unavailable", "Local embeddings are unavailable; use lexical retrieval. No remote fallback was attempted.", { provider: request.provider });
+  }
+  const body = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  let rawVectors: unknown = body.embeddings;
+  if (request.provider === "lm_studio" && Array.isArray(body.data)) {
+    const ordered = new Array<unknown>(request.inputs.length);
+    for (const item of body.data) {
+      if (!item || typeof item !== "object") throw new AIProviderError("invalid_request", "Invalid local embedding response.");
+      const row = item as Record<string, unknown>;
+      if (!Number.isInteger(row.index) || (row.index as number) < 0 || (row.index as number) >= ordered.length || ordered[row.index as number] !== undefined) {
+        throw new AIProviderError("invalid_request", "Invalid local embedding response indices.");
+      }
+      ordered[row.index as number] = row.embedding;
+    }
+    rawVectors = ordered;
+  }
+  if (!Array.isArray(rawVectors) || rawVectors.length !== request.inputs.length) throw new AIProviderError("invalid_request", "Local embedding response did not cover every requested input.");
+  let dimensions = 0;
+  const vectors: number[][] = [];
+  for (const raw of rawVectors) {
+    if (!Array.isArray(raw) || !raw.length || raw.length > 8_192 || raw.some(number => typeof number !== "number" || !Number.isFinite(number))) {
+      throw new AIProviderError("invalid_request", "Local embedding response contains an invalid vector.");
+    }
+    const norm = Math.hypot(...raw);
+    if (!Number.isFinite(norm) || norm === 0 || (dimensions && dimensions !== raw.length)) throw new AIProviderError("invalid_request", "Local embedding dimensions or norms are inconsistent.");
+    dimensions = raw.length;
+    const vector = raw as number[];
+    for (let index = 0; index < vector.length; index += 1) vector[index] /= norm;
+    vectors.push(vector);
+  }
+  if (typeof body.model !== "string" || !body.model.trim() || body.model.trim().length > 200) throw new AIProviderError("invalid_request", "Local embedding response did not identify its served model.");
+  return { vectors, model: body.model.trim(), dimensions };
 }

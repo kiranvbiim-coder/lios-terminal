@@ -1,5 +1,5 @@
 const desktopProcessStartedAtNs = process.hrtime.bigint();
-const { app, BrowserWindow, session, ipcMain, dialog, safeStorage, shell } = require("electron");
+const { app, BrowserWindow, session, ipcMain, dialog, safeStorage, shell, Tray, Menu, nativeImage } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const crypto = require("crypto");
@@ -28,6 +28,13 @@ const {
 app.setName("LiOS Intelligence Terminal");
 
 const desktopSelfTestRequested = process.argv.includes("--desktop-self-test");
+
+// One desktop profile owns one Home process. A second launch must not compete for its database.
+if (!app.requestSingleInstanceLock()) app.exit(0);
+app.on("second-instance", () => {
+  if (!app.isReady() || !mainWindow) return;
+  showMainWindow();
+});
 
 function desktopRendererUrl() {
   return `http://localhost:${serverPort}/`;
@@ -84,6 +91,7 @@ let mainWindow = null;
 let serverRestartCount = 0;
 let serverPort = 5052;
 let isQuitting = false;
+let desktopTray = null;
 let localWorkspace = null;
 let dataRootState = null;
 // Random per launch. The server only accepts requests that carry it, and only this app's own session adds it
@@ -572,6 +580,39 @@ ipcMain.handle("limuria:restore-backup", async (event, rawPassphrase) => {
   }
 });
 
+function showMainWindow() {
+  if (isQuitting) return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function installDesktopTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, "build-resources", "icon.png"));
+  if (icon.isEmpty()) {
+    logToFile("Desktop tray unavailable: icon missing. Window close retains ordinary platform behavior.");
+    return;
+  }
+  try {
+    desktopTray = new Tray(icon.resize({ width: process.platform === "darwin" ? 18 : 24, height: process.platform === "darwin" ? 18 : 24 }));
+    desktopTray.setToolTip("LiOS Home · running on this machine");
+    desktopTray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Open LiOS", click: showMainWindow },
+      { label: "Home keeps running when the window is closed", enabled: false },
+      { type: "separator" },
+      { label: "Quit LiOS and stop Home", click: () => app.quit() },
+    ]));
+    desktopTray.on("click", showMainWindow);
+  } catch (error) {
+    desktopTray = null;
+    logToFile(`Desktop tray unavailable: ${redactDesktopLogText(error.message)}`);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -633,8 +674,15 @@ function createWindow() {
     reportStartupFailure(new Error(`The local server did not become ready on port ${serverPort} within ${SERVER_READY_TIMEOUT_MS / 1000} seconds.`));
   }, SERVER_READY_TIMEOUT_MS);
 
+  mainWindow.on("close", event => {
+    if (!isQuitting && desktopTray) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on("closed", () => {
     clearTimeout(serverReadyTimer);
+    clearInterval(pollInterval);
     serverReadyTimer = null;
     mainWindow = null;
   });
@@ -750,6 +798,7 @@ app.whenReady().then(async () => {
     logToFile(`whenReady: cache cleared, starting server + window on port ${serverPort}`);
     startServer();
     createWindow();
+    if (!desktopSelfTestRequested) installDesktopTray();
     const { autoUpdater } = require("electron-updater");
     const updateStatus = configureAutoUpdater({
       updater: autoUpdater,
@@ -762,13 +811,16 @@ app.whenReady().then(async () => {
     reportStartupFailure(err);
   }
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+  app.on("activate", showMainWindow);
 });
 
+
+app.on("before-quit", () => {
+  isQuitting = true;
+  clearTimeout(serverReadyTimer);
+  desktopTray?.destroy();
+  desktopTray = null;
+});
 // Terminate Express child process on exit
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

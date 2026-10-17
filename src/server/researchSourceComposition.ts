@@ -140,7 +140,7 @@ export function researchProviderIdForDocument(doc: P7ProjectDocument): string | 
   return cleanString(metadata.provider, 200);
 }
 
-function blockReasonForUse(source: ResearchSourceMetadata, targetUse: ResearchCompositionUse): ResearchCompositionBlockReason | null {
+export function researchSourceUseBlockReason(source: ResearchSourceMetadata, targetUse: ResearchCompositionUse): ResearchCompositionBlockReason | null {
   if (source.rights.entitlement.decision === "denied") return "entitlement_denied";
   if (source.rights.entitlement.decision === "unknown") return "entitlement_unknown";
 
@@ -223,7 +223,7 @@ export function composeResearchSources(input: {
     }
 
     increment(byClass, source.class);
-    const reason = blockReasonForUse(source, input.targetUse);
+    const reason = researchSourceUseBlockReason(source, input.targetUse);
     if (reason) {
       const item = blocked(doc, source, reason);
       blockedSources.push(item);

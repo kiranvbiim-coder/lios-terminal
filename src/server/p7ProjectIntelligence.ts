@@ -15,6 +15,7 @@ import {
   type P7ProjectDocument,
   type P7ProjectSnapshot,
   type P7SearchHit,
+  type P7SearchRequest,
   type P7TimelineEvent,
 } from "@shared/p7ResearchContracts";
 import { researchProviderIdForDocument } from "./researchSourceComposition";
@@ -251,12 +252,7 @@ function reciprocalRank(rank: number | undefined, weight: number): number {
   return rank && weight > 0 ? weight / (60 + rank) : 0;
 }
 
-export function searchProjectDocuments(
-  documents: P7ProjectDocument[],
-  input: unknown,
-): P7SearchHit[] {
-  const request = p7SearchRequestSchema.parse(input);
-  const queryTerms = [...new Set(terms(request.query))];
+export function filterPermittedProjectDocuments(documents: P7ProjectDocument[], request: P7SearchRequest): P7ProjectDocument[] {
   const allowedRefs = new Set(request.allowedSourceRefs);
   const providerAllow = new Set(request.providerAllow);
   const providerDeny = new Set(request.providerDeny);
@@ -264,7 +260,7 @@ export function searchProjectDocuments(
   // Permission/source/provider filtering happens before every retrieval channel
   // and before excerpts are constructed, so excluded metadata/content cannot
   // affect ranking or become observable. Provider identity is explicit metadata only.
-  const filtered = documents.filter((doc) => {
+  return documents.filter((doc) => {
     if (request.sourceTypes.length && !request.sourceTypes.includes(doc.sourceType)) return false;
     const providerId = researchProviderIdForDocument(doc);
     if (providerId && providerDeny.has(providerId)) return false;
@@ -272,6 +268,12 @@ export function searchProjectDocuments(
     if (!allowedRefs.size) return true;
     return allowedRefs.has(doc.sourceRef) || doc.sourceRefs.some((ref) => allowedRefs.has(ref));
   });
+}
+
+export function searchProjectDocuments(documents: P7ProjectDocument[], input: unknown): P7SearchHit[] {
+  const request = p7SearchRequestSchema.parse(input);
+  const queryTerms = [...new Set(terms(request.query))];
+  const filtered = filterPermittedProjectDocuments(documents, request);
 
   const df = new Map<string, number>();
   for (const term of queryTerms) {
