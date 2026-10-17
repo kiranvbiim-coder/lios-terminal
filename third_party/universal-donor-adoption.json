@@ -8,8 +8,8 @@
   "baselineDonorCount": 92,
   "controlledForkCount": 10,
   "sourceSnapshot": {
-    "baselineSha": "8a926a0e8aab78d0db8eb7236e5f0147688d9117",
-    "componentsSha": "ca59f123fb0d7531703b23731305d8271c12b3cb",
+    "baselineSha": "bd5ac2e8e843ea5c207474eb9ff69fd736e655bf",
+    "componentsSha": "264a28e3f6d5d323aeaccf5c2bcade4ae7a830fa",
     "upstreamPinsSha": "01685f2631b7370c6f080af0e3ec91b737791c95",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
@@ -75,7 +75,7 @@
       "baselineTruthStatus": "runtime_integrated_optional",
       "declaredDecision": "adapt",
       "declaredPosture": "runtime_candidate",
-      "evidenceAsRecorded": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "evidenceAsRecorded": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 506.50 kB/~174.22 kB gzip (local 6.1.0 build). This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
       "sourceRegistries": [
         "third_party/components.json"
       ],
@@ -920,7 +920,7 @@
       "baselineTruthStatus": "runtime_integrated_optional",
       "declaredDecision": "adapt",
       "declaredPosture": "donor_candidate",
-      "evidenceAsRecorded": "Single pinned Apache ECharts 5.6.0 npm runtime with zrender 5.6.1 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 474269 raw bytes/~160.25 kB gzip. This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "evidenceAsRecorded": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 506.50 kB/~174.22 kB gzip (local 6.1.0 build). This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
       "sourceRegistries": [
         "third_party/components.json"
       ],
