@@ -10,6 +10,7 @@ import {
   AGENT_ROLE_REGISTRY,
   conversationContextEnvelopeSchema,
   conversationRequestSchema,
+  conversationArtifactDraftSchema,
   workflowPlanSchema,
   type AgentRole,
   type ApprovalGrant,
@@ -66,6 +67,7 @@ import { qlibRiskChallengerTool } from "./qlibRiskChallengerTool";
 import { disclosureChangesTool } from "./disclosureChangesTool";
 import { researchRevisionTool } from "./researchRevisionTool";
 import { createProjectObjectPublicationTool } from "./projectObjectPublicationTool";
+import { createNodeFinanceTool, nodeFinanceToolOutputSchema, type NodeFinanceGatewaySession } from "./nodeFinanceTool";
 import { artifactContentSchema, artifactExportFormatsForKind, artifactRefreshSpecSchema } from "@shared/artifactContracts";
 import { runP6Backtest } from "./p6BacktestEngine";
 import { calculatePersonalFinanceSnapshot } from "./p6PersonalFinance";
@@ -187,6 +189,7 @@ export interface ConversationRuntimeInput {
   preferredProvider?: string | null;
   preferredModel?: string | null;
   aiCompletion?: (request: AIRoutedCompletionRequest) => Promise<AICompletionResult>;
+  nodeFinanceGateway?: NodeFinanceGatewaySession;
   emit: (event: ConversationRuntimeEvent) => void | Promise<void>;
   /**
    * SI-02 L3: run the bounded agent loop instead of a fixed workflow. Server-set only, never read from a request body.
@@ -474,6 +477,7 @@ export function createConversationToolCall(
     resourceTransmissionAllowed: input.request.transmissionPolicy.allowResourceReferences,
     activeArtifactRefs: (input.request.context?.activeObjectRefs ?? []).filter(ref => /^artifact:[0-9a-f-]{36}$/i.test(ref)).slice(0, 20),
     tenant: input.tenant,
+    nodeFinanceGateway: input.nodeFinanceGateway,
   };
 }
 
@@ -1106,6 +1110,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(createMemoryReflectionTool());
   for (const tool of memoryLifecycleConversationTools()) registerConversationTool(tool);
   registerConversationTool(createProjectObjectPublicationTool());
+  registerConversationTool(createNodeFinanceTool({ sessionForCall: call => call.nodeFinanceGateway ?? null }));
 }
 
 registerBuiltinConversationTools();
@@ -1412,7 +1417,11 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
   const artifactEdit = artifactId ? parseArtifactEditInstruction(request.message) : null;
 
   const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
-  if (runtimeDiagnosis) {
+  if (request.context?.nodeFinancePolicy) {
+    capabilities = [];
+    intent = { action: "calculate", confidence: 1, entityRefs: [], parameters: { workflow: "node_finance_snapshot" }, requiresAI: false, requiresDeterministicCompute: true };
+    steps.push({ id: "node-finance", kind: "calculate", label: "Calculate exact owner-selected node-local P6 snapshot", componentId: "lios.finance.node_snapshot", permissionClass: "safe_auto", dependsOn: [] });
+  } else if (runtimeDiagnosis) {
     capabilities = [];
     intent = { action: "research", confidence: 0.99, entityRefs: [], parameters: { workflow: "runtime_doctor" }, requiresAI: false, requiresDeterministicCompute: false };
     steps.push({ id: "runtime-doctor", kind: "resolve", label: "Inspect current runtime readiness", componentId: "lios.runtime.doctor", permissionClass: "safe_auto", dependsOn: [] });
@@ -2234,6 +2243,30 @@ async function executeRuntimeDoctor(input: ConversationRuntimeInput, plan: Workf
   await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [], cancelled: false, awaitingApproval: false };
+}
+
+async function executeNodeFinanceSnapshot(input: ConversationRuntimeInput, plan: WorkflowPlan, signal: AbortSignal): Promise<ConversationRuntimeResult> {
+  const policy = input.request.context?.nodeFinancePolicy;
+  if (!policy || input.scope !== "project" || !input.projectId) throw new Error("Node finance requires an explicitly selected Project-scoped node/source policy.");
+  const requestId = input.request.requestId;
+  const componentId = "lios.finance.node_snapshot";
+  const startedAt = nowIso();
+  await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "node-finance", label: "Run governed node-local P6 snapshot", componentId });
+  const tool = await invokeConversationTool(componentId, { policy }, signal, createConversationToolCall(input, "workflow"));
+  const parsed = nodeFinanceToolOutputSchema.parse(tool);
+  const report = parsed.output.report;
+  const text = ["### Node-local personal-finance snapshot", tool.summary, `As of ${report.asOf} · ${report.currency ?? "No currency recorded"}`, `Net worth: ${report.netWorth}; assets: ${report.assets}; liabilities: ${report.liabilities}.`, `Monthly income: ${report.trailingMonthlyIncome}; expenses: ${report.trailingMonthlyExpenses}; cash flow: ${report.trailingMonthlyCashFlow}.`, `Exact input: ${report.source.inputHash}`, `Node: ${parsed.output.outcome.binding.deviceId} · generation ${parsed.output.outcome.binding.generationId}`, "Authenticated remote-reported result; no independent attestation, provider/broker action or inference. Raw accounts remain on the node."].join("\n");
+  const receipt = createReceipt({ requestId, operation: "node_finance_snapshot", componentId, startedAt, deterministic: true, aiDerived: false, input: { policy }, output: parsed.output, sourceRefs: tool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "node-finance", label: "Node-local P6 result", summary: tool.summary, deterministic: true, sourceRefs: tool.sourceRefs });
+  await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
+  const draft = conversationArtifactDraftSchema.parse({
+    schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: "report", title: `Node-local personal-finance snapshot · ${report.asOf}`, projectId: input.projectId,
+    sourceRefs: tool.sourceRefs, executionReceiptIds: [receipt.id], persistence: "project_candidate",
+    data: { kind: "report", blocks: [{ id: "node-finance-summary", type: "paragraph", text, attrs: { inputHash: report.source.inputHash, sourceId: report.source.sourceId, nodeId: parsed.output.outcome.binding.deviceId, trust: "remote-reported" } }], sections: [] },
+  });
+  await emit(input, { ...eventBase(requestId), type: "artifact", artifact: draft });
+  await emit(input, { ...eventBase(requestId), type: "text", text, label: "deterministic" });
+  return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [draft], cancelled: false, awaitingApproval: false };
 }
 function evidenceKindForSourceRef(sourceRef: string): EvidenceObservation["kind"] {
   if (sourceRef.startsWith("ai-provider:")) return "ai";
@@ -4741,6 +4774,8 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
       result = await executeArtifactEditProposal(runtimeInput, plan, budgetSignal);
     } else if (plan.intent.parameters.workflow === "runtime_doctor") {
       result = await executeRuntimeDoctor(runtimeInput, plan, budgetSignal);
+    } else if (plan.intent.parameters.workflow === "node_finance_snapshot") {
+      result = await executeNodeFinanceSnapshot(runtimeInput, plan, budgetSignal);
     } else if (["p6_project_continuity", "p7_project_search", "p7_project_changes", "p7_insight_lens"].includes(String(plan.intent.parameters.workflow || ""))) {
       result = await executeP7ProjectIntelligence(runtimeInput, plan, budgetSignal);
     } else if (plan.intent.parameters.workflow === "p5_professional_bundle") {

@@ -324,6 +324,7 @@ function startErrorFor(error: unknown, requestId: string): ConversationStartErro
 export interface ConversationRunServiceOptions {
   /** Model seam for tests; production leaves it unset and uses the single BYOAI path. */
   aiCompletion?: ConversationRuntimeInput["aiCompletion"];
+  nodeFinanceGateway?: ConversationRuntimeInput["nodeFinanceGateway"];
 }
 
 interface RestartLaunch {
@@ -749,6 +750,7 @@ async function runProjectChat(
           } : {}),
           resolvedAttachments,
           ...(options.aiCompletion ? { aiCompletion: options.aiCompletion } : {}),
+          ...(options.nodeFinanceGateway ? { nodeFinanceGateway: options.nodeFinanceGateway } : {}),
           preferredProvider: aiSetup?.aiProviderId,
           preferredModel: aiSetup?.aiModelId,
           emit: async (runtimeEvent) => {

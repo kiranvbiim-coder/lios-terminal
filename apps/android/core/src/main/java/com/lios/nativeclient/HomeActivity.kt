@@ -11,6 +11,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -34,7 +36,21 @@ open class HomeActivity : Activity() {
     private var projectId: Int? = null
     private var chatId: Int? = null
     private var page = 0
-    private var activeRun: String? = null
+    private val run = RunCursor()
+    private var runOwner: Int? = null
+    private var currentOwner: Int? = null
+    private var artifactsPage = 0
+    private val foregroundHandler = Handler(Looper.getMainLooper())
+    private var foreground = false
+    private var notificationFetch = false
+    private var replayingReads = false
+    private val notificationPoll = object : Runnable {
+        override fun run() {
+            if (!foreground) return
+            if (::gateway.isInitialized && gateway.connected && projectId != null) fetchNotifications(false)
+            foregroundHandler.postDelayed(this, 30_000)
+        }
+    }
     private var reviewed: JSONObject? = null
     private val notified = linkedSetOf<String>()
 
@@ -63,21 +79,35 @@ open class HomeActivity : Activity() {
                     status.text = "Home changed; refresh current view before review"
                     reviewed = null
                 } else if (name == "conversation.event") {
-                    val event = payload.optJSONObject("event") ?: payload
-                    status.text = "Home run: ${event.optString("type", "updated")} ${event.optString("message", "").take(300)}"
-                    if (event.optString("type") == "done") {
-                        activeRun = null
-                        if (projectId != null) continuity()
+                    if (run.receive(payload)) {
+                        persistNavigation()
+                        val event = payload.optJSONObject("event") ?: payload
+                        status.text = "Home run: ${event.optString("type", "updated")} ${event.optString("message", "").take(300)}"
+                        if (run.requestId == null && projectId != null) continuity()
                     }
                 }
             }
             val notifications = getSystemService(NotificationManager::class.java)
             notifications.createNotificationChannel(NotificationChannel("lios.home", "LiOS Home monitor updates", NotificationManager.IMPORTANCE_DEFAULT))
+            restoreNavigation()
             connection()
+            if (projectId != null) runCatching { continuity() }.onFailure { showError(it) }
         } catch (error: Exception) {
             body.removeAllViews()
             text("Native storage unavailable: ${error.message}. Do not export or restore device keys. Clear app data and obtain a new owner-approved pairing if the Keystore was lost.")
         }
+    }
+    override fun onStart() {
+        super.onStart()
+        foreground = true
+        foregroundHandler.removeCallbacks(notificationPoll)
+        foregroundHandler.post(notificationPoll)
+    }
+    override fun onStop() {
+        foreground = false
+        foregroundHandler.removeCallbacks(notificationPoll)
+        if (::gateway.isInitialized) gateway.close()
+        super.onStop()
     }
     override fun onDestroy() {
         if (::gateway.isInitialized) gateway.close()
@@ -124,13 +154,14 @@ open class HomeActivity : Activity() {
         button("Review pairing invitation") {
             val pair = HomeEndpoint.invitation(invite.text.toString().trim(), index.text.toString().toInt())
             confirm("Verify Home out-of-band", "Compare this Home and certificate fingerprint with the owner's Home Settings before continuing.\n${pair.first.name}\n${pair.first.homeId}\n${pair.first.url}\n${pair.first.fingerprint}\nThe owner must separately approve this device.") {
-                projectId = null; chatId = null; reviewed = null
+                projectId = null; chatId = null; reviewed = null; currentOwner = null; runOwner = null; run.clear()
                 invite.text.clear()
                 gateway.connect(pair.first, pair.second)
             }
         }
         button("Disconnect — never auto-reconnect") { gateway.close(); status.text = "Offline; stored reviews remain drafts" }
         button("Projects") { projects() }
+        button("Stored Project / Chat snapshots") { savedViews() }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             button("Allow local Home notifications") { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1) }
         text("Updates arrive while this native app is connected. Android/Wear background suspension stops delivery; no LiOS cloud/push relay exists. Reopen and refresh to catch up. Notification taps only open the app, never approve.")
@@ -142,27 +173,58 @@ open class HomeActivity : Activity() {
             for (i in 0 until projects.length()) {
                 val project = projects.getJSONObject(i)
                 button(project.optString("name", "Project ${project.getInt("id")}")) {
-                    projectId = project.getInt("id"); chatId = null; page = 0; continuity()
+                    projectId = project.getInt("id"); chatId = null; page = 0; artifactsPage = 0; persistNavigation(); continuity()
                 }
             }
             if (projects.length() == 0) text("No Projects on this Home. Create one on the Home first.")
         }
     }
-    private fun snapshotKey() = "view.${gateway.home?.homeId ?: rememberedHome()?.homeId}.${projectId}.${chatId ?: 0}.$page"
+    private fun snapshotKey() = "${projectId}.${chatId ?: 0}.$page.$artifactsPage"
+    private fun localState(): ContinuityState = ContinuityState(store, requireNotNull(gateway.home ?: rememberedHome()).homeId)
+    private fun persistNavigation() {
+        if (gateway.home == null && rememberedHome() == null) return
+        localState().navigate(JSONObject().put("deviceId", identity.deviceId).put("projectId", projectId).put("chatId", chatId).put("page", page).put("artifactsPage", artifactsPage).put("userId", currentOwner).put("runId", run.requestId).put("runSeq", run.sequence).put("runOwner", runOwner))
+    }
+    private fun restoreNavigation() {
+        val nav = rememberedHome()?.let { ContinuityState(store, it.homeId).navigation() } ?: return
+        require(nav.getString("deviceId") == identity.deviceId) { "Offline navigation belongs to another device" }
+        projectId = if (nav.isNull("projectId")) null else nav.getInt("projectId")
+        chatId = if (nav.isNull("chatId")) null else nav.getInt("chatId")
+        page = nav.optInt("page", 0).coerceIn(0, 1_000_000); artifactsPage = nav.optInt("artifactsPage", 0).coerceIn(0, 1_000_000)
+        currentOwner = if (nav.isNull("userId")) null else nav.getInt("userId")
+        runOwner = if (nav.isNull("runOwner")) null else nav.getInt("runOwner")
+        if (!nav.isNull("runId")) run.begin(nav.getString("runId"), nav.optInt("runSeq", -1))
+    }
+    private fun savedViews() {
+        clear("Stored snapshots — offline read-only; Home must reauthorize writes")
+        for ((key, value) in localState().views()) {
+            button("${value.getJSONObject("project").optString("name")} • ${key}") {
+                val fields = key.split(".")
+                projectId = fields[0].toInt(); chatId = fields[1].toInt().takeIf { it > 0 }; page = fields[2].toInt(); artifactsPage = fields[3].toInt()
+                persistNavigation(); continuity()
+            }
+        }
+    }
     private fun rememberedHome() = store.text("home")?.let { HomeEndpoint.fromJson(JSONObject(it)) }
     private fun continuity() {
         val pid = requireNotNull(projectId) { "Choose a Project" }
-        val params = JSONObject().put("projectId", pid).put("offset", page).put("limit", if (wearable) 10 else 50)
+        val params = JSONObject().put("projectId", pid).put("offset", page).put("limit", if (wearable) 10 else 50).put("artifactsOffset", artifactsPage).put("artifactsLimit", 100)
         chatId?.let { params.put("chatId", it) }
+        val key = snapshotKey()
         if (!gateway.connected) {
-            val cached = store.text(snapshotKey()) ?: throw GatewayFailure("UNAVAILABLE", "Home offline; no saved snapshot for this page")
-            renderContinuity(JSONObject(cached).getJSONObject("value"), true)
+            val cached = localState().snapshot(snapshotKey()) ?: throw GatewayFailure("UNAVAILABLE", "Home offline; no saved snapshot for this page")
+            renderContinuity(cached, true)
             return
         }
         rpc("device.continuity.read", params) { value ->
+            if (key != snapshotKey()) return@rpc
             require(value.getString("homeId") == gateway.home?.homeId) { "Continuity returned a different Home" }
-            store.text(snapshotKey(), JSONObject().put("capturedAt", Instant.now().toString()).put("value", value).toString())
+            currentOwner = value.getInt("userId")
+            localState().capture(snapshotKey(), value)
+            persistNavigation()
             renderContinuity(value, false)
+            reattachRun()
+            replayNotificationReads()
         }
     }
     private fun renderContinuity(value: JSONObject, offline: Boolean) {
@@ -175,7 +237,7 @@ open class HomeActivity : Activity() {
             val chats = value.getJSONArray("chats")
             for (i in 0 until chats.length()) {
                 val chat = chats.getJSONObject(i)
-                button(chat.optString("title", "Chat ${chat.getInt("id")}")) { chatId = chat.getInt("id"); page = 0; continuity() }
+                button(chat.optString("title", "Chat ${chat.getInt("id")}")) { chatId = chat.getInt("id"); page = 0; persistNavigation(); continuity() }
             }
             button("Create Chat on Home") {
                 rpc("chats.create", JSONObject().put("projectId", projectId)) { result -> chatId = result.getJSONObject("chat").getInt("id"); page = 0; continuity() }
@@ -186,6 +248,9 @@ open class HomeActivity : Activity() {
                 text("${message.optString("role")}: ${message.optString("content", message.optString("text", message.toString()))}")
             }
             if (!value.isNull("nextOffset")) button("Next history page") { page = value.getInt("nextOffset"); continuity() }
+            button("First message page") { page = 0; persistNavigation(); continuity() }
+            button("First Artifact page") { artifactsPage = 0; persistNavigation(); continuity() }
+            if (!value.isNull("nextArtifactsOffset")) button("Next Artifact page") { artifactsPage = value.getInt("nextArtifactsOffset"); persistNavigation(); continuity() }
             if (chatId != null) {
                 val message = input("Ask in this canonical Chat", true)
                 button("Send once to Home") {
@@ -193,45 +258,103 @@ open class HomeActivity : Activity() {
                     val requestId = UUID.randomUUID().toString()
                     val body = JSONObject().put("requestId", requestId).put("message", message.text.toString().trim())
                     confirm("Send to Home", "This sends your message to the Home runtime; provider and execution permission remain Home-owned. Offline messages are not auto-queued.") {
-                        rpc("conversation.start", JSONObject().put("chatId", chatId).put("body", body)) {
-                            activeRun = requestId
-                            rpc("conversation.subscribe", JSONObject().put("requestId", requestId).put("afterSeq", -1)) { status.text = "Attached to canonical run $requestId" }
+                        require(gateway.connected) { "Home offline; messages are never queued" }
+                        require(run.requestId == null) { "Existing run is attached or unconfirmed; reconnect to inspect it before sending another message" }
+                        run.begin(requestId); runOwner = currentOwner; persistNavigation()
+                        gateway.request("conversation.start", JSONObject().put("chatId", chatId).put("body", body)) { result ->
+                            result.onSuccess { reattachRun() }.onFailure {
+                                if (it is GatewayFailure && it.code != "UNAVAILABLE" && run.requestId == requestId) { run.clear(); persistNavigation() }
+                                showError(it)
+                            }
                         }
                     }
                 }
             }
-            activeRun?.let { run -> button("Cancel active Home run") { rpc("conversation.cancel", JSONObject().put("requestId", run)) { status.text = "Home cancellation requested" } } }
+            run.requestId?.let { run -> button("Cancel active Home run") { rpc("conversation.cancel", JSONObject().put("requestId", run)) { status.text = "Home cancellation requested" } } }
             val artifacts = value.getJSONArray("artifacts")
             text("Canonical Artifact revisions")
             for (i in 0 until artifacts.length()) {
                 val artifact = artifacts.getJSONObject(i)
                 button(artifact.optString("title", artifact.optString("name", "Artifact"))) {
-                    rpc("artifacts.read", JSONObject().put("artifactId", artifact.getString("id"))) { detail ->
-                        clear("Canonical Artifact — no local editing authority")
-                        text(detail.toString(2)); button("Back to Project") { continuity() }
-                    }
+                    inspectArtifact(artifact.getString("id"))
                 }
             }
         } else {
             text("Home status: ${value.getJSONArray("chats").length()} Chats, ${value.getJSONArray("artifacts").length()} Artifacts. Open Android/desktop for full professional work.")
         }
     }
-    private fun notifications() {
-        rpc("notifications.list", JSONObject().put("projectId", requireNotNull(projectId)).put("limit", if (wearable) 10 else 50)) { result ->
-            clear("Canonical monitor notifications")
-            val rows = result.getJSONArray("notifications")
-            for (i in 0 until rows.length()) {
-                val row = rows.getJSONObject(i)
-                text("${row.optString("title")}\n${row.optString("body")}\n${row.optString("createdAt")} • ${row.optString("status")}")
-                if (row.optString("status") == "delivered" && row.isNull("readAt")) {
-                    notifyLocally(row)
-                    button("Mark read on Home") {
-                        rpc("notifications.read", JSONObject().put("projectId", projectId).put("notificationId", row.getString("id"))) { notifications() }
-                    }
-                }
+    private fun reattachRun() {
+        val id = run.requestId ?: return
+        if (currentOwner != runOwner) { run.clear(); persistNavigation(); return }
+        gateway.request("conversation.subscribe", JSONObject().put("requestId", id).put("afterSeq", run.sequence)) { result ->
+            result.onSuccess { run.subscribed(id, it.optString("status")); persistNavigation() }.onFailure {
+                if (it is GatewayFailure && it.code == "NOT_FOUND" && run.requestId == id) { run.clear(); persistNavigation() }
+                showError(it)
             }
-            button("Refresh notifications") { notifications() }
-            button("Back to Project") { continuity() }
+        }
+    }
+    private fun inspectArtifact(id: String, version: Int? = null, offset: Int = 0) {
+        val params = JSONObject().put("artifactId", id)
+        version?.let { params.put("version", it) }
+        rpc("artifacts.read", params) { detail ->
+            clear("Canonical Artifact — ${version?.let { "historical version $it" } ?: "current head"}; no local editing authority")
+            text(detail.toString(2)); button("Back to Project") { continuity() }
+            rpc("artifacts.versions.list", JSONObject().put("artifactId", id).put("offset", offset).put("limit", 50)) { history ->
+                val versions = history.getJSONArray("versions")
+                for (i in 0 until versions.length()) {
+                    val row = versions.getJSONObject(i)
+                    button("Inspect historical version ${row.getInt("version")} • ${row.optString("createdAt")}") { inspectArtifact(id, row.getInt("version"), offset) }
+                }
+                button("First version page") { inspectArtifact(id, version, 0) }
+                if (!history.isNull("nextOffset")) button("Next version page") { inspectArtifact(id, version, history.getInt("nextOffset")) }
+            }
+        }
+    }
+    private fun notifications() {
+        if (!gateway.connected) renderNotifications(localState().notifications(requireNotNull(projectId)), true)
+        else fetchNotifications(true)
+    }
+    private fun fetchNotifications(render: Boolean) {
+        if (notificationFetch || projectId == null || !gateway.connected || !foreground) return
+        notificationFetch = true
+        val pid = projectId
+        val epoch = gateway.epoch
+        gateway.request("notifications.list", JSONObject().put("projectId", pid).put("limit", if (wearable) 10 else 50)) { result ->
+            notificationFetch = false
+            if (!foreground || epoch != gateway.epoch) return@request
+            result.onFailure { showError(it) }.onSuccess { value ->
+                if (pid != projectId) return@onSuccess
+                val rows = value.getJSONArray("notifications")
+                localState().captureNotifications(requireNotNull(pid), rows)
+                for (i in 0 until rows.length()) if (rows.getJSONObject(i).optString("status") == "delivered" && rows.getJSONObject(i).isNull("readAt")) notifyLocally(rows.getJSONObject(i))
+                if (render) renderNotifications(rows, false)
+            }
+        }
+    }
+    private fun renderNotifications(rows: JSONArray, offline: Boolean) {
+        clear(if (offline) "OFFLINE notification snapshot — read intents only" else "Canonical monitor notifications")
+        for (i in 0 until rows.length()) {
+            val row = rows.getJSONObject(i)
+            text("${row.optString("title")}\n${row.optString("body")}\n${row.optString("createdAt")} • ${row.optString("status")}")
+            if (row.optString("status") == "delivered" && row.isNull("readAt")) button(if (offline) "Retain read intent for same-owner reconnect" else "Mark read on Home") {
+                val home = requireNotNull(gateway.home ?: rememberedHome())
+                val intent = JSONObject().put("homeId", home.homeId).put("userId", requireNotNull(currentOwner)).put("deviceId", identity.deviceId).put("projectId", requireNotNull(projectId)).put("notificationId", row.getString("id"))
+                localState().enqueueRead(intent)
+                if (gateway.connected) replayNotificationReads()
+                status.text = "Read intent retained; Home acknowledgement required"
+            }
+        }
+        button("Refresh notifications") { notifications() }
+        button("Back to Project") { continuity() }
+    }
+    private fun replayNotificationReads() {
+        if (replayingReads || !gateway.connected || currentOwner == null) return
+        val state = localState()
+        val intent = state.reads().firstOrNull { it.getInt("userId") == currentOwner && it.getString("deviceId") == identity.deviceId } ?: return
+        replayingReads = true
+        gateway.request("notifications.read.replay", intent) { result ->
+            replayingReads = false
+            result.onSuccess { state.removeRead(intent); replayNotificationReads() }.onFailure { showError(it) }
         }
     }
     private fun notifyLocally(row: JSONObject) {

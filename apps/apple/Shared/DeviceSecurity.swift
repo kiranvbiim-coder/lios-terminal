@@ -6,6 +6,7 @@ import Security
 
 struct ClientFailure: LocalizedError {
     let message: String
+    var code: String? = nil
     var errorDescription: String? { message }
 }
 

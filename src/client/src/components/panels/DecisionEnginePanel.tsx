@@ -10,6 +10,7 @@ import { calculateClientScenarioActions } from "@/lib/scenarioActionClient";
 import type { ScenarioActionInput, ScenarioActionResult } from "../../../../server/scenarioActionEngine";
 import type { ScenarioPipelineResult } from "../../../../server/scenarioPipeline";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import { takePendingDecisionReview, subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
 
 type View = "receipt" | "challenge" | "monitoring" | "history";
 type DecisionCase = {
@@ -32,7 +33,7 @@ type Receipt = {
 type Approval = { id: number; outcome: string; receiptVersionId: number; snapshotHash: string; waiverReason: string | null; createdAt: string };
 type Monitor = { id: number; name: string; indicator: string; operator: string; threshold: number; unit: string; action: string; status: string; currentValue: number | null; lastEvaluatedAt: string | null };
 type Replay = { id: number; receiptVersionId: number; changed: boolean; replaySnapshotHash: string; asOf: string; result: { reproducible?: boolean; message?: string }; createdAt: string };
-type Detail = { decision: DecisionCase; receipts: Receipt[]; approvals: Approval[]; monitoringRules: Monitor[]; replays: Replay[] };
+type Detail = { decision: DecisionCase; receipts: Receipt[]; approvals: Approval[]; monitoringRules: Monitor[]; replays: Replay[]; policyDigest: string; permissions: { read_decisions: boolean; author_decisions: boolean; review_decisions: boolean }; reviewDeniedReason: string | null };
 type Investigation = { id: number; title: string; question: string; primarySymbol: string | null; organizationId: number | null };
 type FinancialSnapshotRef = { id: string; contentHash: string; dataClass?: string; entityKey?: string; availableAt?: string; capturedAt?: string };
 type FactorSnapshotListItem = { snapshotId: string; contentHash: string; request: { symbols: string[]; benchmarkSymbol: string; range: string; asOf: string }; capturedAt: string; expiresAt: number; organizationScope: string; included: string[]; excluded: Array<{ securityId: string; reason: string }>; periodCount: number };
@@ -123,10 +124,10 @@ function scenarioFactorPnl(trace: ScenarioPipelineResult["trace"]): number | nul
   return scenario.securities.reduce((sum, row) => sum + (weights[row.securityId] ?? 0) * row.factorPnl, 0);
 }
 
-export default function DecisionEnginePanel({ symbol, role }: { symbol: string; role: string }) {
-  const canAuthor = role === "internal_admin" || role === "internal_analyst";
-  const canReview = role === "internal_admin" || role === "internal_compliance";
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+export default function DecisionEnginePanel({ symbol, role, initialDecisionId }: { symbol: string; role: string; initialDecisionId?: number }) {
+  const authorRole = role === "internal_admin" || role === "internal_analyst";
+  const reviewerRole = role === "internal_admin" || role === "internal_compliance";
+  const [selectedId, setSelectedId] = useState<number | null>(() => initialDecisionId ?? takePendingDecisionReview());
   const [view, setView] = useState<View>("receipt");
   const [message, setMessage] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -197,7 +198,11 @@ export default function DecisionEnginePanel({ symbol, role }: { symbol: string; 
   const { data: investigations = [] } = useQuery<Investigation[]>({ queryKey: ["/api/research/investigations"] });
   const { data: brainRuns = [] } = useQuery<BrainRun[]>({ queryKey: ["/api/brain/runs"] });
   const detailPath = selectedId ? `/api/decisions/${selectedId}` : "";
-  const { data: detail, refetch: refetchDetail } = useQuery<Detail>({ queryKey: [detailPath], enabled: Boolean(selectedId) });
+  const { data: fetchedDetail, error: detailError, isFetching: detailFetching, refetch: refetchDetail } = useQuery<Detail>({ queryKey: [detailPath], enabled: Boolean(selectedId), retry: false });
+  const detail = !detailError && !detailFetching && fetchedDetail?.decision.id === selectedId ? fetchedDetail : undefined;
+  const canAuthor = authorRole && (!selectedId || detail?.permissions.author_decisions === true);
+  const canReview = reviewerRole && detail?.permissions.review_decisions === true;
+  useEffect(() => subscribeDecisionReview(id => { setSelectedId(id); setView("receipt"); setShowCreate(false); setMessage(""); }), []);
   const financialAsOf = useMemo(() => new Date().toISOString(), [symbol]);
   const { data: financialSnapshot } = useQuery<FinancialSnapshotRef>({
     queryKey: ["/api/data-snapshots/financials/as-of", symbol],
@@ -437,7 +442,7 @@ export default function DecisionEnginePanel({ symbol, role }: { symbol: string; 
   });
   const review = useMutation({
     mutationFn: async (outcome: "approved" | "rejected" | "waived") => (await apiRequest("POST", `/api/decisions/${selectedId}/approval`, {
-      receiptVersionId: latest?.id, outcome, finalDecision, rationale, waiverReason: outcome === "waived" ? waiverReason : undefined,
+      receiptVersionId: latest?.id, policyDigest: detail?.policyDigest, outcome, finalDecision, rationale, waiverReason: outcome === "waived" ? waiverReason : undefined,
     })).json(),
     onSuccess: async () => { setMessage("Review decision recorded against the exact receipt hash."); await refresh(); await refetchDetail(); },
     onError: (error: Error) => setMessage(error.message),
@@ -553,6 +558,9 @@ export default function DecisionEnginePanel({ symbol, role }: { symbol: string; 
       {canAuthor && <button title="New decision" onClick={() => setShowCreate(true)} className="h-8 px-3 border border-amber-400/40 text-amber-300 flex items-center gap-2 font-terminal text-[8px]"><Plus className="w-3.5 h-3.5" /> NEW CASE</button>}
     </header>
     {message && <button onClick={() => setMessage("")} className="shrink-0 px-4 py-2 text-left border-b border-border font-terminal text-[8px] text-amber-300">{message}</button>}
+    {detailError && <div role="alert" className="border-b border-border p-4 text-sm text-amber-200">Canonical case {selectedId} unavailable: {detailError.message}. No other case is substituted. Current server role and organization grants control access.<button type="button" onClick={() => void refetchDetail()} className="ml-2 underline">Recheck server access</button></div>}
+    {detailFetching && <p role="status" className="p-3 text-sm">Checking exact canonical case {selectedId}…</p>}
+    {detail?.reviewDeniedReason && <p role="status" className="border-b border-border p-3 text-sm text-amber-200">{detail.reviewDeniedReason} Presentation preferences cannot grant review permission.</p>}
 
     <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="min-h-0 border-b lg:border-b-0 lg:border-r border-border flex flex-col max-h-48 lg:max-h-none">

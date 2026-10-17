@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, FileBarChart, FileUp, Package, Plus } from "lucide-react";
-import type { ProjectSession } from "@/lib/useProjects";
+import type { ProjectResource, ProjectSession } from "@/lib/useProjects";
 import {
   createArtifact,
   exportProjectArtifactPackage,
@@ -50,17 +50,24 @@ export function ProjectArtifactsPanel({
   onAskArtifact,
   onFocusArtifact,
   onRerunArtifact,
+  initialArtifactId = null,
+  selectedResourceId = null,
+  resources = [],
 }: {
   projectId: number;
   sessions: ProjectSession[];
   onAskArtifact: (id: string, title: string, prompt?: string) => void;
   onFocusArtifact?: (id: string, title: string) => void;
   onRerunArtifact?: (id: string, title: string, spec: ArtifactRefreshSpec) => void;
+  initialArtifactId?: string | null;
+  selectedResourceId?: string | null;
+  resources?: ProjectResource[];
 }) {
   const artifacts = useProjectArtifacts(projectId);
   const archivedArtifacts = useProjectArtifacts(projectId, "archived");
   const invalidate = useInvalidateArtifacts();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialArtifactId);
+  const [resourceOpen, setResourceOpen] = useState(Boolean(selectedResourceId));
   const [newKind, setNewKind] = useState<ArtifactContent["kind"]>("spreadsheet");
   const [error, setError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -111,7 +118,28 @@ export function ProjectArtifactsPanel({
   if (artifacts.isLoading) return <p role="status" className="mt-6 text-sm">Loading Project artifacts…</p>;
   if (artifacts.isError) return <p role="alert" className="mt-6 text-sm">Unable to load artifacts. <button onClick={() => void artifacts.refetch()}>Retry</button></p>;
 
+  if (resourceOpen && selectedResourceId) {
+    const resource = resources.find((item) => item.id === selectedResourceId && item.projectId === projectId && item.status === "active");
+    return <section className="mt-4 rounded-xl border border-border/60 p-4" aria-label="Selected Project file">
+      <button type="button" className="lios-section-action mb-4" onClick={() => setResourceOpen(false)}>Back to Library</button>
+      {resource ? <>
+        <h2 className="font-semibold">{resource.label}</h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div><dt className="text-muted-foreground">Exact file ID</dt><dd className="break-all font-mono">{resource.id}</dd></div>
+          <div><dt className="text-muted-foreground">Kind / context</dt><dd>{resource.kind} · {resource.contextMode}</dd></div>
+          <div><dt className="text-muted-foreground">Reference</dt><dd className="break-all">{resource.resourceRef ?? "No reference recorded"}</dd></div>
+          <div><dt className="text-muted-foreground">Updated</dt><dd>{resource.updatedAt}</dd></div>
+        </dl>
+        <p className="mt-4 text-sm text-muted-foreground">Project file metadata · contents are not previewed or sent to AI by opening this result.</p>
+      </> : <p role="alert">This exact file is no longer available in this Project. No substitute file was opened.</p>}
+    </section>;
+  }
+
   if (selected) {
+    if (selected === initialArtifactId && ![...rows, ...archivedRows].some((artifact) => artifact.id === selected && artifact.projectId === projectId)) {
+      if (archivedArtifacts.isLoading) return <p role="status">Loading exact Artifact…</p>;
+      return <section className="mt-4"><p role="alert">This exact Artifact is no longer available in this Project. No substitute was opened.</p><button type="button" className="lios-section-action mt-3" onClick={() => setSelected(null)}>Back to Library</button></section>;
+    }
     return (
       <section className="mt-4">
         <ArtifactPane

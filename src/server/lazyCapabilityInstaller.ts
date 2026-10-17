@@ -144,7 +144,7 @@ export async function ensureLazyCapability(
   }
 
   const targetPackIds = unique([...(currentState?.selectedPackIds ?? []), ...requiredManagedPackIds]);
-  const selectedReleasePackIds = unique(currentState?.selectedReleasePackIds ?? []);
+  const selectedReleasePackIds = unique([...(currentState?.selectedReleasePackIds ?? []), runtimePack.id]);
   const installRuntime = dependencies.installRuntime ?? installManagedRuntime;
   const runtimeInstallOptions: ManagedRuntimeInstallOptions = {
     ...(options.runtimeInstallOptions ?? {}),

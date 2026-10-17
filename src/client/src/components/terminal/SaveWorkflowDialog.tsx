@@ -223,6 +223,7 @@ export function SaveWorkflowDialog({
                   <select value={eventType} onChange={(event) => setEventType(event.target.value as P9AutomationEventType)} className="mt-1 w-full rounded border border-border/60 bg-black px-2 py-1.5 font-ui text-[7px] text-foreground">
                     <option value="filing">Filing</option>
                     <option value="earnings">Earnings</option>
+                    <option value="estimate_revision">Estimate revision</option>
                     <option value="data_refresh">Data refresh</option>
                     <option value="price_threshold">Price threshold</option>
                     <option value="risk_threshold">Risk threshold</option>

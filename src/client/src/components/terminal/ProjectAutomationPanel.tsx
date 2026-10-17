@@ -28,6 +28,7 @@ import {
 } from "@/lib/p9ManualRunAttemptLedger";
 import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
+import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 
 function time(value: string | null): string {
   if (!value) return "—";
@@ -295,6 +296,13 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                       ? ` · ${workflow.eventCursor.pendingAutomationEvents.length} pending delivery`
                       : ""}
                   </p>}
+                  {workflow.action.kind === "model_refresh_review" && <details className="mt-2 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Model source review · no automatic apply</summary>
+                    <p className="break-all">Accepted {workflow.action.acceptedArtifact.artifactId} · v{workflow.action.acceptedArtifact.version} · {workflow.action.sourceProvider}</p>
+                    <p>Open this model's existing reported-period maintenance surface to select, review and explicitly apply an eligible immutable snapshot. This monitor never overwrites your model.</p>
+                    {last?.output.review != null && <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(last.output.review, null, 2)}</pre>}
+                  </details>}
+                  {last?.output.kind === "portfolio_materiality" && <PortfolioMaterialityResult output={last.output} />}
                   {workflow.action.kind === "conversation_rerun" && workflow.action.acceptedArtifact && <details className="mt-2 text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Accepted monitor baseline · v{workflow.action.acceptedArtifact.version}</summary>
                     <p className="mt-1 break-all">{workflow.action.acceptedArtifact.artifactId}</p>

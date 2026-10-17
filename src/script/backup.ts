@@ -1,6 +1,6 @@
 import path from "node:path";
 import { closeDb, initDb } from "../server/db";
-import { createBackup, extractBackup, restoreBackup, verifyBackup } from "../server/backupArchive";
+import { createBackup, extractBackup, recoverBackupRestore, restoreBackup, verifyBackup } from "../server/backupArchive";
 import { readPrivateSecretFile } from "../server/privateSecretFile";
 import packageJson from "../package.json";
 
@@ -9,6 +9,7 @@ const USAGE = `Usage:
   npm run backup:verify  -- <archive> [--passphrase-file <file>]
   npm run backup:extract -- <archive> <new-directory> [--passphrase-file <file>]
   npm run backup:restore -- <archive> [--passphrase-file <file>] [--replace]
+  npm run backup:restore -- --recover
 
 create/restore act on the current database (DATABASE_URL, or the PGlite database in the LiOS data root) and data
 root (LIOS_DATA_ROOT); stop LiOS first when it uses the local database. An encrypted backup contains the vault and
@@ -59,6 +60,12 @@ async function main(): Promise<void> {
     } finally {
       await closeDb();
     }
+  } else if (command === "restore" && args.length === 1 && args[0] === "--recover") {
+    const db = await initDb({ restoreRecovery: true });
+    try {
+      const recovered = await recoverBackupRestore(db);
+      console.log(`Prior Home recovered. Database export, prior files and recovery audit retained at ${recovered.retainedRecoveryDirectory}.`);
+    } finally { await closeDb(); }
   } else if (command === "restore" && first) {
     const db = await initDb();
     try {

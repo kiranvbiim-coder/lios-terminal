@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, CheckCircle2, LockKeyhole, Save, ShieldCheck, Users, XCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import type { EnterprisePolicy } from "@shared/enterpriseContracts";
+import { DECISION_PERMISSIONS, DECISION_ROLE_CEILINGS, type EnterprisePolicy, type EnterpriseRole } from "@shared/enterpriseContracts";
 
 interface OrganizationOption { id: number; name: string; slug: string; status: string; }
 interface Props { orgs: OrganizationOption[]; isAdmin: boolean; }
@@ -46,9 +46,17 @@ export default function EnterpriseGovernancePanel({ orgs, isAdmin }: Props) {
     onError: (error: Error) => setMessage(error.message || "Could not save policy."),
   });
 
-  const roleSummary = useMemo(() => draft ? Object.entries(draft.roles.grants).map(([role, permissions]) => ({ role, count: permissions.length })) : [], [draft]);
+  const roleSummary = useMemo(() => draft ? (Object.entries(draft.roles.grants) as Array<[EnterpriseRole, EnterprisePolicy["roles"]["grants"][EnterpriseRole]]>).map(([role, permissions]) => ({ role, permissions, count: permissions.length })) : [], [draft]);
   const patch = <K extends keyof EnterprisePolicy>(key: K, value: EnterprisePolicy[K]) => setDraft((current) => current ? { ...current, [key]: value } : current);
   const patchNested = <K extends keyof EnterprisePolicy, P extends keyof EnterprisePolicy[K]>(key: K, nested: P, value: EnterprisePolicy[K][P]) => setDraft((current) => current ? { ...current, [key]: { ...(current[key] as object), [nested]: value } } as EnterprisePolicy : current);
+  const patchDecisionGrant = (role: EnterpriseRole, permission: typeof DECISION_PERMISSIONS[number], enabled: boolean) => {
+    setDraft((current) => {
+      if (!current || !DECISION_ROLE_CEILINGS[role].includes(permission)) return current;
+      const grants = current.roles.grants[role].filter((grant) => grant !== permission);
+      if (enabled) grants.push(permission);
+      return { ...current, roles: { grants: { ...current.roles.grants, [role]: grants } } };
+    });
+  };
 
   if (!orgs.length) return <div className="p-5 font-terminal text-[10px] text-muted-foreground">Create an organization before configuring enterprise governance.</div>;
 
@@ -82,6 +90,17 @@ export default function EnterpriseGovernancePanel({ orgs, isAdmin }: Props) {
             <Field label="ALLOWED EMAIL DOMAINS"><input className={inputClass} value={draft.seats.allowedEmailDomains.join(", ")} placeholder="example.com" onChange={(event) => patchNested("seats", "allowedEmailDomains", splitList(event.target.value))} disabled={!isAdmin} /></Field>
           </div><div className="mt-3 grid gap-1 sm:grid-cols-2">{roleSummary.map((row) => <div key={row.role} className="flex justify-between border border-border/60 px-2 py-1 font-terminal text-[8px]"><span>{row.role}</span><span className="text-emerald-300">{row.count} grants</span></div>)}</div></section>
 
+          <section className="border border-border bg-[#080808] p-3"><SectionTitle title="DECISION SECURITY-ROLE GRANTS" />
+            <p className="mb-3 font-ui text-[10px] text-muted-foreground">Organization policy may reduce, never widen, security-role authority. Read is also required for authoring and review. Personas do not grant access. Changes invalidate prior review bindings; review does not execute trades or accept Artifact proposals.</p>
+            <div className="space-y-2">{roleSummary.map((row) => <div key={row.role} className="border border-border/60 p-2">
+              <div className="mb-2 font-terminal text-[9px]">{row.role}</div>
+              <div className="grid gap-2 sm:grid-cols-3">{DECISION_PERMISSIONS.map((permission) => <Toggle key={permission}
+                label={`${permission.replace("_decisions", "").toUpperCase()}${DECISION_ROLE_CEILINGS[row.role].includes(permission) ? "" : " · ROLE DENIED"}`}
+                value={DECISION_ROLE_CEILINGS[row.role].includes(permission) && row.permissions.includes(permission)}
+                disabled={!isAdmin || !DECISION_ROLE_CEILINGS[row.role].includes(permission)}
+                onChange={(enabled) => patchDecisionGrant(row.role, permission, enabled)} />)}</div>
+            </div>)}</div>
+          </section>
           <section className="border border-border bg-[#080808] p-3"><SectionTitle title="CONNECTOR & AI POLICY" /><div className="grid gap-2 sm:grid-cols-2">
             <Field label="ALLOWED CONNECTORS"><input className={inputClass} value={draft.connectors.allowedConnectorIds.join(", ")} placeholder="empty = none" onChange={(event) => patchNested("connectors", "allowedConnectorIds", splitList(event.target.value))} disabled={!isAdmin} /></Field>
             <Field label="ALLOWED AI PROVIDERS"><input className={inputClass} value={draft.ai.allowedProviders.join(", ")} placeholder="provider IDs" onChange={(event) => patchNested("ai", "allowedProviders", splitList(event.target.value))} disabled={!isAdmin} /></Field>

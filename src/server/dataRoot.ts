@@ -1,4 +1,5 @@
 import path from "node:path";
+import { assertNoPendingHomeRestore } from "./backupRestoreState";
 import {
   DATA_ROOT_EXIT_CODE,
   DataRootUnavailableError,
@@ -56,7 +57,8 @@ export function stateDir(options?: DataRootOptions): string {
 }
 
 /** Call once at startup, before any module creates state. Throws DataRootUnavailableError for a vanished root. */
-export function prepareDataRoot(options?: DataRootOptions) {
+export function prepareDataRoot(options?: DataRootOptions, restoreRecovery = false) {
+  if (!restoreRecovery) assertNoPendingHomeRestore(resolveDataRoot(options).root);
   return prepare(options);
 }
 

@@ -23,8 +23,24 @@ export const enterprisePermissionSchema = z.enum([
   "export_data",
   "use_ai",
   "use_external_connections",
+  "read_decisions",
+  "author_decisions",
+  "review_decisions",
 ]);
 export type EnterprisePermission = z.infer<typeof enterprisePermissionSchema>;
+
+export const DECISION_PERMISSIONS = ["read_decisions", "author_decisions", "review_decisions"] as const;
+export type DecisionPermission = typeof DECISION_PERMISSIONS[number];
+export type EnterpriseRole = keyof EnterprisePolicy["roles"]["grants"];
+
+/** Organization grants only narrow these existing security-role ceilings. Personas are not roles. */
+export const DECISION_ROLE_CEILINGS: Record<EnterpriseRole, readonly DecisionPermission[]> = {
+  internal_admin: DECISION_PERMISSIONS,
+  internal_analyst: ["read_decisions", "author_decisions"],
+  internal_compliance: ["read_decisions", "review_decisions"],
+  client_admin: [],
+  client_user: [],
+};
 
 const roleGrantSchema = z.object({
   internal_admin: z.array(enterprisePermissionSchema).max(50),
@@ -106,13 +122,13 @@ const clientAdminPermissions: EnterprisePermission[] = [
 const clientUserPermissions: EnterprisePermission[] = ["use_ai", "export_data"];
 
 export const DEFAULT_ENTERPRISE_POLICY: EnterprisePolicy = {
-  version: 1,
+  version: 2,
   seats: { maxSeats: null, allowSelfJoin: false, requireAdminApproval: true, allowedEmailDomains: [] },
   roles: {
     grants: {
       internal_admin: [...allPermissions],
-      internal_analyst: ["view_audit", "manage_workspaces", "manage_network", "export_data", "use_ai", "use_external_connections"],
-      internal_compliance: ["view_audit", "manage_retention", "manage_network", "export_data"],
+      internal_analyst: ["view_audit", "manage_workspaces", "manage_network", "export_data", "use_ai", "use_external_connections", ...DECISION_ROLE_CEILINGS.internal_analyst],
+      internal_compliance: ["view_audit", "manage_retention", "manage_network", "export_data", ...DECISION_ROLE_CEILINGS.internal_compliance],
       client_admin: clientAdminPermissions,
       client_user: clientUserPermissions,
     },
@@ -133,7 +149,17 @@ function cloneDefault(): EnterprisePolicy {
 
 export function normalizeEnterprisePolicy(input: unknown): EnterprisePolicy {
   const parsed = enterprisePolicySchema.safeParse(input);
-  return parsed.success ? parsed.data : cloneDefault();
+  if (!parsed.success) return cloneDefault();
+  const policy = parsed.data;
+  // Version 1 predates Decision grants. Migrate once within the old role ceilings;
+  // version 2 explicitly absent grants remain denied, including after persistence.
+  if (policy.version < 2) {
+    for (const role of Object.keys(DECISION_ROLE_CEILINGS) as EnterpriseRole[]) {
+      policy.roles.grants[role] = [...new Set([...policy.roles.grants[role], ...DECISION_ROLE_CEILINGS[role]])];
+    }
+    policy.version = 2;
+  }
+  return policy;
 }
 
 export interface EnterprisePolicyReadiness {
@@ -164,6 +190,8 @@ export function assessEnterprisePolicy(policyInput: unknown): EnterprisePolicyRe
 }
 
 export function canUseEnterprisePermission(policyInput: unknown, role: keyof EnterprisePolicy["roles"]["grants"], permission: EnterprisePermission): boolean {
+  if ((DECISION_PERMISSIONS as readonly string[]).includes(permission)
+    && !DECISION_ROLE_CEILINGS[role]?.includes(permission as DecisionPermission)) return false;
   const policy = normalizeEnterprisePolicy(policyInput);
   return policy.roles.grants[role]?.includes(permission) ?? false;
 }

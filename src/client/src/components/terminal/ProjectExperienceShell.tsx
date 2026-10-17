@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import GovernedExtensionsPanel from "@/components/GovernedExtensionsPanel";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -152,6 +153,7 @@ import {
 import { recordP2ConversationEvent } from "@/lib/p2ConversationTelemetry";
 import { recordP3TrustManifest } from "@/lib/p3TrustTelemetry";
 import { artifactReplayDraft, buildArtifactDependencyRefs } from "@/lib/p4ArtifactWorkspace";
+import { resolveWorkSearchLibraryTarget } from "@/lib/terminalCommands";
 type SandboxTerminalInput = z.output<(typeof GATEWAY_METHODS)["execution.session.input"]["params"]>["input"];
 type SandboxTerminalProposal = z.output<(typeof GATEWAY_METHODS)["execution.operation.propose"]["result"]>;
 const SANDBOX_TERMINAL_INPUTS: SandboxTerminalInput[] = ["help", "pwd", "id -u", "ls /tmp", "exit"];
@@ -167,6 +169,9 @@ interface Props {
   account: { name: string; email?: string };
   onLogout: () => void;
   onOpenSettings: () => void;
+  navigationRequest?: { id: number; section: NavigationSection | "search" } | null;
+  onNavigationContext?: (context: string) => void;
+  onOpenCommand?: () => void;
 }
 
 type ChatMode = "project" | "quick" | "temporary";
@@ -291,6 +296,8 @@ export default function ProjectExperienceShell({
   onOpenWorkbench,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
+  navigationRequest, onNavigationContext,
+  onOpenCommand,
 }: Props) {
   const [lifecycleRequest, setLifecycleRequest] = useState<LifecycleRequest | null>(null);
   const lifecycleTrigger = useRef<HTMLElement | null>(null);
@@ -306,6 +313,16 @@ export default function ProjectExperienceShell({
     lifecycleTrigger.current = null;
   });
   const [section, setSection] = useState<NavigationSection>("conversation");
+  const handledNavigation = useRef<number | null>(null);
+  useEffect(() => {
+    if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
+    handledNavigation.current = navigationRequest.id;
+    if (navigationRequest.section === "search") setWorkSearchOpen(true);
+    else setSection(navigationRequest.section);
+    setShowLifecycleCenter(false);
+    setContextOpen(false);
+  }, [navigationRequest]);
+  const [librarySelection, setLibrarySelection] = useState<{ projectId: number; artifactId: string | null; resourceId: string | null; request: number } | null>(null);
   const [workSearchOpen, setWorkSearchOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [chatLimit, setChatLimit] = useState(50);
@@ -590,6 +607,9 @@ export default function ProjectExperienceShell({
     () => [...(home?.chats ?? []), ...quickChats, ...archivedQuickChats, ...archivedProjectChats].find((chat) => chat.id === selection.chatId) ?? null,
     [home?.chats, quickChats, archivedQuickChats, archivedProjectChats, selection.chatId],
   );
+  useEffect(() => {
+    onNavigationContext?.(`${home?.project.name ?? (selection.projectId ? "Project unavailable or loading" : "No Project selected")} · ${activeChat?.title ?? (selection.chatId ? "Chat unavailable or loading" : "no saved Chat selected")}`);
+  }, [home?.project.name, selection.projectId, selection.chatId, activeChat?.title, onNavigationContext]);
 
   const resources = home?.resources ?? [];
   const mentionCandidates = useMemo(() => {
@@ -621,6 +641,7 @@ export default function ProjectExperienceShell({
     selection.setProjectId(project.id);
     selection.setChatId(null);
     setChatMode("project");
+    return true;
   };
 
   const openChat = async (chat: ProjectChat, confirmed = false) => {
@@ -652,8 +673,16 @@ export default function ProjectExperienceShell({
         if (!response.ok) throw new Error("This Project is no longer available.");
         project = await response.json() as Project;
       }
-      await openProject(project);
-      if (result.kind === "artifact" || result.kind === "file") setSection("library");
+      if (selection.projectId !== project.id && !(await openProject(project))) return;
+      if (result.kind === "artifact" || result.kind === "file") {
+        const exactTarget = resolveWorkSearchLibraryTarget(result);
+        if (!exactTarget) throw new Error("This search result has no exact available object identity.");
+        if (busy) { setLifecycleNotice("Stop the current response before opening a search result."); return; }
+        setLibrarySelection((current) => ({ ...exactTarget, request: (current?.request ?? 0) + 1 }));
+        setSection("library");
+        setShowLifecycleCenter(false);
+        setContextOpen(false);
+      } else if (selection.projectId === project.id) setSection("conversation");
     }
   };
   const handleChatLifecycleAction = async (chat: ProjectChat, action: LifecycleAction) => {
@@ -1514,7 +1543,7 @@ export default function ProjectExperienceShell({
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
-        onSearch={() => setWorkSearchOpen(true)}
+        onSearch={onOpenCommand ?? (() => setWorkSearchOpen(true))}
         onWorkbench={onOpenWorkbench}
         onConnectors={onOpenEnvironment}
         onSettings={onOpenSettings} onLogout={onLogout}
@@ -1631,12 +1660,15 @@ export default function ProjectExperienceShell({
             {(section === "library" || section === "automations") && <>
               <label htmlFor="lios-tools-project" className="mr-3 text-sm">Project</label><select id="lios-tools-project" value={selection.projectId ?? ""} disabled={busy} onChange={async (e) => { const nextId = Number(e.target.value) || null; if (nextId === selection.projectId || !(await confirmConversationSwitch())) return; selection.setChatId(null); selection.setProjectId(nextId); setChatMode("project"); }} className="rounded border border-border bg-background p-2"><option value="">Choose a Project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
               {projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : !selection.projectId ? <p className="mt-6">Choose a Project to keep this work isolated.</p> : projectHomeQuery.isLoading ? <p role="status">Loading Project…</p> : projectHomeQuery.isError ? <p role="alert">Unable to load this Project. <button onClick={() => void projectHomeQuery.refetch()}>Retry</button></p> : home && <div className="lios-project-tools">
-                {section === "library" ? <ProjectArtifactsPanel key={home.project.id} projectId={home.project.id} sessions={home.sessions}
+                {section === "library" ? <ProjectArtifactsPanel key={`${home.project.id}:${librarySelection?.projectId === home.project.id ? librarySelection.request : 0}`} projectId={home.project.id} sessions={home.sessions}
+                  initialArtifactId={librarySelection?.projectId === home.project.id ? librarySelection.artifactId : null}
+                  selectedResourceId={librarySelection?.projectId === home.project.id ? librarySelection.resourceId : null}
+                  resources={home.resources}
                   onAskArtifact={(id, title, prompt) => { pendingArtifactOpenRef.current = id; pendingArtifactFocusRef.current = false; void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review.`); }}
                   onFocusArtifact={(id) => { pendingArtifactOpenRef.current = id; pendingArtifactFocusRef.current = true; void newProjectChat(); }} /> : <ProjectAutomationPanel key={home.project.id} projectId={home.project.id} />}
               </div>}
             </>}
-            {section === "plugins" && <div className="max-w-xl"><h2 className="mb-3 text-lg font-semibold">Governed extensions</h2><p>LiOS supports connector, tool, artifact and agent capabilities through its Plugin SDK. A public plugin marketplace and installation controls are not available in this version.</p><p className="mt-3">Manage your configured data sources, MCP connections and AI providers in Connection Center.</p><button className="lios-section-action mt-5" onClick={onOpenEnvironment}>Open Connectors</button></div>}
+            {section === "plugins" && <GovernedExtensionsPanel />}
           </section>
         ) : showLifecycleCenter ? (
           <LifecycleCenter

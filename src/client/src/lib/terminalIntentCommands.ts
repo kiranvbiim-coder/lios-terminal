@@ -1,4 +1,4 @@
-import { getCommandAliasView, parseTerminalCommand, type ParsedTerminalCommand } from "./terminalCommands";
+import { getCommandAliasView, parseCanonicalNavigation, parseTerminalCommand, type ParsedTerminalCommand } from "./terminalCommands";
 import type { ViewMode } from "./terminalTypes";
 
 const INTENT_ALIASES: Record<string, ViewMode> = {
@@ -42,6 +42,7 @@ export function getIntentAliasView(token: string | undefined): ViewMode | null {
 export function parseFlexibleTerminalCommand(input: string): ParsedTerminalCommand | null {
   const raw = normalize(input);
   if (!raw) return null;
+  if (parseCanonicalNavigation(raw)) return parseTerminalCommand(raw);
   const tokens = raw.split(" ");
 
   if (tokens.length >= 2) {

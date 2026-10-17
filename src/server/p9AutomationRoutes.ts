@@ -77,7 +77,8 @@ export function registerP9AutomationRoutes(app: Express): void {
         notificationChannels: ["in_app"],
         eventSources: {
           filing: { state: "live", adapter: "sec_edgar_cursor_observer" },
-          earnings: { state: "waiting_for_verified_provider", adapter: "publishP9EarningsObserved" },
+          earnings: { state: "retained_source_observer", adapter: "current_estimate_actual_snapshots", requiresCurrentSourceRights: true },
+          estimate_revision: { state: "retained_source_observer", adapter: "current_estimate_vintages", requiresCurrentSourceRights: true },
           data_refresh: { state: "live", adapter: "data_spine" },
           price_threshold: { state: "live", adapter: "price_alerts" },
           risk_threshold: { state: "live", adapter: "decision_monitor" },

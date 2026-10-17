@@ -21,7 +21,8 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { acquirePgliteOwnership, PgliteOwnershipError, recoverStalePgliteLock, type PgliteOwnershipHandle } from "./pgliteLock";
 import { markPgliteMigrationsApplied, preparePgliteMigrationBackup } from "./pgliteBackup";
-import { DataRootUnavailableError, databaseDir, markDatabaseInitialized, prepareDataRoot } from "./dataRoot";
+import { DataRootUnavailableError, dataRoot, databaseDir, markDatabaseInitialized, prepareDataRoot } from "./dataRoot";
+import { assertNoPendingHomeRestore } from "./backupRestoreState";
 // PGlite's JavaScript Date adapter reads the process timezone before SQL is
 // executed. Keep that boundary in UTC so timestamptz values are not shifted
 // by the workstation's local offset during insert/read round-trips.
@@ -35,10 +36,10 @@ let pgliteOwnership: PgliteOwnershipHandle | null = null;
 let exitReleaseInstalled = false;
 let pgliteDir = "";
 
-export async function initDb(): Promise<DrizzleDb> {
+export async function initDb(options: { restoreRecovery?: boolean } = {}): Promise<DrizzleDb> {
   if (dbInstance) return dbInstance;
   if (dbInitPromise) return dbInitPromise;
-  dbInitPromise = initializeDb();
+  dbInitPromise = initializeDb(options);
   try {
     return await dbInitPromise;
   } finally {
@@ -46,9 +47,10 @@ export async function initDb(): Promise<DrizzleDb> {
   }
 }
 
-async function initializeDb(): Promise<DrizzleDb> {
+async function initializeDb(options: { restoreRecovery?: boolean }): Promise<DrizzleDb> {
   let migrationFingerprint: string | null = null;
   try {
+    if (!options.restoreRecovery) assertNoPendingHomeRestore(dataRoot());
     if (process.env.DATABASE_URL) {
       const { drizzle } = await import("drizzle-orm/node-postgres");
       const { Pool } = await import("pg");
@@ -66,9 +68,10 @@ async function initializeDb(): Promise<DrizzleDb> {
       const { PGlite } = await import("@electric-sql/pglite");
       // Throws DataRootUnavailableError instead of silently creating an empty database over a root that
       // LiOS already initialized (unmounted drive, deleted or moved database folder).
-      prepareDataRoot({ localDatabase: true });
+      prepareDataRoot({ localDatabase: true }, options.restoreRecovery === true);
       pgliteDir = databaseDir();
       const freshDatabase = !fs.existsSync(pgliteDir);
+      if (freshDatabase && options.restoreRecovery) throw new Error("Restore recovery requires the existing Home database; refusing to create a fresh one.");
       if (freshDatabase) restoreSeedDbOrCreateEmpty(pgliteDir);
 
       pgliteOwnership = acquirePgliteOwnership(pgliteDir);
@@ -102,9 +105,13 @@ async function initializeDb(): Promise<DrizzleDb> {
       console.log(`Using local embedded Postgres (PGlite) at ${pgliteDir}. Set DATABASE_URL for a real shared database.`);
     }
 
-    await runMigrations(dbInstance);
-    if (usingPglite && migrationFingerprint) markPgliteMigrationsApplied(pgliteDir, migrationFingerprint);
-    if (usingPglite) markDatabaseInitialized();
+    // Recovery must reopen the exact interrupted schema, not migrate it before
+    // the prior logical export has been checked and restored.
+    if (!options.restoreRecovery) {
+      await runMigrations(dbInstance);
+      if (usingPglite && migrationFingerprint) markPgliteMigrationsApplied(pgliteDir, migrationFingerprint);
+      if (usingPglite) markDatabaseInitialized();
+    }
     return dbInstance;
   } catch (error) {
     await closeDb();

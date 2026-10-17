@@ -62,6 +62,7 @@ import { registerLseRoutes } from "./lseRoutes";
 import { registerCftcRoutes } from "./cftcRoutes";
 import { registerSecEdgarRoutes } from "./secEdgarRoutes";
 import { registerCompanyIntelligenceRoutes } from "./companyIntelligenceRoutes";
+import { registerP13ExtensionRoutes } from "./p13ExtensionRoutes";
 import { registerWorldBankRoutes } from "./worldBankRoutes";
 import { registerNasaPowerRoutes } from "./nasaPowerRoutes";
 import { registerGoogleTrendsRoutes } from "./googleTrendsRoutes";
@@ -215,6 +216,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerP8Routes(app);
   // P9 Project automation is tenant-scoped and shared by authenticated Project users.
   registerP9AutomationRoutes(app);
+  registerP13ExtensionRoutes(app);
 
   // Deliberately small anonymous surface: marketing/product preview support
   // and explicit lead capture only. The public entry experience is

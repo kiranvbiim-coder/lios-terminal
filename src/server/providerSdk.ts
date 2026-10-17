@@ -20,7 +20,7 @@ import {
 import type { TenantContext } from "./tenantContext";
 import { getQuotes, getForexQuotes } from "./marketData";
 import { resolveFinancialStatements } from "./financialStatementsBroker";
-import { getAlternativeDatasetAsOf, listAlternativeDatasets } from "./alternativeDatasetStore";
+import { getRetainedAlternativeMetadata, readPermittedAlternativeDataset } from "./alternativeDatasetStore";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
 import { openFigiInstrumentFallback } from "./openFigiConnector";
 import { searchCommonInstrumentUniverse } from "./instrumentSearchIndexStore";
@@ -311,16 +311,16 @@ export function createNativeProviderAdapters(): LiOSDataProviderAdapter[] {
       credentialRequirement: "not_required",
       locality: "user_owned",
       aiTransmission: "unknown",
-      internalUse: "permitted",
+      internalUse: "unknown",
       redistribution: "unknown",
       notes: ["Stored user/organization snapshot; source-specific downstream rights remain authoritative."],
     }),
     async fetch(request, context) {
       const entity = symbolFor(request) ?? request.entity.ref;
-      const snapshot = request.pointInTime.mode === "as_known_on" && request.pointInTime.asKnownOn
-        ? await getAlternativeDatasetAsOf(dataClass, entity, new Date(request.pointInTime.asKnownOn), context.organizationId)
-        : (await listAlternativeDatasets(dataClass, entity, context.organizationId, 1))[0] ?? null;
-      if (!snapshot) return null;
+      const metadata = await getRetainedAlternativeMetadata(dataClass, entity, context,
+        request.pointInTime.mode === "as_known_on" && request.pointInTime.asKnownOn ? new Date(request.pointInTime.asKnownOn) : new Date());
+      if (!metadata) return null;
+      const { snapshot, entitlement } = await readPermittedAlternativeDataset(metadata, context);
       return {
         providerId: snapshot.provider || id,
         data: snapshot.payload,
@@ -329,9 +329,7 @@ export function createNativeProviderAdapters(): LiOSDataProviderAdapter[] {
         publishedAt: snapshot.publishedAt,
         availableAt: snapshot.availableAt,
         revision: snapshot.contentHash,
-        entitlement: snapshot.entitlementPolicyId
-          ? { decision: "allowed", policyId: snapshot.entitlementPolicyId, permittedUses: ["internal_research"], reasons: ["Snapshot carries an entitlement-policy reference."] }
-          : unknownEntitlement("No entitlement policy is attached to this snapshot."),
+        entitlement,
         normalized: true,
       };
     },

@@ -83,7 +83,21 @@ export class PluginTrustStore {
 
   trustKey(keyId: string, publicKey: crypto.KeyObject): void {
     if (!keyId.trim()) throw new Error("Plugin trust key id is required.");
+    if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("Plugin publisher keys must use Ed25519.");
+    const existing = this.keys.get(keyId);
+    if (existing && (existing.revoked || this.fingerprint(keyId) !== this.keyFingerprint(publicKey))) {
+      throw new Error("Publisher key id is already bound or revoked; use a new publisher key id.");
+    }
     this.keys.set(keyId, { publicKey, revoked: false });
+  }
+
+  private keyFingerprint(publicKey: crypto.KeyObject): string {
+    return crypto.createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  }
+
+  fingerprint(keyId: string): string | null {
+    const key = this.keys.get(keyId);
+    return key ? this.keyFingerprint(key.publicKey) : null;
   }
 
   revokeKey(keyId: string): void {

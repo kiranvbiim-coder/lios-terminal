@@ -31,6 +31,8 @@ import { ArtifactProposalReview } from "./ArtifactProposalReview";
 import { artifactMaintenancePrompt } from "@/lib/artifactProposalReview";
 import { SpreadsheetCellSourceInspect } from "./SpreadsheetCellSourceInspect";
 import { spreadsheetDraftHasChanges } from "@/lib/artifactSpreadsheetDraft";
+import { openTerminalInspector } from "@/lib/terminalInspector";
+import ArtifactPortfolioMateriality from "./ArtifactPortfolioMateriality";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
@@ -201,7 +203,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
         <tbody>{Array.from({length:rows},(_,r) => <tr key={r}><th className="sticky left-0 border border-border/40 bg-[#0a0a0a] px-2 font-terminal text-[12px] text-muted-foreground">{r+1}</th>{Array.from({length:cols},(_,c) => {
           const cellRef = `${colIndexToLetters(c)}${r+1}`;
           const cell = grid.getCell(cellRef);
-          return <td key={cellRef} className="border border-border/35 p-0"><input aria-label={`Cell ${cellRef}`} value={cell.raw} title={cell.error ?? String(cell.value ?? "")} onFocus={() => setSelectedRef(cellRef)} onChange={e => { grid.setCell(cellRef,e.target.value); reportDirty(); setTick(v => v + 1); }} className={`h-7 min-w-[92px] bg-transparent px-1.5 font-terminal text-[13px] outline-none ${cell.error ? "text-red-300" : cell.raw.startsWith("=") ? "text-foreground" : "text-cyan-200"}`}/></td>;
+          return <td key={cellRef} data-sheet-id={sheet.id} data-cell-ref={cellRef} className="border border-border/35 p-0"><input aria-label={`Cell ${cellRef}`} value={cell.raw} title={cell.error ?? String(cell.value ?? "")} onFocus={() => setSelectedRef(cellRef)} onChange={e => { grid.setCell(cellRef,e.target.value); reportDirty(); setTick(v => v + 1); }} className={`h-7 min-w-[92px] bg-transparent px-1.5 font-terminal text-[13px] outline-none ${cell.error ? "text-red-300" : cell.raw.startsWith("=") ? "text-foreground" : "text-cyan-200"}`}/></td>;
         })}</tr>)}</tbody>
       </table>
     </div>
@@ -286,7 +288,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
   if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
   if(content.kind==="valuation") return <div className="space-y-3"><div className="font-terminal text-[12px] text-muted-foreground">{content.modelId.toUpperCase()} · {content.symbol??"NO SYMBOL"}</div><div className="grid gap-3"><RecordSummary title="Assumptions" values={content.assumptions}/><RecordSummary title="Outputs" values={content.outputs}/><RecordSummary title="Summary" values={content.summary}/></div><JsonEditor content={content} onSave={onSave}/></div>;
-  if(content.kind==="portfolio") return <div className="space-y-3"><div className="font-terminal text-[12px] text-muted-foreground">{content.holdings.length} HOLDINGS</div><DataPreview columns={Array.from(new Set(content.holdings.slice(0,100).flatMap((holding)=>Object.keys(holding))))} rows={content.holdings}/><RecordSummary title="Summary" values={content.summary}/><RecordSummary title="Risk" values={content.risk}/><JsonEditor content={content} onSave={onSave}/></div>;
+  if(content.kind==="portfolio") return <div className="space-y-3"><div className="font-terminal text-[12px] text-muted-foreground">{content.holdings.length} HOLDINGS</div><DataPreview columns={Array.from(new Set(content.holdings.slice(0,100).flatMap((holding)=>Object.keys(holding))))} rows={content.holdings}/><RecordSummary title="Summary" values={content.summary}/><RecordSummary title="Risk" values={content.risk}/><JsonEditor content={content} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/></div>;
   return <JsonEditor content={content} onSave={onSave}/>;
 }
 function FieldValue({ value, exact = false }: { value: unknown; exact?: boolean }) {
@@ -302,14 +304,14 @@ function RecordSummary({ title, values }: { title: string; values: Record<string
 const TABLE_PAGE_SIZE = 100;
 type PreviewColumn = string | { key: string; label: string };
 
-function DataPreview({ columns, rows, offset = 0 }: { columns: PreviewColumn[]; rows: Array<Record<string, unknown>>; offset?: number }) {
+function DataPreview({ columns, rows, offset = 0, canonicalTable = false }: { columns: PreviewColumn[]; rows: Array<Record<string, unknown>>; offset?: number; canonicalTable?: boolean }) {
   const visibleRows = rows.length > TABLE_PAGE_SIZE ? rows.slice(0, TABLE_PAGE_SIZE) : rows;
   return <div className="max-h-[380px] overflow-auto rounded border border-border/50" tabIndex={0} aria-label="Recorded data table">
     <table className="w-full text-left font-ui text-[13px]"><caption className="sr-only">Recorded data, rows {visibleRows.length ? offset + 1 : 0} to {visibleRows.length ? offset + visibleRows.length : 0}</caption>
       <thead className="sticky top-0 bg-background"><tr>{columns.map((column) => <th key={typeof column === "string" ? column : column.key} scope="col" className="border-b border-border p-3 font-semibold">{typeof column === "string" ? column : column.label}</th>)}</tr></thead>
       <tbody>{visibleRows.map((row, index) => <tr key={offset + index}>{columns.map((column) => {
         const key = typeof column === "string" ? column : column.key;
-        return <td key={key} className="border-b border-border/30 p-3 align-top tabular-nums"><FieldValue value={row[key]} exact /></td>;
+        return <td key={key} tabIndex={canonicalTable ? 0 : undefined} data-table-row={canonicalTable ? offset + index : undefined} data-table-column={canonicalTable ? key : undefined} className="border-b border-border/30 p-3 align-top tabular-nums"><FieldValue value={row[key]} exact /></td>;
       })}</tr>)}</tbody>
     </table>{!rows.length && <p className="p-3 text-sm text-muted-foreground">No rows available on this page.</p>}
   </div>;
@@ -340,7 +342,7 @@ function TableArtifactTable({ content }: { content: Extract<ArtifactContent, { k
     <TablePaging offset={offset} shown={rows.length} available={available} reported={available}
       previousOffset={offset > 0 ? Math.max(0, offset - TABLE_PAGE_SIZE) : null}
       nextOffset={offset + rows.length < available ? offset + TABLE_PAGE_SIZE : null} onPage={setOffset}/>
-    <DataPreview columns={content.columns} rows={rows} offset={offset}/>
+    <DataPreview columns={content.columns} rows={rows} offset={offset} canonicalTable/>
   </section>;
 }
 
@@ -634,6 +636,16 @@ function ArtifactPaneWorkspace({
     invalidateAutomation(projectId);
   });
   const save=async(next:ArtifactContent)=>{
+    if (next.kind === "portfolio") {
+      if (spreadsheetSaveInFlight.current || spreadsheetPendingRevision) throw new Error("Wait for the current portfolio revision to finish saving.");
+      spreadsheetSaveInFlight.current = true; setSpreadsheetSaving(true);
+      try {
+        await createArtifactVersion(artifactId, { baseVersion: data.version.version, content: next, actorType: "user" });
+        setSpreadsheetDirty(false); setSpreadsheetPendingRevision(true);
+        invalidate(projectId, artifactId);
+      } finally { spreadsheetSaveInFlight.current = false; setSpreadsheetSaving(false); }
+      return;
+    }
     if (next.kind === "spreadsheet") {
       if (spreadsheetSaveInFlight.current || modelApplying || spreadsheetPendingRevision) throw new Error("Wait for the current spreadsheet save or model update to finish.");
       spreadsheetSaveInFlight.current = true;
@@ -694,6 +706,7 @@ function ArtifactPaneWorkspace({
         (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
       }}>{tab}</button>)}
     </div>
+    <div className="border-b border-border/50 px-3 py-2"><button type="button" onClick={() => openTerminalInspector({ view: "research", label: data.artifact.title, target: { artifactId, version: data.version.version, contentHash: data.version.contentHash } })} className="rounded border border-cyan-300/30 px-3 py-2 text-sm text-cyan-200">Inspect exact saved source</button><span className="ml-2 text-xs text-muted-foreground">Cells: focus then Alt+I, or Alt-click. Inspection reads the saved revision, never unsaved draft values.</span></div>
     <div className="grid gap-2 border-b border-border/50 px-3 py-2 md:grid-cols-[1fr_auto_auto_auto_auto]"><div className="truncate font-terminal text-[12px] text-muted-foreground">SOURCES {data.version.sourceRefs.length} · {data.version.sourceRefs.length?"LINKED":"NONE"} · {data.version.executionReceiptIds.length} RECEIPTS</div><div className="flex items-center gap-1"><History className="h-3 w-3 text-muted-foreground"/><span className="font-terminal text-[12px] text-muted-foreground">{versions.data?.length??1} REVISIONS</span></div><div className="flex items-center gap-1"><Link2 className="h-3 w-3 text-muted-foreground"/><span className="font-terminal text-[12px] text-muted-foreground">{refs.data?.length??0} REFS</span></div><div className="font-terminal text-[12px] text-muted-foreground">{data.version.dependencyRefs.length} DEPS</div><div className="font-terminal text-[12px] text-muted-foreground">{data.version.refreshSpec?"REPLAY · "+data.version.refreshSpec.kind.toUpperCase():"NO REPLAY"}</div></div>
     {inspectorTab==="evidence"&&<div role="tabpanel" id={`${inspectorId}-evidence-panel`} aria-labelledby={`${inspectorId}-evidence-tab`} className="border-b border-border/50 bg-black/25 px-3 py-3">{data.version.trustManifest?<ConversationTrustPanel manifest={data.version.trustManifest}/>:<div className="grid gap-3 md:grid-cols-2"><div><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Sources</div><div className="mt-1 break-words font-ui text-[13px] leading-5 text-foreground">{data.version.sourceRefs.length?data.version.sourceRefs.join(" · "):"No source references recorded for this legacy version."}</div></div><div><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Execution</div><div className="mt-1 font-ui text-[13px] leading-5 text-foreground">Adapter {data.version.adapterId} · {data.version.executionReceiptIds.length} receipt{data.version.executionReceiptIds.length===1?"":"s"} · content {shortHash(data.version.contentHash)}</div></div></div>}{data.version.dependencyRefs.length>0&&<div className="mt-3 rounded border border-border/50 bg-black/20 p-2"><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Dependencies</div><div className="mt-1 break-words font-ui text-[13px] leading-5 text-foreground">{data.version.dependencyRefs.join(" · ")}</div></div>}{data.version.refreshSpec&&<div className="mt-3 rounded border border-emerald-300/15 bg-emerald-300/[0.02] p-2"><div className="font-terminal text-[12px] uppercase tracking-wider text-emerald-200">Governed replay</div><div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{data.version.refreshSpec.capabilityIds.length?data.version.refreshSpec.capabilityIds.join(" · "):"Conversation replay"} · {data.version.refreshSpec.sourceScope} · {data.version.refreshSpec.executionMode}</div></div>}</div>}
     {exportOpen&&<section aria-label="Export artifact" className="border-b border-border/50 p-3">
@@ -719,7 +732,10 @@ function ArtifactPaneWorkspace({
       {isIntegratedModelWorkbook(data) && <IntegratedArtifactEngineInputs key={artifactId} detail={data} onOpenOutput={onEngineOutput}/>}
       {isIntegratedModelWorkbook(data) && <Suspense fallback={<p role="status">Loading model maintenance…</p>}><ArtifactModelMaintenance key={artifactId} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision} onApplyingChange={setModelApplying}/></Suspense>}
       {isIntegratedModelWorkbook(data) && <Suspense fallback={<p role="status">Loading model change report…</p>}><ArtifactModelChangeReport key={`${artifactId}:${data.version.version}`} detail={data} versions={versions.data ?? []} sessions={sessions} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying} onAsk={onAsk}/></Suspense>}
+      {content.kind === "portfolio" && <ArtifactPortfolioMateriality key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying}/>}
+      <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
       {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={modelApplying || spreadsheetSaving || spreadsheetPendingRevision}/>}
+      </div>
       <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>
     </div>
     {(proposals.data??[]).some((p)=>p.status==="pending")&&<div className="space-y-2 border-t border-border/50 p-3">{(proposals.data??[]).map((p)=><ArtifactProposalReview key={p.id} proposal={p} base={p.baseVersion === data.version.version ? data.version : versions.data?.find(version => version.version === p.baseVersion)} current={data.version} headVersion={data.artifact.headVersion} onDecision={async(id,d)=>run(async()=>{await decideArtifactProposal(id,d);invalidate(projectId,artifactId)})}/>)}</div>}

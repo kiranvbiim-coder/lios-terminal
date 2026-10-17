@@ -7,10 +7,13 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { z } from "zod";
+import { deviceContinuityMethods } from "@shared/deviceOutbox";
 import { eq } from "drizzle-orm";
 import { WebSocket, WebSocketServer } from "ws";
 import { GATEWAY_PROTOCOL_VERSION, gatewayFrameSchema, type GatewayFrame, type GatewayScope } from "@shared/gatewayProtocol";
 import type { DeviceReviewBinding } from "@shared/deviceOutbox";
+import { DEFAULT_ENTERPRISE_POLICY } from "@shared/enterpriseContracts";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-device-continuity-"));
 process.env.LIOS_DATA_ROOT = root;
@@ -24,8 +27,9 @@ const { decisionSnapshotHash } = await import("./decisionEngine");
 const { GatewayHub } = await import("./gatewayHub");
 const { registerDeviceContinuityGateway } = await import("./gatewayDeviceContinuity");
 const { createProject } = await import("./projectStore");
-const { createArtifact } = await import("./artifactStore");
+const { createArtifact, createArtifactVersion } = await import("./artifactStore");
 const { users, decisionCases, decisionReceiptVersions, decisionApprovals } = schema;
+const { saveEnterprisePolicy } = await import("./enterprisePolicyService");
 
 type Role = "internal_compliance" | "internal_analyst";
 const homeId = crypto.randomUUID();
@@ -84,7 +88,7 @@ test("paired-device continuity and exact-request Decision review use current Hom
   await initDb();
   const hub = new GatewayHub({ version: "device-continuity-test" });
   registerDeviceContinuityGateway(hub, { homeId: () => homeId });
-  const identities = new Map<string, { userId: number; email: string; role: Role; organizationId: null; grantedScopes: GatewayScope[]; deviceId?: string }>();
+  const identities = new Map<string, { userId: number; email: string; role: Role; organizationId: number | null; grantedScopes: GatewayScope[]; deviceId?: string }>();
   const http = createServer();
   const wss = new WebSocketServer({ server: http });
   wss.on("connection", (socket, request) => {
@@ -114,7 +118,7 @@ test("paired-device continuity and exact-request Decision review use current Hom
   async function connect(who: "reviewer" | "reviewerRead" | "analyst" | "stranger") {
     const user = who === "reviewer" || who === "reviewerRead" ? reviewer : who === "analyst" ? analyst : stranger;
     const key = crypto.randomUUID();
-    identities.set(key, { userId: user.id, email: user.email, role: user.role as Role, organizationId: null, grantedScopes: who === "reviewerRead" ? ["read"] : ["read", "write"], deviceId: deviceIds[who] });
+    identities.set(key, { userId: user.id, email: user.email, role: user.role as Role, organizationId: user.organizationId, grantedScopes: who === "reviewerRead" ? ["read"] : ["read", "write"], deviceId: deviceIds[who] });
     return openClient(`${base}?k=${key}`);
   }
   const submission = (binding: DeviceReviewBinding, overrides: Record<string, unknown> = {}) => ({
@@ -149,6 +153,80 @@ test("paired-device continuity and exact-request Decision review use current Hom
     owner.close(); foreign.close();
   });
 
+  await t.test("Artifact discovery pages beyond 100 and historical bodies remain explicitly selectable", async () => {
+    const ctx = { userId: reviewer.id, organizationId: null, role: reviewer.role };
+    const project = await createProject(ctx, { name: "Paged native Artifact history" });
+    const content = { kind: "table" as const, columns: [{ key: "x", label: "X" }], rows: [{ x: 1 }] };
+    const first = await createArtifact(ctx, { projectId: project.id, title: "Historical table", content });
+    const v2 = await createArtifactVersion(ctx, { artifactId: first.artifact.id, baseVersion: 1, content: { ...content, rows: [{ x: 2 }] } });
+    for (let i = 0; i < 100; i++) await createArtifact(ctx, { projectId: project.id, title: `Page item ${i}`, content });
+    const owner = await connect("reviewer");
+    const page1 = await owner.call("device.continuity.read", { projectId: project.id });
+    assert.ok(page1.ok);
+    const firstPage = deviceContinuityMethods["device.continuity.read"].result.parse(page1.payload);
+    assert.equal(firstPage.artifacts.length, 100);
+    assert.equal(firstPage.nextArtifactsOffset, 100);
+    const page2 = await owner.call("device.continuity.read", { projectId: project.id, artifactsOffset: 100 });
+    assert.ok(page2.ok);
+    const secondPage = deviceContinuityMethods["device.continuity.read"].result.parse(page2.payload);
+    assert.equal(secondPage.artifacts.length, 1);
+    assert.equal(secondPage.nextArtifactsOffset, null);
+    assert.equal(new Set([...firstPage.artifacts, ...secondPage.artifacts].map((row) => row.id)).size, 101);
+    assert.equal((await owner.call("device.continuity.read", { projectId: project.id, artifactsOffset: -1 })).ok, false);
+    assert.equal((await owner.call("device.continuity.read", { projectId: project.id, artifactsLimit: 101 })).ok, false);
+    const history = await owner.call("artifacts.versions.list", { artifactId: first.artifact.id, limit: 1 });
+    assert.ok(history.ok);
+    const firstHistory = deviceContinuityMethods["artifacts.versions.list"].result.parse(history.payload);
+    assert.deepEqual(firstHistory.versions.map((row) => row.version), [2]);
+    assert.equal(firstHistory.nextOffset, 1);
+    assert.equal("content" in firstHistory.versions[0]!, false);
+    const older = await owner.call("artifacts.versions.list", { artifactId: first.artifact.id, offset: 1, limit: 1 });
+    assert.ok(older.ok);
+    assert.deepEqual(deviceContinuityMethods["artifacts.versions.list"].result.parse(older.payload).versions.map((row) => row.version), [1]);
+    const oldBody = await owner.call("artifacts.read", { artifactId: first.artifact.id, version: 1 });
+    const newBody = await owner.call("artifacts.read", { artifactId: first.artifact.id, version: 2 });
+    assert.ok(oldBody.ok && newBody.ok);
+    const body = z.object({ revision: z.object({ content: z.unknown(), contentHash: z.string() }) });
+    assert.deepEqual(body.parse(oldBody.payload).revision.content, first.version.content);
+    assert.equal(body.parse(newBody.payload).revision.contentHash, v2.contentHash);
+    const foreign = await connect("stranger");
+    assert.equal((await foreign.call("artifacts.versions.list", { artifactId: first.artifact.id })).ok, false);
+    assert.equal((await foreign.call("artifacts.read", { artifactId: first.artifact.id, version: 1 })).ok, false);
+    owner.close(); foreign.close();
+  });
+
+  await t.test("only same-Home owner/device notification reads replay, preserving the first acknowledgement", async () => {
+    const ctx = { userId: reviewer.id, organizationId: null, role: reviewer.role };
+    const project = await createProject(ctx, { name: "Native read intents" });
+    const workflowId = crypto.randomUUID(), runId = crypto.randomUUID(), notificationId = crypto.randomUUID();
+    await db.insert(schema.projectAutomationWorkflows).values({
+      id: workflowId, projectId: project.id, ownerUserId: reviewer.id, name: "Read-intent fixture",
+      trigger: { type: "manual" }, action: { kind: "conversation_rerun", chatId: 2_000_000_000, request: { message: "LiOS doctor" } },
+      notificationPolicy: { enabled: true, channels: ["in_app"], notifyOn: ["failure"], minimumRelevanceScore: 0, cooldownMinutes: 60, suppressUnchanged: true },
+    });
+    await db.insert(schema.projectAutomationRuns).values({ id: runId, workflowId, projectId: project.id, ownerUserId: reviewer.id, triggerType: "manual", status: "failed", startedAt: new Date() });
+    await db.insert(schema.projectAutomationNotifications).values({ id: notificationId, workflowId, runId, projectId: project.id, ownerUserId: reviewer.id, status: "delivered", reason: "failure", title: "Inspect Home", body: "No workflow or provider execution occurred." });
+    const owner = await connect("reviewer");
+    const intent = { homeId, userId: reviewer.id, deviceId: deviceIds.reviewer, projectId: project.id, notificationId };
+    const ack = await owner.call("notifications.read.replay", intent);
+    assert.ok(ack.ok);
+    const again = await owner.call("notifications.read.replay", intent);
+    assert.ok(again.ok);
+    const acknowledgement = z.object({ notification: z.object({ readAt: z.string() }) });
+    assert.equal(acknowledgement.parse(ack.payload).notification.readAt, acknowledgement.parse(again.payload).notification.readAt);
+    for (const changed of [{ homeId: crypto.randomUUID() }, { userId: stranger.id }, { deviceId: deviceIds.analyst }, { method: "conversation.start" }]) {
+      assert.equal((await owner.call("notifications.read.replay", { ...intent, ...changed })).ok, false);
+    }
+    const readOnly = await connect("reviewerRead");
+    assert.equal((await readOnly.call("notifications.read.replay", { ...intent, deviceId: deviceIds.reviewerRead })).ok, false);
+    const foreign = await connect("stranger");
+    await db.update(pairedDevices).set({ revokedAt: new Date() }).where(eq(pairedDevices.id, deviceIds.reviewer));
+    assert.equal((await owner.call("notifications.read.replay", intent)).ok, false, "revocation is rechecked for an already-authenticated native session");
+    await db.update(pairedDevices).set({ revokedAt: null }).where(eq(pairedDevices.id, deviceIds.reviewer));
+    assert.equal((await foreign.call("notifications.read.replay", { ...intent, userId: stranger.id, deviceId: deviceIds.stranger })).ok, false);
+    owner.close(); readOnly.close(); foreign.close();
+  });
+
   await t.test("an exact review is applied once, replays idempotently and refuses a changed payload under the same request", async () => {
     const { decision, receipt } = await makeDecision(reviewer.id);
     const client = await connect("reviewer");
@@ -171,6 +249,39 @@ test("paired-device continuity and exact-request Decision review use current Hom
     const [stored] = await db.select().from(decisionCases).where(eq(decisionCases.id, decision.id));
     assert.equal(stored!.status, "rejected");
     client.close();
+  });
+
+  await t.test("organization policy revision invalidates native review drafts even when effective grants stay equal, and revocation denies replay", async () => {
+    const [org] = await db.insert(schema.organizations).values({ name: "Native institutional review", slug: crypto.randomUUID() }).returning();
+    const [admin] = await db.insert(users).values({ ...identityRow("internal_analyst"), role: "internal_admin", organizationId: org.id }).returning();
+    const policy = structuredClone(DEFAULT_ENTERPRISE_POLICY);
+    await saveEnterprisePolicy(org.id, policy, admin);
+    await db.update(users).set({ organizationId: org.id }).where(eq(users.id, reviewer.id));
+    await db.update(pairedDevices).set({ organizationId: org.id }).where(eq(pairedDevices.id, deviceIds.reviewer));
+    reviewer.organizationId = org.id;
+    const client = await connect("reviewer");
+    try {
+      const { decision } = await makeDecision(reviewer.id);
+      const original = await readBinding(client, decision.id);
+      await saveEnterprisePolicy(org.id, policy, admin);
+      const stale = await client.call("decision.review.submit", submission(original.binding));
+      assert.equal(stale.ok, false, "an old offline draft cannot retain authority across an institutional policy revision");
+      const fresh = await readBinding(client, decision.id);
+      assert.notEqual(fresh.binding.policyDigest, original.binding.policyDigest);
+      const draft = submission(fresh.binding);
+      const applied = await client.call("decision.review.submit", draft);
+      assert.equal(applied.ok, true, JSON.stringify(applied));
+      const revoked = structuredClone(policy);
+      revoked.roles.grants.internal_compliance = revoked.roles.grants.internal_compliance.filter(permission => permission !== "review_decisions");
+      await saveEnterprisePolicy(org.id, revoked, admin);
+      assert.equal((await client.call("decision.review.submit", draft)).ok, false, "exact prior success cannot bypass current organization revocation");
+      assert.equal((await db.select().from(decisionApprovals).where(eq(decisionApprovals.decisionId, decision.id))).length, 1);
+    } finally {
+      client.close();
+      reviewer.organizationId = null;
+      await db.update(users).set({ organizationId: null }).where(eq(users.id, reviewer.id));
+      await db.update(pairedDevices).set({ organizationId: null }).where(eq(pairedDevices.id, deviceIds.reviewer));
+    }
   });
 
   await t.test("a stale draft cannot finalize over a decision head that changed after it was authored", async () => {

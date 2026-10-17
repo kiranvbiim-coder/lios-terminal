@@ -171,9 +171,24 @@
     "Generic lock-screen notification text on Apple, Android and Wear.",
     "Android ambiguous delivery reconciles the exact prior request via canonical Home, not a changed review head or local success assumption.",
     "Apple handshake completion rejects stale connection generations and mismatched authenticated device identity.",
-    "Approval migration is additive to the public schema; private snapshots were not copied."
+    "Approval migration is additive to the public schema; private snapshots were not copied.",
+    "Native continuity locally adapts the imported clients: request-scoped reconnect cursors, bounded encrypted Android snapshots/navigation, explicit P4 history/pagination, same-Home/owner/device notification-read intents and truthful Watch receipt wording. Original sourceSha256 values remain import evidence, not hashes of modified destinations."
+  ],
+  "locallyModifiedPaths": [
+    "apps/apple/Shared/DeviceSecurity.swift",
+    "apps/apple/Shared/HomeGateway.swift",
+    "apps/apple/Phone/HomeModel.swift",
+    "apps/apple/Phone/LiOSApp.swift",
+    "apps/apple/Phone/PhoneWatchBridge.swift",
+    "apps/apple/Tests/DeviceProtocolTests.swift",
+    "apps/android/core/src/main/java/com/lios/nativeclient/HomeActivity.kt"
+  ],
+  "localExtensions": [
+    "apps/apple/Shared/ContinuityState.swift",
+    "apps/android/core/src/main/java/com/lios/nativeclient/ContinuityState.kt"
   ],
   "verification": {
+    "nativeContinuityChanges": "PASS (source/protocol): host Swift Shared typecheck and Phone/Watch/Tests parse; 11 real-database Gateway continuity/history/pagination/read-intent authority checks; actual pinned TLS, Ed25519 single-use pairing and separate owner-approved two-client Home journey retained exact Artifact v1/v2, reattached completed Doctor request from runSeq 7 without a second start, shared canonical Chat and reconciled notification-read replay with stable timestamp and wrong-Home refusal. Native SDK/UI/WatchConnectivity/shipping qualification remains NOT_RUN.",
     "homeContracts": "PASS: typecheck; 39 continuity/Decision checks; 45 existing pairing/TLS/Gateway/conversation checks passed with one Windows-only skip; production source build passed.",
     "homeRuntime": "PASS: compiled retained Home, owner-pinned TLS, signed pairing and explicit owner approval, canonical Chat continuity, explicit rejection and exact replay, changed-payload and read-only release refusals. Native-created Chat observed on existing desktop web surface.",
     "appleProtocol": "PASS: production identity/endpoint code compiled and ran Ed25519/tamper/unsafe-endpoint smoke; Gateway code typechecked on macOS; all Apple source parsed. Not an iOS/watchOS app build.",

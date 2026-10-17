@@ -4,6 +4,7 @@ import { applyArtifactModelMaintenance, reviewArtifactModelMaintenance, useArtif
 import type { ArtifactDetail } from "@/lib/useArtifacts";
 import { ArtifactModelMaintenanceReviewSession, initialModelMaintenanceReviewState, modelMaintenanceReviewMatches } from "@/lib/artifactModelMaintenanceReview";
 import type { ModelMaintenanceContext, ModelMaintenanceReviewState } from "@/lib/artifactModelMaintenanceReview";
+import { createP9Workflow, useInvalidateP9Automation } from "@/lib/useP9Automation";
 
 const PAGE_SIZE = 40;
 function Periods({ periods }: { periods: ArtifactModelMaintenancePeriod[] }) {
@@ -31,6 +32,9 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
   const [state, setState] = useState<ModelMaintenanceReviewState>(initialModelMaintenanceReviewState);
   const [changesPage, setChangesPage] = useState(0);
   const [preservedPage, setPreservedPage] = useState(0);
+  const [monitorBusy, setMonitorBusy] = useState(false);
+  const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
+  const invalidateAutomation = useInvalidateP9Automation();
   const optionsMatch = options.data?.artifactId === artifact.id && options.data.version === version.version && options.data.contentHash === version.contentHash;
   const context: ModelMaintenanceContext = { artifactId: artifact.id, projectId: artifact.projectId, version: version.version, headVersion: artifact.headVersion, contentHash: version.contentHash,
     available: currentHead && !blocked && optionsMatch && options.data?.canApply === true && !options.isError };
@@ -61,6 +65,23 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
   const disabled = !context.available || state.pending !== null || savedResultAwaitingRefresh;
   const changes = review?.changes.slice(changesPage * PAGE_SIZE, (changesPage + 1) * PAGE_SIZE) ?? [];
   const preserved = review?.preservedCells.slice(preservedPage * PAGE_SIZE, (preservedPage + 1) * PAGE_SIZE) ?? [];
+  const monitorSource = async () => {
+    if (monitorBusy || disabled || !selected || !options.data) return;
+    setMonitorBusy(true); setMonitorMessage(null);
+    try {
+      await createP9Workflow(artifact.projectId, {
+        schemaVersion: "1", name: `${artifact.title.slice(0, 140)} · source review`, template: "custom", enabled: true,
+        description: "Hourly review-only observation of new eligible immutable snapshots. Never applies a model update.",
+        trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 60 } },
+        action: { kind: "model_refresh_review", acceptedArtifact: { artifactId: artifact.id, version: version.version, contentHash: version.contentHash }, sourceProvider: selected.provider, engineRev: options.data.engineRev },
+        notificationPolicy: { enabled: true, channels: ["in_app"], notifyOn: ["failure", "change_detected"], cooldownMinutes: 60, suppressUnchanged: true, minimumRelevanceScore: 0.5 },
+        sourceRefs: [], engineRefs: [options.data.engineRev], artifactRefs: [artifact.id],
+      });
+      invalidateAutomation(artifact.projectId);
+      setMonitorMessage("Review-only monitor saved in Automations. Its accepted model/provider are fixed; inspect new source reviews there and explicitly apply through this existing maintenance surface.");
+    } catch (error) { setMonitorMessage(error instanceof Error ? error.message : "Model source monitoring could not be saved."); }
+    finally { setMonitorBusy(false); }
+  };
   return <section aria-label="Update model reported periods" data-testid="artifact-model-maintenance" aria-busy={state.pending !== null} className="mb-4 space-y-3 rounded-lg border border-cyan-300/25 p-3">
     <h3 className="text-[14px] font-semibold">Update this model from an owned snapshot</h3>
     <p className="text-sm text-muted-foreground">Uses only saved model v{version.version}. Save local worksheet edits first. Choose a frozen dataset already owned by you, inspect reported periods and actuals, then explicitly apply. No provider fetch, ticker entry, automatic selection, execution, or resume.</p>
@@ -82,6 +103,8 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
     </>}
     {state.selected && <div data-testid="artifact-model-maintenance-selected" className="max-h-64 overflow-auto rounded border border-border/40 p-2"><Snapshot target={state.selected}/></div>}
     <button type="button" data-testid="artifact-model-maintenance-review" disabled={disabled || !targetStillAvailable} onClick={() => void session.current?.review()} className="rounded border border-cyan-300/40 px-3 py-2 text-sm text-cyan-200 disabled:opacity-40">{state.pending === "review" ? "Reviewing saved model and snapshot…" : "Review reported-period update"}</button>
+    {selected && <button type="button" disabled={disabled || monitorBusy} onClick={() => void monitorSource()} className="ml-2 rounded border border-border/50 px-3 py-2 text-sm disabled:opacity-40">{monitorBusy ? "Saving review monitor…" : "Monitor this model/provider hourly · review only"}</button>}
+    {monitorMessage && <p role="status" className="text-sm text-muted-foreground">{monitorMessage}</p>}
     {review && <div data-testid="artifact-model-maintenance-review-details" data-review-hash={review.reviewHash} className="space-y-3">
       <dl className="space-y-1 break-all font-terminal text-[12px]">
         <div><dt className="inline text-muted-foreground">Captured model head / hash: </dt><dd className="inline">{review.artifactId} · v{review.version} · {review.contentHash}</dd></div>

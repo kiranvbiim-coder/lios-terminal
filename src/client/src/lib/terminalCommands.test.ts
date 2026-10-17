@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseTerminalCommand } from "./terminalCommands";
+import { dispatchCanonicalNavigation, parseTerminalCommand, resolveWorkSearchLibraryTarget, searchCanonicalNavigation } from "./terminalCommands";
+import { parseFlexibleTerminalCommand } from "./terminalIntentCommands";
 
 test("parseTerminalCommand treats a bare ticker as a quote command", () => {
   assert.deepEqual(parseTerminalCommand("aapl"), {
@@ -98,10 +99,59 @@ test("parseTerminalCommand opens readiness and connector registry panels", () =>
   });
   assert.deepEqual(parseTerminalCommand("CONNECTORS"), {
     raw: "CONNECTORS",
-    view: "connectors",
+    view: "missioncontrol",
+    navigation: "connections",
   });
   assert.deepEqual(parseTerminalCommand("CONFLICTS"), {
     raw: "CONFLICTS",
     view: "conflictdetector",
   });
+});
+
+test("reserved application destinations dispatch to canonical surfaces without ticker or execution actions", () => {
+  const opened: string[] = [];
+  const selection = { projectId: 42, chatId: 73, draft: "Unsent work" };
+  for (const [query, expected] of [
+    ["automations", "automations"], ["open library", "library"], ["saved artifacts", "library"],
+    ["history", "chats"], ["go to projects", "projects"], ["Connections & AI", "connections"],
+    ["AI", "connections"], ["LiOS doctor", "connections"], ["conversation", "conversation"],
+  ]) {
+    const command = parseFlexibleTerminalCommand(query);
+    assert.ok(command?.navigation, query);
+    assert.equal(command.symbol, undefined, "Navigation must never manufacture a ticker");
+    dispatchCanonicalNavigation(command.navigation, {
+      openConnections: () => opened.push("connections"),
+      openProjectSection: (section) => opened.push(section),
+    });
+    assert.equal(opened.at(-1), expected, query);
+  }
+  assert.deepEqual(selection, { projectId: 42, chatId: 73, draft: "Unsent work" });
+});
+
+test("navigation metadata searches supported destinations without suggesting runnable tools", () => {
+  assert.equal(searchCanonicalNavigation("automations")[0]?.target, "automations");
+  assert.equal(searchCanonicalNavigation("saved artifacts")[0]?.target, "library");
+  assert.equal(searchCanonicalNavigation("connections")[0]?.target, "connections");
+  assert.match(searchCanonicalNavigation("doctor")[0]?.description ?? "", /Does not.*run a repair/);
+  assert.deepEqual(searchCanonicalNavigation("unregistered destination"), []);
+});
+
+test("explicit ticker lookup remains available for reserved navigation words", () => {
+  assert.deepEqual(parseFlexibleTerminalCommand("QUOTE AUTOMATIONS"), {
+    raw: "QUOTE AUTOMATIONS", symbol: "AUTOMATIONS", view: "quote",
+  });
+  assert.deepEqual(parseFlexibleTerminalCommand("AI QUOTE"), {
+    raw: "AI QUOTE", symbol: "AI", view: "quote",
+  });
+  assert.deepEqual(parseFlexibleTerminalCommand("AAPL"), { raw: "AAPL", symbol: "AAPL", view: "quote" });
+  assert.deepEqual(parseFlexibleTerminalCommand("DCF NVDA"), { raw: "DCF NVDA", symbol: "NVDA", view: "valuation" });
+});
+
+test("work search navigation retains exact object identity and refuses incomplete matches", () => {
+  const result = { kind: "artifact" as const, id: "search-row", title: "Same title", snippet: null, projectId: 42, chatId: null, artifactId: "artifact-exact", resourceId: "wrong-file", updatedAt: "2026-10-17" };
+  assert.deepEqual(resolveWorkSearchLibraryTarget(result), { projectId: 42, artifactId: "artifact-exact", resourceId: null });
+  assert.deepEqual(resolveWorkSearchLibraryTarget({ ...result, kind: "file", resourceId: "file-exact" }), { projectId: 42, artifactId: null, resourceId: "file-exact" });
+  assert.equal(resolveWorkSearchLibraryTarget({ ...result, artifactId: null }), null);
+  assert.equal(resolveWorkSearchLibraryTarget({ ...result, projectId: null }), null);
+  assert.equal(resolveWorkSearchLibraryTarget({ ...result, kind: "file", resourceId: null }), null);
 });

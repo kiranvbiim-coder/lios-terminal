@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { and, desc, eq, isNull, lte, or } from "drizzle-orm";
-import { datasetSnapshots, portfolios, positions } from "@shared/schema";
+import { and, desc, eq, isNull, lte, or, getTableColumns } from "drizzle-orm";
+import { datasetSnapshots, portfolios, positions, users } from "@shared/schema";
 import {
   alternativePayloadSchemas,
   alternativeSnapshotInputSchema,
@@ -8,10 +8,72 @@ import {
   type AlternativeSnapshotInput,
 } from "@shared/pointInTimeAlternativeData";
 import { getDb } from "./db";
-import { ensureEntitlementPolicy } from "./dataEntitlementStore";
+import { ensureEntitlementPolicy, getApplicableEntitlementPolicy, getEntitlementPolicyById } from "./dataEntitlementStore";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 import { getOptionsChain } from "./lseData";
 import { getFmpAnalystEstimates } from "./fmpData";
+import type { TenantContext } from "./tenantContext";
+import type { ProviderEntitlementDecision } from "@shared/universalDataFabric";
+
+const { payload: _retainedPayload, ...retainedMetadataColumns } = getTableColumns(datasetSnapshots);
+type RetainedMetadata = Omit<typeof datasetSnapshots.$inferSelect, "payload">;
+
+function retainedDenied(): never {
+  throw Object.assign(new Error("Retained source is unavailable under current owner, availability or permitted-use policy."), { status: 403 });
+}
+
+/** P5 metadata admission deliberately excludes payload. Organization-null is
+ * storage scope, not a public disclosure grant. Historical clocks never
+ * replace today's owner/account/rights/expiry checks. */
+async function requireRetainedAuthority(metadata: RetainedMetadata, context: TenantContext, now = new Date()): Promise<ProviderEntitlementDecision> {
+  const db = getDb();
+  const [actor] = await db.select().from(users).where(eq(users.id, context.userId)).limit(1);
+  const [owner] = metadata.createdByUserId === null ? [] : await db.select().from(users).where(eq(users.id, metadata.createdByUserId)).limit(1);
+  if (!actor?.active || actor.mustChangePassword || actor.lockedUntil && actor.lockedUntil > now || actor.organizationId !== context.organizationId || actor.role !== context.role
+    || !owner?.active || owner.mustChangePassword || owner.lockedUntil && owner.lockedUntil > now) retainedDenied();
+  if (metadata.organizationId === null
+    ? metadata.createdByUserId !== context.userId
+    : metadata.organizationId !== context.organizationId || owner.organizationId !== metadata.organizationId) retainedDenied();
+  if (metadata.availableAt > now || metadata.expiresAt && metadata.expiresAt <= now || !metadata.source.trim() || !metadata.provider.trim()) retainedDenied();
+  if (!metadata.entitlementPolicyId) retainedDenied();
+  const captured = await getEntitlementPolicyById(metadata.entitlementPolicyId);
+  const policy = await getApplicableEntitlementPolicy(metadata.provider, metadata.dataClass, now);
+  if (!captured || captured.provider !== metadata.provider || captured.dataClass !== metadata.dataClass
+    || !policy?.reviewedAt || policy.reviewedAt > now || policy.licenseType === "unknown"
+    || !policy.permittedUses.includes("internal_research")) retainedDenied();
+  return { decision: "allowed", policyId: policy.id, permittedUses: [...policy.permittedUses], reasons: ["Current P5 reviewed source policy permits internal research for this current owner-scoped retained source."] };
+}
+
+export async function getRetainedAlternativeMetadata(dataClass: AlternativeDataClass, entityKey: string, context: TenantContext, asOf = new Date()) {
+  const scope = context.organizationId === null
+    ? and(isNull(datasetSnapshots.organizationId), eq(datasetSnapshots.createdByUserId, context.userId))
+    : or(and(isNull(datasetSnapshots.organizationId), eq(datasetSnapshots.createdByUserId, context.userId)), eq(datasetSnapshots.organizationId, context.organizationId));
+  const [metadata] = await getDb().select(retainedMetadataColumns).from(datasetSnapshots).where(and(
+    eq(datasetSnapshots.dataClass, dataClass), eq(datasetSnapshots.entityKey, entityKey.toUpperCase()),
+    lte(datasetSnapshots.availableAt, asOf), scope,
+  )).orderBy(desc(datasetSnapshots.availableAt), desc(datasetSnapshots.createdAt)).limit(1);
+  if (!metadata) return null;
+  await requireRetainedAuthority(metadata, context);
+  return metadata;
+}
+
+/** Re-admit before reading payload and after retrieval. Comparing all metadata
+ * prevents an in-flight owner/source/hash/policy change from authorizing bytes. */
+export async function readPermittedAlternativeDataset(metadata: RetainedMetadata, context: TenantContext) {
+  const loadMetadata = async () => {
+    const [current] = await getDb().select(retainedMetadataColumns).from(datasetSnapshots).where(eq(datasetSnapshots.id, metadata.id)).limit(1);
+    if (!current || JSON.stringify(current) !== JSON.stringify(metadata)) retainedDenied();
+    const entitlement = await requireRetainedAuthority(current, context);
+    return entitlement;
+  };
+  await loadMetadata();
+  const [row] = await getDb().select({ payload: datasetSnapshots.payload }).from(datasetSnapshots).where(and(eq(datasetSnapshots.id, metadata.id), eq(datasetSnapshots.contentHash, metadata.contentHash))).limit(1);
+  const entitlement = await loadMetadata();
+  if (!row) retainedDenied();
+  if (stableSnapshotHash({ payload: row.payload, provider: metadata.provider, lineage: metadata.lineage }) !== metadata.contentHash) retainedDenied();
+  const snapshot = rowToSnapshot({ ...metadata, payload: row.payload });
+  return { snapshot, entitlement };
+}
 
 function bounds(input: AlternativeSnapshotInput): { start: string | null; end: string | null; count: number; missing: number } {
   let dates: string[] = []; let count = 0; let missing = 0;

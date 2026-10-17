@@ -8,6 +8,10 @@ import {
   evaluateEnterpriseExport,
   evaluateEnterpriseSharing,
   normalizeEnterprisePolicy,
+  canUseEnterprisePermission,
+  DECISION_PERMISSIONS,
+  DECISION_ROLE_CEILINGS,
+  type EnterpriseRole,
 } from "./enterpriseContracts";
 
 test("enterprise policy defaults fail closed for external capabilities", () => {
@@ -39,4 +43,27 @@ test("enterprise connector, AI, sharing, and export decisions use the same polic
   assert.equal(evaluateEnterpriseExport(policy, "csv", "client_user").allowed, false);
   assert.equal(evaluateEnterpriseExport(policy, "json", "client_user").allowed, false);
   assert.equal(evaluateEnterpriseExport(policy, "json", "internal_admin").allowed, true);
+});
+
+test("Decision grants migrate legacy policy once and can only narrow existing security-role ceilings", () => {
+  const legacy = structuredClone(DEFAULT_ENTERPRISE_POLICY);
+  legacy.version = 1;
+  for (const role of Object.keys(legacy.roles.grants) as EnterpriseRole[]) {
+    legacy.roles.grants[role] = legacy.roles.grants[role].filter((permission) => !(DECISION_PERMISSIONS as readonly string[]).includes(permission));
+  }
+  const migrated = normalizeEnterprisePolicy(legacy);
+  assert.equal(migrated.version, 2);
+  for (const role of Object.keys(migrated.roles.grants) as EnterpriseRole[]) {
+    for (const permission of DECISION_PERMISSIONS) {
+      assert.equal(canUseEnterprisePermission(migrated, role, permission), DECISION_ROLE_CEILINGS[role].includes(permission));
+    }
+  }
+  migrated.roles.grants.internal_compliance = ["read_decisions"];
+  assert.equal(canUseEnterprisePermission(normalizeEnterprisePolicy(migrated), "internal_compliance", "review_decisions"), false);
+  for (const role of Object.keys(migrated.roles.grants) as EnterpriseRole[]) {
+    migrated.roles.grants[role] = [...DECISION_PERMISSIONS];
+    for (const permission of DECISION_PERMISSIONS) {
+      assert.equal(canUseEnterprisePermission(migrated, role, permission), DECISION_ROLE_CEILINGS[role].includes(permission), `${role}/${permission}`);
+    }
+  }
 });

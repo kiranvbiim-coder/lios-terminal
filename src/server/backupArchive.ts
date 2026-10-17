@@ -14,9 +14,11 @@ import * as schema from "@shared/schema";
 import { resolveMigrationsFolder } from "./db";
 import { databaseDir, dataRoot } from "./dataRoot";
 import { BackupDecryptStream, BackupEncryptStream, isEncryptedBackupHeader } from "./backupCrypto";
-import { exportDatabase, importDatabase, readExportManifest, type DatabaseExportManifest } from "./databaseTransfer";
+import { exportDatabase, importDatabase, readExportManifest, withExclusiveDatabaseRestore, type DatabaseExportManifest } from "./databaseTransfer";
 import { createVaultMigrationEnvelope } from "./credentialVault";
 import { normalizeArchivePath, padTo512, TAR_END, TarFormatError, TarReader, tarFileHeader } from "./tarFormat";
+import { assertHomeRestoreOffline, RESTORE_STATE_DIRECTORY, restoreRecoveryMessage } from "./backupRestoreState";
+import { HomeRestoreRecovery, syncRestorePath, syncRestoreTree } from "./backupRestoreRecovery";
 
 /**
  * GM-06: one portable, verified backup of everything a Home owns.
@@ -593,10 +595,47 @@ export interface RestoreResult {
   credentialMigrationEnvelope: Buffer | null;
 }
 
+export interface RestoreOptions {
+  passphrase?: string | undefined;
+  replace?: boolean;
+  /** Destination credential custody is finalized under the same recovery/DB transaction. */
+  finalizeCredentials?: (envelope: Buffer) => void;
+}
+
+/** Explicit offline operator recovery also resolves an ambiguous database commit after a crash. */
+export async function recoverBackupRestore(db: DrizzleDb): Promise<{ retainedRecoveryDirectory: string }> {
+  const root = dataRoot();
+  assertHomeRestoreOffline(root);
+  const recovery = HomeRestoreRecovery.open(root, assertSafeRestoreFileTarget);
+  assertRestorableHomeManifest({
+    format: BACKUP_FORMAT, createdAt: "", liosVersion: "", encrypted: true, sourceEngine: "pglite",
+    database: { tables: 0, rows: 0, migrations: 0 }, skipped: [], notes: [],
+    entries: recovery.journal.files.map((item) => ({ path: `files/${item.relative}`, kind: "file", sha256: "0".repeat(64), bytes: 0 })),
+  });
+  const release = recovery.claimRecovery();
+  try {
+    if (recovery.journal.phase !== "preparing") {
+      readExportManifest(recovery.priorDatabase);
+      recovery.phase("rolling_back");
+      await withExclusiveDatabaseRestore(db, async (tx) => {
+        await importDatabase(tx, recovery.priorDatabase, {
+          replace: true, existingTransaction: true, refuseConcurrentWrites: true,
+          beforeCommit: () => recovery.rollbackFiles(assertSafeRestoreFileTarget),
+        });
+      });
+    }
+    return { retainedRecoveryDirectory: recovery.retire("rolled_back") };
+  } catch (error) {
+    throw new BackupError(`${restoreRecoveryMessage(root)} Recovery could not finish: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    release();
+  }
+}
+
 export async function restoreBackup(
   db: DrizzleDb,
   file: string,
-  options: { passphrase?: string | undefined; replace?: boolean } = {},
+  options: RestoreOptions = {},
 ): Promise<RestoreResult> {
   const root = dataRoot();
   // Reject redirected Home storage *before* creating the extraction staging
@@ -611,53 +650,87 @@ export async function restoreBackup(
   if (!preparedRoot.isDirectory() || preparedRoot.isSymbolicLink()) {
     throw new BackupError("The LiOS restore destination must be a real Home directory.");
   }
+  assertHomeRestoreOffline(root);
   const staging = path.join(root, `.lios-restore-${process.pid}-${crypto.randomUUID()}`);
+  const previous = reserveRestorePreviousDirectory(root);
+  let recovery: HomeRestoreRecovery;
+  try {
+    recovery = HomeRestoreRecovery.reserve(root, staging, previous);
+    assertHomeRestoreOffline(root);
+  } catch (error) {
+    // This uniquely owned, still-empty slot is the only path we may remove.
+    fs.rmdirSync(previous);
+    throw error;
+  }
   let extractionOwned = false;
+  let resolved = false;
+  let committed = false;
+  let credentialMigrationEnvelope: Buffer | null = null;
   try {
     const manifest = await extractBackup(file, staging, options);
     extractionOwned = true;
     assertRestorableHomeManifest(manifest);
-    // Validate all Home destinations before the database import. Otherwise a
-    // symlinked parent could refuse the file stage after DB state changed.
-    for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file"
-      && candidate.path !== BACKUP_VAULT_MIGRATION_ENTRY)) {
-      assertSafeRestoreFileTarget(root, entry.path.slice("files/".length));
+    const files = manifest.entries.filter((entry) => entry.kind === "file" && entry.path !== BACKUP_VAULT_MIGRATION_ENTRY);
+    const relatives = files.map((entry) => entry.path.slice("files/".length));
+    if (options.finalizeCredentials) {
+      for (const relative of ["vault.key", "credential-vault.enc.json"]) {
+        if (!relatives.includes(relative)) relatives.push(relative);
+      }
     }
-    // Re-check the database export itself, then load it atomically. A refused or failed import changes nothing.
+    for (const relative of relatives) assertSafeRestoreFileTarget(root, relative);
+    const envelope = manifest.entries.find((entry) => entry.path === BACKUP_VAULT_MIGRATION_ENTRY);
+    if (envelope) credentialMigrationEnvelope = fs.readFileSync(path.join(staging, envelope.path));
     readExportManifest(path.join(staging, "db"));
-    await importDatabase(db, path.join(staging, "db"), { replace: options.replace === true });
-
-    let previous: string | null = null;
-    let restored = 0;
-    let credentialMigrationEnvelope: Buffer | null = null;
-    for (const entry of manifest.entries.filter((candidate) => candidate.kind === "file")) {
-      if (entry.path === BACKUP_VAULT_MIGRATION_ENTRY) {
-        credentialMigrationEnvelope = fs.readFileSync(path.join(staging, entry.path));
-        continue;
-      }
-      const relative = entry.path.slice("files/".length);
-      // The DB import is async, so verify the filesystem boundary again.
-      const target = assertSafeRestoreFileTarget(root, relative);
-      fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-      if (fs.existsSync(target)) {
-        if (!previous) previous = reserveRestorePreviousDirectory(root);
-        const keep = path.join(previous, relative);
-        fs.mkdirSync(path.dirname(keep), { recursive: true, mode: 0o700 });
-        fs.renameSync(target, keep);
-      }
-      fs.renameSync(path.join(staging, entry.path), target);
-      restored += 1;
+    syncRestoreTree(staging);
+    await withExclusiveDatabaseRestore(db, async (tx) => {
+      await exportDatabase(tx, recovery.priorDatabase, process.env.DATABASE_URL ? "postgres" : "pglite", { existingTransaction: true });
+      recovery.prepareFiles(relatives, assertSafeRestoreFileTarget);
+      await importDatabase(tx, path.join(staging, "db"), {
+        replace: options.replace === true, existingTransaction: true, refuseConcurrentWrites: true,
+        beforeCommit: () => {
+          recovery.phase("publishing");
+          for (const entry of files) recovery.publish(entry.path.slice("files/".length), path.join(staging, entry.path), assertSafeRestoreFileTarget);
+          if (credentialMigrationEnvelope && options.finalizeCredentials) {
+            options.finalizeCredentials(credentialMigrationEnvelope);
+            for (const relative of ["vault.key", "credential-vault.enc.json"]) {
+              const target = assertSafeRestoreFileTarget(root, relative);
+              if (fs.existsSync(target)) syncRestorePath(target);
+            }
+            syncRestorePath(root);
+          }
+          // Durable before COMMIT: its outcome may be unknowable after a crash.
+          // Startup therefore refuses this Home until explicit prior-state recovery.
+          recovery.phase("committing");
+        },
+      });
+    });
+    committed = true;
+    recovery.retire("complete");
+    resolved = true;
+    return { manifest, filesRestored: files.length, previousFilesDir: recovery.journal.files.some((entry) => entry.original) ? previous : null, credentialMigrationEnvelope };
+  } catch (error) {
+    credentialMigrationEnvelope?.fill(0);
+    if (committed) {
+      throw new BackupError(`Restore database and Home files committed, but final audit retirement failed. Preserve recovery custody and inspect before another restore. ${error instanceof Error ? error.message : String(error)}`);
     }
-    return {
-      manifest,
-      filesRestored: restored,
-      previousFilesDir: previous,
-      credentialMigrationEnvelope,
-    };
+    if (recovery.journal.phase === "preparing") {
+      recovery.discardUnprepared();
+      resolved = true;
+      throw new BackupError(`Restore refused before Home publication; existing database and files were not replaced. ${error instanceof Error ? error.message : String(error)}`);
+    }
+    try {
+      await recoverBackupRestore(db);
+      resolved = true;
+    } catch (rollbackError) {
+      throw new BackupError(`Restore failed; Home remains blocked pending recovery. ${restoreRecoveryMessage(root)} Restore: ${error instanceof Error ? error.message : String(error)} Recovery: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
+    }
+    throw new BackupError(`Restore failed; the prior database and Home files were restored. ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    // extractBackup cleans its own failed reservation. Do not delete a path
-    // whose ownership this restore never acquired (e.g. a collision).
-    if (extractionOwned) fs.rmSync(staging, { recursive: true, force: true });
+    // After a durable terminal outcome this is only owned extraction cleanup.
+    // Leave it for inspection on failure; cleanup must never mask a commit.
+    if (resolved && extractionOwned) {
+      try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* Terminal journal retains the outcome and prior-state custody. */ }
+    }
   }
 }
 

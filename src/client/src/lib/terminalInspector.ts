@@ -1,4 +1,5 @@
 import type { ViewMode } from "./terminalTypes";
+import type { ArtifactInspectionTarget } from "@shared/artifactInspection";
 
 export interface TerminalInspectorRequest {
   view: ViewMode;
@@ -7,6 +8,7 @@ export interface TerminalInspectorRequest {
   value?: string | number | boolean | null;
   metricKey?: string;
   sourceHint?: string;
+  target?: ArtifactInspectionTarget;
 }
 
 const EVENT_NAME = "lios:mini-inspector";

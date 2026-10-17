@@ -37,7 +37,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir -r python-service/requirements.txt
 
 COPY . .
-RUN npm run build
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 RUN groupadd --gid 10001 lios \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin lios \

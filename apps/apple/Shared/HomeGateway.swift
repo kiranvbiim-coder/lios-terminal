@@ -99,7 +99,10 @@ import Combine
     private func receive(_ frame: [String: Any]) async throws {
         if frame["type"] as? String == "res", let id = frame["id"] as? String, let waiter = pending.removeValue(forKey: id) {
             if frame["ok"] as? Bool == true { waiter.resume(returning: frame["payload"] as? [String: Any] ?? [:]) }
-            else { waiter.resume(throwing: ClientFailure(message: (frame["error"] as? [String: Any])?["message"] as? String ?? "Home denied the request.")) }
+            else {
+                let error = frame["error"] as? [String: Any]
+                waiter.resume(throwing: ClientFailure(message: error?["message"] as? String ?? "Home denied the request.", code: error?["code"] as? String))
+            }
             return
         }
         guard frame["type"] as? String == "event", let event = frame["event"] as? String else { return }

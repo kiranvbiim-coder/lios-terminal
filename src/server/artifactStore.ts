@@ -466,10 +466,11 @@ export async function getArtifactVersion(
 export async function listProjectArtifacts(
   ctx: TenantContext,
   projectId: number,
-  input: { status?: "active" | "archived"; trash?: boolean; kind?: string; limit?: number } = {},
+  input: { status?: "active" | "archived"; trash?: boolean; kind?: string; limit?: number; offset?: number } = {},
 ): Promise<ProjectArtifact[]> {
   await validateArtifactProject(ctx, projectId);
   const limit = Math.min(Math.max(input.limit ?? 100, 1), 500);
+  const offset = z.number().int().min(0).max(1_000_000).parse(input.offset ?? 0);
   const status = input.status ?? (input.trash ? "archived" : "active");
   const conditions = [
     artifactTenantFilter(ctx),
@@ -478,7 +479,7 @@ export async function listProjectArtifacts(
     input.trash ? isNotNull(projectArtifacts.trashedAt) : isNull(projectArtifacts.trashedAt),
     ...(input.kind ? [eq(projectArtifacts.kind, artifactKindSchema.parse(input.kind))] : []),
   ];
-  return getDb().select().from(projectArtifacts).where(and(...conditions)).orderBy(desc(projectArtifacts.updatedAt)).limit(limit);
+  return getDb().select().from(projectArtifacts).where(and(...conditions)).orderBy(desc(projectArtifacts.updatedAt), desc(projectArtifacts.id)).limit(limit).offset(offset);
 }
 
 export async function listOwnedArtifacts(
@@ -499,6 +500,16 @@ export async function listArtifactVersions(ctx: TenantContext, artifactId: strin
   return getDb().select().from(projectArtifactVersions)
     .where(eq(projectArtifactVersions.artifactId, artifactId))
     .orderBy(desc(projectArtifactVersions.version));
+}
+
+/** Bounded native history discovery never loads retained work bodies merely to list version identities. */
+export async function listArtifactVersionSummaries(ctx: TenantContext, artifactId: string, input: { offset: number; limit: number }) {
+  await getArtifact(ctx, artifactId);
+  const offset = z.number().int().min(0).max(1_000_000).parse(input.offset);
+  const limit = z.number().int().min(1).max(101).parse(input.limit);
+  return getDb().select({ version: projectArtifactVersions.version, contentHash: projectArtifactVersions.contentHash, createdAt: projectArtifactVersions.createdAt })
+    .from(projectArtifactVersions).where(eq(projectArtifactVersions.artifactId, artifactId))
+    .orderBy(desc(projectArtifactVersions.version)).limit(limit).offset(offset);
 }
 
 export async function listArtifactReferences(ctx: TenantContext, artifactId: string): Promise<ProjectArtifactReference[]> {

@@ -8,14 +8,16 @@ import { deviceNetwork } from "./deviceRuntime";
 import { tenantContext } from "./tenantContext";
 import { getProject, listProjects } from "./projectStore";
 import { createProjectChat, getProjectChat, listProjectChats, listProjectChatMessages } from "./projectChatStore";
-import { getArtifact, getArtifactVersion, listProjectArtifacts } from "./artifactStore";
+import { getArtifact, getArtifactVersion, listArtifactVersionSummaries, listProjectArtifacts } from "./artifactStore";
 import { listP9Notifications, markP9NotificationRead } from "./p9AutomationStore";
 import { DecisionReviewError, decisionReviewHead, readCanonicalDecisionReview, submitCanonicalDecisionReview } from "./decisionRoutes";
 import { decisionSnapshotHash } from "./decisionEngine";
+import { getDecisionAuthorization } from "./decisionAuthorization";
 
 /** Every paired call uses current Home identity; handshake claims are never a lasting permission grant. */
-export async function requireCurrentGatewayUser(connection: GatewayConnection, scope: GatewayScope = "read", db: DrizzleDb = getDb()): Promise<User> {
-  const [user] = await db.select().from(users).where(eq(users.id, connection.identity.userId)).for("share").limit(1);
+export async function requireCurrentGatewayUser(connection: GatewayConnection, scope: GatewayScope = "read", db: DrizzleDb = getDb(), lock = false): Promise<User> {
+  const query = db.select().from(users).where(eq(users.id, connection.identity.userId));
+  const [user] = await (lock ? query.for("update") : query.for("share")).limit(1);
   if (!user || !user.active || user.mustChangePassword || (user.lockedUntil && user.lockedUntil.getTime() > Date.now())) throw new GatewayMethodError(gatewayError("FORBIDDEN", "The current account cannot use device continuity."));
   if (user.role !== connection.identity.role || (user.organizationId ?? null) !== connection.identity.organizationId) throw new GatewayMethodError(gatewayError("FORBIDDEN", "Account identity changed; reconnect and inspect current permissions."));
   if (!connection.scopes.includes(scope) && !(scope === "read" && connection.scopes.includes("write")) && !connection.scopes.includes("admin")) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This connection lacks the current required scope."));
@@ -26,10 +28,11 @@ export async function requireCurrentGatewayUser(connection: GatewayConnection, s
   return user;
 }
 
-async function currentReviewPolicy(connection: GatewayConnection, db: DrizzleDb, scope: GatewayScope) {
-  const user = await requireCurrentGatewayUser(connection, scope, db);
+async function currentReviewPolicy(connection: GatewayConnection, db: DrizzleDb, scope: GatewayScope, lock = false) {
+  const user = await requireCurrentGatewayUser(connection, scope, db, lock);
+  const authority = await getDecisionAuthorization(user, db, lock);
   const [device] = connection.identity.deviceId ? await db.select().from(pairedDevices).where(eq(pairedDevices.id, connection.identity.deviceId)).limit(1) : [];
-  return { user, digest: decisionSnapshotHash({ version: DEVICE_REVIEW_POLICY_VERSION, userId: user.id, role: user.role, organizationId: user.organizationId ?? null, active: user.active, mustChangePassword: user.mustChangePassword, deviceId: device?.id ?? null, scopes: device?.scopes ?? connection.scopes, pairedAt: device?.createdAt ?? null }) };
+  return { user, digest: decisionSnapshotHash({ version: DEVICE_REVIEW_POLICY_VERSION, enterpriseDecisionPolicyDigest: authority.digest, userId: user.id, role: user.role, organizationId: user.organizationId ?? null, active: user.active, mustChangePassword: user.mustChangePassword, deviceId: device?.id ?? null, scopes: device?.scopes ?? connection.scopes, pairedAt: device?.createdAt ?? null }) };
 }
 
 function publicRecord(value: unknown): Record<string, unknown> {
@@ -57,14 +60,14 @@ export function registerDeviceContinuityGateway(hub: GatewayHub, options: { home
   hub.register("device.continuity.read", (params, connection) => guarded(connection, "read", async (user) => {
     const ctx = tenantContext(user);
     const project = await getProject(ctx, params.projectId);
-    const [chats, artifacts] = await Promise.all([listProjectChats(ctx, { projectId: project.id }), listProjectArtifacts(ctx, project.id, { limit: 100 })]);
+    const [chats, artifacts] = await Promise.all([listProjectChats(ctx, { projectId: project.id }), listProjectArtifacts(ctx, project.id, { limit: params.artifactsLimit + 1, offset: params.artifactsOffset })]);
     let messages: ProjectChatMessage[] = [];
     if (params.chatId) {
       const chat = await getProjectChat(ctx, params.chatId);
       if (chat.projectId !== project.id) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This Chat does not belong to the requested Project."));
       messages = await listProjectChatMessages(ctx, chat.id);
     }
-    return { homeId: currentHome(), userId: user.id, project: publicRecord(project), chats: chats.map(publicRecord), messages: messages.slice(params.offset, params.offset + params.limit).map(publicRecord), artifacts: artifacts.map(publicRecord), nextOffset: messages.length > params.offset + params.limit ? params.offset + params.limit : null };
+    return { homeId: currentHome(), userId: user.id, project: publicRecord(project), chats: chats.map(publicRecord), messages: messages.slice(params.offset, params.offset + params.limit).map(publicRecord), artifacts: artifacts.slice(0, params.artifactsLimit).map(publicRecord), nextOffset: messages.length > params.offset + params.limit ? params.offset + params.limit : null, nextArtifactsOffset: artifacts.length > params.artifactsLimit ? params.artifactsOffset + params.artifactsLimit : null };
   }));
   hub.register("artifacts.read", (params, connection) => guarded(connection, "read", async (user) => {
     const ctx = tenantContext(user);
@@ -73,8 +76,17 @@ export function registerDeviceContinuityGateway(hub: GatewayHub, options: { home
     // Existing Gateway frame limits fail closed for oversized revisions; never return partial success.
     return { artifact: publicRecord(artifact), revision: publicRecord(revision) };
   }));
+  hub.register("artifacts.versions.list", (params, connection) => guarded(connection, "read", async (user) => {
+    const versions = await listArtifactVersionSummaries(tenantContext(user), params.artifactId, { offset: params.offset, limit: params.limit + 1 });
+    // List metadata only: each historical body is fetched explicitly through artifacts.read.
+    return { versions: versions.slice(0, params.limit).map((version) => ({ version: version.version, contentHash: version.contentHash, createdAt: version.createdAt.toISOString() })), nextOffset: versions.length > params.limit ? params.offset + params.limit : null };
+  }));
   hub.register("notifications.list", (params, connection) => guarded(connection, "read", async (user) => ({ notifications: (await listP9Notifications(tenantContext(user), params.projectId, params.limit)).map(publicRecord) })));
   hub.register("notifications.read", (params, connection) => guarded(connection, "write", async (user) => ({ notification: publicRecord(await markP9NotificationRead(tenantContext(user), params.projectId, params.notificationId)) })));
+  hub.register("notifications.read.replay", (params, connection) => guarded(connection, "write", async (user) => {
+    if (params.homeId !== currentHome() || params.userId !== user.id || params.deviceId !== connection.identity.deviceId) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This notification-read intent belongs to another Home, account or device."));
+    return { notification: publicRecord(await markP9NotificationRead(tenantContext(user), params.projectId, params.notificationId)) };
+  }));
   hub.register("decision.review.read", (params, connection) => guarded(connection, "read", async () => {
     const policy = await currentReviewPolicy(connection, getDb(), "read");
     const state = await readCanonicalDecisionReview(params.decisionId, policy.user);
@@ -88,7 +100,7 @@ export function registerDeviceContinuityGateway(hub: GatewayHub, options: { home
       binding: params.binding,
       revalidate: async (db) => {
         if (params.binding.homeId !== currentHome()) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This Home identity changed before review release."));
-        return (await currentReviewPolicy(connection, db, "write")).digest;
+        return (await currentReviewPolicy(connection, db, "write", true)).digest;
       },
     });
     return { approvalId: result.approval.id, decisionId: result.approval.decisionId, receiptVersionId: result.approval.receiptVersionId, snapshotHash: result.approval.snapshotHash, outcome: result.approval.outcome, requestId: params.requestId, idempotent: result.idempotent };

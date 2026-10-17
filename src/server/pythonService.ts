@@ -14,6 +14,7 @@
  * call into this fail cleanly with a clear error, not a crash.
  */
 import { getProcessSupervisor } from "./exec";
+import { z } from "zod";
 import { createSafeConversationCancellationReason, currentConversationSignal } from "./exec/execution-scope";
 import type { ManagedRun } from "./exec";
 import { randomBytes } from "crypto";
@@ -385,6 +386,25 @@ export function getPythonServiceEnvironment(): Promise<{ python: string; package
   });
   environmentPromise = pending;
   return pending;
+}
+
+/** Passive discovery/Doctor probe: never starts Python, installs packages or contacts an AI provider. */
+export async function inspectRunningPythonService(): Promise<{ ready: boolean; packages: Record<string, string>; reason: string }> {
+  if (sandboxIsolationMode() === "strict") return { ready: false, packages: {}, reason: "Strict Python execution requires a governed runtime backend; host-sidecar fallback is refused." };
+  if (!child && !remoteServiceUrl()) return { ready: false, packages: {}, reason: "No running Python sidecar is currently owned by this Home. Review Connections runtime setup." };
+  try {
+    const remote = remoteServiceUrl() !== null;
+    if (remote && !process.env.PYTHON_REMOTE_SERVICE_TOKEN?.trim()) return { ready: false, packages: {}, reason: "The configured remote Python service requires its owner-managed authentication token." };
+    const base = serviceBaseUrl();
+    if (!remote && !await isOwnedSidecar(base, SIDECAR_TOKEN)) return { ready: false, packages: {}, reason: "The local Python service did not prove current Home ownership." };
+    const response = await fetch(`${base}/runtime-info`, { headers: serviceHeaders(), signal: AbortSignal.timeout(1_000) });
+    if (!response.ok) return { ready: false, packages: {}, reason: "The current Python service is not responding with authenticated runtime metadata." };
+    const parsed = z.object({ packages: z.record(z.string()) }).safeParse(await response.json());
+    if (!parsed.success) return { ready: false, packages: {}, reason: "Python runtime package inventory is invalid; review Doctor." };
+    return { ready: true, packages: parsed.data.packages, reason: "Current authenticated Python runtime inventory observed; invocation still rechecks policy and inputs." };
+  } catch {
+    return { ready: false, packages: {}, reason: "The configured Python runtime is currently unreachable; no process was started." };
+  }
 }
 
 // Thrown for a 4xx response from the sidecar itself -- the request reached

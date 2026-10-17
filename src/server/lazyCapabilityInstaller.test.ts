@@ -97,7 +97,7 @@ test("approved lazy install preserves existing low-level packs and release-pack 
   for (const id of ["core", "fixed-income", "econometrics", "forecasting", "optimization", "ml"]) {
     assert.ok(receivedPackIds.includes(id), `expected ${id} to be preserved/resolved`);
   }
-  assert.deepEqual(receivedReleasePackIds, ["research"]);
+  assert.deepEqual(receivedReleasePackIds, ["research", "quant"]);
   assert.equal(receivedStrictAuthority, strictProvisioningAuthority);
   assert.equal(receivedRequireVerified, true, "approved lazy installs require verified release artifacts");
 });

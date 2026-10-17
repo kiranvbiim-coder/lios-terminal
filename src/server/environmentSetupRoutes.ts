@@ -19,7 +19,7 @@ import { BUILT_IN_CONNECTORS } from "@shared/connectorRegistry";
 import { AIProviderError, AI_PROVIDERS, getProviderSetupOptions } from "./byoaiRouter";
 import { verifyAIProviderConnection } from "./aiProviderVerification";
 import { communityDataConsentSchema, updateEnvironmentSetupSchema } from "@shared/schema";
-import { listCommunityConsents, setCommunityConsent, unconsentedRuntimePacks } from "./communityDataConsent";
+import { listCommunityConsents, setCommunityConsent } from "./communityDataConsent";
 import { deleteVaultCredential, listVaultCredentials, setVaultCredential } from "./credentialVault";
 import {
   deleteOrganizationCredential,
@@ -27,15 +27,14 @@ import {
   organizationCredentialStoreEnabled,
   setOrganizationCredential,
 } from "./organizationCredentialVault";
-import { installManagedRuntime, ManagedRuntimeVerificationError, managedRuntimePythonPath, readManagedRuntimeState, rollbackManagedRuntime } from "./pythonRuntimeManager";
-import { ManagedRuntimeProvisioningError, reconcileManagedRuntime } from "./managedRuntimeReconciler";
+import { managedRuntimePythonPath, readManagedRuntimeState } from "./pythonRuntimeManager";
 import { evaluateManagedRuntimeReadiness } from "./provisioningReadiness";
 import { planManagedRuntimeRepair } from "./doctorRepairPlan";
-import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
-import { executeManagedRuntimeRepair, DoctorRepairExecutionRefusedError } from "./doctorRepairExecutor";
 import { SP01_DEPENDENCY_INVENTORY } from "./sp01DependencyInventory";
-import { P10_OPTIONAL_MANAGED_ADDON_IDS, P10_RUNTIME_PACK_IDS, P10_RUNTIME_PACKS, expandP10RuntimePacks } from "./p10RuntimePacks";
+import { P10_RUNTIME_PACKS } from "./p10RuntimePacks";
 import { inspectSandboxImageReadiness, repairSandboxImage } from "./sandboxImageProvisioning";
+import { runtimeLifecycleRequestSchema } from "@shared/runtimeLifecycle";
+import { applyRuntimeLifecycle, previewRuntimeLifecycle, RuntimeLifecycleRefusal, type RuntimeLifecycleDependencies } from "./runtimeLifecycle";
 
 const CREDENTIAL_NAMES = new Set([
   ...BUILT_IN_CONNECTORS.filter((connector) => connector.vaultKey).map((connector) => connector.vaultKey!),
@@ -61,7 +60,7 @@ function aiVerificationStatus(error: AIProviderError): number {
   return 502;
 }
 
-export function registerEnvironmentSetupRoutes(app: Express): void {
+export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependencies: RuntimeLifecycleDependencies = {}): void {
   app.get("/api/setup/sandbox-image", requireAuth, async (_req, res, next) => {
     try {
       res.json(await inspectSandboxImageReadiness());
@@ -236,7 +235,7 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
         managedState,
         managedRuntimeReadiness,
         doctorRepairPlan: planManagedRuntimeRepair(managedRuntimeReadiness, {
-          isolationMode: effectiveSandboxIsolationMode(undefined),
+          isolationMode: "strict", strictProvisioningAuthorityAvailable: Boolean(lifecycleDependencies.strictProvisioningAuthority),
         }),
         sp01Dependencies: SP01_DEPENDENCY_INVENTORY,
         status,
@@ -245,147 +244,42 @@ export function registerEnvironmentSetupRoutes(app: Express): void {
       next(error);
     }
   });
-  app.post("/api/setup/python-runtime/install", requireRole("internal_admin", "client_admin"), async (req, res, next) => {
-    const parsed = z.object({
-      reconcile: z.boolean().optional(),
-      repair: z.boolean().optional(),
-      confirmed: z.boolean().optional(),
-      packIds: z.array(z.string().trim().min(1)).max(20).optional(),
-      releasePackIds: z.array(z.enum(P10_RUNTIME_PACK_IDS)).max(P10_RUNTIME_PACK_IDS.length).optional(),
-      additionalPackIds: z.array(z.enum(P10_OPTIONAL_MANAGED_ADDON_IDS)).max(P10_OPTIONAL_MANAGED_ADDON_IDS.length).optional(),
-    }).superRefine((value, issue) => {
-      if (value.packIds?.length && (value.releasePackIds?.length || value.additionalPackIds?.length)) {
-        issue.addIssue({ code: z.ZodIssueCode.custom, message: "Choose legacy low-level packIds or releasePackIds/additionalPackIds, not both." });
-      }
-      if (value.repair && (value.reconcile || value.packIds?.length || value.releasePackIds?.length || value.additionalPackIds?.length)) {
-        issue.addIssue({ code: z.ZodIssueCode.custom, message: "Doctor repair uses the saved runtime selection; do not combine it with pack changes or reconciliation." });
-      }
-      if (value.repair && value.confirmed !== true) {
-        issue.addIssue({ code: z.ZodIssueCode.custom, message: "Doctor repair requires explicit confirmation." });
-      }
-    }).safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
-      return;
-    }
+  app.post("/api/setup/python-runtime/lifecycle/preview", requireRole("internal_admin", "client_admin"), async (req, res, next) => {
+    const parsed = runtimeLifecycleRequestSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     try {
-      const releasePackIds = parsed.data.releasePackIds ?? [];
-      const additionalPackIds = parsed.data.additionalPackIds ?? [];
-      const managedPackIds = releasePackIds.length || additionalPackIds.length
-        ? [...new Set([...expandP10RuntimePacks(releasePackIds), ...additionalPackIds])]
-        : (parsed.data.packIds?.length ? parsed.data.packIds : ["core"]);
-      // P0.5: the community-yahoo pack installs yfinance, which is the same
-      // real capability the yahoo_community connector consent governs.
-      // Installing it without that consent record would be a second,
-      // ungated door to the same data -- refuse rather than silently
-      // installing it.
-      const blocked = await unconsentedRuntimePacks(req.user!.id, parsed.data.reconcile || parsed.data.repair
-        ? [...new Set([...managedPackIds, ...(readManagedRuntimeState()?.selectedPackIds ?? [])])]
-        : managedPackIds);
-      if (blocked.length) {
-        res.status(403).json({
-          error: "A selected runtime pack requires community-data consent that has not been accepted.",
-          blockedPacks: blocked,
-        });
-        return;
-      }
-      if (parsed.data.repair) {
-        try {
-          const repaired = await executeManagedRuntimeRepair({
-            confirmed: parsed.data.confirmed === true,
-            isolationMode: effectiveSandboxIsolationMode(undefined),
-          });
-          const state = readManagedRuntimeState();
-          const readiness = evaluateManagedRuntimeReadiness({
-            state, pythonAvailable: Boolean(managedRuntimePythonPath()),
-            requiredPackIds: state?.selectedPackIds.length ? state.selectedPackIds : ["core"],
-          });
-          await recordAuditEvent(req.user!.id, "python_runtime_doctor_repair", {
-            action: repaired.plan.action, readiness: readiness.state, ...auditActor(req.user!),
-          });
-          res.status(readiness.ready ? 200 : 409).json({
-            result: repaired.operation, state, readiness,
-            error: readiness.ready ? undefined : "Repair returned without verified managed-runtime readiness; the capability remains unavailable.",
-          });
-        } catch (error) {
-          const code = error instanceof DoctorRepairExecutionRefusedError
-            ? error.code : error instanceof ManagedRuntimeVerificationError ? error.code : "repair_failed";
-          await recordAuditEvent(req.user!.id, "python_runtime_doctor_repair_refused", { code, ...auditActor(req.user!) });
-          res.status(409).json({ error: "Managed runtime repair could not complete safely.", code });
-        }
-        return;
-      }
-      if (parsed.data.reconcile) {
-        try {
-          const reconciled = await reconcileManagedRuntime({
-            requiredPackIds: managedPackIds,
-            ...(parsed.data.releasePackIds ? { selectedReleasePackIds: releasePackIds } : {}),
-          });
-          await recordAuditEvent(req.user!.id, "python_runtime_reconciled", {
-            action: reconciled.action,
-            before: reconciled.before.state,
-            after: reconciled.after.state,
-            packIds: reconciled.state?.selectedPackIds ?? [],
-            hashVerified: reconciled.state?.hashVerified ?? false,
-            ...auditActor(req.user!),
-          });
-          res.json({ releasePackIds, additionalPackIds, result: reconciled, state: readManagedRuntimeState() });
-        } catch (error) {
-          const readiness = error instanceof ManagedRuntimeProvisioningError
-            ? error.readiness
-            : evaluateManagedRuntimeReadiness({
-                state: readManagedRuntimeState(),
-                pythonAvailable: Boolean(managedRuntimePythonPath()),
-                requiredPackIds: managedPackIds,
-              });
-          const diskFull = (error as NodeJS.ErrnoException)?.code === "ENOSPC";
-          const code = error instanceof ManagedRuntimeProvisioningError || error instanceof ManagedRuntimeVerificationError
-            ? error.code
-            : diskFull ? "insufficient_disk" : "install_failed";
-          await recordAuditEvent(req.user!.id, "python_runtime_reconciliation_failed", {
-            code,
-            readiness: readiness.state,
-            rollbackApplied: error instanceof ManagedRuntimeProvisioningError && error.rollbackApplied,
-            ...auditActor(req.user!),
-          });
-          res.status(code === "unsupported" ? 400 : diskFull ? 507 : 409).json({
-            ok: false,
-            error: { code, message: error instanceof ManagedRuntimeProvisioningError || error instanceof ManagedRuntimeVerificationError
-              ? error.message
-              : diskFull
-                ? "Insufficient disk space to stage the managed runtime."
-                : "Managed runtime installation failed; check interpreter and download availability, then retry." },
-            readiness,
-            rollbackApplied: error instanceof ManagedRuntimeProvisioningError && error.rollbackApplied,
-          });
-        }
-        return;
-      }
-      const result = await installManagedRuntime(managedPackIds, releasePackIds);
-      await recordAuditEvent(req.user!.id, "python_runtime_installed", {
-        releasePackIds,
-        additionalPackIds,
-        packIds: result.state.selectedPackIds,
-        manifestVersion: result.state.manifestVersion,
-        hashVerified: result.state.hashVerified,
-        verificationWarnings: result.state.verificationWarnings,
-        ...auditActor(req.user!),
+      const preview = await previewRuntimeLifecycle(req.user!, parsed.data, lifecycleDependencies);
+      await recordAuditEvent(req.user!.id, "python_runtime_lifecycle_previewed", {
+        operation: preview.request.operation, operationHash: preview.operationHash,
+        blockers: preview.blockers, sourceStateHash: preview.sourceStateHash,
+        targetManifestHash: preview.targetManifestHash, ...auditActor(req.user!),
       });
-      res.json({ releasePackIds, additionalPackIds, result, state: readManagedRuntimeState() });
+      res.json(preview);
     } catch (error) {
+      if (error instanceof RuntimeLifecycleRefusal) { res.status(403).json({ error: error.message, code: error.code }); return; }
       next(error);
     }
   });
-
-  app.post("/api/setup/python-runtime/rollback", requireRole("internal_admin", "client_admin"), async (req, res, next) => {
+  app.post("/api/setup/python-runtime/lifecycle/apply", requireRole("internal_admin", "client_admin"), async (req, res, next) => {
+    const parsed = z.object({
+      request: runtimeLifecycleRequestSchema, confirmed: z.literal(true),
+      operationHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmationToken: z.string().regex(/^[a-f0-9]{64}$/), expiresAt: z.number().int(),
+    }).strict().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     try {
-      const result = await rollbackManagedRuntime();
-      await recordAuditEvent(req.user!.id, "python_runtime_rolled_back", {
-        manifestVersion: result.state.manifestVersion,
-        ...auditActor(req.user!),
+      const outcome = await applyRuntimeLifecycle(req.user!, parsed.data, lifecycleDependencies);
+      await recordAuditEvent(req.user!.id, "python_runtime_lifecycle_applied", {
+        operation: parsed.data.request.operation, operationHash: outcome.operationHash,
+        readiness: outcome.readiness.state, ...auditActor(req.user!),
       });
-      res.json({ result, state: readManagedRuntimeState() });
+      res.json(outcome);
     } catch (error) {
+      if (error instanceof RuntimeLifecycleRefusal) {
+        await recordAuditEvent(req.user!.id, "python_runtime_lifecycle_refused", { operation: parsed.data.request.operation, code: error.code, ...auditActor(req.user!) });
+        res.status(error.code === "current_administrator_required" ? 403 : 409).json({ error: error.message, code: error.code, blockers: error.blockers });
+        return;
+      }
       next(error);
     }
   });

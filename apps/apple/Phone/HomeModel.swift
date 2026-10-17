@@ -6,6 +6,7 @@ import UserNotifications
     let gateway = HomeGateway()
     let outbox = ReviewOutbox()
     let watch = PhoneWatchBridge()
+    let notificationOutbox = NotificationReadOutbox()
     @Published var homeAddress = ""
     @Published var fingerprint = ""
     @Published var pairingToken = ""
@@ -15,6 +16,7 @@ import UserNotifications
     @Published var notifications: [[String: Any]] = []
     @Published var review: [String: Any] = [:]
     @Published var artifact: [String: Any] = [:]
+    @Published var artifactVersions: [[String: Any]] = []
     @Published var runEvents: [[String: Any]] = []
     @Published var projectId: Int?
     @Published var chatId: Int?
@@ -28,28 +30,35 @@ import UserNotifications
     private var pageOffset = 0
     private var nextOffset: Int?
     private var polling: Task<Void, Never>?
-    private var activeRun: String?
-    private var activeRunSequence = -1
+    private var run = RunCursor()
+    private var artifactsOffset = 0
+    private var nextArtifactsOffset: Int?
+    private var versionsOffset = 0
+    private var nextVersionsOffset: Int?
+    private var selectedArtifact: String?
+    private var configuredHome: HomeConfiguration?
+    private var replayingReads = false
 
     init() {
         do {
             try outbox.load()
+            try notificationOutbox.load()
             if let data = try DeviceKeychain.load("home") {
                 let home = try JSONDecoder().decode(HomeConfiguration.self, from: data)
                 homeAddress = home.address; fingerprint = home.fingerprint
+                configuredHome = home
             }
         } catch { self.error = error.localizedDescription }
         gateway.onEvent = { [weak self] event, payload in
             guard let self else { return }
             if event == "home.connected" {
                 Task {
-                    await self.perform { try await self.refreshProjects() }
-                    if let activeRun = self.activeRun { await self.perform { _ = try await self.gateway.call("conversation.subscribe", ["requestId": activeRun, "afterSeq": self.activeRunSequence]) } }
+                    await self.perform { try await self.refreshProjects(); try await self.reattachRun(); try await self.replayNotificationReads() }
                 }
             } else if event == "conversation.event" {
+                guard self.run.receive(payload) else { return }
                 self.runEvents.append(payload)
                 if self.runEvents.count > 100 { self.runEvents.removeFirst() }
-                if let seq = payload["runSeq"] as? Int { self.activeRunSequence = seq }
                 Task { await self.perform { try await self.refreshContinuity() } }
             } else if event == "resync.required" || event == "data.invalidate" {
                 Task { await self.perform { try await self.refreshContinuity() } }
@@ -63,25 +72,35 @@ import UserNotifications
     }
     func connect() throws {
         let home = try HomeConfiguration.validated(address: homeAddress, fingerprint: fingerprint)
+        if configuredHome != home {
+            run.clear(); projectId = nil; chatId = nil; continuity = [:]; notifications = []; review = [:]; artifact = [:]; artifactVersions = []; runEvents = []
+        }
+        configuredHome = home
         try gateway.connect(home: home, pairingToken: pairingToken)
         pairingToken = ""
     }
     func refreshProjects() async throws {
         projects = try await gateway.call("projects.list")["projects"] as? [[String: Any]] ?? []
-        if let projectId { try await selectProject(projectId) }
+        if let projectId {
+            guard projects.contains(where: { $0["id"] as? Int == projectId }) else { self.projectId = nil; chatId = nil; continuity = [:]; notifications = []; review = [:]; return }
+            try await refreshContinuity()
+            try await refreshNotifications()
+        }
     }
     func selectProject(_ id: Int) async throws {
-        projectId = id; chatId = nil; pageOffset = 0
-        continuity = [:]; notifications = []; artifact = [:]; review = [:]; runEvents = []
+        projectId = id; chatId = nil; pageOffset = 0; artifactsOffset = 0
+        continuity = [:]; notifications = []; artifact = [:]; artifactVersions = []; review = [:]
         try await refreshContinuity()
         try await refreshNotifications()
+        try await replayNotificationReads()
     }
     func refreshContinuity() async throws {
         guard let projectId else { return }
-        var params: [String: Any] = ["projectId": projectId, "offset": pageOffset, "limit": 50]
+        var params: [String: Any] = ["projectId": projectId, "offset": pageOffset, "limit": 50, "artifactsOffset": artifactsOffset, "artifactsLimit": 100]
         if let chatId { params["chatId"] = chatId }
         continuity = try await gateway.call("device.continuity.read", params)
         nextOffset = continuity["nextOffset"] as? Int
+        nextArtifactsOffset = continuity["nextArtifactsOffset"] as? Int
     }
     func selectChat(_ id: Int) async throws { chatId = id; pageOffset = 0; try await refreshContinuity() }
     func nextMessages() async throws { guard let nextOffset else { return }; pageOffset = nextOffset; try await refreshContinuity() }
@@ -94,16 +113,52 @@ import UserNotifications
     }
     func send() async throws {
         guard let chatId, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ClientFailure(message: "Select or create a saved Chat before sending.") }
+        guard gateway.connected else { throw ClientFailure(message: "Home offline; messages are never queued.") }
         let requestId = UUID().uuidString.lowercased()
-        _ = try await gateway.call("conversation.start", ["chatId": chatId, "body": ["requestId": requestId, "message": message]])
-        activeRun = requestId; activeRunSequence = -1; message = ""
+        guard run.requestId == nil else { throw ClientFailure(message: "A run is still attached or unconfirmed. Reconnect to inspect it before sending another message.") }
+        run.begin(requestId); runEvents = []
+        // Keep this ID on ambiguous failure: reconnect subscribes; it never resends start.
+        do {
+            _ = try await gateway.call("conversation.start", ["chatId": chatId, "body": ["requestId": requestId, "message": message]])
+        } catch let error as ClientFailure {
+            if let code = error.code, code != "UNAVAILABLE", run.requestId == requestId { run.clear() }
+            throw error
+        }
+        message = ""
         try await refreshContinuity()
     }
     func cancelRun() async throws {
-        guard let activeRun else { return }
+        guard let activeRun = run.requestId else { return }
         _ = try await gateway.call("conversation.cancel", ["requestId": activeRun])
     }
-    func readArtifact(_ id: String) async throws { artifact = try await gateway.call("artifacts.read", ["artifactId": id]) }
+    func reattachRun() async throws {
+        guard let id = run.requestId else { return }
+        do {
+            let result = try await gateway.call("conversation.subscribe", ["requestId": id, "afterSeq": run.sequence])
+            run.subscribed(id, status: result["status"] as? String ?? "")
+        } catch let error as ClientFailure {
+            if error.code == "NOT_FOUND" { run.clear() }
+            throw error
+        }
+    }
+    func nextArtifacts() async throws { guard let nextArtifactsOffset else { return }; artifactsOffset = nextArtifactsOffset; try await refreshContinuity() }
+    func firstArtifacts() async throws { artifactsOffset = 0; try await refreshContinuity() }
+    func readArtifact(_ id: String, version: Int? = nil) async throws {
+        var params: [String: Any] = ["artifactId": id]
+        if let version { params["version"] = version }
+        artifact = try await gateway.call("artifacts.read", params)
+        if selectedArtifact != id { selectedArtifact = id; versionsOffset = 0 }
+        try await refreshArtifactVersions()
+    }
+    func refreshArtifactVersions() async throws {
+        guard let selectedArtifact else { return }
+        let result = try await gateway.call("artifacts.versions.list", ["artifactId": selectedArtifact, "offset": versionsOffset, "limit": 50])
+        artifactVersions = result["versions"] as? [[String: Any]] ?? []
+        nextVersionsOffset = result["nextOffset"] as? Int
+    }
+    func inspectVersion(_ version: Int) async throws { guard let selectedArtifact else { return }; try await readArtifact(selectedArtifact, version: version) }
+    func nextVersions() async throws { guard let nextVersionsOffset else { return }; versionsOffset = nextVersionsOffset; try await refreshArtifactVersions() }
+    func firstVersions() async throws { versionsOffset = 0; try await refreshArtifactVersions() }
     func readDecision(_ id: Int) async throws {
         review = try await gateway.call("decision.review.read", ["decisionId": id])
         decisionId = String(id); finalDecision = ""; rationale = ""
@@ -131,9 +186,20 @@ import UserNotifications
             notifications: notifications, homeId: continuity["homeId"] as? String ?? "")
     }
     func markRead(_ id: String) async throws {
-        guard let projectId else { return }
-        _ = try await gateway.call("notifications.read", ["projectId": projectId, "notificationId": id])
-        try await refreshNotifications()
+        guard let projectId, let homeId = continuity["homeId"] as? String, let userId = continuity["userId"] as? Int else { throw ClientFailure(message: "Read canonical Home identity before retaining a notification intent.") }
+        let intent = NotificationReadIntent(homeId: homeId, userId: userId, deviceId: try DeviceIdentity.loadOrCreate().id, projectId: projectId, notificationId: id)
+        try notificationOutbox.enqueue(intent)
+        if gateway.connected { try await replayNotificationReads(); try await refreshNotifications() }
+    }
+    func replayNotificationReads() async throws {
+        guard !replayingReads, let homeId = continuity["homeId"] as? String, let userId = continuity["userId"] as? Int else { return }
+        replayingReads = true
+        defer { replayingReads = false }
+        let deviceId = try DeviceIdentity.loadOrCreate().id
+        for intent in notificationOutbox.items where intent.homeId == homeId && intent.userId == userId && intent.deviceId == deviceId {
+            _ = try await gateway.call("notifications.read.replay", intent.params)
+            try notificationOutbox.remove(intent)
+        }
     }
     func foreground(_ active: Bool) {
         polling?.cancel(); polling = nil
