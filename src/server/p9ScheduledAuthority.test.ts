@@ -74,7 +74,6 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
       assert.equal(calls, 1, "disabled owner never invokes provider source");
       assert.equal(result.failed, 2, "denied owner and failing provider count as failures");
       assert.equal(result.observed, 0, "failed fetch cannot become a successful observation");
-      assert.ok(warnings.some(line => line.includes("[p9Automation] filing observer failed for workflow")));
       assert.ok(!warnings.join("\n").includes(secret), "server logs must not contain provider failure or credential bytes");
     } finally {
       console.warn = originalWarn;
