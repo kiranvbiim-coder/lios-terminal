@@ -21,14 +21,10 @@ type RestoreJournal = z.infer<typeof journalSchema>;
 export type RestoreTargetCheck = (root: string, relative: string) => string;
 
 export function syncRestorePath(file: string): void {
-  let fd: number;
-  try { fd = fs.openSync(file, "r"); } catch (error) {
-    // Windows does not expose directory handles through openSync. File data
-    // is still flushed; sudden power-loss durability there is not POSIX fsync.
-    if (process.platform === "win32" && fs.lstatSync(file).isDirectory()
-      && ["EISDIR", "EPERM", "EACCES"].includes(String((error as NodeJS.ErrnoException).code))) return;
-    throw error;
-  }
+  // Node can open directories on Windows but cannot flush their handles.
+  // Do not claim POSIX directory durability there; regular-file flushes remain mandatory.
+  if (process.platform === "win32" && fs.lstatSync(file).isDirectory()) return;
+  const fd = fs.openSync(file, process.platform === "win32" ? "r+" : "r");
   try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
 }
 
