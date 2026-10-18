@@ -43,10 +43,11 @@ function walk(directory: string): string[] {
   });
 }
 
-function discoverAdvancedPythonEndpoints(root: string): string[] {
-  const advancedRoutes = fs.readFileSync(path.join(root, "python-service/advanced_routes.py"), "utf8");
-  const paths = Array.from(advancedRoutes.matchAll(/^\s*\("(\/[^"]+)"\s*,/gm)).map((match) => match[1]);
-  return paths.map((routePath) => `/advanced${routePath}`);
+function discoverPythonEndpoints(root: string, declaration: "BASE_ROUTES" | "ADVANCED_ROUTES"): string[] {
+  const source = fs.readFileSync(path.join(root, "python-service/engine_routes.py"), "utf8");
+  const block = source.split(`${declaration} = (`)[1]?.split("\n)")[0] ?? "";
+  const paths = Array.from(block.matchAll(/EngineRoute\(['"](\/[^'"]+)['"]/g)).map((match) => match[1]);
+  return declaration === "ADVANCED_ROUTES" ? paths.map((routePath) => `/advanced${routePath}`) : paths;
 }
 
 export type QuantTruthAuditResult = ReturnType<typeof runQuantTruthAudit>;
@@ -106,8 +107,8 @@ export function runQuantTruthAudit(root = process.cwd()) {
   }
 
   const pythonMain = fs.readFileSync(path.join(root, "python-service/main.py"), "utf8");
-  const directPythonEndpoints = Array.from(pythonMain.matchAll(/@app\.post\("([^"]+)"/g)).map((match) => match[1]);
-  const advancedPythonEndpoints = discoverAdvancedPythonEndpoints(root);
+  const directPythonEndpoints = discoverPythonEndpoints(root, "BASE_ROUTES");
+  const advancedPythonEndpoints = discoverPythonEndpoints(root, "ADVANCED_ROUTES");
   const advancedRouterMounted = pythonMain.includes("app.include_router(advanced_router)");
   if (advancedPythonEndpoints.length > 0 && !advancedRouterMounted) {
     issues.push("Advanced Python manifest exists but advanced_router is not mounted.");

@@ -27,6 +27,7 @@ import {
   effectiveSandboxIsolationMode,
   sandboxIsolationMode,
 } from "./exec/sandbox-runtime-profile";
+import { callIsolatedPythonService, IsolatedPythonInputError } from "./isolatedPythonService";
 
 const dirname = typeof __dirname !== "undefined" ? __dirname : path.dirname(process.argv[1] || process.cwd());
 // Same resourcesBase pattern already used for script/download_history.py in
@@ -437,9 +438,18 @@ export async function callPythonService<T>(
   } = {},
 ): Promise<T> {
   if (effectiveSandboxIsolationMode(options.isolationMode) === "strict") {
-    throw new Error(
-      "Strict SI-01.12 isolation is unavailable for the long-lived Python HTTP sidecar; host-sidecar fallback is refused.",
-    );
+    const scopeSignal = currentConversationSignal();
+    const signal = options.signal && scopeSignal ? AbortSignal.any([options.signal, scopeSignal]) : options.signal ?? scopeSignal;
+    try {
+      return await callIsolatedPythonService<T>(routePath, body, {
+        serviceDir: SERVICE_DIR,
+        signal,
+        timeoutMs: options.timeoutMs,
+      });
+    } catch (error) {
+      if (error instanceof IsolatedPythonInputError) throw new PythonServiceDataError(error.message);
+      throw error;
+    }
   }
 
   const ready = await startPythonService();
