@@ -11,7 +11,7 @@ import os
 import stat
 import sys
 
-from engine_routes import EngineInputError, EngineUnavailableError, dispatch
+from engine_routes import EngineInputError, EngineUnavailableError, dispatch, runtime_inventory
 
 MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_ERROR_CHARS = 4000
@@ -69,8 +69,13 @@ def _encode_result(result):
 def run(request_path, result_path):
     request = _read_request(request_path)
     try:
-        result = dispatch(request["route"], request["body"])
-        envelope = {"ok": True, "result": result.model_dump(mode="python")}
+        if request["route"] == "/runtime-info":
+            if request["body"] != {}:
+                raise EngineInputError("Runtime inventory requires an empty object body.")
+            result = runtime_inventory()
+        else:
+            result = dispatch(request["route"], request["body"]).model_dump(mode="python")
+        envelope = {"ok": True, "result": result}
     except EngineInputError as exc:
         envelope = {"ok": False, "error": {"kind": "input", "message": exc.worker_message[:MAX_ERROR_CHARS]}}
     except EngineUnavailableError as exc:

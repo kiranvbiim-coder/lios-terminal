@@ -81,9 +81,7 @@ class LazyHttpTests(unittest.TestCase):
         base_route = engine_routes.ROUTES_BY_PATH["/economics/taylor-rule"]
         advanced_route = engine_routes.ROUTES_BY_PATH[ROUTE]
         add_engine_routes(app, [base_route])
-        router = APIRouter(prefix="/advanced")
-        add_engine_routes(router, [advanced_route], prefix="/advanced")
-        app.include_router(router)
+        add_engine_routes(app, [advanced_route], prefix="/advanced", mount_prefix="/advanced")
         install_lazy_openapi(app, {base_route.path: base_route, ROUTE: advanced_route})
         schema = TestClient(app).get("/openapi.json").json()
         post = schema["paths"][ROUTE]["post"]

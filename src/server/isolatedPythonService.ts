@@ -202,10 +202,11 @@ export async function callIsolatedPythonService<T>(
       throw unavailable("isolated execution or authoritative cleanup failed.");
     }
     checkAbort(options.signal);
+    if (executed.exit.timedOut || executed.exit.reason === "overall-timeout") {
+      throw new DOMException("Isolated Python worker exceeded its execution deadline.", "TimeoutError");
+    }
     if (executed.exit.reason !== "exit" || executed.exit.exitCode !== 0) {
-      throw unavailable(executed.exit.timedOut || executed.exit.reason === "overall-timeout"
-        ? "worker exceeded its execution deadline."
-        : "worker failed before returning a valid result.");
+      throw unavailable("worker failed before returning a valid result.");
     }
     const outputs = executed.finalization.workspaceOutputs;
     if (!outputs || outputs.length !== 1 || outputs[0]?.path !== "result.json") {

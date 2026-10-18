@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import sys
 from typing import NamedTuple
 
 from pydantic import ValidationError
@@ -200,6 +201,52 @@ class EngineUnavailableError(RuntimeError):
     pass
 
 
+# Inspect only already-loaded exception modules after a selected engine fails.
+# Optional numerical packs must never be imported merely to build an except tuple.
+_NUMERICAL_DOMAIN_EXCEPTIONS = {
+    "statsmodels.tools.sm_exceptions": ("PerfectSeparationError", "MissingDataError"),
+    "linearmodels.panel.utility": ("AbsorbingEffectError",),
+    "linearmodels.panel.model": ("AmbiguityError",),
+    "scipy.optimize._nonlin": ("NoConvergence",),
+    "scipy.optimize._optimize": ("BracketError",),
+    "ruptures.exceptions": ("NotEnoughPoints", "BadSegmentationParameters"),
+    "networkx.exception": (
+        "NetworkXPointlessConcept", "NetworkXUnfeasible", "NetworkXUnbounded",
+        "NodeNotFound", "HasACycle", "AmbiguousSolution", "ExceededMaxIterations",
+    ),
+}
+
+
+def _is_numerical_domain_error(error):
+    for module_name, names in _NUMERICAL_DOMAIN_EXCEPTIONS.items():
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        for name in names:
+            exception_type = getattr(module, name, None)
+            if isinstance(exception_type, type) and isinstance(error, exception_type):
+                return True
+    return False
+
+
+def runtime_inventory():
+    """Passive runtime metadata only: no imports or execution of numerical packs."""
+    import platform
+    from importlib.metadata import PackageNotFoundError, version
+
+    packages = {}
+    for package in [
+        "fastapi", "uvicorn", "numpy", "scipy", "statsmodels", "pandas",
+        "linearmodels", "QuantLib", "arch", "ruptures", "scikit-learn",
+        "networkx", "pymoo", "SALib", "asteval", "edgartools", "yfinance",
+    ]:
+        try:
+            packages[package] = version(package)
+        except PackageNotFoundError:
+            packages[package] = "unavailable"
+    return {"ok": True, "python": platform.python_version(), "packages": packages}
+
+
 def resolve_route(route: EngineRoute):
     """Load only the selected canonical engine, never a request-supplied module."""
     try:
@@ -253,6 +300,15 @@ def dispatch(route_path: str, body):
             f"Numerical engine {route.module} is unavailable: required pack {missing} is not installed or loadable."
         ) from exc
     except (ValueError, ArithmeticError) as exc:
+        raise EngineInputError(
+            str(exc),
+            worker_message="Numerical request violates the selected engine's input constraints.",
+        ) from exc
+    except Exception as exc:
+        # Preserve known library data/convergence failures as input errors,
+        # while programming and unexpected engine failures still fail execution.
+        if not _is_numerical_domain_error(exc):
+            raise
         raise EngineInputError(
             str(exc),
             worker_message="Numerical request violates the selected engine's input constraints.",

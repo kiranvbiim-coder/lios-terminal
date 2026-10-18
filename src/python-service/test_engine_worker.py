@@ -67,6 +67,21 @@ class EngineRouteDeclarationTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaisesRegex(engine_routes.EngineInputError, "finite"):
                 engine_routes.dispatch(REVERSE_ROUTE, {**REVERSE_BODY, "currentRevenue": value})
 
+    def test_numerical_domain_classifier_does_not_import_optional_packs(self):
+        with patch.object(engine_routes.importlib, "import_module") as import_module:
+            self.assertFalse(engine_routes._is_numerical_domain_error(RuntimeError("broken engine")))
+        import_module.assert_not_called()
+
+    def test_unexpected_engine_errors_are_not_classified_as_domain_failures(self):
+        import advanced_valuation
+
+        for error in (RuntimeError("broken engine"), TypeError("bug"), KeyError("missing internal key")):
+            with self.subTest(error=type(error).__name__), patch.object(
+                advanced_valuation, "reverse_dcf", side_effect=error,
+            ):
+                with self.assertRaises(type(error)):
+                    engine_routes.dispatch(REVERSE_ROUTE, REVERSE_BODY)
+
 
 class EngineWorkerTests(unittest.TestCase):
     def setUp(self):
@@ -114,6 +129,96 @@ class EngineWorkerTests(unittest.TestCase):
         envelope = json.loads(self.result.read_text())
         self.assertFalse(envelope["ok"])
         self.assertEqual(envelope["error"]["kind"], "input")
+
+    def test_statsmodels_perfect_separation_and_missing_data_remain_input_errors(self):
+        from statsmodels.discrete.discrete_model import Logit
+        from statsmodels.tools.sm_exceptions import MissingDataError, PerfectSeparationError
+
+        for error_type in (PerfectSeparationError, MissingDataError):
+            with self.subTest(error=error_type.__name__):
+                self.write_request("/stats/logistic", {"y": [0, 0, 1, 1], "x": [[-2, -1, 1, 2]]})
+                with patch.object(Logit, "fit", side_effect=error_type("private-customer-value")):
+                    self.assertEqual(engine_worker.main([str(self.request), str(self.result)]), 0)
+                envelope = json.loads(self.result.read_text())
+                self.assertFalse(envelope["ok"])
+                self.assertEqual(envelope["error"]["kind"], "input")
+                self.assertNotIn("private-customer-value", self.result.read_text())
+                self.result.unlink()
+
+    def test_statsmodels_perfect_separation_retains_http_400(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from lazy_http_routes import add_engine_routes
+        from statsmodels.discrete.discrete_model import Logit
+        from statsmodels.tools.sm_exceptions import PerfectSeparationError
+
+        app = FastAPI()
+        add_engine_routes(app, [engine_routes.ROUTES_BY_PATH["/stats/logistic"]])
+        with patch.object(Logit, "fit", side_effect=PerfectSeparationError("Perfect separation detected")):
+            response = TestClient(app).post("/stats/logistic", json={"y": [0, 0, 1, 1], "x": [[-2, -1, 1, 2]]})
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertEqual(response.json(), {"detail": "Perfect separation detected"})
+
+    def test_scipy_nonconvergence_remains_an_input_error(self):
+        from scipy.optimize import NoConvergence
+
+        self.write_request()
+        import advanced_valuation
+        with patch.object(advanced_valuation, "reverse_dcf", side_effect=NoConvergence("failed to converge")):
+            self.assertEqual(engine_worker.main([str(self.request), str(self.result)]), 0)
+        envelope = json.loads(self.result.read_text())
+        self.assertFalse(envelope["ok"])
+        self.assertEqual(envelope["error"]["kind"], "input")
+
+    def test_runtime_inventory_runs_without_numerical_or_http_imports(self):
+        self.write_request("/runtime-info", {})
+        script = PACK_BOUNDARY + '''
+import engine_routes
+blocked = {route.module for route in engine_routes.ROUTES_BY_PATH.values()} | {'numpy', 'scipy'}
+class RefuseNumericalImports(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in blocked:
+            raise AssertionError('Runtime inventory imported ' + fullname)
+sys.meta_path.insert(0, RefuseNumericalImports())
+import engine_worker
+status = engine_worker.main(sys.argv[1:])
+assert not (blocked & sys.modules.keys())
+raise SystemExit(status)
+'''
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(self.request), str(self.result)],
+            cwd=SERVICE_DIR, capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        envelope = json.loads(self.result.read_text())
+        self.assertTrue(envelope["ok"])
+        inventory = envelope["result"]
+        self.assertEqual(set(inventory), {"ok", "python", "packages"})
+        self.assertTrue(inventory["ok"])
+        self.assertIsInstance(inventory["python"], str)
+        self.assertIn("numpy", inventory["packages"])
+        self.assertIn("QuantLib", inventory["packages"])
+        self.assertNotIn("/runtime-info", engine_routes.ROUTES_BY_PATH)
+
+    def test_runtime_inventory_reports_missing_distribution_metadata(self):
+        from importlib.metadata import PackageNotFoundError
+
+        def installed_version(package):
+            if package == "numpy":
+                return "test-installed-version"
+            raise PackageNotFoundError(package)
+
+        with patch("importlib.metadata.version", side_effect=installed_version):
+            inventory = engine_routes.runtime_inventory()
+        self.assertEqual(inventory["packages"]["numpy"], "test-installed-version")
+        self.assertEqual(inventory["packages"]["QuantLib"], "unavailable")
+
+    def test_runtime_inventory_refuses_nonempty_body_without_dispatch(self):
+        self.write_request("/runtime-info", {"module": "os"})
+        with patch.object(engine_worker, "dispatch") as dispatch:
+            self.assertEqual(engine_worker.main([str(self.request), str(self.result)]), 0)
+        dispatch.assert_not_called()
+        self.assertEqual(json.loads(self.result.read_text())["error"]["kind"], "input")
 
     def test_validation_failure_is_input_and_does_not_echo_body(self):
         self.write_request(body={**REVERSE_BODY, "currentRevenue": "private-customer-value"})

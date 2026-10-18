@@ -32,11 +32,11 @@ def _endpoint(route_path):
     return endpoint
 
 
-def add_engine_routes(router, routes, *, prefix=""):
+def add_engine_routes(router, routes, *, prefix="", mount_prefix=""):
     for route in routes:
         endpoint = _endpoint(f"{prefix}{route.path}")
         endpoint.__name__ = f"engine_{route.function}"
-        router.add_api_route(route.path, endpoint, methods=["POST"])
+        router.add_api_route(f"{mount_prefix}{route.path}", endpoint, methods=["POST"])
 
 
 def install_lazy_openapi(app, routes_by_path):

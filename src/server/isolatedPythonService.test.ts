@@ -175,7 +175,11 @@ test("private backend errors, diagnostics and caller cancellation reasons never 
       } }), (error: unknown) => {
       assert.ok(error instanceof Error);
       assert.equal(error.message.includes("private-"), false);
-      if (variant === "timeout") assert.match(error.message, /execution deadline/);
+      if (variant === "timeout") {
+        assert.ok(error instanceof DOMException);
+        assert.equal(error.name, "TimeoutError");
+        assert.match(error.message, /execution deadline/);
+      }
       return true;
     });
     assert.equal(fs.existsSync(stagingRoot), false);
@@ -187,6 +191,30 @@ test("private backend errors, diagnostics and caller cancellation reasons never 
     signal: controller.signal, runner: async () => { launched = true; throw new Error(); } }),
   { name: "AbortError", message: "Isolated Python request cancelled." });
   assert.equal(launched, false);
+});
+
+test("either authoritative deadline fact produces TimeoutError without returning a result", async (t) => {
+  const f = fixture(t);
+  for (const variant of ["reason", "flag"] as const) {
+    let stagingRoot = "";
+    await assert.rejects(callIsolatedPythonService(ROUTE, { secret: "private-body" }, {
+      serviceDir: f.serviceDir,
+      runner: async (_backend, request) => {
+        stagingRoot = request.workspaceTransfer!.root;
+        const response = result(request, { ok: true, result: "must-not-return" });
+        response.exit.stderr = "private-body private-engine";
+        if (variant === "reason") response.exit.reason = "overall-timeout";
+        else response.exit.timedOut = true;
+        return response;
+      },
+    }), (error: unknown) => {
+      assert.ok(error instanceof DOMException);
+      assert.equal(error.name, "TimeoutError");
+      assert.equal(error.message, "Isolated Python worker exceeded its execution deadline.");
+      return true;
+    });
+    assert.equal(fs.existsSync(stagingRoot), false);
+  }
 });
 
 test("cancellation waits for the runner extinction/finalization join before staging cleanup", async (t) => {

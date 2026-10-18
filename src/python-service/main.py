@@ -9,8 +9,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI
 
-from advanced_routes import router as advanced_router
-from engine_routes import BASE_ROUTES, ROUTES_BY_PATH
+from engine_routes import BASE_ROUTES, ADVANCED_ROUTES, ROUTES_BY_PATH
 from lazy_http_routes import add_engine_routes, install_lazy_openapi
 from parent_watchdog import start_from_environment as start_parent_watchdog
 from sidecar_auth import SidecarTokenMiddleware, load_token
@@ -20,7 +19,7 @@ _SIDECAR_TOKEN = load_token()
 start_parent_watchdog()
 
 app = FastAPI(title="Limuria Python Sidecar")
-app.include_router(advanced_router)
+add_engine_routes(app, ADVANCED_ROUTES, prefix="/advanced", mount_prefix="/advanced")
 app.add_middleware(SidecarTokenMiddleware, token=_SIDECAR_TOKEN)
 
 

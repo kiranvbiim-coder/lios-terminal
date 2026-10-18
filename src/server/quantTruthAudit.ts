@@ -109,9 +109,9 @@ export function runQuantTruthAudit(root = process.cwd()) {
   const pythonMain = fs.readFileSync(path.join(root, "python-service/main.py"), "utf8");
   const directPythonEndpoints = discoverPythonEndpoints(root, "BASE_ROUTES");
   const advancedPythonEndpoints = discoverPythonEndpoints(root, "ADVANCED_ROUTES");
-  const advancedRouterMounted = pythonMain.includes("app.include_router(advanced_router)");
+  const advancedRouterMounted = pythonMain.includes('add_engine_routes(app, ADVANCED_ROUTES, prefix="/advanced", mount_prefix="/advanced")');
   if (advancedPythonEndpoints.length > 0 && !advancedRouterMounted) {
-    issues.push("Advanced Python manifest exists but advanced_router is not mounted.");
+    issues.push("Advanced Python manifest exists but its canonical routes are not mounted.");
   }
   const expectedAdvancedPythonEndpoints = ADVANCED_QUANT_PATHS.map((routePath) => `/advanced/${routePath}`).sort();
   const actualAdvancedPythonEndpoints = [...advancedPythonEndpoints].sort();
