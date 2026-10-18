@@ -144,16 +144,19 @@ class SpecializedValuationTests(unittest.TestCase):
         self.assertGreaterEqual(out.optionValue, out.immediateExerciseValue)
         self.assertGreaterEqual(out.timeValue, 0)
 
-    def test_dcf_surface_increases_with_margin_and_growth(self):
+    def test_dcf_surface_growth_amplifies_negative_cash_flows(self):
         out = vs.dcf_expectation_surface(vs.DcfExpectationSurfaceRequest(
             currentRevenue=1000, netDebt=100, sharesOutstanding=100, years=5,
             waccPct=10, terminalGrowthPct=3, taxRatePct=25, reinvestmentPctOfRevenue=20,
             revenueGrowthGridPct=[2, 8], ebitMarginGridPct=[15, 25],
         ))
         m = out.valuePerShareMatrix
-        self.assertGreater(m[0][1], m[0][0])
+        # Both margins produce negative FCFF after tax and 20% revenue reinvestment.
+        # Growth increases that cash consumption; a higher margin reduces it.
+        self.assertLess(m[0][1], m[0][0])
+        self.assertLess(m[1][1], m[1][0])
         self.assertGreater(m[1][0], m[0][0])
-        self.assertGreater(m[1][1], m[0][0])
+        self.assertGreater(m[1][1], m[0][1])
 
     def test_project_finance_undefined_ratios_are_json_safe_nulls(self):
         out = vs.project_finance(vs.ProjectFinanceRequest(

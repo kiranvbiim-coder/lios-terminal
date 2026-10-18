@@ -6,6 +6,7 @@ type Depth2Spec = {
   label: string;
   category: string;
   source: string;
+  version?: string;
   program?: QuantModelRegistryEntry["program"];
   surface?: string;
 };
@@ -26,7 +27,7 @@ const specs: Depth2Spec[] = [
   { path: "portfolio/ledoit-wolf-covariance", label: "Ledoit-Wolf Robust Covariance", category: "portfolio_optimization", source: "python-service/portfolio_bayesian.py", surface: "Portfolio Optimizer" },
 
   { path: "valuation/real-option", label: "Real Option Valuation", category: "valuation", source: "python-service/valuation_specialized.py", program: "financial_modelling", surface: "Valuation" },
-  { path: "valuation/expectation-surface", label: "DCF Expectation Surface", category: "valuation", source: "python-service/valuation_specialized.py", program: "financial_modelling", surface: "Valuation" },
+  { path: "valuation/expectation-surface", label: "DCF Expectation Surface", category: "valuation", source: "python-service/valuation_specialized.py", version: "1.0.1", program: "financial_modelling", surface: "Valuation" },
   { path: "valuation/project-finance", label: "Project Finance NPV IRR DSCR And LLCR", category: "valuation", source: "python-service/valuation_specialized.py", program: "financial_modelling", surface: "Integrated Model Studio" },
   { path: "valuation/saas-cohort", label: "SaaS Cohort LTV CAC And Present Value", category: "valuation", source: "python-service/valuation_specialized.py", program: "financial_modelling", surface: "Valuation" },
   { path: "valuation/insurance-embedded-value", label: "Insurance Embedded And Appraised Value", category: "valuation", source: "python-service/valuation_specialized.py", program: "financial_modelling", surface: "Valuation" },
@@ -42,7 +43,7 @@ export const ADVANCED_QUANT_DEPTH2_REGISTRY: QuantModelRegistryEntry[] = specs.m
   validationLevel: "benchmark_required",
   determinism: "deterministic",
   dataMode: "user_supplied",
-  version: "1.0.0",
+  version: spec.version ?? "1.0.0",
   apiEndpoint: `/api/quant/advanced/${spec.path}`,
   engineEndpoint: `/advanced/${spec.path}`,
   surfaces: [spec.surface ?? "Quant Workbench", "Quant Lab"],

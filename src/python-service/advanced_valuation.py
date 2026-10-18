@@ -52,7 +52,7 @@ def _dcf_value(revenue: float, growth: float, margin: float, tax: float, reinves
         next_rev = rev * (1.0 + growth)
         ebit = next_rev * margin
         nopat = ebit * (1.0 - tax)
-        reinvest = max(0.0, next_rev - rev) * reinvestment
+        reinvest = next_rev * reinvestment
         fcff = nopat - reinvest
         pv += fcff / ((1.0 + wacc) ** year)
         final_fcff = fcff
