@@ -43,6 +43,8 @@ class ProbabilisticDcfResponse(BaseModel):
 
 
 def _dcf_value(revenue: float, growth: float, margin: float, tax: float, reinvestment: float, years: int, wacc: float, terminal_growth: float, net_debt: float) -> float:
+    if not np.isfinite(growth) or growth < -1.0:
+        raise ValueError("Revenue growth must be finite and at least -100%, including stochastic draws.")
     if wacc <= terminal_growth:
         raise ValueError("WACC must exceed terminal growth.")
     pv = 0.0
@@ -52,7 +54,7 @@ def _dcf_value(revenue: float, growth: float, margin: float, tax: float, reinves
         next_rev = rev * (1.0 + growth)
         ebit = next_rev * margin
         nopat = ebit * (1.0 - tax)
-        reinvest = max(0.0, next_rev - rev) * reinvestment
+        reinvest = next_rev * reinvestment
         fcff = nopat - reinvest
         pv += fcff / ((1.0 + wacc) ** year)
         final_fcff = fcff

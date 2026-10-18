@@ -61,7 +61,8 @@ export const ADVANCED_QUANT_DEPTH2_EXAMPLES: Record<string, Record<string, unkno
   },
   "python.advanced.valuation.expectation-surface": {
     currentRevenue: 1000, netDebt: 150, sharesOutstanding: 100, years: 5, waccPct: 10, terminalGrowthPct: 3,
-    taxRatePct: 25, reinvestmentPctOfRevenue: 30, revenueGrowthGridPct: [2, 5, 8, 11], ebitMarginGridPct: [15, 20, 25],
+    // Illustrative analyst assumption, not provider data; percentage of total forecast revenue.
+    taxRatePct: 25, reinvestmentPctOfRevenue: 8, revenueGrowthGridPct: [2, 5, 8, 11], ebitMarginGridPct: [15, 20, 25],
   },
   "python.advanced.valuation.project-finance": {
     initialEquityInvestment: 250, taxRatePct: 25, equityDiscountRatePct: 12, openingDebt: 400,

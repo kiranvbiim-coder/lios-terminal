@@ -6,6 +6,7 @@ export type AdvancedModelSpec = {
   label: string;
   category: string;
   source: string;
+  version?: string;
   determinism?: QuantModelRegistryEntry["determinism"];
   program?: QuantModelRegistryEntry["program"];
   surface?: string;
@@ -36,7 +37,7 @@ const specs: AdvancedModelSpec[] = [
   { path: "portfolio/stress-aware", label: "Stress-Aware Portfolio Optimisation", category: "portfolio_optimization", source: "python-service/advanced_portfolio.py", surface: "Portfolio Stress" },
   { path: "portfolio/regime-blend", label: "Regime-Conditioned Portfolio Blend", category: "portfolio_optimization", source: "python-service/advanced_portfolio.py", surface: "Regime Classifier" },
 
-  { path: "valuation/probabilistic-dcf", label: "Probabilistic Monte Carlo DCF", category: "valuation", source: "python-service/advanced_valuation.py", determinism: "seeded_stochastic", program: "financial_modelling", surface: "Valuation" },
+  { path: "valuation/probabilistic-dcf", label: "Probabilistic Monte Carlo DCF", category: "valuation", source: "python-service/advanced_valuation.py", version: "1.0.1", determinism: "seeded_stochastic", program: "financial_modelling", surface: "Valuation" },
   {
     path: "valuation/dcf-sensitivity",
     label: "Deterministic DCF Sensitivity",
@@ -55,7 +56,7 @@ const specs: AdvancedModelSpec[] = [
     ],
     nextValidation: "Maintain the known-answer corpus and reconcile convention changes against the institutional DCF implementation before altering this contract.",
   },
-  { path: "valuation/reverse-dcf", label: "Reverse DCF Expectations", category: "valuation", source: "python-service/advanced_valuation.py", program: "financial_modelling", surface: "Valuation" },
+  { path: "valuation/reverse-dcf", label: "Reverse DCF Expectations", category: "valuation", source: "python-service/advanced_valuation.py", version: "1.0.1", program: "financial_modelling", surface: "Valuation" },
   { path: "valuation/residual-income", label: "Residual Income Valuation", category: "valuation", source: "python-service/advanced_valuation.py", program: "financial_modelling", surface: "Valuation" },
   { path: "valuation/eva", label: "Economic Value Added Valuation", category: "valuation", source: "python-service/advanced_valuation.py", program: "financial_modelling", surface: "Valuation" },
   { path: "valuation/sotp", label: "Sum-Of-The-Parts Valuation", category: "valuation", source: "python-service/advanced_valuation.py", program: "financial_modelling", surface: "Valuation" },
@@ -127,7 +128,7 @@ export const ADVANCED_QUANT_REGISTRY: QuantModelRegistryEntry[] = specs.map((spe
   validationLevel: spec.validationLevel ?? "benchmark_required",
   determinism: spec.determinism ?? "deterministic",
   dataMode: "user_supplied",
-  version: "1.0.0",
+  version: spec.version ?? "1.0.0",
   apiEndpoint: `/api/quant/advanced/${spec.path}`,
   engineEndpoint: `/advanced/${spec.path}`,
   surfaces: [spec.surface ?? "Quant Workbench", "Quant Lab"],

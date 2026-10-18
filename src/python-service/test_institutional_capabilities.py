@@ -5,6 +5,7 @@ import advanced_fixed_income as afi
 import advanced_derivatives as ader
 import advanced_portfolio as aport
 import advanced_valuation as aval
+import valuation_specialized as aval_special
 import advanced_credit as acr
 import advanced_econometrics as aecon
 import advanced_forecasting as afc
@@ -107,6 +108,67 @@ class InstitutionalCapabilityTests(unittest.TestCase):
         a, b = aval.probabilistic_dcf(req), aval.probabilistic_dcf(req)
         self.assertEqual(a.expectedValuePerShare, b.expectedValuePerShare)
         self.assertLess(a.p05ValuePerShare, a.p95ValuePerShare)
+
+    def test_dcf_reinvestment_is_charged_on_total_forecast_revenue(self):
+        # FCFF = revenue * (20% margin - 10% reinvestment), zero tax.
+        # With one forecast year and zero terminal growth, EV = FCFF / 10%.
+        for growth, years, debt, expected in [(-10, 1, 0, 9), (0, 1, 0, 10), (10, 1, 0, 11), (10, 2, 20, 10)]:
+            with self.subTest(growth=growth, years=years, debt=debt):
+                result = aval.probabilistic_dcf(aval.ProbabilisticDcfRequest(
+                    currentRevenue=100, netDebt=debt, sharesOutstanding=10,
+                    years=years, waccPct=10, terminalGrowthPct=0,
+                    scenarios=[aval.DcfScenario(
+                        name="owned known-answer inputs", revenueGrowthPct=growth,
+                        ebitMarginPct=20, taxRatePct=0,
+                        reinvestmentPctOfRevenue=10, probability=1,
+                    )],
+                    nSimulations=1000, growthVolPct=0, marginVolPct=0,
+                ))
+                self.assertAlmostEqual(result.expectedValuePerShare, expected, places=10)
+                self.assertAlmostEqual(result.scenarioWeightedDeterministicValuePerShare, expected, places=10)
+
+    def test_reverse_dcf_prices_reinvestment_at_flat_revenue(self):
+        for solve_for in ["revenue_growth", "ebit_margin"]:
+            with self.subTest(solve_for=solve_for):
+                result = aval.reverse_dcf(aval.ReverseDcfRequest(
+                    currentRevenue=100, marketEquityValue=100, years=1,
+                    waccPct=10, terminalGrowthPct=0, ebitMarginPct=20,
+                    taxRatePct=0, reinvestmentPctOfRevenue=10, solveFor=solve_for,
+                ))
+                if solve_for == "revenue_growth":
+                    self.assertAlmostEqual(result.impliedRevenueGrowthPct, 0, places=8)
+                else:
+                    self.assertAlmostEqual(result.impliedEbitMarginPct, 20, places=8)
+                self.assertAlmostEqual(result.repricedEquityValue, 100, places=8)
+
+    def test_dcf_expectation_surface_preserves_reinvestment_at_each_growth(self):
+        result = aval_special.dcf_expectation_surface(aval_special.DcfExpectationSurfaceRequest(
+            currentRevenue=100, sharesOutstanding=10, years=1,
+            waccPct=10, terminalGrowthPct=0, taxRatePct=0,
+            reinvestmentPctOfRevenue=10,
+            revenueGrowthGridPct=[-10, 0, 10], ebitMarginGridPct=[10, 20],
+        ))
+        for actual_row, expected_row in zip(result.valuePerShareMatrix, [[0, 0, 0], [9, 10, 11]]):
+            for actual, expected in zip(actual_row, expected_row):
+                self.assertAlmostEqual(actual, expected, places=10)
+
+    def test_probabilistic_dcf_refuses_negative_revenue_in_scenarios_and_draws(self):
+        for growth, volatility in [(-150, 0), (-99, 50)]:
+            with self.subTest(growth=growth, volatility=volatility):
+                request = aval.ProbabilisticDcfRequest(
+                    currentRevenue=100, sharesOutstanding=10, years=1,
+                    waccPct=10, terminalGrowthPct=0,
+                    scenarios=[aval.DcfScenario(
+                        name="owned boundary case", revenueGrowthPct=growth,
+                        ebitMarginPct=20, taxRatePct=0,
+                        reinvestmentPctOfRevenue=30, probability=1,
+                    )], nSimulations=1000, growthVolPct=volatility, marginVolPct=0, seed=42,
+                )
+                with self.assertRaisesRegex(ValueError, "at least -100%"):
+                    aval.probabilistic_dcf(request)
+
+    def test_dcf_total_revenue_loss_is_zero_not_a_reinvestment_credit(self):
+        self.assertEqual(aval._dcf_value(100, -1, .2, 0, .3, 1, .1, 0, 0), 0)
 
     def test_rating_transition_identity_is_unchanged(self):
         out = acr.rating_migration(acr.MigrationMatrixRequest(

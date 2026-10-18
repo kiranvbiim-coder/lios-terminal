@@ -128,6 +128,25 @@ test("legacy advanced consumers retain sidecar result fields at the response roo
   assert.equal(headers["X-LIOS-Output-Hash"], response.receipt.outputSnapshotHash);
 });
 
+test("corrected revenue-based DCF receipts cannot collide with the prior calculation revision", () => {
+  const parsed = parseAdvancedQuantRunRequest({ currentRevenue: 100, reinvestmentPctOfRevenue: 10 });
+  assert.ok(parsed.success);
+  for (const modelPath of ["valuation/probabilistic-dcf", "valuation/reverse-dcf", "valuation/expectation-surface"] as const) {
+    const registryEntry = QUANT_MODEL_REGISTRY.find((entry) => entry.apiEndpoint === `/api/quant/advanced/${modelPath}`);
+    assert.ok(registryEntry);
+    const input = {
+      path: modelPath,
+      parameters: parsed.data.parameters,
+      inputProvenance: parsed.data.inputProvenance,
+      result: { valuePerShare: 10 },
+    };
+    const current = buildAdvancedQuantRunReceipt({ ...input, registryEntry });
+    const prior = buildAdvancedQuantRunReceipt({ ...input, registryEntry: { ...registryEntry, version: "1.0.0" } });
+    assert.notEqual(current.modelVersion, prior.modelVersion);
+    assert.notEqual(current.inputSnapshotHash, prior.inputSnapshotHash);
+  }
+});
+
 test("advanced route receipts preserve explicit source-bound and synthetic classifications", () => {
   const registryEntry = QUANT_MODEL_REGISTRY.find((entry) => entry.apiEndpoint === "/api/quant/advanced/valuation/reverse-dcf");
   assert.ok(registryEntry);
