@@ -3,15 +3,24 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { MANAGED_RUNTIME_MANIFEST, type ManagedRuntimeManifest } from "../server/runtimeManifest";
 
 const HIGH_OBLIGATION_LICENSE = /(?:^|\b)(?:AGPL|GPL|SSPL|BUSL)(?:-|\b)|Elastic License|Commons Clause/i;
-const MANUAL_REVIEW_LICENSE = /SEE LICENSE|UNKNOWN|UNLICENSED|CUSTOM/i;
-const PERMISSIVE_LICENSE = /^(?:MIT|Apache-2\.0|BSD-(?:2|3)-Clause|ISC|0BSD|CC0-1\.0|Unlicense|NCSA)$/i;
+const PERMISSIVE_LICENSES: Record<string, true> = {
+  MIT: true, "Apache-2.0": true, "BSD-2-Clause": true, "BSD-3-Clause": true,
+  ISC: true, "0BSD": true, "CC0-1.0": true, Unlicense: true, NCSA: true,
+};
+// These terms are eligible only with exact-package evidence in the canonical
+// matrix; this table never approves a package or a LicenseRef/exception.
+const EVIDENCE_REQUIRED_TERMS: Record<string, true> = {
+  "OFL-1.1": true, Zlib: true, "Python-2.0": true, "MIT-0": true, "BlueOak-1.0.0": true,
+};
 const require = createRequire(import.meta.url);
-const { shouldCopy }: { shouldCopy: (source: string, root: string) => boolean } =
-  require("./afterPackCopyNodeModules.cjs");
+type SpdxExpression = { license: string; plus?: boolean; exception?: string } |
+  { conjunction: "and" | "or"; left: SpdxExpression; right: SpdxExpression };
+const parseSpdx: (expression: string) => SpdxExpression = require("spdx-expression-parse");
 
 export interface LicenseFinding {
   component: string;
@@ -19,39 +28,148 @@ export interface LicenseFinding {
   source: "node" | "runtime";
   severity: "allow" | "review" | "block";
   detail: string;
+  selectedExpression?: string;
+  selectedTerms?: string[];
+  legalFiles?: GrantFile[];
 }
 
-export function classifyLicense(license: string): Pick<LicenseFinding, "severity" | "detail"> {
-  const normalized = String(license || "").trim();
-  if (!normalized) {
-    return { severity: "review", detail: "No license metadata was declared." };
-  }
-  if (MANUAL_REVIEW_LICENSE.test(normalized)) {
-    return { severity: "review", detail: "License metadata requires manual review." };
-  }
+type Classification = Pick<LicenseFinding, "severity" | "detail" | "selectedExpression" | "selectedTerms">;
 
-  const alternatives = normalized.split(/\s+OR\s+/i).map((part) => part.replace(/[()]/g, "").trim());
-  // Deliberately conservative: mixed AND/WITH expressions need an explicit
-  // terms review rather than assuming any permissive token clears everything.
-  const permissiveAlternative = !/\b(?:AND|WITH)\b/i.test(normalized) &&
-    alternatives.some((part) => PERMISSIVE_LICENSE.test(part));
-
-  if (HIGH_OBLIGATION_LICENSE.test(normalized) && !permissiveAlternative) {
-    return {
-      severity: "block",
-      detail: "High-obligation/copyleft/restricted license requires an explicit distribution decision before proprietary-core bundling.",
-    };
+function classifyExpression(expression: SpdxExpression, reviewedTerms: ReadonlySet<string>): Classification {
+  if ("license" in expression) {
+    const term = `${expression.license}${expression.plus ? "+" : ""}`;
+    if (expression.exception) {
+      return { severity: "review", detail: `Unapproved SPDX exception: ${term} WITH ${expression.exception}.` };
+    }
+    if (HIGH_OBLIGATION_LICENSE.test(term)) {
+      return { severity: "block", detail: `Restricted/high-obligation term ${term} requires an explicit distribution decision.` };
+    }
+    if (Object.hasOwn(PERMISSIVE_LICENSES, term) || reviewedTerms.has(term)) {
+      return { severity: "allow", detail: "Selected complete license branch; preserve every selected obligation.", selectedExpression: term, selectedTerms: [term] };
+    }
+    return { severity: "review", detail: `Unreviewed license term: ${term}.` };
   }
-  if (HIGH_OBLIGATION_LICENSE.test(normalized) && permissiveAlternative) {
+  const left = classifyExpression(expression.left, reviewedTerms);
+  const right = classifyExpression(expression.right, reviewedTerms);
+  if (expression.conjunction === "or") {
+    if (left.severity === "allow") return left;
+    if (right.severity === "allow") return right;
+  } else if (left.severity === "allow" && right.severity === "allow") {
     return {
       severity: "allow",
-      detail: "License expression includes an explicit permissive OR alternative; release notices must preserve the selected license terms.",
+      detail: "All conjunctive terms apply; preserve every selected obligation.",
+      selectedExpression: `(${left.selectedExpression} AND ${right.selectedExpression})`,
+      selectedTerms: [...new Set([...left.selectedTerms!, ...right.selectedTerms!])],
     };
   }
-  if (alternatives.every((part) => PERMISSIVE_LICENSE.test(part))) {
-    return { severity: "allow", detail: "Recognized permissive metadata; retained terms and distribution obligations still require reconciliation." };
+  return {
+    severity: left.severity === "block" || right.severity === "block" ? "block" : "review",
+    detail: `${left.detail} ${expression.conjunction.toUpperCase()} ${right.detail}`,
+  };
+}
+
+function parseLicense(license: string, reviewedTerms: ReadonlySet<string>): Classification {
+  if (!license.trim()) return { severity: "review", detail: "No license metadata was declared." };
+  try {
+    return classifyExpression(parseSpdx(license), reviewedTerms);
+  } catch {
+    return { severity: HIGH_OBLIGATION_LICENSE.test(license) ? "block" : "review", detail: "Malformed/non-SPDX license metadata requires exact-package grant review." };
   }
-  return { severity: "review", detail: "Unrecognized or mixed license expression requires a distribution-rights review." };
+}
+
+export function classifyLicense(license: string): Classification {
+  return parseLicense(String(license || "").trim(), new Set());
+}
+
+interface GrantFile {
+  scope: "package" | "distribution";
+  path: string;
+  sha256: string;
+}
+
+interface PackageRightsReview {
+  name: string;
+  version: string;
+  declaredLicense: string;
+  selectedExpression: string;
+  reviewedTerms: string[];
+  metadataCorrection?: string;
+  additionalExpression?: string;
+  legalFiles: GrantFile[];
+  obligations: string[];
+}
+
+function readRightsReviews(cwd: string): PackageRightsReview[] {
+  const matrix = JSON.parse(fs.readFileSync(path.resolve(cwd, "../third_party/release-rights-matrix.json"), "utf8")) as {
+    nodePackageReviews?: PackageRightsReview[];
+  };
+  if (!Array.isArray(matrix.nodePackageReviews)) throw new Error("Release-rights matrix is missing nodePackageReviews.");
+  const seen = new Set<string>();
+  for (const review of matrix.nodePackageReviews) {
+    const key = `${review.name}@${review.version}`;
+    if (seen.has(key) || !review.name || !review.version || typeof review.declaredLicense !== "string" ||
+        !review.selectedExpression || !Array.isArray(review.reviewedTerms) ||
+        review.reviewedTerms.some((term) => !Object.hasOwn(EVIDENCE_REQUIRED_TERMS, term)) ||
+        !review.legalFiles?.length || !review.obligations?.length) {
+      throw new Error(`Invalid/duplicate exact-package rights review: ${key}`);
+    }
+    seen.add(key);
+  }
+  return matrix.nodePackageReviews;
+}
+
+function verifyGrantFile(root: string, grant: GrantFile): void {
+  if (!["package", "distribution"].includes(grant.scope) || !/^[a-f0-9]{64}$/.test(grant.sha256) ||
+      !grant.path || grant.path.includes("\\") || path.posix.isAbsolute(grant.path) ||
+      grant.path.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Invalid reviewed legal-file path/hash.");
+  }
+  let target = root;
+  for (const part of grant.path.split("/")) {
+    target = path.join(target, part);
+    if (fs.lstatSync(target).isSymbolicLink()) throw new Error(`Reviewed legal file traverses a symlink: ${grant.path}`);
+  }
+  if (!fs.statSync(target).isFile() || createHash("sha256").update(fs.readFileSync(target)).digest("hex") !== grant.sha256) {
+    throw new Error(`Missing/tampered reviewed legal file: ${grant.path}`);
+  }
+}
+
+function classifyPackageLicense(
+  license: string, name: string, version: string, directory: string, distributionRoot: string,
+  reviews: PackageRightsReview[],
+): Classification & Pick<LicenseFinding, "legalFiles"> {
+  const review = reviews.find((entry) => entry.name === name && entry.version === version);
+  if (!review) return classifyLicense(license);
+  try {
+    if (review.declaredLicense !== license) throw new Error("Declared license differs from the exact-package rights review.");
+    for (const grant of review.legalFiles) {
+      verifyGrantFile(grant.scope === "package" ? directory : distributionRoot, grant);
+    }
+    let selected = parseLicense(review.selectedExpression, new Set(review.reviewedTerms));
+    if (selected.severity !== "allow") throw new Error(`Reviewed branch is not approved: ${selected.detail}`);
+    // A metadata correction is only valid for this exact declaration/version,
+    // backed by the pinned grant. It never makes arbitrary malformed SPDX valid.
+    if (review.metadataCorrection && HIGH_OBLIGATION_LICENSE.test(license)) {
+      throw new Error("A metadata correction cannot clear declared restricted terms.");
+    }
+    if (!review.metadataCorrection) {
+      const declared = parseLicense(license, new Set(review.reviewedTerms));
+      if (declared.severity !== "allow" || declared.selectedExpression !== selected.selectedExpression) {
+        throw new Error("Selected branch differs from the parsed declaration.");
+      }
+    }
+    if (review.additionalExpression) {
+      selected = parseLicense(`(${selected.selectedExpression}) AND (${review.additionalExpression})`, new Set(review.reviewedTerms));
+      if (selected.severity !== "allow") throw new Error(`Unapproved constituent obligations: ${selected.detail}`);
+    }
+    return { ...selected, legalFiles: review.legalFiles, detail: `${selected.detail} Exact-package grant hashes reconciled; ${review.obligations.join(" ")}` };
+  } catch (error) {
+    const original = classifyLicense(license);
+    return {
+      severity: original.severity === "block" ? "block" : "review",
+      detail: `Exact-package rights evidence failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 export function auditManagedRuntimeLicenses(
@@ -75,11 +193,16 @@ export function auditManagedRuntimeLicenses(
 
 function packageLicense(pkg: Record<string, unknown>): string {
   if (typeof pkg.license === "string" && pkg.license.trim()) return pkg.license.trim();
-  if (Array.isArray(pkg.licenses)) {
-    const values = pkg.licenses
-      .map((value) => typeof value === "string" ? value : value && typeof value === "object" && "type" in value ? String(value.type) : "")
-      .filter(Boolean);
-    if (values.length) return values.join(" OR ");
+  if (Array.isArray(pkg.licenses) && pkg.licenses.length) {
+    if (pkg.licenses.length === 1) {
+      const only: unknown = pkg.licenses[0];
+      if (typeof only === "string" && only.trim()) return only.trim();
+      if (only && typeof only === "object" && "type" in only && typeof only.type === "string" && only.type.trim()) {
+        return only.type.trim();
+      }
+    }
+    // Multiple legacy entries do not establish alternative versus cumulative grants.
+    return `AMBIGUOUS LEGACY LICENSES: ${JSON.stringify(pkg.licenses)}`;
   }
   return "";
 }
@@ -100,6 +223,8 @@ export function auditInstalledNodeLicenses(
   if (!fs.statSync(nodeModules).isDirectory()) throw new Error(`Missing copied dependency directory: ${nodeModules}`);
   const findings: LicenseFinding[] = [];
   const missingPackageMetadata: string[] = [];
+  const reviews = readRightsReviews(cwd);
+  const distributionRoot = packagedNodeModules ? path.dirname(nodeModules) : path.resolve(cwd, "..");
   const ancestors = new Set<string>();
 
   function visit(directory: string, packageRoot: boolean): void {
@@ -127,11 +252,12 @@ export function auditInstalledNodeLicenses(
           const name = typeof pkg.name === "string" && pkg.name.trim() ? pkg.name : relativePath;
           const version = typeof pkg.version === "string" && pkg.version.trim() ? pkg.version : "unknown";
           const locked = packages[relativePath];
-          const classification = classifyLicense(license);
+          const classification = classifyPackageLicense(license, name, version, directory, distributionRoot, reviews);
           // Export-subpath manifests (e.g. helpers/esm/package.json) are not
           // independently installed packages. Explicit nested licenses are
           // still inspected, but only actual package roots require lock rows.
-          const drift = !packageRoot ? "" : !locked
+          const drift = !packageRoot ? "" : !pkg.name || !pkg.version
+            ? "Copied package is missing its name/version metadata." : !locked
             ? "Copied package is absent from the lockfile."
             : locked.version !== version ? `Copied version ${version} differs from locked version ${String(locked.version)}.` : "";
           findings.push({
@@ -150,9 +276,6 @@ export function auditInstalledNodeLicenses(
       const scopeContainer = path.basename(directory).startsWith("@") && path.basename(path.dirname(directory)) === "node_modules";
       for (const entry of entries) {
         const source = path.join(directory, entry.name);
-        // The installed-source mode inventories precisely the hook's retained
-        // paths. Exact-package mode inspects every directory actually present.
-        if (!packagedNodeModules && !shouldCopy(source, nodeModules)) continue;
         if (!fs.statSync(source).isDirectory()) continue;
         const childPackageRoot = scopeContainer ||
           (dependencyContainer && !entry.name.startsWith("@") && !entry.name.startsWith("."));
@@ -219,6 +342,11 @@ export function runStaticLicenseAudit(cwd: string, packagedNodeModules?: string)
   // The exact copied graph is a Node gate, not proof of optional Python packs.
   const runtime = packagedNodeModules ? [] : auditManagedRuntimeLicenses();
   const summary = summarizeLicenseFindings([...node.findings, ...runtime]);
+  for (const finding of [...node.findings, ...runtime]) {
+    if (finding.severity === "allow") {
+      console.log(`SELECTED license: ${finding.component}: ${finding.license} => ${finding.selectedExpression}`);
+    }
+  }
 
   for (const finding of summary.review) {
     console.warn(`REVIEW license: ${finding.component}: ${finding.license} — ${finding.detail}`);

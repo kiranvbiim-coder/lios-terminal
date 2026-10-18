@@ -1,6 +1,119 @@
 {
   "schemaVersion": "1",
-  "effectiveDate": "2026-10-02",
+  "effectiveDate": "2026-10-18",
+  "nodePackageReviewBoundary": "Exact package/version/declaration and retained legal-file SHA-256 evidence only; not global license approval, complete copied-graph clearance, modification review, signed-release or target qualification. Unlisted terms remain unresolved. Build-only exclusion must come from runtime closure, never license ignore lists.",
+  "nodePackageReviews": [
+    {
+      "name": "sax", "version": "1.6.0",
+      "declaredLicense": "BlueOak-1.0.0", "selectedExpression": "BlueOak-1.0.0", "reviewedTerms": ["BlueOak-1.0.0"],
+      "reviewEvidence": "Retained by the production closure. Complete installed LICENSE.md reviewed: copyright and patent grants, notice delivery rule, excuse and liability provisions. No approval of omitted development BlueOak versions is inferred.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE.md", "sha256": "8a1af140fdfbf5afd3df27f7e662f989c5b963a300020dfafce42033cae9e004"}],
+      "obligations": ["Everyone receiving any part must receive the complete Blue Oak Model License 1.0.0 text or its canonical link; retain the full supplied legal file."]
+    },
+    {
+      "name": "@fontsource/barlow-condensed", "version": "5.2.8",
+      "declaredLicense": "OFL-1.1", "selectedExpression": "OFL-1.1", "reviewedTerms": ["OFL-1.1"],
+      "reviewEvidence": "Installed LICENSE sections Permission & Conditions 1-5; client index.css imports the packaged font CSS. Copyright 2017 The Barlow Project Authors.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "046ee27d8bddc6b6ee08eee53c96dbf3ec1f6df561644e018507dd8ffcb11d31"}],
+      "obligations": ["Distribute full copyright/OFL text with fonts in an easily viewable form; do not sell fonts alone or relicense under LiOS proprietary terms.", "No LiOS font source changes recorded; reserved-name and modified-font obligations require review before any font alteration, subsetting or format conversion."]
+    },
+    {
+      "name": "@fontsource/inter", "version": "5.3.0",
+      "declaredLicense": "OFL-1.1", "selectedExpression": "OFL-1.1", "reviewedTerms": ["OFL-1.1"],
+      "reviewEvidence": "Installed LICENSE sections Permission & Conditions 1-5; client index.css imports the packaged font CSS. Copyright 2016 The Inter Project Authors.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"}],
+      "obligations": ["Distribute full copyright/OFL text with fonts in an easily viewable form; do not sell fonts alone or relicense under LiOS proprietary terms.", "No LiOS font source changes recorded; reserved-name and modified-font obligations require review before any font alteration, subsetting or format conversion."]
+    },
+    {
+      "name": "@fontsource/jetbrains-mono", "version": "5.3.0",
+      "declaredLicense": "OFL-1.1", "selectedExpression": "OFL-1.1", "reviewedTerms": ["OFL-1.1"],
+      "reviewEvidence": "Installed LICENSE sections Permission & Conditions 1-5; client index.css imports the packaged font CSS. Copyright 2020 The JetBrains Mono Project Authors.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "403581b69dac5cff4079205e01c6b467e56af449ecbd7247693ddb1baafa005b"}],
+      "obligations": ["Distribute full copyright/OFL text with fonts in an easily viewable form; do not sell fonts alone or relicense under LiOS proprietary terms.", "No LiOS font source changes recorded; reserved-name and modified-font obligations require review before any font alteration, subsetting or format conversion."]
+    },
+    {
+      "name": "rgbcolor", "version": "1.0.1",
+      "declaredLicense": "MIT OR SEE LICENSE IN FEEL-FREE.md", "selectedExpression": "MIT", "reviewedTerms": [],
+      "metadataCorrection": "Non-SPDX alternative declaration; LICENSE.md lines 1-26 explicitly offers the complete MIT grant as an alternative. Select MIT, not FEEL-FREE.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE.md", "sha256": "86045408b01f66f9319a2fe7bc7f7e115f272956ac44d2d840fc00127124a78c"}],
+      "obligations": ["Retain Copyright (c) 2016 Stoyan Stefanov and complete MIT permission/warranty text."]
+    },
+    {
+      "name": "dompurify", "version": "3.4.16",
+      "declaredLicense": "(MPL-2.0 OR Apache-2.0)", "selectedExpression": "Apache-2.0", "reviewedTerms": [],
+      "reviewEvidence": "Installed LICENSE is full Apache-2.0; LICENSE-MPL remains retained but is not the selected alternative. Upstream copyright is preserved in src/license_header and dist headers.",
+      "legalFiles": [
+        {"scope": "package", "path": "LICENSE", "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"},
+        {"scope": "package", "path": "src/license_header", "sha256": "5803fa925ae1703b9c752921c95a321570e6cabf06fcf2de895ddaf1687cebef"}
+      ],
+      "obligations": ["Retain complete Apache-2.0 agreement and source/dist attribution headers; retain any applicable NOTICE and mark changes to upstream files.", "Selecting Apache for this dual-licensed version does not approve standalone MPL dependencies."]
+    },
+    {
+      "name": "victory-vendor", "version": "36.9.2",
+      "declaredLicense": "MIT AND ISC", "selectedExpression": "MIT AND ISC", "reviewedTerms": [],
+      "additionalExpression": "BSD-3-Clause",
+      "reviewEvidence": "README Licenses declares package MIT plus vendored licenses. Vendored d3-ease is BSD-3-Clause; d3-voronoi carries BSD-3-Clause and MIT; remaining vendor legal texts are ISC. npm omits root MIT grant, supplemented verbatim from FormidableLabs/victory v36.9.2, commit dd86278d205f3f306e2ab38c317a6f9c56f0a6f8, LICENSE.txt.",
+      "upstreamLegalUrl": "https://raw.githubusercontent.com/FormidableLabs/victory/dd86278d205f3f306e2ab38c317a6f9c56f0a6f8/LICENSE.txt",
+      "legalFiles": [
+        {"scope": "distribution", "path": "third_party/licenses/victory-vendor-36.9.2-LICENSE.txt", "sha256": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4"},
+        {"scope": "package", "path": "lib-vendor/d3-array/LICENSE", "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884"},
+        {"scope": "package", "path": "lib-vendor/d3-color/LICENSE", "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884"},
+        {"scope": "package", "path": "lib-vendor/d3-ease/LICENSE", "sha256": "b989d9085148d21ff64a75e14462aefa06b2589a55553b07b1460c70081c7d08"},
+        {"scope": "package", "path": "lib-vendor/d3-format/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-interpolate/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-path/LICENSE", "sha256": "0ab21426fad1e8b819ea8ab4c7faf5a24d4fca9c01572fe722490d600bba0d22"},
+        {"scope": "package", "path": "lib-vendor/d3-scale/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-shape/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-time/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-time-format/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-timer/LICENSE", "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee"},
+        {"scope": "package", "path": "lib-vendor/d3-voronoi/LICENSE", "sha256": "ad6cf57648385d6c40a29f73c55e42922dd793823df5ea265ccd834873bf09b9"},
+        {"scope": "package", "path": "lib-vendor/internmap/LICENSE", "sha256": "9ea8903938dab5f12c4572d60725069bec2d1b0dc3bcc210b09bae946a5ebb1f"}
+      ],
+      "obligations": ["Preserve every listed MIT, ISC and BSD copyright/permission/disclaimer; reproduce BSD terms in binary distribution materials; do not imply endorsement.", "The metadata conjunction does not replace the additional BSD component obligations."]
+    },
+    {
+      "name": "pako", "version": "2.2.0",
+      "declaredLicense": "(MIT AND Zlib)", "selectedExpression": "MIT AND Zlib", "reviewedTerms": ["Zlib"],
+      "reviewEvidence": "Root LICENSE supplies MIT; lib/zlib/README lines 17-55 supplies separate zlib copyright and all three restrictions.",
+      "legalFiles": [
+        {"scope": "package", "path": "LICENSE", "sha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"},
+        {"scope": "package", "path": "lib/zlib/README", "sha256": "20356aece8f36fda34645e97af3b163da0a88e253b78ffba298590d5b9121ebb"}
+      ],
+      "obligations": ["Preserve MIT and zlib texts and source headers; do not misrepresent origin; plainly mark altered source.", "This evidence is for 2.2.0 only, not nested pako 1.x versions."]
+    },
+    {
+      "name": "pako", "version": "1.0.11",
+      "declaredLicense": "(MIT AND Zlib)", "selectedExpression": "MIT AND Zlib", "reviewedTerms": ["Zlib"],
+      "reviewEvidence": "Retained nested jszip/node_modules/pako copy separately reviewed. Root LICENSE supplies MIT; lib/zlib/README identifies zlib 1.2.8 and supplies the copyright and all three zlib restrictions.",
+      "legalFiles": [
+        {"scope": "package", "path": "LICENSE", "sha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"},
+        {"scope": "package", "path": "lib/zlib/README", "sha256": "d8b499598e43d755ea8918448128259ff01820c50d94d5a48c8883d0a594ddb1"}
+      ],
+      "obligations": ["Preserve both MIT and zlib texts and source headers; do not misrepresent origin; plainly mark altered source.", "This is a separate exact-version grant review, not inheritance of the pako 2.2.0 grant hash."]
+    },
+    {
+      "name": "argparse", "version": "2.0.1",
+      "declaredLicense": "Python-2.0", "selectedExpression": "Python-2.0", "reviewedTerms": ["Python-2.0"],
+      "reviewEvidence": "Complete installed LICENSE reviewed: historical PSF, BeOpen, CNRI and CWI grants all retained. GPL-compatible discussion is not a GPL grant.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "de4d1f2d2ad5ad0cfd1657a106476b31cb5db5ef9d1ff842b237c0c81f0c8a23"}],
+      "obligations": ["Preserve full historical license chain/copyrights and disclaimers; do not use licensors' names for endorsement.", "LiOS redistributes the upstream JavaScript port without local source edits; future derivative changes require the PSF/CNRI change summary."]
+    },
+    {
+      "name": "nodemailer", "version": "10.0.13",
+      "declaredLicense": "MIT-0", "selectedExpression": "MIT-0", "reviewedTerms": ["MIT-0"],
+      "reviewEvidence": "Installed LICENSE is MIT No Attribution: permissive grant and warranty disclaimer without the MIT attribution condition. Copyright (c) 2011-2023 Andris Reinman retained.",
+      "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "4f814dcacd2da618d62829ea1f6238701cf421f18a6b36c91c5d8212245e2c78"}],
+      "obligations": ["Retain the supplied grant/disclaimer with this unchanged package; no broad approval of unrelated license identifiers."]
+    },
+    {
+      "name": "pause", "version": "0.0.1",
+      "declaredLicense": "", "selectedExpression": "MIT", "reviewedTerms": [],
+      "metadataCorrection": "package.json omits license metadata, but installed Readme.md lines 6-29 contains the complete MIT grant, Copyright (c) 2012 TJ Holowaychuk. This exact retained grant resolves the omitted declaration only.",
+      "legalFiles": [{"scope": "package", "path": "Readme.md", "sha256": "d568e8932b83f0ae0799a3ff43b2ddd8940b5afd0ad33e70d9226a63c3a8505d"}],
+      "obligations": ["Retain the complete Readme.md copyright, MIT permission and warranty disclaimer; absent/changed grant remains release-blocking."]
+    }
+  ],
   "softwareCode": {
     "sourceOfTruth": "third_party/components.json + third_party/upstream-lock.json + locked package graphs",
     "releaseRule": "Every bundled or materially adapted donor must have a reviewed software license, exact upstream pin, destination/adaptation record, notices and regression evidence.",

@@ -30,7 +30,7 @@
     "test:econometrics": "PYTHONPATH=python-service python3 -m unittest discover -s python-service -p 'test_econometrics_extensions.py' -v",
     "test:provider-contract": "node --import tsx --test server/brainService.test.ts server/consensusService.test.ts server/economicsData.test.ts server/marketData.test.ts server/researchSearch.test.ts server/researchService.test.ts",
     "test:release-preflight": "node --import tsx --test script/release_preflight.test.ts",
-    "test:desktop": "node --check desktopSecretCustody.cjs && node --check desktopIpcSecurity.cjs && node --check desktopLogRedaction.cjs && node --check desktopBackupRestore.cjs && node --check desktopPythonSidecar.cjs && node --check desktopSelfTest.cjs && node --check desktopMacPackSigning.cjs && node --check p14PerformanceBudget.cjs && node --check script/validate_p14_packaged_performance_probe.cjs && node --check script/build_python_sidecar.cjs && node --check script/verify_packaged_python_sidecar.cjs && node --check script/afterPackCopyNodeModules.cjs && node script/run_project_tests.mjs desktop && node --test script/afterPackCopyNodeModules.test.cjs",
+    "test:desktop": "node --check desktopSecretCustody.cjs && node --check desktopIpcSecurity.cjs && node --check desktopLogRedaction.cjs && node --check desktopBackupRestore.cjs && node --check desktopPythonSidecar.cjs && node --check desktopSelfTest.cjs && node --check desktopMacPackSigning.cjs && node --check p14PerformanceBudget.cjs && node --check script/validate_p14_packaged_performance_probe.cjs && node --check script/build_python_sidecar.cjs && node --check script/verify_packaged_python_sidecar.cjs && node --check script/afterPackCopyNodeModules.cjs && node script/run_project_tests.mjs desktop && node --test script/afterPackCopyNodeModules.test.cjs script/runtimeDependencyClosure.test.cjs",
     "test:sandbox-image": "node --check desktopSandboxImage.cjs && node --check script/sandbox_image_release.cjs && node --test desktopSandboxImage.test.cjs",
     "smoke:local": "tsx script/smoke_local.ts",
     "coding:runtime": "tsx script/acp_runtime_capabilities.ts",
@@ -250,6 +250,7 @@
     "esbuild": "^0.25.0",
     "postcss": "^8.5.26",
     "remotion": "4.0.528",
+    "spdx-expression-parse": "5.0.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.20.5",
@@ -320,6 +321,7 @@
       "desktopWorkspace.cjs",
       "desktopCsp.cjs",
       "dataRootCore.cjs",
+      "governedDataMigration.cjs",
       "desktopPort.cjs",
       "desktopRequestTrust.cjs",
       "preload.cjs",
@@ -334,6 +336,18 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "../THIRD_PARTY_NOTICES.md",
+        "to": "legal/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "legal/LICENSE"
+      },
+      {
+        "from": "../third_party/licenses",
+        "to": "legal/licenses"
+      },
       "python-sidecar-dist/**/*",
       "sandbox-image-dist/**/*",
       "sandbox-image/CDLA-Permissive-2.0.txt",

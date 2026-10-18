@@ -1,7 +1,7 @@
 # LiOS Third-Party Notices
 
-**Effective:** 2026-10-05
-**Repository:** `kiranvbiim-coder/lios-v1.0.0`
+**Effective:** 2026-10-18
+**Repository:** `kiranvbiim-coder/lios-terminal`
 
 LiOS uses open-source software aggressively, but code licenses, external API/data rights, model-weight licenses, assets, trademarks and service terms are tracked as separate concerns.
 
@@ -9,10 +9,125 @@ This file is the human-readable notice entry point. The machine-readable source 
 
 - `third_party/components.json`
 - `third_party/upstream-lock.json`
+- `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
 
-The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook copies installed Node dependencies including dev-only packages, so the exact copied graph must also reconcile against the lockfile before binary release; production-only audits are not sufficient for that copy.
+The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook selects the locked production/optional/peer dependency closure plus the explicitly retained TypeScript operator-tool root, preserving original installation paths. This is not a `dev`-flag filter: any development-marked package reached by that closure remains included, and the auditor inventories **every package actually copied**, including unexpected extras. Build-only exclusion is a reachability decision, never a license ignore list.
 
-The desktop ASAR rebuild retains this notice file, the root proprietary original-code `LICENSE`, the complete `third_party/licenses/` tree and dependency LICENSE/COPYING/NOTICE files and legal directories, including case variants. These retained bytes and license metadata do not by themselves establish redistribution rights or exact-package qualification. Unknown/restricted terms, missing metadata, lock drift and untracked copied packages block the hook's binary packaging path; complete notice obligations, native/sidecar/sandbox/model/data/asset rights and full copied-graph vulnerability clearance remain separate release prerequisites.
+The desktop ASAR rebuild retains this notice file, the root proprietary original-code `LICENSE`, the complete `third_party/licenses/` tree and full selected package payloads, including LICENSE/COPYING/NOTICE files, README grants, legal directories and source attribution headers. Binary resources also carry an ordinary-text copy of these root legal materials under `Resources/legal` (`resources/legal` on platforms using that directory spelling), so accompanying notices can be read without extracting ASAR. Unknown/restricted terms, missing metadata, missing/tampered reviewed grants, lock drift and untracked copied packages block binary packaging. Preserved bytes and source rights reviews do not establish signing, exact-target release qualification or complete sidecar/sandbox/model/data/asset rights.
+
+### Selected runtime alternatives and cumulative obligations
+
+`src/script/audit_supply_chain.ts` parses SPDX precedence and parentheses. It selects a complete recognized `OR` branch and requires every `AND` term. Unapproved `WITH` exceptions remain unresolved. Exact package/declaration corrections below depend on the retained legal-file SHA-256 records in `third_party/release-rights-matrix.json`; they are not general approval of unknown declarations or other versions. The audit records each package's selected expression.
+
+| Package/version | Selected terms and retained material |
+| --- | --- |
+| `dompurify@3.4.16` | Apache-2.0 alternative, not MPL-2.0. Complete package `LICENSE`, `src/license_header` and distribution attribution headers remain; retain applicable NOTICE and mark upstream modifications. |
+| `rgbcolor@1.0.1` | MIT alternative expressly offered in `LICENSE.md`; Copyright (c) 2016 Stoyan Stefanov. The non-SPDX `FEEL-FREE.md` alternative is not selected. |
+| `victory-vendor@36.9.2` | MIT **and** ISC plus BSD-3-Clause component obligations. All `lib-vendor/*/LICENSE` texts remain, including d3-ease's BSD terms and d3-voronoi's BSD/MIT terms. Root package MIT grant, omitted by npm, is preserved verbatim at `third_party/licenses/victory-vendor-36.9.2-LICENSE.txt`, from [Victory v36.9.2 commit `dd86278d205f3f306e2ab38c317a6f9c56f0a6f8`](https://github.com/FormidableLabs/victory/blob/dd86278d205f3f306e2ab38c317a6f9c56f0a6f8/LICENSE.txt). Preserve all copyright, permission, disclaimer and binary-redistribution notices; no endorsement is implied. |
+| `pako@2.2.0` and nested `jszip/node_modules/pako@1.0.11` | MIT **and** Zlib; preserve each version's root `LICENSE`, `lib/zlib/README` and source headers, identify altered source and do not misrepresent origin. The exact versions have separate grant-hash reviews: the zlib README identifies 1.3.2 and 1.2.8 respectively. |
+| `argparse@2.0.1` | Python-2.0 with full historical PSF, BeOpen, CNRI and CWI license chain in package `LICENSE`. LiOS redistributes the upstream JavaScript port without local source changes; future changes require the PSF/CNRI change summaries and attribution/endorsement rules. GPL compatibility discussion in that text is not a GPL distribution grant. |
+| `nodemailer@10.0.13` | MIT-0; supplied `LICENSE` retains Copyright (c) 2011-2023 Andris Reinman, full permissive grant and disclaimer. |
+| `sax@1.6.0` | Blue Oak Model License 1.0.0, full package `LICENSE.md`; each recipient of any part must receive that text or [its canonical link](https://blueoakcouncil.org/license/1.0.0). Omitted development BlueOak packages are not approved by this entry. |
+| `pause@0.0.1` | MIT, Copyright (c) 2012 TJ Holowaychuk. Package metadata omits the declaration; complete `Readme.md` license section supplies the exact reviewed grant and must remain intact. |
+
+Standalone MPL dependencies, Remotion commercial eligibility/distribution and unknown grants are **not** cleared by these selections. If Remotion is used to produce commercial media, the operator must establish entity eligibility or applicable paid terms; if intentionally redistributed, those terms must cover that exact distribution. Omitting development code from a runtime closure does not settle rights in prior promotional-media production.
+
+### Bundled fonts — SIL Open Font License 1.1
+
+The client imports the unchanged Fontsource CSS/WOFF assets for:
+
+- `@fontsource/barlow-condensed@5.2.8`: Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow).
+- `@fontsource/inter@5.3.0`: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).
+- `@fontsource/jetbrains-mono@5.3.0`: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono).
+
+Each package's complete original copyright and OFL agreement remains in its `LICENSE`, hash-pinned by the rights matrix. The common agreement is reproduced below in the accompanying readable notice. Font software remains OFL-licensed, not proprietary LiOS material; no sale of fonts alone, endorsement or reserved-name permission is claimed. No LiOS font source alterations are recorded; any future alteration, subsetting or format conversion requires the modified-font/name conditions to be evaluated before distribution.
+
+```text
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```
 
 ## Bundled production dependencies added in P1
 

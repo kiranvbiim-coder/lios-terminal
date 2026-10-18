@@ -14,27 +14,18 @@
 // disk-saving setup for git worktrees). electron-builder's dependency
 // walker does not handle that redirection correctly for every package.
 //
-// Fix: after electron-builder finishes packaging, throw away its app.asar
-// and app.asar.unpacked entirely and rebuild BOTH from a staging directory
-// that (a) extracts everything electron-builder DID get right out of the
-// original app.asar (dist/**, main.cjs, build-resources/**, etc.) and (b)
-// overlays a full, dereferenced copy of the real node_modules on top. This
-// sidesteps electron-builder's dependency-tree resolution entirely for
-// both the archive and its unpacked mirror.
+// Rebuild the archive from its original application payload and an explicit
+// lockfile-path runtime closure. Physical node_modules may remain symlinked;
+// package identity and original nested/hoisted placements remain authoritative.
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
+const { finished } = require("node:stream/promises");
 const asar = require("@electron/asar");
 const plist = require("plist");
-
-const EXCLUDE_DIR_NAMES = new Set([".bin", "test", "tests", "__tests__", "example", "examples", ".github"]);
-const EXCLUDE_EXTENSIONS = new Set([".md", ".map", ".ts", ".flow"]);
-// Legal files and the complete contents of legal directories take precedence
-// over size pruning. Some dependencies put their only terms in LICENSE.md or
-// licenses/<component>/README.md, including case variants.
-const LEGAL_PATH_NAME = /^(?:third[-_]?party[-_])?(?:licen[cs]es?|copying|notices?)(?:[._-].*)?$/i;
+const { selectRuntimeClosure, copyRuntimeClosure, closureEvidence } = require("./runtimeDependencyClosure.cjs");
 
 /** Enumerate every bundled root-rights source so verification cannot miss nested donor grants. */
 function rootRightsFiles(repoRoot) {
@@ -89,14 +80,13 @@ function updateMacEmbeddedAsarIntegrity(contentsDir, asarPath) {
   return hash;
 }
 
-function shouldCopy(srcPath, sourceRoot) {
-  const relativePath = sourceRoot ? path.relative(sourceRoot, srcPath) : path.basename(srcPath);
-  if (relativePath.split(path.sep).some((part) => LEGAL_PATH_NAME.test(part))) return true;
-  const base = path.basename(srcPath);
-  if (EXCLUDE_DIR_NAMES.has(base)) return false;
-  const ext = path.extname(srcPath);
-  if (ext && EXCLUDE_EXTENSIONS.has(ext)) return false;
-  return true;
+function verifyDependencyLegalBytes(asarPath, files) {
+  for (const file of files) {
+    const archived = asar.extractFile(asarPath, path.normalize(file.path));
+    if (crypto.createHash("sha256").update(archived).digest("hex") !== file.sha256) {
+      throw new Error(`[afterPackCopyNodeModules] Dependency legal bytes changed in rebuilt ASAR: ${file.path}; package signing refused.`);
+    }
+  }
 }
 
 module.exports = async function afterPack(context) {
@@ -127,14 +117,21 @@ module.exports = async function afterPack(context) {
     throw new Error(`[afterPackCopyNodeModules] app.asar not found at ${asarPath}.`);
   }
 
-  const sourceCount = fs.readdirSync(srcNodeModules).length;
-  console.log(
-    `[afterPackCopyNodeModules] Rebuilding app.asar with a full node_modules copy ` +
-      `(electron-builder's dependency walker is known to drop transitive deps on this project). ` +
-      `src=${srcNodeModules} (${sourceCount} top-level packages)`,
-  );
+  const closure = selectRuntimeClosure({
+    projectDir,
+    platform: electronPlatformName,
+    arch: context.arch,
+    libc: electronPlatformName === "linux" && process.platform === "linux"
+      ? (process.report.getReport().header.glibcVersionRuntime ? "glibc" : "musl")
+      : undefined,
+  });
+  console.log(`[afterPackCopyNodeModules] Runtime dependency closure: ${JSON.stringify(closureEvidence(closure))}`);
 
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-asar-rebuild-"));
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-asar-rebuild-"));
+  const stagingDir = path.join(workDir, "payload");
+  const candidatePath = path.join(workDir, "rebuilt", "app.asar");
+  fs.mkdirSync(stagingDir);
+  fs.mkdirSync(path.dirname(candidatePath));
   try {
     // 1. Extract everything electron-builder got right (dist/**, main.cjs,
     //    build-resources/**, package.json, ...) out of the original asar.
@@ -154,28 +151,12 @@ module.exports = async function afterPack(context) {
       });
     }
 
-    // 2. Blow away whatever partial/broken node_modules ended up in the
-    //    staging tree and replace with a full dereferenced copy of the
-    //    real thing.
+    // Replace the partial builder tree with package payloads selected by their
+    // exact lock locations, without recursively copying unselected children.
     const stagingNodeModules = path.join(stagingDir, "node_modules");
     fs.rmSync(stagingNodeModules, { recursive: true, force: true });
     fs.mkdirSync(stagingNodeModules, { recursive: true });
-    fs.cpSync(srcNodeModules, stagingNodeModules, {
-      recursive: true,
-      dereference: true,
-      mode: fs.constants.COPYFILE_FICLONE,
-      filter: (source) => shouldCopy(source, srcNodeModules),
-    });
-
-    const destCount = fs.readdirSync(stagingNodeModules).length;
-    console.log(`[afterPackCopyNodeModules] Staged ${destCount} top-level packages.`);
-    if (destCount < sourceCount - 1) {
-      // -1 tolerates the excluded ".bin" entry.
-      console.warn(
-        `[afterPackCopyNodeModules] WARNING: staged count (${destCount}) is notably lower than source count ` +
-          `(${sourceCount}); verify exclude filters did not drop a required top-level package.`,
-      );
-    }
+    const dependencyLegalFiles = copyRuntimeClosure(closure, stagingDir);
 
     // Audit the graph actually copied, including dev-only and unlocked packages,
     // before replacing the archive or handing the bundle to code signing.
@@ -190,22 +171,37 @@ module.exports = async function afterPack(context) {
       throw new Error(`[afterPackCopyNodeModules] Copied dependency license audit failed (exit ${audit.status}); binary release blocked.`);
     }
 
-    // 3. Rebuild app.asar from the corrected staging tree, unpacking the
-    //    same paths the original build config unpacked (dist/**, node_modules/**).
-    fs.rmSync(asarPath, { force: true });
-    fs.rmSync(unpackedDir, { recursive: true, force: true });
-    await asar.createPackageWithOptions(stagingDir, asarPath, {
+    // Build and validate a candidate without destroying the healthy archive.
+    // The existing plist must already support embedded integrity before any
+    // replacement; its hash is refreshed only after all byte checks succeed.
+    if (electronPlatformName === "darwin") {
+      const info = plist.parse(fs.readFileSync(path.join(path.dirname(resourcesDir), "Info.plist"), "utf8"));
+      if (!info.ElectronAsarIntegrity?.["Resources/app.asar"]) {
+        throw new Error("Missing ElectronAsarIntegrity.Resources/app.asar before archive replacement");
+      }
+    }
+    // @electron/asar resolves with out.end(), not the stream's finish/close.
+    // Wait for flushed bytes before inspecting, copying or deleting its source.
+    const archiveStream = await asar.createPackageWithOptions(stagingDir, candidatePath, {
       unpack: "{dist/**,node_modules/**}",
       unpackDir: "{dist,node_modules}",
     });
-    // extractAll cached the old index under this same archive path.
-    // Consumers in this process must inspect the newly rebuilt notice files.
-    asar.uncache(asarPath);
+    await finished(archiveStream);
 
     // Signing must never bless an archive with silently zero-filled or
     // otherwise modified proprietary/donor terms, even when the header and
     // integrity hash themselves are internally consistent.
-    verifyRootRightsBytes(repoRoot, asarPath, requiredRights);
+    verifyRootRightsBytes(repoRoot, candidatePath, requiredRights);
+    verifyDependencyLegalBytes(candidatePath, dependencyLegalFiles);
+    fs.rmSync(unpackedDir, { recursive: true, force: true });
+    if (fs.existsSync(candidatePath + ".unpacked")) {
+      fs.cpSync(candidatePath + ".unpacked", unpackedDir, {
+        recursive: true,
+        mode: fs.constants.COPYFILE_FICLONE,
+      });
+    }
+    fs.copyFileSync(candidatePath, asarPath, fs.constants.COPYFILE_FICLONE);
+    asar.uncache(asarPath);
 
     if (electronPlatformName === "darwin") {
       const hash = updateMacEmbeddedAsarIntegrity(path.dirname(resourcesDir), asarPath);
@@ -217,9 +213,8 @@ module.exports = async function afterPack(context) {
       `[afterPackCopyNodeModules] app.asar.unpacked present after rebuild: ${fs.existsSync(unpackedDir)}`,
     );
   } finally {
-    fs.rmSync(stagingDir, { recursive: true, force: true });
+    fs.rmSync(workDir, { recursive: true, force: true });
   }
 };
 
 module.exports.updateMacEmbeddedAsarIntegrity = updateMacEmbeddedAsarIntegrity;
-module.exports.shouldCopy = shouldCopy;
