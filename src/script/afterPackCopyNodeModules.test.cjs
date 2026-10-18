@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { finished } = require("node:stream/promises");
 const asar = require("@electron/asar");
 const plist = require("plist");
 const afterPack = require("./afterPackCopyNodeModules.cjs");
@@ -21,7 +22,7 @@ test("refreshes macOS embedded ASAR integrity after replacing app.asar", async (
     fs.mkdirSync(resourcesDir, { recursive: true });
     fs.mkdirSync(sourceDir, { recursive: true });
     fs.writeFileSync(path.join(sourceDir, "main.js"), "module.exports = 'LiOS';\n");
-    await asar.createPackage(sourceDir, asarPath);
+    await finished(await asar.createPackage(sourceDir, asarPath));
     fs.writeFileSync(
       infoPlistPath,
       plist.build({
@@ -73,19 +74,30 @@ async function createPackFixture() {
   for (const directory of [projectDir, resourcesDir, originalSource, installedModules]) {
     fs.mkdirSync(directory, { recursive: true });
   }
-  fs.symlinkSync(installedModules, path.join(projectDir, "node_modules"), "dir");
+  fs.symlinkSync(installedModules, path.join(projectDir, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  const dependencies = { "@fixture/runtime": "1.0.0" };
+  const devDependencies = { "dev-tool": "3.0.0", tsx: "4.0.0" };
   const lockedPackages = {
-    "node_modules/@fixture/runtime": { version: "1.0.0" },
+    "": { dependencies, devDependencies },
+    "node_modules/@fixture/runtime": { version: "1.0.0", dependencies: { nested: "2.0.0", shared: "1.0.0" } },
     "node_modules/@fixture/runtime/node_modules/nested": { version: "2.0.0" },
+    "node_modules/shared": { version: "1.0.0" },
+    "node_modules/tsx": { version: "4.0.0", dev: true, dependencies: { "operator-helper": "1.0.0" } },
+    "node_modules/operator-helper": { version: "1.0.0", dev: true },
     "node_modules/dev-tool": { version: "3.0.0", dev: true },
+    "node_modules/@fixture/runtime/node_modules/unrelated": { version: "9.0.0", dev: true },
   };
   for (const [relativePath, entry] of Object.entries(lockedPackages)) {
+    if (!relativePath) continue;
     const directory = path.join(projectDir, relativePath);
     fs.mkdirSync(directory, { recursive: true });
     const name = relativePath.slice(relativePath.lastIndexOf("node_modules/") + "node_modules/".length);
-    fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ name, version: entry.version, license: "MIT" }));
+    fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({
+      name, version: entry.version, ...(name === "dev-tool" ? {} : { license: "MIT" }),
+    }));
     fs.writeFileSync(path.join(directory, "index.js"), `module.exports = ${JSON.stringify(name)};\n`);
   }
+  fs.writeFileSync(path.join(projectDir, "package.json"), JSON.stringify({ dependencies, devDependencies }));
   fs.writeFileSync(path.join(projectDir, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: lockedPackages }));
   const legalBytes = {
     LICENSE: "LiOS fixture proprietary rights. All rights reserved.\n",
@@ -97,11 +109,12 @@ async function createPackFixture() {
     fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
     fs.writeFileSync(path.join(root, relativePath), bytes);
   }
+  fs.writeFileSync(path.join(root, "third_party", "release-rights-matrix.json"), JSON.stringify({ nodePackageReviews: [] }));
   fs.writeFileSync(path.join(originalSource, "main.cjs"), "module.exports = 'original app';\n");
   fs.mkdirSync(path.join(originalSource, "dist"), { recursive: true });
   fs.writeFileSync(path.join(originalSource, "dist", "server.cjs"), "module.exports = 'bundled server';\n");
   const asarPath = path.join(resourcesDir, "app.asar");
-  await asar.createPackage(originalSource, asarPath);
+  await finished(await asar.createPackage(originalSource, asarPath));
   fs.writeFileSync(path.join(contentsDir, "Info.plist"), plist.build({
     CFBundleName: "LiOS",
     ElectronAsarIntegrity: { "Resources/app.asar": { algorithm: "SHA256", hash: "original-hash", fixture: "retained" } },
@@ -109,6 +122,7 @@ async function createPackFixture() {
   return {
     root, projectDir, contentsDir, resourcesDir, asarPath, legalBytes,
     context: {
+      arch: "arm64",
       appOutDir: path.join(root, "out"),
       electronPlatformName: "darwin",
       packager: { projectDir, appInfo: { productFilename: "LiOS" } },
@@ -127,13 +141,17 @@ test("rebuilds a real ASAR with root rights, case-variant dependency notices and
     "LiCeNsEs/vendor/README.md": "Vendor terms in an otherwise pruned README.\n",
     "third-party-licenses/vendor/tests/notice.ts": "Complete legal directory contents.\n",
     "binding.node": Buffer.from([0, 1, 2, 255]),
+    "runtime.ts": "export const runtimeAsset = true;\n",
+    "worker.mjs": "export const workerAsset = true;\n",
+    "assets/runtime.wasm": Buffer.from([0, 97, 115, 109]),
+    "examples/runtime.js": "module.exports = 'runtime asset, not dead documentation';\n",
   };
   try {
     for (const [relativePath, bytes] of Object.entries(dependencyBytes)) {
       fs.mkdirSync(path.dirname(path.join(packageDir, relativePath)), { recursive: true });
       fs.writeFileSync(path.join(packageDir, relativePath), bytes);
     }
-    fs.writeFileSync(path.join(packageDir, "README.md"), "Ordinary dependency documentation remains pruned.\n");
+    fs.writeFileSync(path.join(packageDir, "README.md"), "Complete selected package payload remains intact.\n");
     await afterPack(fixture.context);
 
     for (const [relativePath, bytes] of Object.entries(fixture.legalBytes)) {
@@ -144,10 +162,14 @@ test("rebuilds a real ASAR with root rights, case-variant dependency notices and
       assert.deepEqual(asar.extractFile(fixture.asarPath, path.normalize(archivePath)), Buffer.from(bytes));
       assert.deepEqual(fs.readFileSync(path.join(fixture.resourcesDir, "app.asar.unpacked", archivePath)), Buffer.from(bytes));
     }
-    assert.throws(() => asar.statFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/README.md")));
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/README.md")).toString(), /Complete selected package/);
     assert.match(asar.extractFile(fixture.asarPath, "main.cjs").toString(), /original app/);
     assert.match(asar.extractFile(fixture.asarPath, path.normalize("dist/server.cjs")).toString(), /bundled server/);
-    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/dev-tool/index.js")).toString(), /dev-tool/);
+    assert.throws(() => asar.statFile(fixture.asarPath, path.normalize("node_modules/dev-tool/index.js")));
+    assert.throws(() => asar.statFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/node_modules/unrelated/index.js")));
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/tsx/index.js")).toString(), /tsx/);
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/operator-helper/index.js")).toString(), /operator-helper/);
+    assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/shared/index.js")).toString(), /shared/);
     assert.match(asar.extractFile(fixture.asarPath, path.normalize("node_modules/@fixture/runtime/node_modules/nested/index.js")).toString(), /nested/);
     const expectedHash = crypto.createHash("sha256").update(asar.getRawHeader(fixture.asarPath).headerString).digest("hex");
     const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
@@ -170,12 +192,12 @@ test("blocks missing root rights sources before replacing the real archive", asy
   }
 });
 
-test("blocks an unresolved dev-only license before replacing the archive or its embedded integrity", async () => {
+test("blocks an unresolved selected dev-metadata runtime license before replacing the archive or its embedded integrity", async () => {
   const fixture = await createPackFixture();
   try {
     const originalArchive = fs.readFileSync(fixture.asarPath);
-    const manifestPath = path.join(fixture.projectDir, "node_modules", "dev-tool", "package.json");
-    fs.writeFileSync(manifestPath, JSON.stringify({ name: "dev-tool", version: "3.0.0" }));
+    const manifestPath = path.join(fixture.projectDir, "node_modules", "operator-helper", "package.json");
+    fs.writeFileSync(manifestPath, JSON.stringify({ name: "operator-helper", version: "1.0.0" }));
     await assert.rejects(afterPack(fixture.context), /Copied dependency license audit failed.*binary release blocked/);
     assert.deepEqual(fs.readFileSync(fixture.asarPath), originalArchive);
     const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
@@ -190,6 +212,7 @@ test("fails closed before signing when rebuilt ASAR mutates a nested donor grant
   const donorSource = path.join(fixture.root, "third_party", "licenses");
   const targetRelative = "third_party/licenses/donor/README.md";
   const donorExpected = fs.readFileSync(path.join(fixture.root, targetRelative));
+  const originalArchive = fs.readFileSync(fixture.asarPath);
   const cpSync = fs.cpSync.bind(fs);
   let legalCopySeen = false;
 
@@ -211,6 +234,7 @@ test("fails closed before signing when rebuilt ASAR mutates a nested donor grant
     mock.mock.restore();
     assert.equal(legalCopySeen, true);
     assert.deepEqual(fs.readFileSync(path.join(fixture.root, targetRelative)), donorExpected);
+    assert.deepEqual(fs.readFileSync(fixture.asarPath), originalArchive);
     const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
     assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, "original-hash",
       "a broken archive must never receive a new embedded integrity signature");
@@ -238,6 +262,42 @@ test("refuses symlinked donor legal grants before replacing a previously healthy
     const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
     assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, "original-hash");
     assert.equal(fs.readFileSync(external, "utf8"), "PRIVATE_DOCUMENT_MUST_NOT_BE_BUNDLED");
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("missing required dependency edge preserves the archive and integrity metadata", async () => {
+  const fixture = await createPackFixture();
+  try {
+    const originalArchive = fs.readFileSync(fixture.asarPath);
+    fs.rmSync(path.join(fixture.projectDir, "node_modules", "shared"), { recursive: true });
+    await assert.rejects(afterPack(fixture.context), /Missing required installed edge/);
+    assert.deepEqual(fs.readFileSync(fixture.asarPath), originalArchive);
+    const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
+    assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, "original-hash");
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("dependency legal-byte mutation in candidate ASAR refuses archive replacement", async (t) => {
+  const fixture = await createPackFixture();
+  try {
+    const licensePath = path.join(fixture.projectDir, "node_modules/@fixture/runtime/LICENSE");
+    fs.writeFileSync(licensePath, "MIT legal bytes that must survive archive creation.\n");
+    const originalArchive = fs.readFileSync(fixture.asarPath);
+    const createPackage = asar.createPackageWithOptions.bind(asar);
+    t.mock.method(asar, "createPackageWithOptions", async (source, destination, options) => {
+      const stream = await createPackage(source, destination, options);
+      await finished(stream);
+      fs.writeFileSync(path.join(destination + ".unpacked", "node_modules/@fixture/runtime/LICENSE"), "mutated terms");
+      return stream;
+    });
+    await assert.rejects(afterPack(fixture.context), /Dependency legal bytes changed in rebuilt ASAR/);
+    assert.deepEqual(fs.readFileSync(fixture.asarPath), originalArchive);
+    const info = plist.parse(fs.readFileSync(path.join(fixture.contentsDir, "Info.plist"), "utf8"));
+    assert.equal(info.ElectronAsarIntegrity["Resources/app.asar"].hash, "original-hash");
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

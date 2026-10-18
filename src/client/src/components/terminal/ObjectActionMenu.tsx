@@ -66,6 +66,7 @@ export function ObjectActionMenu({
   onAction,
 }: ObjectActionMenuProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const pendingAction = useRef<LifecycleAction | null>(null);
   const items = getLifecycleMenuItems({ kind, status, pinned, scope }, { hidden, disabled });
   if (!items.length) return null;
 
@@ -82,7 +83,19 @@ export function ObjectActionMenu({
           <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[190px] border-border/80 bg-[#0a0a0a] p-1">
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[190px] border-border/80 bg-[#0a0a0a] p-1"
+        onCloseAutoFocus={(event) => {
+          const action = pendingAction.current;
+          pendingAction.current = null;
+          if (action === null) return;
+          // Release the menu's modal layer before an action opens another dialog.
+          event.preventDefault();
+          triggerRef.current?.focus();
+          onAction(action, triggerRef.current);
+        }}
+      >
         <DropdownMenuLabel className="px-2 py-1 font-terminal text-[7px] uppercase tracking-[0.18em] text-muted-foreground">
           {kind} actions
         </DropdownMenuLabel>
@@ -97,7 +110,7 @@ export function ObjectActionMenu({
               aria-label={item.disabledReason ? `${item.label}. ${item.disabledReason}` : item.label}
               title={item.disabledReason}
               onSelect={() => {
-                if (!isDisabled) onAction(item.id, triggerRef.current);
+                if (!isDisabled) pendingAction.current = item.id;
               }}
               className={`font-ui text-[8px] ${item.danger ? "text-red-300 focus:text-red-200" : "text-foreground"}`}
             >

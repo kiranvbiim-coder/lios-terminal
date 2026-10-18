@@ -25,9 +25,21 @@ function findPackagedResources(root) {
   return candidates[0];
 }
 
+function evidenceOutputPath(root, configured) {
+  let bundle = path.resolve(root);
+  while (!bundle.endsWith(".app") && path.dirname(bundle) !== bundle) bundle = path.dirname(bundle);
+  const appBundle = bundle.endsWith(".app") ? bundle : null;
+  const report = path.resolve(configured || path.join(appBundle ? path.dirname(appBundle) : path.dirname(root), "python-sidecar-evidence.json"));
+  if (appBundle && (report === appBundle || report.startsWith(appBundle + path.sep))) {
+    throw new Error("Sidecar evidence must be written outside the signed application bundle.");
+  }
+  return report;
+}
+
 async function main() {
   const root = path.resolve(process.argv[2] || path.join(__dirname, "..", "dist-app"));
   const resourcesPath = findPackagedResources(root);
+  const reportPath = evidenceOutputPath(resourcesPath, process.env.LIOS_PYTHON_SIDECAR_EVIDENCE);
   const executable = bundledPythonSidecarPath(resourcesPath);
   const health = await probeBundledPythonSidecar({ executable });
 
@@ -41,12 +53,14 @@ async function main() {
     requiredPackages: health.packages,
     status: "verified",
   };
-  const reportPath = process.env.LIOS_PYTHON_SIDECAR_EVIDENCE || path.join(path.dirname(root), "python-sidecar-evidence.json");
+  // Never add evidence to sealed app resources after signature verification.
   fs.writeFileSync(reportPath, JSON.stringify(evidence, null, 2) + "\n", "utf8");
   console.log(JSON.stringify(evidence, null, 2));
 }
 
-main().catch((error) => {
+if (require.main === module) main().catch((error) => {
   console.error(error instanceof Error ? error.stack || error.message : String(error));
-  process.exit(1);
+  process.exitCode = 1;
 });
+
+module.exports = { evidenceOutputPath };
