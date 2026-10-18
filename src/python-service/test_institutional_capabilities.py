@@ -152,6 +152,24 @@ class InstitutionalCapabilityTests(unittest.TestCase):
             for actual, expected in zip(actual_row, expected_row):
                 self.assertAlmostEqual(actual, expected, places=10)
 
+    def test_probabilistic_dcf_refuses_negative_revenue_in_scenarios_and_draws(self):
+        for growth, volatility in [(-150, 0), (-99, 50)]:
+            with self.subTest(growth=growth, volatility=volatility):
+                request = aval.ProbabilisticDcfRequest(
+                    currentRevenue=100, sharesOutstanding=10, years=1,
+                    waccPct=10, terminalGrowthPct=0,
+                    scenarios=[aval.DcfScenario(
+                        name="owned boundary case", revenueGrowthPct=growth,
+                        ebitMarginPct=20, taxRatePct=0,
+                        reinvestmentPctOfRevenue=30, probability=1,
+                    )], nSimulations=1000, growthVolPct=volatility, marginVolPct=0, seed=42,
+                )
+                with self.assertRaisesRegex(ValueError, "at least -100%"):
+                    aval.probabilistic_dcf(request)
+
+    def test_dcf_total_revenue_loss_is_zero_not_a_reinvestment_credit(self):
+        self.assertEqual(aval._dcf_value(100, -1, .2, 0, .3, 1, .1, 0, 0), 0)
+
     def test_rating_transition_identity_is_unchanged(self):
         out = acr.rating_migration(acr.MigrationMatrixRequest(
             ratings=["A", "D"], transitionMatrix=[[1, 0], [0, 1]], currentDistribution=[1, 0], periods=5,

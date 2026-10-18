@@ -31,6 +31,13 @@ function resolveModel(modelId: string): QuantModelRegistryEntry {
   return model;
 }
 
+export function assertCurrentQuantModelVersion(record: Pick<QuantExperiment, "modelId" | "modelVersion">): void {
+  const model = resolveModel(record.modelId);
+  if (record.modelVersion !== model.version) {
+    throw new Error(`Quant model version mismatch: saved ${record.modelId}@${record.modelVersion}, current version ${model.version}. Create a current-version experiment and explicitly reconcile its inputs before running; historical inputs are not migrated automatically.`);
+  }
+}
+
 async function environmentFor(model: QuantModelRegistryEntry) {
   const python = await getPythonServiceEnvironment();
   return {
@@ -119,7 +126,8 @@ export async function editQuantExperiment(id: string, ownerUserId: number, patch
   await validateInvestigation(investigationId, organizationId);
   await snapshotHashes(datasetIds, organizationId);
   if (patch.parameters && byteSize(patch.parameters) > MAX_INPUT_BYTES) throw new Error("Experiment parameters exceed the 1 MB input limit.");
-  const [updated] = await getDb().update(quantExperiments).set({ ...patch, modelVersion: model.version, updatedAt: new Date() })
+  const modelVersion = model.id === existing.modelId ? existing.modelVersion : model.version;
+  const [updated] = await getDb().update(quantExperiments).set({ ...patch, modelVersion, updatedAt: new Date() })
     .where(and(eq(quantExperiments.id, id), eq(quantExperiments.ownerUserId, ownerUserId))).returning();
   return updated ?? null;
 }
@@ -159,6 +167,7 @@ export async function enqueueQuantRun(experimentId: string, ownerUserId: number,
   const experiment = await getQuantExperiment(experimentId, ownerUserId);
   if (!experiment) throw new Error("Experiment not found.");
   if (experiment.status !== "active") throw new Error("Archived experiments cannot run.");
+  assertCurrentQuantModelVersion(experiment);
   await enforceQuota(ownerUserId);
   const model = resolveModel(experiment.modelId);
   const parameters = request.parameters ?? experiment.parameters;
@@ -290,6 +299,7 @@ export async function getQuantRun(id: string, ownerUserId?: number) {
 
 export async function rerunQuantRun(id: string, ownerUserId: number, bypassCache = true) {
   const run = await getQuantRun(id, ownerUserId); if (!run) throw new Error("Run not found.");
+  assertCurrentQuantModelVersion(run);
   return enqueueQuantRun(run.experimentId, ownerUserId, { parameters: run.parameters, datasetSnapshotIds: run.datasetSnapshotIds, seed: run.seed, timeoutMs: run.timeoutMs, bypassCache });
 }
 

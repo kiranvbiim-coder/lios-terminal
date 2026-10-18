@@ -576,7 +576,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
     { kind: "number", key: "waccPct", label: "WACC PCT", default: 10 },
     { kind: "number", key: "terminalGrowthPct", label: "TERMINAL GROWTH PCT", default: 3 },
     { kind: "number", key: "taxRatePct", label: "TAX RATE PCT", default: 25 },
-    { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 30 },
+    { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 8 },
     { kind: "numberArray", key: "revenueGrowthGridPct", label: "REVENUE GROWTH GRID PCT", default: [
       2,
       5,
@@ -1145,7 +1145,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
       { kind: "number", key: "revenueGrowthPct", label: "REVENUE GROWTH PCT", default: 2 },
       { kind: "number", key: "ebitMarginPct", label: "EBIT MARGIN PCT", default: 14 },
       { kind: "number", key: "taxRatePct", label: "TAX RATE PCT", default: 25 },
-      { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 35 },
+      { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 10 },
       { kind: "number", key: "probability", label: "PROBABILITY", default: 0.2 }
     ], default: [
       {
@@ -1153,7 +1153,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
         "revenueGrowthPct": 2,
         "ebitMarginPct": 14,
         "taxRatePct": 25,
-        "reinvestmentPctOfRevenue": 35,
+        "reinvestmentPctOfRevenue": 10,
         "probability": 0.2
       },
       {
@@ -1161,7 +1161,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
         "revenueGrowthPct": 7,
         "ebitMarginPct": 20,
         "taxRatePct": 25,
-        "reinvestmentPctOfRevenue": 30,
+        "reinvestmentPctOfRevenue": 8,
         "probability": 0.6
       },
       {
@@ -1169,7 +1169,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
         "revenueGrowthPct": 12,
         "ebitMarginPct": 25,
         "taxRatePct": 25,
-        "reinvestmentPctOfRevenue": 28,
+        "reinvestmentPctOfRevenue": 5,
         "probability": 0.2
       }
     ] },
@@ -1187,7 +1187,7 @@ export const QUANT_LAB_MODEL_SCHEMAS: Record<string, JsonFieldSchema[]> = {
     { kind: "number", key: "terminalGrowthPct", label: "TERMINAL GROWTH PCT", default: 3 },
     { kind: "number", key: "ebitMarginPct", label: "EBIT MARGIN PCT", default: 20 },
     { kind: "number", key: "taxRatePct", label: "TAX RATE PCT", default: 25 },
-    { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 30 },
+    { kind: "number", key: "reinvestmentPctOfRevenue", label: "REINVESTMENT PCT OF REVENUE", default: 8 },
     { kind: "string", key: "solveFor", label: "SOLVE FOR", default: "revenue_growth" }
   ],
   "python.advanced.valuation.residual-income": [

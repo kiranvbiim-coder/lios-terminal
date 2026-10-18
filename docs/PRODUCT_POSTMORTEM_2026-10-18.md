@@ -55,6 +55,10 @@ These queue counts classify claims; they are not accepted-capability counts. No 
 
 Impact: prior outputs from these three paths may be overstated or imply wrong expectations. Historical receipts remain intact. Users need an explicit fresh run under the corrected revision; material-decision use requires broader independent validation. Registry validation remains `benchmark_required`, not upgraded by a handful of known answers.
 
+Review caught three downstream obligations before merge: bundled illustrative starter rates were recalibrated for total-revenue semantics (not provider facts); saved experiment/run versions are now refused before enqueue/cache/environment lookup when they differ from the registry, and ordinary edits preserve historical versions; finite growth below -100% is refused, including stochastic draws, instead of allowing negative revenue to credit reinvestment. Total revenue loss (-100%) remains valid and yields zero operating value. Actual revised bundled starters executed: reverse DCF repriced 1500 with absolute error below `3e-9`; probabilistic and expectation-surface outputs remained finite. These checks do not remove valid negative-FCFF scenarios or claim broad numerical certification.
+
+Final reviewed correction checks: typecheck and 33 focused TypeScript consumer/custody/Quant Lab checks passed; complete Python suite passed **207 tests and 54 subtests**, with the same two warnings. New isolated-database regression proves stale run/cache/rerun refusal leaves persisted state unchanged, ordinary edits retain historical revision, and current-version input reaches normal validation. No private data, real provider call or automatic experiment migration is used.
+
 ### 2. Zero-setup managed provisioning is not delivered
 
 `runtimeLifecycle.ts:54–95` defaults to missing authority; `pythonRuntimeManager.ts:348–355` refuses; `strictProvisioningAuthority.ts:114–120` requires injection. Confirmation and wheel hashes cannot make this default succeed. Fixed argv and host staging paths are not OS confinement. Reintroducing generic host `runCommand` would repeat the rejected PR #74 design.
