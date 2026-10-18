@@ -116,7 +116,7 @@
       "declaredDecision": "adapt",
       "declaredPosture": "runtime_candidate",
       "currentTruthStatus": "runtime_integrated_optional",
-      "evidence": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 506.50 kB/~174.22 kB gzip (local 6.1.0 build). This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "evidence": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0; loaded ONLY for canonical P4 Chart Artifacts selecting echarts. Current local typecheck, production build and actual browser line/area/bar/scatter rendering passed with explicit owned verification data; negative values and missing observations remain intact, raw donor HTML options remain inactive. Current lazy chunk 506.50 kB/~174.22 kB gzip. Historical run 38201743707 belongs to the prior 5.6.0 integration, not this version. This npm adoption is distinct from the upstream Git review pin; no full donor audit, packaged/SP-04 or production qualification is claimed. Both donor IDs refer to one integration.",
       "sourceRegistries": [
         "third_party/components.json"
       ]
@@ -367,7 +367,7 @@
       "declaredDecision": "adapt",
       "declaredPosture": "donor_candidate",
       "currentTruthStatus": "runtime_integrated_optional",
-      "evidence": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0 is installed; dynamically loaded ONLY when canonical P4 Chart Artifact selects echarts. Renderer uses lossless P4 viewport, SVG, and exact values/series; native macOS V1 PASS run 38201743707 (tests, TypeScript, production build), lazy chunk 506.50 kB/~174.22 kB gzip (local 6.1.0 build). This source-package adoption is NOT the independently reviewed upstream Git pin, not a full donor audit, not packaged desktop/SP-04 acceptance. Both donor IDs refer to the SAME one npm integration, not two separate installs.",
+      "evidence": "Single pinned Apache ECharts 6.1.0 npm runtime with zrender 6.1.0 and tslib 2.3.0; loaded ONLY for canonical P4 Chart Artifacts selecting echarts. Current local typecheck, production build and actual browser line/area/bar/scatter rendering passed with explicit owned verification data; negative values and missing observations remain intact, raw donor HTML options remain inactive. Current lazy chunk 506.50 kB/~174.22 kB gzip. Historical run 38201743707 belongs to the prior 5.6.0 integration, not this version. This npm adoption is distinct from the upstream Git review pin; no full donor audit, packaged/SP-04 or production qualification is claimed. Both donor IDs refer to one integration.",
       "sourceRegistries": [
         "third_party/components.json"
       ]

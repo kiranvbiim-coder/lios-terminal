@@ -1587,7 +1587,7 @@
       "modifications": [
         "Production ECharts 6.1.0 full runtime installed from exact npm integrity; LiOS adapts its SVG core+selected charts behind native P4 lazy Chart Artifact projection, not a copied Git tree or second Artifact authority."
       ],
-      "notes": "Opt-in Apache ECharts v6.1.0 runtime under LiOS-owned Chart Artifacts; local ECharts 6.1.0 source production build emitted one 506.50 kB (~174.22 kB gzip) lazy chunk; prior 5.6.0 packaged-footprint evidence is superseded; Recharts/Lightweight Charts remain existing defaults. Git review pin is not identical to independently locked npm artifact. SP-04 packaged/target P10/P14 startup and memory acceptance remain open."
+      "notes": "Opt-in Apache ECharts v6.1.0 runtime under LiOS-owned Chart Artifacts; local source production build emitted one 506.50 kB (~174.22 kB gzip) lazy chunk. Prior 5.6.0 source footprint is historical, not packaged proof. Recharts/Lightweight Charts remain existing defaults. Git review pin is distinct from the independently locked npm artifact. Packaged/target P10/P14 startup, accessibility and memory acceptance remain open."
     },
     {
       "id": "tanstack-table",
@@ -2047,7 +2047,7 @@
       "roles": [
         "optional-advanced-visualization"
       ],
-      "notes": "Opt-in Apache ECharts v6.1.0 runtime under LiOS-owned Chart Artifacts; local ECharts 6.1.0 source production build emitted one 506.50 kB (~174.22 kB gzip) lazy chunk; prior 5.6.0 packaged-footprint evidence is superseded; Recharts/Lightweight Charts remain existing defaults. Git review pin is not identical to independently locked npm artifact. SP-04 packaged/target P10/P14 startup and memory acceptance remain open.",
+      "notes": "Opt-in Apache ECharts v6.1.0 runtime under LiOS-owned Chart Artifacts; local source production build emitted one 506.50 kB (~174.22 kB gzip) lazy chunk. Prior 5.6.0 source footprint is historical, not packaged proof. Recharts/Lightweight Charts remain existing defaults. Git review pin is distinct from the independently locked npm artifact. Packaged/target P10/P14 startup, accessibility and memory acceptance remain open.",
       "posture": "runtime_candidate",
       "classification": "adapt",
       "bundled": true,

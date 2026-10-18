@@ -71,12 +71,12 @@ export interface StrictProvisioningAuthority {
   provisionManagedRuntime(request: StrictProvisioningRequest): Promise<StrictProvisioningResult>;
 }
 
-export function managedRuntimeRoot(): string {
+function runtimeRoot(): string {
   return path.join(dataRoot(), "python-runtimes");
 }
 
 function statePath(): string {
-  return path.join(managedRuntimeRoot(), "managed-state.json");
+  return path.join(runtimeRoot(), "managed-state.json");
 }
 
 /**
@@ -85,7 +85,7 @@ function statePath(): string {
  * or rolling back an installation.
  */
 function assertRuntimeStateStorageSafe(): void {
-  const root = fs.lstatSync(managedRuntimeRoot(), { throwIfNoEntry: false });
+  const root = fs.lstatSync(runtimeRoot(), { throwIfNoEntry: false });
   if (root && (!root.isDirectory() || root.isSymbolicLink())) {
     throw new Error("Managed runtime storage root is unsafe.");
   }
@@ -103,7 +103,7 @@ function assertRuntimeStateStorageSafe(): void {
 function authorizedRollbackPath(candidate: unknown): string | null {
   if (typeof candidate !== "string" || !path.isAbsolute(candidate)) return null;
   const normalized = path.resolve(candidate);
-  if (path.dirname(normalized) !== path.resolve(managedRuntimeRoot())
+  if (path.dirname(normalized) !== path.resolve(runtimeRoot())
     || !/^rollback-\d+$/.test(path.basename(normalized))) return null;
   try {
     const entry = fs.lstatSync(normalized);
@@ -178,7 +178,7 @@ function packLockPath(packId: string): string {
   return path.join(base, `${packId}.lock.txt`);
 }
 
-function managedPythonPath(runtimePath = path.join(managedRuntimeRoot(), "current")): string {
+function managedPythonPath(runtimePath = path.join(runtimeRoot(), "current")): string {
   return process.platform === "win32"
     ? path.join(runtimePath, "Scripts", "python.exe")
     : path.join(runtimePath, "bin", "python3");
@@ -223,13 +223,13 @@ export function inspectManagedRuntimeCustody(packIds: readonly string[]) {
     return hash(fs.readFileSync(file, "utf8"));
   };
   assertRuntimeStateStorageSafe();
-  validateCurrentRuntimeDirectory(path.join(managedRuntimeRoot(), "current"));
+  validateCurrentRuntimeDirectory(path.join(runtimeRoot(), "current"));
   const state = readManagedRuntimeState();
   const previousPath = authorizedRollbackPath(state?.rollbackPath);
   const rollbackSnapshotHash = previousPath ? fileHash(runtimeStateSnapshotPath(previousPath)) : null;
   const sourceStateHash = hash(JSON.stringify({
     stateHash: fileHash(statePath()),
-    currentSnapshotHash: fileHash(runtimeStateSnapshotPath(path.join(managedRuntimeRoot(), "current"))),
+    currentSnapshotHash: fileHash(runtimeStateSnapshotPath(path.join(runtimeRoot(), "current"))),
     rollbackPath: previousPath, rollbackSnapshotHash,
     pythonAvailable: managedRuntimePythonPath() !== null,
   }));
@@ -249,7 +249,7 @@ function assertExpectedRuntimeCustody(packIds: readonly string[], expected?: str
   }
 }
 
-export function managedRuntimeBasePython(): string {
+function pythonExecutable(): string {
   const configured = process.env.PYTHON_EXECUTABLE?.trim();
   if (configured) return configured;
   return process.platform === "win32" ? "python" : "python3";
@@ -366,7 +366,7 @@ export async function installManagedRuntime(
     throw new ManagedRuntimeVerificationError("unverified_release_hashes");
   }
 
-  const root = managedRuntimeRoot();
+  const root = runtimeRoot();
   assertRuntimeStateStorageSafe();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   assertRuntimeStateStorageSafe();
@@ -400,7 +400,7 @@ export async function installManagedRuntime(
       packageOutput = result.packageOutput;
       installedPackages = result.installedPackages;
     } else {
-      await command(managedRuntimeBasePython(), ["-m", "venv", temporaryPath]);
+      await command(pythonExecutable(), ["-m", "venv", temporaryPath]);
       const pip = process.platform === "win32"
         ? path.join(temporaryPath, "Scripts", "pip.exe")
         : path.join(temporaryPath, "bin", "pip");
@@ -483,7 +483,7 @@ export async function installManagedRuntime(
 
 export async function rollbackManagedRuntime(options: { expectedCustodyHash?: string; packIds?: readonly string[] } = {}): Promise<ManagedRuntimeOperationResult> {
   assertRuntimeStateStorageSafe();
-  const lifecycleRoot = managedRuntimeRoot();
+  const lifecycleRoot = runtimeRoot();
   if (!fs.lstatSync(lifecycleRoot, { throwIfNoEntry: false })) {
     throw new Error("No safe managed runtime rollback is available.");
   }
@@ -495,7 +495,7 @@ export async function rollbackManagedRuntime(options: { expectedCustodyHash?: st
   if (!state || !previousPath) {
     throw new Error("No safe managed runtime rollback is available.");
   }
-  const root = managedRuntimeRoot();
+  const root = runtimeRoot();
   const currentPath = path.join(root, "current");
   const currentEntry = fs.lstatSync(currentPath, { throwIfNoEntry: false });
   if (!currentEntry?.isDirectory() || currentEntry.isSymbolicLink()) {
