@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { AddressInfo } from "node:net";
+import express from "express";
+import passport from "passport";
+import test from "node:test";
+import type { RuntimeLifecyclePreview } from "@shared/runtimeLifecycle";
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-provisioning-refusal-"));
+process.env.LIOS_DATA_ROOT = path.join(root, "home");
+process.env.LIMURIA_DATA_DIR = process.env.LIOS_DATA_ROOT;
+const resourceRoot = path.join(root, "resources");
+delete process.env.DATABASE_URL;
+// Supply a real release-lock file so missing locks cannot hide a missing isolation authority.
+const requirements = path.join(resourceRoot, "python-service", "requirements");
+fs.mkdirSync(requirements, { recursive: true });
+fs.writeFileSync(path.join(requirements, "core.lock.txt"), "# Admission fixture only; never execute this file.\n");
+const { initDb, getDb, closeDb } = await import("./db");
+const { users } = await import("@shared/schema");
+const { registerEnvironmentSetupRoutes } = await import("./environmentSetupRoutes");
+
+test("default production routes never promote a generic host runner to strict provisioning even with release locks", { timeout: 120_000 }, async t => {
+  t.after(async () => { await closeDb(); fs.rmSync(root, { recursive: true, force: true }); });
+  await initDb();
+  process.env.ELECTRON_RESOURCES_PATH = resourceRoot;
+  const [owner] = await getDb().insert(users).values({ email: `${crypto.randomUUID()}@example.test`, name: "Provisioning refusal owner", role: "internal_admin", passwordHash: "verification-only", active: true }).returning();
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.user = owner; next(); });
+  app.use(passport.initialize());
+  registerEnvironmentSetupRoutes(app);
+  const server = app.listen(0, "127.0.0.1");
+  t.after(() => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  if (!server.listening) await new Promise<void>(resolve => server.once("listening", resolve));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/setup/python-runtime/lifecycle`;
+  const response = await fetch(`${base}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "install", releasePackIds: ["core"], additionalPackIds: [] }) });
+  assert.equal(response.status, 200);
+  const preview = await response.json() as RuntimeLifecyclePreview;
+  assert.equal(preview.releaseLocks.find(lock => lock.packId === "core")?.sha256?.length, 64);
+  assert.ok(preview.blockers.includes("strict_provisioning_authority_missing:configure_a_trusted_governed_runner"));
+  const applied = await fetch(`${base}/apply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ request: preview.request, operationHash: preview.operationHash, confirmationToken: preview.confirmationToken, expiresAt: preview.expiresAt, confirmed: true }) });
+  assert.equal(applied.status, 409);
+  const refusal = await applied.json() as { code: string; blockers: string[] };
+  assert.equal(refusal.code, "prerequisites_blocked");
+  assert.ok(refusal.blockers.includes("strict_provisioning_authority_missing:configure_a_trusted_governed_runner"));
+  assert.equal(fs.existsSync(path.join(process.env.LIOS_DATA_ROOT!, "python-runtimes")), false, "denied provisioning must create no staging runtime or activate any host environment");
+});
