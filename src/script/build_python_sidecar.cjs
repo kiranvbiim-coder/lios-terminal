@@ -67,6 +67,13 @@ const args = [
 
 for (const moduleName of collectAll) args.push("--collect-all", moduleName);
 for (const distribution of copyMetadata) args.push("--copy-metadata", distribution);
+// Engine modules are resolved lazily at runtime; freeze every shipped local module,
+// without importing their optional numerical libraries during HTTP startup.
+for (const entry of fs.readdirSync(pythonService, { withFileTypes: true })) {
+  if (entry.isFile() && entry.name.endsWith(".py") && !entry.name.startsWith("test_") && entry.name !== "conftest.py") {
+    args.push("--hidden-import", entry.name.slice(0, -3));
+  }
+}
 args.push(path.join(pythonService, "sidecar_entry.py"));
 
 const result = spawnSync(python, args, {

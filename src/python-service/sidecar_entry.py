@@ -1,9 +1,4 @@
 import os
-import sys
-
-import uvicorn
-
-from main import app
 
 
 def _port() -> int:
@@ -19,11 +14,19 @@ def _port() -> int:
     return port
 
 
-if __name__ == "__main__":
+def serve():
+    port = _port()
+    import uvicorn
+    from main import app
+
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=_port(),
+        port=port,
         log_level=os.environ.get("LIOS_PYTHON_LOG_LEVEL", "warning"),
         access_log=False,
     )
+
+
+if __name__ == "__main__":
+    serve()

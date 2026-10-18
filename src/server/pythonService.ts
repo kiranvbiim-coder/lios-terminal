@@ -27,6 +27,7 @@ import {
   effectiveSandboxIsolationMode,
   sandboxIsolationMode,
 } from "./exec/sandbox-runtime-profile";
+import { callIsolatedPythonService, IsolatedPythonInputError } from "./isolatedPythonService";
 
 const dirname = typeof __dirname !== "undefined" ? __dirname : path.dirname(process.argv[1] || process.cwd());
 // Same resourcesBase pattern already used for script/download_history.py in
@@ -54,6 +55,10 @@ export function createSidecarToken(): string {
 // Never logged and only ever placed in the environment of the child we spawn
 // and in requests to that child's loopback URL (never to a remote service).
 const SIDECAR_TOKEN = createSidecarToken();
+let isolatedInventory: { key: string; python: string; packages: Record<string, string> } | null = null;
+function isolatedInventoryKey(): string {
+  return JSON.stringify(["LIOS_EXECUTION_SANDBOX_ENGINE", "LIOS_EXECUTION_SANDBOX_TARGET", "LIOS_EXECUTION_SANDBOX_IMAGE", "LIOS_EXECUTION_SANDBOX_PYTHON"].map(name => process.env[name] ?? ""));
+}
 let localPort: number | null = null;
 
 /** Reserves a free ephemeral loopback port by binding port 0, reading it, and releasing it. */
@@ -260,7 +265,7 @@ async function pollHealth(maxAttempts: number, intervalMs: number): Promise<bool
  */
 export function startPythonService(): Promise<boolean> {
   if (sandboxIsolationMode() === "strict") {
-    return Promise.resolve(false);
+    return getPythonServiceEnvironment().then(() => true, () => false);
   }
   if (readyPromise) return readyPromise;
   const generation = ++launchGeneration;
@@ -370,9 +375,18 @@ export function stopPythonService(): void {
   child = null;
   readyPromise = null;
   environmentPromise = null;
+  isolatedInventory = null;
 }
 
 export function getPythonServiceEnvironment(): Promise<{ python: string; packages: Record<string, string> }> {
+  if (sandboxIsolationMode() === "strict") {
+    const key = isolatedInventoryKey();
+    return callIsolatedPythonService<unknown>("/runtime-info", {}, { serviceDir: SERVICE_DIR, timeoutMs: 15_000 }).then(value => {
+      const metadata = z.object({ python: z.string(), packages: z.record(z.string()) }).parse(value);
+      isolatedInventory = { key, ...metadata };
+      return metadata;
+    }, error => { isolatedInventory = null; throw error; });
+  }
   if (environmentPromise) return environmentPromise;
   const pending = (async () => {
     if (!await startPythonService()) throw new Error("Python sidecar is not available.");
@@ -390,7 +404,10 @@ export function getPythonServiceEnvironment(): Promise<{ python: string; package
 
 /** Passive discovery/Doctor probe: never starts Python, installs packages or contacts an AI provider. */
 export async function inspectRunningPythonService(): Promise<{ ready: boolean; packages: Record<string, string>; reason: string }> {
-  if (sandboxIsolationMode() === "strict") return { ready: false, packages: {}, reason: "Strict Python execution requires a governed runtime backend; host-sidecar fallback is refused." };
+  if (sandboxIsolationMode() === "strict") {
+    if (!isolatedInventory || isolatedInventory.key !== isolatedInventoryKey()) return { ready: false, packages: {}, reason: "Strict backend inventory has not been verified for the current image. Refresh runtime health; no host fallback is used." };
+    return { ready: true, packages: isolatedInventory.packages, reason: "Verified isolated-image inventory; every invocation rechecks its sandbox and required pack. No probe or installation started by discovery." };
+  }
   if (!child && !remoteServiceUrl()) return { ready: false, packages: {}, reason: "No running Python sidecar is currently owned by this Home. Review Connections runtime setup." };
   try {
     const remote = remoteServiceUrl() !== null;
@@ -437,9 +454,18 @@ export async function callPythonService<T>(
   } = {},
 ): Promise<T> {
   if (effectiveSandboxIsolationMode(options.isolationMode) === "strict") {
-    throw new Error(
-      "Strict SI-01.12 isolation is unavailable for the long-lived Python HTTP sidecar; host-sidecar fallback is refused.",
-    );
+    const scopeSignal = currentConversationSignal();
+    const signal = options.signal && scopeSignal ? AbortSignal.any([options.signal, scopeSignal]) : options.signal ?? scopeSignal;
+    try {
+      return await callIsolatedPythonService<T>(routePath, body, {
+        serviceDir: SERVICE_DIR,
+        signal,
+        timeoutMs: options.timeoutMs,
+      });
+    } catch (error) {
+      if (error instanceof IsolatedPythonInputError) throw new PythonServiceDataError(error.message);
+      throw error;
+    }
   }
 
   const ready = await startPythonService();

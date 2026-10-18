@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
 import { conversationAttachmentRefSchema } from "@shared/conversationRuntime";
-import { callPythonService } from "../pythonService";
 import { LepSidecarSupervisor } from "../p11SidecarSupervisor";
 import { installManagedRuntime } from "../pythonRuntimeManager";
 import { parseLocalDocumentWithDocling } from "../p7DocumentIntelligence";
@@ -28,11 +27,6 @@ test("global strict mode is a non-downgrade floor for every risky host fallback"
   const previous = process.env.LIOS_EXECUTION_ISOLATION;
   process.env.LIOS_EXECUTION_ISOLATION = "strict";
   try {
-    await assert.rejects(
-      () => callPythonService("/health", {}, { isolationMode: "legacy-host" }),
-      /host-sidecar fallback is refused/,
-    );
-
     assert.throws(
       () => new LepSidecarSupervisor({
         command: process.execPath,

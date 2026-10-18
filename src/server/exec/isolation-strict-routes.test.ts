@@ -1,16 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { callPythonService } from "../pythonService";
 import { LepSidecarSupervisor } from "../p11SidecarSupervisor";
 import { executeAdvancedQuant, type AdvancedQuantEngineCall } from "../advancedQuantExecution";
 import { installManagedRuntime } from "../pythonRuntimeManager";
-
-test("strict Python HTTP isolation fails before host sidecar startup", async () => {
-  await assert.rejects(
-    () => callPythonService("/health", {}, { isolationMode: "strict" }),
-    /host-sidecar fallback is refused/,
-  );
-});
 
 test("strict P11 LEP isolation fails at construction before host process startup", () => {
   assert.throws(
