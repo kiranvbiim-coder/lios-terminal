@@ -35,6 +35,8 @@ export interface GovernedToolCall {
   sourceScope?: ConversationSourceScope;
   /** Server-resolved ResearchArtifact allow-list; never sourced from model arguments. */
   allowedSourceRefs?: string[];
+  /** Server-only review refresh: materialize current P7 search evidence without persisting an index or snapshot. */
+  researchReadOnly?: boolean;
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */
   activeArtifactRefs?: string[];
   /** Server-owned Project resource transmission posture; false means resource content must not be disclosed. */

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { createAttribution } from "./byoaiRouter";
 import type { ConversationRuntimeInput } from "./conversationRuntime";
@@ -199,8 +200,8 @@ process.env.LIMURIA_DATA_DIR = dataDir;
 test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blocked metadata", async (t) => {
   // Database modules must load after LIMURIA_DATA_DIR selects this test's isolated root.
   const { initDb, closeDb, getDb } = await import("./db");
-  const { users } = await import("@shared/schema");
-  const { createProject } = await import("./projectStore");
+  const { users, projectIntelligenceDocuments, projectIntelligenceDocumentVersions, projectIntelligenceSnapshots } = await import("@shared/schema");
+  const { createProject, getProject, touchProjectActivity } = await import("./projectStore");
   const { indexProjectDocument, searchProjectIntelligence } = await import("./p7ProjectIntelligenceStore");
   const {
     researchSourceCompositionTool,
@@ -481,6 +482,13 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
           rights: { ...allowedRights, aiTransmission: "restricted" },
         } },
       });
+      const permitted = documents[1]!;
+      const currentPermitted = await indexProjectDocument(ctx, {
+        projectId: project.id, sourceType: permitted.sourceType, sourceRef: permitted.sourceRef,
+        title: permitted.title, body: permitted.body, metadata: permitted.metadata,
+        sourceRefs: [permitted.sourceRef, forbidden.sourceRef, "unverified:private:xerophyte-reference"],
+      });
+      assert.notEqual(currentPermitted.contentHash, permitted.contentHash, "referenced-source changes create a distinct source revision");
       registerConversationTool({
         id: "test.research.unrelated-payload", label: "Unrelated read", kind: "retrieve",
         permissionClass: "safe_auto", access: "read", sideEffect: "none", replaySafe: true,
@@ -528,12 +536,12 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       });
       assert.equal(prompts.length, 2, "injected completion proves outgoing transport, not model synthesis quality");
       const review = prompts[1]!;
-      for (const [index, document] of documents.entries()) {
+      for (const [index, document] of [documents[0]!, currentPermitted].entries()) {
         assert.ok(review.includes(passages[index]), "the actual governed review prompt must contain the late matching passage");
         assert.ok(review.includes(document.contentHash), "each passage retains its current source revision");
         assert.ok(review.includes(document.sourceRef));
       }
-      for (const secret of [...Object.values(forbidden), "ARBITRARY-OUTPUT-DO-NOT-SEND", "ARBITRARY-INPUT-DO-NOT-SEND"]) {
+      for (const secret of [...Object.values(forbidden), "unverified:private:xerophyte-reference", "ARBITRARY-OUTPUT-DO-NOT-SEND", "ARBITRARY-INPUT-DO-NOT-SEND"]) {
         assert.equal(review.includes(secret), false, `review must exclude ${secret}`);
       }
       const durableOrClient = JSON.stringify([events, ledger]);
@@ -643,6 +651,9 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         "Megaflora password=do-not-transmit-credential",
         "Megaflora https://example.test/report?token=do-not-transmit-query",
         "Megaflora -----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----",
+        "Megaflora client_secret=do-not-transmit-client-secret",
+        "Megaflora AWS_SECRET_ACCESS_KEY=do-not-transmit-aws-secret",
+        "Megaflora token: do-not-transmit-colon-token",
       ];
       for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
@@ -700,13 +711,40 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.equal(source.contentHash, original.contentHash);
         assert.ok(safeBulk.some((document) => document.sourceRef === source.sourceRef));
       }
-      for (const secret of ["do-not-transmit-credential", "do-not-transmit-query", "not-a-real-key"]) {
+      for (const secret of ["do-not-transmit-credential", "do-not-transmit-query", "not-a-real-key",
+        "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token"]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
-      for (let index = 30; index < 33; index += 1) {
+      for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
         assert.equal(framed.includes(`internal:megaflora:${index}`), false, "credential source identities are omitted with their records");
       }
       assert.equal(JSON.stringify([bulk.events, bulk.ledger]).includes("植".repeat(20)), false);
+
+      async function persistedIntelligence() {
+        return Promise.all([
+          getDb().select().from(projectIntelligenceDocuments)
+            .where(eq(projectIntelligenceDocuments.projectId, project.id)).orderBy(projectIntelligenceDocuments.id),
+          getDb().select().from(projectIntelligenceDocumentVersions)
+            .where(eq(projectIntelligenceDocumentVersions.projectId, project.id)).orderBy(projectIntelligenceDocumentVersions.id),
+          getDb().select().from(projectIntelligenceSnapshots)
+            .where(eq(projectIntelligenceSnapshots.projectId, project.id)).orderBy(projectIntelligenceSnapshots.id),
+        ]);
+      }
+      let beforeRefresh: string | undefined;
+      const stale = await capture({ beforeReview: async () => {
+        await touchProjectActivity(ctx, project.id);
+        const currentProject = await getProject(ctx, project.id);
+        const persisted = await persistedIntelligence();
+        const latestSnapshot = persisted[2].reduce((latest, snapshot) =>
+          Math.max(latest, snapshot.generatedAt.getTime()), 0);
+        assert.ok(latestSnapshot > 0);
+        assert.ok(currentProject.lastActivityAt.getTime() >= latestSnapshot, "fixture must trigger the stale Project activity path");
+        beforeRefresh = JSON.stringify(persisted);
+      } });
+      assert.ok(beforeRefresh);
+      assert.ok(stale.prompts[1]!.includes(passages[1]), "stale activity still permits current read-only evidence retrieval");
+      assert.equal(JSON.stringify(await persistedIntelligence()), beforeRefresh,
+        "ephemeral review must not rewrite current index rows, append document versions, or persist a new snapshot");
     });
   });
 });

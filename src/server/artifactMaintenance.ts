@@ -19,7 +19,7 @@ const MAX_SNAPSHOT_BYTES = 12 * 1024;
 const MAX_EDIT_BYTES = 128 * 1024;
 const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
-const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credential|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 export function isCredentialBearingArtifactText(value: string): boolean {
   return credentialText.test(value);
 }

@@ -4229,8 +4229,12 @@ async function resolveAgentResearchReviewObservations(
 ): Promise<string | null> {
   const researchSteps = completedSteps.filter((step) => step.toolId === researchSourceCompositionTool.id);
   if (!researchSteps.length) return null;
-  type Source = z.infer<typeof researchSourceCompositionToolOutputSchema>["output"]["sources"][number];
-  const candidates: Array<Source & { stepId: string }> = [];
+  type ComposedSource = z.infer<typeof researchSourceCompositionToolOutputSchema>["output"]["sources"][number];
+  type Source = Pick<ComposedSource, "documentId" | "sourceRef" | "sourceType" | "title" | "sourceClass" | "identity" | "occurredAt" | "contentHash" | "excerpt"> & {
+    stepId: string;
+    rights: Pick<ComposedSource["rights"], "aiTransmission" | "internalUse" | "redistribution">;
+  };
+  const candidates: Source[] = [];
   const observation = {
     completedResearchStepCount: researchSteps.length,
     unavailableStepCount: 0,
@@ -4238,7 +4242,7 @@ async function resolveAgentResearchReviewObservations(
     blockedSourceCount: 0,
     omittedSourceCountByCredentialPolicy: 0,
     omittedSourceCountByByteLimit: 0,
-    sources: [] as Array<Source & { stepId: string }>,
+    sources: [] as Source[],
   };
   for (const step of researchSteps) {
     assertNotAborted(signal);
@@ -4256,6 +4260,7 @@ async function resolveAgentResearchReviewObservations(
       const parsedInput = researchSourceCompositionToolInputSchema.parse(step.input);
       const call = createConversationToolCall(input, "agent", {
         allowedSourceRefs: await activeResearchSourceAllowList(input),
+        researchReadOnly: true,
       });
       assertNotAborted(signal);
       if (getConversationTool(researchSourceCompositionTool.id) !== descriptor
@@ -4274,7 +4279,23 @@ async function resolveAgentResearchReviewObservations(
           observation.omittedSourceCountByCredentialPolicy += 1;
           continue;
         }
-        candidates.push({ stepId: step.id, ...source });
+        candidates.push({
+          stepId: step.id,
+          documentId: source.documentId,
+          sourceRef: source.sourceRef,
+          sourceType: source.sourceType,
+          title: source.title,
+          sourceClass: source.sourceClass,
+          identity: source.identity,
+          occurredAt: source.occurredAt,
+          contentHash: source.contentHash,
+          excerpt: source.excerpt,
+          rights: {
+            aiTransmission: source.rights.aiTransmission,
+            internalUse: source.rights.internalUse,
+            redistribution: source.rights.redistribution,
+          },
+        });
       }
     } catch {
       assertNotAborted(signal);

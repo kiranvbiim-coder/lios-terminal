@@ -7,9 +7,11 @@ import {
 import type { ConversationToolDefinition, ConversationToolResult } from "./conversationRuntime";
 import { assertNotAborted, sourceScopeAllowsProjectData } from "./conversationRuntimeCore";
 import {
+  currentPermittedProjectSearchDocuments,
   listProjectIntelligenceDocuments,
   searchProjectIntelligence,
 } from "./p7ProjectIntelligenceStore";
+import { searchProjectDocuments } from "./p7ProjectIntelligence";
 import { composeResearchSources } from "./researchSourceComposition";
 import { tenantContext } from "./tenantContext";
 import {
@@ -115,15 +117,19 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
       .filter(Boolean)
       .slice(0, 5_000);
 
-    const hits = await searchProjectIntelligence(ctx, projectId, {
-      query: parsed.query,
-      limit: parsed.limit,
-      allowedSourceRefs,
-    });
+    // Review refreshes use one current in-memory document set for both matching and custody; they never rebuild the index.
+    const readOnlyDocuments = call.researchReadOnly === true
+      ? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
+      : null;
+    assertNotAborted(signal);
+    const searchRequest = { query: parsed.query, limit: parsed.limit, allowedSourceRefs };
+    const hits = readOnlyDocuments
+      ? searchProjectDocuments(readOnlyDocuments, searchRequest)
+      : await searchProjectIntelligence(ctx, projectId, searchRequest);
     assertNotAborted(signal);
 
     const documents = new Map(
-      (await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
+      (readOnlyDocuments ?? await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
     );
     const matchingExcerpts = new Map<string, string>();
     const rankedDocuments = hits.flatMap((hit) => {

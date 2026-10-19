@@ -529,11 +529,8 @@ export async function indexProjectDocument(ctx: TenantContext, input: {
   });
 }
 
-export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: number): Promise<{
-  documents: P7ProjectDocument[];
-  graph: P7ContextGraph;
-  snapshot: P7ProjectSnapshot;
-}> {
+/** Materialize authoritative current source documents without changing the durable index, versions or snapshots. */
+async function collectCurrentProjectDocuments(ctx: TenantContext, projectId: number): Promise<P7ProjectDocument[]> {
   await getProject(ctx, projectId);
   const documents: P7ProjectDocument[] = [];
   const chats = await listProjectChats(ctx, { projectId, status: "active" });
@@ -774,7 +771,15 @@ export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: 
     if (existing.metadata.preserveOnRebuild === true) documents.push(existing);
   }
 
-  const uniqueDocuments = [...new Map(documents.map((item) => [item.sourceType + "\n" + item.sourceRef, item])).values()];
+  return [...new Map(documents.map((item) => [item.sourceType + "\n" + item.sourceRef, item])).values()];
+}
+
+export async function rebuildProjectIntelligence(ctx: TenantContext, projectId: number): Promise<{
+  documents: P7ProjectDocument[];
+  graph: P7ContextGraph;
+  snapshot: P7ProjectSnapshot;
+}> {
+  const uniqueDocuments = await collectCurrentProjectDocuments(ctx, projectId);
   const graph = buildReactiveContextGraph({ projectId, documents: uniqueDocuments });
   const snapshot = createProjectSnapshot({ projectId, graph, documents: uniqueDocuments });
 
@@ -902,7 +907,11 @@ export async function currentProjectIntelligence(ctx: TenantContext, projectId: 
   return { documents, graph, researchGraph: buildResearchGraph(graph), timeline: buildUnifiedTimeline(documents) };
 }
 
-export async function currentPermittedProjectSearchDocuments(ctx: TenantContext, projectId: number): Promise<P7ProjectDocument[]> {
+export async function currentPermittedProjectSearchDocuments(
+  ctx: TenantContext,
+  projectId: number,
+  options: { readOnly?: boolean } = {},
+): Promise<P7ProjectDocument[]> {
   const [project, indexed, snapshots] = await Promise.all([
     getProject(ctx, projectId),
     listProjectIntelligenceDocuments(ctx, projectId),
@@ -910,7 +919,9 @@ export async function currentPermittedProjectSearchDocuments(ctx: TenantContext,
   ]);
   let documents = indexed;
   if (!documents.length || !snapshots[0] || Math.max(project.updatedAt.getTime(), project.lastActivityAt.getTime()) >= Date.parse(snapshots[0].generatedAt)) {
-    documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
+    documents = options.readOnly
+      ? await collectCurrentProjectDocuments(ctx, projectId)
+      : (await rebuildProjectIntelligence(ctx, projectId)).documents;
   }
   // Current eligibility is authoritative even if source changes raced snapshot construction.
   const [resources, chats, artifacts] = await Promise.all([
