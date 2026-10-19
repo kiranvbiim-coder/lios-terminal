@@ -125,15 +125,25 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
     const documents = new Map(
       (await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
     );
+    const matchingExcerpts = new Map<string, string>();
     const rankedDocuments = hits.flatMap((hit) => {
       const document = documents.get(hit.documentId);
-      return document ? [document] : [];
+      if (!document) return [];
+      if (!hit.contentHash || document.contentHash !== hit.contentHash) {
+        throw new Error("Research source changed during retrieval; compose again before using its excerpt.");
+      }
+      matchingExcerpts.set(document.id, hit.excerpt);
+      return [document];
     });
     const composition = composeResearchSources({
       documents: rankedDocuments,
       targetUse: "ai_assistance",
       sourceClasses: parsed.sourceClasses,
     });
+    // Reuse the matching P7 passage, not the document prefix, without changing source custody.
+    for (const source of composition.included) {
+      source.excerpt = matchingExcerpts.get(source.documentId)!;
+    }
     assertNotAborted(signal);
 
     const blocked = aggregateBlocked(composition.blocked);
