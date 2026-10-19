@@ -807,6 +807,64 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.ok(benignLocator.prompts[1]!.includes("Benignurl noncredential query parameters remain usable."));
       assert.ok(benignLocator.prompts[1]!.includes("/download?year=2026&section=margin"));
 
+      const nestedGrantCases = [
+        { id: "api-keys-object", body: 'Ulmusgrant {"apiKeys":{"primary":"do-not-transmit-api-keys-object"}}', url: null },
+        { id: "tokens-array", body: 'Ulmusgrant {"tokens":["do-not-transmit-token-array"]}', url: null },
+        { id: "secrets-assignment", body: "Ulmusgrant secrets=do-not-transmit-secrets-assignment", url: null },
+        { id: "encoded-url-value", body: "Ulmusgrant nested URL bearer identity must stay local.",
+          url: "https://example.test/redirect?next=https%3A%2F%2Fstorage.example.test%2Ffile%3Fsig%3Ddo-not-transmit-nested-url-signature" },
+        { id: "plus-client-secret-fragment", body: "Ulmusgrant form-encoded client secret fragment must stay local.",
+          url: "https://example.test/report#client+secret=do-not-transmit-plus-client-secret" },
+        { id: "plus-api-key-fragment", body: "Ulmusgrant form-encoded API key fragment must stay local.",
+          url: "https://example.test/report#api+key=do-not-transmit-plus-api-key" },
+        { id: "plus-routed-fragment", body: "Ulmusgrant routed form-encoded credential fragment must stay local.",
+          url: "https://example.test/report#/route?client+secret=do-not-transmit-plus-route-secret" },
+        { id: "plus-relative-fragment", body: "Ulmusgrant /download#api+key=do-not-transmit-plus-relative-key", url: null },
+      ];
+      for (const source of nestedGrantCases) {
+        await indexProjectDocument(ctx, {
+          projectId: project.id, sourceType: "research_evidence",
+          sourceRef: `internal:ulmusgrant:${source.id}`, title: `Ulmusgrant credential source ${source.id}`,
+          body: source.body, sourceRefs: [`internal:ulmusgrant:${source.id}`],
+          metadata: { researchSource: {
+            class: "internal_research",
+            identity: { sourceId: source.id, providerId: null, organization: null,
+              author: null, analystId: null, expertId: null, url: source.url },
+            rights: allowedRights,
+          } },
+        });
+      }
+      const benignEncodedUrl = "https://example.test/redirect?next=https%3A%2F%2Fexample.test%2Freport%3Fyear%3D2026";
+      await indexProjectDocument(ctx, {
+        projectId: project.id, sourceType: "research_evidence", sourceRef: "internal:ulmusgrant:benign",
+        title: "Ulmusgrant benign encoded locator", body: "Ulmusgrant harmless encoded URL remains usable.",
+        sourceRefs: ["internal:ulmusgrant:benign"],
+        metadata: { researchSource: {
+          class: "internal_research",
+          identity: { sourceId: "benign-encoded-url", providerId: null, organization: null,
+            author: null, analystId: null, expertId: null, url: benignEncodedUrl },
+          rights: allowedRights,
+        } },
+      });
+      const nestedGrants = await capture({ query: "ulmusgrant" });
+      for (const source of nestedGrantCases) {
+        for (const value of [source.body, source.id, source.url].filter((value): value is string => value !== null)) {
+          assert.equal(nestedGrants.prompts[1]!.includes(value), false, "plural or nested URL credential records must be omitted whole");
+        }
+      }
+      assert.ok(nestedGrants.prompts[1]!.includes(benignEncodedUrl));
+      assert.ok(nestedGrants.prompts[1]!.includes("Ulmusgrant harmless encoded URL remains usable."));
+      const nestedObservation = findObservation(JSON.parse(nestedGrants.prompts[1]!));
+      assert.ok(nestedObservation);
+      const nestedJson = nestedObservation.split("\n").find((line) => line.startsWith("{"));
+      assert.ok(nestedJson);
+      const nestedSummary = z.object({
+        sources: z.array(z.object({ sourceRef: z.string() }).passthrough()),
+        omittedSourceCountByCredentialPolicy: z.number(),
+      }).passthrough().parse(JSON.parse(nestedJson));
+      assert.equal(nestedSummary.omittedSourceCountByCredentialPolicy, nestedGrantCases.length);
+      assert.deepEqual(nestedSummary.sources.map((source) => source.sourceRef), ["internal:ulmusgrant:benign"]);
+
       async function persistedIntelligence() {
         return Promise.all([
           getDb().select().from(projectIntelligenceDocuments)
@@ -1069,6 +1127,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         observedPassage?: string;
         excludedPassage?: string;
         beforeRelease: () => Promise<void>;
+        duringTransmission?: () => Promise<void>;
       }) {
         await saveEnterprisePolicy(organization.id, {
           ...DEFAULT_ENTERPRISE_POLICY,
@@ -1101,6 +1160,14 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               assert.equal(getConnectorVerification("openai")?.ok, true, "planning establishes a healthy provider before the policy race");
               raceHealthBaseline = getConnectorVerification("openai");
               await race.beforeRelease();
+              const duringTransmission = race.duringTransmission;
+              if (duringTransmission) return invokeAIRoutedCompletion({
+                ...completion,
+                beforeTransmission: async () => {
+                  await completion.beforeTransmission?.();
+                  await duringTransmission();
+                },
+              });
             }
             return invokeAIRoutedCompletion(completion);
           } } : {}),
@@ -1122,6 +1189,30 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.ok(attempted[1]!.body.includes(privatePassage));
         assert.equal(getConnectorVerification("openai")?.ok, false, "actual provider 429 must still degrade connector health");
 
+        for (const change of ["external-data", "allowed-provider", "endpoint"] as const) {
+          attempted.length = 0;
+          reviewReached = false;
+          let policyChangedInsideCallback = false;
+          await assert.rejects(invokeWithPolicy(true, {
+            observedPassage: privatePassage, beforeRelease: async () => undefined,
+            duringTransmission: async () => {
+              await saveEnterprisePolicy(organization.id, {
+                ...DEFAULT_ENTERPRISE_POLICY,
+                ai: { ...DEFAULT_ENTERPRISE_POLICY.ai,
+                  allowedProviders: change === "allowed-provider" ? ["gemini"] : ["openai", "gemini"],
+                  allowedModels: [],
+                  endpointMode: change === "endpoint" ? "configured_private" : "hosted",
+                  endpointUrl: change === "endpoint" ? "https://private.example.test" : "https://api.openai.com",
+                  allowExternalData: change !== "external-data", requireApproval: false },
+              }, { id: actor.id, email: actor.email });
+              policyChangedInsideCallback = true;
+            },
+          }), /policy|organization|provider|endpoint|private|approved/i);
+          assert.equal(policyChangedInsideCallback, true, "fixture changes stored policy during the canonical pre-dispatch callback");
+          assert.equal(reviewReached, false, "enterprise policy must be rechecked after asynchronous source validation");
+          assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"], "no private review or fallback may dispatch under revoked enterprise policy");
+          assert.deepEqual(getConnectorVerification("openai"), raceHealthBaseline, "local policy revocation must preserve connector health");
+        }
         const indirectBody = "Sequoia unselected document merely cites the approved source.";
         const indirectTitle = "Sequoia Unselected Indirect Citation";
         const indirectRef = "internal:sequoia:unselected";

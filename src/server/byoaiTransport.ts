@@ -33,7 +33,7 @@ export interface AICompletionRequest {
   dataClassification?: "public" | "organization";
   /** Explicit per-call approval when the organization policy requires it. */
   enterpriseApproval?: boolean;
-  /** Server-only, ephemeral release check after asynchronous policy checks and immediately before provider dispatch. */
+  /** Server-only source release check, followed by a final enterprise-policy/revision gate before provider dispatch. */
   beforeTransmission?: () => Promise<void>;
 }
 
@@ -295,13 +295,13 @@ async function enforceEnterpriseAiPolicy(
   request: AICompletionRequest,
   config: AIProviderConfig,
   model: string,
-): Promise<void> {
+): Promise<number | null> {
   const identity = getRequestIdentity();
   const organizationId = identity?.organizationId ?? null;
-  if (!organizationId) return;
+  if (!organizationId) return null;
   const record = await getStoredEnterprisePolicy(organizationId);
-  const policy = record?.policy;
-  if (!policy) return;
+  if (!record) return 0;
+  const policy = record.policy;
 
   const decision = evaluateEnterpriseAiProvider(policy, config.id, model);
   if (!decision.allowed) {
@@ -337,6 +337,7 @@ async function enforceEnterpriseAiPolicy(
       throw new AIProviderError("policy_denied", "Runtime AI endpoint does not match the organization-approved private endpoint.", { provider: config.id });
     }
   }
+  return record.revision;
 }
 
 // Every governed BYOAI call records a process-local verification outcome.
@@ -351,9 +352,16 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
   if (!config) throw new AIProviderError("invalid_provider", "AI provider is not registered.");
   const resolvedModel = resolveProviderModel(config, canonicalRequest.model);
   validateImages(canonicalRequest, provider, resolvedModel);
-  await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
+  const enterpriseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
   // A local release-policy refusal did not contact the provider and must not change connector health.
   await canonicalRequest.beforeTransmission?.();
+  if (canonicalRequest.beforeTransmission) {
+    // Source-release checks await mutable state. Bind the enterprise revision and re-evaluate the complete policy last.
+    const releaseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
+    if (releaseRevision !== enterpriseRevision) {
+      throw new AIProviderError("policy_denied", "Organization AI policy changed before dispatch; retry under the current policy.", { provider });
+    }
+  }
   try {
     const result = await invokeAIProviderUnverified({ ...canonicalRequest, model: resolvedModel });
     if (VERIFIABLE_CONNECTOR_PROVIDERS.has(provider)) recordConnectorVerification(provider, true, `${result.provider} responded to a live completion request.`);

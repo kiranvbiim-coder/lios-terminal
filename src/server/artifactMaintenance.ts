@@ -21,7 +21,7 @@ const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
 // Artifact validation preserves its existing credential-like-value threshold; outbound research release is more conservative.
 const artifactCredentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
-const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\bshared[_\s-]?access[_\s-]?signature\s+sr=|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credentials?|shared[_\s-]?access[_\s-]?signature|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+const credentialText = /(?:[?&](?:api[_-]?keys?|access[_-]?tokens?|refresh[_-]?tokens?|tokens?|secrets?|passwords?)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\bshared[_\s-]?access[_\s-]?signatures?\s+sr=|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?keys?|access[_\s-]?tokens?|refresh[_\s-]?tokens?|auth[_\s-]?tokens?|tokens?|secrets?|secret[_\s-]?(?:access[_\s-]?)?keys?|passwords?|passwds?|private[_\s-]?keys?|credentials?|shared[_\s-]?access[_\s-]?signatures?|authorization|cookies?)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 const outboundAccessGrantParameters: Record<string, true> = {
   sig: true, signature: true, token: true, key: true, credential: true, credentials: true,
   apikey: true, accesskey: true, accesskeyid: true, secretaccesskey: true,
@@ -42,32 +42,58 @@ function isOutboundAccessGrantName(rawName: string): boolean {
       break;
     }
   }
-  return Object.hasOwn(outboundAccessGrantParameters, name.toLowerCase().replace(/[-_\s]/g, ""));
+  const normalized = name.toLowerCase().replace(/[-_\s+]/g, "");
+  return name.includes("%") || Object.hasOwn(outboundAccessGrantParameters, normalized)
+    || normalized.endsWith("s") && Object.hasOwn(outboundAccessGrantParameters, normalized.slice(0, -1));
 }
 export function isCredentialBearingOutboundText(value: string): boolean {
-  // Normalize identifier boundaries before the single shared policy: clientSecret, AWSSecretAccessKey and JSON keys
-  // must receive the same treatment as their snake_case equivalents without changing the source record itself.
-  const normalized = value
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2");
-  if (credentialText.test(value) || credentialText.test(normalized)) return true;
-  // Parameter grants also occur in relative links and standalone SAS tokens.
-  for (const parameter of value.matchAll(/(?:^|[?&#])([^=\s?&#]+)=/g)) {
-    if (isOutboundAccessGrantName(parameter[1]!)) return true;
-  }
-  for (const match of value.matchAll(/(?:\b[a-z][a-z0-9+.-]*:)?\/\/[^\s<>"]+/gi)) {
-    try {
-      const url = new URL(match[0], "https://lios.invalid");
-      if (url.username || url.password) return true;
-      const fragment = url.hash.slice(1);
-      const fragmentParameters = new URLSearchParams(fragment.startsWith("?") ? fragment.slice(1) : fragment);
-      const queryOffset = fragment.indexOf("?");
-      const routedParameters = queryOffset >= 0 ? new URLSearchParams(fragment.slice(queryOffset + 1)) : null;
-      for (const rawName of [...url.searchParams.keys(), ...fragmentParameters.keys(), ...(routedParameters?.keys() ?? [])]) {
-        if (isOutboundAccessGrantName(rawName)) return true;
+  // One bounded work queue covers nested encodings and URL values. Limits deny release rather than skip uncertain data.
+  const maxBytes = 128 * 1024;
+  const maxNodes = 256;
+  const maxDepth = 6;
+  let remainingBytes = maxBytes;
+  const seen = new Set<string>();
+  const queue: Array<{ text: string; depth: number }> = [];
+  const enqueue = (text: string, depth: number): boolean => {
+    if (seen.has(text)) return true;
+    if (depth > maxDepth || queue.length >= maxNodes || text.length > remainingBytes) return false;
+    const bytes = Buffer.byteLength(text, "utf8");
+    if (bytes > remainingBytes) return false;
+    remainingBytes -= bytes;
+    seen.add(text);
+    queue.push({ text, depth });
+    return true;
+  };
+  if (!enqueue(value, 0)) return true;
+  for (let index = 0; index < queue.length; index += 1) {
+    const { text, depth } = queue[index]!;
+    // Singular/plural camelCase and acronym keys share the same outbound credential-family policy.
+    const normalized = text.replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+    if (credentialText.test(text) || credentialText.test(normalized)) return true;
+    for (const parameter of text.matchAll(/(?:^|[?&#])([^=\s?&#]+)=([^&#\s]*)/g)) {
+      if (isOutboundAccessGrantName(parameter[1]!)) return true;
+      if (!enqueue(parameter[2]!, depth + 1)) return true;
+    }
+    for (const match of text.matchAll(/(?:\b[a-z][a-z0-9+.-]*:)?\/\/[^\s<>"]+/gi)) {
+      try {
+        const url = new URL(match[0], "https://lios.invalid");
+        if (url.username || url.password) return true;
+        for (const [name, parameterValue] of url.searchParams) {
+          if (isOutboundAccessGrantName(name)) return true;
+          if (!enqueue(parameterValue, depth + 1)) return true;
+        }
+        if (!enqueue(url.hash, depth + 1)) return true;
+      } catch {
+        // Non-URL prose is not interpreted as a credential.
       }
-    } catch {
-      // Non-URL prose is not interpreted as a credential.
+    }
+    if (text.includes("%")) {
+      try {
+        const decoded = decodeURIComponent(text);
+        if (decoded !== text && !enqueue(decoded, depth + 1)) return true;
+      } catch {
+        // A literal percent in prose need not be URL encoding.
+      }
     }
   }
   return false;
