@@ -23,6 +23,7 @@ export class RuntimeLifecycleRefusal extends Error {
 /** Trusted server injection only. HTTP requests cannot supply runners, paths, packages or authorities. */
 export interface RuntimeLifecycleDependencies {
   strictProvisioningAuthority?: StrictProvisioningAuthority;
+  provisioningBlocker?: "native_runtime_bundle_invalid";
   readActor?: (id: number) => Promise<(RuntimeLifecycleActor & { active: boolean; mustChangePassword: boolean; lockedUntil: Date | null }) | null>;
   readState?: typeof readManagedRuntimeState;
   inspectCustody?: typeof inspectManagedRuntimeCustody;
@@ -85,6 +86,7 @@ export async function previewRuntimeLifecycle(
   } else {
     if (!custody.supportedPlatform) blockers.push("unsupported_platform");
     if (!dependencies.strictProvisioningAuthority) blockers.push("strict_provisioning_authority_missing:configure_a_trusted_governed_runner");
+    if (dependencies.provisioningBlocker) blockers.push(dependencies.provisioningBlocker);
     if (custody.releaseLocks.some((lock) => lock.sha256 === null)) blockers.push("unverified_release_hashes:install_platform_release_wheel_hash_locks");
     const unconsented = await (dependencies.unconsentedPacks ?? unconsentedRuntimePacks)(actor.id, targetPackIds);
     if (unconsented.length) blockers.push("community_data_consent_required");

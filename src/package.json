@@ -13,6 +13,7 @@
   },
   "scripts": {
     "dev": "node script/dev.mjs",
+    "native:runtime:build": "python3 script/build_native_runtime_bundle.py",
     "history:import": "NODE_ENV=production tsx script/import_stooq_db.ts",
     "history:import:bse": "NODE_ENV=production tsx script/import_bse_bhavcopy.ts",
     "history:adjust:bse": "NODE_ENV=production tsx script/adjust_bse_splits.ts",
@@ -284,6 +285,7 @@
       "category": "public.app-category.finance",
       "icon": "build-resources/icon.icns",
       "hardenedRuntime": true,
+      "signIgnore": [".*/native-runtime-dist/.*"],
       "gatekeeperAssess": false,
       "target": [
         "dmg",
@@ -350,6 +352,7 @@
       },
       "python-sidecar-dist/**/*",
       "sandbox-image-dist/**/*",
+      "native-runtime-dist/**/*",
       "sandbox-image/CDLA-Permissive-2.0.txt",
       "script/**/*",
       "server/data/**/*",

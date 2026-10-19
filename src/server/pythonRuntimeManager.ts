@@ -172,6 +172,10 @@ function readRuntimeStateSnapshot(runtimePath: string): ManagedRuntimeState | nu
 
 function packLockPath(packId: string): string {
   const resourcesBase = (process as { resourcesPath?: string }).resourcesPath || process.env.ELECTRON_RESOURCES_PATH;
+  if (resourcesBase) {
+    const nativeLock = path.join(resourcesBase, "native-runtime-dist", "locks", `${packId}.lock.txt`);
+    if (fs.existsSync(nativeLock)) return nativeLock;
+  }
   const base = resourcesBase
     ? path.join(resourcesBase, "python-service", "requirements")
     : path.resolve(path.dirname(typeof __dirname !== "undefined" ? __dirname : process.argv[1] || process.cwd()), "../python-service/requirements");

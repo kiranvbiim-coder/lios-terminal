@@ -2732,6 +2732,24 @@
         "Wrapped in existing authenticated, Project-owned, read-only governed conversation tool with manual-input truth class and unknown-truth agent-submitted inputs and bounded output; no new calculator-of-record, Python service, provider connector, data store, broker order or permissions authority."
       ],
       "notes": "Only the formulas are adapted. No Qlib Python package, trained models, provider datasets or dataset rights are imported; source pin and MIT notice in THIRD_PARTY_NOTICES.md. V1 and V3 packaged user acceptance are separate gates; SP-05 unaccepted."
+    },
+    {
+      "id": "python-build-standalone-native-runtime",
+      "name": "CPython relocatable native runtime via python-build-standalone",
+      "repository": "astral-sh/python-build-standalone",
+      "releaseTag": "20261013",
+      "commitSha": "9e40cba825ca0997a01cab9f60a0b15ffb976af2",
+      "license": "Python-2.0 AND CNRI-Python",
+      "posture": "runtime_candidate",
+      "classification": "adapt",
+      "bundled": false,
+      "noticeRequiredOnImport": true,
+      "externalRights": "separate_review_required",
+      "roles": ["native-runtime-distribution", "p10-copy-only-provisioning"],
+      "destinationPaths": ["script/build_native_runtime_bundle.py", "server/nativeRuntimeBundle.ts"],
+      "importedPaths": [],
+      "modifications": ["No upstream build-system source imported. Release tooling materializes internal links, removes unused absolute-path console wrappers/bytecode, installs the locked native core closure, preserves full component grants, and signs final Mach-O bytes before manifest hashing."],
+      "notes": "Release-build-only local candidate CPython 3.13.16 macOS arm64, install-only archive SHA256 ca0e6a70fb75a0984751bd75493e3de77680aef7fbd0fea9b903c299537b3423. Full-component legal metadata from companion archive SHA256 3497822d8bf4884bc79258f62668f985654d03d40ec74da4ca9ae7a5667c4362 is retained and hash-verified. Upstream build-system source is MPL-2.0 and is not imported; CPython/native library grants remain separate. Generated binary is ignored, not included in source distribution or approved public release; existing P10 activation/rollback remains authoritative. Minimum selected native-wheel OS is macOS14. No Windows or signed/notarized acceptance."
     }
   ]
 }
