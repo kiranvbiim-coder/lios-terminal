@@ -50,6 +50,7 @@ import { registerPersonaPreferenceRoutes } from "./personaPreferenceRoutes";
 import { registerTrialRoutes } from "./trialAccess";
 import { registerPublicRoutes } from "./publicRoutes";
 import { registerEnvironmentSetupRoutes } from "./environmentSetupRoutes";
+import { resolvePackagedNativeRuntimeBundleAuthority } from "./nativeRuntimeBundle";
 import { registerSourceConnectionRoutes } from "./sourceConnectionRoutes";
 import { registerSourceRegistryRoutes } from "./sourceRegistryRoutes";
 import { registerProjectRoutes } from "./projectRoutes";
@@ -114,7 +115,7 @@ import { registerP6ContinuityRoutes } from "./p6ContinuityRoutes";
 import { registerP7ResearchRoutes } from "./p7ResearchRoutes";
 import { registerP8Routes } from "./p8Routes";
 import { registerP9AutomationRoutes } from "./p9AutomationRoutes";
-import { stateDir } from "./dataRoot";
+import { dataRoot, stateDir } from "./dataRoot";
 
 
 function parseSymbols(value: unknown) {
@@ -199,7 +200,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerBackupRoutes(app);
   registerDeviceRoutes(app);
   registerMCPRoutes(app);
-  registerEnvironmentSetupRoutes(app);
+  const nativeResources = (process as { resourcesPath?: string }).resourcesPath || process.env.ELECTRON_RESOURCES_PATH;
+  let nativeProvisioning: ReturnType<typeof resolvePackagedNativeRuntimeBundleAuthority> = null;
+  let nativeProvisioningInvalid = false;
+  if (nativeResources) {
+    try {
+      nativeProvisioning = resolvePackagedNativeRuntimeBundleAuthority(nativeResources, path.join(dataRoot(), "python-runtimes"));
+    } catch {
+      nativeProvisioningInvalid = true;
+      console.warn("Native runtime bundle verification failed; provisioning is disabled.");
+    }
+  }
+  registerEnvironmentSetupRoutes(app, {
+    ...(nativeProvisioning ? { strictProvisioningAuthority: nativeProvisioning } : {}),
+    ...(nativeProvisioningInvalid ? { provisioningBlocker: "native_runtime_bundle_invalid" as const } : {}),
+  });
   registerSourceConnectionRoutes(app);
   registerSourceRegistryRoutes(app);
   registerProjectRoutes(app);

@@ -25,6 +25,7 @@ src/.pyinstaller-spec/
 # SP-01 pinned sandbox payload and built archive are release-generated, never source.
 src/sandbox-image-inputs/
 src/sandbox-image-dist/
+src/native-runtime-dist/
 
 # Private runtime custody and audit outputs are not publication artifacts.
 **/.sp02-qualification/
