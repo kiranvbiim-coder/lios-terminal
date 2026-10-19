@@ -15,6 +15,8 @@ import type { ProcessSupervisor } from "./exec/types";
 import { z } from "zod";
 import type { ConversationSourceScope } from "@shared/sourceScope";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
+import type { ArtifactContent } from "@shared/artifactContracts";
+import type { P7ProjectDocument } from "@shared/p7ResearchContracts";
 import type { AgentDelegationBudget } from "./agent-delegation";
 import type { RuntimePermissionClass, RuntimePermissionDecision } from "@shared/runtimeContracts";
 import { assertNotAborted } from "./conversationRuntimeCore";
@@ -35,6 +37,14 @@ export interface GovernedToolCall {
   sourceScope?: ConversationSourceScope;
   /** Server-resolved ResearchArtifact allow-list; never sourced from model arguments. */
   allowedSourceRefs?: string[];
+  /** Complete current active ResearchArtifact policy, resolved by the server rather than tool/model input. */
+  researchSourcePolicy?: Extract<ArtifactContent, { kind: "research" }>["sourcePolicy"];
+  /** Ephemeral current-head identity for revalidation before releasing a research observation. */
+  researchSourcePolicyBinding?: { artifactId: string; headVersion: number; contentHash: string };
+  /** Server-only review refresh: materialize current P7 search evidence without persisting an index or snapshot. */
+  researchReadOnly?: boolean;
+  /** One server-owned readonly document snapshot reused only by queries within the same review refresh. */
+  researchReadDocuments?: P7ProjectDocument[];
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */
   activeArtifactRefs?: string[];
   /** Server-owned Project resource transmission posture; false means resource content must not be disclosed. */

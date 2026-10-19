@@ -101,13 +101,15 @@ export function killSignals(adapter: StubChildAdapter): Array<NodeJS.Signals | u
 
 export function createStubSupervisor(adapters: ReadonlyArray<SpawnProcessAdapter<NodeJS.Signals | null> | Error>) {
   const queue = [...adapters];
+  const adapterCreated = createDeferredCore();
   const createAdapter = mock.fn((_params: ChildAdapterInput): SpawnProcessAdapter<NodeJS.Signals | null> => {
     const next = queue.shift();
     if (!next) { throw new Error("no stub adapter queued"); }
     if (next instanceof Error) { throw next; }
+    adapterCreated.resolve();
     return next;
   });
-  return { supervisor: createProcessSupervisor({ createAdapter }), createAdapter };
+  return { supervisor: createProcessSupervisor({ createAdapter }), createAdapter, adapterCreated: adapterCreated.promise };
 }
 
 export function spawnChild(supervisor: ProcessSupervisor, options: Omit<SpawnInput, "mode" | "argv"> & { argv?: string[] } = {}): Promise<ManagedRun> {

@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import {
   createExecutionPolicySnapshot,
@@ -104,10 +104,9 @@ function passthroughBackend(
   return { backend, calls };
 }
 
-async function waitForAdapter(createAdapter: ReturnType<typeof createStubSupervisor>["createAdapter"]): Promise<void> {
-  for (let index = 0; index < 200 && createAdapter.mock.calls.length === 0; index += 1) {
-    await delay(2);
-  }
+async function waitForAdapter(createAdapter: ReturnType<typeof createStubSupervisor>["createAdapter"], ready: Promise<void>, execution: Promise<unknown>): Promise<void> {
+  await Promise.race([ready, execution.then(() => { throw new Error("Execution finished before native adapter construction"); })]);
+  await nextTurn();
   assert.equal(createAdapter.mock.calls.length, 1, "expected exactly one native adapter construction");
 }
 
@@ -473,6 +472,8 @@ test("backend lifecycle is retained through native extinction and finalization b
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const events: string[] = [];
   let finish!: () => void;
+  let started!: () => void;
+  const finalizationStarted = new Promise<void>((resolve) => { started = resolve; });
   const finalization = new Promise<void>((resolve) => { finish = resolve; });
   let retainedPlan: ExecutionBackendLaunchPlan | undefined;
   const { backend } = passthroughBackend((plan) => {
@@ -482,6 +483,7 @@ test("backend lifecycle is retained through native extinction and finalization b
       onCancel() { events.push("cancel"); },
       async finalize() {
         events.push("finalize");
+        started();
         await finalization;
       },
     };
@@ -498,19 +500,19 @@ test("backend lifecycle is retained through native extinction and finalization b
   assert.equal(prepared.facts.runtimeGenerationId, "lios-exec-test-generation-00000001");
   assert.equal(Object.isFrozen(prepared.facts), true);
   const adapter = createStubChildAdapter({ autoExtinction: false });
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   let returned = false;
   const execution = executePreparedGovernedCommand(prepared, authorization(prepared), supervisor)
     .then((result) => { returned = true; return result; });
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   adapter.emitStdout("ok");
   adapter.settle(0);
   await delay(10);
   assert.deepEqual(events, [], "backend finalization cannot precede native extinction");
   assert.equal(returned, false);
   adapter.settleExtinction();
-  for (let index = 0; index < 200 && events.length === 0; index += 1) await delay(2);
+  await finalizationStarted;
   assert.deepEqual(events, ["finalize"]);
   assert.equal(returned, false, "completion waits for backend extinction proof");
   finish();
@@ -543,10 +545,10 @@ test("cancel invokes backend hook before native termination and finalization fai
       adapter.settle(null, "SIGTERM");
     },
   });
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   const execution = executePreparedGovernedCommand(prepared, authorization(prepared), supervisor);
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   controller.abort(new Error("private backend cancel"));
   await assert.rejects(execution, /backend extinction unproven/);
   assert.deepEqual(events, ["backend-cancel", "native-kill", "backend-finalize"]);
@@ -645,10 +647,10 @@ test("governed happy path reaches exactly one GM-10 native adapter", async (t) =
   });
 
   const adapter = createStubChildAdapter();
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   const execution = executePreparedGovernedCommand(prepared, authorization(prepared), supervisor);
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   adapter.emitStdout("ok");
   adapter.settle(0);
   const result = await execution;

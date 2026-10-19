@@ -71,16 +71,23 @@ describe("process supervisor with real children", () => {
   });
 
   it("no-output timeout terminates a silent process after its last output", T, async () => {
+    const watcher = createOutputWatcher();
     const run = await make().spawn({
       mode: "child",
       argv: nodeArgv(`console.log("started"); ${IDLE_SCRIPT}`),
-      noOutputTimeoutMs: 300,
+      // This real-process test verifies silence termination, not sub-300ms Node cold startup.
+      // Exact timer rearming is covered by the supervisor's injected-clock tests.
+      noOutputTimeoutMs: 5_000,
+      onStdout: watcher.onStdout,
     });
+    await watcher.waitFor(/started/);
     const exit = await run.wait();
     assert.equal(exit.reason, "no-output-timeout");
     assert.equal(exit.timedOut, true);
     assert.equal(exit.noOutputTimedOut, true);
     assert.match(exit.stdout, /started/);
+    await run.waitForExtinction?.();
+    assert.ok(run.pid !== undefined && await waitForPidGone(run.pid), "the silent process is still alive");
   });
 
   it("truncates captured output past the cap, reports it, and still streams full chunks", T, async () => {

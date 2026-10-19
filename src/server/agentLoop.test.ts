@@ -113,6 +113,105 @@ test("the review prompt carries tool summaries only, never the model's raw tool 
   assert.match(h.prompts[1]!.user, /result of a/);
 });
 
+test("each review repair resolves fresh ephemeral observations from completed steps only", async () => {
+  const h = harness([
+    plan([step("read"), step("failed", "t.calc", { dependsOn: ["read"] })]),
+    "not a review",
+    complete(),
+  ], { invoke: async (planned) => planned.id === "failed"
+    ? { kind: "failed", reason: "Unavailable" }
+    : { kind: "ok", summary: "Read completed", deterministic: true, sourceRefs: ["src:read"] } });
+  let resolutions = 0;
+  h.deps.resolveReviewObservations = async ({ completedSteps, signal }) => {
+    assert.equal(signal.aborted, false);
+    assert.deepEqual(completedSteps.map(({ id, toolId }) => ({ id, toolId })), [{ id: "read", toolId: "t.quote" }]);
+    resolutions += 1;
+    return resolutions === 1
+      ? { text: "CURRENT-PERMITTED-PASSAGE", sourceRefs: ["source:current"] }
+      : { text: "CURRENT-RIGHTS-REVOKED", sourceRefs: [] };
+  };
+  const result = await runAgentLoop(h.deps);
+  assert.equal(resolutions, 2, "repair must re-resolve rather than retain prior source permissions");
+  assert.ok(h.prompts[1]!.user.includes("CURRENT-PERMITTED-PASSAGE"));
+  assert.ok(h.prompts[2]!.user.includes("CURRENT-RIGHTS-REVOKED"));
+  assert.equal(h.prompts[2]!.user.includes("CURRENT-PERMITTED-PASSAGE"), false);
+  assert.equal(h.prompts[0]!.user.includes("CURRENT-PERMITTED-PASSAGE"), false, "planning is not evidence review");
+  assert.equal(result.aiCalls, 3);
+  assert.equal(result.revisions, 1);
+  const durable = JSON.stringify([result, h.ledger, h.results]);
+  assert.equal(durable.includes("CURRENT-PERMITTED-PASSAGE"), false);
+  assert.equal(durable.includes("CURRENT-RIGHTS-REVOKED"), false);
+  assert.deepEqual(h.ran, ["read", "failed"], "refresh never replays tool side effects");
+});
+
+test("ephemeral observation reads cannot bypass exhausted AI budget or cancellation", async () => {
+  const limited = harness([plan([step("read")])], { budget: { maxAiCalls: 1 } });
+  let reads = 0;
+  limited.deps.resolveReviewObservations = async () => { reads += 1; return { text: "unused", sourceRefs: [] }; };
+  const result = await runAgentLoop(limited.deps);
+  assert.equal(result.status, "budget_exhausted");
+  assert.equal(reads, 0);
+  const controller = new AbortController();
+  const cancelled = harness([plan([step("read")])], {
+    signal: controller.signal,
+    invoke: async () => {
+      controller.abort();
+      return { kind: "ok", summary: "Read completed", deterministic: true, sourceRefs: [] };
+    },
+  });
+  cancelled.deps.resolveReviewObservations = async () => { reads += 1; return { text: "unused", sourceRefs: [] }; };
+  await assert.rejects(runAgentLoop(cancelled.deps), { name: "AbortError" });
+  assert.equal(reads, 0);
+});
+
+test("review provenance is bounded before a model receives cumulative references", async () => {
+  const firstRefs = Array.from({ length: 60 }, (_, index) => `source:first:${index}`);
+  const nextRefs = Array.from({ length: 60 }, (_, index) => `source:next:${index}`);
+  const h = harness([plan([step("read")]), "invalid review", complete()]);
+  let resolutions = 0;
+  h.deps.resolveReviewObservations = async ({ reviewedSourceRefs }) => {
+    resolutions += 1;
+    if (resolutions === 1) {
+      assert.deepEqual(reviewedSourceRefs, []);
+      return { text: "first bounded source batch", sourceRefs: firstRefs };
+    }
+    assert.deepEqual(reviewedSourceRefs, firstRefs, "successful provider dispatch counts even when its response needs repair");
+    return { text: "OVERCAP-MUST-NOT-TRANSMIT", sourceRefs: nextRefs };
+  };
+  await assert.rejects(runAgentLoop(h.deps), /source|reference|bound|limit/i);
+  assert.equal(h.prompts.length, 2, "cumulative overflow must stop before the repaired model call");
+  assert.equal(h.prompts.some((prompt) => prompt.user.includes("OVERCAP-MUST-NOT-TRANSMIT")), false);
+});
+
+test("successful review provenance survives approval resume independently of current observations", async () => {
+  const h = harness([
+    plan([step("read")]),
+    JSON.stringify({ decision: "revise", steps: [step("confirm", "t.confirm")] }),
+  ]);
+  h.deps.resolveReviewObservations = async () => ({
+    text: "EPHEMERAL-BEFORE-APPROVAL", sourceRefs: ["source:fresh-review"],
+  });
+  const paused = await runAgentLoop(h.deps);
+  assert.equal(paused.status, "awaiting_approval");
+  assert.ok(paused.resume);
+  assert.deepEqual(paused.resume.reviewedSourceRefs, ["source:fresh-review"]);
+  assert.equal(JSON.stringify(paused.resume).includes("EPHEMERAL-BEFORE-APPROVAL"), false);
+  const resumed = harness([complete()], { invoke: async () => ({
+    kind: "ok", summary: "Approved", deterministic: true, sourceRefs: [],
+  }) });
+  resumed.ledger.push(...h.ledger);
+  resumed.ledger.push(sealAgentEvent(resumed.ledger, {
+    kind: "tool_call_resumed", toolCallId: "confirm-call", approvalRef: "approval:review-provenance",
+  }, "2026-10-05T00:00:00.000Z"));
+  resumed.deps.resolveReviewObservations = async ({ reviewedSourceRefs }) => {
+    assert.deepEqual(reviewedSourceRefs, ["source:fresh-review"]);
+    return null;
+  };
+  const done = await resumeAgentLoop(resumed.deps, paused.resume);
+  assert.deepEqual(done.reviewedSourceRefs, ["source:fresh-review"]);
+  assert.equal(JSON.stringify(resumed.prompts).includes("EPHEMERAL-BEFORE-APPROVAL"), false);
+});
+
 test("model planning prompt exposes bounded tool-specific input guidance", async () => {
   const guided: AgentLoopTool = {
     ...tool("lios.entity.resolve"),

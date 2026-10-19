@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import {
   createExecutionPolicySnapshot,
@@ -105,10 +105,9 @@ function privateTransportBackend(input: {
   };
 }
 
-async function waitForAdapter(createAdapter: ReturnType<typeof createStubSupervisor>["createAdapter"]): Promise<void> {
-  for (let index = 0; index < 200 && createAdapter.mock.calls.length === 0; index += 1) {
-    await delay(2);
-  }
+async function waitForAdapter(createAdapter: ReturnType<typeof createStubSupervisor>["createAdapter"], ready: Promise<void>, execution: Promise<unknown>): Promise<void> {
+  await Promise.race([ready, execution.then(() => { throw new Error("Execution finished before native adapter construction"); })]);
+  await nextTurn();
   assert.equal(createAdapter.mock.calls.length, 1, "expected one native adapter");
 }
 
@@ -125,10 +124,10 @@ test("GM-11 admits lifecycle-bound private output transport and returns only san
   assert.equal(typeof prepared.lifecycle()?.acceptExit, "function");
 
   const adapter = createStubChildAdapter({ autoExtinction: false });
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   const execution = executePreparedGovernedCommand(prepared, authorization(prepared), supervisor);
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   adapter.emitStdoutRaw(Buffer.from("private-frame-must-not-return"));
   adapter.settle(0);
   adapter.settleExtinction();
@@ -173,7 +172,7 @@ test("canonical GM-10 join accepts private output only after native extinction a
     },
   };
   const adapter = createStubChildAdapter({ autoExtinction: false });
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   const execution = runPreparedSpawn({
     mode: "child",
@@ -185,7 +184,7 @@ test("canonical GM-10 join accepts private output only after native extinction a
     onStderrRaw: lifecycle.onStderrRaw,
     onCancel: lifecycle.onCancel,
   }, undefined, supervisor, { lifecycle });
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   adapter.emitStdoutRaw(Buffer.from("private-frame"));
   adapter.settle(0);
   await delay(10);
@@ -214,7 +213,7 @@ test("private output acceptance failure still finalizes the backend before surfa
     },
   };
   const adapter = createStubChildAdapter({ autoExtinction: false });
-  const { supervisor, createAdapter } = createStubSupervisor([adapter]);
+  const { supervisor, createAdapter, adapterCreated } = createStubSupervisor([adapter]);
   t.after(async () => supervisor.shutdown());
   const execution = runPreparedSpawn({
     mode: "child",
@@ -226,7 +225,7 @@ test("private output acceptance failure still finalizes the backend before surfa
     onStderrRaw: lifecycle.onStderrRaw,
     onCancel: lifecycle.onCancel,
   }, undefined, supervisor, { lifecycle });
-  await waitForAdapter(createAdapter);
+  await waitForAdapter(createAdapter, adapterCreated, execution);
   adapter.settle(0);
   adapter.settleExtinction();
   await assert.rejects(execution, /private transport invalid/);

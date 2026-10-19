@@ -7,9 +7,11 @@ import {
 import type { ConversationToolDefinition, ConversationToolResult } from "./conversationRuntime";
 import { assertNotAborted, sourceScopeAllowsProjectData } from "./conversationRuntimeCore";
 import {
+  currentPermittedProjectSearchDocuments,
   listProjectIntelligenceDocuments,
   searchProjectIntelligence,
 } from "./p7ProjectIntelligenceStore";
+import { searchProjectDocuments } from "./p7ProjectIntelligence";
 import { composeResearchSources } from "./researchSourceComposition";
 import { tenantContext } from "./tenantContext";
 import {
@@ -114,16 +116,41 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
       .map((value) => value.trim())
       .filter(Boolean)
       .slice(0, 5_000);
+    const sourcePolicy = call.researchSourcePolicy;
+    if (sourcePolicy?.mode === "only_refs" && !sourcePolicy.allowedSourceRefs.length) {
+      throw new Error("Active research source policy permits no source references.");
+    }
+    const allowedRefSet = new Set(allowedSourceRefs);
+    const scopedSourceRefs = sourcePolicy?.mode === "only_refs"
+      ? sourcePolicy.allowedSourceRefs.filter((ref) => !allowedRefSet.size || allowedRefSet.has(ref))
+      : allowedSourceRefs;
+    if (sourcePolicy?.mode === "only_refs" && !scopedSourceRefs.length) {
+      throw new Error("Current research source restrictions have no permitted intersection.");
+    }
 
-    const hits = await searchProjectIntelligence(ctx, projectId, {
+    // Review refreshes use one current in-memory document set for both matching and custody; they never rebuild the index.
+    const currentDocuments = call.researchReadOnly === true
+      ? call.researchReadDocuments ?? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
+      : sourcePolicy?.mode === "only_refs" ? await currentPermittedProjectSearchDocuments(ctx, projectId) : null;
+    const exactRefs = sourcePolicy?.mode === "only_refs" ? new Set(scopedSourceRefs) : null;
+    const searchDocuments = exactRefs
+      ? currentDocuments!.filter((document) => exactRefs.has(document.sourceRef))
+      : currentDocuments;
+    assertNotAborted(signal);
+    const searchRequest = {
       query: parsed.query,
       limit: parsed.limit,
-      allowedSourceRefs,
-    });
+      allowedSourceRefs: scopedSourceRefs,
+      providerAllow: sourcePolicy?.providerAllow ?? [],
+      providerDeny: sourcePolicy?.providerDeny ?? [],
+    };
+    const hits = searchDocuments
+      ? searchProjectDocuments(searchDocuments, searchRequest)
+      : await searchProjectIntelligence(ctx, projectId, searchRequest);
     assertNotAborted(signal);
 
     const documents = new Map(
-      (await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
+      (searchDocuments ?? await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
     );
     const matchingExcerpts = new Map<string, string>();
     const rankedDocuments = hits.flatMap((hit) => {
