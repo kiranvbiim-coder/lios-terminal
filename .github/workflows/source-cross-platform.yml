@@ -28,7 +28,9 @@ jobs:
           - platform: Linux
             runner: ubuntu-24.04
           - platform: macOS
-            runner: macos-15
+            # Standard hosted Intel capacity; macos-15 arm64 repeatedly failed
+            # before runner acquisition. Source checks are not native arm64 release proof.
+            runner: macos-15-intel
           - platform: Windows
             runner: windows-2022
     runs-on: ${{ matrix.runner }}
