@@ -128,10 +128,10 @@ test("legacy advanced consumers retain sidecar result fields at the response roo
   assert.equal(headers["X-LIOS-Output-Hash"], response.receipt.outputSnapshotHash);
 });
 
-test("corrected revenue-based DCF receipts cannot collide with the prior calculation revision", () => {
+test("corrected numerical receipts cannot collide with the prior calculation revision", () => {
   const parsed = parseAdvancedQuantRunRequest({ currentRevenue: 100, reinvestmentPctOfRevenue: 10 });
   assert.ok(parsed.success);
-  for (const modelPath of ["valuation/probabilistic-dcf", "valuation/reverse-dcf", "valuation/expectation-surface"] as const) {
+  for (const modelPath of ["valuation/probabilistic-dcf", "valuation/reverse-dcf", "valuation/expectation-surface", "derivatives/black-scholes-greeks", "derivatives/portfolio-greeks"] as const) {
     const registryEntry = QUANT_MODEL_REGISTRY.find((entry) => entry.apiEndpoint === `/api/quant/advanced/${modelPath}`);
     assert.ok(registryEntry);
     const input = {

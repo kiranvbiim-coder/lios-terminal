@@ -22,7 +22,7 @@ const specs: AdvancedModelSpec[] = [
   { path: "fixed-income/key-rate-risk", label: "Key-Rate Duration And DV01", category: "fixed_income", source: "python-service/advanced_fixed_income.py", surface: "Fixed Income" },
   { path: "fixed-income/immunize-duration", label: "Duration Immunisation", category: "fixed_income", source: "python-service/advanced_fixed_income.py", surface: "Fixed Income" },
 
-  { path: "derivatives/black-scholes-greeks", label: "Black-Scholes Higher Greeks", category: "derivatives", source: "python-service/advanced_derivatives.py", surface: "Quant Workbench" },
+  { path: "derivatives/black-scholes-greeks", label: "Black-Scholes Higher Greeks", category: "derivatives", source: "python-service/advanced_derivatives.py", version: "1.0.1", surface: "Quant Workbench" },
   { path: "derivatives/implied-volatility", label: "Implied Volatility Inversion", category: "derivatives", source: "python-service/advanced_derivatives.py", surface: "Quant Workbench" },
   { path: "derivatives/surface-arbitrage", label: "Volatility Surface Arbitrage Diagnostics", category: "derivatives", source: "python-service/advanced_derivatives.py", surface: "Quant Workbench" },
   { path: "derivatives/exotic-monte-carlo", label: "Seeded Exotic Option Monte Carlo", category: "derivatives", source: "python-service/advanced_derivatives.py", determinism: "seeded_stochastic", surface: "Monte Carlo" },
