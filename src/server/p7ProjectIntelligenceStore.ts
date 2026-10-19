@@ -912,16 +912,20 @@ export async function currentPermittedProjectSearchDocuments(
   projectId: number,
   options: { readOnly?: boolean } = {},
 ): Promise<P7ProjectDocument[]> {
-  const [project, indexed, snapshots] = await Promise.all([
-    getProject(ctx, projectId),
-    listProjectIntelligenceDocuments(ctx, projectId),
-    listProjectIntelligenceSnapshots(ctx, projectId, 1),
-  ]);
-  let documents = indexed;
-  if (!documents.length || !snapshots[0] || Math.max(project.updatedAt.getTime(), project.lastActivityAt.getTime()) >= Date.parse(snapshots[0].generatedAt)) {
-    documents = options.readOnly
-      ? await collectCurrentProjectDocuments(ctx, projectId)
-      : (await rebuildProjectIntelligence(ctx, projectId)).documents;
+  let documents: P7ProjectDocument[];
+  if (options.readOnly) {
+    // Release fences must not trust a snapshot timestamp for current content or rights.
+    documents = await collectCurrentProjectDocuments(ctx, projectId);
+  } else {
+    const [project, indexed, snapshots] = await Promise.all([
+      getProject(ctx, projectId),
+      listProjectIntelligenceDocuments(ctx, projectId),
+      listProjectIntelligenceSnapshots(ctx, projectId, 1),
+    ]);
+    documents = indexed;
+    if (!documents.length || !snapshots[0] || Math.max(project.updatedAt.getTime(), project.lastActivityAt.getTime()) >= Date.parse(snapshots[0].generatedAt)) {
+      documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
+    }
   }
   // Current eligibility is authoritative even if source changes raced snapshot construction.
   const [resources, chats, artifacts] = await Promise.all([

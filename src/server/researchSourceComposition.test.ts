@@ -851,7 +851,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const tenant = { userId: actor.id, organizationId: organization.id, role: actor.role };
       const researchProject = await createProject(tenant, { name: "Private research without selected resources" });
       const privatePassage = "Sequoia internal findings are organization-owned evidence.";
-      await indexProjectDocument(tenant, {
+      const originalSource = await indexProjectDocument(tenant, {
         projectId: researchProject.id, sourceType: "research_evidence", sourceRef: "internal:sequoia:routing",
         title: "Sequoia research", body: privatePassage, sourceRefs: ["internal:sequoia:routing"],
         metadata: { researchSource: {
@@ -884,7 +884,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), { status: 200 });
       }) as typeof fetch;
       async function invokeWithPolicy(allowExternalData: boolean, race?: {
-        artifactId: string;
+        artifactId?: string;
+        observedPassage?: string;
         beforeRelease: () => Promise<void>;
       }) {
         await saveEnterprisePolicy(organization.id, {
@@ -904,13 +905,16 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
             requestId: crypto.randomUUID(), continuationOf: null, message: "Compare sequoia research findings.",
             executionMode: "ai_assisted", aiDirectApproved: false, approvals: [], attachments: [],
             sourceScope: "my_data",
-            ...(race ? { context: { activeObjectRefs: [race.artifactId] } } : {}),
+            ...(race?.artifactId ? { context: { activeObjectRefs: [race.artifactId] } } : {}),
             transmissionPolicy: { mode: "configured", providerAllow: ["openai", "gemini"], providerDeny: [],
               allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
               allowToolCalling: true, dataClassification: "public" },
           },
           ...(race ? { aiCompletion: async (completion) => {
             if (completion.messages.some((message) => message.content.includes("BEGIN_CURRENT_RESEARCH_OBSERVATIONS"))) {
+              if (race.observedPassage) {
+                assert.ok(JSON.stringify(completion).includes(race.observedPassage), "race must begin only after the source passage was composed for review");
+              }
               await race.beforeRelease();
             }
             return invokeAIRoutedCompletion(completion);
@@ -956,6 +960,78 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.equal(reviewReached, false, "canonical before-transmission validation must reject stale observations");
         assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"], "no private review or stale fallback reaches any provider");
         assert.equal(attempted.some(({ body }) => body.includes(privatePassage)), false);
+
+        async function assertSourceRace(mutate: () => Promise<void>, observedPassage = privatePassage) {
+          attempted.length = 0;
+          reviewReached = false;
+          let mutated = false;
+          await assert.rejects(invokeWithPolicy(true, {
+            observedPassage,
+            beforeRelease: async () => { await mutate(); mutated = true; },
+          }), /changed|policy|source|research|transmission/i);
+          assert.equal(mutated, true, "source mutation must happen after composition without an active Artifact");
+          assert.equal(reviewReached, false);
+          assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"],
+            "changed source custody must refuse before private provider transport and fallback");
+          assert.equal(attempted.some(({ body }) => body.includes(observedPassage)), false);
+        }
+        const sourceMetadata = (rights = allowedRights) => ({ researchSource: {
+          class: "internal_research",
+          identity: { sourceId: "sequoia-routing", providerId: null, organization: null,
+            author: null, analystId: null, expertId: null, url: null },
+          rights,
+        } });
+        async function restoreSource() {
+          await indexProjectDocument(tenant, {
+            projectId: researchProject.id, sourceType: "research_evidence", sourceRef: originalSource.sourceRef,
+            title: originalSource.title, body: originalSource.body, sourceRefs: originalSource.sourceRefs,
+            metadata: sourceMetadata(),
+          });
+        }
+        await assertSourceRace(async () => {
+          await indexProjectDocument(tenant, {
+            projectId: researchProject.id, sourceType: "research_evidence", sourceRef: originalSource.sourceRef,
+            title: originalSource.title, body: originalSource.body, sourceRefs: originalSource.sourceRefs,
+            metadata: { researchSource: {
+              ...sourceMetadata().researchSource, rights: { ...allowedRights, aiTransmission: "restricted" },
+            } },
+          });
+        });
+        await restoreSource();
+        await assertSourceRace(async () => {
+          await indexProjectDocument(tenant, {
+            projectId: researchProject.id, sourceType: "research_evidence", sourceRef: originalSource.sourceRef,
+            title: originalSource.title, body: originalSource.body, sourceRefs: originalSource.sourceRefs,
+            metadata: { researchSource: {
+              ...sourceMetadata().researchSource, rights: {
+                ...allowedRights, entitlement: { ...allowedRights.entitlement, decision: "denied" },
+              },
+            } },
+          });
+        });
+        await restoreSource();
+        await assertSourceRace(async () => {
+          await indexProjectDocument(tenant, {
+            projectId: researchProject.id, sourceType: "research_evidence", sourceRef: originalSource.sourceRef,
+            title: originalSource.title, body: `${originalSource.body} Materially revised source custody.`,
+            sourceRefs: originalSource.sourceRefs, metadata: sourceMetadata(),
+          });
+        });
+        await restoreSource();
+        await assertSourceRace(async () => {
+          await getDb().delete(projectIntelligenceDocuments).where(eq(projectIntelligenceDocuments.id, originalSource.id));
+        });
+        await restoreSource();
+
+        const { createProjectResource, setProjectResourceContextMode } = await import("./projectResourceStore");
+        const resourcePassage = "Sequoia current resource eligibility must be checked before release.";
+        const resource = await createProjectResource(tenant, {
+          projectId: researchProject.id, kind: "note", label: "Sequoia eligibility note",
+          contextMode: "project", metadata: { text: resourcePassage, ...sourceMetadata() },
+        });
+        await assertSourceRace(async () => {
+          await setProjectResourceContextMode(tenant, resource.id, "excluded");
+        }, resourcePassage);
       } finally {
         globalThis.fetch = priorFetch;
         if (priorCredentialStore === undefined) delete process.env.LIMURIA_CREDENTIAL_STORE;

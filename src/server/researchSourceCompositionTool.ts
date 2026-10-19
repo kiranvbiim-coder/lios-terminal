@@ -120,8 +120,9 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
     if (sourcePolicy?.mode === "only_refs" && !sourcePolicy.allowedSourceRefs.length) {
       throw new Error("Active research source policy permits no source references.");
     }
+    const allowedRefSet = new Set(allowedSourceRefs);
     const scopedSourceRefs = sourcePolicy?.mode === "only_refs"
-      ? sourcePolicy.allowedSourceRefs.filter((ref) => !allowedSourceRefs.length || allowedSourceRefs.includes(ref))
+      ? sourcePolicy.allowedSourceRefs.filter((ref) => !allowedRefSet.size || allowedRefSet.has(ref))
       : allowedSourceRefs;
     if (sourcePolicy?.mode === "only_refs" && !scopedSourceRefs.length) {
       throw new Error("Current research source restrictions have no permitted intersection.");
