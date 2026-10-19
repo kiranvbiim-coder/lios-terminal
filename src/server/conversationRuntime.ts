@@ -1220,7 +1220,8 @@ async function invokeGovernedAi(
   try {
     if (content.containsPrivateResearch) {
       if (!content.beforeTransmission) throw new AIProviderError("policy_denied", "Current research release authorization is unavailable.");
-      await content.beforeTransmission();
+      // Canonical transport checks at final dispatch; injected adapters need this guard here.
+      if (invokeAI !== invokeAIRoutedCompletion) await content.beforeTransmission();
     }
     const policy = input.request.transmissionPolicy;
     const answered = await invokeAI({
@@ -4418,7 +4419,6 @@ async function resolveAgentResearchReviewObservations(
       throw new AIProviderError("policy_denied", "Current research source policy changed or is unavailable; refresh the research before continuing.");
     }
   };
-  await assertCurrent();
   return { text: rendered, sourceRefs: [...new Set(observation.sources.map((source) => source.sourceRef))], assertCurrent };
 }
 
