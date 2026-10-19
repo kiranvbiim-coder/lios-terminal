@@ -4261,10 +4261,10 @@ async function resolveAgentResearchReviewObservations(
   if (!researchSteps.length) return null;
   type ComposedSource = z.infer<typeof researchSourceCompositionToolOutputSchema>["output"]["sources"][number];
   type Source = Pick<ComposedSource, "documentId" | "sourceRef" | "sourceType" | "title" | "sourceClass" | "identity" | "occurredAt" | "contentHash" | "excerpt"> & {
-    stepId: string;
+    stepIds: string[];
     rights: Pick<ComposedSource["rights"], "aiTransmission" | "internalUse" | "redistribution">;
   };
-  const candidates: Source[] = [];
+  const candidates = new Map<string, Source>();
   const policyBindings: Array<GovernedToolCall["researchSourcePolicyBinding"]> = [];
   let reviewSnapshot: Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy" | "researchSourcePolicyBinding" | "researchReadDocuments">> | undefined;
   const observation = {
@@ -4274,6 +4274,7 @@ async function resolveAgentResearchReviewObservations(
     blockedSourceCount: 0,
     omittedSourceCountByCredentialPolicy: 0,
     omittedSourceCountByByteLimit: 0,
+    deduplicatedSourceCount: 0,
     sources: [] as Source[],
   };
   for (const step of researchSteps) {
@@ -4316,8 +4317,15 @@ async function resolveAgentResearchReviewObservations(
           observation.omittedSourceCountByCredentialPolicy += 1;
           continue;
         }
-        candidates.push({
-          stepId: step.id,
+        const key = hashPayload({ custody: researchReviewSourceFingerprint(source), excerpt: source.excerpt });
+        const previous = candidates.get(key);
+        if (previous) {
+          if (!previous.stepIds.includes(step.id)) previous.stepIds.push(step.id);
+          observation.deduplicatedSourceCount += 1;
+          continue;
+        }
+        candidates.set(key, {
+          stepIds: [step.id],
           documentId: source.documentId,
           sourceRef: source.sourceRef,
           sourceType: source.sourceType,
@@ -4340,9 +4348,9 @@ async function resolveAgentResearchReviewObservations(
       observation.unavailableStepCount += 1;
     }
   }
-  observation.omittedSourceCountByByteLimit = candidates.length;
+  observation.omittedSourceCountByByteLimit = candidates.size;
   let rendered = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
-  for (const source of candidates) {
+  for (const source of candidates.values()) {
     observation.sources.push(source);
     observation.omittedSourceCountByByteLimit -= 1;
     const candidate = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
@@ -4364,7 +4372,10 @@ async function resolveAgentResearchReviewObservations(
           || !sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) throw new Error();
         const currentScope = await activeResearchSourcePolicy(input);
         const documents = await currentPermittedProjectSearchDocuments(input.tenant, input.projectId, { readOnly: true });
-        const permitted = filterPermittedProjectDocuments(documents.filter((document) => sourceIds.has(document.id)), p7SearchRequestSchema.parse({
+        const exactRefs = currentScope.researchSourcePolicy?.mode === "only_refs"
+          ? new Set(currentScope.researchSourcePolicy.allowedSourceRefs) : null;
+        const permitted = filterPermittedProjectDocuments(documents.filter((document) =>
+          sourceIds.has(document.id) && (!exactRefs || exactRefs.has(document.sourceRef))), p7SearchRequestSchema.parse({
           query: "Current research release",
           allowedSourceRefs: currentScope.allowedSourceRefs ?? [],
           providerAllow: currentScope.researchSourcePolicy?.providerAllow ?? [],

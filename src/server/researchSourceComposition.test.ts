@@ -588,7 +588,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
               allowToolCalling: true, dataClassification: "private" },
           },
-          agentLoop: { ledger: async (event) => { ledger.push(event); } },
+          agentLoop: { maxSteps: 12, ledger: async (event) => { ledger.push(event); } },
           aiCompletion: async (completion) => {
             prompts.push(JSON.stringify(completion));
             let text: string;
@@ -652,6 +652,14 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       for (const passage of passages) assert.equal(durable.includes(passage), false);
 
       const safeBulk: P7ProjectDocument[] = [];
+      const credentialUrls = [
+        "https://alice:hunter2@example.com/report",
+        "https://storage.example.test/report?sv=2025-01-01&sp=r&sig=do-not-transmit-sas-signature",
+        "https://cdn.example.test/report?Expires=9999999999&Signature=do-not-transmit-cloudfront-signature&Key-Pair-Id=fixture-key",
+        "https://example.test/report?%74oken=do-not-transmit-encoded-token",
+        "https://s3.example.test/report?X-Amz-Signature=do-not-transmit-aws-signature",
+        "https://cdn.example.test/report?%53ignature=do-not-transmit-encoded-signature",
+      ];
       const credentialBodies = [
         "Megaflora password=do-not-transmit-credential",
         "Megaflora https://example.test/report?token=do-not-transmit-query",
@@ -665,7 +673,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         'Megaflora {"passWord":"do-not-transmit-json-mixed-case-password"}',
         "Megaflora token: pending",
         "Megaflora secret: none",
-        "Megaflora userinfo-bearing source identity must remain local.",
+        ...credentialUrls.map((_url, index) => `Megaflora credential-bearing URL identity ${index} must remain local.`),
       ];
       for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
@@ -677,7 +685,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
             class: "internal_research",
             identity: { sourceId: sourceRef, providerId: null, organization: null,
               author: null, analystId: null, expertId: null,
-              url: index === 30 + credentialBodies.length - 1 ? "https://alice:hunter2@example.com/report" : null },
+              url: index >= 30 + credentialBodies.length - credentialUrls.length
+                ? credentialUrls[index - (30 + credentialBodies.length - credentialUrls.length)] : null },
             rights: allowedRights,
           } },
         });
@@ -729,13 +738,28 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         "do-not-transmit-json-client-secret", "do-not-transmit-json-database-password",
         "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password",
         "token: pending", "secret: none", "alice", "hunter2",
-        "Megaflora userinfo-bearing source identity must remain local."]) {
+        ...credentialUrls, ...credentialBodies.slice(-credentialUrls.length)]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
       for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
         assert.equal(framed.includes(`internal:megaflora:${index}`), false, "credential source identities are omitted with their records");
       }
       assert.equal(JSON.stringify([bulk.events, bulk.ledger]).includes("植".repeat(20)), false);
+      const benignUrl = "https://example.test/report?year=2026&section=margin";
+      await indexProjectDocument(ctx, {
+        projectId: project.id, sourceType: "research_evidence", sourceRef: "internal:benignurl:report",
+        title: "Benignurl public locator", body: "Benignurl noncredential query parameters remain usable.",
+        sourceRefs: ["internal:benignurl:report"],
+        metadata: { researchSource: {
+          class: "internal_research",
+          identity: { sourceId: "benignurl-report", providerId: null, organization: null,
+            author: null, analystId: null, expertId: null, url: benignUrl },
+          rights: allowedRights,
+        } },
+      });
+      const benignLocator = await capture({ query: "benignurl" });
+      assert.ok(benignLocator.prompts[1]!.includes(benignUrl));
+      assert.ok(benignLocator.prompts[1]!.includes("Benignurl noncredential query parameters remain usable."));
 
       async function persistedIntelligence() {
         return Promise.all([
@@ -783,6 +807,38 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.ok(oneQueryReads > 0, "counter must observe real readonly Project database queries");
       assert.equal(threeQueryReads, oneQueryReads,
         "multiple completed research queries share one current Project collection per review, rather than rereading all Project roots per query");
+
+      const overlapSources = [
+        { sourceRef: "internal:pinus:overlap", title: "Pinusoverlap primary",
+          body: `Pinusoverlap repeated-query passage. ${"植".repeat(1_800)}` },
+        { sourceRef: "internal:pinus:distinct", title: "Pinusdistinct final",
+          body: "Pinusdistinct later-query evidence must remain admitted." },
+      ];
+      for (const source of overlapSources) {
+        await indexProjectDocument(ctx, {
+          projectId: project.id, sourceType: "research_evidence", ...source,
+          sourceRefs: [source.sourceRef], metadata: documents[1]!.metadata,
+        });
+      }
+      const overlap = await capture({ queries: [...Array<string>(8).fill("pinusoverlap"), "pinusdistinct"] });
+      const overlapTransport = findObservation(JSON.parse(overlap.prompts[1]!));
+      assert.ok(overlapTransport);
+      const overlapJson = overlapTransport.split("\n").find((line) => line.startsWith("{"));
+      assert.ok(overlapJson);
+      const deduplicated = z.object({
+        sources: z.array(z.object({ sourceRef: z.string(), stepIds: z.array(z.string()) }).passthrough()),
+        omittedSourceCountByByteLimit: z.number(),
+        currentSourceCount: z.number(),
+        deduplicatedSourceCount: z.number(),
+      }).passthrough().parse(JSON.parse(overlapJson));
+      assert.equal(deduplicated.sources.length, 2, "repeated identical document passages occupy one source record");
+      assert.equal(deduplicated.omittedSourceCountByByteLimit, 0);
+      assert.equal(deduplicated.currentSourceCount, 9);
+      assert.equal(deduplicated.deduplicatedSourceCount, 7);
+      assert.deepEqual(deduplicated.sources.find((source) => source.sourceRef === overlapSources[0].sourceRef)?.stepIds,
+        Array.from({ length: 8 }, (_, index) => `compose-${index}`));
+      assert.deepEqual(deduplicated.sources.find((source) => source.sourceRef === overlapSources[1].sourceRef)?.stepIds, ["compose-8"]);
+      assert.ok(overlapTransport.includes(overlapSources[1].body), "deduplication preserves distinct later evidence within the byte budget");
 
       const providerSources = [
         { sourceRef: "internal:agathis:approved", providerId: "agathis-approved-provider",
@@ -917,6 +973,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       async function invokeWithPolicy(allowExternalData: boolean, race?: {
         artifactId?: string;
         observedPassage?: string;
+        excludedPassage?: string;
         beforeRelease: () => Promise<void>;
       }) {
         await saveEnterprisePolicy(organization.id, {
@@ -946,6 +1003,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               if (race.observedPassage) {
                 assert.ok(JSON.stringify(completion).includes(race.observedPassage), "race must begin only after the source passage was composed for review");
               }
+              if (race.excludedPassage) assert.equal(JSON.stringify(completion).includes(race.excludedPassage), false);
               assert.equal(getConnectorVerification("openai")?.ok, true, "planning establishes a healthy provider before the policy race");
               raceHealthBaseline = getConnectorVerification("openai");
               await race.beforeRelease();
@@ -970,6 +1028,35 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.ok(attempted[1]!.body.includes(privatePassage));
         assert.equal(getConnectorVerification("openai")?.ok, false, "actual provider 429 must still degrade connector health");
 
+        const indirectBody = "Sequoia unselected document merely cites the approved source.";
+        const indirectTitle = "Sequoia Unselected Indirect Citation";
+        const indirectRef = "internal:sequoia:unselected";
+        await indexProjectDocument(tenant, {
+          projectId: researchProject.id, sourceType: "research_evidence", sourceRef: indirectRef,
+          title: indirectTitle, body: indirectBody, sourceRefs: [originalSource.sourceRef],
+          metadata: originalSource.metadata,
+        });
+        const exactOnly = await createArtifact(tenant, {
+          projectId: researchProject.id, title: "Exact selected sources",
+          content: researchArtifactContentSchema.parse({
+            kind: "research", question: "Sequoia exact selection", blocks: [], claims: [], evidence: [],
+            sourcePolicy: { mode: "only_refs", allowedSourceRefs: [originalSource.sourceRef] },
+          }),
+        });
+        attempted.length = 0;
+        reviewReached = false;
+        let exactReleaseReached = false;
+        await assert.rejects(invokeWithPolicy(true, {
+          artifactId: exactOnly.artifact.id, observedPassage: privatePassage, excludedPassage: indirectBody,
+          beforeRelease: async () => { exactReleaseReached = true; },
+        }), /rate|provider|private/i);
+        assert.equal(exactReleaseReached, true);
+        assert.equal(reviewReached, true, "exact allowed source must pass the final release fence");
+        assert.ok(attempted[1]!.body.includes(privatePassage));
+        for (const forbidden of [indirectBody, indirectTitle, indirectRef]) {
+          assert.equal(attempted[1]!.body.includes(forbidden), false, "indirect citations cannot broaden exact only_refs selection");
+        }
+        assert.deepEqual(attempted.map(({ provider }) => provider), ["openai", "openai"]);
         const initial = researchArtifactContentSchema.parse({
           kind: "research", question: "Sequoia race", blocks: [], claims: [], evidence: [],
           sourcePolicy: { mode: "only_refs", allowedSourceRefs: ["internal:sequoia:routing"] },

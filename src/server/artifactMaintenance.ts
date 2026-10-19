@@ -22,6 +22,15 @@ const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
 // Artifact validation preserves its existing credential-like-value threshold; outbound research release is more conservative.
 const artifactCredentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credential|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+const outboundAccessGrantParameters: Record<string, true> = {
+  sig: true, signature: true, token: true, key: true, credential: true, credentials: true,
+  apikey: true, accesskey: true, accesskeyid: true, secretaccesskey: true,
+  accesstoken: true, refreshtoken: true, authtoken: true, idtoken: true,
+  auth: true, authorization: true, clientsecret: true, password: true,
+  xamzsignature: true, xamzcredential: true, xamzsecuritytoken: true, awsaccesskeyid: true,
+  xgoogsignature: true, xgoogcredential: true, googleaccessid: true,
+  keypairid: true, sharedaccesssignature: true, sas: true, accessgrant: true,
+};
 export function isCredentialBearingOutboundText(value: string): boolean {
   // Normalize identifier boundaries before the single shared policy: clientSecret, AWSSecretAccessKey and JSON keys
   // must receive the same treatment as their snake_case equivalents without changing the source record itself.
@@ -33,6 +42,20 @@ export function isCredentialBearingOutboundText(value: string): boolean {
     try {
       const url = new URL(match[0]);
       if (url.username || url.password) return true;
+      for (const rawName of url.searchParams.keys()) {
+        let name = rawName;
+        // URLSearchParams decodes once; bounded further decoding covers nested escaped credential names.
+        for (let depth = 0; depth < 3; depth += 1) {
+          try {
+            const decoded = decodeURIComponent(name);
+            if (decoded === name) break;
+            name = decoded;
+          } catch {
+            break;
+          }
+        }
+        if (Object.hasOwn(outboundAccessGrantParameters, name.toLowerCase().replace(/[-_\s]/g, ""))) return true;
+      }
     } catch {
       // Non-URL prose is not interpreted as a credential.
     }

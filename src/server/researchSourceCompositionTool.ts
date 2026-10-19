@@ -129,9 +129,13 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
     }
 
     // Review refreshes use one current in-memory document set for both matching and custody; they never rebuild the index.
-    const readOnlyDocuments = call.researchReadOnly === true
+    const currentDocuments = call.researchReadOnly === true
       ? call.researchReadDocuments ?? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
-      : null;
+      : sourcePolicy?.mode === "only_refs" ? await currentPermittedProjectSearchDocuments(ctx, projectId) : null;
+    const exactRefs = sourcePolicy?.mode === "only_refs" ? new Set(scopedSourceRefs) : null;
+    const searchDocuments = exactRefs
+      ? currentDocuments!.filter((document) => exactRefs.has(document.sourceRef))
+      : currentDocuments;
     assertNotAborted(signal);
     const searchRequest = {
       query: parsed.query,
@@ -140,13 +144,13 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
       providerAllow: sourcePolicy?.providerAllow ?? [],
       providerDeny: sourcePolicy?.providerDeny ?? [],
     };
-    const hits = readOnlyDocuments
-      ? searchProjectDocuments(readOnlyDocuments, searchRequest)
+    const hits = searchDocuments
+      ? searchProjectDocuments(searchDocuments, searchRequest)
       : await searchProjectIntelligence(ctx, projectId, searchRequest);
     assertNotAborted(signal);
 
     const documents = new Map(
-      (readOnlyDocuments ?? await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
+      (searchDocuments ?? await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
     );
     const matchingExcerpts = new Map<string, string>();
     const rankedDocuments = hits.flatMap((hit) => {
