@@ -822,6 +822,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         { id: "plus-relative-fragment", body: "Ulmusgrant /download#api+key=do-not-transmit-plus-relative-key", url: null },
         { id: "npmrc-auth-token", body: "Ulmusgrant //registry.npmjs.org/:_authToken=npm_fixture_secret", url: null },
         { id: "underscore-auth-token-json", body: 'Ulmusgrant {"_authToken":"npm_fixture_json_secret"}', url: null },
+        { id: "npmrc-bare-auth", body: "Ulmusgrant //registry.npmjs.org/:_auth=dXNlcjpwYXNz", url: null },
+        { id: "docker-json-auth", body: 'Ulmusgrant {"auths":{"registry.example.test":{"auth":"dXNlcjpwYXNz"}}}', url: null },
       ];
       for (const source of nestedGrantCases) {
         await indexProjectDocument(ctx, {
