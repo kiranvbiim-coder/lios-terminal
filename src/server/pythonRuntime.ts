@@ -2,6 +2,7 @@ import { runCommand } from "./exec/run-command";
 import { pythonRuntimeEnvOverlay } from "./exec/env";
 import { getPythonServiceEnvironment } from "./pythonService";
 import { MANAGED_RUNTIME_MANIFEST, type ManagedRuntimeManifest } from "./runtimeManifest";
+import { sandboxIsolationMode } from "./exec/sandbox-runtime-profile";
 
 export type PythonRuntimeId = "lios-managed" | "system-auto" | "external-path" | "remote-service";
 
@@ -59,6 +60,9 @@ export interface PythonRuntimeInspectionOptions {
 }
 
 async function inspectExternalEnvironment(environmentPath: string): Promise<{ python: string; packages: Record<string, string> }> {
+  if (sandboxIsolationMode() === "strict") {
+    throw new Error("Strict isolation does not permit host Python environment inspection. Use the verified isolated runtime; no external interpreter was started.");
+  }
   const executable = process.platform === "win32" ? `${environmentPath}\\Scripts\\python.exe` : `${environmentPath}/bin/python`;
   const result = await runCommand({
     argv: [executable, "-c", "import json,sys,importlib.metadata as m; print(json.dumps({'python':sys.version.split()[0],'packages':{d.metadata['Name']:d.version for d in m.distributions()} }))"],

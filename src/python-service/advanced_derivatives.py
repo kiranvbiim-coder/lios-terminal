@@ -72,7 +72,8 @@ def black_scholes_greeks(req: BlackScholesRequest) -> GreeksResponse:
     vega = s * disc_q * pdf * sqrt_t / 100.0
     vanna = -disc_q * pdf * d2 / v
     vomma = s * disc_q * pdf * sqrt_t * d1 * d2 / v / 10000.0
-    charm = (-disc_q * (pdf * (2 * (r - q) * t - d2 * v * sqrt_t) / (2 * t * v * sqrt_t) + q * (_norm_cdf(d1) if req.optionType == "call" else _norm_cdf(d1) - 1.0))) / 365.0
+    # Calendar-time passage, as for theta: charm = -d(delta)/dT / 365.
+    charm = (q * delta - disc_q * pdf * (2 * (r - q) * t - d2 * v * sqrt_t) / (2 * t * v * sqrt_t)) / 365.0
     return GreeksResponse(price=price, delta=delta, gamma=gamma, vegaPerVolPoint=vega, thetaPerDay=theta, rhoPerRatePoint=rho, vanna=vanna, vomma=vomma, charmPerDay=charm)
 
 

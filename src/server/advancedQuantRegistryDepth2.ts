@@ -18,7 +18,7 @@ const specs: Depth2Spec[] = [
   { path: "fixed-income/credit-spread-curve", label: "Credit Spread Curve And Implied Hazard", category: "fixed_income", source: "python-service/fixed_income_structured.py", surface: "Fixed Income" },
 
   { path: "derivatives/local-volatility", label: "Dupire Local Volatility Surface", category: "derivatives", source: "python-service/derivatives_surface.py", surface: "Quant Workbench" },
-  { path: "derivatives/portfolio-greeks", label: "Portfolio Greeks Aggregation", category: "derivatives", source: "python-service/derivatives_surface.py", surface: "Advanced Risk" },
+  { path: "derivatives/portfolio-greeks", label: "Portfolio Greeks Aggregation", category: "derivatives", source: "python-service/derivatives_surface.py", version: "1.0.1", surface: "Advanced Risk" },
   { path: "derivatives/futures-basis", label: "Futures Basis And Carry", category: "derivatives", source: "python-service/derivatives_surface.py", surface: "Quant Workbench" },
   { path: "derivatives/strategy-payoff", label: "Option Strategy Payoff And Break-Evens", category: "derivatives", source: "python-service/derivatives_surface.py", surface: "Quant Workbench" },
 

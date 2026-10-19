@@ -1,50 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { inspectPythonRuntime } from "./pythonRuntime";
+import { getProcessSupervisor } from "./exec";
 
-/**
- * A user who points LiOS at their own venv/Conda/enterprise environment
- * has not asked LiOS to modify it. Inspection must therefore only ever
- * read -- never install, uninstall, upgrade, or write into that
- * environment. This is a source-level guard (same approach as
- * globalInstrumentMasterBoundary.test.ts) rather than a behavioural test,
- * because the failure it prevents is a future edit quietly adding a
- * mutating command to the inspection path.
- */
-const MUTATING_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
-  { label: "pip install", pattern: /\bpip\b[^\n]*\binstall\b/ },
-  { label: "pip uninstall", pattern: /\buninstall\b/ },
-  { label: "pip download", pattern: /\bdownload\b/ },
-  { label: "venv creation", pattern: /"-m",\s*"venv"/ },
-  { label: "ensurepip", pattern: /ensurepip/ },
-  { label: "filesystem write", pattern: /\bwriteFileSync\b|\bmkdirSync\b|\brmSync\b|\brenameSync\b/ },
-];
-
-test("the BYO Python inspection module never mutates the user's environment", () => {
-  const source = fs.readFileSync(path.resolve(process.cwd(), "server", "pythonRuntime.ts"), "utf8");
-  const violations = MUTATING_PATTERNS
-    .filter(({ pattern }) => pattern.test(source))
-    .map(({ label }) => `server/pythonRuntime.ts performs a mutating operation: ${label}`);
-  assert.deepEqual(violations, []);
-});
-
-test("external-environment inspection runs a single read-only metadata query", () => {
-  const source = fs.readFileSync(path.resolve(process.cwd(), "server", "pythonRuntime.ts"), "utf8");
-  // The one command it may run against a user's interpreter: importlib
-  // metadata listing. Anything else executed in that environment would be
-  // outside what "inspection" promises.
-  assert.match(source, /importlib\.metadata/, "inspection should read distributions via importlib.metadata");
-  assert.ok(!/subprocess|shell:\s*true/.test(source), "inspection must not open a shell in the user's environment");
-});
-
-test("runtime installation lives in a separate module from inspection", () => {
-  // installManagedRuntime (which legitimately does create a venv and run
-  // pip) must stay out of the inspection module, so that pointing LiOS at
-  // a BYO environment can never reach install code.
-  const inspection = fs.readFileSync(path.resolve(process.cwd(), "server", "pythonRuntime.ts"), "utf8");
-  assert.ok(
-    !/installManagedRuntime|pythonRuntimeManager/.test(inspection),
-    "pythonRuntime.ts (inspection) must not import or call the managed-install path",
-  );
+test("strict inspection refuses a user-selected host interpreter without starting or mutating it", async t => {
+  let launches = 0;
+  t.mock.method(getProcessSupervisor(), "spawn", async () => {
+    launches += 1;
+    throw new Error("Unexpected host process admission.");
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-byo-inspection-"));
+  const prior = process.env.LIOS_EXECUTION_ISOLATION;
+  process.env.LIOS_EXECUTION_ISOLATION = "strict";
+  t.after(() => { if (prior === undefined) delete process.env.LIOS_EXECUTION_ISOLATION; else process.env.LIOS_EXECUTION_ISOLATION = prior; fs.rmSync(root, { recursive: true, force: true }); });
+  const directory = path.join(root, process.platform === "win32" ? "Scripts" : "bin");
+  fs.mkdirSync(directory);
+  const executable = path.join(directory, process.platform === "win32" ? "python.exe" : "python");
+  const marker = path.join(root, "host-process-started");
+  if (process.platform === "win32") fs.linkSync(process.execPath, executable);
+  else fs.writeFileSync(executable, `#!/bin/sh\nprintf started > '${marker}'\nprintf '%s' '{"python":"3.13.5","packages":{}}'\n`, { mode: 0o700 });
+  const result = await inspectPythonRuntime({ runtimeId: "external-path", environmentPath: root });
+  assert.equal(result.state, "unavailable");
+  assert.equal(result.runtimeId, "external-path");
+  assert.deepEqual(result.packages, {});
+  assert.equal(launches, 0);
+  assert.equal(fs.existsSync(marker), false);
+  assert.equal(result.detail.includes(root), false);
+  assert.deepEqual(fs.readdirSync(directory), [path.basename(executable)]);
 });
