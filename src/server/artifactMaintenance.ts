@@ -68,7 +68,8 @@ export function isCredentialBearingOutboundText(value: string): boolean {
   for (let index = 0; index < queue.length; index += 1) {
     const { text, depth } = queue[index]!;
     // Singular/plural camelCase and acronym keys share the same outbound credential-family policy.
-    const normalized = text.replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+    const normalized = text.replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/(^|[^A-Za-z0-9_])_+(?=[A-Za-z])/g, "$1");
     if (credentialText.test(text) || credentialText.test(normalized)) return true;
     for (const parameter of text.matchAll(/(?:^|[?&#])([^=\s?&#]+)=([^&#\s]*)/g)) {
       if (isOutboundAccessGrantName(parameter[1]!)) return true;

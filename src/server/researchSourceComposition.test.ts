@@ -820,6 +820,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         { id: "plus-routed-fragment", body: "Ulmusgrant routed form-encoded credential fragment must stay local.",
           url: "https://example.test/report#/route?client+secret=do-not-transmit-plus-route-secret" },
         { id: "plus-relative-fragment", body: "Ulmusgrant /download#api+key=do-not-transmit-plus-relative-key", url: null },
+        { id: "npmrc-auth-token", body: "Ulmusgrant //registry.npmjs.org/:_authToken=npm_fixture_secret", url: null },
+        { id: "underscore-auth-token-json", body: 'Ulmusgrant {"_authToken":"npm_fixture_json_secret"}', url: null },
       ];
       for (const source of nestedGrantCases) {
         await indexProjectDocument(ctx, {
