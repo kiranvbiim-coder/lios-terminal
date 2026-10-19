@@ -1209,15 +1209,16 @@ async function invokeGovernedAi(
   plan: WorkflowPlan,
   invokeAI: (request: AIRoutedCompletionRequest) => Promise<AICompletionResult>,
   request: Omit<AIRoutedCompletionRequest, "fallback">,
+  content: { containsPrivateResearch?: true } = {},
 ): Promise<AICompletionResult> {
-  const privateReason = privateAiContentReason(input, plan);
+  const privateReason = content.containsPrivateResearch ? "Project research observations" : privateAiContentReason(input, plan);
   try {
     const policy = input.request.transmissionPolicy;
     const answered = await invokeAI({
       ...request,
       maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
       maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
-      ...(privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
+      ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
       fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
     });
     if (answered.fallback?.attempts.length) {
@@ -4375,7 +4376,7 @@ async function executeAgentLoop(
       checkpoint: (state: AgentLoopContinuationState) => options.checkpoint!({ state, context, toolSetSha256: facts.toolSetSha256, policySha256: facts.policySha256, budget }),
       interruptOnAbort: () => input.signal?.aborted === true,
     } : {}),
-    callModel: async ({ system, user }) => {
+    callModel: async ({ system, user, containsPrivateResearch }) => {
       let answered: AICompletionResult;
       try {
         answered = await invokeGovernedAi(input, plan, invokeAI, {
@@ -4392,7 +4393,7 @@ async function executeAgentLoop(
             allow: request.transmissionPolicy.providerAllow,
             deny: request.transmissionPolicy.providerDeny,
           },
-        });
+        }, { containsPrivateResearch });
       } catch (error) {
         // A model that cannot answer is an honest data gap, never a substituted or fabricated answer.
         if (error instanceof AIProviderError && !signal.aborted) {

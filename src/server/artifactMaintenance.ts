@@ -21,7 +21,12 @@ const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
 const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credential|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 export function isCredentialBearingArtifactText(value: string): boolean {
-  return credentialText.test(value);
+  // Normalize identifier boundaries before the single shared policy: clientSecret, AWSSecretAccessKey and JSON keys
+  // must receive the same treatment as their snake_case equivalents without changing the source record itself.
+  const normalized = value
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  return credentialText.test(value) || credentialText.test(normalized);
 }
 const pathSchema = z.array(z.union([z.string().min(1).max(300).refine(key => !forbiddenKeys.test(key), "Prototype paths are forbidden."), z.number().int().min(0).max(MAX_ARRAY_LENGTH - 1)])).min(1).max(32);
 const inspectInputSchema = z.object({ artifactId: z.string().trim().min(1).max(200), paths: z.array(pathSchema).min(1).max(24).optional() }).strict();

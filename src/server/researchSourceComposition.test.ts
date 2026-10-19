@@ -654,6 +654,10 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         "Megaflora client_secret=do-not-transmit-client-secret",
         "Megaflora AWS_SECRET_ACCESS_KEY=do-not-transmit-aws-secret",
         "Megaflora token: do-not-transmit-colon-token",
+        'Megaflora {"clientSecret":"do-not-transmit-json-client-secret"}',
+        'Megaflora {"databasePassword":"do-not-transmit-json-database-password"}',
+        "Megaflora passWord=do-not-transmit-mixed-case-password",
+        'Megaflora {"passWord":"do-not-transmit-json-mixed-case-password"}',
       ];
       for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
@@ -712,7 +716,9 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.ok(safeBulk.some((document) => document.sourceRef === source.sourceRef));
       }
       for (const secret of ["do-not-transmit-credential", "do-not-transmit-query", "not-a-real-key",
-        "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token"]) {
+        "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token",
+        "do-not-transmit-json-client-secret", "do-not-transmit-json-database-password",
+        "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password"]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
       for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
@@ -745,6 +751,100 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.ok(stale.prompts[1]!.includes(passages[1]), "stale activity still permits current read-only evidence retrieval");
       assert.equal(JSON.stringify(await persistedIntelligence()), beforeRefresh,
         "ephemeral review must not rewrite current index rows, append document versions, or persist a new snapshot");
+    });
+
+    await nested.test("public agent planning cannot downgrade refreshed Project research at the actual enterprise provider boundary", async () => {
+      // Enterprise policy and runtime must load after this test's isolated database setup.
+      const { executeConversationRuntime } = await import("./conversationRuntime");
+      const { organizations } = await import("@shared/schema");
+      const { DEFAULT_ENTERPRISE_POLICY } = await import("@shared/enterpriseContracts");
+      const { saveEnterprisePolicy } = await import("./enterprisePolicyService");
+      const { runWithRequestIdentity } = await import("./requestContext");
+      const [organization] = await getDb().insert(organizations).values({
+        name: "Research routing policy", slug: `research-routing-${crypto.randomUUID()}`,
+      }).returning();
+      const [actor] = await getDb().insert(users).values({
+        email: `${crypto.randomUUID()}@example.test`, passwordHash: "test-only",
+        role: "internal_admin", organizationId: organization.id, name: "Routing owner",
+      }).returning();
+      const tenant = { userId: actor.id, organizationId: organization.id, role: actor.role };
+      const researchProject = await createProject(tenant, { name: "Private research without selected resources" });
+      const privatePassage = "Sequoia internal findings are organization-owned evidence.";
+      await indexProjectDocument(tenant, {
+        projectId: researchProject.id, sourceType: "research_evidence", sourceRef: "internal:sequoia:routing",
+        title: "Sequoia research", body: privatePassage, sourceRefs: ["internal:sequoia:routing"],
+        metadata: { researchSource: {
+          class: "internal_research",
+          identity: { sourceId: "sequoia-routing", providerId: null, organization: null,
+            author: null, analystId: null, expertId: null, url: null },
+          rights: allowedRights,
+        } },
+      });
+      const priorFetch = globalThis.fetch;
+      const priorCredentialStore = process.env.LIMURIA_CREDENTIAL_STORE;
+      const attempted: Array<{ provider: string; body: string }> = [];
+      let reviewReached = false;
+      process.env.LIMURIA_CREDENTIAL_STORE = "organization";
+      globalThis.fetch = (async (url, init) => {
+        const endpoint = String(url);
+        const provider = endpoint.includes("api.openai.com") ? "openai"
+          : endpoint.includes("generativelanguage.googleapis.com") ? "gemini" : "unexpected";
+        assert.notEqual(provider, "unexpected", "fixture must never contact an unrecognized endpoint");
+        const body = String(init?.body ?? "");
+        attempted.push({ provider, body });
+        if (body.includes("BEGIN_CURRENT_RESEARCH_OBSERVATIONS")) {
+          reviewReached = true;
+          return new Response("rate limited", { status: 429 });
+        }
+        const text = JSON.stringify({ steps: [{
+          id: "compose", toolId: "lios.research.compose_sources", label: "Read current permitted sources",
+          input: { query: "sequoia" }, dependsOn: [],
+        }] });
+        return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), { status: 200 });
+      }) as typeof fetch;
+      async function invokeWithPolicy(allowExternalData: boolean) {
+        await saveEnterprisePolicy(organization.id, {
+          ...DEFAULT_ENTERPRISE_POLICY,
+          ai: { ...DEFAULT_ENTERPRISE_POLICY.ai, allowedProviders: ["openai", "gemini"],
+            allowedModels: [], endpointMode: "hosted", endpointUrl: "https://api.openai.com",
+            allowExternalData, requireApproval: false },
+        }, { id: actor.id, email: actor.email });
+        return runWithRequestIdentity({
+          userId: actor.id, organizationId: organization.id,
+          credentials: { openaiApiKey: "fixture-openai-key", geminiApiKey: "fixture-gemini-key" },
+          selectedConnectorIds: [],
+        }, () => executeConversationRuntime({
+          tenant, scope: "project", chatId: null, projectId: researchProject.id,
+          resources: [], history: [], preferredProvider: "openai", preferredModel: "gpt-4o",
+          request: {
+            requestId: crypto.randomUUID(), continuationOf: null, message: "Compare sequoia research findings.",
+            executionMode: "ai_assisted", aiDirectApproved: false, approvals: [], attachments: [],
+            sourceScope: "my_data",
+            transmissionPolicy: { mode: "configured", providerAllow: ["openai", "gemini"], providerDeny: [],
+              allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
+              allowToolCalling: true, dataClassification: "public" },
+          },
+          agentLoop: {}, emit: () => undefined,
+        }));
+      }
+      try {
+        await assert.rejects(invokeWithPolicy(false), /organization data|policy|private/i);
+        assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"],
+          "public planning may reach the provider, but organization research must be denied before transport");
+        assert.equal(reviewReached, false);
+        assert.equal(attempted.some(({ body }) => body.includes(privatePassage)), false);
+
+        attempted.length = 0;
+        await assert.rejects(invokeWithPolicy(true), /rate|provider|private/i);
+        assert.equal(reviewReached, true, "permissive enterprise policy must reach the actual research review transport");
+        assert.deepEqual(attempted.map(({ provider }) => provider), ["openai", "openai"],
+          "private research review must not fall back to configured Gemini after the preferred provider fails");
+        assert.ok(attempted[1]!.body.includes(privatePassage));
+      } finally {
+        globalThis.fetch = priorFetch;
+        if (priorCredentialStore === undefined) delete process.env.LIMURIA_CREDENTIAL_STORE;
+        else process.env.LIMURIA_CREDENTIAL_STORE = priorCredentialStore;
+      }
     });
   });
 });

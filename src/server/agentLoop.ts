@@ -141,7 +141,12 @@ export interface AgentLoopDeps {
   budget: AgentLoopBudget;
   signal: AbortSignal;
   /** One model call through the single BYOAI path. The kernel counts and bounds calls; it never retries on its own. */
-  callModel: (call: { system: string; user: string }) => Promise<string>;
+  callModel: (call: {
+    system: string;
+    user: string;
+    /** Trusted, ephemeral release metadata set only when this call carries resolved research observations. */
+    containsPrivateResearch?: true;
+  }) => Promise<string>;
   invokeTool: (call: {
     step: AgentPlannedStep;
     toolCallId: string;
@@ -486,11 +491,11 @@ async function drive(
     planSha256: allSteps.length ? agentPlanSha256(allSteps) : null,
     steps: outcomes, aiCalls, revisions, ...extra,
   });
-  const callModel = async (system: string, user: string): Promise<string> => {
+  const callModel = async (system: string, user: string, containsPrivateResearch?: true): Promise<string> => {
     assertLive(signal);
     if (aiCalls >= budget.maxAiCalls) throw new BudgetStop("ai_calls");
     aiCalls += 1;
-    const text = await deps.callModel({ system, user });
+    const text = await deps.callModel({ system, user, ...(containsPrivateResearch ? { containsPrivateResearch } : {}) });
     assertLive(signal);
     return text;
   };
@@ -839,7 +844,7 @@ class BudgetStop extends Error {
 }
 
 async function requestReview(
-  callModel: (system: string, user: string) => Promise<string>,
+  callModel: (system: string, user: string, containsPrivateResearch?: true) => Promise<string>,
   goal: string,
   outcomes: readonly AgentStepOutcome[],
   budget: AgentLoopBudget,
@@ -856,7 +861,7 @@ async function requestReview(
       ...(observations ? ["", observations] : []),
       ...(correction ? ["", correction] : []),
     ].join("\n");
-    const text = await callModel(inspectSystem(), user);
+    const text = await callModel(inspectSystem(), user, observations ? true : undefined);
     try {
       const parsed = inspectSchema.safeParse(parseModelJson(text));
       if (!parsed.success) {
