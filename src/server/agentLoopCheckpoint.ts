@@ -86,6 +86,7 @@ export function boundAgentLoopContinuation(state: AgentLoopContinuationState): A
     delegatedBudgetUsed: state.delegatedBudgetUsed
       ? { ...state.delegatedBudgetUsed }
       : { maxSteps: 0, maxAiCalls: 0, maxRevisions: 0, maxDurationMs: 0 },
+    ...(state.reviewedSourceRefs ? { reviewedSourceRefs: [...state.reviewedSourceRefs] } : {}),
   };
 }
 

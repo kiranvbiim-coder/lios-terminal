@@ -108,7 +108,7 @@ test("checkpoint resume re-resolves settled research under current rights withou
   first.deps.resolveReviewObservations = async ({ completedSteps }) => {
     firstReads += 1;
     assert.deepEqual(completedSteps.map((planned) => planned.id), ["research"]);
-    return "PRE-RESTART-PERMITTED-PASSAGE";
+    return { text: "PRE-RESTART-PERMITTED-PASSAGE", sourceRefs: ["source:pre-restart"] };
   };
   await runAgentLoop(first.deps);
   assert.equal(firstReads, 1);
@@ -120,7 +120,7 @@ test("checkpoint resume re-resolves settled research under current rights withou
   second.deps.resolveReviewObservations = async ({ completedSteps }) => {
     resumedReads += 1;
     assert.deepEqual(completedSteps.map((planned) => planned.id), ["research"]);
-    return "POST-RESTART-CURRENT-RIGHTS-REVOKED";
+    return { text: "POST-RESTART-CURRENT-RIGHTS-REVOKED", sourceRefs: [] };
   };
   const result = await resumeAgentLoopFromCheckpoint(second.deps, state, null);
   assert.equal(result.status, "completed");
@@ -130,6 +130,55 @@ test("checkpoint resume re-resolves settled research under current rights withou
   assert.ok(second.prompts[0]!.includes("POST-RESTART-CURRENT-RIGHTS-REVOKED"));
   assert.equal(second.prompts[0]!.includes("PRE-RESTART-PERMITTED-PASSAGE"), false);
   assert.equal(JSON.stringify([result, second.checkpoints, second.ledger]).includes("POST-RESTART-CURRENT-RIGHTS-REVOKED"), false);
+});
+
+test("successful reviewed references persist through revised checkpoints without storing passages and old checkpoints remain resumable", async () => {
+  const controller = new AbortController();
+  const first = harness([
+    plan([step("research")]),
+    JSON.stringify({ decision: "revise", steps: [step("next", "t.calc")] }),
+  ], {
+    signal: controller.signal, stop: true,
+    invoke: async (planned) => {
+      if (planned.id === "next") {
+        controller.abort();
+        throw new DOMException("Stopped at revised step", "AbortError");
+      }
+    },
+  });
+  first.deps.resolveReviewObservations = async () => ({
+    text: "EPHEMERAL-CHECKPOINT-REVIEW-PASSAGE", sourceRefs: ["source:reviewed-before-checkpoint"],
+  });
+  await assert.rejects(runAgentLoop(first.deps), { name: "AbortError" });
+  const state = structuredClone(first.checkpoints.at(-1)!);
+  assert.deepEqual(state.reviewedSourceRefs, ["source:reviewed-before-checkpoint"]);
+  assert.deepEqual(boundAgentLoopContinuation(state).reviewedSourceRefs, state.reviewedSourceRefs);
+  assert.equal(JSON.stringify(state).includes("EPHEMERAL-CHECKPOINT-REVIEW-PASSAGE"), false);
+  const originalLedger = structuredClone(first.ledger);
+  const reopen = planAgentLoopReopen({
+    requestId: REQUEST_ID, events: originalLedger, continuation: boundAgentLoopContinuation(state), toolFacts,
+  });
+  const second = harness([complete()], { ledger: structuredClone(originalLedger) });
+  second.deps.resolveReviewObservations = async ({ reviewedSourceRefs }) => {
+    assert.deepEqual(reviewedSourceRefs, ["source:reviewed-before-checkpoint"]);
+    return null;
+  };
+  const done = await resumeAgentLoopFromCheckpoint(second.deps, state, reopen);
+  assert.deepEqual(done.reviewedSourceRefs, ["source:reviewed-before-checkpoint"]);
+  assert.deepEqual(second.ran, ["next"]);
+  assert.equal(JSON.stringify(second.prompts).includes("EPHEMERAL-CHECKPOINT-REVIEW-PASSAGE"), false);
+
+  const legacy = structuredClone(state);
+  delete legacy.reviewedSourceRefs;
+  assert.equal(Object.hasOwn(boundAgentLoopContinuation(legacy), "reviewedSourceRefs"), false,
+    "old checkpoints keep their original shape rather than gaining a hash-changing default");
+  const legacyResume = harness([complete()], { ledger: structuredClone(originalLedger) });
+  legacyResume.deps.resolveReviewObservations = async ({ reviewedSourceRefs }) => {
+    assert.deepEqual(reviewedSourceRefs, []);
+    return null;
+  };
+  const legacyDone = await resumeAgentLoopFromCheckpoint(legacyResume.deps, legacy, reopen);
+  assert.deepEqual(legacyDone.reviewedSourceRefs, []);
 });
 
 test("an approval pause is not a checkpoint boundary and a settled denial/failure is", async () => {

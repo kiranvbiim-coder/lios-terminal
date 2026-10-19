@@ -81,6 +81,14 @@ export interface AgentStepOutcome {
   sourceRefs: string[];
 }
 
+export const MAX_AGENT_REVIEWED_SOURCE_REFS = 100;
+
+export interface AgentReviewObservations {
+  text: string;
+  /** Exact own-source references admitted to this model request; passages remain ephemeral. */
+  sourceRefs: string[];
+}
+
 export type AgentLoopStatus = "completed" | "budget_exhausted" | "awaiting_approval";
 
 /**
@@ -100,6 +108,8 @@ export interface AgentLoopContinuationState {
   counters: { aiCalls: number; revisions: number; executed: number };
   /** L13: child budget already reserved by this parent run. */
   delegatedBudgetUsed?: AgentDelegationBudget;
+  /** Reference-only provenance from successful model reviews; absent on older continuations. Never source passages. */
+  reviewedSourceRefs?: string[];
 }
 
 /** The step the durable ledger shows as started but unfinished when a run is resumed after a Stop or restart. */
@@ -132,6 +142,7 @@ export interface AgentLoopOutcome {
   steps: AgentStepOutcome[];
   aiCalls: number;
   revisions: number;
+  reviewedSourceRefs: string[];
 }
 
 export interface AgentLoopDeps {
@@ -157,7 +168,11 @@ export interface AgentLoopDeps {
    * Ephemeral, server-owned reads for the next review only. Receives validated completed steps, grants no tool authority,
    * and must never replay side effects. The returned material is not added to outcomes, events or checkpoints.
    */
-  resolveReviewObservations?: (call: { completedSteps: readonly AgentPlannedStep[]; signal: AbortSignal }) => Promise<string | null>;
+  resolveReviewObservations?: (call: {
+    completedSteps: readonly AgentPlannedStep[];
+    signal: AbortSignal;
+    reviewedSourceRefs: readonly string[];
+  }) => Promise<AgentReviewObservations | null>;
   /** L2 durable ledger. A failing append fails the run visibly; there is no fallback. Null when the run has no journal. */
   ledger: ((event: AgentEventInput) => Promise<unknown>) | null;
   /**
@@ -451,6 +466,11 @@ async function drive(
   reopen: AgentLoopReopen | null = null,
 ): Promise<AgentLoopOutcome> {
   const { budget, signal } = deps;
+  const reviewedSourceRefs = new Set(restored?.reviewedSourceRefs ?? []);
+  if (reviewedSourceRefs.size > MAX_AGENT_REVIEWED_SOURCE_REFS
+    || [...reviewedSourceRefs].some((ref) => !ref.trim() || ref.length > 1_000)) {
+    throw new AgentPlanError("Reviewed source provenance exceeds the continuation bound.");
+  }
   const offered = deps.tools.filter((tool) => tool.decision !== "deny");
   const catalogue = new Map(offered.map((tool) => [tool.id, tool] as const));
   const skillCatalogue = new Map((deps.skills ?? []).map((skill) => [skill.id, skill] as const));
@@ -489,13 +509,22 @@ async function drive(
   const finish = (status: AgentLoopStatus, extra: Partial<AgentLoopOutcome> = {}): AgentLoopOutcome => ({
     status, answer: null, stopReason: null, awaiting: null, resume: null,
     planSha256: allSteps.length ? agentPlanSha256(allSteps) : null,
-    steps: outcomes, aiCalls, revisions, ...extra,
+    steps: outcomes, aiCalls, revisions, reviewedSourceRefs: [...reviewedSourceRefs], ...extra,
   });
-  const callModel = async (system: string, user: string, containsPrivateResearch?: true): Promise<string> => {
+  const callModel = async (system: string, user: string, observations?: AgentReviewObservations): Promise<string> => {
     assertLive(signal);
     if (aiCalls >= budget.maxAiCalls) throw new BudgetStop("ai_calls");
+    const nextRefs = new Set([...reviewedSourceRefs, ...(observations?.sourceRefs ?? [])]);
+    if (nextRefs.size > MAX_AGENT_REVIEWED_SOURCE_REFS
+      || [...nextRefs].some((ref) => !ref.trim() || ref.length > 1_000)) {
+      throw new AgentPlanError("Research observations exceed the cumulative source-reference bound.");
+    }
     aiCalls += 1;
-    const text = await deps.callModel({ system, user, ...(containsPrivateResearch ? { containsPrivateResearch } : {}) });
+    const text = await deps.callModel({ system, user, ...(observations ? { containsPrivateResearch: true as const } : {}) });
+    if (observations) {
+      for (const ref of observations.sourceRefs) reviewedSourceRefs.add(ref);
+      await checkpoint();
+    }
     assertLive(signal);
     return text;
   };
@@ -521,6 +550,7 @@ async function drive(
       paused: { stepId: step.id, toolId: step.toolId, toolCallId },
       counters: { aiCalls, revisions, executed },
       delegatedBudgetUsed: { ...delegatedBudgetUsed },
+      reviewedSourceRefs: [...reviewedSourceRefs],
     };
     return finish("awaiting_approval", { awaiting: { stepId: step.id, toolId: step.toolId }, resume });
   };
@@ -535,6 +565,7 @@ async function drive(
       settled: outcomes.filter((outcome) => outcome.status !== "approval_required").map((outcome) => ({ ...outcome })),
       counters: { aiCalls, revisions, executed },
       delegatedBudgetUsed: { ...delegatedBudgetUsed },
+      reviewedSourceRefs: [...reviewedSourceRefs],
     });
   };
 
@@ -813,7 +844,7 @@ async function drive(
           if (!deps.resolveReviewObservations) return null;
           const completedSteps = allSteps.filter((step) =>
             outcomes.some((outcome) => outcome.id === step.id && outcome.toolId === step.toolId && outcome.status === "completed"));
-          const observations = await deps.resolveReviewObservations({ completedSteps, signal });
+          const observations = await deps.resolveReviewObservations({ completedSteps, signal, reviewedSourceRefs: [...reviewedSourceRefs] });
           assertLive(signal);
           return observations;
         },
@@ -844,13 +875,13 @@ class BudgetStop extends Error {
 }
 
 async function requestReview(
-  callModel: (system: string, user: string, containsPrivateResearch?: true) => Promise<string>,
+  callModel: (system: string, user: string, observations?: AgentReviewObservations) => Promise<string>,
   goal: string,
   outcomes: readonly AgentStepOutcome[],
   budget: AgentLoopBudget,
   bumpRevision: () => void,
   revisions: () => number,
-  resolveObservations: () => Promise<string | null>,
+  resolveObservations: () => Promise<AgentReviewObservations | null>,
 ): Promise<z.infer<typeof inspectSchema>> {
   const results = renderResults(outcomes);
   let correction: string | null = null;
@@ -858,10 +889,10 @@ async function requestReview(
     const observations = await resolveObservations();
     const user = [
       `Goal: ${goal}\n\nResults:\n${results}`,
-      ...(observations ? ["", observations] : []),
+      ...(observations ? ["", observations.text] : []),
       ...(correction ? ["", correction] : []),
     ].join("\n");
-    const text = await callModel(inspectSystem(), user, observations ? true : undefined);
+    const text = await callModel(inspectSystem(), user, observations ?? undefined);
     try {
       const parsed = inspectSchema.safeParse(parseModelJson(text));
       if (!parsed.success) {

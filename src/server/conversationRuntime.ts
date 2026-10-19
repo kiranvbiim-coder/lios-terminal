@@ -147,6 +147,7 @@ import { consumeApprovedAgentExecOperation, executeApprovedAgentExecOperation } 
 import { ExecutionAuthorizationInvalidError } from "./exec/execution-authorization";
 import {
   AgentDispatchOutcomeUnknownError,
+  MAX_AGENT_REVIEWED_SOURCE_REFS,
   agentInputSha256,
   resumeAgentLoop,
   resumeAgentLoopFromCheckpoint,
@@ -4256,7 +4257,8 @@ async function resolveAgentResearchReviewObservations(
   input: ConversationRuntimeInput,
   completedSteps: readonly AgentPlannedStep[],
   signal: AbortSignal,
-): Promise<{ text: string; assertCurrent: () => Promise<void> } | null> {
+  reviewedSourceRefs: readonly string[],
+): Promise<{ text: string; sourceRefs: string[]; assertCurrent: () => Promise<void> } | null> {
   const researchSteps = completedSteps.filter((step) => step.toolId === researchSourceCompositionTool.id);
   if (!researchSteps.length) return null;
   type ComposedSource = z.infer<typeof researchSourceCompositionToolOutputSchema>["output"]["sources"][number];
@@ -4274,6 +4276,7 @@ async function resolveAgentResearchReviewObservations(
     blockedSourceCount: 0,
     omittedSourceCountByCredentialPolicy: 0,
     omittedSourceCountByByteLimit: 0,
+    omittedSourceCountByReferenceLimit: 0,
     deduplicatedSourceCount: 0,
     sources: [] as Source[],
   };
@@ -4350,7 +4353,13 @@ async function resolveAgentResearchReviewObservations(
   }
   observation.omittedSourceCountByByteLimit = candidates.size;
   let rendered = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
+  const admittedRefs = new Set(reviewedSourceRefs);
   for (const source of candidates.values()) {
+    if (!admittedRefs.has(source.sourceRef) && admittedRefs.size >= MAX_AGENT_REVIEWED_SOURCE_REFS) {
+      observation.omittedSourceCountByByteLimit -= 1;
+      observation.omittedSourceCountByReferenceLimit += 1;
+      continue;
+    }
     observation.sources.push(source);
     observation.omittedSourceCountByByteLimit -= 1;
     const candidate = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
@@ -4359,7 +4368,14 @@ async function resolveAgentResearchReviewObservations(
       observation.omittedSourceCountByByteLimit += 1;
     } else {
       rendered = candidate;
+      admittedRefs.add(source.sourceRef);
     }
+  }
+  rendered = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
+  while (Buffer.byteLength(rendered, "utf8") > MAX_AGENT_RESEARCH_REVIEW_BYTES && observation.sources.length) {
+    observation.sources.pop();
+    observation.omittedSourceCountByByteLimit += 1;
+    rendered = `${AGENT_RESEARCH_REVIEW_FRAME}\n${JSON.stringify(observation)}\nEND_CURRENT_RESEARCH_OBSERVATIONS`;
   }
   assertNotAborted(signal);
   const sourceBindings = observation.sources.map((source) => ({ documentId: source.documentId, fingerprint: researchReviewSourceFingerprint(source) }));
@@ -4403,7 +4419,7 @@ async function resolveAgentResearchReviewObservations(
     }
   };
   await assertCurrent();
-  return { text: rendered, assertCurrent };
+  return { text: rendered, sourceRefs: [...new Set(observation.sources.map((source) => source.sourceRef))], assertCurrent };
 }
 
 async function executeAgentLoop(
@@ -4496,11 +4512,11 @@ async function executeAgentLoop(
       providers.add(answered.attribution.provider);
       return answered.text;
     },
-    resolveReviewObservations: async ({ completedSteps, signal: reviewSignal }) => {
+    resolveReviewObservations: async ({ completedSteps, signal: reviewSignal, reviewedSourceRefs }) => {
       assertReviewResearchCurrent = undefined;
-      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal);
+      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
       assertReviewResearchCurrent = observation?.assertCurrent;
-      return observation?.text ?? null;
+      return observation ? { text: observation.text, sourceRefs: observation.sourceRefs } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
       const descriptor = getConversationTool(step.toolId);
@@ -4652,7 +4668,11 @@ async function executeAgentLoop(
     : resume ? await resumeAgentLoop(deps, resume.state) : await runAgentLoop(deps);
   assertNotAborted(signal);
 
-  const sourceRefs = [...new Set([...outcome.steps.flatMap((step) => step.sourceRefs), ...[...providers].map((provider) => `ai-provider:${provider}`)])].slice(0, 100);
+  const providerRefs = [...providers].map((provider) => `ai-provider:${provider}`);
+  const requiredSourceRefs = [...new Set([...outcome.reviewedSourceRefs, ...providerRefs])];
+  const requiredRefSet = new Set(requiredSourceRefs);
+  const additionalSourceRefs = [...new Set(outcome.steps.flatMap((step) => step.sourceRefs))].filter((ref) => !requiredRefSet.has(ref));
+  const sourceRefs = [...requiredSourceRefs, ...additionalSourceRefs.slice(0, Math.max(0, 500 - requiredSourceRefs.length))];
   const summaryOutput = { status: outcome.status, aiCalls: outcome.aiCalls, revisions: outcome.revisions, steps: outcome.steps.map((step) => ({ id: step.id, toolId: step.toolId, status: step.status })) };
   if (outcome.status === "awaiting_approval") {
     const text = `Waiting for your approval: the plan needs "${outcome.awaiting?.toolId}", which cannot run without it. Nothing was executed for that step.`;

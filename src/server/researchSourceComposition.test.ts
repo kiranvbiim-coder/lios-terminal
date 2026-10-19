@@ -571,6 +571,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         context?: ConversationRuntimeInput["request"]["context"];
         beforeReview?: () => Promise<void>;
         repair?: () => Promise<void>;
+        repairCount?: number;
       } = {}) {
         mutateBeforeReview = options.beforeReview;
         const prompts: string[] = [];
@@ -588,7 +589,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
               allowToolCalling: true, dataClassification: "private" },
           },
-          agentLoop: { maxSteps: 12, ledger: async (event) => { ledger.push(event); } },
+          agentLoop: { maxSteps: 12, maxAiCalls: 8, maxRevisions: 5, ledger: async (event) => { ledger.push(event); } },
           aiCompletion: async (completion) => {
             prompts.push(JSON.stringify(completion));
             let text: string;
@@ -605,7 +606,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               ] });
             } else {
               reviewCalls += 1;
-              if (reviewCalls === 1 && options.repair) {
+              if (reviewCalls <= (options.repairCount ?? 1) && options.repair) {
                 await options.repair();
                 text = "invalid review requiring a fresh policy check";
               } else text = JSON.stringify({ decision: "complete", answer: "Transport fixture complete." });
@@ -617,6 +618,30 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         });
         return { prompts, events, ledger };
       }
+      const refreshedRef = "internal:fresh-provenance-record";
+      const refreshed = await capture({
+        query: "balsamfresh",
+        beforeReview: async () => {
+          await indexProjectDocument(ctx, {
+            projectId: project.id, sourceType: "research_evidence", sourceRef: refreshedRef,
+            title: "Fresh provenance source", body: "Balsamfresh evidence was added after the original composition.",
+            sourceRefs: [refreshedRef],
+            metadata: { researchSource: {
+              class: "internal_research",
+              identity: { sourceId: refreshedRef, providerId: null, organization: null,
+                author: null, analystId: null, expertId: null, url: null },
+              rights: allowedRights,
+            } },
+          });
+        },
+      });
+      assert.ok(refreshed.prompts[1]!.includes("Balsamfresh evidence was added"));
+      const refreshedReceipt = refreshed.events.find((event) =>
+        typeof event === "object" && event !== null && "type" in event && event.type === "receipt"
+      ) as { receipt: { sourceRefs: string[] } } | undefined;
+      assert.ok(refreshedReceipt);
+      assert.ok(refreshedReceipt.receipt.sourceRefs.includes(refreshedRef),
+        "Final receipt must attribute sources admitted by the fresh review, not only original tool outcomes");
       const revoked = await capture({ beforeReview: async () => {
         const document = documents[0]!;
         await indexProjectDocument(ctx, {
@@ -654,11 +679,16 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const safeBulk: P7ProjectDocument[] = [];
       const credentialUrls = [
         "https://alice:hunter2@example.com/report",
+        "https://alice:pass'word@example.test/report",
         "https://storage.example.test/report?sv=2025-01-01&sp=r&sig=do-not-transmit-sas-signature",
         "https://cdn.example.test/report?Expires=9999999999&Signature=do-not-transmit-cloudfront-signature&Key-Pair-Id=fixture-key",
         "https://example.test/report?%74oken=do-not-transmit-encoded-token",
         "https://s3.example.test/report?X-Amz-Signature=do-not-transmit-aws-signature",
         "https://cdn.example.test/report?%53ignature=do-not-transmit-encoded-signature",
+        "https://example.test/report#key=do-not-transmit-fragment-key",
+        "https://example.test/report#sig=do-not-transmit-fragment-signature",
+        "https://example.test/report#%74oken=do-not-transmit-fragment-token",
+        "https://example.test/#/download?sig=do-not-transmit-routed-fragment-signature",
       ];
       const credentialBodies = [
         "Megaflora password=do-not-transmit-credential",
@@ -673,24 +703,36 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         'Megaflora {"passWord":"do-not-transmit-json-mixed-case-password"}',
         "Megaflora token: pending",
         "Megaflora secret: none",
+        "Megaflora //fixture-user:do-not-transmit-scheme-password@example.com/report",
+        "Megaflora //example.com/report?sig=do-not-transmit-scheme-signature",
+        'Megaflora {"credentials":"do-not-transmit-plural-json"}',
+        "Megaflora credentials=do-not-transmit-plural-assignment",
+        "Megaflora /download?sig=do-not-transmit-relative-signature",
+        "Megaflora ./download?Signature=do-not-transmit-dot-relative-signature",
+        "Megaflora /download#key=do-not-transmit-relative-fragment-key",
+        "Megaflora SharedAccessSignature sr=https%3A%2F%2Fexample.test&sig=do-not-transmit-standalone-sas&se=9999999999&skn=fixture-key",
+        "Megaflora SharedAccessSignature=do-not-transmit-sas-assignment",
         ...credentialUrls.map((_url, index) => `Megaflora credential-bearing URL identity ${index} must remain local.`),
       ];
-      for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
+      // Keep every credential case inside the canonical 50-result search cap.
+      const safeBulkCount = 50 - credentialBodies.length;
+      assert.ok(safeBulkCount >= 15, "retain enough multibyte safe sources to exercise the global byte cap");
+      for (let index = 0; index < safeBulkCount + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
         const document = await indexProjectDocument(ctx, {
           projectId: project.id, sourceType: "research_evidence", sourceRef,
           title: `Megaflora survey ${index}`, sourceRefs: [sourceRef],
-          body: index < 30 ? `Megaflora passage record ${index}. ${"植".repeat(1_500)}` : credentialBodies[index - 30],
+          body: index < safeBulkCount ? `Megaflora passage record ${index}. ${"植".repeat(1_500)}` : credentialBodies[index - safeBulkCount],
           metadata: { researchSource: {
             class: "internal_research",
             identity: { sourceId: sourceRef, providerId: null, organization: null,
               author: null, analystId: null, expertId: null,
-              url: index >= 30 + credentialBodies.length - credentialUrls.length
-                ? credentialUrls[index - (30 + credentialBodies.length - credentialUrls.length)] : null },
+              url: index >= safeBulkCount + credentialBodies.length - credentialUrls.length
+                ? credentialUrls[index - (safeBulkCount + credentialBodies.length - credentialUrls.length)] : null },
             rights: allowedRights,
           } },
         });
-        if (index < 30) safeBulk.push(document);
+        if (index < safeBulkCount) safeBulk.push(document);
       }
       const bulk = await capture({ query: "megaflora" });
       const begin = "BEGIN_CURRENT_RESEARCH_OBSERVATIONS";
@@ -737,18 +779,21 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token",
         "do-not-transmit-json-client-secret", "do-not-transmit-json-database-password",
         "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password",
-        "token: pending", "secret: none", "alice", "hunter2",
+        "token: pending", "secret: none", "alice", "hunter2", "do-not-transmit-scheme-password",
+        "do-not-transmit-scheme-signature", "do-not-transmit-plural-json", "do-not-transmit-plural-assignment",
+        "do-not-transmit-relative-signature", "do-not-transmit-dot-relative-signature", "do-not-transmit-relative-fragment-key",
+        "do-not-transmit-standalone-sas", "do-not-transmit-sas-assignment",
         ...credentialUrls, ...credentialBodies.slice(-credentialUrls.length)]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
-      for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
+      for (let index = safeBulkCount; index < safeBulkCount + credentialBodies.length; index += 1) {
         assert.equal(framed.includes(`internal:megaflora:${index}`), false, "credential source identities are omitted with their records");
       }
       assert.equal(JSON.stringify([bulk.events, bulk.ledger]).includes("植".repeat(20)), false);
       const benignUrl = "https://example.test/report?year=2026&section=margin";
       await indexProjectDocument(ctx, {
         projectId: project.id, sourceType: "research_evidence", sourceRef: "internal:benignurl:report",
-        title: "Benignurl public locator", body: "Benignurl noncredential query parameters remain usable.",
+        title: "Benignurl public locator", body: "Benignurl noncredential query parameters remain usable. Relative locator /download?year=2026&section=margin is ordinary source data.",
         sourceRefs: ["internal:benignurl:report"],
         metadata: { researchSource: {
           class: "internal_research",
@@ -760,6 +805,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const benignLocator = await capture({ query: "benignurl" });
       assert.ok(benignLocator.prompts[1]!.includes(benignUrl));
       assert.ok(benignLocator.prompts[1]!.includes("Benignurl noncredential query parameters remain usable."));
+      assert.ok(benignLocator.prompts[1]!.includes("/download?year=2026&section=margin"));
 
       async function persistedIntelligence() {
         return Promise.all([
@@ -839,6 +885,54 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         Array.from({ length: 8 }, (_, index) => `compose-${index}`));
       assert.deepEqual(deduplicated.sources.find((source) => source.sourceRef === overlapSources[1].sourceRef)?.stepIds, ["compose-8"]);
       assert.ok(overlapTransport.includes(overlapSources[1].body), "deduplication preserves distinct later evidence within the byte budget");
+
+      let cumulativeBatch = -1;
+      let cumulativeDocuments: P7ProjectDocument[] = [];
+      async function replaceCumulativeBatch() {
+        for (const document of cumulativeDocuments) {
+          await getDb().delete(projectIntelligenceDocuments).where(eq(projectIntelligenceDocuments.id, document.id));
+        }
+        cumulativeDocuments = [];
+        cumulativeBatch += 1;
+        for (let index = 0; index < 25; index += 1) {
+          const sourceRef = `internal:cumulative:${cumulativeBatch}:${index}`;
+          cumulativeDocuments.push(await indexProjectDocument(ctx, {
+            projectId: project.id, sourceType: "research_evidence", sourceRef,
+            title: `Cumulativebatch ${cumulativeBatch} ${index}`,
+            body: `Cumulativebatch passage ${cumulativeBatch} ${index}.`,
+            sourceRefs: [sourceRef], metadata: documents[1]!.metadata,
+          }));
+        }
+      }
+      const cumulative = await capture({
+        query: "cumulativebatch", beforeReview: replaceCumulativeBatch,
+        repair: replaceCumulativeBatch, repairCount: 4,
+      });
+      assert.equal(cumulative.prompts.length, 6, "five reviews exercise more than one hundred potential source references");
+      const transmittedRefs = new Set<string>();
+      let lastReferenceOmissions = 0;
+      for (const prompt of cumulative.prompts.slice(1)) {
+        const transport = findObservation(JSON.parse(prompt));
+        assert.ok(transport);
+        const json = transport.split("\n").find((line) => line.startsWith("{"));
+        assert.ok(json);
+        const observed = z.object({
+          sources: z.array(z.object({ sourceRef: z.string() }).passthrough()),
+          omittedSourceCountByReferenceLimit: z.number(),
+        }).passthrough().parse(JSON.parse(json));
+        for (const source of observed.sources) transmittedRefs.add(source.sourceRef);
+        lastReferenceOmissions = observed.omittedSourceCountByReferenceLimit;
+      }
+      assert.equal(transmittedRefs.size, 100);
+      assert.equal(lastReferenceOmissions, 25, "the final twenty-five new references must be omitted before model transport");
+      assert.equal(cumulative.prompts.at(-1)!.includes("Cumulativebatch passage 4 "), false);
+      const cumulativeReceipt = cumulative.events.find((event) =>
+        typeof event === "object" && event !== null && "type" in event && event.type === "receipt");
+      assert.ok(cumulativeReceipt);
+      const receipt = z.object({ receipt: z.object({ sourceRefs: z.array(z.string()) }).passthrough() })
+        .passthrough().parse(cumulativeReceipt);
+      for (const ref of transmittedRefs) assert.ok(receipt.receipt.sourceRefs.includes(ref),
+        "every source actually transmitted across reviews must survive in final receipt provenance");
 
       const providerSources = [
         { sourceRef: "internal:agathis:approved", providerId: "agathis-approved-provider",

@@ -123,6 +123,8 @@ export const agentLoopContinuationSchema = z.object({
     maxRevisions: budgetCount,
     maxDurationMs: budgetCount,
   }).strict(),
+  // Optional without a parse-time default: old snapshot binding hashes must remain byte-compatible.
+  reviewedSourceRefs: z.array(z.string().trim().min(1).max(1_000)).max(100).optional(),
 }).strict();
 export type AgentLoopContinuation = z.infer<typeof agentLoopContinuationSchema>;
 

@@ -21,7 +21,7 @@ const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
 // Artifact validation preserves its existing credential-like-value threshold; outbound research release is more conservative.
 const artifactCredentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
-const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credential|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\bshared[_\s-]?access[_\s-]?signature\s+sr=|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credentials?|shared[_\s-]?access[_\s-]?signature|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 const outboundAccessGrantParameters: Record<string, true> = {
   sig: true, signature: true, token: true, key: true, credential: true, credentials: true,
   apikey: true, accesskey: true, accesskeyid: true, secretaccesskey: true,
@@ -31,6 +31,19 @@ const outboundAccessGrantParameters: Record<string, true> = {
   xgoogsignature: true, xgoogcredential: true, googleaccessid: true,
   keypairid: true, sharedaccesssignature: true, sas: true, accessgrant: true,
 };
+function isOutboundAccessGrantName(rawName: string): boolean {
+  let name = rawName;
+  for (let depth = 0; depth < 4; depth += 1) {
+    try {
+      const decoded = decodeURIComponent(name);
+      if (decoded === name) break;
+      name = decoded;
+    } catch {
+      break;
+    }
+  }
+  return Object.hasOwn(outboundAccessGrantParameters, name.toLowerCase().replace(/[-_\s]/g, ""));
+}
 export function isCredentialBearingOutboundText(value: string): boolean {
   // Normalize identifier boundaries before the single shared policy: clientSecret, AWSSecretAccessKey and JSON keys
   // must receive the same treatment as their snake_case equivalents without changing the source record itself.
@@ -38,23 +51,20 @@ export function isCredentialBearingOutboundText(value: string): boolean {
     .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2");
   if (credentialText.test(value) || credentialText.test(normalized)) return true;
-  for (const match of value.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"']+/gi)) {
+  // Parameter grants also occur in relative links and standalone SAS tokens.
+  for (const parameter of value.matchAll(/(?:^|[?&#])([^=\s?&#]+)=/g)) {
+    if (isOutboundAccessGrantName(parameter[1]!)) return true;
+  }
+  for (const match of value.matchAll(/(?:\b[a-z][a-z0-9+.-]*:)?\/\/[^\s<>"]+/gi)) {
     try {
-      const url = new URL(match[0]);
+      const url = new URL(match[0], "https://lios.invalid");
       if (url.username || url.password) return true;
-      for (const rawName of url.searchParams.keys()) {
-        let name = rawName;
-        // URLSearchParams decodes once; bounded further decoding covers nested escaped credential names.
-        for (let depth = 0; depth < 3; depth += 1) {
-          try {
-            const decoded = decodeURIComponent(name);
-            if (decoded === name) break;
-            name = decoded;
-          } catch {
-            break;
-          }
-        }
-        if (Object.hasOwn(outboundAccessGrantParameters, name.toLowerCase().replace(/[-_\s]/g, ""))) return true;
+      const fragment = url.hash.slice(1);
+      const fragmentParameters = new URLSearchParams(fragment.startsWith("?") ? fragment.slice(1) : fragment);
+      const queryOffset = fragment.indexOf("?");
+      const routedParameters = queryOffset >= 0 ? new URLSearchParams(fragment.slice(queryOffset + 1)) : null;
+      for (const rawName of [...url.searchParams.keys(), ...fragmentParameters.keys(), ...(routedParameters?.keys() ?? [])]) {
+        if (isOutboundAccessGrantName(rawName)) return true;
       }
     } catch {
       // Non-URL prose is not interpreted as a credential.
