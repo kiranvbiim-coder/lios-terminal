@@ -194,10 +194,11 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-research-source-comp
 process.env.LIMURIA_DATA_DIR = dataDir;
 
 test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blocked metadata", async (t) => {
+  // Database modules must load after LIMURIA_DATA_DIR selects this test's isolated root.
   const { initDb, closeDb, getDb } = await import("./db");
   const { users } = await import("@shared/schema");
   const { createProject } = await import("./projectStore");
-  const { indexProjectDocument } = await import("./p7ProjectIntelligenceStore");
+  const { indexProjectDocument, searchProjectIntelligence } = await import("./p7ProjectIntelligenceStore");
   const {
     researchSourceCompositionTool,
     researchSourceCompositionToolInputSchema,
@@ -396,6 +397,69 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
     ),
     /requires Auto or My Data scope/,
   );
+
+  await t.test("query-centered excerpts retain late matching passages and each source revision", async () => {
+    const passages = [
+      "Xerophyte survey found drought-tolerant vegetation at the north entrance.",
+      "Xerophyte review recorded a separate planting trial at the south entrance.",
+    ];
+    const documents: P7ProjectDocument[] = [];
+    for (const [index, passage] of passages.entries()) {
+      const sourceRef = `internal:field-survey:${index}`;
+      const body = "Administrative preamble without survey findings. ".repeat(100)
+        + passage
+        + " Methodology appendix without additional findings.".repeat(40);
+      assert.ok(body.indexOf(passage) > 1_800);
+      documents.push(await indexProjectDocument(ctx, {
+        projectId: project.id,
+        sourceType: "research_evidence",
+        sourceRef,
+        title: `Field survey ${index}`,
+        body,
+        sourceRefs: [sourceRef],
+        metadata: {
+          researchSource: {
+            class: "internal_research",
+            identity: {
+              sourceId: sourceRef,
+              providerId: null,
+              organization: "Internal field survey",
+              author: null,
+              analystId: null,
+              expertId: null,
+              url: null,
+            },
+            rights: allowedRights,
+          },
+        },
+      }));
+    }
+    const hits = await searchProjectIntelligence(ctx, project.id, { query: "xerophyte" });
+    const composed = researchSourceCompositionToolOutputSchema.parse(
+      await researchSourceCompositionTool.invoke(
+        { query: "xerophyte" },
+        new AbortController().signal,
+        call,
+      ),
+    );
+    assert.equal(composed.output.sourceCount, 2);
+    assert.equal(composed.output.blockedCount, 0);
+    assert.deepEqual(new Set(composed.sourceRefs), new Set(documents.map((document) => document.sourceRef)));
+    for (const [index, document] of documents.entries()) {
+      const hit = hits.find((item) => item.documentId === document.id);
+      const source = composed.output.sources.find((item) => item.documentId === document.id);
+      assert.ok(hit);
+      assert.ok(source);
+      assert.ok(hit.excerpt.includes(passages[index]));
+      assert.ok(source.excerpt.includes(passages[index]), "Composition must return the matching passage, not the document preamble.");
+      assert.equal(source.excerpt, hit.excerpt);
+      assert.equal(source.contentHash, document.contentHash);
+      assert.equal(source.contentHash, hit.contentHash);
+      assert.equal(source.sourceRef, document.sourceRef);
+      assert.equal(source.identity.sourceId, document.sourceRef);
+      assert.equal(source.rights.aiTransmission, "permitted");
+    }
+  });
 });
 
 

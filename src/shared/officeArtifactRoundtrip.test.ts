@@ -174,6 +174,28 @@ test("DOCX: native newline normalization preserves unchanged canonical CRLF/CR a
   const content = artifactContentSchema.parse({ kind: "report", blocks: [{ id: "p", type: "paragraph", text: "First\r\nSecond\rThird", attrs: { richText: { version: 1, text: "First\r\nSecond\rThird", runs: [{ from: 7, to: 13, marks: [{ type: "bold" }] }] } } }, { id: "list", type: "ordered_list", text: "One\r\nTwo\r\n", attrs: { start: 2 } }] });
   assert.deepEqual((await readOfficeArtifactRoundtrip(await generated("docx", content))).content, content);
 });
+test("DOCX: native table newline normalization preserves unchanged canonical CRLF/CR headers and string cells", async () => {
+  const content = artifactContentSchema.parse({
+    kind: "report",
+    blocks: [{
+      id: "literal-lines", type: "table", text: "Literal table line endings",
+      attrs: { table: {
+        kind: "table",
+        columns: [{ key: "literal", label: "Header\r\ncontinuation\rfinal", type: "string" }],
+        rows: [{ literal: "First\r\nSecond\rThird\nFourth" }],
+      } },
+    }],
+  });
+  const bytes = await generated("docx", content);
+  assert.match(strFromU8(unzipSync(bytes)["word/document.xml"]), /<w:br\/>/, "fixture must contain actual native Word line breaks");
+  const result = await readOfficeArtifactRoundtrip(bytes, "docx");
+  assert.deepEqual(result.sourceContent, content);
+  assert.deepEqual(result.content, content);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.sourceArtifactId, plan(content).artifactId);
+  assert.equal(result.sourceVersion, plan(content).version);
+  assert.equal(result.sourceHash, plan(content).contentHash);
+});
 test("Office: invalid/duplicate table bindings and source identities are not guessed", async () => {
   const files = unzipSync(await generated("docx"));
   mutateXml(files, OFFICE_ARTIFACT_METADATA_PART, document => { const payload = document.getElementsByTagName("payload")[0], value = JSON.parse(payload.textContent!); value.bindings[1].id = value.bindings[0].id; payload.textContent = JSON.stringify(value); });

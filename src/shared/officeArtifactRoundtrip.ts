@@ -292,7 +292,8 @@ function tableGrid(node: XmlNode, format: "docx" | "pptx", relations: Relationsh
   return rows.map(row => children(row, "tc").map(cell => joinParagraphs(descendants(cell, "p").map(paragraph => readParagraph(paragraph, format, relations))).text));
 }
 function cellValue(value: string, original: unknown): unknown {
-  if (value === (original === undefined ? "Not recorded" : recordedDocumentValue(original))) return original;
+  // Native breaks/XML normalize CR/CRLF; unchanged table text retains raw source spelling.
+  if (value === nativeNewlines(original === undefined ? "Not recorded" : recordedDocumentValue(original)).text) return original;
   if (original === null || original === undefined) throw new Error("Ambiguous edited null/missing Office cell type.");
   if (Array.isArray(original) || typeof original === "object") { let parsed: unknown; try { parsed = JSON.parse(value); } catch { throw new Error("Edited structured Office cell requires literal JSON."); } if (Array.isArray(original) !== Array.isArray(parsed) || parsed === null || typeof parsed !== "object") throw new Error("Edited Office cell changed structured type."); return parsed; }
   if (typeof original === "number") { if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) || !Number.isFinite(Number(value))) throw new Error("Edited Office numeric cell requires an unambiguous finite decimal."); return Number(value); }
@@ -490,7 +491,11 @@ export async function readOfficeArtifactRoundtrip(bytes: Uint8Array, requestedFo
     if (grid.length !== rowCount + 1 || grid.some(row => row.length !== columnCount) || rowStart + rowCount > table.rows.length || columnStart + columnCount > table.columns.length) throw new Error("Unsupported Office table structural edit.");
     const key = JSON.stringify(binding.path), entry = tables.get(key) ?? { path: binding.path, table: structuredClone(table), cells: new Map<string, unknown>() };
     const writeCell = (key: string, value: unknown, apply: () => void) => { if (entry.cells.has(key) && !same(entry.cells.get(key), value)) throw new Error("Conflicting repeated Office table cells."); entry.cells.set(key, value); apply(); };
-    grid[0].forEach((label, index) => writeCell(`header:${columnStart + index}`, label, () => { entry.table.columns[columnStart + index].label = label; }));
+    grid[0].forEach((raw, index) => {
+      const originalLabel = table.columns[columnStart + index].label;
+      const label = raw === nativeNewlines(originalLabel).text ? originalLabel : raw;
+      writeCell(`header:${columnStart + index}`, label, () => { entry.table.columns[columnStart + index].label = label; });
+    });
     grid.slice(1).forEach((row, rowIndex) => row.forEach((raw, columnIndex) => {
       const index = rowStart + rowIndex, column = table.columns[columnStart + columnIndex], originalValue = table.rows[index][column.key], value = cellValue(raw, originalValue);
       writeCell(`${index}:${column.key}`, value, () => { if (value !== undefined) entry.table.rows[index][column.key] = value as TableContent["rows"][number][string]; });

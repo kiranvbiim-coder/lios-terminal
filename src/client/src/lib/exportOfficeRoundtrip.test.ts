@@ -111,6 +111,43 @@ test("SI-04.19 Word edits bound narrative/list/table rather than restoring embed
   assert.deepEqual((await readOfficeArtifactRoundtrip(next.bytes, "docx")).content, content);
 });
 
+test("SI-04.19 Word table edits preserve unchanged CRLF/CR siblings through re-export", async () => {
+  const source = artifactContentSchema.parse({
+    kind: "report",
+    blocks: [{
+      id: "lines", type: "table", text: "Literal table text",
+      attrs: { table: {
+        kind: "table",
+        columns: [
+          { key: "preserved", label: "Preserved\r\nheader\rfinal", type: "string" },
+          { key: "edited", label: "Editable\r\nheader", type: "string" },
+        ],
+        rows: [{ preserved: "First\r\nSecond\rThird\nFourth", edited: "Editable\r\ncell" }],
+      } },
+    }],
+  });
+  const file = buildArtifactDocx(plan(source, "docx"), source);
+  const bytes = edited(file.bytes, { "word/document.xml": xml => xml.replaceAll(">Editable<", ">Revised<") });
+  assert.deepEqual(unzipSync(bytes)["customXml/liosArtifact.xml"], unzipSync(file.bytes)["customXml/liosArtifact.xml"]);
+  const result = await readOfficeArtifactRoundtrip(bytes, "docx");
+  assert.deepEqual(result.sourceContent, source);
+  assert.equal(result.sourceArtifactId, "artifact:office:owned");
+  assert.equal(result.sourceVersion, 7);
+  assert.equal(result.sourceHash, HASH);
+  if (result.content.kind !== "report") assert.fail("report expected");
+  const table = tableArtifactContentSchema.parse(result.content.blocks[0].attrs.table);
+  assert.equal(table.columns[0].label, "Preserved\r\nheader\rfinal");
+  assert.equal(table.columns[1].label, "Revised\nheader");
+  assert.equal(table.rows[0].preserved, "First\r\nSecond\rThird\nFourth");
+  assert.equal(table.rows[0].edited, "Revised\ncell");
+  assert.ok(result.warnings.some(warning => warning.includes("Native table edits")));
+  const next = buildArtifactDocx(plan(result.content, "docx", 8), result.content);
+  const reopened = await readOfficeArtifactRoundtrip(next.bytes, "docx");
+  assert.deepEqual(reopened.content, result.content);
+  assert.equal(reopened.sourceVersion, 8);
+  assert.deepEqual(reopened.warnings, []);
+});
+
 test("SI-04.19 native PowerPoint narrative/table edits survive canonical re-export and reopen", async () => {
   const file = await buildNativeArtifactPptx(plan(report, "pptx"), report);
   const { files, binding } = closePackage(file.bytes);
