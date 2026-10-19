@@ -47,7 +47,7 @@ import { invokeAIRoutedCompletion, type AICompletionResult, type AIRoutedComplet
 import { AIProviderError } from "./byoaiRouter";
 import { createArtifactProposal, getArtifact, getArtifactVersion } from "./artifactStore";
 import { projectEvidenceArtifactTool } from "./projectEvidenceArtifactTool";
-import { artifactInspectTool, artifactMaintenanceTool, buildArtifactMaintenancePrompt, isCredentialBearingArtifactText } from "./artifactMaintenance";
+import { artifactInspectTool, artifactMaintenanceTool, buildArtifactMaintenancePrompt, isCredentialBearingOutboundText } from "./artifactMaintenance";
 import { webResearchArtifactTool } from "./webResearchArtifactTool";
 import { createMemoryReflectionTool } from "./memoryReflectionTool";
 import { memoryLifecycleConversationTools } from "./memoryLifecycleTool";
@@ -1209,10 +1209,14 @@ async function invokeGovernedAi(
   plan: WorkflowPlan,
   invokeAI: (request: AIRoutedCompletionRequest) => Promise<AICompletionResult>,
   request: Omit<AIRoutedCompletionRequest, "fallback">,
-  content: { containsPrivateResearch?: true } = {},
+  content: { containsPrivateResearch?: true; beforeTransmission?: () => Promise<void> } = {},
 ): Promise<AICompletionResult> {
   const privateReason = content.containsPrivateResearch ? "Project research observations" : privateAiContentReason(input, plan);
   try {
+    if (content.containsPrivateResearch) {
+      if (!content.beforeTransmission) throw new AIProviderError("policy_denied", "Current research release authorization is unavailable.");
+      await content.beforeTransmission();
+    }
     const policy = input.request.transmissionPolicy;
     const answered = await invokeAI({
       ...request,
@@ -1220,6 +1224,7 @@ async function invokeGovernedAi(
       maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
       ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
       fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
+      ...(content.containsPrivateResearch ? { beforeTransmission: content.beforeTransmission } : {}),
     });
     if (answered.fallback?.attempts.length) {
       const failed = answered.fallback.attempts.map((attempt) => `${attempt.provider} (${attempt.code.replaceAll("_", " ")})`).join(", ");
@@ -2084,7 +2089,7 @@ async function emit(input: ConversationRuntimeInput, event: ConversationRuntimeE
 
 async function activeResearchSourcePolicy(
   input: ConversationRuntimeInput,
-): Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy">> {
+): Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy" | "researchSourcePolicyBinding">> {
   if (input.scope !== "project" || !input.projectId) return { allowedSourceRefs: [] };
   const artifactId = activeArtifactId(input.request.context);
   if (!artifactId) return { allowedSourceRefs: [] };
@@ -2092,13 +2097,15 @@ async function activeResearchSourcePolicy(
   if (artifact.projectId !== input.projectId) throw new Error("Active ResearchArtifact belongs to a different Project.");
   const version = await getArtifactVersion(input.tenant, artifact.id, artifact.headVersion);
   const content = artifactContentSchema.parse(version.content);
-  if (content.kind !== "research") return { allowedSourceRefs: [] };
+  const binding = { artifactId: artifact.id, headVersion: artifact.headVersion, contentHash: version.contentHash };
+  if (content.kind !== "research") return { allowedSourceRefs: [], researchSourcePolicyBinding: binding };
   if (content.sourcePolicy.mode === "only_refs" && !content.sourcePolicy.allowedSourceRefs.length) {
     throw new Error('Active ResearchArtifact is set to "Use only these sources" but its allow-list is empty.');
   }
   return {
     allowedSourceRefs: content.sourcePolicy.mode === "only_refs" ? content.sourcePolicy.allowedSourceRefs : [],
     researchSourcePolicy: content.sourcePolicy,
+    researchSourcePolicyBinding: binding,
   };
 }
 
@@ -4222,7 +4229,7 @@ const AGENT_RESEARCH_REVIEW_FRAME = [
 ].join("\n");
 
 function researchObservationContainsCredentials(value: unknown): boolean {
-  if (typeof value === "string") return isCredentialBearingArtifactText(value);
+  if (typeof value === "string") return isCredentialBearingOutboundText(value);
   if (value === null || typeof value !== "object") return false;
   return Object.values(value).some(researchObservationContainsCredentials);
 }
@@ -4232,7 +4239,7 @@ async function resolveAgentResearchReviewObservations(
   input: ConversationRuntimeInput,
   completedSteps: readonly AgentPlannedStep[],
   signal: AbortSignal,
-): Promise<string | null> {
+): Promise<{ text: string; assertCurrent: () => Promise<void> } | null> {
   const researchSteps = completedSteps.filter((step) => step.toolId === researchSourceCompositionTool.id);
   if (!researchSteps.length) return null;
   type ComposedSource = z.infer<typeof researchSourceCompositionToolOutputSchema>["output"]["sources"][number];
@@ -4241,6 +4248,7 @@ async function resolveAgentResearchReviewObservations(
     rights: Pick<ComposedSource["rights"], "aiTransmission" | "internalUse" | "redistribution">;
   };
   const candidates: Source[] = [];
+  const policyBindings: Array<GovernedToolCall["researchSourcePolicyBinding"]> = [];
   const observation = {
     completedResearchStepCount: researchSteps.length,
     unavailableStepCount: 0,
@@ -4268,6 +4276,7 @@ async function resolveAgentResearchReviewObservations(
         ...await activeResearchSourcePolicy(input),
         researchReadOnly: true,
       });
+      policyBindings.push(call.researchSourcePolicyBinding);
       assertNotAborted(signal);
       if (getConversationTool(researchSourceCompositionTool.id) !== descriptor
         || call.resourceTransmissionAllowed !== true
@@ -4323,7 +4332,25 @@ async function resolveAgentResearchReviewObservations(
     }
   }
   assertNotAborted(signal);
-  return rendered;
+  const assertCurrent = async (): Promise<void> => {
+    try {
+      assertNotAborted(signal);
+      for (const binding of policyBindings) {
+        if (activeArtifactId(input.request.context) !== (binding?.artifactId ?? null)) throw new Error();
+        if (!binding) continue;
+        const currentVersion = await getArtifactVersion(input.tenant, binding.artifactId, binding.headVersion);
+        const currentArtifact = await getArtifact(input.tenant, binding.artifactId);
+        if (currentArtifact.projectId !== input.projectId || currentArtifact.headVersion !== binding.headVersion
+          || currentVersion.contentHash !== binding.contentHash) throw new Error();
+        assertNotAborted(signal);
+      }
+    } catch {
+      assertNotAborted(signal);
+      throw new AIProviderError("policy_denied", "Current research source policy changed or is unavailable; refresh the research before continuing.");
+    }
+  };
+  await assertCurrent();
+  return { text: rendered, assertCurrent };
 }
 
 async function executeAgentLoop(
@@ -4343,6 +4370,7 @@ async function executeAgentLoop(
       nextActions: ["Turn AI on in your settings", "Switch to AI-assisted mode"],
     });
   }
+  let assertReviewResearchCurrent: (() => Promise<void>) | undefined;
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
@@ -4398,7 +4426,7 @@ async function executeAgentLoop(
             allow: request.transmissionPolicy.providerAllow,
             deny: request.transmissionPolicy.providerDeny,
           },
-        }, { containsPrivateResearch });
+        }, { containsPrivateResearch, beforeTransmission: containsPrivateResearch ? assertReviewResearchCurrent : undefined });
       } catch (error) {
         // A model that cannot answer is an honest data gap, never a substituted or fabricated answer.
         if (error instanceof AIProviderError && !signal.aborted) {
@@ -4415,8 +4443,12 @@ async function executeAgentLoop(
       providers.add(answered.attribution.provider);
       return answered.text;
     },
-    resolveReviewObservations: ({ completedSteps, signal: reviewSignal }) =>
-      resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal),
+    resolveReviewObservations: async ({ completedSteps, signal: reviewSignal }) => {
+      assertReviewResearchCurrent = undefined;
+      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal);
+      assertReviewResearchCurrent = observation?.assertCurrent;
+      return observation?.text ?? null;
+    },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
       const descriptor = getConversationTool(step.toolId);
       const externalDispatch = descriptor?.sideEffect === "external";

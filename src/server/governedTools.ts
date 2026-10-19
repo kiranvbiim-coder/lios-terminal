@@ -38,6 +38,8 @@ export interface GovernedToolCall {
   allowedSourceRefs?: string[];
   /** Complete current active ResearchArtifact policy, resolved by the server rather than tool/model input. */
   researchSourcePolicy?: Extract<ArtifactContent, { kind: "research" }>["sourcePolicy"];
+  /** Ephemeral current-head identity for revalidation before releasing a research observation. */
+  researchSourcePolicyBinding?: { artifactId: string; headVersion: number; contentHash: string };
   /** Server-only review refresh: materialize current P7 search evidence without persisting an index or snapshot. */
   researchReadOnly?: boolean;
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */

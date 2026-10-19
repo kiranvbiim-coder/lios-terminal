@@ -19,8 +19,10 @@ const MAX_SNAPSHOT_BYTES = 12 * 1024;
 const MAX_EDIT_BYTES = 128 * 1024;
 const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
+// Artifact validation preserves its existing credential-like-value threshold; outbound research release is more conservative.
+const artifactCredentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
 const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:[a-z0-9]+[_-])*(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|auth[_\s-]?token|token|secret|secret[_\s-]?(?:access[_\s-]?)?key|password|passwd|private[_\s-]?key|credential|authorization|cookie)["']?\s*[:=]\s*["']?\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
-export function isCredentialBearingArtifactText(value: string): boolean {
+export function isCredentialBearingOutboundText(value: string): boolean {
   // Normalize identifier boundaries before the single shared policy: clientSecret, AWSSecretAccessKey and JSON keys
   // must receive the same treatment as their snake_case equivalents without changing the source record itself.
   const normalized = value
@@ -63,7 +65,7 @@ function assertJson(value: unknown, depth = 0, seen = new Set<object>()): void {
   if (depth > 30) throw new Error("Artifact maintenance JSON exceeds the nesting bound.");
   if (value === null || typeof value === "boolean") return;
   if (typeof value === "string") {
-    if (isCredentialBearingArtifactText(value)) throw new Error("Artifact maintenance must not transmit or persist credential-bearing text.");
+    if (artifactCredentialText.test(value)) throw new Error("Artifact maintenance must not transmit or persist credential-bearing text.");
     return;
   }
   if (typeof value === "number" && Number.isFinite(value)) return;

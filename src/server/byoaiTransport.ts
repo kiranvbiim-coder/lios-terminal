@@ -33,6 +33,8 @@ export interface AICompletionRequest {
   dataClassification?: "public" | "organization";
   /** Explicit per-call approval when the organization policy requires it. */
   enterpriseApproval?: boolean;
+  /** Server-only, ephemeral release check after asynchronous policy checks and immediately before provider dispatch. */
+  beforeTransmission?: () => Promise<void>;
 }
 
 export type AIRoutedCompletionRequest = Omit<AICompletionRequest, "provider"> & {
@@ -468,6 +470,7 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
   const signal = request.signal ?? AbortSignal.timeout(60_000);
   let response: Response;
   let text = "";
+  await request.beforeTransmission?.();
   try {
     if (request.provider === "anthropic") {
       const messages = request.messages.map((message) => ({

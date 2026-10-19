@@ -658,6 +658,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         'Megaflora {"databasePassword":"do-not-transmit-json-database-password"}',
         "Megaflora passWord=do-not-transmit-mixed-case-password",
         'Megaflora {"passWord":"do-not-transmit-json-mixed-case-password"}',
+        "Megaflora token: pending",
+        "Megaflora secret: none",
       ];
       for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
@@ -718,7 +720,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       for (const secret of ["do-not-transmit-credential", "do-not-transmit-query", "not-a-real-key",
         "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token",
         "do-not-transmit-json-client-secret", "do-not-transmit-json-database-password",
-        "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password"]) {
+        "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password",
+        "token: pending", "secret: none"]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
       for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
@@ -804,6 +807,28 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
           }
         }
       }
+
+      const { artifactInspectTool, artifactMaintenanceTool } = await import("./artifactMaintenance");
+      const benign = await createArtifact(ctx, {
+        projectId: project.id, title: "Ordinary status labels",
+        content: researchArtifactContentSchema.parse({
+          kind: "research", question: "token: pending; secret: none",
+          blocks: [], claims: [], evidence: [],
+        }),
+      });
+      const benignCall = { ...call, resourceTransmissionAllowed: true,
+        activeArtifactRefs: [benign.artifact.id], stepId: "benign-maintenance" };
+      const inspected = await artifactInspectTool.invoke(
+        { artifactId: benign.artifact.id, paths: [["question"]] }, new AbortController().signal, benignCall,
+      );
+      assert.ok(JSON.stringify(inspected.output).includes("token: pending; secret: none"));
+      const proposed = await artifactMaintenanceTool.invoke({
+        artifactId: benign.artifact.id, baseVersion: 1, baseHash: benign.version.contentHash,
+        summary: "Clarify ordinary status labels",
+        edits: [{ op: "set", path: ["question"], value: "token: pending; secret: none; review complete" }],
+      }, new AbortController().signal, benignCall);
+      assert.equal(z.object({ changed: z.boolean() }).passthrough().parse(proposed.output).changed, true,
+        "broad outbound research filtering must not make benign existing Artifacts uninspectable or uneditable");
     });
 
     await nested.test("public agent planning cannot downgrade refreshed Project research at the actual enterprise provider boundary", async () => {
@@ -813,6 +838,9 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const { DEFAULT_ENTERPRISE_POLICY } = await import("@shared/enterpriseContracts");
       const { saveEnterprisePolicy } = await import("./enterprisePolicyService");
       const { runWithRequestIdentity } = await import("./requestContext");
+      const { invokeAIRoutedCompletion } = await import("./byoaiTransport");
+      const { createArtifact, createArtifactVersion } = await import("./artifactStore");
+      const { researchArtifactContentSchema } = await import("@shared/artifactContracts");
       const [organization] = await getDb().insert(organizations).values({
         name: "Research routing policy", slug: `research-routing-${crypto.randomUUID()}`,
       }).returning();
@@ -855,7 +883,10 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         }] });
         return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), { status: 200 });
       }) as typeof fetch;
-      async function invokeWithPolicy(allowExternalData: boolean) {
+      async function invokeWithPolicy(allowExternalData: boolean, race?: {
+        artifactId: string;
+        beforeRelease: () => Promise<void>;
+      }) {
         await saveEnterprisePolicy(organization.id, {
           ...DEFAULT_ENTERPRISE_POLICY,
           ai: { ...DEFAULT_ENTERPRISE_POLICY.ai, allowedProviders: ["openai", "gemini"],
@@ -873,10 +904,17 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
             requestId: crypto.randomUUID(), continuationOf: null, message: "Compare sequoia research findings.",
             executionMode: "ai_assisted", aiDirectApproved: false, approvals: [], attachments: [],
             sourceScope: "my_data",
+            ...(race ? { context: { activeObjectRefs: [race.artifactId] } } : {}),
             transmissionPolicy: { mode: "configured", providerAllow: ["openai", "gemini"], providerDeny: [],
               allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
               allowToolCalling: true, dataClassification: "public" },
           },
+          ...(race ? { aiCompletion: async (completion) => {
+            if (completion.messages.some((message) => message.content.includes("BEGIN_CURRENT_RESEARCH_OBSERVATIONS"))) {
+              await race.beforeRelease();
+            }
+            return invokeAIRoutedCompletion(completion);
+          } } : {}),
           agentLoop: {}, emit: () => undefined,
         }));
       }
@@ -893,6 +931,31 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.deepEqual(attempted.map(({ provider }) => provider), ["openai", "openai"],
           "private research review must not fall back to configured Gemini after the preferred provider fails");
         assert.ok(attempted[1]!.body.includes(privatePassage));
+
+        const initial = researchArtifactContentSchema.parse({
+          kind: "research", question: "Sequoia race", blocks: [], claims: [], evidence: [],
+          sourcePolicy: { mode: "only_refs", allowedSourceRefs: ["internal:sequoia:routing"] },
+        });
+        const active = await createArtifact(tenant, {
+          projectId: researchProject.id, title: "Concurrent source policy", content: initial,
+        });
+        attempted.length = 0;
+        reviewReached = false;
+        let changedHead = false;
+        await assert.rejects(invokeWithPolicy(true, {
+          artifactId: active.artifact.id,
+          beforeRelease: async () => {
+            await createArtifactVersion(tenant, {
+              artifactId: active.artifact.id, baseVersion: 1,
+              content: { ...initial, sourcePolicy: { ...initial.sourcePolicy, allowedSourceRefs: [] } },
+            });
+            changedHead = true;
+          },
+        }), /head|changed|policy|source/i);
+        assert.equal(changedHead, true, "barrier commits the denying head after observations are built but before canonical transport");
+        assert.equal(reviewReached, false, "canonical before-transmission validation must reject stale observations");
+        assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"], "no private review or stale fallback reaches any provider");
+        assert.equal(attempted.some(({ body }) => body.includes(privatePassage)), false);
       } finally {
         globalThis.fetch = priorFetch;
         if (priorCredentialStore === undefined) delete process.env.LIMURIA_CREDENTIAL_STORE;
