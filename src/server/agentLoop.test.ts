@@ -113,6 +113,55 @@ test("the review prompt carries tool summaries only, never the model's raw tool 
   assert.match(h.prompts[1]!.user, /result of a/);
 });
 
+test("each review repair resolves fresh ephemeral observations from completed steps only", async () => {
+  const h = harness([
+    plan([step("read"), step("failed", "t.calc", { dependsOn: ["read"] })]),
+    "not a review",
+    complete(),
+  ], { invoke: async (planned) => planned.id === "failed"
+    ? { kind: "failed", reason: "Unavailable" }
+    : { kind: "ok", summary: "Read completed", deterministic: true, sourceRefs: ["src:read"] } });
+  let resolutions = 0;
+  h.deps.resolveReviewObservations = async ({ completedSteps, signal }) => {
+    assert.equal(signal.aborted, false);
+    assert.deepEqual(completedSteps.map(({ id, toolId }) => ({ id, toolId })), [{ id: "read", toolId: "t.quote" }]);
+    resolutions += 1;
+    return resolutions === 1 ? "CURRENT-PERMITTED-PASSAGE" : "CURRENT-RIGHTS-REVOKED";
+  };
+  const result = await runAgentLoop(h.deps);
+  assert.equal(resolutions, 2, "repair must re-resolve rather than retain prior source permissions");
+  assert.ok(h.prompts[1]!.user.includes("CURRENT-PERMITTED-PASSAGE"));
+  assert.ok(h.prompts[2]!.user.includes("CURRENT-RIGHTS-REVOKED"));
+  assert.equal(h.prompts[2]!.user.includes("CURRENT-PERMITTED-PASSAGE"), false);
+  assert.equal(h.prompts[0]!.user.includes("CURRENT-PERMITTED-PASSAGE"), false, "planning is not evidence review");
+  assert.equal(result.aiCalls, 3);
+  assert.equal(result.revisions, 1);
+  const durable = JSON.stringify([result, h.ledger, h.results]);
+  assert.equal(durable.includes("CURRENT-PERMITTED-PASSAGE"), false);
+  assert.equal(durable.includes("CURRENT-RIGHTS-REVOKED"), false);
+  assert.deepEqual(h.ran, ["read", "failed"], "refresh never replays tool side effects");
+});
+
+test("ephemeral observation reads cannot bypass exhausted AI budget or cancellation", async () => {
+  const limited = harness([plan([step("read")])], { budget: { maxAiCalls: 1 } });
+  let reads = 0;
+  limited.deps.resolveReviewObservations = async () => { reads += 1; return "unused"; };
+  const result = await runAgentLoop(limited.deps);
+  assert.equal(result.status, "budget_exhausted");
+  assert.equal(reads, 0);
+  const controller = new AbortController();
+  const cancelled = harness([plan([step("read")])], {
+    signal: controller.signal,
+    invoke: async () => {
+      controller.abort();
+      return { kind: "ok", summary: "Read completed", deterministic: true, sourceRefs: [] };
+    },
+  });
+  cancelled.deps.resolveReviewObservations = async () => { reads += 1; return "unused"; };
+  await assert.rejects(runAgentLoop(cancelled.deps), { name: "AbortError" });
+  assert.equal(reads, 0);
+});
+
 test("model planning prompt exposes bounded tool-specific input guidance", async () => {
   const guided: AgentLoopTool = {
     ...tool("lios.entity.resolve"),

@@ -4,6 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { z } from "zod";
+import { createAttribution } from "./byoaiRouter";
+import type { ConversationRuntimeInput } from "./conversationRuntime";
 import { p7ProjectDocumentSchema, type P7ProjectDocument } from "@shared/p7ResearchContracts";
 import {
   composeResearchSources,
@@ -398,7 +401,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
     /requires Auto or My Data scope/,
   );
 
-  await t.test("query-centered excerpts retain late matching passages and each source revision", async () => {
+  await t.test("query-centered excerpts retain late matching passages and each source revision", async (nested) => {
     const passages = [
       "Xerophyte survey found drought-tolerant vegetation at the north entrance.",
       "Xerophyte review recorded a separate planting trial at the south entrance.",
@@ -459,6 +462,252 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.equal(source.identity.sourceId, document.sourceRef);
       assert.equal(source.rights.aiTransmission, "permitted");
     }
+
+    await nested.test("bounded agent review transmits current permitted late passages, not arbitrary tool payloads", async () => {
+      // Load the runtime only after this test selects and initializes its isolated database root.
+      const { executeConversationRuntime, registerConversationTool } = await import("./conversationRuntime");
+      const forbidden = {
+        sourceRef: "expert:private:xerophyte",
+        title: "Forbidden Xerophyte Expert Title",
+        body: "Xerophyte secret passage must stay local.",
+      };
+      await indexProjectDocument(ctx, {
+        projectId: project.id, sourceType: "research_evidence",
+        ...forbidden, sourceRefs: [forbidden.sourceRef],
+        metadata: { researchSource: {
+          class: "expert_content",
+          identity: { sourceId: forbidden.sourceRef, providerId: null, organization: null,
+            author: null, analystId: null, expertId: null, url: null },
+          rights: { ...allowedRights, aiTransmission: "restricted" },
+        } },
+      });
+      registerConversationTool({
+        id: "test.research.unrelated-payload", label: "Unrelated read", kind: "retrieve",
+        permissionClass: "safe_auto", access: "read", sideEffect: "none", replaySafe: true,
+        inputSchema: z.object({ privateArgument: z.string() }).strict(),
+        outputSchema: z.object({ output: z.unknown(), summary: z.string(), deterministic: z.boolean(), sourceRefs: z.array(z.string()) }).strict(),
+        cancel: null,
+        invoke: async () => ({ output: { secret: "ARBITRARY-OUTPUT-DO-NOT-SEND" },
+          summary: "Unrelated read completed.", deterministic: true, sourceRefs: [] }),
+      });
+      const prompts: string[] = [];
+      const events: unknown[] = [];
+      const ledger: unknown[] = [];
+      const completions = [
+        JSON.stringify({ steps: [
+          { id: "compose", toolId: "lios.research.compose_sources", label: "Read permitted survey sources",
+            input: { query: "xerophyte" }, dependsOn: [] },
+          { id: "other", toolId: "test.research.unrelated-payload", label: "Unrelated read",
+            input: { privateArgument: "ARBITRARY-INPUT-DO-NOT-SEND" }, dependsOn: ["compose"] },
+        ] }),
+        JSON.stringify({ decision: "complete", answer: "Transport fixture complete." }),
+      ];
+      await executeConversationRuntime({
+        tenant: call.tenant, scope: "project", chatId: null, projectId: project.id,
+        resources: [], history: [],
+        request: {
+          requestId: crypto.randomUUID(), continuationOf: null,
+          message: "Compare xerophyte survey findings using the governed research source composition tool.",
+          executionMode: "ai_assisted", aiDirectApproved: false, approvals: [], attachments: [],
+          sourceScope: "my_data",
+          transmissionPolicy: {
+            mode: "configured", providerAllow: [], providerDeny: [],
+            allowProjectInstructions: true, allowResourceReferences: true,
+            allowSelection: true, allowToolCalling: true, dataClassification: "private",
+          },
+        },
+        agentLoop: { ledger: async (event) => { ledger.push(event); } },
+        aiCompletion: async (completion) => {
+          prompts.push(JSON.stringify(completion));
+          const text = completions.shift();
+          assert.notEqual(text, undefined, "only planning and review are expected");
+          return { provider: "openai", model: "gpt-4o", text: text!,
+            attribution: createAttribution({ provider: "openai", model: "gpt-4o", prompt: "transport fixture", output: text! }) };
+        },
+        emit: (event) => { events.push(event); },
+      });
+      assert.equal(prompts.length, 2, "injected completion proves outgoing transport, not model synthesis quality");
+      const review = prompts[1]!;
+      for (const [index, document] of documents.entries()) {
+        assert.ok(review.includes(passages[index]), "the actual governed review prompt must contain the late matching passage");
+        assert.ok(review.includes(document.contentHash), "each passage retains its current source revision");
+        assert.ok(review.includes(document.sourceRef));
+      }
+      for (const secret of [...Object.values(forbidden), "ARBITRARY-OUTPUT-DO-NOT-SEND", "ARBITRARY-INPUT-DO-NOT-SEND"]) {
+        assert.equal(review.includes(secret), false, `review must exclude ${secret}`);
+      }
+      const durableOrClient = JSON.stringify([events, ledger]);
+      for (const passage of passages) assert.equal(durableOrClient.includes(passage), false, "research observations stay ephemeral, outside SSE and the journal");
+    });
+
+    await nested.test("research review refreshes database rights and active source policy for every repaired review", async () => {
+      // Runtime/store loading must follow the isolated database setup above.
+      const { executeConversationRuntime, registerConversationTool } = await import("./conversationRuntime");
+      const { createArtifact, createArtifactVersion } = await import("./artifactStore");
+      const { researchArtifactContentSchema } = await import("@shared/artifactContracts");
+      let mutateBeforeReview: (() => Promise<void>) | undefined;
+      registerConversationTool({
+        id: "test.research.change-current-policy", label: "Change fixture policy", kind: "retrieve",
+        permissionClass: "safe_auto", access: "read", sideEffect: "none", replaySafe: true,
+        inputSchema: z.object({}).strict(),
+        outputSchema: z.object({ output: z.unknown(), summary: z.string(), deterministic: z.boolean(), sourceRefs: z.array(z.string()) }).strict(),
+        cancel: null,
+        invoke: async () => {
+          await mutateBeforeReview?.();
+          return { output: null, summary: "Fixture boundary reached.", deterministic: true, sourceRefs: [] };
+        },
+      });
+      async function capture(options: {
+        query?: string;
+        context?: ConversationRuntimeInput["request"]["context"];
+        beforeReview?: () => Promise<void>;
+        repair?: () => Promise<void>;
+      } = {}) {
+        mutateBeforeReview = options.beforeReview;
+        const prompts: string[] = [];
+        const events: unknown[] = [];
+        const ledger: unknown[] = [];
+        let reviewCalls = 0;
+        await executeConversationRuntime({
+          tenant: call.tenant, scope: "project", chatId: null, projectId: project.id,
+          resources: [], history: [],
+          request: {
+            requestId: crypto.randomUUID(), continuationOf: null, message: "Compare governed research findings.",
+            executionMode: "ai_assisted", aiDirectApproved: false, approvals: [], attachments: [],
+            sourceScope: "my_data", ...(options.context ? { context: options.context } : {}),
+            transmissionPolicy: { mode: "configured", providerAllow: [], providerDeny: [],
+              allowProjectInstructions: true, allowResourceReferences: true, allowSelection: true,
+              allowToolCalling: true, dataClassification: "private" },
+          },
+          agentLoop: { ledger: async (event) => { ledger.push(event); } },
+          aiCompletion: async (completion) => {
+            prompts.push(JSON.stringify(completion));
+            let text: string;
+            if (prompts.length === 1) {
+              text = JSON.stringify({ steps: [
+                { id: "compose", toolId: "lios.research.compose_sources", label: "Read sources",
+                  input: { query: options.query ?? "xerophyte", limit: 50 }, dependsOn: [] },
+                { id: "boundary", toolId: "test.research.change-current-policy", label: "Fixture boundary",
+                  input: {}, dependsOn: ["compose"] },
+              ] });
+            } else {
+              reviewCalls += 1;
+              if (reviewCalls === 1 && options.repair) {
+                await options.repair();
+                text = "invalid review requiring a fresh policy check";
+              } else text = JSON.stringify({ decision: "complete", answer: "Transport fixture complete." });
+            }
+            return { provider: "openai", model: "gpt-4o", text,
+              attribution: createAttribution({ provider: "openai", model: "gpt-4o", prompt: "transport fixture", output: text }) };
+          },
+          emit: (event) => { events.push(event); },
+        });
+        return { prompts, events, ledger };
+      }
+      const revoked = await capture({ beforeReview: async () => {
+        const document = documents[0]!;
+        await indexProjectDocument(ctx, {
+          projectId: project.id, sourceType: document.sourceType, sourceRef: document.sourceRef,
+          title: document.title, body: document.body, sourceRefs: document.sourceRefs,
+          metadata: { ...document.metadata, researchSource: {
+            ...(document.metadata.researchSource as Record<string, unknown>),
+            rights: { ...allowedRights, aiTransmission: "unknown" },
+          } },
+        });
+      } });
+      assert.equal(revoked.prompts[1]!.includes(passages[0]), false, "rights revoked after original composition must remove its passage");
+      assert.equal(revoked.prompts[1]!.includes(documents[0]!.sourceRef), false, "restricted source identity must not survive via original outcomes");
+      assert.ok(revoked.prompts[1]!.includes(passages[1]), "still-permitted sources remain usable");
+
+      const content = researchArtifactContentSchema.parse({
+        kind: "research", question: "Xerophyte survey", blocks: [], claims: [], evidence: [],
+        sourcePolicy: { mode: "only_refs", allowedSourceRefs: [documents[1]!.sourceRef] },
+      });
+      const saved = await createArtifact(ctx, { projectId: project.id, title: "Current research scope", content });
+      const repaired = await capture({
+        context: { activeObjectRefs: [saved.artifact.id] },
+        repair: async () => {
+          await createArtifactVersion(ctx, {
+            artifactId: saved.artifact.id, baseVersion: 1,
+            content: { ...content, sourcePolicy: { ...content.sourcePolicy, allowedSourceRefs: [] } },
+          });
+        },
+      });
+      assert.ok(repaired.prompts[1]!.includes(passages[1]));
+      assert.equal(repaired.prompts[2]!.includes(passages[1]), false, "repair must reread the active allowlist and fail closed when it becomes empty");
+      const durable = JSON.stringify([revoked.events, revoked.ledger, repaired.events, repaired.ledger]);
+      for (const passage of passages) assert.equal(durable.includes(passage), false);
+
+      const safeBulk: P7ProjectDocument[] = [];
+      const credentialBodies = [
+        "Megaflora password=do-not-transmit-credential",
+        "Megaflora https://example.test/report?token=do-not-transmit-query",
+        "Megaflora -----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----",
+      ];
+      for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
+        const sourceRef = `internal:megaflora:${index}`;
+        const document = await indexProjectDocument(ctx, {
+          projectId: project.id, sourceType: "research_evidence", sourceRef,
+          title: `Megaflora survey ${index}`, sourceRefs: [sourceRef],
+          body: index < 30 ? `Megaflora passage record ${index}. ${"植".repeat(1_500)}` : credentialBodies[index - 30],
+          metadata: { researchSource: {
+            class: "internal_research",
+            identity: { sourceId: sourceRef, providerId: null, organization: null,
+              author: null, analystId: null, expertId: null, url: null },
+            rights: allowedRights,
+          } },
+        });
+        if (index < 30) safeBulk.push(document);
+      }
+      const bulk = await capture({ query: "megaflora" });
+      const begin = "BEGIN_CURRENT_RESEARCH_OBSERVATIONS";
+      const end = "END_CURRENT_RESEARCH_OBSERVATIONS";
+      function findObservation(value: unknown): string | undefined {
+        if (typeof value === "string") return value.includes(begin) ? value : undefined;
+        if (!value || typeof value !== "object") return undefined;
+        for (const child of Object.values(value)) {
+          const found = findObservation(child);
+          if (found) return found;
+        }
+        return undefined;
+      }
+      const transport = findObservation(JSON.parse(bulk.prompts[1]!));
+      assert.ok(transport);
+      const framed = transport.slice(transport.indexOf(begin), transport.indexOf(end) + end.length);
+      assert.ok(Buffer.byteLength(framed, "utf8") <= 24 * 1024, "the global bound includes framing and multibyte source bytes");
+      assert.match(framed, /Untrusted source material/);
+      assert.match(framed, /NOT the original immutable tool output/);
+      const jsonLine = framed.split("\n").find((line) => line.startsWith("{"));
+      assert.ok(jsonLine);
+      const projection = JSON.parse(jsonLine) as {
+        sources: Array<{ sourceRef: string; contentHash: string; excerpt: string }>;
+        currentSourceCount: number;
+        omittedSourceCountByByteLimit: number;
+        omittedSourceCountByCredentialPolicy: number;
+      };
+      assert.ok(projection.sources.length > 0);
+      assert.ok(projection.omittedSourceCountByByteLimit > 0);
+      assert.equal(projection.omittedSourceCountByCredentialPolicy, credentialBodies.length);
+      assert.equal(projection.currentSourceCount,
+        projection.sources.length + projection.omittedSourceCountByByteLimit + projection.omittedSourceCountByCredentialPolicy);
+      const current = researchSourceCompositionToolOutputSchema.parse(await researchSourceCompositionTool.invoke(
+        { query: "megaflora", limit: 50 }, new AbortController().signal, call,
+      ));
+      for (const source of projection.sources) {
+        const original = current.output.sources.find((candidate) => candidate.sourceRef === source.sourceRef);
+        assert.ok(original);
+        assert.deepEqual(source.excerpt, original.excerpt, "byte bounding admits whole records, never clips passages");
+        assert.equal(source.contentHash, original.contentHash);
+        assert.ok(safeBulk.some((document) => document.sourceRef === source.sourceRef));
+      }
+      for (const secret of ["do-not-transmit-credential", "do-not-transmit-query", "not-a-real-key"]) {
+        assert.equal(bulk.prompts[1]!.includes(secret), false);
+      }
+      for (let index = 30; index < 33; index += 1) {
+        assert.equal(framed.includes(`internal:megaflora:${index}`), false, "credential source identities are omitted with their records");
+      }
+      assert.equal(JSON.stringify([bulk.events, bulk.ledger]).includes("植".repeat(20)), false);
+    });
   });
 });
 

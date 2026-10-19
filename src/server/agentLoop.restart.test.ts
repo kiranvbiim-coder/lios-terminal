@@ -102,6 +102,36 @@ test("checkpoints are written only at safe boundaries: after the validated plan 
   assert.equal(h.checkpoints[2]!.counters.executed, 2);
 });
 
+test("checkpoint resume re-resolves settled research under current rights without persisting observations", async () => {
+  const first = harness([plan([step("research")]), complete()]);
+  let firstReads = 0;
+  first.deps.resolveReviewObservations = async ({ completedSteps }) => {
+    firstReads += 1;
+    assert.deepEqual(completedSteps.map((planned) => planned.id), ["research"]);
+    return "PRE-RESTART-PERMITTED-PASSAGE";
+  };
+  await runAgentLoop(first.deps);
+  assert.equal(firstReads, 1);
+  const state = structuredClone(first.checkpoints.at(-1)!);
+  assert.equal(JSON.stringify([boundAgentLoopContinuation(state), first.ledger]).includes("PRE-RESTART-PERMITTED-PASSAGE"), false);
+
+  const second = harness([complete()], { ledger: first.ledger });
+  let resumedReads = 0;
+  second.deps.resolveReviewObservations = async ({ completedSteps }) => {
+    resumedReads += 1;
+    assert.deepEqual(completedSteps.map((planned) => planned.id), ["research"]);
+    return "POST-RESTART-CURRENT-RIGHTS-REVOKED";
+  };
+  const result = await resumeAgentLoopFromCheckpoint(second.deps, state, null);
+  assert.equal(result.status, "completed");
+  assert.equal(resumedReads, 1);
+  assert.deepEqual(second.ran, [], "a completed read is not executed again to recover its original result");
+  assert.equal(second.prompts.length, 1);
+  assert.ok(second.prompts[0]!.includes("POST-RESTART-CURRENT-RIGHTS-REVOKED"));
+  assert.equal(second.prompts[0]!.includes("PRE-RESTART-PERMITTED-PASSAGE"), false);
+  assert.equal(JSON.stringify([result, second.checkpoints, second.ledger]).includes("POST-RESTART-CURRENT-RIGHTS-REVOKED"), false);
+});
+
 test("an approval pause is not a checkpoint boundary and a settled denial/failure is", async () => {
   const h = harness([plan([step("c", "t.confirm")])]);
   const outcome = await runAgentLoop(h.deps);

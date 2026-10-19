@@ -20,6 +20,9 @@ const MAX_EDIT_BYTES = 128 * 1024;
 const MAX_ARRAY_LENGTH = 200_000;
 const forbiddenKeys = /^(?:__proto__|prototype|constructor)$/i;
 const credentialText = /(?:[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)=|\b(?:bearer|authorization)\s*[:= ]\s*\S+|\b(?:api[_\s-]?key|access[_\s-]?token|refresh[_\s-]?token|password|private[_\s-]?key)\s*[:=]\s*\S{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
+export function isCredentialBearingArtifactText(value: string): boolean {
+  return credentialText.test(value);
+}
 const pathSchema = z.array(z.union([z.string().min(1).max(300).refine(key => !forbiddenKeys.test(key), "Prototype paths are forbidden."), z.number().int().min(0).max(MAX_ARRAY_LENGTH - 1)])).min(1).max(32);
 const inspectInputSchema = z.object({ artifactId: z.string().trim().min(1).max(200), paths: z.array(pathSchema).min(1).max(24).optional() }).strict();
 const maintenanceInputSchema = z.object({
@@ -55,7 +58,7 @@ function assertJson(value: unknown, depth = 0, seen = new Set<object>()): void {
   if (depth > 30) throw new Error("Artifact maintenance JSON exceeds the nesting bound.");
   if (value === null || typeof value === "boolean") return;
   if (typeof value === "string") {
-    if (credentialText.test(value)) throw new Error("Artifact maintenance must not transmit or persist credential-bearing text.");
+    if (isCredentialBearingArtifactText(value)) throw new Error("Artifact maintenance must not transmit or persist credential-bearing text.");
     return;
   }
   if (typeof value === "number" && Number.isFinite(value)) return;
