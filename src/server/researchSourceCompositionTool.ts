@@ -116,13 +116,29 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
       .map((value) => value.trim())
       .filter(Boolean)
       .slice(0, 5_000);
+    const sourcePolicy = call.researchSourcePolicy;
+    if (sourcePolicy?.mode === "only_refs" && !sourcePolicy.allowedSourceRefs.length) {
+      throw new Error("Active research source policy permits no source references.");
+    }
+    const scopedSourceRefs = sourcePolicy?.mode === "only_refs"
+      ? sourcePolicy.allowedSourceRefs.filter((ref) => !allowedSourceRefs.length || allowedSourceRefs.includes(ref))
+      : allowedSourceRefs;
+    if (sourcePolicy?.mode === "only_refs" && !scopedSourceRefs.length) {
+      throw new Error("Current research source restrictions have no permitted intersection.");
+    }
 
     // Review refreshes use one current in-memory document set for both matching and custody; they never rebuild the index.
     const readOnlyDocuments = call.researchReadOnly === true
       ? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
       : null;
     assertNotAborted(signal);
-    const searchRequest = { query: parsed.query, limit: parsed.limit, allowedSourceRefs };
+    const searchRequest = {
+      query: parsed.query,
+      limit: parsed.limit,
+      allowedSourceRefs: scopedSourceRefs,
+      providerAllow: sourcePolicy?.providerAllow ?? [],
+      providerDeny: sourcePolicy?.providerDeny ?? [],
+    };
     const hits = readOnlyDocuments
       ? searchProjectDocuments(readOnlyDocuments, searchRequest)
       : await searchProjectIntelligence(ctx, projectId, searchRequest);

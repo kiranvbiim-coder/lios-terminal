@@ -751,6 +751,59 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.ok(stale.prompts[1]!.includes(passages[1]), "stale activity still permits current read-only evidence retrieval");
       assert.equal(JSON.stringify(await persistedIntelligence()), beforeRefresh,
         "ephemeral review must not rewrite current index rows, append document versions, or persist a new snapshot");
+
+      const providerSources = [
+        { sourceRef: "internal:agathis:approved", providerId: "agathis-approved-provider",
+          title: "Approved Agathis Provider Note", body: "Agathis approved provider passage remains available." },
+        { sourceRef: "internal:agathis:excluded", providerId: "agathis-excluded-provider",
+          title: "Excluded Agathis Provider Note", body: "Agathis excluded provider passage must stay local." },
+      ];
+      for (const source of providerSources) {
+        await indexProjectDocument(ctx, {
+          projectId: project.id, sourceType: "research_evidence", sourceRef: source.sourceRef,
+          title: source.title, body: source.body, sourceRefs: [source.sourceRef],
+          metadata: { researchSource: {
+            class: "internal_research",
+            identity: { sourceId: source.sourceRef, providerId: source.providerId, organization: null,
+              author: null, analystId: null, expertId: null, url: null },
+            rights: allowedRights,
+          } },
+        });
+      }
+      for (const mode of ["connected_sources", "only_refs"] as const) {
+        for (const filter of ["allow", "deny"] as const) {
+          const initial = researchArtifactContentSchema.parse({
+            kind: "research", question: "Agathis provider research", blocks: [], claims: [], evidence: [],
+            sourcePolicy: { mode, allowedSourceRefs: providerSources.map((source) => source.sourceRef),
+              providerAllow: [], providerDeny: [] },
+          });
+          const policyArtifact = await createArtifact(ctx, {
+            projectId: project.id, title: `Provider policy ${mode} ${filter}`, content: initial,
+          });
+          const providerFiltered = await capture({
+            query: "agathis", context: { activeObjectRefs: [policyArtifact.artifact.id] },
+            repair: async () => {
+              await createArtifactVersion(ctx, {
+                artifactId: policyArtifact.artifact.id, baseVersion: 1,
+                content: { ...initial, sourcePolicy: {
+                  ...initial.sourcePolicy,
+                  providerAllow: filter === "allow" ? [providerSources[0].providerId] : providerSources.map((source) => source.providerId),
+                  providerDeny: filter === "deny" ? [providerSources[1].providerId] : [],
+                } },
+              });
+            },
+          });
+          const before = providerFiltered.prompts[1]!;
+          const after = providerFiltered.prompts[2]!;
+          for (const source of providerSources) assert.ok(before.includes(source.body));
+          for (const value of Object.values(providerSources[0])) {
+            assert.ok(after.includes(value), `${mode} ${filter} must retain permitted source provenance and passage`);
+          }
+          for (const value of Object.values(providerSources[1])) {
+            assert.equal(after.includes(value), false, `${mode} ${filter} must exclude forbidden provider content and identity after policy refresh`);
+          }
+        }
+      }
     });
 
     await nested.test("public agent planning cannot downgrade refreshed Project research at the actual enterprise provider boundary", async () => {

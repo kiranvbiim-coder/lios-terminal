@@ -2082,19 +2082,24 @@ async function emit(input: ConversationRuntimeInput, event: ConversationRuntimeE
   await input.emit(event);
 }
 
-async function activeResearchSourceAllowList(input: ConversationRuntimeInput): Promise<string[]> {
-  if (input.scope !== "project" || !input.projectId) return [];
+async function activeResearchSourcePolicy(
+  input: ConversationRuntimeInput,
+): Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy">> {
+  if (input.scope !== "project" || !input.projectId) return { allowedSourceRefs: [] };
   const artifactId = activeArtifactId(input.request.context);
-  if (!artifactId) return [];
+  if (!artifactId) return { allowedSourceRefs: [] };
   const artifact = await getArtifact(input.tenant, artifactId);
   if (artifact.projectId !== input.projectId) throw new Error("Active ResearchArtifact belongs to a different Project.");
   const version = await getArtifactVersion(input.tenant, artifact.id, artifact.headVersion);
   const content = artifactContentSchema.parse(version.content);
-  if (content.kind !== "research" || content.sourcePolicy.mode !== "only_refs") return [];
-  if (!content.sourcePolicy.allowedSourceRefs.length) {
+  if (content.kind !== "research") return { allowedSourceRefs: [] };
+  if (content.sourcePolicy.mode === "only_refs" && !content.sourcePolicy.allowedSourceRefs.length) {
     throw new Error('Active ResearchArtifact is set to "Use only these sources" but its allow-list is empty.');
   }
-  return content.sourcePolicy.allowedSourceRefs;
+  return {
+    allowedSourceRefs: content.sourcePolicy.mode === "only_refs" ? content.sourcePolicy.allowedSourceRefs : [],
+    researchSourcePolicy: content.sourcePolicy,
+  };
 }
 
 async function executeP7ProjectIntelligence(
@@ -2125,12 +2130,12 @@ async function executeP7ProjectIntelligence(
     componentId = "lios.project.search";
     label = "Search permitted Project intelligence";
     await emit(input, { ...eventBase(requestId), type: "tool_start", stepId, label, componentId });
-    const allowedSourceRefs = await activeResearchSourceAllowList(input);
+    const sourcePolicy = await activeResearchSourcePolicy(input);
     tool = await invokeConversationTool(
       componentId,
       { query: String(plan.intent.parameters.query || "") },
       signal,
-      createConversationToolCall(input, "workflow", { allowedSourceRefs }),
+      createConversationToolCall(input, "workflow", sourcePolicy),
     );
   } else if (workflow === "p7_project_changes") {
     stepId = "project-what-changed";
@@ -4260,7 +4265,7 @@ async function resolveAgentResearchReviewObservations(
       }
       const parsedInput = researchSourceCompositionToolInputSchema.parse(step.input);
       const call = createConversationToolCall(input, "agent", {
-        allowedSourceRefs: await activeResearchSourceAllowList(input),
+        ...await activeResearchSourcePolicy(input),
         researchReadOnly: true,
       });
       assertNotAborted(signal);
@@ -4343,7 +4348,7 @@ async function executeAgentLoop(
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
   const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
   const maintenancePrompt = input.scope === "project" && request.transmissionPolicy.allowResourceReferences && /\b(update|maintain|revise|edit|improve|append)\b/i.test(request.message)
-    ? await buildArtifactMaintenancePrompt(createConversationToolCall(input, "agent", { allowedSourceRefs: await activeResearchSourceAllowList(input) }), signal)
+    ? await buildArtifactMaintenancePrompt(createConversationToolCall(input, "agent", await activeResearchSourcePolicy(input)), signal)
     : null;
   const providers = new Set<string>();
   let agentPlan = plan;
@@ -4484,7 +4489,7 @@ async function executeAgentLoop(
         }
 
         const callFor = createConversationToolCall(input, "agent", {
-          allowedSourceRefs: await activeResearchSourceAllowList(input),
+          ...await activeResearchSourcePolicy(input),
           stepId: step.id,
           toolCallId,
           ...(idempotencyKey ? {

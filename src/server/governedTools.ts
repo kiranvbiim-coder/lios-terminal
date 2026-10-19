@@ -15,6 +15,7 @@ import type { ProcessSupervisor } from "./exec/types";
 import { z } from "zod";
 import type { ConversationSourceScope } from "@shared/sourceScope";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
+import type { ArtifactContent } from "@shared/artifactContracts";
 import type { AgentDelegationBudget } from "./agent-delegation";
 import type { RuntimePermissionClass, RuntimePermissionDecision } from "@shared/runtimeContracts";
 import { assertNotAborted } from "./conversationRuntimeCore";
@@ -35,6 +36,8 @@ export interface GovernedToolCall {
   sourceScope?: ConversationSourceScope;
   /** Server-resolved ResearchArtifact allow-list; never sourced from model arguments. */
   allowedSourceRefs?: string[];
+  /** Complete current active ResearchArtifact policy, resolved by the server rather than tool/model input. */
+  researchSourcePolicy?: Extract<ArtifactContent, { kind: "research" }>["sourcePolicy"];
   /** Server-only review refresh: materialize current P7 search evidence without persisting an index or snapshot. */
   researchReadOnly?: boolean;
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */
