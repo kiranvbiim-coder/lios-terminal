@@ -352,6 +352,8 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
   const resolvedModel = resolveProviderModel(config, canonicalRequest.model);
   validateImages(canonicalRequest, provider, resolvedModel);
   await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
+  // A local release-policy refusal did not contact the provider and must not change connector health.
+  await canonicalRequest.beforeTransmission?.();
   try {
     const result = await invokeAIProviderUnverified({ ...canonicalRequest, model: resolvedModel });
     if (VERIFIABLE_CONNECTOR_PROVIDERS.has(provider)) recordConnectorVerification(provider, true, `${result.provider} responded to a live completion request.`);
@@ -470,7 +472,6 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
   const signal = request.signal ?? AbortSignal.timeout(60_000);
   let response: Response;
   let text = "";
-  await request.beforeTransmission?.();
   try {
     if (request.provider === "anthropic") {
       const messages = request.messages.map((message) => ({

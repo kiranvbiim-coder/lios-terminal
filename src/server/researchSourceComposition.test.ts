@@ -567,6 +567,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       });
       async function capture(options: {
         query?: string;
+        queries?: string[];
         context?: ConversationRuntimeInput["request"]["context"];
         beforeReview?: () => Promise<void>;
         repair?: () => Promise<void>;
@@ -592,11 +593,15 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
             prompts.push(JSON.stringify(completion));
             let text: string;
             if (prompts.length === 1) {
+              const queries = options.queries ?? [options.query ?? "xerophyte"];
+              const reads = queries.map((query, index) => ({
+                id: `compose-${index}`, toolId: "lios.research.compose_sources", label: "Read sources",
+                input: { query, limit: 50 }, dependsOn: [],
+              }));
               text = JSON.stringify({ steps: [
-                { id: "compose", toolId: "lios.research.compose_sources", label: "Read sources",
-                  input: { query: options.query ?? "xerophyte", limit: 50 }, dependsOn: [] },
+                ...reads,
                 { id: "boundary", toolId: "test.research.change-current-policy", label: "Fixture boundary",
-                  input: {}, dependsOn: ["compose"] },
+                  input: {}, dependsOn: reads.map((read) => read.id) },
               ] });
             } else {
               reviewCalls += 1;
@@ -660,6 +665,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         'Megaflora {"passWord":"do-not-transmit-json-mixed-case-password"}',
         "Megaflora token: pending",
         "Megaflora secret: none",
+        "Megaflora userinfo-bearing source identity must remain local.",
       ];
       for (let index = 0; index < 30 + credentialBodies.length; index += 1) {
         const sourceRef = `internal:megaflora:${index}`;
@@ -670,7 +676,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
           metadata: { researchSource: {
             class: "internal_research",
             identity: { sourceId: sourceRef, providerId: null, organization: null,
-              author: null, analystId: null, expertId: null, url: null },
+              author: null, analystId: null, expertId: null,
+              url: index === 30 + credentialBodies.length - 1 ? "https://alice:hunter2@example.com/report" : null },
             rights: allowedRights,
           } },
         });
@@ -721,7 +728,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         "do-not-transmit-client-secret", "do-not-transmit-aws-secret", "do-not-transmit-colon-token",
         "do-not-transmit-json-client-secret", "do-not-transmit-json-database-password",
         "do-not-transmit-mixed-case-password", "do-not-transmit-json-mixed-case-password",
-        "token: pending", "secret: none"]) {
+        "token: pending", "secret: none", "alice", "hunter2",
+        "Megaflora userinfo-bearing source identity must remain local."]) {
         assert.equal(bulk.prompts[1]!.includes(secret), false);
       }
       for (let index = 30; index < 30 + credentialBodies.length; index += 1) {
@@ -754,6 +762,27 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       assert.ok(stale.prompts[1]!.includes(passages[1]), "stale activity still permits current read-only evidence retrieval");
       assert.equal(JSON.stringify(await persistedIntelligence()), beforeRefresh,
         "ephemeral review must not rewrite current index rows, append document versions, or persist a new snapshot");
+
+      async function reviewDatabaseReadCount(queries: string[]) {
+        let count = () => 0;
+        let restore: () => void = () => undefined;
+        try {
+          const result = await capture({ queries, beforeReview: async () => {
+            const spy = t.mock.method(getDb(), "select");
+            count = () => spy.mock.callCount();
+            restore = () => spy.mock.restore();
+          } });
+          assert.ok(result.prompts[1]!.includes(passages[1]), "instrumented review must still compose real permitted evidence");
+          return count();
+        } finally {
+          restore();
+        }
+      }
+      const oneQueryReads = await reviewDatabaseReadCount(["xerophyte"]);
+      const threeQueryReads = await reviewDatabaseReadCount(["xerophyte", "xerophyte survey", "xerophyte trial"]);
+      assert.ok(oneQueryReads > 0, "counter must observe real readonly Project database queries");
+      assert.equal(threeQueryReads, oneQueryReads,
+        "multiple completed research queries share one current Project collection per review, rather than rereading all Project roots per query");
 
       const providerSources = [
         { sourceRef: "internal:agathis:approved", providerId: "agathis-approved-provider",
@@ -841,6 +870,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const { invokeAIRoutedCompletion } = await import("./byoaiTransport");
       const { createArtifact, createArtifactVersion } = await import("./artifactStore");
       const { researchArtifactContentSchema } = await import("@shared/artifactContracts");
+      const { getConnectorVerification } = await import("./connectorVerification");
       const [organization] = await getDb().insert(organizations).values({
         name: "Research routing policy", slug: `research-routing-${crypto.randomUUID()}`,
       }).returning();
@@ -865,6 +895,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       const priorCredentialStore = process.env.LIMURIA_CREDENTIAL_STORE;
       const attempted: Array<{ provider: string; body: string }> = [];
       let reviewReached = false;
+      let raceHealthBaseline: unknown;
       process.env.LIMURIA_CREDENTIAL_STORE = "organization";
       globalThis.fetch = (async (url, init) => {
         const endpoint = String(url);
@@ -915,6 +946,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
               if (race.observedPassage) {
                 assert.ok(JSON.stringify(completion).includes(race.observedPassage), "race must begin only after the source passage was composed for review");
               }
+              assert.equal(getConnectorVerification("openai")?.ok, true, "planning establishes a healthy provider before the policy race");
+              raceHealthBaseline = getConnectorVerification("openai");
               await race.beforeRelease();
             }
             return invokeAIRoutedCompletion(completion);
@@ -935,6 +968,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.deepEqual(attempted.map(({ provider }) => provider), ["openai", "openai"],
           "private research review must not fall back to configured Gemini after the preferred provider fails");
         assert.ok(attempted[1]!.body.includes(privatePassage));
+        assert.equal(getConnectorVerification("openai")?.ok, false, "actual provider 429 must still degrade connector health");
 
         const initial = researchArtifactContentSchema.parse({
           kind: "research", question: "Sequoia race", blocks: [], claims: [], evidence: [],
@@ -960,6 +994,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         assert.equal(reviewReached, false, "canonical before-transmission validation must reject stale observations");
         assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"], "no private review or stale fallback reaches any provider");
         assert.equal(attempted.some(({ body }) => body.includes(privatePassage)), false);
+        assert.deepEqual(getConnectorVerification("openai"), raceHealthBaseline, "local head-change refusal must not mark the healthy connector failed");
 
         async function assertSourceRace(mutate: () => Promise<void>, observedPassage = privatePassage) {
           attempted.length = 0;
@@ -974,6 +1009,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
           assert.deepEqual(attempted.map(({ provider }) => provider), ["openai"],
             "changed source custody must refuse before private provider transport and fallback");
           assert.equal(attempted.some(({ body }) => body.includes(observedPassage)), false);
+          assert.deepEqual(getConnectorVerification("openai"), raceHealthBaseline, "local source-custody refusal must preserve the exact connector health baseline");
         }
         const sourceMetadata = (rights = allowedRights) => ({ researchSource: {
           class: "internal_research",

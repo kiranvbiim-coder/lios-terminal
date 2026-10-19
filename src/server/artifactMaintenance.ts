@@ -28,7 +28,16 @@ export function isCredentialBearingOutboundText(value: string): boolean {
   const normalized = value
     .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2");
-  return credentialText.test(value) || credentialText.test(normalized);
+  if (credentialText.test(value) || credentialText.test(normalized)) return true;
+  for (const match of value.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"']+/gi)) {
+    try {
+      const url = new URL(match[0]);
+      if (url.username || url.password) return true;
+    } catch {
+      // Non-URL prose is not interpreted as a credential.
+    }
+  }
+  return false;
 }
 const pathSchema = z.array(z.union([z.string().min(1).max(300).refine(key => !forbiddenKeys.test(key), "Prototype paths are forbidden."), z.number().int().min(0).max(MAX_ARRAY_LENGTH - 1)])).min(1).max(32);
 const inspectInputSchema = z.object({ artifactId: z.string().trim().min(1).max(200), paths: z.array(pathSchema).min(1).max(24).optional() }).strict();

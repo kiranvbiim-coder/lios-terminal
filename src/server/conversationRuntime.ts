@@ -4266,6 +4266,7 @@ async function resolveAgentResearchReviewObservations(
   };
   const candidates: Source[] = [];
   const policyBindings: Array<GovernedToolCall["researchSourcePolicyBinding"]> = [];
+  let reviewSnapshot: Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy" | "researchSourcePolicyBinding" | "researchReadDocuments">> | undefined;
   const observation = {
     completedResearchStepCount: researchSteps.length,
     unavailableStepCount: 0,
@@ -4289,11 +4290,15 @@ async function resolveAgentResearchReviewObservations(
         continue;
       }
       const parsedInput = researchSourceCompositionToolInputSchema.parse(step.input);
-      const call = createConversationToolCall(input, "agent", {
+      reviewSnapshot ??= (async () => ({
         ...await activeResearchSourcePolicy(input),
+        researchReadDocuments: await currentPermittedProjectSearchDocuments(input.tenant, input.projectId!, { readOnly: true }),
+      }))();
+      const call = createConversationToolCall(input, "agent", {
+        ...await reviewSnapshot,
         researchReadOnly: true,
       });
-      policyBindings.push(call.researchSourcePolicyBinding);
+      if (!policyBindings.length) policyBindings.push(call.researchSourcePolicyBinding);
       assertNotAborted(signal);
       if (getConversationTool(researchSourceCompositionTool.id) !== descriptor
         || call.resourceTransmissionAllowed !== true

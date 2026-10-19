@@ -130,7 +130,7 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
 
     // Review refreshes use one current in-memory document set for both matching and custody; they never rebuild the index.
     const readOnlyDocuments = call.researchReadOnly === true
-      ? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
+      ? call.researchReadDocuments ?? await currentPermittedProjectSearchDocuments(ctx, projectId, { readOnly: true })
       : null;
     assertNotAborted(signal);
     const searchRequest = {
