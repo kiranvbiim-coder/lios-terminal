@@ -32,7 +32,7 @@ import { loadLegacyTickerCatalog } from "./legacyTickerCatalog";
 import { loadProviderIngestedCatalog } from "./providerIngestedCatalog";
 import { fetchSecTickerUniverse } from "./instrumentUniverseIngestion";
 import { openFigiCredential, searchOpenFigi } from "./openFigiConnector";
-import { lseFederatedInstrumentFallback } from "./lseDataProvider";
+import { lseFederatedInstrumentFallback, searchLseCatalogCandidates } from "./lseDataProvider";
 
 let cachedIndex: InstrumentSearchIndex | null = null;
 
@@ -88,7 +88,9 @@ export function matchSecTickers(
       listingId: null,
       name: row.name,
       symbol: row.ticker,
-      exchange: "US",
+      // SEC's ticker map identifies US coverage, not a trading venue.
+      exchange: null,
+      countryCode: "US",
       isPrimaryListing: false,
       lifecycleStatus: "active",
       identifiers: [
@@ -133,17 +135,58 @@ export function mergeFederatedInstrumentCandidates(
   return [...deduped.values()].slice(0, limit);
 }
 
-export const p5FederatedInstrumentFallback: InstrumentSearchFederatedFallback = {
-  async search(queryText, options) {
-    const tasks: Array<Promise<InstrumentMasterCandidate[]>> = [];
-    if (openFigiCredential()) {
-      tasks.push(searchOpenFigi(queryText, options).then((result) => result.candidates).catch(() => []));
+export async function searchFederatedInstrumentCandidates(
+  queryText: string,
+  options: InstrumentSearchOptions,
+  policy: {
+    signal?: AbortSignal;
+    providerAllow?: readonly string[];
+    providerDeny?: readonly string[];
+    propagateErrors?: boolean;
+    /** Keep every bounded provider result for structured master resolution;
+     * a global search-page limit must not hide later matches or ambiguity. */
+    preserveProviderCandidates?: boolean;
+  } = {},
+): Promise<InstrumentMasterCandidate[]> {
+  policy.signal?.throwIfAborted();
+  const permitted = (provider: string) => !policy.providerDeny?.includes(provider)
+    && (!policy.providerAllow?.length || policy.providerAllow.includes(provider));
+  const tasks: Array<Promise<InstrumentMasterCandidate[]>> = [];
+  const add = (search: () => Promise<InstrumentMasterCandidate[]>) => {
+    const pending = search();
+    tasks.push(policy.propagateErrors ? pending : pending.catch(() => []));
+  };
+  if (permitted("openfigi") && openFigiCredential()) {
+    add(() => searchOpenFigi(queryText, options).then((result) => result.candidates));
+  }
+  if (permitted("lse")) {
+    add(() => policy.propagateErrors
+      ? searchLseCatalogCandidates(queryText, options, { signal: policy.signal })
+      : lseFederatedInstrumentFallback.search(queryText, options));
+  }
+  if (permitted("sec_edgar")) add(() => secEdgarFederatedFallback.search(queryText, options));
+  let onAbort: (() => void) | undefined;
+  try {
+    const pending = Promise.all(tasks);
+    const signal = policy.signal;
+    const cancelled = signal ? Promise.withResolvers<never>() : null;
+    if (signal && cancelled) {
+      onAbort = () => cancelled.reject(signal.reason ?? new DOMException("Instrument search aborted.", "AbortError"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
     }
-    tasks.push(lseFederatedInstrumentFallback.search(queryText, options).catch(() => []));
-    tasks.push(secEdgarFederatedFallback.search(queryText, options).catch(() => []));
-    const groups = await Promise.all(tasks);
-    return mergeFederatedInstrumentCandidates(groups, options.limit ?? 20);
-  },
+    const groups = await (cancelled ? Promise.race([pending, cancelled.promise]) : pending);
+    signal?.throwIfAborted();
+    return policy.preserveProviderCandidates
+      ? groups.flat()
+      : mergeFederatedInstrumentCandidates(groups, options.limit ?? 20);
+  } finally {
+    if (onAbort) policy.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+export const p5FederatedInstrumentFallback: InstrumentSearchFederatedFallback = {
+  search: searchFederatedInstrumentCandidates,
 };
 
 export async function searchCommonInstrumentUniverse(

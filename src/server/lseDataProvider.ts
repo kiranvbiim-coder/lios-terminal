@@ -71,6 +71,7 @@ export interface LseDataProviderDependencies {
   fetchFn?: typeof fetch;
   credential?: string | null;
   now?: () => number;
+  signal?: AbortSignal;
 }
 
 class LseProviderError extends Error {
@@ -284,6 +285,7 @@ async function lseJsonRequest<T>(
     credential: string;
     fetchFn?: typeof fetch;
     timeoutMs?: number;
+    signal?: AbortSignal;
   },
 ): Promise<{ data: T; quota: ProviderQuota | null; retrievedAt: string; sourceRef: string }> {
   const fetchFn = input.fetchFn ?? fetch;
@@ -296,7 +298,9 @@ async function lseJsonRequest<T>(
       ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    signal: AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS),
+    signal: input.signal
+      ? AbortSignal.any([input.signal, AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS)])
+      : AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS),
   });
   const payload = await readResponsePayload(response);
   const quota = quotaFromHeaders(response.headers);
@@ -335,13 +339,37 @@ async function lseUsage(
 async function lseCatalog(
   credential: string,
   fetchFn?: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<LseCatalogRow[]> {
+  signal?.throwIfAborted();
   const credentialScope = crypto.createHash("sha256").update(credential).digest("hex").slice(0, 16);
   const key = "lse:catalog:" + credentialScope;
-  return catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, async () => {
+  const pending = catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, async () => {
+    // The provider deadline bounds this shared read, not any one consumer's signal.
     const result = await lseJsonRequest<unknown>("/catalog", { credential, fetchFn });
     if (!Array.isArray(result.data)) return [];
     return result.data.filter((row): row is LseCatalogRow => Boolean(row && typeof row === "object"));
+  });
+  if (!signal) return pending;
+  return new Promise<LseCatalogRow[]>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    // Observe both outcomes even after local cancellation so a later shared
+    // failure cannot become an unhandled rejection.
+    pending.then(
+      (rows) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(rows);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+    if (signal.aborted) onAbort();
   });
 }
 
@@ -353,9 +381,15 @@ function rowName(row: LseCatalogRow): string {
   return stringValue(row.name) ?? rowSymbol(row) ?? "Unknown";
 }
 
+function isInstrumentCatalogRow(row: LseCatalogRow): boolean {
+  // Only the verified stocks dataset describes ticker identities. Other feeds
+  // (including options, economics and bonds) are not company observations.
+  return stringValue(row.dataset)?.toLowerCase() === "stocks" && rowSymbol(row) !== null;
+}
+
 export function lseCatalogRowToCandidate(row: LseCatalogRow): (InstrumentMasterCandidate & { symbol: string }) | null {
-  const symbol = rowSymbol(row);
-  if (!symbol) return null;
+  if (!isInstrumentCatalogRow(row)) return null;
+  const symbol = rowSymbol(row)!;
   const base = adaptLegacySymbolCatalogRow({
     symbol,
     name: rowName(row),
@@ -403,11 +437,13 @@ export async function searchLseCatalogCandidates(
   options: InstrumentSearchOptions = {},
   dependencies: LseDataProviderDependencies = {},
 ): Promise<InstrumentMasterCandidate[]> {
+  dependencies.signal?.throwIfAborted();
   if (localOnlyReason()) return [];
   const credential = lseCredential(dependencies.credential);
   if (!credential) return [];
-  const rows = await lseCatalog(credential, dependencies.fetchFn);
-  return matchCatalogRows(rows, queryText, options.limit ?? 20).flatMap((row) => {
+  const rows = await lseCatalog(credential, dependencies.fetchFn, dependencies.signal);
+  dependencies.signal?.throwIfAborted();
+  return matchCatalogRows(rows.filter(isInstrumentCatalogRow), queryText, options.limit ?? 20).flatMap((row) => {
     const candidate = lseCatalogRowToCandidate(row);
     return candidate ? [candidate] : [];
   });
