@@ -69,7 +69,7 @@ class ArtifactChartBoundary extends Component<{ children: ReactNode }, { failed:
 }
 const shortHash = (value: string) => `${value.slice(0, 10)}…${value.slice(-6)}`;
 
-function DocumentEditor({ content: incomingContent, revision, onSave }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void> }) {
+function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void }) {
   const [content, setContent] = useState(incomingContent);
   const [question, setQuestion] = useState(incomingContent.kind === "research" ? incomingContent.question : "");
   const [sourceMode, setSourceMode] = useState<"connected_sources" | "only_refs">(incomingContent.kind === "research" ? incomingContent.sourcePolicy.mode : "connected_sources");
@@ -91,6 +91,7 @@ function DocumentEditor({ content: incomingContent, revision, onSave }: { conten
   draftRef.current = draftContent;
   baselineRef.current = baseline;
   const dirty = advancedDirty || JSON.stringify(draftContent) !== baseline;
+  useEffect(() => { onDirtyChange?.(dirty || saving || pending); }, [dirty, saving, pending, onDirtyChange]);
   useEffect(() => { if (dirty && notice?.startsWith("Document revision saved.")) setNotice(null); }, [dirty, notice]);
   useEffect(() => {
     const incoming = JSON.stringify(incomingContent);
@@ -279,7 +280,7 @@ function StrategyEditor({content,onSave}:{content:Extract<ArtifactContent,{kind:
 }
 function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,onOpenExport}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;onOpenExport?:()=>void}) {
   if(content.kind==="spreadsheet") return <SpreadsheetEditor content={content} revisionKey={`${revision}:${contentHash}`} onSave={onSave} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} revision={revision} onSave={onSave}/>;
+  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange}/>;
   if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
@@ -287,7 +288,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   if(content.kind==="thesis") return <ThesisEditor content={content} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem}/>;
   if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
   if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
-  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave}/>;
+  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="portfolio") return <PortfolioArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   return <ArtifactViewerFallback kind={content.kind} content={content} onSave={onSave} onOpenExport={onOpenExport} facts={content.kind==="screen"?[{label:"Screen",value:content.view},...(content.symbol?[{label:"Symbol",value:content.symbol}]:[])]:[]}/>;
 }
@@ -457,6 +458,9 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput }: {
 
 interface ArtifactPaneProps {
   artifactId: string;
+  version?: number | null;
+  onVersionChange?: (version: number | null) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   projectId: number;
   sessions: ProjectSession[];
   onClose: () => void;
@@ -523,11 +527,11 @@ export function ArtifactPane(props: ArtifactPaneProps) {
   useEffect(() => { setOpenedOutput(null); }, [props.artifactId]);
   const output = openedOutput?.sourceArtifactId === props.artifactId ? openedOutput.result : null;
   return <div>
-    <div hidden={output !== null}><ArtifactPaneWorkspace key={props.artifactId} {...props} onEngineOutput={(result) => setOpenedOutput({ sourceArtifactId: props.artifactId, result })}/></div>
+    <div hidden={output !== null}><ArtifactPaneWorkspace key={`${props.artifactId}:${props.version ?? "head"}`} {...props} onEngineOutput={(result) => setOpenedOutput({ sourceArtifactId: props.artifactId, result })}/></div>
     {output && <section data-testid="artifact-engine-output-workspace">
       <button type="button" data-testid="artifact-back-to-engine-source" onClick={() => setOpenedOutput(null)} className="mb-3 rounded border border-border/50 px-3 py-2 text-sm">Back to source Artifact</button>
       <p className="mb-3 break-all text-sm text-muted-foreground">Engine run {output.receipt.runId} · output Artifact {output.outputArtifact.id} · source {props.artifactId} v{output.review.version}. Your original workspace return path is unchanged.</p>
-      <ArtifactPane key={output.outputArtifact.id} {...props} artifactId={output.outputArtifact.id} projectId={output.outputArtifact.projectId}/>
+      <ArtifactPane key={output.outputArtifact.id} {...props} version={null} artifactId={output.outputArtifact.id} projectId={output.outputArtifact.projectId}/>
     </section>}
   </div>;
 }
@@ -535,6 +539,9 @@ export function ArtifactPane(props: ArtifactPaneProps) {
 function ArtifactPaneWorkspace({
   artifactId,
   projectId,
+  version,
+  onVersionChange,
+  onDirtyChange,
   sessions,
   onClose,
   onAsk,
@@ -542,7 +549,7 @@ function ArtifactPaneWorkspace({
   onRerun,
   onEngineOutput,
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
-  const detail=useArtifact(artifactId),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
+  const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
   const projectArtifacts=useProjectArtifacts(projectId);
   const [mergeBranchId,setMergeBranchId]=useState("");
@@ -559,6 +566,7 @@ function ArtifactPaneWorkspace({
   const [spreadsheetSaving, setSpreadsheetSaving] = useState(false);
   const [spreadsheetPendingRevision, setSpreadsheetPendingRevision] = useState(false);
   const [modelApplying, setModelApplying] = useState(false);
+  useEffect(() => { onDirtyChange?.(spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying); }, [spreadsheetDirty, spreadsheetSaving, spreadsheetPendingRevision, modelApplying, onDirtyChange]);
   const spreadsheetSaveInFlight = useRef(false);
   const exportInFlight = useRef(false);
   const mounted = useRef(false);
@@ -692,7 +700,7 @@ function ArtifactPaneWorkspace({
   const draft=async(d:SpreadsheetCellDiff)=>run(async()=>{await proposeArtifactChange(artifactId,{baseVersion:data.artifact.headVersion,type:"spreadsheet_ai_diff",summary:`Conversation-ready draft ${d.sheetId}!${d.ref}`,diffs:[d],actorType:"conversation"});invalidate(projectId,artifactId)});
   const refreshThesis=async()=>run(async()=>{await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
   const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.artifact.headVersion}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200" title="Stage the saved governed request in a fresh Project chat"><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await undoArtifact(artifactId);invalidate(projectId,artifactId)})} disabled={data.artifact.headVersion<=1} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title="Undo by new version"><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Archive"><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
+  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200" title="Stage the saved governed request in a fresh Project chat"><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await undoArtifact(artifactId);invalidate(projectId,artifactId)})} disabled={data.artifact.headVersion<=1} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title="Undo by new version"><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Archive"><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
     <div role="tablist" aria-label="Artifact inspector" className="lios-reference-artifact-tabs">
       {(["artifact", "evidence", "history"] as const).map((tab, index, tabs) => <button key={tab} type="button" role="tab" id={`${inspectorId}-${tab}-tab`} aria-controls={`${inspectorId}-${tab}-panel`} aria-selected={inspectorTab === tab} tabIndex={inspectorTab === tab ? 0 : -1} onClick={() => setInspectorTab(tab)} onKeyDown={(event) => {
         const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -714,9 +722,10 @@ function ArtifactPaneWorkspace({
     </section>}
 
     <div role="tabpanel" id={`${inspectorId}-artifact-panel`} aria-labelledby={`${inspectorId}-artifact-tab`} hidden={inspectorTab!=="artifact"} className="p-4">
+      {data.version.version !== data.artifact.headVersion && <p role="status" className="mb-3 text-sm">Viewing saved revision {data.version.version}; current revision is {data.artifact.headVersion}. <button type="button" className="underline" onClick={() => onVersionChange?.(null)}>Open current revision</button></p>}
       {content.kind === "portfolio" && <ArtifactPortfolioMateriality key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying}/>}
       <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
-      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)}/>}
+      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)}/></fieldset>}
       </div>
       <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>
       <details data-testid="artifact-more-actions" className="mt-4 rounded-lg border border-border/40 bg-black/10 p-3"><summary className="cursor-pointer font-ui text-[13px] text-muted-foreground">More actions · review, reports, maintenance and source inspection</summary>

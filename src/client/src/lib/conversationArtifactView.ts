@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 
-export interface ArtifactViewState { artifactId: string | null; focus: boolean }
+export interface ArtifactViewState { artifactId: string | null; focus: boolean; revision?: number | null }
 const EMPTY: ArtifactViewState = { artifactId: null, focus: false };
 const UUID = /^(?:artifact:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function parseArtifactView(value: unknown): ArtifactViewState {
   if (!value || typeof value !== "object" || Array.isArray(value)) return EMPTY;
   const item = value as Record<string, unknown>;
+  const revision = item.revision === null || item.revision === undefined ? item.revision : typeof item.revision === "number" && Number.isSafeInteger(item.revision) && item.revision > 0 ? item.revision : undefined;
   return item.version === 1 && typeof item.artifactId === "string" && UUID.test(item.artifactId) && typeof item.focus === "boolean"
-    ? { artifactId: item.artifactId, focus: item.focus } : EMPTY;
+    ? { artifactId: item.artifactId, focus: item.focus, ...(revision !== undefined ? { revision } : {}) } : EMPTY;
 }
 function readView(key: string | null): ArtifactViewState {
   if (!key || typeof window === "undefined") return EMPTY;
@@ -29,7 +30,8 @@ export function useConversationArtifactView(ownerId: number | undefined, project
       return { key, value };
     });
   }, [key, restored]);
-  const setArtifact = useCallback((artifactId: string | null) => update({ artifactId }), [update]);
+  const setArtifact = useCallback((artifactId: string | null) => update({ artifactId, revision: null }), [update]);
   const setFocus = useCallback((focus: boolean) => update({ focus }), [update]);
-  return [state.artifactId, setArtifact, state.focus, setFocus] as const;
+  const setRevision = useCallback((revision: number | null) => update({ revision }), [update]);
+  return [state.artifactId, setArtifact, state.focus, setFocus, restored.artifactId !== null, state.revision ?? null, setRevision] as const;
 }

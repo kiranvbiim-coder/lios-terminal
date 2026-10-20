@@ -331,7 +331,7 @@ export function buildP5ProfessionalResultText(input: P5ProfessionalResultTextInp
   const warnings = (input.warnings ?? []).filter((warning) => warning.trim().length > 0);
   const pointer = input.savedToProject
     ? "The interactive model is saved in your Project. Open it from the side panel; model details and checks are under Show work."
-    : "The interactive model is open in the side panel; model details and checks are under Show work.";
+    : "This result has not been saved as a canonical model. Use the explicit save action when available; Temporary Chat does not save work automatically.";
   return [
     `### ${input.label}`,
     body,

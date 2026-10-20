@@ -106,10 +106,10 @@ export function useAllArtifacts(status: "active" | "archived" | "trash" = "activ
     },
   });
 }
-export function useArtifact(artifactId: string | null) {
+export function useArtifact(artifactId: string | null, version?: number | null) {
   return useQuery<ArtifactDetail>({
-    queryKey: ["/api/artifacts", artifactId],
-    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}`); if (!res.ok) throw new Error("Failed to load Artifact."); return res.json(); },
+    queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
+    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error("Failed to load Artifact."); return res.json(); },
     enabled: Boolean(artifactId),
   });
 }

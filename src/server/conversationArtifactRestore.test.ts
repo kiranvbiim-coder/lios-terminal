@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import express from "express";
+import { createServer } from "node:http";
 import { savedMessageArtifactRefs } from "@shared/conversationArtifactRefs";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 
@@ -16,7 +18,8 @@ const { createProject } = await import("./projectStore");
 const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { startProjectChatRun } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
-const { getArtifact, getArtifactVersion } = await import("./artifactStore");
+const { getArtifact, getArtifactVersion, createArtifactVersion } = await import("./artifactStore");
+const { registerArtifactRoutes } = await import("./artifactRoutes");
 
 const offline = { sourceScope: "my_data", executionMode: "deterministic_first" } as const;
 
@@ -84,6 +87,23 @@ test("a retained run Artifact reference survives message reload and resolves onl
   assert.equal(artifact.title, refs[0]!.title);
   assert.equal(artifact.kind, refs[0]!.kind);
   assert.equal((await getArtifactVersion(tenant, refs[0]!.id, refs[0]!.version)).version, retained.version);
+
+  const original = await getArtifactVersion(tenant, retained.id, retained.version);
+  await createArtifactVersion(tenant, { artifactId: retained.id, baseVersion: original.version, content: original.content, note: "Synthetic later revision" });
+  const app = express();
+  app.use((req, _res, next) => { req.user = user; req.isAuthenticated = (() => true) as typeof req.isAuthenticated; next(); });
+  registerArtifactRoutes(app);
+  const server = createServer(app);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const detail = await fetch(`http://127.0.0.1:${address.port}/api/artifacts/${encodeURIComponent(retained.id)}?version=${retained.version}`);
+  assert.equal(detail.status, 200);
+  const historical = await detail.json();
+  assert.equal(historical.version.version, retained.version);
+  assert.equal(historical.version.contentHash, original.contentHash);
+  assert.equal(historical.artifact.headVersion, original.version + 1);
 
   // Another tenant can neither read the chat that carries the reference nor resolve the Artifact it names.
   await assert.rejects(() => listProjectChatMessages(foreignTenant, chat.id));

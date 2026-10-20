@@ -105,7 +105,7 @@ import {
   workspaceSessionEnvelopeForProjectSession,
 } from "@/lib/livingWorkspaceAdapter";
 import { parseProjectWorkspaceDirectives } from "@/lib/projectWorkspaceDirectives";
-import { collectCitationSources } from "@/lib/chatMarkdown";
+import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatMarkdown";
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
@@ -409,12 +409,13 @@ export default function ProjectExperienceShell({
   const [newProjectName, setNewProjectName] = useState("");
   const [compareBaseSessionId, setCompareBaseSessionId] = useState<string | null>(null);
   const [sessionComparison, setSessionComparison] = useState<string | null>(null);
-  const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode] = useConversationArtifactView(projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId, selection.projectId, selection.chatId);
+  const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode, restoredArtifactView, artifactViewVersion, setArtifactViewVersion] = useConversationArtifactView(projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId, selection.projectId, selection.chatId);
+  const artifactDraftDirtyRef = useRef(false);
   useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
     const width = shellRef.current?.querySelector(".lios-project-chat-surface")?.clientWidth ?? 0;
-    if (width > 0 && width < 900) setArtifactFocusMode(true);
-  }, [conversationArtifactRef]);
+    if (width > 0 && width < 900 && !restoredArtifactView) setArtifactFocusMode(true);
+  }, [conversationArtifactRef, restoredArtifactView]);
   const [selectedTextContext, setSelectedTextContext] = useState("");
   const pendingArtifactOpenRef = useRef<string | null>(null);
   const pendingArtifactFocusRef = useRef(false);
@@ -1503,7 +1504,6 @@ export default function ProjectExperienceShell({
 
   const displayMessages: Array<ProjectChatMessage | LocalMessage> = chatMode === "temporary" ? temporaryMessages : persistedMessages;
   const citationSources = useMemo(() => collectCitationSources(runtimeEvents), [runtimeEvents]);
-  const lastAssistantId = [...displayMessages].reverse().find((message) => message.role === "assistant")?.id;
   const visibleExecutionSessionId = sandboxSessionId ?? runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
   const visibleExecutionSessionProjectId = sandboxSessionId ? selection.projectId : (chatMode === "project" ? selection.projectId : null);
   const visibleExecutionSessionChatId = sandboxSessionId
@@ -1843,9 +1843,9 @@ export default function ProjectExperienceShell({
                         <span className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">{message.role === "user" ? "YOU" : "LIOS"}</span>
                       </div>
                       {message.role === "assistant"
-                        ? <ChatMarkdown text={message.content} sources={message.id === lastAssistantId ? citationSources : undefined} />
+                        ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
-                      {message.role === "assistant" && chatMode === "project" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} activeId={conversationArtifactRef} onOpen={(id) => { setArtifactFocusMode(false); setConversationArtifactRef(id); }} />}
+                      {message.role === "assistant" && chatMode === "project" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
                       {message.role === "user" && selection.projectId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
                           {savedMessageAttachments(message).map((attachment) => (
@@ -2282,6 +2282,7 @@ export default function ProjectExperienceShell({
                 >
                   <ConversationArtifactPane
                     artifactId={conversationArtifactRef}
+                    version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
                     projectId={selection.projectId}
                     sessions={home?.sessions ?? []}
                     onClose={() => {

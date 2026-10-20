@@ -603,7 +603,8 @@ export function resolveCitation(cite: Extract<Inline, { t: "cite" }>, sources: r
     // A bare [n] means nothing unless the runtime explicitly numbered its sources.
     const resolved: Array<{ number: number; source: ChatCitationSource }> = [];
     for (const number of cite.nums) {
-      const source = sources.find((candidate) => candidate.index === number);
+      const matches = sources.filter((candidate) => candidate.index === number);
+      const source = matches.length === 1 ? matches[0] : null;
       if (!source) return null;
       resolved.push({ number, source });
     }
@@ -613,9 +614,12 @@ export function resolveCitation(cite: Extract<Inline, { t: "cite" }>, sources: r
   const wanted = normalizeCitationKey(cite.name);
   if (!wanted) return null;
   // Exact normalized label / id / humanized-id equality only. No substring or fuzzy matching.
-  const position = sources.findIndex((source) => [source.label, source.id, humanizeSourceRef(source.id) ?? ""].some((candidate) => normalizeCitationKey(candidate) === wanted));
-  if (position === -1) return null;
-  return [{ number: sources[position].index ?? position + 1, source: sources[position] }];
+  const exactIds = sources.filter((source) => normalizeCitationKey(source.id) === wanted);
+  if (exactIds.length === 1) return [{ number: exactIds[0].index ?? sources.indexOf(exactIds[0]) + 1, source: exactIds[0] }];
+  if (exactIds.length > 1) return null;
+  const matches = sources.filter((source) => [source.label, humanizeSourceRef(source.id) ?? ""].some((candidate) => normalizeCitationKey(candidate) === wanted));
+  if (matches.length !== 1) return null;
+  return [{ number: matches[0].index ?? sources.indexOf(matches[0]) + 1, source: matches[0] }];
 }
 
 /** Real, user-visible sources of the latest run, in a stable order, for citation matching. */
@@ -625,7 +629,7 @@ export function collectCitationSources(events: readonly ConversationRuntimeEvent
     if (sources.length >= 50) return;
     const href = /^https?:\/\//i.test(id.trim()) ? safeHref(id) : null;
     const label = providerLabel || (href ? new URL(href).hostname.replace(/^www\./, "") : humanizeSourceRef(id));
-    if (!label || sources.some((source) => source.id === id || source.label === label)) return;
+    if (!label || sources.some((source) => source.id === id)) return;
     sources.push({ id, label, href });
   };
   for (const event of events) {
@@ -636,4 +640,19 @@ export function collectCitationSources(events: readonly ConversationRuntimeEvent
     }
   }
   return sources;
+}
+
+/** Saved answers resolve only their own retained sources, never a later run's events. */
+export function savedMessageCitationSources(metadata: unknown): ChatCitationSource[] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
+  const rows = (metadata as Record<string, unknown>).citationSources;
+  if (!Array.isArray(rows)) return [];
+  const sources = new Map<string, ChatCitationSource>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const item = row as Record<string, unknown>;
+    if (typeof item.id !== "string" || item.id.length > 2000 || typeof item.label !== "string" || item.label.length > 2000) continue;
+    if (!sources.has(item.id)) sources.set(item.id, { id: item.id, label: item.label, href: /^https?:\/\//i.test(item.id) ? safeHref(item.id) : null });
+  }
+  return [...sources.values()];
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ChatMarkdown from "./ChatMarkdown";
-import { collectCitationSources, parseChatMarkdown, safeHref, stripMachineDirectives, type ChatCitationSource } from "@/lib/chatMarkdown";
+import { collectCitationSources, parseChatMarkdown, resolveCitation, savedMessageCitationSources, safeHref, stripMachineDirectives, type ChatCitationSource } from "@/lib/chatMarkdown";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 
 function render(text: string, options: { streaming?: boolean; sources?: ChatCitationSource[] } = {}): string {
@@ -205,8 +205,28 @@ test("citation sources come only from the run's real source references", () => {
     { type: "tool_result", requestId, at, stepId: "s2", label: "Filings again", summary: "ok", deterministic: true, sourceRefs: ["provider:sec_edgar"] },
   ] as unknown as ConversationRuntimeEvent[];
   const sources = collectCitationSources(events);
-  assert.deepEqual(sources.map((source) => source.label), ["SEC EDGAR", "example.com"]);
+  assert.deepEqual(sources.map((source) => source.id), ["provider:sec_edgar@2026-10-01", "https://example.com/doc", "provider:sec_edgar"]);
   assert.equal(sources.some((source) => source.id.startsWith("engine:")), false, "internal engine refs are not user-facing sources");
   assert.equal(sources.find((source) => source.id === "https://example.com/doc")?.href, "https://example.com/doc");
   assert.equal(sources[0].href ?? null, null);
+});
+
+test("duplicate provider labels never select an arbitrary document; exact retained IDs remain resolvable", () => {
+  const sources = savedMessageCitationSources({ citationSources: [
+    { id: "https://example.test/filing/first", label: "SEC" },
+    { id: "https://example.test/filing/second", label: "SEC" },
+  ] });
+  assert.equal(sources.length, 2);
+  assert.equal(resolveCitation({ t: "cite", raw: "[source: SEC]", nums: [], name: "SEC" }, sources), null);
+  const resolved = resolveCitation({ t: "cite", raw: "", nums: [], name: "https://example.test/filing/second" }, sources);
+  assert.equal(resolved?.[0].source.id, "https://example.test/filing/second");
+});
+
+test("saved answer citation sources never depend on another run", () => {
+  const previous = { citationSources: [{ id: "https://example.test/old", label: "SEC" }] };
+  const current = { citationSources: [{ id: "https://example.test/new", label: "SEC" }] };
+  assert.equal(savedMessageCitationSources(previous)[0].href, "https://example.test/old");
+  assert.equal(savedMessageCitationSources(current)[0].href, "https://example.test/new");
+  assert.equal(savedMessageCitationSources(previous)[0].href, "https://example.test/old");
+  assert.deepEqual(savedMessageCitationSources({}), []);
 });

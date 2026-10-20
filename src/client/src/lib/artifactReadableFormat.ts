@@ -105,9 +105,9 @@ function groupNumber(value: number, maxFraction: number): string {
 function currencySymbol(currency: string | null | undefined): string {
   if (!currency || !/^[A-Za-z]{3}$/.test(currency)) return "";
   try {
-    const part = new Intl.NumberFormat(EN, { style: "currency", currency: currency.toUpperCase(), currencyDisplay: "narrowSymbol" })
+    const part = new Intl.NumberFormat(EN, { style: "currency", currency: currency.toUpperCase(), currencyDisplay: "code" })
       .formatToParts(0).find(item => item.type === "currency");
-    return part?.value ?? "";
+    return part ? `${part.value} ` : "";
   } catch { return ""; }
 }
 

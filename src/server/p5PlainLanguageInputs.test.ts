@@ -63,10 +63,10 @@ test("plain-language assumptions carry manual provenance with the exact user tex
   assert.equal(resolved.success, true);
 });
 
-test("percent words, ranges, a first-year cash flow with growth and currency symbols normalise to the same shape", () => {
+test("percent words, ranges and a first-year cash flow with growth normalize to the same shape", () => {
   const message = [
     "Run a DCF sensitivity for AAPL.",
-    "First-year free cash flow 100 growing 10% per year for 3 years. WACC 10 percent, terminal growth 3 per cent, net debt of $50 and 10 shares outstanding.",
+    "First-year free cash flow 100 growing 10% per year for 3 years. WACC 10 percent, terminal growth 3 per cent, net debt of 50 and 10 shares outstanding.",
     "WACC from 9% to 11% in steps of 1%. Terminal growth sensitivity: 2%, 3%, 4%.",
     "Bear case: free cash flows 90, 95, 100; WACC 11%; terminal growth 2%.",
     "Bull case: free cash flows 110, 125, 140; WACC 9%; terminal growth 4%.",
@@ -331,4 +331,38 @@ test("partial stated assumptions are never replaced by an active Artifact's stor
   const plain = withArtifact("Run a DCF sensitivity for AAPL on this model");
   assert.equal(plain.availability, "ready");
   assert.equal(plain.parameters.activeArtifactRef, artifactRef);
+});
+
+test("currency markers cannot silently lose identity or combine monetary units", () => {
+  for (const message of [
+    PLAIN_MESSAGE.replace("net debt is 50", "net debt is €50").replace("100, 110 and 120", "$100, $110 and $120"),
+    PLAIN_MESSAGE.replace("net debt is 50", "net debt is $50"),
+  ]) {
+    const extraction = extractP5PlainLanguageInputs(message, "valuation/dcf-sensitivity");
+    assert.equal(extraction?.status, "incomplete");
+    assert.ok(extraction?.status === "incomplete" && extraction.gap.issues.some(issue => issue.key === "_general"));
+  }
+});
+
+test("standalone horizon and growth overrides cannot reuse old Artifact assumptions", () => {
+  for (const message of ["Rerun DCF sensitivity for AAPL over 5 years", "Rerun DCF sensitivity for AAPL with cash flow growth 4%"]) {
+    const req = request(message);
+    req.context = { ...req.context, activeObjectRefs: ["artifact:11111111-1111-4111-8111-111111111111"] };
+    const cap = resolveConversationCapabilities(req).find(item => item.id === "company.valuation");
+    assert.equal(cap?.availability, "needs_input");
+    assert.equal(cap?.parameters.modelParameters, null);
+  }
+});
+
+test("guided forecasts admit fifty years while sensitivity grids remain bounded to twenty-five", () => {
+  const guided = buildP5GuidedInputs({ modelPath: "valuation/dcf-sensitivity", entity: "AAPL", missing: [], issues: [], provided: {} });
+  assert.ok(guided);
+  const flows = Array.from({ length: 50 }, (_, index) => String(100 + index)).join(", ");
+  const values = { freeCashFlows: flows, waccPct: "10", terminalGrowthPct: "2", netDebt: "50", sharesOutstanding: "10", waccGridPct: "9, 10, 11", terminalGrowthGridPct: "1, 2, 3",
+    "bearCase.freeCashFlows": flows, "bearCase.waccPct": "11", "bearCase.terminalGrowthPct": "1",
+    "bullCase.freeCashFlows": flows, "bullCase.waccPct": "9", "bullCase.terminalGrowthPct": "3" };
+  assert.deepEqual(validateP5GuidedValues(guided, values).errors, {});
+  assert.equal(validateP5GuidedValues(guided, { ...values, freeCashFlows: `${flows}, 200` }).parsed, null);
+  const grid = Array.from({ length: 26 }, (_, index) => String(9 + index)).join(", ");
+  assert.equal(validateP5GuidedValues(guided, { ...values, waccGridPct: grid }).parsed, null);
 });

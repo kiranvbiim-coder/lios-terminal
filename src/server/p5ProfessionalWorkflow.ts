@@ -235,7 +235,7 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
       modelPath,
       parameters: explicit.parameters ?? plainComplete?.parameters ?? null,
       inputProvenance: explicit.inputProvenance ?? plainComplete?.inputProvenance,
-      activeArtifactRef: artifactRef,
+      activeArtifactRef: explicit.parameters || plainComplete ? null : artifactRef,
       requiresEntity: modelFamily === "valuation",
       inputGap: plain?.status === "incomplete" ? plain.gap : null,
     });

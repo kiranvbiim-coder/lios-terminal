@@ -262,7 +262,7 @@ export function registerArtifactRoutes(app: Express): void {
   app.get("/api/artifacts/:artifactId", async (req, res) => {
     try {
       const artifact = await getArtifact(ctx(req), pathText(req.params.artifactId));
-      const version = await getArtifactVersion(ctx(req), artifact.id);
+      const version = await getArtifactVersion(ctx(req), artifact.id, req.query.version === undefined ? undefined : pathVersion(req.query.version));
       res.json({ artifact, version });
     } catch (error) { fail(res, error); }
   });

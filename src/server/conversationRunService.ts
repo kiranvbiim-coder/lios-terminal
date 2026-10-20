@@ -920,6 +920,7 @@ async function runProjectChat(
               executionReceiptIds: result.receiptIds,
               artifactDraftIds: result.artifacts.map((artifact) => artifact.artifactId),
               persistedArtifacts,
+              citationSources: (result.trustManifest?.evidence ?? []).map(evidence => ({ id: evidence.sourceRef, label: evidence.providerLabel ?? evidence.sourceRef })),
               deterministic: result.label === "deterministic",
               aiDerived: result.label === "ai_derived",
               workingContext,

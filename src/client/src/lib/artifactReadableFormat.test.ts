@@ -27,7 +27,6 @@ test("display formatting never changes the stored value and keeps the exact text
   assert.equal(formatReadableNumber("maxDrawdownPct", -12.5).text, "-12.5%");
   assert.equal(formatReadableNumber("enterpriseValue", 2_500_000_000).text, "2.5 billion");
   assert.equal(formatReadableNumber("enterpriseValue", 2_500_000_000).exact, "2500000000");
-  assert.equal(formatReadableNumber("enterpriseValue", 3_200_000, { currency: "USD" }).text, "$3.2 million");
   assert.equal(formatReadableNumber("enterpriseValue", 1598.583234946871).text, "1,598.58");
   assert.equal(formatReadableNumber("enterpriseValue", 1598.583234946871).exact, "1598.583234946871");
   assert.equal(formatReadableNumber("count", 12).exact, null);
@@ -104,4 +103,10 @@ test("small magnitudes are never rounded to zero and only allow-listed keys are 
   assert.equal(formatReadableNumber("costImpact", 2_500_000_000).text, "2,500,000,000");
   assert.equal(formatReadableNumber("valuation", 1_500_000).text, "1,500,000");
   assert.equal(formatReadableNumber("costImpact", 0.0012, { showExact: true }).text, "0.0012");
+});
+
+test("currencies sharing a dollar symbol retain distinct ISO identities", () => {
+  const labels = ["USD", "CAD", "AUD", "SGD"].map(currency => formatReadableNumber("enterpriseValue", 3200000, { currency }).text);
+  assert.equal(new Set(labels).size, 4);
+  for (const [index, currency] of ["USD", "CAD", "AUD", "SGD"].entries()) assert.ok(labels[index].includes(currency));
 });

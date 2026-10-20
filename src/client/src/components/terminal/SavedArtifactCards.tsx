@@ -31,16 +31,16 @@ export interface SavedArtifactCardModel {
 }
 
 /**
- * Card facts for a retained Artifact. The persisted message reference is a display snapshot; when the
- * access-checked Project Artifact list already knows the Artifact, its current title/kind/head win so the card
- * never advertises a stale name or version. Nothing is re-run or fetched from message content.
+ * Card identity and version come from the exact retained message result.
+ * Live list metadata is used only for availability and legacy display fallback.
+ * Nothing is rerun or advanced to a newer head implicitly.
  */
 export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, listLoaded = false): SavedArtifactCardModel {
   const unavailable = listLoaded && !live;
-  const title = live?.title ?? ref.title ?? "Saved Artifact";
-  const kind = live?.kind ?? ref.kind;
+  const title = ref.title ?? live?.title ?? "Saved Artifact";
+  const kind = ref.kind ?? live?.kind;
   const kindLabel = kind ? (KIND_LABEL[kind] ?? kind) : null;
-  const version = live?.headVersion ?? ref.version;
+  const version = ref.version;
   return {
     id: ref.id,
     title,
@@ -56,7 +56,7 @@ export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pi
 export function SavedArtifactCardList({ cards, activeId, onOpen }: {
   cards: SavedArtifactCardModel[];
   activeId: string | null;
-  onOpen: (artifactId: string) => void;
+  onOpen: (artifactId: string, version: number) => void;
 }) {
   if (!cards.length) return null;
   return (
@@ -65,7 +65,7 @@ export function SavedArtifactCardList({ cards, activeId, onOpen }: {
         <button
           key={card.id}
           type="button"
-          onClick={() => onOpen(card.id)}
+          onClick={() => onOpen(card.id, card.version)}
           disabled={card.unavailable}
           aria-label={card.ariaLabel}
           aria-pressed={card.unavailable ? undefined : activeId === card.id}
@@ -93,7 +93,7 @@ export default function SavedArtifactCards({ metadata, projectId, activeId, onOp
   metadata: unknown;
   projectId: number | null;
   activeId: string | null;
-  onOpen: (artifactId: string) => void;
+  onOpen: (artifactId: string, version: number) => void;
 }) {
   const refs = savedMessageArtifactRefs(metadata);
   const list = useProjectArtifacts(refs.length > 0 ? projectId : null);

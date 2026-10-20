@@ -182,7 +182,7 @@ export function validateP5GuidedValues(guided: P5GuidedInputs, values: Record<st
     } else {
       const list = parseGuidedList(raw, percent);
       if (!list) errors[field.key] = "Enter numbers separated by commas";
-      else if (list.length > 25) errors[field.key] = "At most 25 values";
+      else if (list.length > (field.key.endsWith("freeCashFlows") ? 50 : 25)) errors[field.key] = `At most ${field.key.endsWith("freeCashFlows") ? 50 : 25} values`;
       else { parsed[field.key] = list; preview.push({ key: field.key, group: field.group, label: field.label, value: list.map((value) => formatGuidedDisplay(value, field)).join(", ") }); }
     }
   }

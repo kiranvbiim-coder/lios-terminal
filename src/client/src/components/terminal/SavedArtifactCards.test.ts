@@ -6,12 +6,12 @@ import { SavedArtifactCardList, describeSavedArtifactCard } from "./SavedArtifac
 
 const id = "artifact:22222222-2222-4222-8222-222222222222";
 
-test("saved Artifact card uses the persisted snapshot and prefers the live access-checked record", () => {
+test("saved Artifact cards remain pinned to the retained result when the current head advances", () => {
   const snapshot = describeSavedArtifactCard({ id, version: 1, title: "AAPL DCF sensitivity", kind: "valuation" }, undefined);
   assert.deepEqual(snapshot, { id, title: "AAPL DCF sensitivity", kindLabel: "Valuation", version: 1, ariaLabel: "Open saved Artifact AAPL DCF sensitivity, Valuation, version 1", unavailable: false });
   const live = describeSavedArtifactCard({ id, version: 1, title: "AAPL DCF sensitivity", kind: "valuation" }, { title: "AAPL DCF (revised)", kind: "valuation", headVersion: 3 });
-  assert.equal(live.title, "AAPL DCF (revised)");
-  assert.equal(live.version, 3);
+  assert.equal(live.title, snapshot.title);
+  assert.equal(live.version, 1);
   const legacy = describeSavedArtifactCard({ id, version: 2, title: null, kind: null }, undefined);
   assert.equal(legacy.title, "Saved Artifact");
   assert.equal(legacy.kindLabel, null);

@@ -290,8 +290,10 @@ function extractSegment(raw: string, allowShared: boolean): SegmentResult {
   scanner.each(
     new RegExp(`\\b(?:grow(?:s|ing)?|growth(?:\\s+rate)?)\\b(?:[\\s:=]|\\b(?:of|at|is|are|equals?|by|to|assumed)\\b)*(${NUM_PLAIN})(?:\\s?(${PCT_MARK}))?`, "gi"),
     (match, source) => {
-      // A growth rate only matters as a building block for a first-year cash flow.
-      if (!firstYear.length) return;
+      if (!firstYear.length) {
+        collector.issue("freeCashFlows", "Cash-flow growth was stated without a first-year cash flow and complete forecast. Review the intended forecast before running.");
+        return;
+      }
       const after = source.slice((match.index ?? 0) + match[0].length);
       const value = percentValue(collector, "cashFlowGrowth", "Cash flow growth", match[1], match[2], after);
       if (value !== null) growths.push(value);
@@ -305,6 +307,9 @@ function extractSegment(raw: string, allowShared: boolean): SegmentResult {
     /\bhorizon\s*(?:of|is|=|:)?\s*(\d{1,3})\s*years?\b/gi,
   ]) {
     for (const match of scanner.text.matchAll(pattern)) horizons.push(Number(match[1]));
+  }
+  if (horizons.length && !firstYear.length && !/\b(?:free\s+cash\s+flows?|fcfs?|cash\s+flows?)\b/i.test(scanner.text)) {
+    collector.issue("freeCashFlows", "A forecast horizon was stated without yearly cash flows. Review the intended forecast before running.");
   }
 
   const lists: number[][] = [];
@@ -415,6 +420,9 @@ function renderForForm(value: unknown): string {
 function extractDcfSensitivity(rawMessage: string): P5PlainLanguageExtraction {
   const message = normalise(rawMessage);
   const generalIssues: P5PlainLanguageIssue[] = [];
+  if (/[$€£]|\b(?:USD|EUR|GBP|CAD|AUD|SGD|JPY|INR|CHF|CNY)\b/i.test(message)) {
+    generalIssues.push({ key: "_general", message: "Currency-marked assumptions need explicit unit reconciliation. Provide all monetary amounts in one declared consistent unit without currency markers; LiOS does not silently convert or discard currency identity." });
+  }
   if (/\d,\d{3}(?!\d)/.test(message)) {
     generalIssues.push({
       key: "_general",
