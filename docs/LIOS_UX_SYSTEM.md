@@ -85,7 +85,7 @@ The new user sees the composer immediately and a contextual **Connect AI** actio
 
 ### Conversation, memory and work products
 
-Any-topic conversation and web research share the existing minimal composer. Factual queries search by default; quick answers precede optional deep research. General documents/reports/tables/charts are supported alongside finance tools. Relevant permitted sources may span Projects, with attribution and exclusions; firm/client/tenant policies still apply.
+Any-topic conversation and web research share the existing minimal composer. Ordinary factual questions may receive a quick answer without retrieval when appropriate; explicit research objectives trigger bounded progressive investigation with permitted structured and web/generative sources where useful and available. General documents/reports/tables/charts use the same professional work paths as finance tools. Relevant permitted sources may span Projects, with attribution and exclusions; firm/client/tenant policies still apply.
 
 Broad automatic memory has inspect/edit/delete controls. Temporary chats do not contribute durable memory or inherit private context by default. Prefer simple controls and source explanations over exposing hidden Working Context.
 
@@ -1739,7 +1739,7 @@ If this journey is not effortless, adding more features does not count as progre
 
 The Project mental model remains **Projects → Chats → Artifacts**. P4 adds depth without adding a new permanent navigation taxonomy.
 
-- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Current source requires explicit Keep for conversation outputs, including Project work; required important Project auto-persistence remains pending TC-13/P4 integration, not closed by this implementation lock. Quick/Temporary Keep explicitly selects and previews the destination scope. Users can create/open persistent work or export/import a Project package.
+- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Supported Project conversation drafts already auto-retain through existing P4 paths; regular Quick-Chat canonical Artifact durability without a Project remains a separate open requirement under the owner lock. Temporary Chats remain non-persistent unless explicitly promoted through a governed action. Users can create/open persistent work or export/import an authorized Project package.
 - Every Artifact opens in one consistent `ArtifactPane` with readable title/status/version, source and execution-receipt context, Ask LiOS, review, fork, undo, export, archive, compare and Session reference actions. Raw adapter/hash/internal metadata belongs under Advanced or Show Work, not default chrome.
 - Conversation and direct controls operate on the same persistent Artifact identity. **Ask LiOS** passes the Artifact as active context. Supported mutation instructions create a review proposal; the user accepts or rejects it in the Artifact surface.
 - SpreadsheetArtifact exposes a real editable formula grid. Professional AI changes are explicit diffs and cannot silently overwrite the model.

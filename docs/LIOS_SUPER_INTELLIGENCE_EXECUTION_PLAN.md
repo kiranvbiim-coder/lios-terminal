@@ -47,7 +47,7 @@ The 20 owner-confirmed conversation, research, Artifact, autonomous-execution an
 
 **Autonomy and truth:** substantial research uses permitted structured data and web/generative research together where genuinely available and appropriate, with progressive findings, transparent missing coverage, budgets and cancellation; routine allowed work proceeds without constant approval. External side effects require risk-tiered authorization, and AI data-transmission consent never overrides tenant/source restrictions. Do not equate ordinary chat with compulsory deep research; do not fabricate data or silently substitute AI for deterministic finance.
 
-Do not declare this lock implemented until an actual installed-app **Chat → simultaneous permitted research → automatically retained Artifact → full context-aware Workbench → direct edit/version → back to Chat → restart/reopen**, plus a non-finance and connected-data journey, succeeds with evidence. Preserve the SP-01–SP-07 and P14 gates.
+Do not declare this lock implemented until an actual installed-app **Chat → permitted multi-source research (concurrent or bounded progressive retrieval, where appropriate and available) → automatically retained Artifact → full context-aware Workbench → direct edit/version → back to Chat → restart/reopen**, plus a non-finance and connected-data journey, succeeds with evidence. Preserve the SP-01–SP-07 and P14 gates.
 
 ### Mandatory progressive Shipping Points
 
