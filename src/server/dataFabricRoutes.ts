@@ -52,7 +52,8 @@ import {
 import { createModelInputLineage } from "./modelInputLineage";
 import { createValuationLineage } from "./valuationLineage";
 import { tenantContext } from "./tenantContext";
-import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, retainIntegratedModelArtifact } from "./integratedModelArtifact";
+import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact } from "./integratedModelArtifact";
+import { getDb } from "./db";
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -381,12 +382,19 @@ export function registerDataFabricRoutes(app: Express): void {
   app.post("/api/financial-models/integrated", requireRole(...AUTHOR_ROLES), async (req, res) => {
     const parsed = integratedModelRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const snapshot = await getDatasetSnapshot(parsed.data.datasetSnapshotId);
-    if (!snapshot || snapshot.dataClass !== "financial_statements") return res.status(404).json({ error: "Financial dataset snapshot not found." });
-    const result = runIntegratedFinancialModel({ datasetSnapshotId: snapshot.id, payload: snapshot.payload, assumptions: parsed.data.assumptions, schedules: parsed.data.schedules });
-    const inputHash = stableSnapshotHash({ datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules });
-    const resultHash = stableSnapshotHash({ modelVersion: result.modelVersion, datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules, forecast: result.forecast });
-    const run = await saveFinancialModelRun({ result, resultHash, createdByUserId: req.user!.id });
+    try {
+      const ctx = tenantContext(req.user!);
+      const { snapshot, result, inputHash, resultHash, run } = await getDb().transaction(async tx => {
+        const source = await loadIntegratedModelDatasetSource(ctx, parsed.data.datasetSnapshotId, ["model_input", "display", "derived_output"], tx, true);
+        const snapshot = source.snapshot;
+        const result = runIntegratedFinancialModel({ datasetSnapshotId: snapshot.id, payload: snapshot.payload, assumptions: parsed.data.assumptions, schedules: parsed.data.schedules });
+        const inputHash = stableSnapshotHash({ datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules });
+        const resultHash = stableSnapshotHash({ modelVersion: result.modelVersion, datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules, forecast: result.forecast });
+        const run = await saveFinancialModelRun({ result, resultHash, createdByUserId: ctx.userId }, tx);
+        if (!run || run.createdByUserId !== ctx.userId) throw new IntegratedModelArtifactError(409, "An identical model result is not owned by the current actor.");
+        await assertIntegratedModelDatasetSourceCurrent(ctx, snapshot.id, source.revision, ["model_input", "display", "derived_output"], tx);
+        return { snapshot, result, inputHash, resultHash, run };
+      });
     const organizationId = req.user!.organizationId;
     const modelInputLineage = organizationId ? createModelInputLineage({
       organizationId,
@@ -426,5 +434,9 @@ export function registerDataFabricRoutes(app: Express): void {
       snapshotId: snapshot.id, resultHash, symbol: result.symbol, checksPassed: result.checks.passed, modelInputLineageId: modelInputLineage?.id, valuationLineageId: valuationLineage?.id, ...auditActor(req.user!),
     });
     res.json({ result, receipt: { runId: run.id, resultHash, datasetSnapshotId: snapshot.id, datasetContentHash: snapshot.contentHash, inputHash, calculatedAt: run.createdAt.toISOString(), deterministic: true }, lineage: { modelInput: modelInputLineage, valuation: valuationLineage } });
+    } catch (error) {
+      if (error instanceof IntegratedModelArtifactError) return res.status(error.status).json({ error: error.message });
+      throw error;
+    }
   });
 }

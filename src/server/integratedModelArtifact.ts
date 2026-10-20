@@ -4,7 +4,7 @@ import { datasetSnapshots, financialModelRuns, users, type DatasetSnapshot, type
 import { canonicalFinancialPeriodSchema, financialDatasetPayloadSchema, type FinancialDatasetPayload } from "@shared/pointInTimeData";
 import { integratedModelAssumptionsSchema, specializedModelSchedulesSchema } from "@shared/integratedFinancialModel";
 import { spreadsheetArtifactContentSchema, spreadsheetCellLineageSchema, type ArtifactContent, type SpreadsheetCellLineage } from "@shared/artifactContracts";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { getProject, ProjectAccessDeniedError } from "./projectStore";
 import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
@@ -201,30 +201,76 @@ export function projectIntegratedModelWorkbook(run: FinancialModelRun, snapshot:
   return { content, sourceRefs, inputHash };
 }
 
+type ModelSourceDb = Pick<DrizzleDb, "select">;
+const financialSourceMetadata = {
+  id: datasetSnapshots.id, organizationId: datasetSnapshots.organizationId, createdByUserId: datasetSnapshots.createdByUserId,
+  entitlementPolicyId: datasetSnapshots.entitlementPolicyId, provider: datasetSnapshots.provider, dataClass: datasetSnapshots.dataClass,
+  contentHash: datasetSnapshots.contentHash, availableAt: datasetSnapshots.availableAt, expiresAt: datasetSnapshots.expiresAt,
+};
+type FinancialSourceMetadata = Pick<DatasetSnapshot, keyof typeof financialSourceMetadata>;
+
+async function requireCurrentModelActor(ctx: TenantContext, db: ModelSourceDb, lock: boolean) {
+  if (!["internal_admin", "internal_analyst"].includes(ctx.role)) throw new IntegratedModelArtifactError(403, "Integrated models require an author role.");
+  const query = db.select({ id: users.id, active: users.active }).from(users).where(and(eq(users.id, ctx.userId), eq(users.role, ctx.role), ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId)));
+  const [actor] = await (lock ? query.for("share") : query).limit(1);
+  if (!actor?.active) throw new IntegratedModelArtifactError(403, "Current tenant access changed; sign in again.");
+}
+
+function modelSourceRevision(source: FinancialSourceMetadata, policy: DataEntitlementPolicy) {
+  return stableSnapshotHash({ source: {
+    id: source.id, organizationId: source.organizationId, createdByUserId: source.createdByUserId,
+    entitlementPolicyId: source.entitlementPolicyId, provider: source.provider, dataClass: source.dataClass,
+    contentHash: source.contentHash, availableAt: source.availableAt.toISOString(), expiresAt: source.expiresAt?.toISOString() ?? null,
+  }, policy: { ...policy, effectiveFrom: policy.effectiveFrom.toISOString(), effectiveTo: policy.effectiveTo?.toISOString() ?? null, reviewedAt: policy.reviewedAt?.toISOString() ?? null, createdAt: policy.createdAt.toISOString() } });
+}
+
+async function admitIntegratedModelDatasetSource(ctx: TenantContext, snapshotId: string, requiredUses: readonly string[], db: ModelSourceDb, lock: boolean) {
+  await requireCurrentModelActor(ctx, db, lock);
+  const query = db.select(financialSourceMetadata).from(datasetSnapshots).where(eq(datasetSnapshots.id, snapshotId));
+  const [identity] = await (lock ? query.for("share") : query).limit(1);
+  if (!identity || identity.dataClass !== "financial_statements" || !canAccessDatasetSnapshot(identity, ctx)) throw new IntegratedModelArtifactError(404, "Financial dataset snapshot not found in the active tenant.");
+  const now = new Date();
+  if (identity.availableAt > now || (identity.expiresAt && identity.expiresAt <= now)) throw new IntegratedModelArtifactError(409, "Financial dataset snapshot is not currently available.");
+  const policy = identity.entitlementPolicyId ? await getEntitlementPolicyById(identity.entitlementPolicyId, db, lock) : null;
+  if (!policy || policy.provider !== identity.provider || policy.dataClass !== identity.dataClass || policy.effectiveFrom > now || (policy.effectiveTo && policy.effectiveTo <= now) || !requiredUses.every(use => policy.permittedUses.includes(use)) || (policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_"))) {
+    throw new IntegratedModelArtifactError(403, "The linked source entitlement policy does not currently permit this model operation.");
+  }
+  return { policy, revision: modelSourceRevision(identity, policy) };
+}
+
+/** Existing snapshot/entitlement owners admit metadata before any financial payload is selected.
+ * Pass a transaction and lock=true when admission must remain valid through persistence. */
+export async function loadIntegratedModelDatasetSource(ctx: TenantContext, snapshotId: string, requiredUses: readonly string[], db: ModelSourceDb = getDb(), lock = false) {
+  const { policy, revision } = await admitIntegratedModelDatasetSource(ctx, snapshotId, requiredUses, db, lock);
+  const [snapshot] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, snapshotId)).limit(1);
+  if (!snapshot || !canAccessDatasetSnapshot(snapshot, ctx) || modelSourceRevision(snapshot, policy) !== revision) throw new IntegratedModelArtifactError(409, "Financial model source access changed during admission.");
+  if (stableSnapshotHash({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) !== snapshot.contentHash) throw new IntegratedModelArtifactError(409, "Financial dataset content does not match its immutable revision.");
+  const payload = financialDatasetPayloadSchema.safeParse(snapshot.payload);
+  if (!payload.success) throw new IntegratedModelArtifactError(409, "Financial dataset content does not match its financial schema.");
+  return { snapshot: { ...snapshot, payload: payload.data }, policy, revision };
+}
+
+/** Metadata-only release fence; a transactional caller rolls back newly saved runs on denial. */
+export async function assertIntegratedModelDatasetSourceCurrent(ctx: TenantContext, snapshotId: string, revision: string, requiredUses: readonly string[], db: ModelSourceDb = getDb()) {
+  const current = await admitIntegratedModelDatasetSource(ctx, snapshotId, requiredUses, db, false);
+  if (current.revision !== revision) throw new IntegratedModelArtifactError(409, "Financial model source changed during calculation.");
+}
+
 /** Metadata-first access guard shared by retention and explicit Artifact input execution. */
 export async function loadIntegratedModelArtifactSource(ctx: TenantContext, runId: string, projectId: number, modelInput = false) {
   z.string().uuid().parse(runId);
   integratedModelArtifactRequestSchema.parse({ projectId });
-  if (!["internal_admin", "internal_analyst"].includes(ctx.role)) throw new IntegratedModelArtifactError(403, "Integrated model retention requires an author role.");
-  // Recheck current actor rather than trusting a stale session's role/organization.
-  const [actor] = await getDb().select({ id: users.id }).from(users).where(and(eq(users.id, ctx.userId), eq(users.role, ctx.role), ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId))).limit(1);
-  if (!actor) throw new IntegratedModelArtifactError(403, "Current tenant access changed; sign in again.");
+  await requireCurrentModelActor(ctx, getDb(), false);
   try { await getProject(ctx, projectId); }
   catch (error) { if (error instanceof ProjectAccessDeniedError) throw new IntegratedModelArtifactError(404, error.message); throw error; }
   // Metadata first: never read a foreign run's result or inaccessible snapshot payload.
   const [runIdentity] = await getDb().select({ datasetSnapshotId: financialModelRuns.datasetSnapshotId }).from(financialModelRuns).where(and(eq(financialModelRuns.id, runId), eq(financialModelRuns.createdByUserId, ctx.userId))).limit(1);
   if (!runIdentity) throw new IntegratedModelArtifactError(404, "Owned integrated model run not found.");
-  const [sourceIdentity] = await getDb().select({ organizationId: datasetSnapshots.organizationId, createdByUserId: datasetSnapshots.createdByUserId, entitlementPolicyId: datasetSnapshots.entitlementPolicyId, provider: datasetSnapshots.provider, dataClass: datasetSnapshots.dataClass }).from(datasetSnapshots).where(eq(datasetSnapshots.id, runIdentity.datasetSnapshotId)).limit(1);
-  if (!sourceIdentity || sourceIdentity.dataClass !== "financial_statements" || !canAccessDatasetSnapshot(sourceIdentity, ctx)) throw new IntegratedModelArtifactError(404, "Financial dataset snapshot not found in the active tenant.");
-  const policy = sourceIdentity.entitlementPolicyId ? await getEntitlementPolicyById(sourceIdentity.entitlementPolicyId) : null;
-  const now = new Date();
   const requiredUses = ["display", "derived_output", "export", ...(modelInput ? ["model_input"] : [])];
-  if (!policy || policy.provider !== sourceIdentity.provider || policy.dataClass !== sourceIdentity.dataClass || policy.effectiveFrom > now || (policy.effectiveTo && policy.effectiveTo < now) || !requiredUses.every(use => policy.permittedUses.includes(use)) || (policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_"))) {
-    throw new IntegratedModelArtifactError(403, "The linked source entitlement policy does not currently permit this workbook projection and export.");
-  }
+  const { snapshot, policy, revision } = await loadIntegratedModelDatasetSource(ctx, runIdentity.datasetSnapshotId, requiredUses);
   const [run] = await getDb().select().from(financialModelRuns).where(and(eq(financialModelRuns.id, runId), eq(financialModelRuns.createdByUserId, ctx.userId))).limit(1);
-  const [snapshot] = await getDb().select().from(datasetSnapshots).where(eq(datasetSnapshots.id, runIdentity.datasetSnapshotId)).limit(1);
-  if (!run || !snapshot || run.datasetSnapshotId !== snapshot.id || !canAccessDatasetSnapshot(snapshot, ctx) || snapshot.entitlementPolicyId !== policy.id) throw new IntegratedModelArtifactError(404, "Model source access changed during retention.");
+  if (!run || run.datasetSnapshotId !== snapshot.id) throw new IntegratedModelArtifactError(404, "Model source access changed during retention.");
+  await assertIntegratedModelDatasetSourceCurrent(ctx, snapshot.id, revision, requiredUses);
   const projection = projectIntegratedModelWorkbook(run, snapshot, policy);
   return { run, snapshot, policy, projection };
 }

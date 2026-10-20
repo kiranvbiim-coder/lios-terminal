@@ -3,14 +3,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { financialModelRuns } from "@shared/schema";
 import type { IntegratedFinancialModelResult } from "@shared/integratedFinancialModel";
 import type { FinancialDatasetPayload } from "@shared/pointInTimeData";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { listDatasetSnapshots } from "./pointInTimeDatasetStore";
 import { resolvePositionIdentity } from "./positionIdentity";
 
 export async function saveFinancialModelRun(input: {
   result: IntegratedFinancialModelResult; resultHash: string; createdByUserId: number;
-}) {
-  const db = getDb();
+}, db: Pick<DrizzleDb, "select" | "insert"> = getDb()) {
   const id = crypto.randomUUID();
   const identity = await resolvePositionIdentity(db, input.result.symbol);
   const [created] = await db.insert(financialModelRuns).values({
