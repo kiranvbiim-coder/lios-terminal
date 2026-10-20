@@ -335,10 +335,9 @@ test("Connect screen: AI and data are separate sections and the provider picker 
 test("H2a chat feel: finished runs collapse to a receipt, work stays open when unfinished, follow-ups never auto-send", () => {
   const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
   const project = source("../components/terminal/ProjectExperienceShell.tsx");
-  // Technical step/capability telemetry stays behind Details; recovery/approval cards remain visible separately.
+  // Technical step/capability telemetry stays behind Show work; recovery/approval cards remain visible separately.
   assert.match(trace, /const workVisible = showWork/);
-  assert.match(trace, /Details/);
-  assert.match(trace, /data-testid="trace-receipt"/);
+  assert.match(trace, /Show work/);
   assert.match(trace, /data-testid="trace-sources"/);
   assert.match(trace, /data-testid="trace-follow-ups"/);
   assert.match(trace, /\{workVisible && !!steps\.length/);

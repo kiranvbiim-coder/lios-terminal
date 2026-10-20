@@ -73,7 +73,7 @@ test("TC-01 Project Home is the rich adaptive surface; global/new chat stays min
     assert.match(projectHome, new RegExp(module, "i"), `Project Home missing rich module: ${module}`);
   }
   assert.doesNotMatch(projectHome, /Decision (area|board|center)/i, "Project Home must not add a permanent Decision area");
-  assert.match(shell, /chatMode !== "temporary" && !selection\.chatId && home \? \(\s*<ProjectHome/, "rich home renders only for a selected Project without an open chat");
+  assert.match(shell, /entrySurface === "project-home" && home \? \(\s*<ProjectHome/, "rich home renders only through the explicit entry-surface rule (see projectEntry.test.ts)");
 });
 
 // TC-06 owns the minimal composer. These controls exist today and may only be

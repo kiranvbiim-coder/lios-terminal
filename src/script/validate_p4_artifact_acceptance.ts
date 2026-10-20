@@ -75,7 +75,7 @@ assert.equal(rendererBenchmark.ciMicrobenchmarks.spreadsheetCells, 10_000, "P4-1
 
 // P4-11 — BacktestArtifact.
 assert.ok(contracts.includes("backtestArtifactContentSchema") && contracts.includes('"edited_not_run"') && contracts.includes('"stale"'), "P4-11 BacktestArtifact statuses are incomplete.");
-assert.ok(pane.includes('content.kind==="backtest"') && pane.includes("TRADES"), "P4-11 BacktestArtifact renderer is missing.");
+assert.ok(pane.includes('content.kind==="backtest"') && read("client/src/components/terminal/BacktestArtifactView.tsx").includes("trades"), "P4-11 BacktestArtifact renderer is missing.");
 
 // P4-12 — StrategyArtifact / Strategy Studio.
 assert.ok(contracts.includes("strategyArtifactContentSchema"), "P4-12 StrategyArtifact contract is missing.");

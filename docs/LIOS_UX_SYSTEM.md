@@ -93,7 +93,7 @@ Additional locks:
 - advanced source/execution/provider controls use progressive disclosure;
 - default composer is minimal;
 - one visible LiOS identity;
-- substantial Project Artifacts must auto-persist (required target; current source still requires explicit Keep, pending TC-13/P4 integration);
+- successful supported Project conversation drafts auto-persist through the existing P4 keeper; Keep remains explicit for Quick/Temporary work and does not authorize cross-scope data access;
 - high proactivity is allowed within permission/budget/governance limits;
 - passive status strip shows only real connected/provider/market/runtime state;
 - no dedicated permanent Decision area is required on Project Home;
@@ -354,7 +354,7 @@ Adapt and reorder only unpinned modules; preserve user pins. No template gate, m
 
 ## 4.3 Keep in Project
 
-Important Project outputs must auto-persist under P4 identity and immutable content versions; Keep must not be a prerequisite to retaining substantial Project work in the required UX. Current source still requires explicit Keep, so automatic persistence remains a TC-13/P4 integration gap, not implemented behavior or passing SP evidence. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
+Successful supported Project conversation drafts auto-persist through `conversationRunService` and P4 `persistProjectConversationDraft`, retaining canonical identity and immutable versions. The assistant message records the saved references; the conversation restores cards from this metadata without rerunning tools. Keep remains explicit outside Project scope. This exercised bounded behavior does not establish complete professional-work or Shipping Point acceptance. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
 
 Quick/Temporary Keep requires an explicit existing/new Project destination and scope preview. Failed saves retain the destination and reuse a newly created Project on retry. Output concepts include charts, tables, models, screens, reports, research, sources, scenarios and recipes; the canonical schema controls serialized Artifact kinds, not this prose list.
 
@@ -1686,7 +1686,7 @@ If this journey is not effortless, adding more features does not count as progre
 
 The Project mental model remains **Projects → Chats → Artifacts**. P4 adds depth without adding a new permanent navigation taxonomy.
 
-- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Current source requires explicit Keep for conversation outputs, including Project work; required important Project auto-persistence remains pending TC-13/P4 integration, not closed by this implementation lock. Quick/Temporary Keep explicitly selects and previews the destination scope. Users can create/open persistent work or export/import a Project package.
+- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Successful supported Project conversation drafts already auto-retain through P4; Quick/Temporary Keep explicitly selects and previews the destination scope. Users can create/open persistent work or export/import a Project package. Public issue #91 coordinates quiet entry, contextual work and integration qualification; the canonical 206-item checklist remains authoritative.
 - Every Artifact opens in one consistent `ArtifactPane` with readable title/status/version, source and execution-receipt context, Ask LiOS, review, fork, undo, export, archive, compare and Session reference actions. Raw adapter/hash/internal metadata belongs under Advanced or Show Work, not default chrome.
 - Conversation and direct controls operate on the same persistent Artifact identity. **Ask LiOS** passes the Artifact as active context. Supported mutation instructions create a review proposal; the user accepts or rejects it in the Artifact surface.
 - SpreadsheetArtifact exposes a real editable formula grid. Professional AI changes are explicit diffs and cannot silently overwrite the model.

@@ -98,12 +98,15 @@ import {
   isP5ProfessionalCapabilityId,
   p5FamilyForCapabilityId,
   buildP5AdvancedArtifact,
+  buildP5ProfessionalResultText,
   buildP5CompanyResearchArtifact,
   buildP5FundamentalsArtifact,
   buildP5ResearchReportArtifact,
   buildP5ReportFromArtifact,
 } from "./p5ProfessionalExecution";
-import { p5InputsFromArtifact } from "./p5ProfessionalWorkflow";
+import { describeP5InputGap, p5InputsFromArtifact } from "./p5ProfessionalWorkflow";
+import type { P5PlainLanguageGap } from "./p5PlainLanguageInputs";
+import { P5_GUIDED_INPUTS_ACTION, type P5GuidedInputs } from "@shared/p5GuidedInputs";
 import { defaultArtifactReportTemplate, getReportTemplate } from "./reportEngine";
 import { p5AdvancedModelPathSchema, p5ProfessionalExportProfileSchema, p5ReconciliationSchema } from "@shared/p5ProfessionalContracts";
 import { executeAdvancedQuant, AdvancedQuantInputError, type AdvancedQuantPath } from "./advancedQuantExecution";
@@ -271,6 +274,7 @@ class ConversationDataGapError extends Error {
     reason: "unavailable" | "not_connected" | "entitlement" | "quota" | "frequency" | "unsupported";
     providersChecked: string[];
     nextActions: string[];
+    guidedInputs?: P5GuidedInputs;
   }) {
     super(gap.message);
     this.name = "ConversationDataGapError";
@@ -3443,18 +3447,33 @@ async function p5AdvancedInputsFromCapability(
 }
 
 function p5ProfessionalInputGap(capability: ConversationCapabilityMatch, detail?: string): ConversationDataGapError {
-  const missing = capability.missingInputs.length ? capability.missingInputs : ["structured_model_inputs_or_active_artifact"];
   const workspaceCommand = typeof capability.parameters.workspaceCommand === "string" ? capability.parameters.workspaceCommand : null;
+  const modelPath = typeof capability.parameters.modelPath === "string" ? capability.parameters.modelPath : null;
+  const modelParameters = capability.parameters.modelParameters
+    && typeof capability.parameters.modelParameters === "object"
+    && !Array.isArray(capability.parameters.modelParameters)
+      ? capability.parameters.modelParameters as Record<string, unknown>
+      : null;
+  const description = describeP5InputGap({
+    label: capability.label,
+    modelPath,
+    entity: capability.symbol ?? capability.entityQuery,
+    missingInputs: capability.missingInputs,
+    modelParameters,
+    inputGap: (capability.parameters.inputGap as P5PlainLanguageGap | null | undefined) ?? null,
+    detail,
+  });
   return new ConversationDataGapError({
     field: "professional_model_inputs",
-    message: detail ?? (capability.label + " requires explicit deterministic model inputs. Missing: " + missing.join(", ") + ". LiOS did not invent assumptions."),
+    message: description.message,
     reason: "unavailable",
-    providersChecked: ["LiOS professional workflow registry", ...(typeof capability.parameters.modelPath === "string" ? [String(capability.parameters.modelPath)] : [])],
+    providersChecked: ["LiOS professional workflow registry", ...(modelPath ? [modelPath] : [])],
     nextActions: [
-      "Tell LiOS the assumptions or model inputs you want to use",
+      P5_GUIDED_INPUTS_ACTION,
       "Use a saved Valuation, Portfolio or Model Artifact",
       ...(workspaceCommand ? [workspaceCommand] : []),
     ],
+    ...(description.guidedInputs ? { guidedInputs: description.guidedInputs } : {}),
   });
 }
 
@@ -3870,15 +3889,17 @@ async function executeP5ProfessionalBundle(
       });
       await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
       await emit(input, { ...eventBase(requestId), type: "artifact", artifact });
-      textParts.push(
-        "### " + capability.label + "\n"
-        + "- Model: " + resolved.modelPath + "\n"
-        + "- Engine: " + run.receipt.modelId + "@" + run.receipt.modelVersion + "\n"
-        + "- Validation: " + run.receipt.validationLevel + "\n"
-        + "- Input provenance: " + run.receipt.dataClassification + "\n"
-        + "- Output hash: " + run.receipt.outputSnapshotHash + "\n"
-        + "- Output: " + artifact.title + " Artifact."
-      );
+      textParts.push(buildP5ProfessionalResultText({
+        label: capability.label,
+        modelPath: resolved.modelPath,
+        symbol: symbol || capability.symbol,
+        result: run.result,
+        validationLevel: run.receipt.validationLevel,
+        dataClassification: run.receipt.dataClassification,
+        sourceCount: run.receipt.sourceBindings.length,
+        warnings: run.receipt.warnings,
+        savedToProject: input.scope === "project",
+      }));
     } catch (error) {
       if (error instanceof AdvancedQuantInputError || error instanceof PythonServiceDataError) {
         blocked.push({ capability, detail: error.message });

@@ -12,6 +12,18 @@ Requested report: [Product postmortem](PRODUCT_POSTMORTEM_2026-10-18.md). **Full
 
 Complete owner-requested closure inventory: [Complete product closure checklist](#complete-product-closure-checklist) in this canonical tracker — all 206 workstreams, seven integrated journeys, target qualification and all 14 P14 categories. Unchecked means not fully accepted, not unimplemented. No separate completion board is maintained.
 
+#### Issue #91 — quiet professional-work integration candidate
+
+TC/P2/P4/P11 convergence follows public [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91), coordinated with #16; the 206-item checklist and SP/P14 remain the sole acceptance authority. Owner chose equal compatible lanes, chat-first with deliberate restoration, contextual Artifact side panel, quiet execution, and actual app screenshots. Product-model calls require a provider the owner connects and an approved run; no paid inference is authorized merely by this checkpoint.
+
+The candidate renders saved/streaming assistant Markdown as React elements (no raw HTML), limits links to safe schemes, and links citations only to exact recorded identities; unindexed numeric citations remain literal rather than guessed. Normal execution hides terminal/plan/receipt internals under Show work while preserving approvals, review, source limitations, cancellation and failure. DCF-sensitivity inputs can be supplied in a bounded explicit plain-language grammar or the existing recovery form with a confirmation preview; incomplete/ambiguous units are refused rather than defaulted, and stated partial assumptions cannot silently inherit contradictory Artifact inputs.
+
+Valuation/backtest/portfolio viewers project recorded values into labelled tables/charts, preserve full precision, and keep JSON behind expert disclosure. Repeated observation of provider classification alone is not proof of source custody; missing recorded sources remain explicit. Existing P4 identity/revision/save/export owners are unchanged. Assistant-message metadata already retained Artifact references; the client now restores access-checked canonical cards instead of relying only on live run events. Quick entry does not force a Project dashboard; deliberate Project navigation still opens it.
+
+The actual local ad-hoc macOS walkthrough exercised a missing-input recovery form, explicit confirmation, governed deterministic DCF sensitivity, saved canonical Valuation V1, human-readable scenario/grid views and source classification. Its repeated output hash matched the earlier approved engineering scenario. This remains manual engineering input, not licensed source-bound finance or a professional export/edit/recalculate qualification. Screenshots stay local because the exercised Home contains owner identity/provider-related material. Final candidate fingerprint and verification are recorded below when exercised.
+
+Known remaining issue #91 acceptance: general research/BYOAI, private/no-ticker entities, complete chat/direct edit → recalculation → immutable revision → export, deliberate Artifact-focus restoration, narrow-screen/keyboard/VoiceOver, clean-install zero-provider setup, full native restart continuity, Windows and SP/P14. Registry/source checks and a readable manual valuation do not close #91. No new donor package is imported: reuse existing React/P4/renderers; custom Markdown is a safe bounded subset, not CommonMark parity.
+
 #### Production/OSS mission — bounded P0/P11 repairs
 
 Verified PR #79 is merged at `5b992fc3c7be6904e424c2fa3187bbf78d1c1a22`, no open PR at mission start. Its strict Python implementation is retained, not recreated. Current mission requires independent review before merge in addition to protected hosted checks.

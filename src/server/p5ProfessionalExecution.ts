@@ -221,6 +221,126 @@ export function buildP5AdvancedArtifact(input: {
   };
 }
 
+export interface P5ProfessionalResultTextInput {
+  label: string;
+  modelPath: string;
+  symbol?: string | null;
+  result: unknown;
+  validationLevel: string;
+  dataClassification: string;
+  sourceCount?: number;
+  warnings?: readonly string[];
+  savedToProject: boolean;
+}
+
+const SOURCE_BOUND_CLASSIFICATIONS = new Set(["live", "delayed", "historical", "cached", "fallback"]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function displayNumber(value: number, maximumFractionDigits: number, minimumFractionDigits = 0): string {
+  return value.toLocaleString("en-US", { minimumFractionDigits, maximumFractionDigits });
+}
+
+function displayPercent(value: number | null): string {
+  return value === null ? "—" : `${displayNumber(value, 2)}%`;
+}
+
+function humanizeKey(key: string): string {
+  const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim().toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function inputsLine(classification: string, sourceCount = 0): string {
+  if (classification === "manual") return "Inputs were supplied by you.";
+  if (SOURCE_BOUND_CLASSIFICATIONS.has(classification)) return sourceCount > 0 ? "Inputs have recorded source bindings; inspect their provenance in the model." : "No source binding is recorded; do not treat these inputs as source-verified.";
+  if (classification === "synthetic") return "Inputs are synthetic (illustrative, not market data).";
+  if (classification === "model_derived") return "Inputs were derived from an earlier model result.";
+  return "Input origin is recorded with the result.";
+}
+
+function validationLine(level: string): string {
+  switch (level) {
+    case "known_answer": return "This calculation method has known-answer checks; this scenario is not an independently verified forecast.";
+    case "regression_tested": return "The calculation is covered by regression tests, not independent reference answers.";
+    case "implementation_reviewed": return "The calculation was reviewed but has not been checked against independent reference answers.";
+    case "benchmark_required": return "The calculation has not yet been benchmarked; treat it as unverified.";
+    case "research_only": return "The calculation is for research use only.";
+    default: return "The calculation has not been validated.";
+  }
+}
+
+function dcfScenarioCell(value: unknown) {
+  const scenario = asRecord(value);
+  const perShare = scenario ? finiteNumber(scenario.valuePerShare) : null;
+  if (!scenario || perShare === null) return null;
+  const growth = finiteNumber(scenario.terminalGrowthPct);
+  const multiple = finiteNumber(scenario.exitMultiple);
+  return {
+    perShare,
+    wacc: finiteNumber(scenario.waccPct),
+    terminal: growth !== null ? displayPercent(growth) : multiple !== null ? `${displayNumber(multiple, 2)}x exit multiple` : "—",
+  };
+}
+
+function dcfSensitivityBody(input: P5ProfessionalResultTextInput): string | null {
+  const scenarios = asRecord(asRecord(input.result)?.scenarios);
+  const bear = dcfScenarioCell(scenarios?.bear);
+  const base = dcfScenarioCell(scenarios?.base);
+  const bull = dcfScenarioCell(scenarios?.bull);
+  if (!bear || !base || !bull) return null;
+  const subject = input.symbol ? `${input.symbol}'s` : "The";
+  const row = (name: string, cell: NonNullable<typeof base>) =>
+    `| ${name} | ${displayNumber(cell.perShare, 2, 2)} | ${displayPercent(cell.wacc)} | ${cell.terminal} |`;
+  return [
+    `${subject} base-case value is **${displayNumber(base.perShare, 2, 2)} per share**, with a bear–bull range of ${displayNumber(bear.perShare, 2, 2)} to ${displayNumber(bull.perShare, 2, 2)}.`,
+    "",
+    "| Case | Value per share | WACC | Terminal growth |",
+    "| --- | ---: | ---: | ---: |",
+    row("Bear", bear),
+    row("Base", base),
+    row("Bull", bull),
+  ].join("\n");
+}
+
+function genericBody(input: P5ProfessionalResultTextInput): string {
+  const record = asRecord(input.result);
+  const rows: string[] = [];
+  if (record) {
+    for (const [key, value] of Object.entries(record)) {
+      if (rows.length >= 8) break;
+      if (/hash|id$/i.test(key)) continue;
+      const number = finiteNumber(value);
+      if (number !== null) rows.push(`| ${humanizeKey(key)} | ${displayNumber(number, 4)} |`);
+      else if (typeof value === "string" && value.length <= 80 && !/^[a-f0-9]{32,}$/i.test(value)) rows.push(`| ${humanizeKey(key)} | ${value.replace(/\|/g, "/")} |`);
+    }
+  }
+  const subject = input.symbol ? `${input.label} for ${input.symbol}` : input.label;
+  return rows.length
+    ? [`${subject} is complete. Key figures:`, "", "| Measure | Value |", "| --- | ---: |", ...rows].join("\n")
+    : `${subject} is complete. The full results are in the saved model.`;
+}
+
+export function buildP5ProfessionalResultText(input: P5ProfessionalResultTextInput): string {
+  const body = input.modelPath === "valuation/dcf-sensitivity" ? dcfSensitivityBody(input) ?? genericBody(input) : genericBody(input);
+  const warnings = (input.warnings ?? []).filter((warning) => warning.trim().length > 0);
+  const pointer = input.savedToProject
+    ? "The interactive model is saved in your Project. Open it from the side panel; model details and checks are under Show work."
+    : "The interactive model is open in the side panel; model details and checks are under Show work.";
+  return [
+    `### ${input.label}`,
+    body,
+    `${inputsLine(input.dataClassification, input.sourceCount)} ${validationLine(input.validationLevel)}`,
+    ...(warnings.length ? [warnings.map((warning) => `Note: ${warning}`).join("\n")] : []),
+    pointer,
+  ].join("\n\n");
+}
+
 function latestReports(resolution: CapabilityResolution<LseFinancialReport[]> | null): LseFinancialReport[] {
   if (!resolution?.authoritative?.value?.length) return [];
   return [...resolution.authoritative.value]

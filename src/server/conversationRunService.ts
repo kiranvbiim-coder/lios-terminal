@@ -82,6 +82,7 @@ import { ExecutionJournalRunIdConflictError, type ExecutionJournalRecord } from 
 import type { TenantContext } from "./tenantContext";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
 import type { RunSummary } from "./conversationRunRegistry";
+import { retainedArtifactMessageRef } from "@shared/conversationArtifactRefs";
 import { deriveWorkingContext, resolveWorkingContextRequest, restoreWorkingContext } from "@shared/workingContext";
 import type { WorkingContextOwner, WorkingContextResolution } from "@shared/workingContext";
 import type { WorkingContextSnapshot } from "@shared/conversationRuntime";
@@ -647,7 +648,7 @@ async function runProjectChat(
           return;
         }
       }
-      const persistedArtifacts: Array<{ id: string; version: number }> = [];
+      const persistedArtifacts: Array<{ id: string; version: number; title: string; kind: string }> = [];
       const pendingArtifacts: Extract<ConversationRuntimeEvent, { type: "artifact" }>[] = [];
       try {
         const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
@@ -796,7 +797,7 @@ async function runProjectChat(
               refreshSpec,
             });
             const persistedArtifact = { id: savedArtifact.artifact.id, version: savedArtifact.version.version };
-            persistedArtifacts.push(persistedArtifact);
+            persistedArtifacts.push(retainedArtifactMessageRef(savedArtifact));
             const retainedEvent = { ...event, persistedArtifact };
             await ledger.recordRuntimeEvent(retainedEvent);
             await transcript.recordEvent(retainedEvent);

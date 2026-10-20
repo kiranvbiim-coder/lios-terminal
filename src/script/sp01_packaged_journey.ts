@@ -171,6 +171,12 @@ function sandboxContainers(): string[] {
   return result.stdout.split("\n").filter(Boolean);
 }
 
+/** Ordinary chat has no sandbox control; the advanced reviewed-operation flow is opened with the /sandbox slash command. */
+async function openSandboxWithSlashCommand(page: Page): Promise<void> {
+  await page.fill("Ask LiOS", "/sandbox");
+  await page.click("Send");
+}
+
 async function main(): Promise<void> {
   const evidenceArg = process.argv.indexOf("--evidence");
   const evidencePath = evidenceArg > 0 ? path.resolve(process.argv[evidenceArg + 1]) : path.join(os.tmpdir(), "lios-sp01-packaged-evidence.json");
@@ -209,11 +215,11 @@ async function main(): Promise<void> {
     await page.click("Create Project");
     await page.waitText(/PROJECT HOME/i);
     await page.click("+ New chat", { exact: false });
-    await page.waitText(/Open restricted sandbox Terminal/i);
+    await page.waitText(/What do you want to understand/i);
     record("sp01.project_chat", true, "Project and Project Chat opened");
 
     // 3. Denial path: exact operation shown, denied, nothing executed.
-    await page.click("Open restricted sandbox Terminal");
+    await openSandboxWithSlashCommand(page);
     const card = await page.waitText(/Approve this exact sandbox operation\?/i);
     record("sp01.exact_operation_card", /Operation digest: [a-f0-9]{64}/.test(card) && /Approval digest: [a-f0-9]{64}/.test(card) && /deny network/i.test(card),
       "card shows exact argv, operation/approval digests and isolation facts");
@@ -222,7 +228,7 @@ async function main(): Promise<void> {
     record("sp01.denial", /not bound before denial/i.test(denied) && sandboxContainers().length === 0, "denial recorded without execution; no container created");
 
     // 4. Approve once -> live governed session shared by Chat and Terminal.
-    await page.click("Open restricted sandbox Terminal");
+    await openSandboxWithSlashCommand(page);
     await page.waitText(/Approve this exact sandbox operation\?/i);
     await page.click("Approve once and open Terminal");
     await page.waitText(/Restricted terminal input ready/i, 120_000);
@@ -255,7 +261,7 @@ async function main(): Promise<void> {
     port = await freePort();
     app = await launch(port, dirs);
     page = await Page.attach(port);
-    await page.waitText(/Open restricted sandbox Terminal/i, 90_000);
+    await page.waitText(/What do you want to understand/i, 90_000);
     await page.click("Reopen last sandbox session");
     const restored = await page.waitText(/CANCELLED/, 60_000);
     record("sp01.restart_restore", /Trust receipt: approved/.test(restored) && /total \d+/.test(restored) && sandboxContainers().length === 0,
