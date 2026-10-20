@@ -243,6 +243,66 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
   );
   const ctx = { userId: owner.id, organizationId: null, role: owner.role };
 
+  await t.test("workflow identity discovery receives the active ResearchArtifact provider and exact-reference policy", async () => {
+    // These modules capture data-root state: load only after this test initializes its isolated database.
+    const { createArtifact } = await import("./artifactStore");
+    const { researchArtifactContentSchema } = await import("@shared/artifactContracts");
+    const { executeConversationRuntime, getConversationTool, registerConversationTool } = await import("./conversationRuntime");
+    const identityTool = getConversationTool("lios.instrument-master");
+    assert.ok(identityTool, "exercise the registered identity tool, not a replacement resolver");
+    try {
+      for (const mode of ["connected_sources", "only_refs"] as const) {
+        const sourcePolicy = {
+          mode,
+          allowedSourceRefs: ["internal:synthetic:identity-scope"],
+          providerAllow: [],
+          providerDeny: ["lse", "sec_edgar", "openfigi"],
+        };
+        const saved = await createArtifact(ctx, {
+          projectId: project.id,
+          title: "Synthetic identity source policy",
+          content: researchArtifactContentSchema.parse({
+            kind: "research", question: "Synthetic identity scope", blocks: [], claims: [], evidence: [],
+            sourcePolicy,
+          }),
+        });
+        let invoked = 0;
+        registerConversationTool({
+          ...identityTool,
+          invoke: async (input, signal, governedCall) => {
+            invoked += 1;
+            assert.equal(governedCall.sourceScope, "auto");
+            assert.equal(governedCall.researchSourcePolicy?.mode, mode);
+            assert.deepEqual(governedCall.researchSourcePolicy?.providerDeny, sourcePolicy.providerDeny);
+            assert.equal(governedCall.researchSourcePolicyBinding?.artifactId, saved.artifact.id);
+            const result = await identityTool.invoke(input, signal, governedCall);
+            assert.equal(result.output, null, "denied/exact-reference policy cannot discover an external identity");
+            return result;
+          },
+        });
+        await executeConversationRuntime({
+          tenant: ctx, scope: "project", chatId: null, projectId: project.id, resources: [], history: [],
+          request: {
+            requestId: crypto.randomUUID(), continuationOf: null,
+            message: "resolve SYNTHX", executionMode: "deterministic_first",
+            aiDirectApproved: false, approvals: [], attachments: [], sourceScope: "auto",
+            context: { activeObjectRefs: [saved.artifact.id] },
+            transmissionPolicy: {
+              mode: "configured", providerAllow: [], providerDeny: [],
+              allowProjectInstructions: true, allowResourceReferences: true,
+              allowSelection: true, allowToolCalling: true, dataClassification: "private",
+            },
+          },
+          aiCompletion: async () => { throw new Error("deterministic identity must not invoke inference"); },
+          emit: () => undefined,
+        });
+        assert.equal(invoked, 1);
+      }
+    } finally {
+      registerConversationTool(identityTool);
+    }
+  });
+
   await indexProjectDocument(ctx, {
     projectId: project.id,
     sourceType: "research_evidence",

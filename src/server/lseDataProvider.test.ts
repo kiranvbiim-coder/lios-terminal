@@ -8,6 +8,7 @@ import {
   lseEntitlementDecision,
   normalizeLseStreamMessage,
   parseLseUsageQuota,
+  searchLseCatalogCandidates,
 } from "./lseDataProvider";
 import { createCanonicalDataRequest } from "./providerSdk";
 
@@ -151,4 +152,51 @@ test("P5 LSE replay-to-live protocol preserves replay markers on generic stream 
   assert.equal(tick?.type, "tick");
   assert.equal(tick?.replay, true);
   assert.equal((tick?.data as Record<string, unknown>).timestamp, "2026-09-22T09:30:01Z");
+});
+
+test("catalog discovery keeps absent access unavailable and propagates provider denial", async () => {
+  const noFetch = (async () => { throw new Error("missing credentials must not fetch"); }) as typeof fetch;
+  assert.deepEqual(await searchLseCatalogCandidates("SYNTHX", {}, { credential: null, fetchFn: noFetch }), []);
+  await assert.rejects(() => searchLseCatalogCandidates("SYNTHX", {}, {
+    credential: "synthetic_catalog_denied",
+    fetchFn: (async () => new Response(JSON.stringify({ detail: "Synthetic denied" }), { status: 403 })) as typeof fetch,
+  }), (error: unknown) => error instanceof Error && "status" in error && error.status === 403);
+});
+
+test("catalog discovery propagates cancellation into its provider fetch", async () => {
+  const controller = new AbortController();
+  const receivedSignals: AbortSignal[] = [];
+  const response = Promise.withResolvers<Response>();
+  const pending = searchLseCatalogCandidates("SYNTHX", {}, {
+    credential: "synthetic_catalog_abort",
+    signal: controller.signal,
+    fetchFn: (async (_input, init) => {
+      const signal = init?.signal;
+      if (signal) {
+        receivedSignals.push(signal);
+        signal.addEventListener("abort", () => response.reject(signal.reason), { once: true });
+      }
+      return response.promise;
+    }) as typeof fetch,
+  });
+  const abort = new DOMException("Synthetic catalog cancelled", "AbortError");
+  controller.abort(abort);
+  await assert.rejects(pending, (error) => error === abort);
+  assert.equal(receivedSignals[0]?.aborted, true);
+});
+
+test("option-chain catalogue availability is not another identity for the underlying ticker", async () => {
+  const stock = { dataset: "stocks", symbol: "SYNTHX", name: "Synthetic Industries", country: "US" };
+  const optionFeeds = ["options", "options_chain", "options_flow"].map((dataset) => ({
+    dataset, symbol: "SYNTHX", name: "Synthetic Industries options", country: "US",
+  }));
+  for (const row of optionFeeds) assert.equal(lseCatalogRowToCandidate(row), null);
+  const candidates = await searchLseCatalogCandidates("SYNTHX", { limit: 100 }, {
+    credential: "synthetic_mixed_dataset_catalog",
+    fetchFn: (async () => new Response(JSON.stringify([stock, ...optionFeeds]), { status: 200 })) as typeof fetch,
+  });
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].symbol, "SYNTHX");
+  assert.equal(candidates[0].name, "Synthetic Industries");
+  assert.equal(candidates[0].canonical, false);
 });

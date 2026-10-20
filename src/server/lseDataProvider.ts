@@ -71,6 +71,7 @@ export interface LseDataProviderDependencies {
   fetchFn?: typeof fetch;
   credential?: string | null;
   now?: () => number;
+  signal?: AbortSignal;
 }
 
 class LseProviderError extends Error {
@@ -284,6 +285,7 @@ async function lseJsonRequest<T>(
     credential: string;
     fetchFn?: typeof fetch;
     timeoutMs?: number;
+    signal?: AbortSignal;
   },
 ): Promise<{ data: T; quota: ProviderQuota | null; retrievedAt: string; sourceRef: string }> {
   const fetchFn = input.fetchFn ?? fetch;
@@ -296,7 +298,9 @@ async function lseJsonRequest<T>(
       ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    signal: AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS),
+    signal: input.signal
+      ? AbortSignal.any([input.signal, AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS)])
+      : AbortSignal.timeout(input.timeoutMs ?? LSE_HTTP_TIMEOUT_MS),
   });
   const payload = await readResponsePayload(response);
   const quota = quotaFromHeaders(response.headers);
@@ -335,14 +339,23 @@ async function lseUsage(
 async function lseCatalog(
   credential: string,
   fetchFn?: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<LseCatalogRow[]> {
   const credentialScope = crypto.createHash("sha256").update(credential).digest("hex").slice(0, 16);
   const key = "lse:catalog:" + credentialScope;
-  return catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, async () => {
-    const result = await lseJsonRequest<unknown>("/catalog", { credential, fetchFn });
+  const fetchCatalog = async () => {
+    const result = await lseJsonRequest<unknown>("/catalog", { credential, fetchFn, signal });
+    signal?.throwIfAborted();
     if (!Array.isArray(result.data)) return [];
     return result.data.filter((row): row is LseCatalogRow => Boolean(row && typeof row === "object"));
-  });
+  };
+  // A cancellable caller must not cancel the shared in-flight catalog of another session.
+  if (signal) {
+    signal.throwIfAborted();
+    const cached = catalogHub.get(key);
+    return cached ?? catalogHub.set(key, await fetchCatalog(), LSE_CATALOG_TTL_MS);
+  }
+  return catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, fetchCatalog);
 }
 
 function rowSymbol(row: LseCatalogRow): string | null {
@@ -354,6 +367,11 @@ function rowName(row: LseCatalogRow): string {
 }
 
 export function lseCatalogRowToCandidate(row: LseCatalogRow): (InstrumentMasterCandidate & { symbol: string }) | null {
+  // Option-catalog symbols identify an underlying's chain/feed, not an option
+  // contract or another listing of the underlying. Do not mint ticker identity
+  // from dataset-level availability metadata.
+  const dataset = stringValue(row.dataset)?.toLowerCase();
+  if (dataset === "options" || dataset === "options_chain" || dataset === "options_flow") return null;
   const symbol = rowSymbol(row);
   if (!symbol) return null;
   const base = adaptLegacySymbolCatalogRow({
@@ -403,10 +421,12 @@ export async function searchLseCatalogCandidates(
   options: InstrumentSearchOptions = {},
   dependencies: LseDataProviderDependencies = {},
 ): Promise<InstrumentMasterCandidate[]> {
+  dependencies.signal?.throwIfAborted();
   if (localOnlyReason()) return [];
   const credential = lseCredential(dependencies.credential);
   if (!credential) return [];
-  const rows = await lseCatalog(credential, dependencies.fetchFn);
+  const rows = await lseCatalog(credential, dependencies.fetchFn, dependencies.signal);
+  dependencies.signal?.throwIfAborted();
   return matchCatalogRows(rows, queryText, options.limit ?? 20).flatMap((row) => {
     const candidate = lseCatalogRowToCandidate(row);
     return candidate ? [candidate] : [];

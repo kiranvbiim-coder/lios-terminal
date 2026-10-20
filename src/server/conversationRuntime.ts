@@ -41,7 +41,8 @@ import {
 } from "./projectAttachmentContent";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
 import { loadLegacyTickerCatalog } from "./legacyTickerCatalog";
-import { resolveConversationInstrument } from "./conversationInstrumentResolution";
+import { createConversationInstrumentFallback, resolveConversationInstrument } from "./conversationInstrumentResolution";
+import { searchFederatedInstrumentCandidates } from "./instrumentSearchIndexStore";
 import { getOHLCV, getOHLCVWithProvenance, getQuotes, type OHLCVBar, type OHLCVProvenance, type Quote } from "./marketData";
 import { invokeAIRoutedCompletion, type AICompletionResult, type AIRoutedCompletionRequest } from "./byoaiTransport";
 import { AIProviderError } from "./byoaiRouter";
@@ -755,13 +756,26 @@ function registerBuiltinConversationTools(): void {
     outputSchema: conversationToolResultSchema,
     replaySafe: true,
     cancel: null,
-    invoke: async (input, signal) => {
+    invoke: async (input, signal, call) => {
       const symbol = String(input.symbol || "").trim().toUpperCase();
       const name = String(input.name || input.query || "").trim();
       if (!symbol && !name) throw new Error("Instrument resolution requires a symbol or company/security name.");
-      // The persisted master only holds instruments the user has onboarded; the bundled catalog is a
-      // non-canonical compatibility fallback (never invented identity, and flagged canonical:false).
-      const catalogFallback = { resolve: async () => loadLegacyTickerCatalog() };
+      const catalogFallback = createConversationInstrumentFallback({
+        loadCatalog: loadLegacyTickerCatalog,
+        allowExternal: (call.sourceScope === "auto" || call.sourceScope === "web")
+          && call.researchSourcePolicy?.mode !== "only_refs",
+        signal,
+        searchProvider: (queryText, providerSignal) => searchFederatedInstrumentCandidates(
+          queryText,
+          { limit: 100 },
+          {
+            signal: providerSignal,
+            providerAllow: call.researchSourcePolicy?.providerAllow,
+            providerDeny: call.researchSourcePolicy?.providerDeny,
+            propagateErrors: true,
+          },
+        ),
+      });
       const resolved = await resolveConversationInstrument(
         { symbol, name },
         (query) => resolvePersistedInstrument(query, catalogFallback),
@@ -771,10 +785,15 @@ function registerBuiltinConversationTools(): void {
       return {
         output: resolved.match ?? null,
         summary: resolved.match
-          ? `${queryLabel} → ${resolved.match.symbol ?? "symbol unavailable"} · entity ${resolved.match.entityId ?? "unknown"} · listing ${resolved.match.listingId ?? "unknown"}`
-          : `No canonical identity match for ${queryLabel}. No identity was invented.`,
+          ? `${queryLabel} → ${resolved.match.symbol ?? "symbol unavailable"} · ${resolved.match.canonical ? "canonical LiOS identity" : `non-canonical provider candidate (${resolved.match.source ?? "unknown"})`} · entity ${resolved.match.entityId ?? "unknown"} · listing ${resolved.match.listingId ?? "unknown"}`
+          : resolved.status === "ambiguous"
+            ? `Identity is ambiguous for ${queryLabel}. No identity was selected.`
+            : `No identity match for ${queryLabel}. No identity was invented.`,
         deterministic: true,
-        sourceRefs: ["lios:global-instrument-master"],
+        sourceRefs: ["lios:global-instrument-master", ...(!resolved.match?.canonical && resolved.match
+          ? [...new Set([resolved.match.source, ...resolved.match.identifiers.map((identifier) => identifier.provider)])]
+            .filter((provider): provider is string => Boolean(provider)).map((provider) => `provider:${provider}`)
+          : [])],
       };
     },
   });
@@ -2629,6 +2648,7 @@ async function executeP2CapabilityBundle(
     "lios.instrument-master",
     hintedSymbol ? { symbol: hintedSymbol } : { name: entityQuery },
     signal,
+    createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)),
   );
   const match = resolvedTool.output as {
     symbol?: string | null;
@@ -2935,7 +2955,7 @@ async function executeP6Backtest(
 
   const startedAt = nowIso();
   await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "resolve-security", label: "Resolve " + symbol, componentId: "lios.instrument-master" });
-  const resolvedTool = await invokeConversationTool("lios.instrument-master", { symbol }, signal);
+  const resolvedTool = await invokeConversationTool("lios.instrument-master", { symbol }, signal, createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)));
   if (!resolvedTool.output) throw new Error("LiOS could not resolve " + symbol + " in the Global Instrument Master.");
   await emit(input, { ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Security resolved", summary: resolvedTool.summary, deterministic: true, sourceRefs: resolvedTool.sourceRefs });
 
@@ -3212,7 +3232,7 @@ async function executeTechnical(
   assertNotAborted(signal);
 
   await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "resolve-security", label: `Resolve ${symbol}`, componentId: "lios.instrument-master" });
-  const resolvedTool = await invokeConversationTool("lios.instrument-master", { symbol }, signal);
+  const resolvedTool = await invokeConversationTool("lios.instrument-master", { symbol }, signal, createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)));
   if (!resolvedTool.output) throw new Error(`LiOS could not resolve ${symbol} in the Global Instrument Master. No identity was invented.`);
   await emit(input, {
     ...eventBase(requestId), type: "tool_result", stepId: "resolve-security", label: "Security resolved",
@@ -3298,7 +3318,7 @@ async function executeResolve(
   const ticker = String(plan.intent.parameters.ticker || plan.intent.entityRefs[0] || "").toUpperCase();
   const startedAt = nowIso();
   await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "resolve-security", label: `Resolve ${ticker}`, componentId: "lios.instrument-master" });
-  const tool = await invokeConversationTool("lios.instrument-master", { symbol: ticker }, signal);
+  const tool = await invokeConversationTool("lios.instrument-master", { symbol: ticker }, signal, createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)));
   const match = tool.output as { entityId?: string | null; listingId?: string | null; canonical?: boolean } | null;
   const text = match
     ? `Ask LiOS resolved ${ticker} through the Global Instrument Master.\nEntity: ${match.entityId ?? "unknown"}\nListing: ${match.listingId ?? "unknown"}\nCanonical: ${match.canonical ? "yes" : "no"}`
@@ -3486,6 +3506,7 @@ async function executeP5ProfessionalBundle(
       "lios.instrument-master",
       hintedSymbol ? { symbol: hintedSymbol } : { name: entityQuery },
       signal,
+      createConversationToolCall(input, "workflow", await activeResearchSourcePolicy(input)),
     );
     const identityMatch = identity.output as { symbol?: string | null; name?: string | null; canonical?: boolean } | null;
     if (!identityMatch) throw new Error("LiOS could not resolve " + identityLabel + " in the Global Instrument Master.");

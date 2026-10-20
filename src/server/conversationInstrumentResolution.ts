@@ -1,4 +1,68 @@
-import type { InstrumentResolutionQuery, InstrumentResolutionResult } from "@shared/globalInstrumentMaster";
+import {
+  resolveInstrumentLocal,
+  type InstrumentMasterCandidate,
+  type InstrumentProviderFallback,
+  type InstrumentResolutionQuery,
+  type InstrumentResolutionResult,
+} from "@shared/globalInstrumentMaster";
+import { instrumentSearchGroupKey } from "@shared/instrumentSearchIndex";
+
+/** Extend the existing master fallback, never a competing identity registry. */
+export function createConversationInstrumentFallback(input: {
+  loadCatalog: () => InstrumentMasterCandidate[];
+  searchProvider: (queryText: string, signal: AbortSignal) => Promise<InstrumentMasterCandidate[]>;
+  allowExternal: boolean;
+  signal: AbortSignal;
+}): InstrumentProviderFallback {
+  return {
+    async resolve(query) {
+      input.signal.throwIfAborted();
+      const catalog = input.loadCatalog();
+      // Preserve compatibility matches and ambiguity without contacting a provider.
+      if (resolveInstrumentLocal(query, catalog).status !== "not_found" || !input.allowExternal) return catalog;
+      const queryText = query.ticker ?? query.name;
+      if (!queryText?.trim()) return catalog;
+      const candidates = await input.searchProvider(queryText, input.signal);
+      input.signal.throwIfAborted();
+      // Reuse only search's grouping identity, not its free-text relevance
+      // filter: the structured master remains the sole matching authority.
+      const groups = new Map<string, InstrumentMasterCandidate[]>();
+      for (const candidate of candidates) {
+        if (candidate.canonical !== false) continue;
+        const key = instrumentSearchGroupKey(candidate);
+        const members = groups.get(key);
+        if (members) members.push(candidate);
+        else groups.set(key, [candidate]);
+      }
+      return [...groups.values()].flatMap((members) => {
+        const primary = members[0];
+        const mics = new Set(members.map((candidate) => candidate.mic?.trim().toUpperCase()).filter(Boolean));
+        const exchanges = new Set(members.map((candidate) => candidate.exchange?.trim().toUpperCase()).filter(Boolean));
+        const countries = new Set(members.map((candidate) => candidate.countryCode?.trim().toUpperCase()).filter(Boolean));
+        const currencies = new Set(members.map((candidate) => candidate.currency?.trim().toUpperCase()).filter(Boolean));
+        if (mics.size > 1 || exchanges.size > 1 || countries.size > 1 || currencies.size > 1) return members;
+        if (members.some((candidate) => candidate.lifecycleStatus !== primary.lifecycleStatus
+          || (candidate.validFrom ?? null) !== (primary.validFrom ?? null)
+          || (candidate.validTo ?? null) !== (primary.validTo ?? null))) return members;
+        const identifiers = members.flatMap((candidate) => candidate.identifiers);
+        const seen = new Set<string>();
+        return [{
+          ...primary,
+          mic: mics.values().next().value ?? null,
+          exchange: exchanges.values().next().value ?? null,
+          countryCode: countries.values().next().value ?? null,
+          currency: currencies.values().next().value ?? null,
+          identifiers: identifiers.filter((identifier) => {
+            const key = JSON.stringify(identifier);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        }];
+      });
+    },
+  };
+}
 
 /**
  * Conversation entity extraction can only guess whether a bare word is a ticker or a company

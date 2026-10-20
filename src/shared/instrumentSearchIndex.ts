@@ -174,7 +174,7 @@ export interface InstrumentSearchFederatedFallback {
   search(queryText: string, options: InstrumentSearchOptions): Promise<InstrumentMasterCandidate[]>;
 }
 
-function groupKeyFor(candidate: InstrumentMasterCandidate): string {
+export function instrumentSearchGroupKey(candidate: InstrumentMasterCandidate): string {
   if (candidate.entityId) return candidate.entityId;
   return `legacy:${normalizeText(candidate.name)}:${normalizeText(candidate.symbol)}`;
 }
@@ -295,7 +295,7 @@ export function searchInstrumentIndexLocal(
 
   const groups = new Map<string, { candidate: InstrumentMasterCandidate; score: number }[]>();
   for (const entry of scored) {
-    const key = groupKeyFor(entry.candidate);
+    const key = instrumentSearchGroupKey(entry.candidate);
     const existing = groups.get(key);
     if (existing) existing.push(entry);
     else groups.set(key, [entry]);
