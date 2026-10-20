@@ -327,7 +327,7 @@ export default function ProjectExperienceShell({
     setShowLifecycleCenter(false);
     setContextOpen(false);
   }, [navigationRequest]);
-  const [librarySelection, setLibrarySelection] = useState<{ projectId: number; artifactId: string | null; resourceId: string | null; request: number } | null>(null);
+  const [librarySelection, setLibrarySelection] = useState<{ projectId: number; artifactId: string | null; resourceId: string | null; version?: number | null; request: number } | null>(null);
   const [workSearchOpen, setWorkSearchOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [chatLimit, setChatLimit] = useState(50);
@@ -1667,6 +1667,7 @@ export default function ProjectExperienceShell({
               {projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : !selection.projectId ? <p className="mt-6">Choose a Project to keep this work isolated.</p> : projectHomeQuery.isLoading ? <p role="status">Loading Project…</p> : projectHomeQuery.isError ? <p role="alert">Unable to load this Project. <button onClick={() => void projectHomeQuery.refetch()}>Retry</button></p> : home && <div className="lios-project-tools">
                 {section === "library" ? <ProjectArtifactsPanel key={`${home.project.id}:${librarySelection?.projectId === home.project.id ? librarySelection.request : 0}`} projectId={home.project.id} sessions={home.sessions}
                   initialArtifactId={librarySelection?.projectId === home.project.id ? librarySelection.artifactId : null}
+                  initialVersion={librarySelection?.projectId === home.project.id ? librarySelection.version ?? null : null}
                   selectedResourceId={librarySelection?.projectId === home.project.id ? librarySelection.resourceId : null}
                   resources={home.resources}
                   onAskArtifact={(id, title, prompt) => { pendingArtifactOpenRef.current = id; pendingArtifactFocusRef.current = false; void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review.`); }}
@@ -2278,7 +2279,7 @@ export default function ProjectExperienceShell({
                     <button type="button" data-testid="artifact-expand-workspace" className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[11px] text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or discard your Artifact edits before expanding the workspace."); return; }
-                        setLibrarySelection((current) => ({ projectId: selection.projectId!, artifactId: conversationArtifactRef, resourceId: null, request: (current?.request ?? 0) + 1 }));
+                        setLibrarySelection((current) => ({ projectId: selection.projectId!, artifactId: conversationArtifactRef, resourceId: null, version: artifactViewVersion, request: (current?.request ?? 0) + 1 }));
                         setSection("library"); setShowLifecycleCenter(false); setContextOpen(false);
                       }}>
                       Expand workspace
