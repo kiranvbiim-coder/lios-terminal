@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { and, desc, eq, lte } from "drizzle-orm";
 import { dataEntitlementPolicies, type DataEntitlementPolicy } from "@shared/schema";
 import { entitlementPolicyInputSchema, type EntitlementPolicyInput } from "@shared/pointInTimeUniverse";
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 
 export async function createEntitlementPolicy(input: EntitlementPolicyInput, reviewedByUserId: number | null = null) {
@@ -19,8 +19,9 @@ export async function createEntitlementPolicy(input: EntitlementPolicyInput, rev
   return { policy, created: true };
 }
 
-export async function getEntitlementPolicyById(id: string): Promise<DataEntitlementPolicy | null> {
-  const [policy] = await getDb().select().from(dataEntitlementPolicies).where(eq(dataEntitlementPolicies.id, id)).limit(1);
+export async function getEntitlementPolicyById(id: string, db: Pick<DrizzleDb, "select"> = getDb(), lock = false): Promise<DataEntitlementPolicy | null> {
+  const query = db.select().from(dataEntitlementPolicies).where(eq(dataEntitlementPolicies.id, id));
+  const [policy] = await (lock ? query.for("share") : query).limit(1);
   return policy ?? null;
 }
 

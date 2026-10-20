@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { CanonicalIdentity } from "@shared/waveCCanonicalAdapters";
 import { companyListings } from "@shared/schema";
-import type { getDb } from "./db";
+import type { DrizzleDb } from "./db";
 
-type Db = ReturnType<typeof getDb>;
+type Db = Pick<DrizzleDb, "select">;
 
 export interface PositionIdentity {
   symbol: string;
