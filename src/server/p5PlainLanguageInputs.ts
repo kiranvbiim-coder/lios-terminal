@@ -273,29 +273,39 @@ function extractSegment(raw: string, allowShared: boolean): SegmentResult {
 
   // First-year cash flow with growth and horizon is an alternative to listing every year.
   const firstYear: number[] = [];
-  const firstYearHandler = (rawNumber: string, scale: string | undefined) => {
+  const firstYearEnds: number[] = [];
+  const firstYearHandler = (rawNumber: string, scale: string | undefined, end: number) => {
     if (scaleSuffix(scale)) { collector.issue("freeCashFlows", "Free cash flow " + SCALE_MESSAGE); return; }
     firstYear.push(numberOf(rawNumber));
+    firstYearEnds.push(end);
   };
   scanner.each(
     new RegExp(`(?:first[- ]year|year[- ]?(?:1|one))\\s+(?:free\\s+cash\\s+flow|fcf)s?${FILLER}(${NUM})(${SCALE})`, "gi"),
-    (match) => firstYearHandler(match[1], match[2]),
+    (match) => firstYearHandler(match[1], match[2], (match.index ?? 0) + match[0].length),
   );
   scanner.each(
     new RegExp(`(?:free\\s+cash\\s+flow|fcf)s?${FILLER}(${NUM})(${SCALE})\\s+(?:in|for)\\s+(?:the\\s+)?(?:first\\s+year|year\\s*(?:1|one))\\b`, "gi"),
-    (match) => firstYearHandler(match[1], match[2]),
+    (match) => firstYearHandler(match[1], match[2], (match.index ?? 0) + match[0].length),
   );
 
   const growths: number[] = [];
   scanner.each(
-    new RegExp(`\\b(?:grow(?:s|ing)?|growth(?:\\s+rate)?)\\b(?:[\\s:=]|\\b(?:of|at|is|are|equals?|by|to|assumed)\\b)*(${NUM_PLAIN})(?:\\s?(${PCT_MARK}))?`, "gi"),
+    new RegExp(`(?:(free\\s+cash\\s+flows?|fcfs?|cash\\s+flows?)\\s+)?\\b(grow(?:s|ing)?|growth(?:\\s+rate)?)\\b(?:[\\s:=]|\\b(?:of|at|is|are|equals?|by|to|assumed)\\b)*(${NUM_PLAIN})(?:\\s?(${PCT_MARK}))?`, "gi"),
     (match, source) => {
+      const start = match.index ?? 0;
+      // Only cash-flow-qualified growth, or a growth verb directly following the first-year figure, counts as cash-flow growth.
+      const directlyAfterFirstYear = !match[1] && /^grow/i.test(match[2])
+        && firstYearEnds.some((end) => end <= start && /^[\s,;]*(?:and\s+|is\s+)?$/i.test(source.slice(end, start)));
+      if (!match[1] && !directlyAfterFirstYear) {
+        collector.issue("freeCashFlows", "A growth rate was stated without saying it is cash-flow growth, so it is ambiguous (revenue, earnings and terminal growth differ). Say \"cash flow growth\" or \"free cash flow growth\" explicitly, or list every forecast year.");
+        return;
+      }
       if (!firstYear.length) {
         collector.issue("freeCashFlows", "Cash-flow growth was stated without a first-year cash flow and complete forecast. Review the intended forecast before running.");
         return;
       }
-      const after = source.slice((match.index ?? 0) + match[0].length);
-      const value = percentValue(collector, "cashFlowGrowth", "Cash flow growth", match[1], match[2], after);
+      const after = source.slice(start + match[0].length);
+      const value = percentValue(collector, "cashFlowGrowth", "Cash flow growth", match[3], match[4], after);
       if (value !== null) growths.push(value);
     },
   );
@@ -402,8 +412,10 @@ function splitCases(text: string): { base: string; cases: Record<"bear" | "bull"
     const start = label.index ?? 0;
     const bodyStart = start + label[0].length;
     const nextLabel = labels[index + 1]?.index ?? text.length;
+    // A label with an inline body ends at its line; a label alone on its line owns every following line up to the next label.
     const newline = text.indexOf("\n", bodyStart);
-    const end = Math.min(nextLabel, newline === -1 ? text.length : newline);
+    const inline = newline !== -1 && text.slice(bodyStart, newline).trim() !== "";
+    const end = Math.min(nextLabel, inline || newline === -1 ? (newline === -1 ? text.length : newline) : text.length);
     cases[label[1].toLowerCase() as "bear" | "bull"].unshift(text.slice(bodyStart, end));
     base = base.slice(0, start) + " ".repeat(end - start) + base.slice(end);
   }
@@ -420,7 +432,7 @@ function renderForForm(value: unknown): string {
 function extractDcfSensitivity(rawMessage: string): P5PlainLanguageExtraction {
   const message = normalise(rawMessage);
   const generalIssues: P5PlainLanguageIssue[] = [];
-  if (/[$€£]|\b(?:USD|EUR|GBP|CAD|AUD|SGD|JPY|INR|CHF|CNY)\b/i.test(message)) {
+  if (/[$€£]\s*[-+]?\d|\b(?:USD|EUR|GBP|CAD|AUD|SGD|JPY|INR|CHF|CNY)\b/i.test(message)) {
     generalIssues.push({ key: "_general", message: "Currency-marked assumptions need explicit unit reconciliation. Provide all monetary amounts in one declared consistent unit without currency markers; LiOS does not silently convert or discard currency identity." });
   }
   if (/\d,\d{3}(?!\d)/.test(message)) {

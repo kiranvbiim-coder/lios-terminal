@@ -17,6 +17,8 @@ import {
 import type { ConversationArtifactDraft } from "@shared/conversationRuntime";
 import { hashLedgerValue } from "./ledgerStore";
 import { compareRecordedFieldCaliber, isSignFlipSensitiveField } from "./finrobotFieldCaliber";
+import { projectReportSections } from "./reportSectionProjection";
+import type { ReportSection } from "./reportEngine";
 
 const SEMANTIC_MATERIALITY_PCT = 0.03;
 const NUMERIC_EPSILON = 1e-12;
@@ -345,6 +347,49 @@ export function applyArtifactPatch(base: ArtifactContent, patch: Record<string, 
   return artifactContentSchema.parse(next);
 }
 
+/** Adapt unknown conversation payloads to the existing report projector, not a second document format. */
+function projectConversationDocument(draft: ConversationArtifactDraft, data: Record<string, unknown>) {
+  const label = (key: string) => {
+    const words = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  };
+  const title = typeof data.title === "string" && data.title.trim() ? data.title : draft.title;
+  const sections: ReportSection[] = [{ type: "title", title, content: title, order: 0 }];
+  const append = (name: string, content: unknown) => {
+    sections.push({ type: "text", title: name, content, order: sections.length });
+  };
+  for (const [key, value] of Object.entries(data)) {
+    if (["kind", "title", "templateId", "editorPreference"].includes(key)) continue;
+    if (key === "sections" && Array.isArray(value)) {
+      value.forEach((section, index) => {
+        if (section && typeof section === "object" && !Array.isArray(section)) {
+          const record = section as Record<string, unknown>;
+          if (typeof record.title === "string" && record.title.trim() && Object.hasOwn(record, "content")) {
+            const extra = Object.fromEntries(Object.entries(record).filter(([name]) =>
+              !["title", "content", "type", "order"].includes(name)));
+            append(record.title, Object.keys(extra).length ? { content: record.content, ...extra } : record.content);
+            return;
+          }
+        }
+        append(`Section ${index + 1}`, section);
+      });
+    } else append(label(key), value);
+  }
+  return projectReportSections({
+    id: draft.artifactId,
+    templateId: typeof data.templateId === "string" ? data.templateId : "",
+    title,
+    generatedAt: "",
+    sections,
+    metadata: { passportIds: [], outputHash: hashLedgerValue(data) },
+  }, {
+    attrs: { sourceRefs: draft.sourceRefs, executionReceiptIds: draft.executionReceiptIds },
+    // The readable blocks are only a projection. Retain the complete original
+    // payload once, including unrecognized rights, provenance and custody fields.
+    firstBlockAttrs: { conversationDraftData: data, conversationArtifactType: draft.artifactType },
+  });
+}
+
 export function normalizeConversationDraft(draft: ConversationArtifactDraft): ArtifactContent {
   const type = draft.artifactType.toLowerCase();
   const data = cloneJson(draft.data);
@@ -363,19 +408,20 @@ export function normalizeConversationDraft(draft: ConversationArtifactDraft): Ar
   if (type.includes("portfolio")) {
     return artifactContentSchema.parse({ kind: "portfolio", portfolioRef: null, holdings: [], summary: data, risk: {} });
   }
-  if (type.includes("report")) {
-    return artifactContentSchema.parse({
-      kind: "report",
-      templateId: null,
-      blocks: [{ id: "block-1", type: "paragraph", text: JSON.stringify(data, null, 2), attrs: {} }],
-      sections: [],
-      editorPreference: "builtin",
-    });
-  }
-  if (type.includes("research")) {
+  if (type.includes("report") || type.includes("research")) {
+    const projected = projectConversationDocument(draft, data);
+    if (type.includes("report")) {
+      return artifactContentSchema.parse({
+        kind: "report",
+        templateId: typeof data.templateId === "string" && data.templateId.trim().length <= 200 ? data.templateId : null,
+        ...projected,
+        editorPreference: "builtin",
+      });
+    }
     return artifactContentSchema.parse({
       kind: "research",
-      blocks: [{ id: "block-1", type: "paragraph", text: JSON.stringify(data, null, 2), attrs: {} }],
+      question: typeof data.question === "string" ? data.question : "",
+      blocks: projected.blocks,
       claims: [],
       editorPreference: "builtin",
     });

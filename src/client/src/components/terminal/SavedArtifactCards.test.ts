@@ -30,11 +30,12 @@ test("saved Artifact card is a labelled keyboard-operable button that opens the 
   assert.equal(renderToStaticMarkup(createElement(SavedArtifactCardList, { cards: [], activeId: null, onOpen: () => undefined })), "");
 });
 
-test("once the Project Artifact list has loaded, a card whose Artifact is missing is disabled and marked Unavailable", () => {
+test("a card is unavailable only when the exact lookup says missing, never because the active list lacks it", () => {
   const ref = { id, version: 1, title: "AAPL DCF sensitivity", kind: "valuation" };
-  assert.equal(describeSavedArtifactCard(ref, undefined, false).unavailable, false, "while the list is loading the card stays openable");
-  assert.equal(describeSavedArtifactCard(ref, { title: "x", kind: "valuation", headVersion: 1 }, true).unavailable, false);
-  const missing = describeSavedArtifactCard(ref, undefined, true);
+  assert.equal(describeSavedArtifactCard(ref, undefined).unavailable, false, "lookup pending: stays openable");
+  assert.equal(describeSavedArtifactCard(ref, undefined, "found").unavailable, false);
+  assert.equal(describeSavedArtifactCard(ref, { title: "x", kind: "valuation", headVersion: 1 }, "missing").unavailable, false, "a resolved Artifact is never unavailable");
+  const missing = describeSavedArtifactCard(ref, undefined, "missing");
   assert.equal(missing.unavailable, true);
   const html = renderToStaticMarkup(createElement(SavedArtifactCardList, { cards: [missing], activeId: null, onOpen: () => undefined }));
   assert.match(html, /<button type="button"[^>]*disabled=""/);

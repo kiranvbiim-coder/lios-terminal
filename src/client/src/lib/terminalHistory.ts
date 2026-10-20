@@ -1,4 +1,4 @@
-import type { WorkspaceState } from "./terminalTypes";
+import type { PaneState, WorkspaceState } from "./terminalTypes";
 
 export interface TerminalNavigationHistory {
   back: WorkspaceState[];
@@ -7,13 +7,16 @@ export interface TerminalNavigationHistory {
 
 const MAX_HISTORY = 50;
 
+function samePane(a: PaneState | null | undefined, b: PaneState | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return a.view === b.view && a.symbol === b.symbol
+    && a.artifact?.artifactId === b.artifact?.artifactId && a.artifact?.version === b.artifact?.version
+    && a.artifact?.projectId === b.artifact?.projectId && a.artifact?.chatId === b.artifact?.chatId;
+}
+
 function sameWorkspace(a: WorkspaceState, b: WorkspaceState): boolean {
-  return a.focusedPane === b.focusedPane &&
-    a.primary.view === b.primary.view && a.primary.symbol === b.primary.symbol &&
-    ((a.secondary === null && b.secondary === null) || Boolean(
-      a.secondary && b.secondary &&
-      a.secondary.view === b.secondary.view && a.secondary.symbol === b.secondary.symbol,
-    ));
+  return a.focusedPane === b.focusedPane && samePane(a.primary, b.primary) && samePane(a.secondary, b.secondary)
+    && samePane(a.tertiary, b.tertiary) && samePane(a.quaternary, b.quaternary);
 }
 
 export function createTerminalNavigationHistory(): TerminalNavigationHistory {

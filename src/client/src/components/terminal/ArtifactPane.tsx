@@ -460,6 +460,7 @@ interface ArtifactPaneProps {
   artifactId: string;
   version?: number | null;
   onVersionChange?: (version: number | null) => void;
+  onDisplayedVersionChange?: (version: number, artifactId: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   projectId: number;
   sessions: ProjectSession[];
@@ -541,6 +542,7 @@ function ArtifactPaneWorkspace({
   projectId,
   version,
   onVersionChange,
+  onDisplayedVersionChange,
   onDirtyChange,
   sessions,
   onClose,
@@ -580,6 +582,9 @@ function ArtifactPaneWorkspace({
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
   const data=detail.data; useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
+  const displayedVersionCallback = useRef(onDisplayedVersionChange);
+  displayedVersionCallback.current = onDisplayedVersionChange;
+  useEffect(() => { if (data) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
     setExportPlan(null);
@@ -644,8 +649,9 @@ function ArtifactPaneWorkspace({
       if (spreadsheetSaveInFlight.current || spreadsheetPendingRevision) throw new Error("Wait for the current portfolio revision to finish saving.");
       spreadsheetSaveInFlight.current = true; setSpreadsheetSaving(true);
       try {
-        await createArtifactVersion(artifactId, { baseVersion: data.version.version, content: next, actorType: "user" });
+        const saved = await createArtifactVersion(artifactId, { baseVersion: data.version.version, content: next, actorType: "user" });
         setSpreadsheetDirty(false); setSpreadsheetPendingRevision(true);
+        onVersionChange?.(saved.version);
         invalidate(projectId, artifactId);
       } finally { spreadsheetSaveInFlight.current = false; setSpreadsheetSaving(false); }
       return;
@@ -657,11 +663,12 @@ function ArtifactPaneWorkspace({
       setError(null);
       try {
         if (data.version.version !== data.artifact.headVersion) throw new Error("Reload the current saved spreadsheet head before saving.");
-        await createArtifactVersion(artifactId, {
+        const saved = await createArtifactVersion(artifactId, {
           baseVersion: data.version.version, content: next, actorType: "user",
           trustManifest: data.version.trustManifest, dependencyRefs: data.version.dependencyRefs, refreshSpec: data.version.refreshSpec,
         });
         if (mounted.current) setSpreadsheetPendingRevision(true);
+        onVersionChange?.(saved.version);
         invalidate(projectId, artifactId);
       } catch (cause) {
         if (mounted.current) setError(cause instanceof Error ? cause.message : "Spreadsheet revision could not be saved. Your local draft is retained.");
@@ -676,10 +683,11 @@ function ArtifactPaneWorkspace({
       setError(null);
       try {
         if(data.version.version!==data.artifact.headVersion) throw new Error("This Artifact is not the current revision. Reload before saving.");
-        await createArtifactVersion(artifactId,{
+        const saved = await createArtifactVersion(artifactId,{
           baseVersion:data.version.version,content:next,actorType:"user",
           trustManifest:data.version.trustManifest,dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
         });
+        onVersionChange?.(saved.version);
         invalidate(projectId,artifactId);
       } catch(cause) {
         setError(cause instanceof Error?cause.message:"Artifact revision could not be saved.");
@@ -687,11 +695,12 @@ function ArtifactPaneWorkspace({
       }
       return;
     }
-    if(next.kind!=="chart") return run(async()=>{await createArtifactVersion(artifactId,{baseVersion:data.artifact.headVersion,content:next,actorType:"user"});invalidate(projectId,artifactId)});
+    if(next.kind!=="chart") return run(async()=>{const saved=await createArtifactVersion(artifactId,{baseVersion:data.artifact.headVersion,content:next,actorType:"user"});onVersionChange?.(saved.version);invalidate(projectId,artifactId)});
     setError(null);
     try {
       if(data.version.version!==data.artifact.headVersion) throw new Error("This chart is not the current revision. Reload before saving.");
-      await createArtifactVersion(artifactId,{baseVersion:data.version.version,content:next,actorType:"user"});
+      const saved = await createArtifactVersion(artifactId,{baseVersion:data.version.version,content:next,actorType:"user"});
+      onVersionChange?.(saved.version);
       invalidate(projectId,artifactId);
     } catch(cause) {
       setError(cause instanceof Error?cause.message:"Chart revision could not be saved.");
@@ -701,7 +710,7 @@ function ArtifactPaneWorkspace({
   const draft=async(d:SpreadsheetCellDiff)=>run(async()=>{await proposeArtifactChange(artifactId,{baseVersion:data.artifact.headVersion,type:"spreadsheet_ai_diff",summary:`Conversation-ready draft ${d.sheetId}!${d.ref}`,diffs:[d],actorType:"conversation"});invalidate(projectId,artifactId)});
   const refreshThesis=async()=>run(async()=>{await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
   const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200" title="Stage the saved governed request in a fresh Project chat"><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await undoArtifact(artifactId);invalidate(projectId,artifactId)})} disabled={data.artifact.headVersion<=1} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title="Undo by new version"><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Archive"><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
+  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{const saved=await undoArtifact(artifactId);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} disabled={data.artifact.headVersion<=1||data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Undo by new version"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
     <div role="tablist" aria-label="Artifact inspector" className="lios-reference-artifact-tabs">
       {(["artifact", "evidence", "history"] as const).map((tab, index, tabs) => <button key={tab} type="button" role="tab" id={`${inspectorId}-${tab}-tab`} aria-controls={`${inspectorId}-${tab}-panel`} aria-selected={inspectorTab === tab} tabIndex={inspectorTab === tab ? 0 : -1} onClick={() => setInspectorTab(tab)} onKeyDown={(event) => {
         const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -763,7 +772,7 @@ function ArtifactPaneWorkspace({
       })} className="rounded border border-cyan-300/30 px-3 py-2 disabled:opacity-30">Review branch reconciliation</button>
       {mergeNotice&&<p role="status">{mergeNotice}</p>}
     </div>}
-    {inspectorTab==="history"&&<button disabled={!left||left>=data.artifact.headVersion} onClick={()=>void run(async()=>{await restoreArtifactRevision(artifactId,data.artifact.headVersion,left!);invalidate(projectId,artifactId)})} className="m-3 rounded border border-amber-300/30 px-3 py-2 disabled:opacity-30">Restore selected revision as new version</button>}
+    {inspectorTab==="history"&&<button disabled={!left||left>=data.artifact.headVersion} onClick={()=>void run(async()=>{const saved=await restoreArtifactRevision(artifactId,data.artifact.headVersion,left!);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} className="m-3 rounded border border-amber-300/30 px-3 py-2 disabled:opacity-30">Restore selected revision as new version</button>}
     <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="border-t border-border/50 p-3"><div className="mb-4 space-y-2">{(versions.data??[]).slice().reverse().map(version=><div key={version.id} className="flex items-center justify-between border-b border-border/40 pb-2 text-xs"><span>Revision {version.version}</span><span className="text-muted-foreground">{version.version===data.artifact.headVersion?"Current":"Saved revision"}</span></div>)}</div><div className="flex flex-wrap items-end gap-2"><label className="font-terminal text-[12px] text-muted-foreground">COMPARE FROM<select value={left??""} onChange={(e)=>setLeft(Number(e.target.value))} className="mt-1 block rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">{(versions.data??[]).slice().reverse().map((v)=><option key={v.id} value={v.version}>v{v.version}</option>)}</select></label><button disabled={!left||left===data.artifact.headVersion} onClick={()=>void run(async()=>{
   const result=await compareArtifactVersions(artifactId,left!,data.artifact.headVersion);
   const leftRecord=(versions.data??[]).find((version)=>version.version===left);

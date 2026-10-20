@@ -1,4 +1,5 @@
 import { useConversationArtifactView } from "@/lib/conversationArtifactView";
+import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -59,7 +60,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import type { ViewMode } from "@/lib/terminalTypes";
+import type { ArtifactWorkbenchContext, ViewMode } from "@/lib/terminalTypes";
 import type { LifecycleAction } from "@shared/objectLifecycle";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
@@ -168,7 +169,8 @@ interface Props {
   activeView: ViewMode;
   activeSymbol?: string;
   workspaceAdapter: WorkspaceAdapter;
-  onOpenWorkbench: () => void;
+  onOpenWorkbench: (context?: ArtifactWorkbenchContext) => void;
+  workbenchReturn?: { context: ArtifactWorkbenchContext; request: number; prompt?: string } | null;
   onOpenEnvironment: () => void;
   account: { name: string; email?: string };
   onLogout: () => void;
@@ -180,10 +182,6 @@ interface Props {
 
 type ChatMode = "project" | "quick" | "temporary";
 
-const ConversationArtifactPane = lazy(async () => {
-  const module = await import("./ArtifactPane");
-  return { default: module.ArtifactPane };
-});
 
 interface LocalMessage {
   id: string;
@@ -298,7 +296,7 @@ export default function ProjectExperienceShell({
   activeView,
   activeSymbol,
   workspaceAdapter,
-  onOpenWorkbench,
+  onOpenWorkbench: navigateWorkbench, workbenchReturn,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
@@ -411,6 +409,27 @@ export default function ProjectExperienceShell({
   const [sessionComparison, setSessionComparison] = useState<string | null>(null);
   const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode, restoredArtifactView, artifactViewVersion, setArtifactViewVersion] = useConversationArtifactView(projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId, selection.projectId, selection.chatId);
   const artifactDraftDirtyRef = useRef(false);
+  const displayedArtifactRef = useRef<{ artifactId: string; version: number } | null>(null);
+  const handledWorkbenchReturn = useRef<number | null>(null);
+  const onOpenWorkbench = () => {
+    if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
+    if (conversationArtifactRef && selection.projectId && selection.chatId) {
+      const displayed = displayedArtifactRef.current;
+      if (displayed?.artifactId !== conversationArtifactRef || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
+      navigateWorkbench({ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version });
+    } else navigateWorkbench();
+  };
+  useEffect(() => {
+    if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
+    const { context, prompt } = workbenchReturn;
+    if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
+      selection.setProjectId(context.projectId); selection.setChatId(context.chatId); return;
+    }
+    handledWorkbenchReturn.current = workbenchReturn.request;
+    setChatMode("project"); setSection("conversation"); setProjectHomeRequested(false);
+    setConversationArtifactRef(context.artifactId); setArtifactViewVersion(context.version);
+    if (prompt) setInput(current => current ? `${current}\n\n${prompt}` : prompt);
+  }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
   useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
     const width = shellRef.current?.querySelector(".lios-project-chat-surface")?.clientWidth ?? 0;
@@ -2260,40 +2279,9 @@ export default function ProjectExperienceShell({
             </div>
             </div>
             {conversationArtifactRef && chatMode === "project" && selection.projectId && (
-              <aside className={artifactFocusMode
-                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#060606]/95 p-3"
-                : "lios-artifact-sidecar block min-h-0 w-[42%] shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
-                {artifactFocusMode && (
-                  <div className="mb-2 flex items-center justify-between rounded-lg border border-amber-300/15 bg-amber-300/[0.025] px-3 py-2" data-p4-artifact-focus="true">
-                    <div>
-                      <div className="font-terminal text-[10px] uppercase tracking-[0.18em] text-amber-200">Artifact Focus</div>
-                      <div className="mt-0.5 font-ui text-[11px] text-muted-foreground">Professional work surface · the Project chat remains available when you exit Focus.</div>
-                    </div>
-                    <button type="button" onClick={() => setArtifactFocusMode(false)} className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[11px] text-muted-foreground hover:text-foreground">
-                      Exit Focus
-                    </button>
-                  </div>
-                )}
-                {!artifactFocusMode && (
-                  <div className="mb-2 flex justify-end">
-                    <button type="button" data-testid="artifact-expand-workspace" className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[11px] text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or discard your Artifact edits before expanding the workspace."); return; }
-                        setLibrarySelection((current) => ({ projectId: selection.projectId!, artifactId: conversationArtifactRef, resourceId: null, version: artifactViewVersion, request: (current?.request ?? 0) + 1 }));
-                        setSection("library"); setShowLifecycleCenter(false); setContextOpen(false);
-                      }}>
-                      Expand workspace
-                    </button>
-                  </div>
-                )}
-                <Suspense
-                  fallback={
-                    <div className="flex min-h-40 items-center justify-center rounded-xl border border-border/55 bg-[#080808] font-terminal text-[12px] tracking-wider text-muted-foreground">
-                      LOADING LIVE ARTIFACT…
-                    </div>
-                  }
-                >
-                  <ConversationArtifactPane
+              <ConversationArtifactSidecar focus={artifactFocusMode} onExitFocus={() => setArtifactFocusMode(false)}
+                    onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, version }; onOpenWorkbench(); }}
+                    onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, version }; }}
                     artifactId={conversationArtifactRef}
                     version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
                     projectId={selection.projectId}
@@ -2318,9 +2306,7 @@ export default function ProjectExperienceShell({
                       setLifecycleNotice(`Restored the saved replay posture for "${title}". Review or send the staged request.`);
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}
-                  />
-                </Suspense>
-              </aside>
+              />
             )}
           </div>
         )}

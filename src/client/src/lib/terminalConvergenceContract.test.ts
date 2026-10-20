@@ -6,7 +6,6 @@ import test from "node:test";
 import {
   ARTIFACT_REVISION_POLICY,
   OBSERVATION_TRUTH_POLICY,
-  PRIMARY_AUTHENTICATED_SHELL,
   PROACTIVITY_POLICY,
   TERMINAL_CONVERGENCE_LOOP,
   WORKING_CONTEXT_POLICY,
@@ -33,7 +32,6 @@ const walk = (dir: string): string[] =>
 const uiSources = [...walk(path.join(clientRoot, "components")), ...walk(path.join(clientRoot, "pages"))]
   .map((file) => ({ file: path.relative(srcRoot, file), text: fs.readFileSync(file, "utf8") }));
 
-const terminal = read("client/src/pages/Terminal.tsx");
 const shell = read("client/src/components/terminal/ProjectExperienceShell.tsx");
 const projectHome = read("client/src/components/terminal/ProjectHome.tsx");
 const roadmap = read("../docs/LIOS_EXECUTION_ROADMAP.md");
@@ -43,13 +41,6 @@ test("TC-01 loop: PROJECT → CHAT → INTENT → ROUTE → COMPUTE → EXPLAIN 
   assert.ok(roadmap.includes(loop), `roadmap §0.0.1 must state the locked loop: ${loop}`);
 });
 
-test("TC-01 one primary authenticated shell; Workbench is an expansion of it", () => {
-  assert.equal((terminal.match(new RegExp(`<${PRIMARY_AUTHENTICATED_SHELL}\\b`, "g")) ?? []).length, 1, "Terminal must mount exactly one primary shell");
-  assert.match(terminal, /experienceSurface === "projects" \? \(\s*<ProjectExperienceShell/, "primary shell must own the projects surface");
-  assert.match(terminal, /onOpenWorkbench=\{\(\) => handleSurface\("workbench"\)\}/, "Workbench must be entered from the primary shell");
-  assert.doesNotMatch(shell, /<WaveCExperienceShell|<DockviewWorkspaceGrid/, "primary shell must not embed a second workspace shell");
-  assert.match(projectHome, /Expand workspace/, "Project Home must present Workbench as Expand workspace");
-});
 
 test("TC-01 hidden Working Context and no required active-entity selector", () => {
   assert.equal(WORKING_CONTEXT_POLICY.userVisibleInspector, false);

@@ -514,6 +514,13 @@ export default function ConversationRuntimeTrace({
             ) : (
               <p className="mt-2 font-ui text-[13px] text-muted-foreground">No field-level differences were reported. Apply only if the summary above is what you intend.</p>
             )}
+            <details className="mt-2 rounded border border-border/40 bg-black/25 p-2 font-ui text-[13px] text-muted-foreground" data-testid="trace-mutation-exact">
+              <summary className="cursor-pointer text-foreground">Exact before and after values</summary>
+              <div className="mt-2 text-[12px] uppercase tracking-wide">Before</div>
+              <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-all font-mono text-[12px]" data-testid="trace-mutation-exact-before">{JSON.stringify(mutation.proposal.before, null, 2)}</pre>
+              <div className="mt-2 text-[12px] uppercase tracking-wide">After</div>
+              <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-all font-mono text-[12px]" data-testid="trace-mutation-exact-after">{JSON.stringify(mutation.proposal.after, null, 2)}</pre>
+            </details>
             <div className="mt-3 flex justify-end gap-2">
               <button type="button" onClick={() => onMutationCancel(mutation.proposal.action)} className="rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
                 Cancel

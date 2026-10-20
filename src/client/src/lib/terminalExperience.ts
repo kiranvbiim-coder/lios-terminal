@@ -16,6 +16,7 @@ const VIEW_LABELS: Partial<Record<ViewMode, string>> = {
   chart: "Chart",
   news: "News",
   agent: "AI Agent",
+  artifact: "Artifact",
   screener: "Screener",
   watchlist: "Watchlist",
   alerts: "Alerts",

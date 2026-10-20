@@ -41,7 +41,7 @@ export const p5GuidedInputsSchema = z.object({
   /** Field keys whose wording was ambiguous or invalid, with the reason. Nothing is guessed for these. */
   issues: z.array(z.object({ key: z.string().max(80), message: z.string().max(400) }).strict()).max(40),
   /** Values already understood, rendered as text, used to pre-fill the form. */
-  provided: z.record(z.string().max(400)),
+  provided: z.record(z.string().max(1500)),
 }).strict();
 export type P5GuidedInputs = z.infer<typeof p5GuidedInputsSchema>;
 

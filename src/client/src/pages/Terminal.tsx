@@ -19,6 +19,10 @@ import TerminalUxOverlays from "@/components/terminal/TerminalUxOverlays";
 import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContextControl";
 import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
+import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
+import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
+import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
+import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
@@ -36,7 +40,7 @@ import { useAudience } from "@/lib/audience";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkspaceShortcutAction, shouldIgnoreCommandShortcut } from "@/lib/terminalChrome";
 import {
-  closeWorkspacePane, focusPane, getWorkspacePane, navigateFocusedPane, openSecurityView, openSymbolInWorkspace,
+  closeWorkspacePane, focusPane, getWorkspacePane, getWorkspacePanes, navigateFocusedPane, openSecurityView, openSymbolInWorkspace,
   openViewInNewPane, sanitizeWorkspaceForAudience, saveActiveWorkspace, PRESET_LAYOUTS, getPersonalFinanceWorkspace,
 } from "@/lib/terminalWorkspace";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
@@ -69,7 +73,7 @@ import {
   createTerminalUndoState, pushTerminalUndo, redoTerminalAction, undoTerminalAction,
   type TerminalUndoState,
 } from "@/lib/terminalUndo";
-import type { PaneId, PaneState, WorkspaceState, ViewMode } from "@/lib/terminalTypes";
+import type { ArtifactWorkbenchContext, PaneId, PaneState, WorkspaceState, ViewMode } from "@/lib/terminalTypes";
 import type { DomainSlug } from "@/lib/domains";
 import type { ClientAiContext } from "@shared/clientAiContext";
 import { subscribeProjectSessionRestore } from "@/lib/projectWorkspaceSession";
@@ -258,11 +262,27 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const isTrial = isClient && session.lifecycleStage === "trial";
   const audience: WorkspaceAudience = isInternal ? "internal" : isTrial ? "trial" : "client";
   const isMobile = useIsMobile();
-  const [tabsState, setTabsState] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
+  const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
+  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(null);
+  const workbenchDirtyRef = useRef(false);
+  const [workbenchDirty, setWorkbenchDirty] = useState(false);
+  const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
+  const setTabsState = useCallback((update: TerminalTabsState | ((current: TerminalTabsState) => TerminalTabsState)) => {
+    setTabsStateRaw(current => {
+      const next = typeof update === "function" ? update(current) : update;
+      if (!workbenchDirtyRef.current) return next;
+      const before = activeTerminalTab(current), after = activeTerminalTab(next);
+      const artifactPane = getWorkspacePanes(before.workspace).find(({ pane }) => pane.view === "artifact");
+      return before.id === after.id && before.workspace.focusedPane === after.workspace.focusedPane && artifactPane && getWorkspacePane(after.workspace, artifactPane.id) === artifactPane.pane ? next : current;
+    });
+  }, []);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
-  const [maximizedPane, setMaximizedPane] = useState<PaneId | null>(null);
+  const [maximizedPane, setMaximizedPaneRaw] = useState<PaneId | null>(null);
+  const setMaximizedPane = useCallback((update: PaneId | null | ((current: PaneId | null) => PaneId | null)) => {
+    setMaximizedPaneRaw(current => workbenchDirtyRef.current ? current : typeof update === "function" ? update(current) : update);
+  }, []);
   const [magnetization, setMagnetization] = useState(0.0);
   const [orderIntensity, setOrderIntensity] = useState(1.0);
   const [linkIsingToQuantum, setLinkIsingToQuantum] = useState(false);
@@ -281,7 +301,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const [reviewDecisionId, setReviewDecisionId] = useState<number | null>(null);
   const historyRef = useRef<Record<string, TerminalNavigationHistory>>({});
   const undoRef = useRef<Record<string, TerminalUndoState<WorkspaceState>>>({});
-  const canOpenView = useCallback((view: ViewMode) => isViewVisibleToAudience(view, audience), [audience]);
+  const canOpenView = useCallback((view: ViewMode) => view !== "artifact" && isViewVisibleToAudience(view, audience), [audience]);
   const livingWorkspaceAdapter = useMemo(() => createLivingWorkspaceAdapter({ audience }), [audience]);
 
   const activeTab = useMemo(() => activeTerminalTab(tabsState), [tabsState]);
@@ -428,7 +448,47 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     setExperienceSurface(surface);
   }, []);
 
-  useEffect(() => subscribeExperienceSurface(setExperienceSurfaceState), []);
+  useEffect(() => subscribeExperienceSurface(surface => {
+    if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
+    setExperienceSurfaceState(surface);
+  }), []);
+  const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext) => {
+    if (context) {
+      const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(), maximizedPane, workbenchDirtyRef.current);
+      if (!result) return;
+      artifactHandoffRef.current = artifactHandoffRef.current?.priorTab.id === result.handoff.priorTab.id
+        ? { ...result.handoff, priorTab: artifactHandoffRef.current.priorTab, priorLayout: artifactHandoffRef.current.priorLayout, priorMaximizedPane: artifactHandoffRef.current.priorMaximizedPane }
+        : result.handoff;
+      setTabsState(() => result.state);
+      setMaximizedPane(null);
+    }
+    handleSurface("workbench");
+  }, [tabsState, maximizedPane, handleSurface, setTabsState]);
+  const handleReturnToChat = useCallback((context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => {
+    const handoff = artifactHandoffRef.current;
+    if (!handoff) {
+      if (dirty || workbenchDirtyRef.current) return;
+      setWorkbenchReturn(current => ({ context, request: (current?.request ?? 0) + 1, prompt }));
+      handleSurface("projects");
+      return;
+    }
+    const result = returnFromArtifactWorkbench(tabsState, handoff, context, dirty || workbenchDirtyRef.current);
+    if (!result) return;
+    setTabsState(() => result.state);
+    setMaximizedPane(handoff.priorMaximizedPane);
+    setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
+    requestDockviewLayoutRestore(handoff.priorLayout);
+    artifactHandoffRef.current = null;
+    handleSurface("projects");
+  }, [tabsState, handleSurface, setTabsState]);
+  const handleWorkbenchVersion = useCallback((paneId: PaneId, version: number) => {
+    setTabsStateRaw(current => {
+      const active = activeTerminalTab(current), pane = getWorkspacePane(active.workspace, paneId);
+      if (!pane?.artifact || pane.artifact.version === version) return current;
+      return updateActiveTerminalWorkspace(current, { ...active.workspace, [paneId]: { ...pane, artifact: { ...pane.artifact, version } } });
+    });
+  }, []);
+  const handleWorkbenchDirty = useCallback((dirty: boolean) => { workbenchDirtyRef.current = dirty; setWorkbenchDirty(dirty); }, []);
 
   useEffect(() => subscribeProjectSessionRestore(() => {
     const restoredTabs = loadTerminalTabs(audience);
@@ -676,6 +736,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "chart": content = <ChartPanel symbol={pane.symbol} onSymbol={(nextSymbol) => updatePaneSymbolAndView(paneId, nextSymbol, "chart")} />; break;
       case "news": content = <NewsPanel symbol={pane.symbol} />; break;
       case "agent": content = <AgentPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} context={askLiosContext ?? undefined} initialPrompt={askLiosPrompt ?? undefined} />; break;
+      case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
       case "screener": content = <ScreenerPanel onSymbol={onSymbol} />; break;
       case "watchlist": content = <WatchlistPanel activeSymbol={activePane.symbol} onSymbol={onSymbol} role={session.role} />; break;
       case "alerts": content = <AlertsPanel onSymbol={onSymbol} role={session.role} />; break;
@@ -791,7 +852,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     );
   }, [
     activePane.symbol, activeTab.id, askLiosContext, askLiosPrompt, domain, handleNav, handlePaneNav, handlePaneSymbol, handleResearchStarter, linkHawkesToOptimizer, linkIsingToQuantum, magnetization, orderIntensity, researchStarter, session.role, tabsState.tabs,
-    updatePaneSymbolAndView,
+    updatePaneSymbolAndView, handleWorkbenchVersion, handleWorkbenchDirty, handleReturnToChat,
   ]);
 
   useEffect(() => {
@@ -961,7 +1022,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             preferences={uxPreferences}
           />
           <div className="relative z-[1] h-full min-h-0 min-w-0">
-          {experienceSurface === "projects" ? (
+          <div className={isProjectsSurface ? "h-full min-h-0" : "hidden"} aria-hidden={!isProjectsSurface}>
             <ProjectExperienceShell
               navigationRequest={projectNavigation}
               onNavigationContext={setNavigationContext}
@@ -973,10 +1034,12 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               activeView={activePane.view}
               activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined}
               workspaceAdapter={livingWorkspaceAdapter}
-              onOpenWorkbench={() => handleSurface("workbench")}
+              onOpenWorkbench={handleOpenWorkbench}
+              workbenchReturn={workbenchReturn}
               onOpenEnvironment={onOpenEnvironment}
             />
-          ) : isExperienceHomeSurface(experienceSurface) ? (
+          </div>
+          {isProjectsSurface ? null : isExperienceHomeSurface(experienceSurface) ? (
             <WaveCExperienceShell
               embedded
               surface={experienceSurface}
@@ -988,10 +1051,12 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             />
           ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
+            {workbenchDirty && <p role="status" className="shrink-0 border-b border-amber-300/30 p-2 text-sm text-amber-200">Unsaved Artifact edits · save or reset in the Artifact pane before leaving this workspace.</p>}
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               <DockviewWorkspaceGrid
                 workspace={workspace}
                 isMobile={isMobile}
+                preserveArtifactDraft={workbenchDirty}
                 maximizedPane={maximizedPane}
                 onFocus={handlePaneFocus}
                 onClose={(paneId) => { setWorkspace((current) => closeWorkspacePane(current, paneId), `Close ${paneId} pane`); if (maximizedPane === paneId) setMaximizedPane(null); }}

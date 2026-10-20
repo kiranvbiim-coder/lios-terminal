@@ -1,3 +1,15 @@
+import type { PaneId } from "./terminalTypes";
+
+export interface WorkspaceRendererState { isMobile: boolean; maximizedPane: PaneId | null }
+
+/** Renderer identity is held only while a local Artifact draft would be lost on remount. */
+export function resolveWorkspaceRendererState(
+  current: WorkspaceRendererState, isMobile: boolean, maximizedPane: PaneId | null, artifactDirty: boolean,
+): WorkspaceRendererState {
+  return artifactDirty || (current.isMobile === isMobile && current.maximizedPane === maximizedPane)
+    ? current : { isMobile, maximizedPane };
+}
+
 export const DOCKVIEW_LAYOUT_STORAGE_KEY = "lios.dockview.layout.v2";
 export const LEGACY_DOCKVIEW_LAYOUT_STORAGE_KEYS = ["lios.dockview.layout.v1"] as const;
 

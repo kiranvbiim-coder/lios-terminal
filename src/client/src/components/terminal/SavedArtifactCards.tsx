@@ -1,7 +1,8 @@
 import * as React from "react";
+import { useQueries } from "@tanstack/react-query";
 import { FileBarChart } from "lucide-react";
 import { savedMessageArtifactRefs, type SavedMessageArtifactRef } from "@shared/conversationArtifactRefs";
-import { useProjectArtifacts, type ProjectArtifactRecord } from "@/lib/useArtifacts";
+import { useProjectArtifacts, type ArtifactDetail, type ProjectArtifactRecord } from "@/lib/useArtifacts";
 
 const KIND_LABEL: Record<string, string> = {
   chart: "Chart",
@@ -26,7 +27,7 @@ export interface SavedArtifactCardModel {
   kindLabel: string | null;
   version: number;
   ariaLabel: string;
-  /** The access-checked Project Artifact list has loaded and does not contain this Artifact (deleted or no longer accessible). */
+  /** The exact access-checked lookup of this Artifact version failed or returned another Project (deleted or no longer accessible). Absence from the active list alone never sets this. */
   unavailable: boolean;
 }
 
@@ -35,8 +36,8 @@ export interface SavedArtifactCardModel {
  * Live list metadata is used only for availability and legacy display fallback.
  * Nothing is rerun or advanced to a newer head implicitly.
  */
-export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, listLoaded = false): SavedArtifactCardModel {
-  const unavailable = listLoaded && !live;
+export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, exactLookup: "pending" | "found" | "missing" = "pending"): SavedArtifactCardModel {
+  const unavailable = !live && exactLookup === "missing";
   const title = ref.title ?? live?.title ?? "Saved Artifact";
   const kind = ref.kind ?? live?.kind;
   const kindLabel = kind ? (KIND_LABEL[kind] ?? kind) : null;
@@ -97,7 +98,29 @@ export default function SavedArtifactCards({ metadata, projectId, activeId, onOp
 }) {
   const refs = savedMessageArtifactRefs(metadata);
   const list = useProjectArtifacts(refs.length > 0 ? projectId : null);
+  // The active list is a bounded page that excludes archived Artifacts, so absence there proves nothing.
+  // Refs not in the list are resolved by the exact access-checked Artifact query at the retained version.
+  const listed = list.data;
+  const exact = useQueries({
+    queries: refs.map((ref) => ({
+      queryKey: ["/api/artifacts", ref.id, "version", ref.version],
+      queryFn: async (): Promise<ArtifactDetail> => {
+        const res = await fetch(`/api/artifacts/${encodeURIComponent(ref.id)}?version=${ref.version}`);
+        if (!res.ok) throw new Error("Failed to load Artifact.");
+        return res.json();
+      },
+      enabled: Boolean(projectId) && listed !== undefined && !listed.some((artifact) => artifact.id === ref.id),
+    })),
+  });
   if (!refs.length || !projectId) return null;
-  const cards = refs.map((ref) => describeSavedArtifactCard(ref, list.data?.find((artifact) => artifact.id === ref.id), list.data !== undefined));
+  const cards = refs.map((ref, index) => {
+    const fromList = listed?.find((artifact) => artifact.id === ref.id);
+    const query = exact[index];
+    const detail = query?.data && query.data.artifact.projectId === projectId ? query.data : undefined;
+    const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
+    const wrongProject = Boolean(query?.data) && !detail;
+    const lookup = live ? "found" : wrongProject || query?.isError ? "missing" : "pending";
+    return describeSavedArtifactCard(ref, live, lookup);
+  });
   return <SavedArtifactCardList cards={cards} activeId={activeId} onOpen={onOpen} />;
 }

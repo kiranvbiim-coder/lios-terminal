@@ -167,7 +167,9 @@ test("a proposed change needing review shows readable rows, never raw JSON", () 
   assert.match(markup, /discount Rate<\/span>: 0\.09 → 0\.1/);
   assert.match(markup, />Apply</);
   assert.match(markup, />Cancel</);
-  assert.doesNotMatch(markup, /<pre|\{"/);
+  const summaryOnly = markup.slice(0, markup.indexOf("<details"));
+  assert.doesNotMatch(summaryOnly, /<pre|\{"/);
+  assert.match(markup, /<details[^>]*>\s*<summary[^>]*>Exact before and after values/);
 });
 
 test("proposed changes diff the union of keys, name nested edits, report removals and count what is capped", () => {
@@ -191,6 +193,18 @@ test("proposed changes diff the union of keys, name nested edits, report removal
   assert.equal(capped.hidden, 3);
   const markup = render([event({ type: "mutation_review", choices: ["review", "apply", "cancel"], proposal: { mutationId: "55555555-5555-4555-8555-555555555555", action: "ChangeAssumption", summary: "Bulk edit.", reversible: true, before: null, after: many } })]);
   assert.match(markup, /\+3 more changes/);
+});
+
+test("every proposed change stays exactly inspectable: long arrays, nested records and >12 fields appear verbatim", () => {
+  const list = Array.from({ length: 10 }, (_, i) => 1000 + i);
+  const many = Object.fromEntries(Array.from({ length: 14 }, (_, i) => [`field${i}`, `value-${i}-exact`]));
+  const after = { ...many, list, nested: { inner: { rate: 0.0937 } } };
+  const markup = render([event({ type: "mutation_review", choices: ["review", "apply", "cancel"], proposal: { mutationId: "55555555-5555-4555-8555-555555555555", action: "ChangeAssumption", summary: "Big edit.", reversible: true, before: { list: [1], nested: { inner: { rate: 0.09 } } }, after } })]);
+  assert.match(markup, /<details/);
+  const exact = markup.slice(markup.indexOf("trace-mutation-exact-before"));
+  for (let i = 0; i < 14; i++) assert.ok(exact.includes(`value-${i}-exact`));
+  for (let i = 0; i < 10; i++) assert.ok(exact.includes(String(1000 + i)));
+  assert.ok(exact.includes("0.0937") && exact.includes("0.09"));
 });
 
 test("a proposal with no field-level difference says so instead of offering Apply on an empty list", () => {

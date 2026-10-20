@@ -366,3 +366,50 @@ test("guided forecasts admit fifty years while sensitivity grids remain bounded 
   const grid = Array.from({ length: 26 }, (_, index) => String(9 + index)).join(", ");
   assert.equal(validateP5GuidedValues(guided, { ...values, waccGridPct: grid }).parsed, null);
 });
+
+test("dollar tickers are not currency markers but dollar amounts still are", () => {
+  const ticker = extractP5PlainLanguageInputs(PLAIN_MESSAGE.replace("for AAPL", "for $AAPL"), "valuation/dcf-sensitivity");
+  assert.equal(ticker?.status, "complete");
+  const amount = extractP5PlainLanguageInputs(PLAIN_MESSAGE.replace("net debt is 50", "net debt is $50"), "valuation/dcf-sensitivity");
+  assert.equal(amount?.status, "incomplete");
+});
+
+test("bare growth is ambiguous and never becomes a silent cash-flow forecast", () => {
+  for (const growth of ["growth 5%", "revenue growth 5%"]) {
+    const gap = gapOf(`First-year free cash flow 100 for 3 years, ${growth}. WACC 10%, terminal growth 3%, net debt 50, 10 shares outstanding.`);
+    assert.ok(gap.issues.some((issue) => issue.key === "freeCashFlows"), growth);
+    assert.equal(gap.provided.freeCashFlows, undefined, growth);
+  }
+  const qualified = extractP5PlainLanguageInputs(
+    "First-year free cash flow 100, free cash flow growth 10% for 3 years. WACC 10%, terminal growth 3%, net debt 50, 10 shares outstanding.",
+    "valuation/dcf-sensitivity",
+  );
+  assert.ok(qualified && qualified.status === "incomplete");
+  assert.equal(qualified.gap.provided.freeCashFlows, "100, 110, 121");
+});
+
+test("multiline case blocks assign their body to the labeled case", () => {
+  const multiline = [
+    "Run a DCF sensitivity for AAPL.",
+    "Free cash flows are 100, 110 and 120. WACC is 10%, terminal growth is 3%, net debt is 50 and shares outstanding is 10.",
+    "WACC grid: 9%, 10%, 11%. Terminal growth grid: 2%, 3%, 4%.",
+    "Bear case:",
+    "free cash flows 90, 95, 100",
+    "WACC 11%",
+    "terminal growth 2%",
+    "Bull case:",
+    "free cash flows 110, 125, 140",
+    "WACC 9%",
+    "terminal growth 4%",
+  ].join("\n");
+  const extraction = extractP5PlainLanguageInputs(multiline, "valuation/dcf-sensitivity");
+  const reference = extractP5PlainLanguageInputs(PLAIN_MESSAGE, "valuation/dcf-sensitivity");
+  assert.equal(extraction?.status, "complete");
+  assert.deepEqual(extraction && extraction.status === "complete" ? extraction.parameters : null, reference && reference.status === "complete" ? reference.parameters : undefined);
+});
+
+test("guided form builds with fifty nine-digit prefilled cash flows", () => {
+  const flows = Array.from({ length: 50 }, (_, index) => String(900000000 + index)).join(", ");
+  const guided = buildP5GuidedInputs({ modelPath: "valuation/dcf-sensitivity", entity: "AAPL", missing: ["netDebt"], issues: [], provided: { freeCashFlows: flows, "bearCase.freeCashFlows": flows, "bullCase.freeCashFlows": flows } });
+  assert.ok(guided);
+});

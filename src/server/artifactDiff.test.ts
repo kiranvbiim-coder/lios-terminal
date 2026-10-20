@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ArtifactContent } from "@shared/artifactContracts";
-import { compareArtifactContents } from "./artifactDiff";
+import { artifactContentSchema, type ArtifactContent } from "@shared/artifactContracts";
+import type { ConversationArtifactDraft } from "@shared/conversationRuntime";
+import { compareArtifactContents, normalizeConversationDraft } from "./artifactDiff";
 
 function compare(left: ArtifactContent, right: ArtifactContent) {
   return compareArtifactContents({
@@ -273,4 +274,117 @@ test("FinRobot field caliber: one-sided currency tags and overflow do not publis
   assert.equal(rev.absoluteChange, null);
   assert.equal(rev.percentChange, null);
   assert.ok(overflow.semantic.comparability.some((x: any) => x.kind === "method" && x.path === "summary.revenue"));
+});
+
+function documentDraft(artifactType: string, data: Record<string, unknown>): ConversationArtifactDraft {
+  return {
+    schemaVersion: "1",
+    artifactId: "00000000-0000-4000-8000-000000000001",
+    artifactType,
+    title: "Recorded analytical work",
+    projectId: null,
+    sourceRefs: ["source:filing:1"],
+    executionReceiptIds: ["00000000-0000-4000-8000-000000000002"],
+    data,
+    persistence: "ephemeral",
+  };
+}
+
+test("unknown structured report drafts become readable sections and exact-value tables", () => {
+  const data = {
+    title: "Credit review",
+    templateId: "risk_report",
+    summary: "The recorded liquidity position requires review.",
+    sections: [
+      { title: "Recorded metrics", type: "key_metrics", order: 1, content: {
+        debt: "9007199254740993.25", coverage: 0, covenantMet: false, unavailable: null,
+        scenarios: [{ name: "Base", spread: "0.012500000000000001" }, { name: "Stress", spread: 0.02 }],
+      } },
+      { title: "Caveats", content: ["No new provider request was made.", "No currency conversion was applied."] },
+    ],
+    sourceCustody: { snapshotId: "snapshot:1", policyId: "policy:1", allowedUses: ["model_input"], export: false },
+  };
+  const draft = documentDraft("credit.report", data);
+  const content = normalizeConversationDraft(draft);
+  assert.equal(content.kind, "report");
+  if (content.kind !== "report") assert.fail("Expected report.");
+  assert.equal(content.templateId, "risk_report");
+  assert.equal(content.blocks[0].type, "heading");
+  assert.equal(content.blocks[0].text, "Credit review");
+  assert.equal(content.sections.length, 5);
+  assert.deepEqual(content.sections.filter(section => ["Recorded metrics", "Caveats"].includes(section.title)).map(section => section.title), ["Recorded metrics", "Caveats"], "authored section names and order must survive projection");
+  for (const section of content.sections) {
+    assert.ok(section.blockIds.length);
+    assert.ok(section.blockIds.every(id => content.blocks.some(block => block.id === id)));
+  }
+  assert.ok(content.blocks.some(block => block.type === "paragraph" && block.text === data.summary));
+  assert.ok(content.blocks.some(block => block.type === "bullet_list" && block.text.includes("No currency conversion was applied.")));
+  const tables = content.blocks.filter(block => block.type === "table").map(block => block.attrs.table as Extract<ArtifactContent, { kind: "table" }>);
+  const fields = tables.flatMap(table => table.rows);
+  assert.ok(fields.some(row => row.field === "debt" && row.value === "9007199254740993.25"));
+  assert.ok(fields.some(row => row.field === "coverage" && row.value === 0));
+  assert.ok(fields.some(row => typeof row.field === "string" && row.field.replace(/\s/g, "").toLowerCase() === "covenantmet" && row.value === false));
+  assert.ok(fields.some(row => row.field === "unavailable" && row.value === null));
+  assert.ok(tables.some(table => table.rows.some(row => row.name === "Base" && row.spread === "0.012500000000000001")));
+  assert.ok(content.blocks.every(block => block.type !== "code" && !block.text.includes('"snapshotId":')));
+  assert.deepEqual(content.blocks[0].attrs.conversationDraftData, data);
+  assert.notEqual(content.blocks[0].attrs.conversationDraftData, data, "the retained record must not alias the caller's data");
+  assert.ok(content.blocks.every(block => {
+    assert.deepEqual(block.attrs.sourceRefs, draft.sourceRefs);
+    assert.deepEqual(block.attrs.executionReceiptIds, draft.executionReceiptIds);
+    return true;
+  }));
+  assert.deepEqual(draft.data, data);
+});
+
+test("unknown research drafts preserve questions and custody without inventing canonical claims", () => {
+  const data = {
+    question: "What changed in the filing?",
+    executiveSummary: "Revenue is unchanged; the margin observation is unavailable.",
+    findings: [{ metric: "Revenue", current: 0, previous: 0 }, { metric: "Margin", current: null }],
+    claims: [{ text: "Author's unverified assertion", provenance: "unknown", sourceRefs: [] }],
+    evidence: [{ sourceRef: "source:filing:1", excerpt: "Exact recorded excerpt" }],
+    sourcePolicy: { mode: "only_refs", allowedSourceRefs: ["source:filing:1"], customRestriction: "no_export" },
+  };
+  const content = normalizeConversationDraft(documentDraft("research_brief", data));
+  assert.equal(content.kind, "research");
+  if (content.kind !== "research") assert.fail("Expected research.");
+  assert.equal(content.question, data.question);
+  assert.deepEqual(content.claims, [], "projection must not promote unvalidated payloads into canonical evidence-backed claims");
+  assert.ok(content.blocks.some(block => block.type === "paragraph" && block.text === data.executiveSummary));
+  const tableRows = content.blocks.filter(block => block.type === "table")
+    .flatMap(block => (block.attrs.table as Extract<ArtifactContent, { kind: "table" }>).rows);
+  assert.ok(tableRows.some(row => row.metric === "Revenue" && row.current === 0 && row.previous === 0));
+  assert.ok(tableRows.some(row => row.metric === "Margin" && row.current === null && !Object.hasOwn(row, "previous")));
+  assert.ok(tableRows.some(row => row.excerpt === "Exact recorded excerpt"));
+  assert.deepEqual(content.blocks[0].attrs.conversationDraftData, data);
+  assert.deepEqual(normalizeConversationDraft(documentDraft("research_brief", data)), content, "projection must be deterministic");
+});
+
+test("canonical report and research drafts bypass projection without rewriting authored content or custody", () => {
+  for (const kind of ["report", "research"] as const) {
+    const content = artifactContentSchema.parse({
+      kind,
+      blocks: [
+        { id: "authored", type: "paragraph", text: '{"this":"is authored text, not an unknown draft"}', attrs: { sourceRefs: ["source:author"], customCustody: { retained: true } } },
+        { id: "authored-table", type: "table", text: "Caption", attrs: { table: { kind: "table", columns: [{ key: "v", label: "Exact value", type: "string" }], rows: [{ v: "0.100000000000000001" }] } } },
+      ],
+      ...(kind === "report" ? { templateId: "company_tearsheet", sections: [{ id: "authored-section", title: "Authored", blockIds: ["authored", "authored-table"] }] }
+        : { question: "Authored question", claims: [{ id: "claim", text: "Authored claim", sourceRefs: ["source:author"], provenance: "source_backed" }], sourcePolicy: { mode: "only_refs", allowedSourceRefs: ["source:author"] } }),
+      editorPreference: "tiptap",
+    });
+    if (content.kind !== "report" && content.kind !== "research") assert.fail("Expected rich document.");
+    assert.deepEqual(normalizeConversationDraft(documentDraft(kind, content)), content);
+    assert.equal(Object.hasOwn(content.blocks[0].attrs, "conversationDraftData"), false);
+  }
+});
+
+test("structured report projection retains every recorded row beyond the renderer preview page", () => {
+  const rows = Array.from({ length: 151 }, (_, index) => ({ period: `period-${index}`, value: index === 150 ? "9007199254740993.25" : index }));
+  const content = normalizeConversationDraft(documentDraft("report", { observations: rows }));
+  if (content.kind !== "report") assert.fail("Expected report.");
+  const projectedRows = content.blocks.filter(block => block.type === "table")
+    .flatMap(block => (block.attrs.table as Extract<ArtifactContent, { kind: "table" }>).rows);
+  assert.deepEqual(projectedRows, rows);
+  assert.deepEqual((content.blocks[0].attrs.conversationDraftData as Record<string, unknown>).observations, rows);
 });
