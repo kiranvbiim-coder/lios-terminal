@@ -2273,6 +2273,18 @@ export default function ProjectExperienceShell({
                     </button>
                   </div>
                 )}
+                {!artifactFocusMode && (
+                  <div className="mb-2 flex justify-end">
+                    <button type="button" data-testid="artifact-expand-workspace" className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[11px] text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or discard your Artifact edits before expanding the workspace."); return; }
+                        setLibrarySelection((current) => ({ projectId: selection.projectId!, artifactId: conversationArtifactRef, resourceId: null, request: (current?.request ?? 0) + 1 }));
+                        setSection("library"); setShowLifecycleCenter(false); setContextOpen(false);
+                      }}>
+                      Expand workspace
+                    </button>
+                  </div>
+                )}
                 <Suspense
                   fallback={
                     <div className="flex min-h-40 items-center justify-center rounded-xl border border-border/55 bg-[#080808] font-terminal text-[12px] tracking-wider text-muted-foreground">
