@@ -144,7 +144,7 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
     const gap = professional.inputGap;
     // Plain-language assumptions the user started to state (complete values are already parameters) must never be
     // discarded in favour of an active Artifact's stored parameters: block and let the user finish or correct them.
-    const statedAssumptions = Boolean(gap && (gap.issues.length || Object.keys(gap.provided).length));
+    const statedAssumptions = Boolean(gap && (gap.issues.length || gap.notes.length || Object.keys(gap.provided).length));
     const explicitOrArtifactInputs = Boolean(professional.parameters || (professional.activeArtifactRef && !statedAssumptions));
     const needsModel = ["valuation", "portfolio_risk", "fixed_income", "derivatives", "macro_fx"].includes(professional.family)
       && !professional.modelPath

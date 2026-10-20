@@ -308,9 +308,6 @@ function extractSegment(raw: string, allowShared: boolean): SegmentResult {
   ]) {
     for (const match of scanner.text.matchAll(pattern)) horizons.push(Number(match[1]));
   }
-  if (horizons.length && !firstYear.length && !/\b(?:free\s+cash\s+flows?|fcfs?|cash\s+flows?)\b/i.test(scanner.text)) {
-    collector.issue("freeCashFlows", "A forecast horizon was stated without yearly cash flows. Review the intended forecast before running.");
-  }
 
   const lists: number[][] = [];
   scanner.each(
@@ -323,6 +320,9 @@ function extractSegment(raw: string, allowShared: boolean): SegmentResult {
   );
 
   resolveFreeCashFlows(collector, lists, firstYear, growths, horizons);
+  if (horizons.length && !firstYear.length && !lists.length) {
+    collector.issue("freeCashFlows", "A forecast horizon was stated without yearly cash flows. Review the intended forecast before running.");
+  }
 
   if (!allowShared) {
     for (const field of ["netDebt", "sharesOutstanding", "waccGridPct", "terminalGrowthGridPct"]) {
