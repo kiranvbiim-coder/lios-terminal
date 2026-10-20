@@ -47,6 +47,14 @@ Independent review identified and closed active-policy propagation and duplicate
 
 **Updated-head proof after all three GitHub findings:** `npm run test:offline` passed 5339 checks, four existing explicit skips, zero failures; `npm run check`, 46 focused checks, production build and native packaging passed. Actual rebuilt app (`app.asar` SHA-256 `7736861cee20a1b2e9fe130789af9caf526d285ca0f39909717f40c20ba84b44`, deep strict ad-hoc signature verified) restored the previous conversation after full process restart and completed a new approved manual company valuation in 4.5 seconds, saved as canonical V1 with the same deterministic output hash. No source-bound rights, monitor or release acceptance is inferred from this bounded smoke.
 
+#### Financial source admission — bounded production hardening
+
+P5/P11/P14 execution now reuses the existing current-actor, snapshot tenant-access and exact linked-entitlement owners before calculation. Calculation needs `model_input`, `display` and `derived_output`; it does not manufacture rights or require export permission. Retaining an exportable workbook continues to require export permission. Metadata admission precedes source-value loading; unavailable, expired, changed or invalid source revisions are refused.
+
+Admission, deterministic calculation, run persistence and release recheck share a transaction. Actor/source/policy row locks bind authorization through persistence; failed release checks roll back the run. Existing global result deduplication cannot transfer another creator's run. No new authority, donor dependency or schema migration was introduced.
+
+Verification used isolated synthetic actors, statements and permissions, never owner Home/provider data. Before correction, the HTTP regression failed; after correction, `npm run check` and 46 focused actual Express/PGlite cases passed across source admission, Artifact retention, reviewed workbook execution and maintenance. Cases cover denied admission without financial payload reads or persisted runs, allowed known-answer forecasts without export grants, same-organization/shared-source semantics, ownership-preserving replay and transactional release-fence rollback. Same-transaction mutations prove rejection/rollback, **not** independent PostgreSQL concurrent lock qualification. Two independent read-only reviewers found no actionable patch-introduced fault. Native packaged/SP/P14 qualification is not established by these checks; adjacent financial read/list/variance custody remains a separate open hardening dependency.
+
 #### All 14 requested OSS candidates — inspected pins and bounded dispositions
 
 Pins below are inspected source snapshots, **not** recommended unreviewed upgrades or verified release binaries. Existing LiOS owners remain authoritative. No new donor code/dependency is bundled by this repair. Packaging/maintenance costs below are qualitative unless a measured value is stated.
