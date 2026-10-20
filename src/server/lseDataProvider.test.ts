@@ -163,7 +163,7 @@ test("catalog discovery keeps absent access unavailable and propagates provider 
   }), (error: unknown) => error instanceof Error && "status" in error && error.status === 403);
 });
 
-test("catalog discovery propagates cancellation into its provider fetch", async () => {
+test("catalog discovery cancels its caller without aborting the shared provider read", async () => {
   const controller = new AbortController();
   const receivedSignals: AbortSignal[] = [];
   const response = Promise.withResolvers<Response>();
@@ -182,7 +182,51 @@ test("catalog discovery propagates cancellation into its provider fetch", async 
   const abort = new DOMException("Synthetic catalog cancelled", "AbortError");
   controller.abort(abort);
   await assert.rejects(pending, (error) => error === abort);
-  assert.equal(receivedSignals[0]?.aborted, true);
+  assert.equal(receivedSignals.length, 1);
+  assert.equal(receivedSignals[0].aborted, false);
+  // A remaining observer sees the eventual provider error after the first
+  // caller has cancelled; the shared read must still have rejection handlers.
+  const remaining = searchLseCatalogCandidates("SYNTHX", {}, {
+    credential: "synthetic_catalog_abort",
+    fetchFn: (async () => { throw new Error("must reuse the shared read"); }) as typeof fetch,
+  });
+  const providerError = new Error("Synthetic provider failure after cancellation");
+  response.reject(providerError);
+  await assert.rejects(remaining, (error) => error === providerError);
+});
+
+test("concurrent catalog consumers share one fetch when one caller aborts", async () => {
+  const controller = new AbortController();
+  const survivingController = new AbortController();
+  const response = Promise.withResolvers<Response>();
+  let fetches = 0;
+  const providerSignals: AbortSignal[] = [];
+  const fetchFn = (async (_input, init) => {
+    fetches += 1;
+    if (init?.signal) providerSignals.push(init.signal);
+    return response.promise;
+  }) as typeof fetch;
+  const credential = "synthetic_catalog_shared_abort";
+  const cancelled = searchLseCatalogCandidates("SYNTHX", {}, {
+    credential, fetchFn, signal: controller.signal,
+  });
+  const surviving = searchLseCatalogCandidates("SYNTHX", {}, {
+    credential, fetchFn, signal: survivingController.signal,
+  });
+  const abort = new DOMException("Synthetic consumer cancelled", "AbortError");
+  controller.abort(abort);
+  await assert.rejects(cancelled, (error) => error === abort);
+  assert.equal(providerSignals.length, 1);
+  assert.equal(providerSignals[0].aborted, false);
+  assert.equal(fetches, 1);
+  response.resolve(new Response(JSON.stringify([
+    { dataset: "stocks", symbol: "SYNTHX", name: "Synthetic Industries" },
+  ]), { status: 200 }));
+  const candidates = await surviving;
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].symbol, "SYNTHX");
+  assert.deepEqual(await searchLseCatalogCandidates("SYNTHX", {}, { credential, fetchFn }), candidates);
+  assert.equal(fetches, 1);
 });
 
 test("option-chain catalogue availability is not another identity for the underlying ticker", async () => {
@@ -194,6 +238,38 @@ test("option-chain catalogue availability is not another identity for the underl
   const candidates = await searchLseCatalogCandidates("SYNTHX", { limit: 100 }, {
     credential: "synthetic_mixed_dataset_catalog",
     fetchFn: (async () => new Response(JSON.stringify([stock, ...optionFeeds]), { status: 200 })) as typeof fetch,
+  });
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].symbol, "SYNTHX");
+  assert.equal(candidates[0].name, "Synthetic Industries");
+  assert.equal(candidates[0].canonical, false);
+});
+
+test("catalog candidate conversion only accepts verified stock identity datasets", () => {
+  for (const dataset of [
+    "options", "options_chain", "options_flow", "economics", "bonds",
+    "commodities", "forex", "crypto", "news", "unknown", "", null, undefined,
+  ]) {
+    assert.equal(lseCatalogRowToCandidate({
+      dataset, symbol: "SYNTHX", name: "Synthetic Industries", category: "Stocks",
+    }), null, `unexpected identity from dataset ${String(dataset)}`);
+  }
+  assert.equal(lseCatalogRowToCandidate({
+    dataset: "stocks", symbol: "", name: "Synthetic Industries",
+  }), null);
+});
+
+test("non-instrument catalogue rows cannot consume the candidate match limit", async () => {
+  const nonInstruments = [
+    "options", "options_chain", "options_flow", "economics", "bonds", "unknown", null,
+  ].map((dataset) => ({ dataset, symbol: "SYNTHX", name: "Synthetic Industries" }));
+  const candidates = await searchLseCatalogCandidates("SYNTHX", { limit: 1 }, {
+    credential: "synthetic_catalog_dataset_starvation",
+    fetchFn: (async () => new Response(JSON.stringify([
+      ...nonInstruments,
+      { dataset: "stocks", name: "SYNTHX availability without a symbol" },
+      { dataset: "stocks", symbol: "SYNTHX", name: "Synthetic Industries" },
+    ]), { status: 200 })) as typeof fetch,
   });
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].symbol, "SYNTHX");

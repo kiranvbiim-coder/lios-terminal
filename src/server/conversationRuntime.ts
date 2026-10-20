@@ -773,6 +773,7 @@ function registerBuiltinConversationTools(): void {
             providerAllow: call.researchSourcePolicy?.providerAllow,
             providerDeny: call.researchSourcePolicy?.providerDeny,
             propagateErrors: true,
+            preserveProviderCandidates: true,
           },
         ),
       });

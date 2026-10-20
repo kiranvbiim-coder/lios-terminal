@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { matchSecTickers, searchFederatedInstrumentCandidates, secEdgarFederatedFallback } from "./instrumentSearchIndexStore";
-import type { InstrumentMasterCandidate } from "@shared/globalInstrumentMaster";
+import { adaptLegacySymbolCatalogRow, resolveInstrument, type InstrumentMasterCandidate } from "@shared/globalInstrumentMaster";
+import type { InstrumentSearchOptions } from "@shared/instrumentSearchIndex";
+import { createConversationInstrumentFallback, resolveConversationInstrument } from "./conversationInstrumentResolution";
+import { lseFederatedInstrumentFallback } from "./lseDataProvider";
 
 const FIXTURE_TICKERS = [
   { cik: "0000320193", ticker: "AAPL", name: "Apple Inc." },
@@ -94,4 +97,96 @@ test("conversation federation aborts a pending shared provider read without retu
     () => searchFederatedInstrumentCandidates("SYNTHX", {}, { providerAllow: ["sec_edgar"], signal: controller.signal }),
     (error) => error === abort,
   );
+});
+
+test("structured federation retains a later exact match after an earlier provider fills the search page", async (t) => {
+  const broadCandidates = Array.from({ length: 100 }, (_, index) => adaptLegacySymbolCatalogRow({
+    symbol: `SYNTHX${index}`,
+    name: `Synthetic Broad Industries ${index}`,
+    provider: "lse",
+    providerId: `SYNTHETIC_BROAD_${index}`,
+  }));
+  const exact = {
+    ...adaptLegacySymbolCatalogRow({
+      symbol: "SYNTHX",
+      name: "Synthetic Exact Industries",
+      provider: "sec_edgar",
+      providerId: "SYNTHETIC_EXACT",
+    }),
+    source: "sec_edgar",
+    countryCode: "US",
+  };
+  t.mock.method(lseFederatedInstrumentFallback, "search", async (query: string, options: InstrumentSearchOptions) => {
+    assert.equal(query, "SYNTHX");
+    assert.equal(options.limit, 100, "the provider request remains bounded");
+    return broadCandidates;
+  });
+  t.mock.method(secEdgarFederatedFallback, "search", async (query: string, options: InstrumentSearchOptions) => {
+    assert.equal(query, "SYNTHX");
+    assert.equal(options.limit, 100, "the later provider retains the same request bound");
+    return [exact];
+  });
+  const policy = { providerAllow: ["lse", "sec_edgar"] };
+  const ordinary = await searchFederatedInstrumentCandidates("SYNTHX", { limit: 100 }, policy);
+  assert.equal(ordinary.length, 100, "ordinary search keeps its global page limit");
+  assert.ok(ordinary.every((candidate) => candidate.symbol !== "SYNTHX"));
+  const fallback = createConversationInstrumentFallback({
+    loadCatalog: () => [],
+    allowExternal: true,
+    signal: new AbortController().signal,
+    searchProvider: async (query, signal) => {
+      const candidates = await searchFederatedInstrumentCandidates(query, { limit: 100 }, {
+        ...policy,
+        signal,
+        preserveProviderCandidates: true,
+      });
+      assert.equal(candidates.length, 101, "all bounded provider observations reach the structured matcher");
+      return candidates;
+    },
+  });
+  const result = await resolveConversationInstrument({ symbol: "SYNTHX" }, (query) => resolveInstrument(query, [], fallback));
+  assert.equal(result.status, "resolved");
+  assert.equal(result.match?.symbol, "SYNTHX");
+  assert.equal(result.match?.source, "sec_edgar");
+  assert.equal(result.match?.canonical, false);
+  assert.equal(result.match?.entityId, null);
+  assert.equal(result.match?.listingId, null);
+});
+
+test("structured federation preserves later conflicting exact observations beyond the global search cap", async (t) => {
+  const broadCandidates = Array.from({ length: 100 }, (_, index) => adaptLegacySymbolCatalogRow({
+    symbol: `SYNTHX${index}`,
+    name: `Synthetic Broad Industries ${index}`,
+    provider: "lse",
+  }));
+  const exact = {
+    ...adaptLegacySymbolCatalogRow({
+      symbol: "SYNTHX",
+      name: "Synthetic Exact Industries",
+      provider: "sec_edgar",
+    }),
+    source: "sec_edgar",
+    countryCode: "US",
+  };
+  t.mock.method(lseFederatedInstrumentFallback, "search", async () => broadCandidates);
+  // Same search dedup key, but conflicting countries must reach the master.
+  t.mock.method(secEdgarFederatedFallback, "search", async () => [exact, { ...exact, countryCode: "GB" }]);
+  const fallback = createConversationInstrumentFallback({
+    loadCatalog: () => [],
+    allowExternal: true,
+    signal: new AbortController().signal,
+    searchProvider: async (query, signal) => {
+      const candidates = await searchFederatedInstrumentCandidates(query, { limit: 100 }, {
+        providerAllow: ["lse", "sec_edgar"],
+        signal,
+        preserveProviderCandidates: true,
+      });
+      assert.equal(candidates.length, 102);
+      return candidates;
+    },
+  });
+  const result = await resolveConversationInstrument({ symbol: "SYNTHX" }, (query) => resolveInstrument(query, [], fallback));
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.match, null);
+  assert.equal(result.candidates.length, 2);
 });

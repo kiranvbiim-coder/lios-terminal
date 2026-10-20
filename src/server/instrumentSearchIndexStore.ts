@@ -143,6 +143,9 @@ export async function searchFederatedInstrumentCandidates(
     providerAllow?: readonly string[];
     providerDeny?: readonly string[];
     propagateErrors?: boolean;
+    /** Keep every bounded provider result for structured master resolution;
+     * a global search-page limit must not hide later matches or ambiguity. */
+    preserveProviderCandidates?: boolean;
   } = {},
 ): Promise<InstrumentMasterCandidate[]> {
   policy.signal?.throwIfAborted();
@@ -174,7 +177,9 @@ export async function searchFederatedInstrumentCandidates(
     }
     const groups = await (cancelled ? Promise.race([pending, cancelled.promise]) : pending);
     signal?.throwIfAborted();
-    return mergeFederatedInstrumentCandidates(groups, options.limit ?? 20);
+    return policy.preserveProviderCandidates
+      ? groups.flat()
+      : mergeFederatedInstrumentCandidates(groups, options.limit ?? 20);
   } finally {
     if (onAbort) policy.signal?.removeEventListener("abort", onAbort);
   }

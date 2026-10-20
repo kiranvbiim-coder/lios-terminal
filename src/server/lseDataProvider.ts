@@ -341,21 +341,36 @@ async function lseCatalog(
   fetchFn?: typeof fetch,
   signal?: AbortSignal,
 ): Promise<LseCatalogRow[]> {
+  signal?.throwIfAborted();
   const credentialScope = crypto.createHash("sha256").update(credential).digest("hex").slice(0, 16);
   const key = "lse:catalog:" + credentialScope;
-  const fetchCatalog = async () => {
-    const result = await lseJsonRequest<unknown>("/catalog", { credential, fetchFn, signal });
-    signal?.throwIfAborted();
+  const pending = catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, async () => {
+    // The provider deadline bounds this shared read, not any one consumer's signal.
+    const result = await lseJsonRequest<unknown>("/catalog", { credential, fetchFn });
     if (!Array.isArray(result.data)) return [];
     return result.data.filter((row): row is LseCatalogRow => Boolean(row && typeof row === "object"));
-  };
-  // A cancellable caller must not cancel the shared in-flight catalog of another session.
-  if (signal) {
-    signal.throwIfAborted();
-    const cached = catalogHub.get(key);
-    return cached ?? catalogHub.set(key, await fetchCatalog(), LSE_CATALOG_TTL_MS);
-  }
-  return catalogHub.getOrFetch(key, LSE_CATALOG_TTL_MS, fetchCatalog);
+  });
+  if (!signal) return pending;
+  return new Promise<LseCatalogRow[]>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    // Observe both outcomes even after local cancellation so a later shared
+    // failure cannot become an unhandled rejection.
+    pending.then(
+      (rows) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(rows);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+    if (signal.aborted) onAbort();
+  });
 }
 
 function rowSymbol(row: LseCatalogRow): string | null {
@@ -366,14 +381,15 @@ function rowName(row: LseCatalogRow): string {
   return stringValue(row.name) ?? rowSymbol(row) ?? "Unknown";
 }
 
+function isInstrumentCatalogRow(row: LseCatalogRow): boolean {
+  // Only the verified stocks dataset describes ticker identities. Other feeds
+  // (including options, economics and bonds) are not company observations.
+  return stringValue(row.dataset)?.toLowerCase() === "stocks" && rowSymbol(row) !== null;
+}
+
 export function lseCatalogRowToCandidate(row: LseCatalogRow): (InstrumentMasterCandidate & { symbol: string }) | null {
-  // Option-catalog symbols identify an underlying's chain/feed, not an option
-  // contract or another listing of the underlying. Do not mint ticker identity
-  // from dataset-level availability metadata.
-  const dataset = stringValue(row.dataset)?.toLowerCase();
-  if (dataset === "options" || dataset === "options_chain" || dataset === "options_flow") return null;
-  const symbol = rowSymbol(row);
-  if (!symbol) return null;
+  if (!isInstrumentCatalogRow(row)) return null;
+  const symbol = rowSymbol(row)!;
   const base = adaptLegacySymbolCatalogRow({
     symbol,
     name: rowName(row),
@@ -427,7 +443,7 @@ export async function searchLseCatalogCandidates(
   if (!credential) return [];
   const rows = await lseCatalog(credential, dependencies.fetchFn, dependencies.signal);
   dependencies.signal?.throwIfAborted();
-  return matchCatalogRows(rows, queryText, options.limit ?? 20).flatMap((row) => {
+  return matchCatalogRows(rows.filter(isInstrumentCatalogRow), queryText, options.limit ?? 20).flatMap((row) => {
     const candidate = lseCatalogRowToCandidate(row);
     return candidate ? [candidate] : [];
   });
