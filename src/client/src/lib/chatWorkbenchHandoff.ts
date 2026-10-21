@@ -10,7 +10,7 @@ export interface ChatWorkbenchOrigin {
 }
 
 function validId(value: number | null): value is number {
-  return Number.isSafeInteger(value) && value !== null && value > 0;
+  return value !== null && Number.isSafeInteger(value) && value > 0;
 }
 
 /** No saved Chat or ticker/Artifact is invented to open the full existing Workbench. */
