@@ -8,13 +8,13 @@ import { formatLiosAddress } from "@shared/liosAddress";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { setExperienceSurface } from "@/lib/experienceShell";
-import { saveIntegratedModelRunArtifact, useInvalidateArtifacts } from "@/lib/useArtifacts";
+import { saveIntegratedModelRunArtifact, useInvalidateArtifacts, useArtifact } from "@/lib/useArtifacts";
 import { useInvalidateProjects, useProjects, useProjectSessions } from "@/lib/useProjects";
 import {
   initialModelArtifactSaveState, isDisplayedModelSaved, modelArtifactSaveNotice, modelArtifactSaveReducer,
   selectedModelArtifactProject,
 } from "@/lib/integratedModelArtifactSave";
-import type { SavedModelArtifact } from "@/lib/integratedModelArtifactSave";
+import type { SavedModelArtifact, ModelArtifactSaveRequest } from "@/lib/integratedModelArtifactSave";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
 const ArtifactPane = lazy(() => import("@/components/terminal/ArtifactPane").then((module) => ({ default: module.ArtifactPane })));
@@ -201,8 +201,11 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   const terminalContext = useTerminalArtifactContext();
   const [activeSymbol, setActiveSymbol] = useTerminalArtifactState("IntegratedModelStudioPanel.activeSymbol", (symbol || "AAPL").toUpperCase());
   const [snapshot, setSnapshot] = useState<PointInTimeDatasetSnapshot | null>(null);
-  const [model, setModel] = useState<ModelResponse | null>(null);
-  const [assumptions, setAssumptions] = useState<IntegratedModelAssumptions | null>(null);
+  const [runId, setRunId] = useTerminalArtifactState<string | null>("IntegratedModelStudioPanel.runId", null);
+  const [loadedModel, setModel] = useState<ModelResponse | null>(null);
+  const model = loadedModel?.receipt.runId === runId ? loadedModel : null;
+  const [authoredAssumptions, setAssumptions] = useTerminalArtifactState<IntegratedModelAssumptions | null>("IntegratedModelStudioPanel.assumptions", null);
+  const assumptions = authoredAssumptions ?? model?.result.assumptions ?? null;
   const [scheduleState, setScheduleState] = useTerminalArtifactState<Record<string, unknown>>("IntegratedModelStudioPanel.scheduleState", {});
   const [tab, setTab] = useTerminalArtifactState<StatementTab>("IntegratedModelStudioPanel.tab", "income");
   const [revisions, setRevisions] = useState<RevisionReport | null>(null);
@@ -213,17 +216,45 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   const invalidateArtifacts = useInvalidateArtifacts();
   const invalidateProjects = useInvalidateProjects();
   const [destination, setDestination] = useTerminalArtifactState("IntegratedModelStudioPanel.destination", "");
-  const [artifactSave, dispatchArtifactSave] = useReducer(modelArtifactSaveReducer, initialModelArtifactSaveState);
+  const [localArtifactSave, dispatchArtifactSave] = useReducer(modelArtifactSaveReducer, initialModelArtifactSaveState);
+  const [savedOutput, setSavedOutput] = useTerminalArtifactState<{ request: ModelArtifactSaveRequest; artifactId: string; version: number } | null>("IntegratedModelStudioPanel.savedOutput", null);
+  const savedOutputQuery = useArtifact(savedOutput?.artifactId ?? null, savedOutput?.version ?? null);
+  const reopenedSaved: SavedModelArtifact | null = savedOutput && savedOutputQuery.data?.artifact.id === savedOutput.artifactId && savedOutputQuery.data.version.version === savedOutput.version && !savedOutputQuery.isPlaceholderData
+    ? { request: savedOutput.request, detail: savedOutputQuery.data } : null;
+  const artifactSave = { ...localArtifactSave, saved: localArtifactSave.saved ?? reopenedSaved };
   const [openedArtifact, setOpenedArtifact] = useState<SavedModelArtifact | null>(null);
   const sessionsQuery = useProjectSessions(openedArtifact?.detail.artifact.projectId ?? null);
   const saveInFlight = useRef(false);
   const saveRequestId = useRef(0);
   const modelInFlight = useRef(false);
   const destinationProject = selectedModelArtifactProject(destination, projectsQuery.data ?? []);
+  const chatDestination = destination === "chat" && terminalContext?.target?.projectId === null ? terminalContext.target.owningChatId : null;
+  const selectedDestination = chatDestination ? { projectId: null, owningChatId: chatDestination, destinationLabel: "this Chat" }
+    : destinationProject ? { projectId: destinationProject.id, destinationLabel: destinationProject.name } : null;
   const saveNotice = modelArtifactSaveNotice(artifactSave, model?.receipt.runId ?? null);
-  const displayedRunSaved = isDisplayedModelSaved(artifactSave.saved, model?.receipt.runId ?? null, destinationProject?.id ?? null);
+  const displayedRunSaved = isDisplayedModelSaved(artifactSave.saved, model?.receipt.runId ?? null, selectedDestination?.projectId ?? null, chatDestination ?? undefined);
+  const setEditing = terminalContext?.setEditing;
+  useEffect(() => {
+    setEditing?.("integrated-model-execution", busy || artifactSave.pending !== null);
+    return () => setEditing?.("integrated-model-execution", false);
+  }, [busy, artifactSave.pending, setEditing]);
 
   useEffect(() => { if (symbol) setActiveSymbol(symbol.toUpperCase()); }, [symbol]);
+  useEffect(() => {
+    if (!runId || loadedModel?.receipt.runId === runId) return;
+    let current = true;
+    setBusy(true); setError(null);
+    void apiRequest("GET", `/api/financial-models/integrated/runs/${encodeURIComponent(runId)}`)
+      .then(response => response.json() as Promise<ModelResponse & { snapshot: PointInTimeDatasetSnapshot }>)
+      .then(body => {
+        if (!current) return;
+        setSnapshot(body.snapshot);
+        setModel(body);
+      })
+      .catch(cause => { if (current) setError(cause instanceof Error ? cause.message : "Saved model run is unavailable."); })
+      .finally(() => { if (current) setBusy(false); });
+    return () => { current = false; };
+  }, [runId]);
 
   async function runModel(datasetSnapshotId: string, overrides?: IntegratedModelAssumptions, schedules?: Partial<SpecializedModelSchedules>) {
     const response = await apiRequest("POST", "/api/financial-models/integrated", {
@@ -232,6 +263,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
     });
     const body = await response.json() as ModelResponse;
     setModel(body);
+    setRunId(body.receipt.runId);
     setAssumptions(body.result.assumptions);
     setScheduleState(body.result.specializedSchedules as unknown as Record<string, unknown>);
     const varianceResponse = await apiRequest("GET", `/api/financial-models/integrated/variance?symbol=${encodeURIComponent(body.result.symbol)}`);
@@ -273,20 +305,20 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   }
 
   async function saveCompletedRun() {
-    if (!model || !destinationProject || busy || saveInFlight.current || projectsQuery.isError) return;
+    if (!model || !selectedDestination || busy || saveInFlight.current || !chatDestination && projectsQuery.isError) return;
     saveInFlight.current = true;
     const request = {
       id: ++saveRequestId.current,
       runId: model.receipt.runId,
-      projectId: destinationProject.id,
-      projectName: destinationProject.name,
+      ...selectedDestination,
     };
     dispatchArtifactSave({ type: "started", request });
     try {
-      const detail = await saveIntegratedModelRunArtifact(request.runId, request.projectId);
+      const detail = await saveIntegratedModelRunArtifact(request.runId, { projectId: request.projectId, ...("owningChatId" in request ? { owningChatId: request.owningChatId } : {}) });
       invalidateArtifacts(detail.artifact.projectId, detail.artifact.id);
       invalidateProjects(detail.artifact.projectId);
       dispatchArtifactSave({ type: "saved", request, detail });
+      setSavedOutput({ request, artifactId: detail.artifact.id, version: detail.version.version });
     } catch (cause) {
       dispatchArtifactSave({ type: "failed", request, message: cause instanceof Error ? cause.message : "Unable to save this completed model run." });
     } finally {
@@ -315,8 +347,10 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
           onClose={() => setOpenedArtifact(null)}
           onAsk={(id, title, stagedPrompt) => {
             if (terminalContext?.onAsk) { terminalContext.onAsk(id, title, stagedPrompt); return; }
-            window.location.hash = formatLiosAddress({ kind: "project", projectId: openedArtifact.request.projectId });
-            setExperienceSurface("projects");
+            if (openedArtifact.request.projectId !== null) {
+              window.location.hash = formatLiosAddress({ kind: "project", projectId: openedArtifact.request.projectId });
+              setExperienceSurface("projects");
+            }
           }} />
       </Suspense>
     </div>;
@@ -348,15 +382,16 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
         <section aria-label="Save completed model run" className="border-b border-border bg-[#080a0b] px-3 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-[9px] text-muted-foreground">
-              SAVE TO PROJECT
-              <select aria-label="Model Artifact destination Project" data-testid="integrated-model-project" value={destination} onChange={(event) => setDestination(event.target.value)}
-                disabled={Boolean(artifactSave.pending) || projectsQuery.isLoading || projectsQuery.isError} className="h-8 max-w-[280px] border border-border bg-black px-2 text-[10px] text-foreground disabled:opacity-50">
-                <option value="" disabled>Choose a Project…</option>
+              SAVE DESTINATION
+              <select aria-label="Model Artifact destination" data-testid="integrated-model-project" value={destination} onChange={(event) => setDestination(event.target.value)}
+                disabled={Boolean(artifactSave.pending)} className="h-8 max-w-[280px] border border-border bg-black px-2 text-[10px] text-foreground disabled:opacity-50">
+                <option value="" disabled>Choose a Chat or Project…</option>
+                {terminalContext?.target?.projectId === null && terminalContext.target.owningChatId && <option value="chat">This Chat</option>}
                 {(projectsQuery.data ?? []).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             </label>
             <button type="button" data-testid="integrated-model-save-artifact" onClick={() => void saveCompletedRun()}
-              disabled={busy || Boolean(artifactSave.pending) || !destinationProject || projectsQuery.isError} aria-busy={Boolean(artifactSave.pending)}
+              disabled={busy || Boolean(artifactSave.pending) || !selectedDestination || !chatDestination && projectsQuery.isError} aria-busy={Boolean(artifactSave.pending)}
               className="flex h-8 items-center gap-1.5 border border-[hsl(38,95%,45%)] px-3 text-[9px] text-[hsl(38,95%,58%)] disabled:opacity-40">
               {artifactSave.pending ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
               {artifactSave.pending ? "Saving model Artifact…" : displayedRunSaved ? "Save same run again" : "Save completed run"}
@@ -369,7 +404,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
           <p className="mt-2 text-[9px] text-muted-foreground">Saves the displayed completed run, not unsent edits. Run Scenario first to include edited assumptions or schedules.</p>
           {projectsQuery.isLoading && <p role="status" className="mt-2 text-[10px] text-muted-foreground">Loading destination Projects…</p>}
           {projectsQuery.isError && <p role="alert" className="mt-2 text-[10px] text-red-400">Unable to load destination Projects. <button type="button" onClick={() => void projectsQuery.refetch()} className="underline">Retry</button></p>}
-          {!projectsQuery.isLoading && !projectsQuery.isError && !(projectsQuery.data ?? []).length && <p className="mt-2 text-[10px] text-muted-foreground">Create a Project in Projects before saving this run.</p>}
+          {!terminalContext?.target?.owningChatId && !projectsQuery.isLoading && !projectsQuery.isError && !(projectsQuery.data ?? []).length && <p className="mt-2 text-[10px] text-muted-foreground">Choose or create a persistent Project before saving this run.</p>}
           {saveNotice && <p role={artifactSave.failure ? "alert" : "status"} aria-live="polite" data-testid="integrated-model-artifact-status"
             data-artifact-id={artifactSave.saved?.detail.artifact.id} data-artifact-version={artifactSave.saved?.detail.version.version}
             data-saved-run-id={artifactSave.saved?.request.runId}

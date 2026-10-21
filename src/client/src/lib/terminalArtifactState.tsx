@@ -3,6 +3,10 @@ import { decodeTerminalPanelValue, encodeTerminalPanelValue, type TerminalScreen
 import type { ChatTerminalContext, ChatTerminalControls } from "./chatTerminalContext";
 import type { WorkspaceAudience } from "./featureRegistry";
 
+export interface TerminalArtifactTarget {
+  artifactId: string; version: number; contentHash: string;
+  projectId: number | null; owningChatId: number | null;
+}
 interface PanelContext {
   symbol: string | null;
   setSymbol: (symbol: string) => void;
@@ -13,6 +17,7 @@ interface PanelContext {
   update: (key: string, change: (previous: unknown) => unknown) => void;
   setEditing: (key: string, editing: boolean) => void;
   onAsk?: (id: string, title: string, stagedPrompt?: string) => void;
+  target?: TerminalArtifactTarget;
 }
 const PanelStateContext = createContext<PanelContext | null>(null);
 export const TerminalArtifactStateProvider = PanelStateContext.Provider;

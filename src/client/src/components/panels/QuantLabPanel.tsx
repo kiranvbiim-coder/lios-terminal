@@ -1,6 +1,7 @@
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useGatewayEvent, useGatewayReady } from "@/lib/gateway/GatewayProvider";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, CheckCircle2, Clock, Copy, FlaskConical, GitCompareArrows, Link, Loader2, Play, Plus, RefreshCw, Save, Square, XCircle } from "lucide-react";
 import type { QuantModelRegistryEntry } from "@shared/quantModelRegistry";
 import type { QuantWorkspace } from "@shared/quantLab";
@@ -76,6 +77,7 @@ function QuantResultReceipt({ value }: { value: unknown }) {
 }
 
 export default function QuantLabPanel() {
+  const queryClient = useQueryClient();
   const [workspace, setWorkspace] = useTerminalArtifactState<QuantWorkspace>("QuantLabPanel.workspace", "statistics");
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [models, setModels] = useState<LabModel[]>([]);
@@ -92,7 +94,7 @@ export default function QuantLabPanel() {
   const [parameters, setParameters] = useTerminalArtifactState<Record<string, unknown>>("QuantLabPanel.parameters", {});
   const [rawParameters, setRawParameters] = useTerminalArtifactState("QuantLabPanel.rawParameters", "{}");
   const [datasetIds, setDatasetIds] = useTerminalArtifactState("QuantLabPanel.datasetIds", "");
-  const [dataFabricFieldIds, setDataFabricFieldIds] = useState<string[]>(() => loadDataFabricFields("lios.waveC.selectedFields"));
+  const [dataFabricFieldIds, setDataFabricFieldIds] = useTerminalArtifactState<string[]>("QuantLabPanel.dataFabricFieldIds", () => loadDataFabricFields("lios.waveC.selectedFields"));
   const [dataFabricFieldId, setDataFabricFieldId] = useTerminalArtifactState("QuantLabPanel.dataFabricFieldId", QUANT_NUMERIC_FIELDS[0]?.id ?? "");
   const [seed, setSeed] = useTerminalArtifactState("QuantLabPanel.seed", "42");
   const [timeoutMs, setTimeoutMs] = useTerminalArtifactState("QuantLabPanel.timeoutMs", "30000");
@@ -104,7 +106,17 @@ export default function QuantLabPanel() {
   const workspaceModels = useMemo(() => models.filter((model) => model.workspace === workspace && model.executable), [models, workspace]);
   const selectedModel = models.find((item) => item.id === modelId) ?? null;
   const selectedExperiment = experiments.find((item) => item.id === selectedExperimentId) ?? null;
-  const selectedRun = runs.find((item) => item.id === selectedRunId) ?? null;
+  const recentRun = runs.find((item) => item.id === selectedRunId) ?? null;
+  const selectedRunDetail = useQuery<{ run: Run }>({
+    queryKey: ["/api/quant-lab/runs", selectedRunId],
+    enabled: selectedRunId !== null && recentRun === null,
+    staleTime: 0,
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quant-lab/runs/${encodeURIComponent(selectedRunId!)}`);
+      return response.json();
+    },
+  });
+  const selectedRun = recentRun ?? selectedRunDetail.data?.run ?? null;
   const workspaceExperiments = experiments.filter((item) => item.workspace === workspace || workspace === "results");
 
   async function load() {
@@ -119,8 +131,8 @@ export default function QuantLabPanel() {
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : "Quant Lab unavailable.")); }, []);
   // Run state changes are pushed by the Home (Gateway `data.invalidate`), so the panel reloads on them, not on a timer.
-  useGatewayEvent("data.invalidate", (payload) => { if (payload.topics.includes("quantlab")) load().catch(() => undefined); });
-  useGatewayReady(() => { load().catch(() => undefined); });
+  useGatewayEvent("data.invalidate", (payload) => { if (payload.topics.includes("quantlab")) { load().catch(() => undefined); void queryClient.invalidateQueries({ queryKey: ["/api/quant-lab/runs"] }); } });
+  useGatewayReady(() => { load().catch(() => undefined); void queryClient.invalidateQueries({ queryKey: ["/api/quant-lab/runs"] }); });
   useEffect(() => {
     const first = workspaceModels[0]; if (!first || workspace === "results" || workspace === "dataset" || workspace === "registry") return;
     if (!workspaceModels.some((model) => model.id === modelId)) selectModel(first.id);
@@ -212,6 +224,8 @@ export default function QuantLabPanel() {
         {WORKSPACES.map((item) => <button key={item.id} onClick={() => setWorkspace(item.id)} className={`h-9 shrink-0 px-3 border-r border-border font-terminal text-[7px] ${workspace === item.id ? "bg-amber-400/7 text-amber-300 border-b border-b-amber-400" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}
       </nav>
       {error && <div className="shrink-0 border-b border-red-400/25 bg-red-400/5 px-3 py-2 font-mono text-[7px] text-red-300">{error}</div>}
+      {selectedRunId && !recentRun && selectedRunDetail.isFetching && <p role="status" className="px-3 py-2 text-xs">Loading selected saved run…</p>}
+      {selectedRunId && !recentRun && selectedRunDetail.error && <p role="alert" className="px-3 py-2 text-xs text-red-300">Selected saved run is unavailable: {selectedRunDetail.error.message}</p>}
 
       {workspace === "dataset" ? (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -263,7 +277,8 @@ export default function QuantLabPanel() {
               {dataFabricFieldIds.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dataFabricFieldIds.map((fieldId) => <span key={fieldId} className="flex items-center gap-1 rounded-full border border-cyan-400/25 px-2 py-1 font-mono text-[6.5px] text-cyan-200">{QUANT_NUMERIC_FIELDS.find((field) => field.id === fieldId)?.label ?? fieldId}<button type="button" onClick={() => removeDataFabricField(fieldId)} aria-label={`Remove Data Fabric field ${fieldId}`}><XCircle className="h-2.5 w-2.5" /></button></span>)}</div> : <div className="mt-2 font-mono text-[6.5px] text-muted-foreground">No dynamic fields selected.</div>}
             </div>
             <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2"><label className="font-terminal text-[6px] text-muted-foreground">SEED<input aria-label="Seed" value={seed} onChange={(event) => setSeed(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">TIMEOUT MS<input aria-label="Timeout milliseconds" value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">INVESTIGATION<input aria-label="Investigation ID" value={investigationId} onChange={(event) => setInvestigationId(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">ORGANIZATION<input aria-label="Organization ID" value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label></div>
-            <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy || !modelId} onClick={saveExperiment} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[7px] disabled:opacity-40"><Save className="inline w-3.5 h-3.5 mr-2" />{selectedExperimentId ? "SAVE VERSION" : "SAVE EXPERIMENT"}</button><button disabled={busy || !selectedExperimentId} onClick={() => runExperiment()} className="h-8 px-3 border border-emerald-400/35 text-emerald-300 font-terminal text-[7px] disabled:opacity-40">{busy ? <Loader2 className="inline w-3.5 h-3.5 mr-2 animate-spin" /> : <Play className="inline w-3.5 h-3.5 mr-2" />}QUEUE RUN</button></div>
+            <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy || !modelId} onClick={saveExperiment} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[7px] disabled:opacity-40"><Save className="inline w-3.5 h-3.5 mr-2" />{selectedExperimentId ? "SAVE VERSION" : "SAVE EXPERIMENT"}</button><button disabled={busy || !selectedExperimentId} onClick={() => runExperiment()} className="h-8 px-3 border border-emerald-400/35 text-emerald-300 font-terminal text-[7px] disabled:opacity-40">{busy ? <Loader2 className="inline w-3.5 h-3.5 mr-2 animate-spin" /> : <Play className="inline w-3.5 h-3.5 mr-2" />}QUEUE SAVED EXPERIMENT</button></div>
+            <p className="mt-2 text-xs text-muted-foreground">Queue uses the saved experiment's parameters, datasets and seed. Save Version first to include edits shown here.</p>
           </div>
           <div className="min-h-0 overflow-auto">
             <div className="border-b border-border px-3 py-2 font-terminal text-[7px] text-muted-foreground">EXPERIMENT CONTROL</div>

@@ -1,5 +1,5 @@
 import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   Check,
@@ -30,6 +30,8 @@ import LiveLseOptionsChain from "@/components/panels/LiveLseOptionsChain";
 import { AdvancedRatesDerivativesRunner } from "@/lib/advancedRatesDerivatives";
 import { exportWorkbook } from "@/lib/exportXlsx";
 import { getCurrencyInfo, inferCurrencyFromSymbol, formatPrice } from "@/lib/finance";
+import type { Quote } from "@/lib/finance";
+import { isObservedQuote } from "@/lib/quoteObservation";
 import { useFundamentals, useOHLCV, useQuote } from "@/lib/useFinance";
 import { useYieldCurve } from "@/lib/useEconomics";
 import {
@@ -78,9 +80,24 @@ type ChainRow = {
 const TREE_STEPS = 250;
 
 export default function OptionsPanelInstitutional({ symbol }: Props) {
+  const { data: quote, isLoading } = useQuote(symbol);
+  const [dataMode, setDataMode] = useTerminalArtifactState<"theoretical" | "live">("OptionsPanelInstitutional.dataMode", "theoretical");
+  const modeToggle = <div className="flex border border-border/60 text-[8px] font-terminal tracking-widest overflow-hidden">
+    <button onClick={() => setDataMode("theoretical")} className={`px-2 py-1 ${dataMode === "theoretical" ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}>THEORETICAL PRICER</button>
+    <button onClick={() => setDataMode("live")} className={`px-2 py-1 border-l border-border/60 ${dataMode === "live" ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}>LSE LIVE CHAIN</button>
+  </div>;
+  if (dataMode === "live") return <div className="h-full flex flex-col bg-[#050505] overflow-hidden">
+    <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border bg-[#070707] shrink-0"><span className="font-terminal text-[8px] text-muted-foreground uppercase tracking-widest">Data Source</span>{modeToggle}</div>
+    <div className="flex-1 overflow-hidden"><LiveLseOptionsChain symbol={symbol}/></div>
+  </div>;
+  if (isLoading) return <div className="h-full p-4 space-y-4 bg-[#050505] flex flex-col justify-center animate-pulse"><Skeleton className="h-8 w-1/3 bg-border"/><Skeleton className="h-64 w-full bg-border"/></div>;
+  if (!quote || !isObservedQuote(quote)) return <div className="p-4 space-y-3">{modeToggle}<p role="status" className="text-sm">SPOT PRICE UNAVAILABLE · The original theoretical options grid requires an observed underlying price. No fallback spot or option result has been substituted. The separately authorized live-chain route remains available above.</p></div>;
+  return <ObservedOptionsPanel symbol={symbol} quote={quote} modeToggle={modeToggle}/>;
+}
+
+function ObservedOptionsPanel({ symbol, quote, modeToggle }: Props & { quote: Quote; modeToggle: ReactNode }) {
   const terminal = useTerminalArtifactContext();
   const initialSymbolRef = useRef(symbol);
-  const { data: quote, isLoading } = useQuote(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
   const { data: yieldCurveData } = useYieldCurve();
@@ -91,7 +108,6 @@ export default function OptionsPanelInstitutional({ symbol }: Props) {
   const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsPanelInstitutional.dividendYieldPct", 0);
   const [exerciseStyle, setExerciseStyle] = useTerminalArtifactState<ExerciseStyle>("OptionsPanelInstitutional.exerciseStyle", "european");
   const [metricView, setMetricView] = useTerminalArtifactState<MetricView>("OptionsPanelInstitutional.metricView", "greeks");
-  const [dataMode, setDataMode] = useTerminalArtifactState<"theoretical" | "live">("OptionsPanelInstitutional.dataMode", "theoretical");
   const [dividendMode, setDividendMode] = useTerminalArtifactState<DividendMode>("OptionsPanelInstitutional.dividendMode", "continuous");
   const [discreteDividends, setDiscreteDividends] = useTerminalArtifactState<DiscreteDividend[]>("OptionsPanelInstitutional.discreteDividends", []);
   const [cashDividendAmount, setCashDividendAmount] = useTerminalArtifactState("OptionsPanelInstitutional.cashDividendAmount", 0);
@@ -109,7 +125,7 @@ export default function OptionsPanelInstitutional({ symbol }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  const spot = quote?.price ?? 100;
+  const spot = quote.price;
   const currencyCode = quote?.currency || inferCurrencyFromSymbol(symbol);
   const currencySymbol = getCurrencyInfo(currencyCode).symbol;
   const T = expiryDays / 365;
@@ -411,33 +427,6 @@ export default function OptionsPanelInstitutional({ symbol }: Props) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [exportOpen]);
 
-  const modeToggle = (
-    <div className="flex border border-border/60 text-[8px] font-terminal tracking-widest overflow-hidden">
-      <button onClick={() => setDataMode("theoretical")} className={`px-2 py-1 ${dataMode === "theoretical" ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}>THEORETICAL PRICER</button>
-      <button onClick={() => setDataMode("live")} className={`px-2 py-1 border-l border-border/60 ${dataMode === "live" ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}>LSE LIVE CHAIN</button>
-    </div>
-  );
-
-  if (dataMode === "live") {
-    return (
-      <div className="h-full flex flex-col bg-[#050505] overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border bg-[#070707] shrink-0">
-          <span className="font-terminal text-[8px] text-muted-foreground uppercase tracking-widest">Data Source</span>
-          {modeToggle}
-        </div>
-        <div className="flex-1 overflow-hidden"><LiveLseOptionsChain symbol={symbol} /></div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="h-full p-4 space-y-4 bg-[#050505] flex flex-col justify-center animate-pulse">
-        <Skeleton className="h-8 w-1/3 bg-border" />
-        <Skeleton className="h-64 w-full bg-border" />
-      </div>
-    );
-  }
 
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden text-foreground">

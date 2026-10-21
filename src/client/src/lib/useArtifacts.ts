@@ -169,8 +169,8 @@ export async function createArtifact(projectId: number, input: {
   return (await apiRequest("POST", `/api/projects/${projectId}/artifacts`, input)).json() as Promise<ArtifactDetail>;
 }
 
-export async function saveIntegratedModelRunArtifact(runId: string, projectId: number): Promise<ArtifactDetail> {
-  return (await apiRequest("POST", `/api/financial-models/integrated/runs/${encodeURIComponent(runId)}/artifact`, { projectId })).json();
+export async function saveIntegratedModelRunArtifact(runId: string, destination: { projectId: number | null; owningChatId?: number }): Promise<ArtifactDetail> {
+  return (await apiRequest("POST", `/api/financial-models/integrated/runs/${encodeURIComponent(runId)}/artifact`, destination)).json();
 }
 
 export interface IntegratedModelInputReview {

@@ -3865,6 +3865,15 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/financial-models/integrated/runs/:runId",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/financial-models/integrated/runs/:runId/artifact",
    "reachableBy": [

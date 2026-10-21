@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import { initialTerminalScreenState, readTerminalScreenState, type TerminalScreenState } from "@shared/terminalArtifact";
-import { TerminalArtifactStateProvider, useTerminalArtifactRenderer, useTerminalArtifactAudience } from "@/lib/terminalArtifactState";
+import { TerminalArtifactStateProvider, useTerminalArtifactRenderer, useTerminalArtifactAudience, type TerminalArtifactTarget } from "@/lib/terminalArtifactState";
 import { chatTerminalCapabilities } from "@/lib/chatTerminalContext";
 import TickerTape from "./TickerTape";
 import MacroTickerTape from "./MacroTickerTape";
 import { ReadableValueTable } from "./ReadableValueTable";
 
 type Screen = Extract<ArtifactContent, { kind: "screen" }>;
-export default function TerminalScreenArtifact({ content, revision, onSave, onDirtyChange, onAsk, disabled = false, ephemeral = false }: {
-  content: Screen; revision: number; onSave: (content: ArtifactContent) => Promise<void>;
+export default function TerminalScreenArtifact({ content, revision, onSave, onDirtyChange, onAsk, target, disabled = false, ephemeral = false }: {
+  content: Screen; revision: number; onSave: (content: ArtifactContent) => Promise<void>; target?: TerminalArtifactTarget;
   onDirtyChange?: (dirty: boolean) => void; onAsk?: (id: string, title: string, stagedPrompt?: string) => void; disabled?: boolean; ephemeral?: boolean;
 }) {
   const render = useTerminalArtifactRenderer();
@@ -80,7 +80,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
     if (dirty || saving || activeEditors.size > 0) { setError("Save or reset this terminal's authored inputs before asking about another Artifact."); return; }
     onAsk?.(id, title, stagedPrompt);
   }, [dirty, saving, activeEditors.size, onAsk]);
-  const provider = useMemo(() => terminal ? ({ symbol: terminal.subject.symbol, setSymbol, sourceScope: terminal.sourceScope, readOnly: disabled || saving, state: terminal.panelState, initialize, update, setEditing, ...(onAsk ? { onAsk: ask } : {}) }) : null, [terminal, setSymbol, disabled, saving, initialize, update, setEditing, onAsk, ask]);
+  const provider = useMemo(() => terminal ? ({ symbol: terminal.subject.symbol, setSymbol, sourceScope: terminal.sourceScope, readOnly: disabled || saving, state: terminal.panelState, initialize, update, setEditing, target, ...(onAsk ? { onAsk: ask } : {}) }) : null, [terminal, setSymbol, disabled, saving, initialize, update, setEditing, target, onAsk, ask]);
   const capability = chatTerminalCapabilities(audience).find(item => item.view === draft.view);
   const liveAllowed = terminal?.sourceScope === "auto" || terminal?.sourceScope === "web";
   if (!terminal || !provider || !render || !capability) return <p role="alert">This retained terminal view is unavailable for this account. Its recorded state is unchanged.</p>;

@@ -52,7 +52,7 @@ import {
 import { createModelInputLineage } from "./modelInputLineage";
 import { createValuationLineage } from "./valuationLineage";
 import { tenantContext } from "./tenantContext";
-import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact } from "./integratedModelArtifact";
+import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact, readIntegratedModelRun } from "./integratedModelArtifact";
 import { getDb } from "./db";
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
@@ -300,6 +300,16 @@ export function registerDataFabricRoutes(app: Express): void {
     const symbol = symbolSchema.safeParse(req.query.symbol);
     if (!symbol.success) return res.status(400).json({ error: "A valid symbol is required." });
     res.json(await getForecastActualVariance(symbol.data));
+  });
+
+  app.get("/api/financial-models/integrated/runs/:runId", requireRole(...AUTHOR_ROLES), async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.runId);
+    if (!id.success) return res.status(400).json({ error: "A valid model run ID is required." });
+    try { res.json(await readIntegratedModelRun(tenantContext(req.user!), id.data)); }
+    catch (error) {
+      if (error instanceof IntegratedModelArtifactError) return res.status(error.status).json({ error: error.message });
+      res.status(422).json({ error: "Persisted model run could not be reopened." });
+    }
   });
 
   app.post("/api/financial-models/integrated/runs/:runId/artifact", requireRole(...AUTHOR_ROLES), async (req, res) => {

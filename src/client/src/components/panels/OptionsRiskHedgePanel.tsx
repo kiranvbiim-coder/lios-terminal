@@ -4,6 +4,8 @@ import { Activity, Info, RefreshCw, Scale, ShieldCheck, Sliders, Target } from "
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrencyInfo, inferCurrencyFromSymbol } from "@/lib/finance";
+import type { Quote } from "@/lib/finance";
+import { isObservedQuote } from "@/lib/quoteObservation";
 import { useFundamentals, useOHLCV, useQuote } from "@/lib/useFinance";
 import { useYieldCurve } from "@/lib/useEconomics";
 import {
@@ -61,14 +63,20 @@ function signedLabel(value: number, digits = 2) {
 }
 
 export default function OptionsRiskHedgePanel({ symbol }: Props) {
+  const { data: quote, isLoading } = useQuote(symbol);
+  if (isLoading) return <div className="h-full p-4 bg-[#050505] flex flex-col justify-center gap-4"><Skeleton className="h-8 w-1/3 bg-border" /><Skeleton className="h-64 w-full bg-border" /></div>;
+  if (!quote || !isObservedQuote(quote)) return <p role="status" className="p-4 text-sm">SPOT PRICE UNAVAILABLE · Existing hedge calculations require an observed underlying price. No fallback spot or hedge result has been substituted. Retained authored terms are unchanged.</p>;
+  return <ObservedOptionsRiskHedgePanel symbol={symbol} quote={quote}/>;
+}
+
+function ObservedOptionsRiskHedgePanel({ symbol, quote }: Props & { quote: Quote }) {
   const terminal = useTerminalArtifactContext();
   const initializedSymbol = useRef(symbol);
-  const { data: quote, isLoading } = useQuote(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
   const { data: yieldCurveData } = useYieldCurve();
 
-  const spot = quote?.price ?? 100;
+  const spot = quote.price;
   const currencyCode = quote?.currency || inferCurrencyFromSymbol(symbol);
   const currencySymbol = getCurrencyInfo(currencyCode).symbol;
   const strikes = useMemo(() => buildStrikeLadder(spot), [spot]);
@@ -261,9 +269,6 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
     });
   }, [strikes, strike, spot, T, r, q, v, configuredDividends, rateTouched, currencyCode, yieldCurveData]);
 
-  if (isLoading) {
-    return <div className="h-full p-4 bg-[#050505] flex flex-col justify-center gap-4"><Skeleton className="h-8 w-1/3 bg-border" /><Skeleton className="h-64 w-full bg-border" /></div>;
-  }
 
   const earlyExercisePremium = exerciseStyle === "american" ? primaryGreeks.price - europeanPrimary.price : 0;
   const deltaDriftOnePctBefore = primaryRisk.gamma * spot * 0.01;
@@ -283,6 +288,7 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
         </div>
         <button onClick={() => { setVolTouched(false); setRateTouched(false); setQTouched(false); }} className="flex items-center gap-1 border border-border/60 px-2 py-1 font-terminal text-[8px] text-muted-foreground hover:text-amber-400"><RefreshCw className="w-3 h-3" /> RESET SOURCES</button>
       </div>
+      <p className="border-b border-amber-400/25 px-4 py-2 text-xs text-amber-200">Local model illustration using the displayed observed spot and editable assumptions. Default volatility, rates, yields and contract terms are assumptions, not observed option quotes or an execution receipt. Saved analytical state retains authored terms; live inputs can change the result.</p>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[350px_minmax(0,1fr)] gap-4 p-4">
         <aside className="space-y-3">
