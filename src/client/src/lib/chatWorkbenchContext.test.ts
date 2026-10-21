@@ -45,3 +45,17 @@ test("a newer assistant turn cannot borrow an old saved entity, and user prose i
   assert.equal(resolveScopedWorkbenchSymbol({ ...previous, messages: [...previous.messages, { role: "assistant", metadata: { workingContext: null } }] }), null);
   assert.equal(resolveScopedWorkbenchSymbol({ ...previous, messages: [{ role: "user", metadata: { workingContext: snapshot() } }] }), null);
 });
+
+test("the verified symbol opens a distinct existing entity tab without changing earlier Workbench tabs", async () => {
+  const { createInitialTabsState, openEntityTab } = await import("./terminalTabs");
+  const { captureChatWorkbenchOrigin } = await import("./chatWorkbenchHandoff");
+  const before = createInitialTabsState();
+  const symbol = resolveScopedWorkbenchSymbol(quick());
+  const origin = captureChatWorkbenchOrigin("quick", null, 29, symbol);
+  assert.deepEqual(origin, { mode: "quick", projectId: null, chatId: 29, symbol: "MSFT" });
+  const opened = openEntityTab(before, origin.symbol!);
+  assert.equal(opened.tabs.length, before.tabs.length + 1);
+  assert.deepEqual(opened.tabs[0], before.tabs[0]);
+  assert.equal(opened.tabs.find(tab => tab.id === opened.activeTabId)?.workspace.primary.symbol, "MSFT");
+  assert.equal(captureChatWorkbenchOrigin("quick", null, 29, "invalid symbol").symbol, undefined);
+});
