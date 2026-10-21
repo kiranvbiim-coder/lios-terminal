@@ -68,7 +68,9 @@ export function ReadableRowsTable({ title, rows, limit = 100, options = {}, expo
   title: string; rows: Array<Record<string, unknown>>; limit?: number; options?: ReadableFormatOptions; exportHint?: string;
 }) {
   const visible = rows.slice(0, limit);
-  const allColumns = Array.from(new Set(visible.flatMap(row => Object.keys(row))));
+  const recordedColumns = new Set<string>();
+  for (const row of rows) for (const key of Object.keys(row)) recordedColumns.add(key);
+  const allColumns = Array.from(recordedColumns);
   const columns = allColumns.slice(0, MAX_COLUMNS);
   return <section aria-label={title} className={SECTION}>
     <h3 className={HEADING}>{title}</h3>

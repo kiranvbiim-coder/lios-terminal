@@ -96,6 +96,7 @@ function modelLabel(path: P5AdvancedModelPath): string {
 
 export function buildP5AdvancedArtifact(input: {
   projectId: number | null;
+  scope?: "quick" | "project" | "temporary";
   symbol?: string | null;
   modelPath: P5AdvancedModelPath;
   parameters: Record<string, unknown>;
@@ -134,7 +135,7 @@ export function buildP5AdvancedArtifact(input: {
           professionalExport: p5ExportProfile("valuation"),
         },
       },
-      persistence: input.projectId ? "project_candidate" : "ephemeral",
+      persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
     };
   }
 
@@ -158,6 +159,7 @@ export function buildP5AdvancedArtifact(input: {
           modelId,
           modelVersion: input.run.receipt.modelVersion,
           validationLevel: input.run.receipt.validationLevel,
+          dataClassification: input.run.receipt.dataClassification,
           inputSnapshotHash: input.run.receipt.inputSnapshotHash,
           outputSnapshotHash: input.run.receipt.outputSnapshotHash,
           professionalReconciliation: reconciliation,
@@ -169,7 +171,7 @@ export function buildP5AdvancedArtifact(input: {
           result: input.run.result,
         } : {},
       },
-      persistence: input.projectId ? "project_candidate" : "ephemeral",
+      persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
     };
   }
 
@@ -217,7 +219,7 @@ export function buildP5AdvancedArtifact(input: {
       }),
       editorPreference: "builtin",
     },
-    persistence: input.projectId ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
   };
 }
 
@@ -230,7 +232,7 @@ export interface P5ProfessionalResultTextInput {
   dataClassification: string;
   sourceCount?: number;
   warnings?: readonly string[];
-  savedToProject: boolean;
+  retentionScope: "project" | "quick" | "temporary";
 }
 
 const SOURCE_BOUND_CLASSIFICATIONS = new Set(["live", "delayed", "historical", "cached", "fallback"]);
@@ -300,7 +302,7 @@ function dcfSensitivityBody(input: P5ProfessionalResultTextInput): string | null
   return [
     `${subject} base-case value is **${displayNumber(base.perShare, 2, 2)} per share**, with a bear–bull range of ${displayNumber(bear.perShare, 2, 2)} to ${displayNumber(bull.perShare, 2, 2)}.`,
     "",
-    "| Case | Value per share | WACC | Terminal growth |",
+    "| Case | Value per share | WACC | Terminal assumption |",
     "| --- | ---: | ---: | ---: |",
     row("Bear", bear),
     row("Base", base),
@@ -329,9 +331,9 @@ function genericBody(input: P5ProfessionalResultTextInput): string {
 export function buildP5ProfessionalResultText(input: P5ProfessionalResultTextInput): string {
   const body = input.modelPath === "valuation/dcf-sensitivity" ? dcfSensitivityBody(input) ?? genericBody(input) : genericBody(input);
   const warnings = (input.warnings ?? []).filter((warning) => warning.trim().length > 0);
-  const pointer = input.savedToProject
-    ? "The interactive model is saved in your Project. Open it from the side panel; model details and checks are under Show work."
-    : "This result has not been saved as a canonical model. Use the explicit save action when available; Temporary Chat does not save work automatically.";
+  const pointer = input.retentionScope === "temporary"
+    ? "Temporary Chat does not save this result as a canonical model."
+    : `The interactive model is retained with this ${input.retentionScope === "project" ? "Project conversation" : "Chat"}. Open the saved Artifact; model details and checks are under Show work.`;
   return [
     `### ${input.label}`,
     body,
@@ -375,6 +377,7 @@ function statementEvidence(
 
 export function buildP5CompanyResearchArtifact(input: {
   projectId: number | null;
+  scope?: "quick" | "project" | "temporary";
   symbol: string;
   quote: Quote;
   technical: TechnicalSnapshot | null;
@@ -502,12 +505,13 @@ export function buildP5CompanyResearchArtifact(input: {
       })),
       editorPreference: "builtin",
     },
-    persistence: input.projectId ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
   };
 }
 
 export function buildP5ResearchReportArtifact(input: {
   projectId: number | null;
+  scope?: "quick" | "project" | "temporary";
   symbol: string;
   quote: Quote;
   technical: TechnicalSnapshot | null;
@@ -559,13 +563,14 @@ export function buildP5ResearchReportArtifact(input: {
       }),
       editorPreference: "builtin",
     },
-    persistence: input.projectId ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
   };
 }
 
 
 export function buildP5FundamentalsArtifact(input: {
   projectId: number | null;
+  scope?: "quick" | "project" | "temporary";
   symbol: string;
   income: CapabilityResolution<LseFinancialReport[]> | null;
   balance: CapabilityResolution<LseFinancialReport[]> | null;
@@ -659,13 +664,14 @@ export function buildP5FundamentalsArtifact(input: {
       })),
       editorPreference: "builtin",
     },
-    persistence: input.projectId ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
   };
 }
 
 
 export function buildP5ReportFromArtifact(input: {
   projectId: number | null;
+  scope?: "quick" | "project" | "temporary";
   sourceArtifactId: string;
   sourceTitle: string;
   sourceContent: ArtifactContent;
@@ -721,6 +727,6 @@ export function buildP5ReportFromArtifact(input: {
       }),
       editorPreference: "builtin",
     },
-    persistence: input.projectId ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "quick" ? "chat_candidate" : input.projectId ? "project_candidate" : "ephemeral",
   };
 }

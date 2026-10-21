@@ -129,3 +129,20 @@ test("deliberate historical selection remains supported without treating arbitra
   const head = advanceArtifactWorkbenchRevision(loadedV1, { type: "select", version: null });
   assert.deepEqual(advanceArtifactWorkbenchRevision(head, { type: "loaded", version: 3 }), { requestedVersion: null, displayedVersion: 3, loading: false });
 });
+
+test("Quick Chat uses the same Workbench editor and returns its exact saved revision without a Project", () => {
+  const quick = { ...context, projectId: null };
+  const before = state();
+  const opened = openArtifactWorkbench(before, quick, null, null, false)!;
+  assert.equal(isWorkspaceState(opened.state.tabs[0].workspace), true);
+  const restored = deserializeWorkspace(serializeWorkspace(opened.state.tabs[0].workspace))!;
+  assert.deepEqual(restored.secondary?.artifact, quick);
+  assert.equal(restored.secondary?.view, "artifact");
+  assert.equal(openArtifactWorkbench(before, quick, null, null, true), null);
+  assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, version: 4 }, true), null);
+  assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, chatId: 43 }, false), null);
+  assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, projectId: 17 }, false), null);
+  const returned = returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, version: 4 }, false)!;
+  assert.deepEqual(returned.context, { ...quick, version: 4 });
+  assert.deepEqual(returned.state, before);
+});

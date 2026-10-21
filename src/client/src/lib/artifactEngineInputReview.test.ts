@@ -23,13 +23,13 @@ const preview: IntegratedModelInputReview = {
 };
 const output: ArtifactDetail = {
   artifact: {
-    id: "canonical-new-output", projectId: 7, ownerUserId: 11, organizationId: null, kind: "spreadsheet", title: "Reviewed scenario output",
-    status: "active", origin: "engine", headVersion: 1, forkedFromArtifactId: null, forkedFromVersion: null,
+    id: revision.artifactId, projectId: 7, ownerUserId: 11, organizationId: null, kind: "spreadsheet", title: "Reviewed scenario output",
+    status: "active", origin: "engine", headVersion: revision.version + 1, forkedFromArtifactId: null, forkedFromVersion: null,
     createdAt: "2026-10-08T12:00:00.000Z", updatedAt: "2026-10-08T12:00:00.000Z", archivedAt: null,
     trashedAt: null, trashedByProjectId: null, trashedFromStatus: null,
   },
   version: {
-    id: "canonical-output-version", artifactId: "canonical-new-output", version: 1, parentVersionId: null, adapterId: "lios.spreadsheet",
+    id: "canonical-output-version", artifactId: revision.artifactId, version: revision.version + 1, parentVersionId: null, adapterId: "lios.spreadsheet",
     content: { kind: "spreadsheet", sheets: [{ id: "assumptions", name: "Assumptions", cells: {}, names: {}, rowCount: 40, columnCount: 2 }], activeSheetId: "assumptions", rendererPreference: "builtin", calculationMode: "automatic" },
     contentHash: "0".repeat(64), sourceRefs: preview.sourceRefs, executionReceiptIds: [], assumptionRefs: [], trustManifest: null, dependencyRefs: [],
     refreshSpec: { kind: "engine", sourceScope: "auto", executionMode: "deterministic_first", capabilityIds: [], message: null, selection: null, engineRef: "integrated_financial_model:2026-10-08:run:new-run" },
@@ -84,7 +84,7 @@ test("review and revision refresh do not execute; only explicit run submits capt
   assert.equal(runRequests.length, 0);
   await h.session.run();
   assert.deepEqual(runRequests, [{ artifactId: revision.artifactId, input: { version: 3, contentHash: preview.contentHash, reviewHash: preview.reviewHash } }]);
-  assert.equal(h.state().result?.outputArtifact.id, "canonical-new-output");
+  assert.equal(h.state().result?.outputArtifact.id, revision.artifactId);
   assert.equal(h.state().result?.receipt.runId, "new-run");
   assert.equal(h.state().review, null);
   await h.session.run();
@@ -113,7 +113,7 @@ test("synchronous duplicate review and run clicks share no second transport requ
   assert.equal(h.state().pending, "run", "dismissing a review cannot claim to cancel server execution");
   running.resolve(result);
   await firstRun;
-  assert.equal(h.state().result?.outputVersion.artifactId, "canonical-new-output");
+  assert.equal(h.state().result?.outputVersion.artifactId, revision.artifactId);
 });
 
 test("review response for a different version or content hash never becomes runnable", async () => {
@@ -222,11 +222,11 @@ test("server stale-head or rights errors remain visible, consume review, and are
   }
 });
 
-test("new output must be canonical, in the source Project, and tied to the captured review hash", async () => {
+test("recomputed output must advance the same canonical Artifact within the captured Project and review", async () => {
   const invalid = [
     { ...result, review: { ...preview, reviewHash: "different-review" } },
     { ...result, outputArtifact: { ...output.artifact, projectId: 8 } },
-    { ...result, outputArtifact: { ...output.artifact, id: revision.artifactId } },
+    { ...result, outputArtifact: { ...output.artifact, id: "unrelated-artifact" } },
     { ...result, outputVersion: { ...output.version, artifactId: "unrelated-output" } },
     { ...result, receipt: { ...result.receipt, runId: preview.source.runId } },
   ];
@@ -235,7 +235,6 @@ test("new output must be canonical, in the source Project, and tied to the captu
     await h.session.review();
     await h.session.run();
     assert.equal(h.state().result, null);
-    assert.match(h.state().error!, /does not identify a new canonical output/);
   }
   assert.equal(revision.artifactId, "source-workbook");
   assert.equal(revision.version, 3);
@@ -262,7 +261,7 @@ test("late previous Artifact run cannot replace the next source's pending review
 test("explicit re-review after saving binds the next version and never carries forward the prior review hash", async () => {
   const nextRevision = { ...revision, version: 4, headVersion: 4, contentHash: "next-content-hash" };
   const nextPreview = { ...preview, version: 4, contentHash: nextRevision.contentHash, reviewHash: "next-review-hash", inputHash: "next-input-hash" };
-  const nextResult = { ...result, review: nextPreview, receipt: { ...result.receipt, inputHash: nextPreview.inputHash } };
+  const nextResult = { ...result, review: nextPreview, outputArtifact: { ...result.outputArtifact, headVersion: 5 }, outputVersion: { ...result.outputVersion, version: 5 }, receipt: { ...result.receipt, inputHash: nextPreview.inputHash } };
   const submitted: Array<{ version: number; contentHash: string; reviewHash: string }> = [];
   const h = harness({
     review: async (_id, version) => version === 3 ? preview : nextPreview,
@@ -278,4 +277,14 @@ test("explicit re-review after saving binds the next version and never carries f
   await h.session.run();
   assert.deepEqual(submitted, [{ version: 4, contentHash: "next-content-hash", reviewHash: "next-review-hash" }]);
   assert.equal(h.state().result?.review.version, 4);
+});
+
+test("projectless engine output remains bound to the reviewed owning Chat", async () => {
+  for (const owningChatId of [42, 43]) {
+    const h = harness({ review: async () => preview, run: async () => ({ ...result, outputArtifact: { ...result.outputArtifact, projectId: null, owningChatId } }) });
+    h.setRevision({ ...revision, projectId: null, owningChatId: 42 });
+    await h.session.review();
+    await h.session.run();
+    assert.equal(h.state().result?.outputArtifact.owningChatId ?? null, owningChatId === 42 ? 42 : null);
+  }
 });

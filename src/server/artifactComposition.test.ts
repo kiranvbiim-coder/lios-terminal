@@ -175,7 +175,11 @@ test("selected Project sources capture immutable multimodal content into reviewe
     await assert.rejects(proposeArtifactComposition(ctx, target.artifact.id, { ...chartInput, sourceId: table.artifact.id }), /must have chart/);
     assert.equal(artifactCompositionRequestSchema.safeParse({ ...chartInput, sourceVersion: undefined }).success, false);
     const cross = await store.createArtifact(ctx, { projectId: otherProject.id, title: "Other chart", content: chartContent });
-    await assert.rejects(proposeArtifactComposition(ctx, target.artifact.id, { ...chartInput, sourceId: cross.artifact.id }), /different Project/);
+    const targetBeforeCross = await store.getArtifact(ctx, target.artifact.id);
+    const proposalsBeforeCross = await store.listArtifactProposals(ctx, target.artifact.id);
+    await assert.rejects(proposeArtifactComposition(ctx, target.artifact.id, { ...chartInput, sourceId: cross.artifact.id }));
+    assert.deepEqual(await store.getArtifact(ctx, target.artifact.id), targetBeforeCross);
+    assert.deepEqual(await store.listArtifactProposals(ctx, target.artifact.id), proposalsBeforeCross);
     const alien = await store.createArtifact(foreignCtx, { projectId: foreignProject.id, title: "Foreign chart", content: chartContent });
     await assert.rejects(proposeArtifactComposition(ctx, target.artifact.id, { ...chartInput, sourceId: alien.artifact.id }), /not found|owned/);
     await getDb().update(projectArtifactVersions).set({ contentHash: "b".repeat(64) }).where(eq(projectArtifactVersions.id, table.version.id));

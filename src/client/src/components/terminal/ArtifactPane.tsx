@@ -8,7 +8,7 @@ import {
   getArtifactExportPlan, proposeArtifactChange, queryDataArtifact, setArtifactStatus, undoArtifact, useArtifact, useArtifactProposals,
   useArtifactReferences, useArtifactVersions, useInvalidateArtifacts,
   restoreArtifactRevision,
-  useProjectArtifacts, proposeArtifactBranchMerge, type DataArtifactQueryResult,
+  useOwnedArtifacts, proposeArtifactBranchMerge, type DataArtifactQueryResult,
   reviewIntegratedModelArtifactInputs, runReviewedIntegratedModelArtifactInputs,
   type ArtifactDetail, type IntegratedModelArtifactRunResult,
 } from "@/lib/useArtifacts";
@@ -284,7 +284,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
-  if(content.kind==="backtest") return <BacktestArtifactView content={content} facts={facts} onSave={onSave}/>;
+  if(content.kind==="backtest") return <BacktestArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="thesis") return <ThesisEditor content={content} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem}/>;
   if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
   if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
@@ -392,14 +392,16 @@ function DataArtifactTable({ artifactId, content }: { artifactId: string; conten
     <DataPreview columns={content.columns.map((column) => column.name)} rows={rows} offset={offset}/>
   </section>;
 }
-function IntegratedArtifactEngineInputs({ detail, onOpenOutput }: {
+function IntegratedArtifactEngineInputs({ detail, onOpenOutput, blocked, onApplyingChange }: {
   detail: ArtifactDetail;
   onOpenOutput: (result: IntegratedModelArtifactRunResult) => void;
+  blocked: boolean;
+  onApplyingChange: (applying: boolean) => void;
 }) {
   const invalidate = useInvalidateArtifacts();
   const [state, setState] = useState(initialEngineInputReviewState);
   const revision = {
-    artifactId: detail.artifact.id, projectId: detail.artifact.projectId,
+    artifactId: detail.artifact.id, projectId: detail.artifact.projectId, owningChatId: detail.artifact.owningChatId,
     version: detail.version.version, headVersion: detail.artifact.headVersion, contentHash: detail.version.contentHash,
   };
   const currentRevision = useRef(revision);
@@ -413,21 +415,27 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput }: {
     session.current = controller;
     return () => { controller.dispose(); if (session.current === controller) session.current = null; };
   }, []);
-  useEffect(() => { session.current?.reconcileRevision(); }, [revision.artifactId, revision.projectId, revision.version, revision.headVersion, revision.contentHash]);
+  useEffect(() => { session.current?.reconcileRevision(); }, [revision.artifactId, revision.projectId, revision.owningChatId, revision.version, revision.headVersion, revision.contentHash]);
+  const outputCallback = useRef(onOpenOutput);
+  outputCallback.current = onOpenOutput;
   useEffect(() => {
-    if (state.result) invalidate(state.result.outputArtifact.projectId, state.result.outputArtifact.id);
+    if (!state.result) return;
+    outputCallback.current(state.result);
+    invalidate(state.result.outputArtifact.projectId, state.result.outputArtifact.id);
   }, [state.result, invalidate]);
+  useEffect(() => { onApplyingChange(state.pending === "run"); return () => onApplyingChange(false); }, [state.pending, onApplyingChange]);
   const review = state.review;
   const current = revision.version === revision.headVersion;
   return <section aria-label="Governed engine inputs" data-testid="artifact-engine-inputs" aria-busy={state.pending !== null} className="mb-4 space-y-3 rounded-lg border border-emerald-300/25 p-3">
     <h3 className="font-ui text-[14px] font-semibold">Review saved engine inputs</h3>
     <p className="font-ui text-[13px] text-muted-foreground">Save spreadsheet changes first. Review reads only this saved Artifact revision against its recorded engine run and frozen dataset. Nothing runs automatically when you edit, save, or refresh.</p>
-    <p className="font-ui text-[13px] text-muted-foreground">No host commands, provider requests, or automatic data fetches. Only assumptions and schedule-inputs are engine inputs; derived output sheets are not inputs. Running creates a new named engine run and a new canonical Artifact in this same Project. The source Artifact is not replaced.</p>
+    <p className="font-ui text-[13px] text-muted-foreground">No host commands, provider requests, or automatic data fetches. Only assumptions and schedule-inputs are engine inputs; derived output sheets are not inputs. Running creates a new named engine run and the next canonical revision of this same Artifact in its existing Chat or Project.</p>
     <div className="flex flex-wrap gap-2">
-      <button type="button" data-testid="artifact-review-engine-inputs" disabled={state.pending !== null || !current} onClick={() => void session.current?.review()} className="rounded border border-emerald-300/30 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "review" ? "Reviewing saved engine inputs…" : "Review engine inputs"}</button>
+      <button type="button" data-testid="artifact-review-engine-inputs" disabled={blocked || state.pending !== null || !current} onClick={() => void session.current?.review()} className="rounded border border-emerald-300/30 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "review" ? "Reviewing saved engine inputs…" : "Review engine inputs"}</button>
       {(review || state.pending === "review") && <button type="button" disabled={state.pending === "run"} onClick={() => session.current?.dismissReview()} className="rounded border border-border/50 px-3 py-2 text-sm disabled:opacity-40">Dismiss review</button>}
     </div>
     {!current && <p role="alert" className="text-sm text-amber-200">This saved version is not the current Artifact head. Reload before reviewing or running engine inputs.</p>}
+    {blocked && <p role="alert" className="text-sm text-amber-200">Save pending Artifact edits and wait for the saved revision before reviewing or running.</p>}
     {review && <div data-testid="artifact-engine-input-review" data-reviewed-version={review.version} data-review-hash={review.reviewHash} className="space-y-3">
       <dl className="space-y-1 break-all font-terminal text-[12px]">
         <div><dt className="inline text-muted-foreground">Saved source revision: </dt><dd className="inline">{review.artifactId} · v{review.version}</dd></div>
@@ -445,13 +453,12 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput }: {
       <details><summary className="cursor-pointer text-sm">Inspect all exact normalized assumptions and schedules</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-words text-[12px]">{JSON.stringify({ assumptions: review.assumptions, schedules: review.schedules }, null, 2)}</pre></details>
       <details><summary className="cursor-pointer text-sm">Recorded source references ({review.sourceRefs.length})</summary><pre className="mt-2 whitespace-pre-wrap break-all text-[12px]">{JSON.stringify(review.sourceRefs, null, 2)}</pre></details>
       <p className="text-sm text-muted-foreground">Run rechecks the saved head, source permissions, engine revision, and both captured hashes before deterministic execution. This does not authorize host execution or provider refresh.</p>
-      <button type="button" data-testid="artifact-run-reviewed-inputs" disabled={state.pending !== null || !current} onClick={() => void session.current?.run()} className="rounded border border-emerald-300/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "run" ? "Running reviewed inputs…" : "Run reviewed inputs"}</button>
+      <button type="button" data-testid="artifact-run-reviewed-inputs" disabled={blocked || state.pending !== null || !current} onClick={() => void session.current?.run()} className="rounded border border-emerald-300/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40">{state.pending === "run" ? "Running reviewed inputs…" : "Run reviewed inputs"}</button>
       {state.pending === "run" && <p role="status" className="text-sm text-muted-foreground">The explicit run is in flight. Leaving this inspector does not cancel server execution.</p>}
     </div>}
     {state.error && <div className="space-y-2"><p role="alert" data-testid="artifact-engine-input-error" className="break-words text-sm text-red-200">{state.error}</p><button type="button" disabled={state.pending !== null} onClick={() => invalidate(detail.artifact.projectId, detail.artifact.id)} className="rounded border border-border/50 px-3 py-2 text-sm disabled:opacity-40">Reload saved source revision</button></div>}
     {state.result && <div className="space-y-2">
-      <p role="status" data-testid="artifact-engine-output-status" data-run-id={state.result.receipt.runId} data-artifact-id={state.result.outputArtifact.id} className="break-all text-sm text-emerald-200">New engine run {state.result.receipt.runId} saved as Artifact {state.result.outputArtifact.id} · v{state.result.outputVersion.version}. Source Artifact {detail.artifact.id} is unchanged.</p>
-      <button type="button" data-testid="artifact-open-engine-output" onClick={() => onOpenOutput(state.result!)} className="rounded border border-border/50 px-3 py-2 text-sm">Open new output Artifact</button>
+      <p role="status" data-testid="artifact-engine-output-status" data-run-id={state.result.receipt.runId} data-artifact-id={state.result.outputArtifact.id} className="break-all text-sm text-emerald-200">Engine run {state.result.receipt.runId} saved on this Artifact · v{state.result.outputVersion.version}. The exact recomputed revision is selected in this workspace.</p>
     </div>}
   </section>;
 }
@@ -462,7 +469,8 @@ interface ArtifactPaneProps {
   onVersionChange?: (version: number | null) => void;
   onDisplayedVersionChange?: (version: number, artifactId: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
-  projectId: number;
+  projectId: number | null;
+  owningChatId?: number | null;
   sessions: ProjectSession[];
   onClose: () => void;
   onAsk: (id: string, title: string, stagedPrompt?: string) => void;
@@ -473,7 +481,7 @@ interface ArtifactPaneProps {
 function ArtifactReportRequest({ detail, artifactId, projectId, onRerun }: {
   detail: ArtifactDetail;
   artifactId: string;
-  projectId: number;
+  projectId: number | null;
   onRerun: NonNullable<ArtifactPaneProps["onRerun"]>;
 }) {
   const catalogue = useQuery({
@@ -484,7 +492,7 @@ function ArtifactReportRequest({ detail, artifactId, projectId, onRerun }: {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const current = {
-    artifactId: detail.artifact.id, versionArtifactId: detail.version.artifactId, projectId: detail.artifact.projectId,
+    artifactId: detail.artifact.id, versionArtifactId: detail.version.artifactId, projectId: detail.artifact.projectId, owningChatId: detail.artifact.owningChatId,
     version: detail.version.version, headVersion: detail.artifact.headVersion, contentHash: detail.version.contentHash,
   };
   const [captured] = useState(() => ({ ...current, artifactId, projectId }));
@@ -524,22 +532,21 @@ function ArtifactReportRequest({ detail, artifactId, projectId, onRerun }: {
 }
 
 export function ArtifactPane(props: ArtifactPaneProps) {
-  const [openedOutput, setOpenedOutput] = useState<{ sourceArtifactId: string; result: IntegratedModelArtifactRunResult } | null>(null);
-  useEffect(() => { setOpenedOutput(null); }, [props.artifactId]);
-  const output = openedOutput?.sourceArtifactId === props.artifactId ? openedOutput.result : null;
-  return <div>
-    <div hidden={output !== null}><ArtifactPaneWorkspace key={`${props.artifactId}:${props.version ?? "head"}`} {...props} onEngineOutput={(result) => setOpenedOutput({ sourceArtifactId: props.artifactId, result })}/></div>
-    {output && <section data-testid="artifact-engine-output-workspace">
-      <button type="button" data-testid="artifact-back-to-engine-source" onClick={() => setOpenedOutput(null)} className="mb-3 rounded border border-border/50 px-3 py-2 text-sm">Back to source Artifact</button>
-      <p className="mb-3 break-all text-sm text-muted-foreground">Engine run {output.receipt.runId} · output Artifact {output.outputArtifact.id} · source {props.artifactId} v{output.review.version}. Your original workspace return path is unchanged.</p>
-      <ArtifactPane key={output.outputArtifact.id} {...props} version={null} artifactId={output.outputArtifact.id} projectId={output.outputArtifact.projectId}/>
-    </section>}
-  </div>;
+  const [selection, setSelection] = useState<{ artifactId: string; version: number } | null>(null);
+  const selectedVersion = selection?.artifactId === props.artifactId ? selection.version : props.version;
+  return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
+    setSelection(version === null ? null : { artifactId: props.artifactId, version });
+    props.onVersionChange?.(version);
+  }} onEngineOutput={(result) => {
+    setSelection({ artifactId: result.outputArtifact.id, version: result.outputVersion.version });
+    props.onVersionChange?.(result.outputVersion.version);
+  }}/>;
 }
 
 function ArtifactPaneWorkspace({
   artifactId,
   projectId,
+  owningChatId,
   version,
   onVersionChange,
   onDisplayedVersionChange,
@@ -553,7 +560,7 @@ function ArtifactPaneWorkspace({
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
   const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
-  const projectArtifacts=useProjectArtifacts(projectId);
+  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? detail.data?.artifact.owningChatId });
   const [mergeBranchId,setMergeBranchId]=useState("");
   const [mergeConflicts,setMergeConflicts]=useState<string[]>([]);
   const [mergePreviews,setMergePreviews]=useState<Record<string,{target:string;branch:string;truncated:boolean}>>({});
@@ -628,6 +635,7 @@ function ArtifactPaneWorkspace({
   };
   const thesisMonitor=(automation.data??[]).find((workflow)=>workflow.template==="thesis_refresh"&&workflow.action.kind==="thesis_refresh"&&workflow.action.artifactId===artifactId)??null;
   const createThesisMonitor=async()=>run(async()=>{
+    if (projectId === null) throw new Error("Project monitors require a Project. This Chat Artifact remains saved here.");
     await createP9Workflow(projectId,{
       schemaVersion:"1",
       name:`Monitor · ${data.artifact.title}`,
@@ -708,9 +716,9 @@ function ArtifactPaneWorkspace({
     }
   };
   const draft=async(d:SpreadsheetCellDiff)=>run(async()=>{await proposeArtifactChange(artifactId,{baseVersion:data.artifact.headVersion,type:"spreadsheet_ai_diff",summary:`Conversation-ready draft ${d.sheetId}!${d.ref}`,diffs:[d],actorType:"conversation"});invalidate(projectId,artifactId)});
-  const refreshThesis=async()=>run(async()=>{await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{const saved=await undoArtifact(artifactId);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} disabled={data.artifact.headVersion<=1||data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Undo by new version"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
+  const refreshThesis=async()=>run(async()=>{if(projectId===null)throw new Error("Project evidence refresh requires a Project.");await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
+  const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{if(projectId===null)throw new Error("Project thesis postmortems require a Project.");await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
+  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{const saved=await undoArtifact(artifactId);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} disabled={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying || data.artifact.headVersion <= 1 || data.version.version !== data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Undo by new version"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
     <div role="tablist" aria-label="Artifact inspector" className="lios-reference-artifact-tabs">
       {(["artifact", "evidence", "history"] as const).map((tab, index, tabs) => <button key={tab} type="button" role="tab" id={`${inspectorId}-${tab}-tab`} aria-controls={`${inspectorId}-${tab}-panel`} aria-selected={inspectorTab === tab} tabIndex={inspectorTab === tab ? 0 : -1} onClick={() => setInspectorTab(tab)} onKeyDown={(event) => {
         const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -737,20 +745,20 @@ function ArtifactPaneWorkspace({
       <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
       {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)}/></fieldset>}
       </div>
-      <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>
+      {projectId !== null && <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>}
       <details data-testid="artifact-more-actions" className="mt-4 rounded-lg border border-border/40 bg-black/10 p-3"><summary className="cursor-pointer font-ui text-[13px] text-muted-foreground">More actions · review, reports, maintenance and source inspection</summary>
       <div className="mt-3 space-y-3">
     <div className="py-2"><button type="button" onClick={() => openTerminalInspector({ view: "research", label: data.artifact.title, target: { artifactId, version: data.version.version, contentHash: data.version.contentHash } })} className="rounded border border-cyan-300/30 px-3 py-2 text-sm text-cyan-200">Inspect exact saved source</button><span className="ml-2 text-xs text-muted-foreground">Cells: focus then Alt+I, or Alt-click. Inspection reads the saved revision, never unsaved draft values.</span></div>
       <Suspense fallback={<p role="status">Loading recorded review…</p>}><ArtifactReviewNotes key={`${artifactId}:${data.version.version}`} detail={data} sessions={sessions} onAsk={onAsk}/></Suspense>
       <Suspense fallback={<p role="status">Loading professional package assembly…</p>}><ProfessionalWorkPackage key={`${artifactId}:${data.version.version}`} detail={data} sessions={sessions} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying} onAsk={onAsk}/></Suspense>
       {content.kind === "spreadsheet" && <Suspense fallback={<p role="status">Loading spreadsheet return…</p>}><SpreadsheetArtifactReturn key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} version={data.version.version} contentHash={data.version.contentHash} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying} onStaged={() => invalidate(projectId, artifactId)}/></Suspense>}
-      {(content.kind === "report" || content.kind === "research") && <Suspense fallback={<p role="status">Loading composition…</p>}><ArtifactComposition key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} projectId={projectId} version={data.version.version} content={content} onStaged={() => invalidate(projectId, artifactId)}/></Suspense>}
+      {projectId !== null && (content.kind === "report" || content.kind === "research") && <Suspense fallback={<p role="status">Loading composition…</p>}><ArtifactComposition key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} projectId={projectId} version={data.version.version} content={content} onStaged={() => invalidate(projectId, artifactId)}/></Suspense>}
       {onRerun && <ArtifactReportRequest key={`${artifactId}:${projectId}:${data.version.version}:${data.artifact.headVersion}:${data.version.contentHash}`} detail={data} artifactId={artifactId} projectId={projectId} onRerun={onRerun}/>}
       <div className="mb-3 rounded border border-cyan-300/20 p-3">
         <button type="button" disabled={data.version.version !== data.artifact.headVersion} onClick={() => onAsk(artifactId, data.artifact.title, artifactMaintenancePrompt(artifactId, data.artifact.title, data.version.version, data.version.contentHash))} className="rounded border border-cyan-300/30 px-3 py-2 font-ui text-[13px] text-cyan-200 disabled:opacity-40">Ask LiOS to maintain this Artifact</button>
         <p className="mt-2 font-ui text-[12px] text-muted-foreground">Stages the exact saved identity, revision and hash in the existing conversation. Add your maintenance instruction, choose AI/agent mode, and send explicitly. Nothing is submitted or accepted automatically.</p>
       </div>
-      {isIntegratedModelWorkbook(data) && <IntegratedArtifactEngineInputs key={artifactId} detail={data} onOpenOutput={onEngineOutput}/>}
+      {isIntegratedModelWorkbook(data) && <IntegratedArtifactEngineInputs key={artifactId} detail={data} onOpenOutput={onEngineOutput} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision} onApplyingChange={setModelApplying}/>}
       {isIntegratedModelWorkbook(data) && <Suspense fallback={<p role="status">Loading model maintenance…</p>}><ArtifactModelMaintenance key={artifactId} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision} onApplyingChange={setModelApplying}/></Suspense>}
       {isIntegratedModelWorkbook(data) && <Suspense fallback={<p role="status">Loading model change report…</p>}><ArtifactModelChangeReport key={`${artifactId}:${data.version.version}`} detail={data} versions={versions.data ?? []} sessions={sessions} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying} onAsk={onAsk}/></Suspense>}
       </div>

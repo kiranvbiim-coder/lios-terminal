@@ -232,6 +232,18 @@ test("an unsaved draft never silently disappears when saving is unavailable", ()
   assert.doesNotMatch(markup, /Keep in Project/);
 });
 
+test("Quick Chat candidate offers retention in the same Chat and Temporary results offer none", () => {
+  const draft = { artifactType: "research_brief", title: "Retained Quick analysis", persistence: "chat_candidate", sourceRefs: [] };
+  const unsaved = render([event({ type: "artifact", artifact: draft }), doneOk], { onKeepArtifact: noop });
+  assert.match(unsaved, /Keep in Chat/);
+  assert.doesNotMatch(unsaved, /Keep in Project/);
+  const saved = render([event({ type: "artifact", artifact: draft, persistedArtifact: { id: "artifact:66666666-6666-4666-8666-666666666666", version: 4 } }), doneOk], { onKeepArtifact: noop });
+  assert.doesNotMatch(saved, /Keep in Chat|Keep in Project|Not saved yet/);
+  const temporary = render([event({ type: "artifact", artifact: { ...draft, persistence: "ephemeral" } }), doneOk], { onKeepArtifact: undefined });
+  assert.doesNotMatch(temporary, /Keep in Chat|Keep in Project/);
+  assert.match(temporary, /Not saved/);
+});
+
 test("a failed or stopped run with no error card still shows a visible status line", () => {
   const failed = render([planEvent, event({ type: "done", status: "failed" })]);
   assert.match(failed, /role="status"[^>]*data-testid="trace-run-status"[^>]*data-run-status="failed"/);

@@ -25,6 +25,7 @@ export default function ArtifactPortfolioMateriality({ detail, blocked = false }
   try { portfolioMaterialityPayload(version.content); }
   catch (error) { eligibilityError = error instanceof Error ? error.message : "Portfolio metadata or explicit holding values are invalid."; }
   const save = async () => {
+    if (artifact.projectId === null) { setMessage("Project monitors require a Project. This Chat Artifact remains saved here."); return; }
     if (pending.current || !currentHead || blocked || !acceptanceMatches || eligibilityError) return;
     const capturedIdentity = identity;
     pending.current = true; setBusy(true); setMessage(null);

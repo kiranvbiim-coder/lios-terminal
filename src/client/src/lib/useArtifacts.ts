@@ -14,7 +14,7 @@ import type {
 import { apiRequest } from "./queryClient";
 
 export interface ProjectArtifactRecord {
-  id: string; projectId: number; ownerUserId: number; organizationId: number | null;
+  id: string; projectId: number | null; owningChatId?: number | null; ownerUserId: number; organizationId: number | null;
   kind: ArtifactContent["kind"]; title: string; status: "active" | "archived";
   origin: "direct" | "conversation" | "import" | "fork" | "engine"; headVersion: number;
   forkedFromArtifactId: string | null; forkedFromVersion: number | null;
@@ -76,7 +76,7 @@ export async function proposeArtifactBranchMerge(artifactId: string, input: {
   }>;
 }
 export interface ArtifactReferenceRecord {
-  id: string; projectId: number; artifactId: string; version: number | null;
+  id: string; projectId: number | null; owningChatId?: number | null; artifactId: string; version: number | null;
   targetType: "project" | "session" | "chat" | "resource" | "artifact";
   targetRef: string; label: string | null; createdAt: string;
 }
@@ -88,12 +88,18 @@ export interface ProjectArtifactProposalRecord {
   createdAt: string; decidedAt: string | null;
 }
 
-export function useProjectArtifacts(projectId: number | null, status: "active" | "archived" | "trash" = "active") {
+export function useOwnedArtifacts(scope: { projectId: number | null; owningChatId?: number | null }, status: "active" | "archived" | "trash" = "active") {
+  const { projectId, owningChatId } = scope;
+  const path = projectId ? `/api/projects/${projectId}/artifacts` : owningChatId ? `/api/chats/${owningChatId}/artifacts` : null;
   return useQuery<ProjectArtifactRecord[]>({
-    queryKey: ["/api/projects", projectId, "artifacts", status],
-    queryFn: async () => { const res = await fetch(`/api/projects/${projectId}/artifacts?status=${status}&limit=500`); if (!res.ok) throw new Error("Failed to load Project Artifacts."); return res.json(); },
-    enabled: Boolean(projectId),
+    queryKey: projectId ? ["/api/projects", projectId, "artifacts", status] : ["/api/chats", owningChatId ?? null, "artifacts", status],
+    queryFn: async () => { const res = await fetch(`${path}?status=${status}&limit=500`); if (!res.ok) throw new Error("Failed to load saved Artifacts."); return res.json(); },
+    enabled: path !== null,
   });
+}
+
+export function useProjectArtifacts(projectId: number | null, status: "active" | "archived" | "trash" = "active") {
+  return useOwnedArtifacts({ projectId }, status);
 }
 
 export function useAllArtifacts(status: "active" | "archived" | "trash" = "active") {
@@ -138,6 +144,7 @@ export function useInvalidateArtifacts() {
   const qc = useQueryClient();
   return useCallback((projectId?: number | null, artifactId?: string | null) => {
     qc.invalidateQueries({ queryKey: ["/api/artifacts"] });
+    qc.invalidateQueries({ queryKey: ["/api/chats"] });
     if (projectId) {
       qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "artifacts"] });
       qc.invalidateQueries({ queryKey: ["/api/projects", projectId, "continuity"] });
@@ -262,17 +269,18 @@ export async function importSpreadsheetArtifact(projectId: number, file: File): 
   }
   return res.json() as Promise<SpreadsheetArtifactImportResult>;
 }
-export async function keepConversationDraft(projectId: number, draft: ConversationArtifactDraft, input?: {
+export async function keepConversationDraft(target: number | { chatId: number }, draft: ConversationArtifactDraft, input?: {
   requestId?: string | null;
   sessionId?: string | null;
   trustManifest?: TrustManifest | null;
   dependencyRefs?: string[];
   refreshSpec?: ArtifactRefreshSpec | null;
 }) {
-  return (await apiRequest("POST", `/api/projects/${projectId}/artifacts/keep-draft`, {
+  const path = typeof target === "number" ? `/api/projects/${target}/artifacts/keep-draft` : `/api/chats/${target.chatId}/artifacts/keep-draft`;
+  return (await apiRequest("POST", path, {
     draft,
     requestId: input?.requestId ?? null,
-    sessionId: input?.sessionId ?? null,
+    ...(typeof target === "number" ? { sessionId: input?.sessionId ?? null } : {}),
     trustManifest: input?.trustManifest ?? null,
     dependencyRefs: input?.dependencyRefs ?? [],
     refreshSpec: input?.refreshSpec ?? null,

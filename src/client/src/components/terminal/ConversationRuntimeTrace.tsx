@@ -493,7 +493,7 @@ export default function ConversationRuntimeTrace({
             <div className="mt-0.5 font-ui text-[12px] text-muted-foreground">{onKeepArtifact ? "Not saved yet" : "Not saved — saving isn’t available in this chat"}</div>
           </div>
           {onKeepArtifact && (
-            <button type="button" onClick={() => onKeepArtifact(unsavedArtifact.artifact)} className="rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[12px] text-fuchsia-200 hover:bg-fuchsia-300/[0.05]">Keep in Project</button>
+            <button type="button" onClick={() => onKeepArtifact(unsavedArtifact.artifact)} className="rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[12px] text-fuchsia-200 hover:bg-fuchsia-300/[0.05]">{unsavedArtifact.artifact.persistence === "chat_candidate" ? "Keep in Chat" : "Keep in Project"}</button>
           )}
         </div>
       )}

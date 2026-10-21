@@ -640,4 +640,18 @@ test("repair migration restores ledger tables skipped by a divergent historical 
   // Drizzle only applies journal entries newer than the last recorded one, so forget the repair AND everything after it.
   await client.query("delete from drizzle.__drizzle_migrations where created_at >= $1", [repair.when]);
   await migrate(db, { migrationsFolder });
+  const artifactOwnership = await client.query<{ conname: string }>(
+    "select conname from pg_constraint where conrelid = 'project_artifacts'::regclass and conname in ('project_artifacts_owning_chat_id_project_chats_id_fk', 'project_artifacts_owner_context_ck') order by conname",
+  );
+  assert.deepEqual(artifactOwnership.rows.map(row => row.conname), [
+    "project_artifacts_owner_context_ck",
+    "project_artifacts_owning_chat_id_project_chats_id_fk",
+  ], "replaying the suffix retains both canonical Chat ownership guards");
+  const artifactColumns = await client.query<{ column_name: string; is_nullable: string }>(
+    "select column_name, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'project_artifacts' and column_name in ('project_id', 'owning_chat_id') order by column_name",
+  );
+  assert.deepEqual(artifactColumns.rows, [
+    { column_name: "owning_chat_id", is_nullable: "YES" },
+    { column_name: "project_id", is_nullable: "YES" },
+  ]);
 });

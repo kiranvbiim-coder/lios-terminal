@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { datasetSnapshots, financialModelRuns, users, type DatasetSnapshot, type FinancialModelRun, type DataEntitlementPolicy } from "@shared/schema";
+import { datasetSnapshots, financialModelRuns, projectChats, users, type DatasetSnapshot, type FinancialModelRun, type DataEntitlementPolicy } from "@shared/schema";
 import { canonicalFinancialPeriodSchema, financialDatasetPayloadSchema, type FinancialDatasetPayload } from "@shared/pointInTimeData";
 import { integratedModelAssumptionsSchema, specializedModelSchedulesSchema } from "@shared/integratedFinancialModel";
 import { spreadsheetArtifactContentSchema, spreadsheetCellLineageSchema, type ArtifactContent, type SpreadsheetCellLineage } from "@shared/artifactContracts";
@@ -9,10 +9,13 @@ import { getProject, ProjectAccessDeniedError } from "./projectStore";
 import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
-import { getArtifact, getArtifactVersion, persistProjectConversationDraft, retainedConversationArtifactId } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft, retainedConversationArtifactId } from "./artifactStore";
 import type { TenantContext } from "./tenantContext";
 
-export const integratedModelArtifactRequestSchema = z.object({ projectId: z.number().int().positive() }).strict();
+export const integratedModelArtifactRequestSchema = z.object({
+  projectId: z.number().int().positive().nullable(),
+  owningChatId: z.number().int().positive().optional(),
+}).strict().refine(input => input.projectId === null ? input.owningChatId !== undefined : input.owningChatId === undefined, { message: "Select one real Project or an explicit persistent owning Chat." });
 export class IntegratedModelArtifactError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
 }
@@ -257,12 +260,22 @@ export async function assertIntegratedModelDatasetSourceCurrent(ctx: TenantConte
 }
 
 /** Metadata-first access guard shared by retention and explicit Artifact input execution. */
-export async function loadIntegratedModelArtifactSource(ctx: TenantContext, runId: string, projectId: number, modelInput = false) {
+export async function loadIntegratedModelArtifactSource(ctx: TenantContext, runId: string, projectId: number | null, modelInput = false, owningChatId?: number | null) {
   z.string().uuid().parse(runId);
-  integratedModelArtifactRequestSchema.parse({ projectId });
   await requireCurrentModelActor(ctx, getDb(), false);
-  try { await getProject(ctx, projectId); }
-  catch (error) { if (error instanceof ProjectAccessDeniedError) throw new IntegratedModelArtifactError(404, error.message); throw error; }
+  if (projectId !== null) {
+    integratedModelArtifactRequestSchema.parse({ projectId });
+    try { await getProject(ctx, projectId); }
+    catch (error) { if (error instanceof ProjectAccessDeniedError) throw new IntegratedModelArtifactError(404, error.message); throw error; }
+  } else {
+    const chatId = z.number().int().positive().parse(owningChatId);
+    const [chat] = await getDb().select({ id: projectChats.id }).from(projectChats).where(and(
+      eq(projectChats.id, chatId), eq(projectChats.ownerUserId, ctx.userId),
+      ctx.organizationId === null ? isNull(projectChats.organizationId) : eq(projectChats.organizationId, ctx.organizationId),
+      isNull(projectChats.projectId), eq(projectChats.scope, "quick"), isNull(projectChats.trashedAt),
+    )).limit(1);
+    if (!chat) throw new IntegratedModelArtifactError(404, "Owned persistent Chat not found.");
+  }
   // Metadata first: never read a foreign run's result or inaccessible snapshot payload.
   const [runIdentity] = await getDb().select({ datasetSnapshotId: financialModelRuns.datasetSnapshotId }).from(financialModelRuns).where(and(eq(financialModelRuns.id, runId), eq(financialModelRuns.createdByUserId, ctx.userId))).limit(1);
   if (!runIdentity) throw new IntegratedModelArtifactError(404, "Owned integrated model run not found.");
@@ -275,23 +288,23 @@ export async function loadIntegratedModelArtifactSource(ctx: TenantContext, runI
   return { run, snapshot, policy, projection };
 }
 
-export async function retainIntegratedModelArtifact(ctx: TenantContext, runId: string, projectId: number, lineage?: { requestId: string; sourceRefs: string[] }) {
-  const { run, projection } = await loadIntegratedModelArtifactSource(ctx, runId, projectId, lineage !== undefined);
+export async function retainIntegratedModelArtifact(ctx: TenantContext, runId: string, projectId: number | null, lineage?: { requestId: string; sourceRefs: string[] }, owningChatId?: number | null) {
+  const { run, projection } = await loadIntegratedModelArtifactSource(ctx, runId, projectId, lineage !== undefined, owningChatId);
   const sourceRefs = [...new Set([...projection.sourceRefs, ...(lineage?.sourceRefs ?? [])])];
   if (sourceRefs.length > 100) throw new IntegratedModelArtifactError(422, "Model projection exceeds the 100 source reference limit.");
   const requestId = lineage ? z.string().uuid().parse(lineage.requestId) : run.id;
   try {
     // P4's existing deterministic keeper arbitrates concurrent retention via the Artifact primary key.
     // runId is an actual persisted identity, not a manufactured execution receipt.
-    return await persistProjectConversationDraft(ctx, {
-      projectId, requestId,
-      draft: { schemaVersion: "1", artifactId: run.id, artifactType: "financial.integrated.spreadsheet", title: `${run.symbol} integrated model · ${run.modelVersion}`, projectId, sourceRefs, executionReceiptIds: [], data: projection.content, persistence: "project_candidate" },
+    return await persistConversationDraft(ctx, {
+      projectId, owningChatId, requestId,
+      draft: { schemaVersion: "1", artifactId: run.id, artifactType: "financial.integrated.spreadsheet", title: `${run.symbol} integrated model · ${run.modelVersion}`, projectId, sourceRefs, executionReceiptIds: [], data: projection.content, persistence: projectId === null ? "chat_candidate" : "project_candidate" },
       dependencyRefs: sourceRefs,
       refreshSpec: { kind: "engine", sourceScope: "my_data", executionMode: "deterministic_first", capabilityIds: [], message: "Immutable projection of a persisted integrated financial model run. Recompute only through an explicit new engine run.", selection: null, engineRef: `integrated_financial_model:${run.modelVersion}:run:${run.id}` },
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes("retention key already contains different content")) {
-      const artifact = await getArtifact(ctx, retainedConversationArtifactId(ctx, projectId, requestId, run.id));
+      const artifact = await getArtifact(ctx, retainedConversationArtifactId(ctx, projectId, requestId, run.id, owningChatId));
       const version = await getArtifactVersion(ctx, artifact.id, 1);
       const historical = spreadsheetArtifactContentSchema.parse(version.content);
       const withoutLineage = {
@@ -301,7 +314,7 @@ export async function retainIntegratedModelArtifact(ctx: TenantContext, runId: s
         })),
       };
       // A prior exact run projection is immutable: repeat retention returns it, never backfills lineage.
-      if (artifact.projectId === projectId
+      if (artifact.projectId === projectId && (projectId !== null || artifact.owningChatId === owningChatId)
         && historical.sheets.every(sheet => Object.values(sheet.cells).every(cell => !cell.lineage))
         && stableSnapshotHash(historical) === stableSnapshotHash(withoutLineage)
         && stableSnapshotHash(version.sourceRefs) === stableSnapshotHash(sourceRefs)

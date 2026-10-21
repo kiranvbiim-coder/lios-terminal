@@ -116,7 +116,7 @@ export type PaneId = "primary" | "secondary" | "tertiary" | "quaternary";
 
 /** Navigation references only; P4 remains the Artifact/revision authority. */
 export interface ArtifactWorkbenchContext {
-  projectId: number;
+  projectId: number | null;
   chatId: number;
   artifactId: string;
   version: number;

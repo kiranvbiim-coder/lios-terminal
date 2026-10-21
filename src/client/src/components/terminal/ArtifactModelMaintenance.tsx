@@ -36,7 +36,7 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
   const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
   const invalidateAutomation = useInvalidateP9Automation();
   const optionsMatch = options.data?.artifactId === artifact.id && options.data.version === version.version && options.data.contentHash === version.contentHash;
-  const context: ModelMaintenanceContext = { artifactId: artifact.id, projectId: artifact.projectId, version: version.version, headVersion: artifact.headVersion, contentHash: version.contentHash,
+  const context: ModelMaintenanceContext = { artifactId: artifact.id, projectId: artifact.projectId, owningChatId: artifact.owningChatId, version: version.version, headVersion: artifact.headVersion, contentHash: version.contentHash,
     available: currentHead && !blocked && optionsMatch && options.data?.canApply === true && !options.isError };
   const current = useRef(context);
   current.current = context;
@@ -54,7 +54,7 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
     session.current = active;
     return () => { active.dispose(); session.current = null; };
   }, [artifact.id, artifact.projectId, invalidate]);
-  useEffect(() => { session.current?.reconcile(); }, [context.artifactId, context.projectId, context.version, context.headVersion, context.contentHash, context.available]);
+  useEffect(() => { session.current?.reconcile(); }, [context.artifactId, context.projectId, context.owningChatId, context.version, context.headVersion, context.contentHash, context.available]);
   useEffect(() => { setChangesPage(0); setPreservedPage(0); }, [state.review?.reviewHash]);
   useEffect(() => { onApplyingChange?.(state.pending === "apply"); return () => { onApplyingChange?.(false); }; }, [state.pending, onApplyingChange]);
   const selected = state.selected;
@@ -66,6 +66,7 @@ export default function ArtifactModelMaintenance({ detail, blocked = false, onAp
   const changes = review?.changes.slice(changesPage * PAGE_SIZE, (changesPage + 1) * PAGE_SIZE) ?? [];
   const preserved = review?.preservedCells.slice(preservedPage * PAGE_SIZE, (preservedPage + 1) * PAGE_SIZE) ?? [];
   const monitorSource = async () => {
+    if (artifact.projectId === null) { setMonitorMessage("Project monitors require a Project. This Chat Artifact remains saved here."); return; }
     if (monitorBusy || disabled || !selected || !options.data) return;
     setMonitorBusy(true); setMonitorMessage(null);
     try {

@@ -1,4 +1,5 @@
 import { useConversationArtifactView } from "@/lib/conversationArtifactView";
+import ChatSourcesControl from "./ChatSourcesControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
@@ -148,7 +149,6 @@ import {
   type WorkingContextSnapshot,
 } from "@shared/conversationRuntime";
 import {
-  P1_SOURCE_SCOPES,
   deriveP1ShellLoadState,
   loadComposerSourceScope,
   recordP1ShellEvent,
@@ -407,15 +407,17 @@ export default function ProjectExperienceShell({
   const [newProjectName, setNewProjectName] = useState("");
   const [compareBaseSessionId, setCompareBaseSessionId] = useState<string | null>(null);
   const [sessionComparison, setSessionComparison] = useState<string | null>(null);
-  const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode, restoredArtifactView, artifactViewVersion, setArtifactViewVersion] = useConversationArtifactView(projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId, selection.projectId, selection.chatId);
+  const openedChatOwnerRef = useRef<{ chatId: number; ownerUserId: number } | null>(null);
+  const artifactOwnerId = chatMode === "temporary" ? undefined : selection.projectId ? projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId : [...(quickChatsQuery.data ?? []), ...(archivedQuickChatsQuery.data ?? [])].find(chat => chat.id === selection.chatId)?.ownerUserId ?? (openedChatOwnerRef.current?.chatId === selection.chatId ? openedChatOwnerRef.current.ownerUserId : undefined);
+  const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode, restoredArtifactView, artifactViewVersion, setArtifactViewVersion] = useConversationArtifactView(artifactOwnerId, selection.projectId, chatMode === "temporary" ? null : selection.chatId);
   const artifactDraftDirtyRef = useRef(false);
-  const displayedArtifactRef = useRef<{ artifactId: string; version: number } | null>(null);
+  const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
   const onOpenWorkbench = () => {
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
-    if (conversationArtifactRef && selection.projectId && selection.chatId) {
+    if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
       const displayed = displayedArtifactRef.current;
-      if (displayed?.artifactId !== conversationArtifactRef || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
+      if (displayed?.artifactId !== conversationArtifactRef || displayed.requestedVersion !== artifactViewVersion || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
       navigateWorkbench({ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version });
     } else navigateWorkbench();
   };
@@ -426,7 +428,7 @@ export default function ProjectExperienceShell({
       selection.setProjectId(context.projectId); selection.setChatId(context.chatId); return;
     }
     handledWorkbenchReturn.current = workbenchReturn.request;
-    setChatMode("project"); setSection("conversation"); setProjectHomeRequested(false);
+    setChatMode(context.projectId === null ? "quick" : "project"); setSection("conversation"); setProjectHomeRequested(false);
     setConversationArtifactRef(context.artifactId); setArtifactViewVersion(context.version);
     if (prompt) setInput(current => current ? `${current}\n\n${prompt}` : prompt);
   }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
@@ -648,6 +650,7 @@ export default function ProjectExperienceShell({
 
   const confirmConversationSwitch = async () => {
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
+    if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
     if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length) return true;
     const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
     if (!answer) return false;
@@ -668,8 +671,9 @@ export default function ProjectExperienceShell({
   const openChat = async (chat: ProjectChat, confirmed = false) => {
     if (!confirmed && selection.chatId !== chat.id && !(await confirmConversationSwitch())) return;
     if (busy && !confirmed) { setLifecycleNotice("Stop the current response before switching chats."); return; }
+    openedChatOwnerRef.current = { chatId: chat.id, ownerUserId: chat.ownerUserId };
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false); setProjectHomeRequested(false);
-    if (chat.projectId !== null) selection.setProjectId(chat.projectId);
+    selection.setProjectId(chat.projectId);
     selection.setChatId(chat.id);
     setChatMode(chat.scope === "quick" ? "quick" : "project");
     setTemporaryMessages([]);
@@ -953,9 +957,9 @@ export default function ProjectExperienceShell({
   const applyRuntimeEvent = (runtimeEvent: ConversationRuntimeEvent) => {
     recordP2ConversationEvent(runtimeEvent);
     if (runtimeEvent.type === "trust") recordP3TrustManifest(runtimeEvent.manifest);
-    if (runtimeEvent.type === "artifact" && runtimeEvent.persistedArtifact && runtimeEvent.artifact.projectId !== null) {
+    if (runtimeEvent.type === "artifact" && runtimeEvent.persistedArtifact && chatMode !== "temporary") {
       invalidateArtifacts(runtimeEvent.artifact.projectId, runtimeEvent.persistedArtifact.id);
-      setConversationArtifactRef(runtimeEvent.persistedArtifact.id);
+      if (!artifactDraftDirtyRef.current) { setConversationArtifactRef(runtimeEvent.persistedArtifact.id); setArtifactViewVersion(runtimeEvent.persistedArtifact.version); }
     }
     setRuntimeEvents((current) => [...current, runtimeEvent]);
     if (runtimeEvent.type === "text") setStreaming(runtimeEvent.text);
@@ -1457,6 +1461,7 @@ export default function ProjectExperienceShell({
     setProjectDestination({
       description: `Move “${chat.title}” and its saved messages into a Project. Future requests can use that Project's context.`,
       save: async (project) => {
+        if (selection.chatId === chat.id && !(await confirmConversationSwitch())) throw new Error("Save or reset the current draft before moving this Chat.");
         const moved = await promoteQuickChat(chat.id, project.id);
         invalidate(project.id, moved.id);
         if (selection.chatId === chat.id) await openChat(moved, true);
@@ -1464,8 +1469,9 @@ export default function ProjectExperienceShell({
     });
   };
   const keepArtifact = (artifact: ConversationArtifactDraft) => {
-    const existingArtifactRef = chatMode === "project" ? conversationArtifactRef : null;
-    const save = async (targetProject: Project) => {
+    if (chatMode === "temporary" || artifact.persistence === "ephemeral") return;
+    const existingArtifactRef = conversationArtifactRef;
+    const save = async (targetProject: Project | null) => {
       if (keepingArtifactRef.current) throw new Error("This work is already being saved. Wait for it to finish.");
       keepingArtifactRef.current = true;
       try {
@@ -1500,24 +1506,26 @@ export default function ProjectExperienceShell({
               dependencyRefs,
               refreshSpec,
             })
-          : keepConversationDraft(targetProject.id, artifact, {
+          : keepConversationDraft(targetProject ? targetProject.id : { chatId: selection.chatId! }, artifact, {
               requestId: runtimeRequestId,
               trustManifest,
               dependencyRefs,
               refreshSpec,
             });
         const created = await persist;
-          invalidateArtifacts(targetProject.id, created.artifact.id);
-          if (chatMode === "project") setConversationArtifactRef(created.artifact.id);
+          invalidateArtifacts(created.artifact.projectId, created.artifact.id);
+          if (!artifactDraftDirtyRef.current) { setConversationArtifactRef(created.artifact.id); setArtifactViewVersion(created.version.version); }
           setLifecycleNotice(existingArtifactRef
             ? `Saved refreshed work as ${created.artifact.id} v${created.version.version}.`
-            : `Kept "${created.artifact.title}" in "${targetProject.name}".`);
+            : `Kept "${created.artifact.title}" in ${targetProject ? `"${targetProject.name}"` : "this Chat"}.`);
       } finally { keepingArtifactRef.current = false; }
     };
     if (chatMode === "project" && home) {
       void save(home.project).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work. Try again."));
+    } else if (chatMode === "quick" && selection.chatId) {
+      void save(null).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to keep this work in Chat."));
     } else {
-      setProjectDestination({ description: `Keep “${artifact.title}” and its recorded sources in a Project. This conversation stays here.`, save });
+      setLifecycleNotice("Wait for this saved Chat to finish loading before keeping its work.");
     }
   };
 
@@ -1865,7 +1873,7 @@ export default function ProjectExperienceShell({
                       {message.role === "assistant"
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
-                      {message.role === "assistant" && chatMode === "project" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
+                      {message.role === "assistant" && chatMode !== "temporary" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} chatId={selection.chatId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
                       {message.role === "user" && selection.projectId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
                           {savedMessageAttachments(message).map((attachment) => (
@@ -1959,7 +1967,7 @@ export default function ProjectExperienceShell({
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
                 {...interruptedRun.traceProps}
                 onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}
-                onKeepArtifact={keepArtifact}
+                onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
               {executionTerminalOpen && visibleExecutionSessionId && (
@@ -2157,6 +2165,7 @@ export default function ProjectExperienceShell({
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
                 <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
@@ -2179,21 +2188,6 @@ export default function ProjectExperienceShell({
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>Sources</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-52">
-                          <DropdownMenuRadioGroup value={sourceScope} onValueChange={(value) => updateSourceScope(value as ConversationSourceScope)}>
-                            {P1_SOURCE_SCOPES.map((scope) => {
-                              const projectOnly = scope.id === "my_data" || scope.id === "files";
-                              return (
-                                <DropdownMenuRadioItem key={scope.id} value={scope.id} disabled={projectOnly && (chatMode !== "project" || !selection.projectId)}>
-                                  {scope.label}
-                                </DropdownMenuRadioItem>
-                              );
-                            })}
-                          </DropdownMenuRadioGroup>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
                       <DropdownMenuItem onSelect={askActiveObject}>Ask this</DropdownMenuItem>
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>Advanced</DropdownMenuSubTrigger>
@@ -2278,26 +2272,27 @@ export default function ProjectExperienceShell({
               </div>
             </div>
             </div>
-            {conversationArtifactRef && chatMode === "project" && selection.projectId && (
+            {conversationArtifactRef && chatMode !== "temporary" && selection.chatId && (
               <ConversationArtifactSidecar focus={artifactFocusMode} onExitFocus={() => setArtifactFocusMode(false)}
-                    onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, version }; onOpenWorkbench(); }}
-                    onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, version }; }}
+                    onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
+                    onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, requestedVersion: artifactViewVersion, version }; }}
                     artifactId={conversationArtifactRef}
                     version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
-                    projectId={selection.projectId}
-                    sessions={home?.sessions ?? []}
+                    projectId={selection.projectId} owningChatId={selection.chatId}
+                    sessions={selection.projectId ? home?.sessions ?? [] : []}
                     onClose={() => {
+                      if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before closing. Your draft remains in Chat."); return; }
                       setConversationArtifactRef(null);
                       setArtifactFocusMode(false);
                     }}
-                    onAsk={(id, title) => {
-                      setConversationArtifactRef(id);
+                    onAsk={(id, title, prompt) => {
+                      if (id !== conversationArtifactRef) setConversationArtifactRef(id);
                       setArtifactFocusMode(false);
-                      setInput(`Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`);
+                      setInput(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`);
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}
                     onRerun={(id, title, spec) => {
-                      setConversationArtifactRef(id);
+                      if (id !== conversationArtifactRef) setConversationArtifactRef(id);
                       setArtifactFocusMode(false);
                       const replay = artifactReplayDraft(title, spec);
                       updateSourceScope(replay.sourceScope);

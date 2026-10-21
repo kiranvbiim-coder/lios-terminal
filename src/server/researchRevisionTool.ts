@@ -52,7 +52,7 @@ async function target(input: Record<string, unknown>, call: Parameters<Conversat
     role: tenant.role,
   });
   const artifact = await getArtifact(ctx, parsed.artifactId);
-  if (artifact.projectId !== call.projectId || artifact.status !== "active") {
+  if (artifact.projectId === null || artifact.projectId !== call.projectId || artifact.status !== "active") {
     throw new Error("Research Artifact is not active in this Project.");
   }
   if (artifact.kind !== "research") throw new Error("Research refresh requires a Research Artifact.");
@@ -75,7 +75,7 @@ async function target(input: Record<string, unknown>, call: Parameters<Conversat
     throw new Error("Research source policies have no permitted overlap.");
   }
 
-  return { parsed, ctx, artifact, version, content, allowedSourceRefs };
+  return { parsed, ctx, artifact, projectId: artifact.projectId, version, content, allowedSourceRefs };
 }
 
 /**
@@ -97,9 +97,9 @@ export const researchRevisionTool: ConversationToolDefinition = {
   cancel: null,
   invoke: async (input, signal, call) => {
     assertNotAborted(signal);
-    const { parsed, ctx, artifact, version, content, allowedSourceRefs } = await target(input, call);
+    const { parsed, ctx, artifact, projectId, version, content, allowedSourceRefs } = await target(input, call);
 
-    const hits = await searchProjectIntelligence(ctx, artifact.projectId, {
+    const hits = await searchProjectIntelligence(ctx, projectId, {
       query: parsed.query,
       limit: 10,
       allowedSourceRefs,
@@ -109,7 +109,7 @@ export const researchRevisionTool: ConversationToolDefinition = {
     assertNotAborted(signal);
 
     const documents = new Map(
-      (await listProjectIntelligenceDocuments(ctx, artifact.projectId)).map((document) => [document.id, document]),
+      (await listProjectIntelligenceDocuments(ctx, projectId)).map((document) => [document.id, document]),
     );
     const knownVersions = new Set(
       content.blocks.flatMap((block) =>

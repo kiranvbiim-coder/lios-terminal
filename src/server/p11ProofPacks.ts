@@ -49,7 +49,7 @@ type P11ColumnarScanner = (
 
 export interface P11ArtifactInspection {
   artifactId: string;
-  projectId: number;
+  projectId: number | null;
   kind: string;
   title: string;
   status: string;

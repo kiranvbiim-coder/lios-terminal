@@ -8,7 +8,7 @@ import {
   listProjectChatMessages,
 } from "./projectChatStore";
 import { getProject } from "./projectStore";
-import { getArtifact, persistProjectConversationDraft } from "./artifactStore";
+import { getArtifact, persistConversationDraft } from "./artifactStore";
 import { listProjectResources } from "./projectResourceStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { requireMasterAiOn } from "./masterAiGate";
@@ -221,6 +221,7 @@ async function assertWorkingContextArtifacts(
   user: ConversationUser,
   scope: ConversationScope,
   projectId: number | null,
+  chatId: number | null,
   request: ConversationRequest,
   carried: WorkingContextSnapshot | null,
 ): Promise<void> {
@@ -229,12 +230,12 @@ async function assertWorkingContextArtifacts(
     ...(carried?.activeArtifact ? [carried.activeArtifact] : []),
   ])];
   for (const ref of refs) {
-    if (scope !== "project" || projectId === null) {
-      throw new ConversationStartError(403, { code: "working_context_artifact_forbidden", error: "Artifact context is restricted to its owning Project.", requestId: request.requestId });
+    if (scope === "temporary") {
+      throw new ConversationStartError(403, { code: "working_context_artifact_forbidden", error: "Temporary Chat cannot access retained Artifact context.", requestId: request.requestId });
     }
     const artifact = await getArtifact(tenantContext(user), ref).catch(() => null);
-    if (!artifact || artifact.projectId !== projectId) {
-      throw new ConversationStartError(403, { code: "working_context_artifact_forbidden", error: "Artifact context is not owned by this Project.", requestId: request.requestId });
+    if (!artifact || artifact.projectId !== projectId || (scope === "quick" && artifact.owningChatId !== chatId)) {
+      throw new ConversationStartError(403, { code: "working_context_artifact_forbidden", error: "Artifact context is outside this Chat ownership boundary.", requestId: request.requestId });
     }
   }
 }
@@ -467,7 +468,7 @@ async function runProjectChat(
   if (restart && !early) throw new ConversationStartError(404, { code: "interrupted_run_not_found", error: "Interrupted execution not found.", requestId: initialRequest.requestId });
   const resolution = resolveWorkingContextRequest(initialRequest, early?.carried ?? null);
   assertWorkingContextResolved(resolution);
-  if (early) await assertWorkingContextArtifacts(user, early.chat.scope, early.chat.projectId, resolution.request, early.carried);
+  if (early) await assertWorkingContextArtifacts(user, early.chat.scope, early.chat.projectId, chatId, resolution.request, early.carried);
   const { request, plan } = await resolveEffectiveConversationRequest(user, resolution.request);
   if (agent && request.executionMode !== "ai_assisted") {
     throw new ConversationStartError(409, { code: "agent_requires_ai", error: "Agent runs need AI-assisted mode with AI turned on.", requestId: request.requestId });
@@ -756,7 +757,7 @@ async function runProjectChat(
           preferredModel: aiSetup?.aiModelId,
           emit: async (runtimeEvent) => {
             const event = runtimeEvent;
-            if (event.type === "artifact" && chat.scope === "project" && chat.projectId !== null) {
+            if (event.type === "artifact") {
               pendingArtifacts.push(event);
               return;
             }
@@ -769,7 +770,7 @@ async function runProjectChat(
             }
           },
         }));
-        if (!result.cancelled && !result.awaitingApproval && chat.scope === "project" && chat.projectId !== null) {
+        if (!result.cancelled && !result.awaitingApproval) {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
           const refreshSpec = {
@@ -788,8 +789,9 @@ async function runProjectChat(
             engineRef: null,
           };
           for (const event of pendingArtifacts) {
-            const savedArtifact = await persistProjectConversationDraft(context, {
+            const savedArtifact = await persistConversationDraft(context, {
               projectId: chat.projectId,
+              owningChatId: chat.projectId === null ? chatId : null,
               requestId: request.requestId,
               draft: event.artifact,
               trustManifest: result.trustManifest ?? null,
@@ -1181,7 +1183,7 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
   }
   const resolution = resolveWorkingContextRequest(initialRequest, carried);
   assertWorkingContextResolved(resolution);
-  await assertWorkingContextArtifacts(user, owner.scope, owner.projectId, resolution.request, carried);
+  await assertWorkingContextArtifacts(user, owner.scope, owner.projectId, null, resolution.request, carried);
   const { request, plan } = await resolveEffectiveConversationRequest(user, resolution.request);
   if (request.attachments.length) {
     throw new ConversationStartError(400, { error: "Temporary chats do not retain file attachments. Start a Project chat to attach files." });

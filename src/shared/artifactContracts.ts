@@ -588,7 +588,8 @@ export type ArtifactContent = z.infer<typeof artifactContentSchema>;
 export const artifactIdentitySchema = z.object({
   schemaVersion: z.literal(LIOS_ARTIFACT_SCHEMA_VERSION),
   id: z.string().trim().min(1).max(240),
-  projectId: z.number().int().positive(),
+  projectId: z.number().int().positive().nullable(),
+  owningChatId: z.number().int().positive().nullable().optional(),
   kind: artifactKindSchema,
   title: z.string().trim().min(1).max(500),
   status: artifactStatusSchema,
@@ -599,7 +600,7 @@ export const artifactIdentitySchema = z.object({
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
   archivedAt: z.string().datetime({ offset: true }).nullable().default(null),
-}).strict();
+}).strict().refine(identity => identity.projectId !== null || identity.owningChatId != null, "An Artifact requires an owning Project or persistent Chat.");
 export type ArtifactIdentity = z.infer<typeof artifactIdentitySchema>;
 
 export const artifactRefreshSpecSchema = z.object({

@@ -74,6 +74,7 @@ export async function createArtifactPackage(ctx: TenantContext, projectId: numbe
         schemaVersion: "1" as const,
         id: artifact.id,
         projectId: artifact.projectId,
+        owningChatId: artifact.owningChatId,
         kind: artifact.kind as any,
         title: artifact.title,
         status: artifact.status as "active" | "archived",

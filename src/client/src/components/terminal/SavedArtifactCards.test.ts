@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SavedArtifactCardList, describeSavedArtifactCard } from "./SavedArtifactCards";
+import { SavedArtifactCardList, describeSavedArtifactCard, savedArtifactMatchesScope } from "./SavedArtifactCards";
 
 const id = "artifact:22222222-2222-4222-8222-222222222222";
 
@@ -42,4 +42,18 @@ test("a card is unavailable only when the exact lookup says missing, never becau
   assert.match(html, />Unavailable</);
   assert.doesNotMatch(html, />Open</);
   assert.match(html, /aria-label="Saved Artifact AAPL DCF sensitivity, Valuation, version 1 is unavailable"/);
+});
+
+test("projectless saved cards resolve only in the owning Quick Chat while retaining their recorded revision", () => {
+  const owned = { projectId: null, owningChatId: 42 };
+  assert.equal(savedArtifactMatchesScope(owned, null, 42), true);
+  assert.equal(savedArtifactMatchesScope(owned, null, 43), false);
+  assert.equal(savedArtifactMatchesScope(owned, 17, 42), false);
+  assert.equal(savedArtifactMatchesScope(owned, null, null), false, "Temporary scope cannot resolve saved cards");
+  assert.equal(savedArtifactMatchesScope({ projectId: null }, null, 42), false);
+  assert.equal(savedArtifactMatchesScope({ projectId: 17 }, 17, 43), true, "existing Project cards remain shared by Project scope");
+  const card = describeSavedArtifactCard({ id, version: 2, title: "Quick Chat analysis", kind: "research" }, { title: "Updated analysis", kind: "research", headVersion: 5 }, "found");
+  assert.equal(card.version, 2);
+  assert.equal(card.title, "Quick Chat analysis");
+  assert.equal(card.unavailable, false);
 });

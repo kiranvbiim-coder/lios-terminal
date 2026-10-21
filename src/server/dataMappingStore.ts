@@ -148,11 +148,11 @@ async function ensureDataMappingTable(): Promise<void> {
         confirmed_at timestamptz NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now()
       );
-      CREATE INDEX IF NOT EXISTS data_field_mapping_scope_idx
-        ON data_field_mappings (organization_id, owner_user_id);
-      CREATE INDEX IF NOT EXISTS data_field_mapping_lookup_idx
-        ON data_field_mappings (organization_id, owner_user_id, provider_id, dataset_key, provider_field);
     `));
+    await getDb().execute(sql.raw(`CREATE INDEX IF NOT EXISTS data_field_mapping_scope_idx
+      ON data_field_mappings (organization_id, owner_user_id)`));
+    await getDb().execute(sql.raw(`CREATE INDEX IF NOT EXISTS data_field_mapping_lookup_idx
+      ON data_field_mappings (organization_id, owner_user_id, provider_id, dataset_key, provider_field)`));
   })().catch((error) => {
     tableReady = null;
     throw error;

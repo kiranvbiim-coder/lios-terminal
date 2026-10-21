@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { artifactContentSchema, type ArtifactContent, type SpreadsheetCell } from "@shared/artifactContracts";
-import { getArtifact, getArtifactVersion, persistProjectConversationDraft } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { loadIntegratedModelArtifactSource } from "./integratedModelArtifact";
 import { hashLedgerValue } from "./ledgerStore";
 import type { TenantContext } from "./tenantContext";
@@ -57,5 +57,5 @@ export async function createModelChangeReport(ctx: TenantContext, artifactId: st
   const content = modelChangeReportContent(before, after, refs);
   const identity = hashLedgerValue({ artifactId, request, owner: ctx.userId, organization: ctx.organizationId });
   const requestId = `${identity.slice(0, 8)}-${identity.slice(8, 12)}-8${identity.slice(13, 16)}-a${identity.slice(17, 20)}-${identity.slice(20, 32)}`;
-  return persistProjectConversationDraft(ctx, { projectId: artifact.projectId, requestId, draft: { schemaVersion: "1", artifactId: `model-change:${identity}`, artifactType: "model.change.report", title: `${artifact.title} changes v${from.version}–v${to.version}`, projectId: artifact.projectId, sourceRefs: refs, executionReceiptIds: [], data: content, persistence: "project_candidate" }, dependencyRefs: refs });
+  return persistConversationDraft(ctx, { projectId: artifact.projectId, requestId, draft: { schemaVersion: "1", artifactId: `model-change:${identity}`, artifactType: "model.change.report", title: `${artifact.title} changes v${from.version}–v${to.version}`, projectId: artifact.projectId, sourceRefs: refs, executionReceiptIds: [], data: content, persistence: "project_candidate" }, dependencyRefs: refs });
 }

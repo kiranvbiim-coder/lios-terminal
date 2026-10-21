@@ -143,7 +143,7 @@ function isPaneShape(value: unknown): value is WorkspaceState["primary"] {
   const pane = value as Partial<WorkspaceState["primary"]>;
   const artifact = pane.artifact;
   return (pane.view !== "artifact" || Boolean(artifact
-    && Number.isSafeInteger(artifact.projectId) && artifact.projectId > 0
+    && (artifact.projectId === null || (Number.isSafeInteger(artifact.projectId) && artifact.projectId > 0))
     && Number.isSafeInteger(artifact.chatId) && artifact.chatId > 0
     && typeof artifact.artifactId === "string" && /^(?:artifact:)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(artifact.artifactId)
     && Number.isSafeInteger(artifact.version) && artifact.version > 0))

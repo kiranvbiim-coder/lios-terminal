@@ -14,9 +14,12 @@ function readView(key: string | null): ArtifactViewState {
   if (!key || typeof window === "undefined") return EMPTY;
   try { return parseArtifactView(JSON.parse(localStorage.getItem(key) ?? "null")); } catch { return EMPTY; }
 }
+export function conversationArtifactViewKey(ownerId: number | undefined, projectId: number | null, chatId: number | null): string | null {
+  return ownerId && chatId ? `lios.artifact-view.v1.${ownerId}.${projectId ?? "quick"}.${chatId}` : null;
+}
 /** Only UI references are remembered. P4 still authorizes and loads the actual Artifact. */
 export function useConversationArtifactView(ownerId: number | undefined, projectId: number | null, chatId: number | null) {
-  const key = ownerId && projectId && chatId ? `lios.artifact-view.v1.${ownerId}.${projectId}.${chatId}` : null;
+  const key = conversationArtifactViewKey(ownerId, projectId, chatId);
   const restored = useMemo(() => readView(key), [key]);
   const [current, setCurrent] = useState<{ key: string | null; value: ArtifactViewState }>({ key, value: restored });
   const state = current.key === key ? current.value : restored;

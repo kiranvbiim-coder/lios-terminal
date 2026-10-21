@@ -183,7 +183,8 @@ export type ProjectLedgerEvent = typeof projectLedgerEvents.$inferSelect;
 // version so P3 lineage/reproducibility can remain trustworthy.
 export const projectArtifacts = pgTable("project_artifacts", {
   id: text("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  owningChatId: integer("owning_chat_id").references(() => projectChats.id, { onDelete: "cascade" }),
   ownerUserId: integer("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   organizationId: integer("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
   kind: text("kind").notNull(),
@@ -204,6 +205,8 @@ export const projectArtifacts = pgTable("project_artifacts", {
   index("project_artifacts_kind_idx").on(table.projectId, table.kind, table.updatedAt),
   index("project_artifacts_owner_idx").on(table.ownerUserId),
   index("project_artifacts_owner_trash_idx").on(table.ownerUserId, table.trashedAt),
+  index("project_artifacts_chat_idx").on(table.owningChatId, table.status, table.updatedAt),
+  check("project_artifacts_owner_context_ck", sql`${table.projectId} IS NOT NULL OR ${table.owningChatId} IS NOT NULL`),
   check("project_artifacts_kind_ck", sql`${table.kind} IN ('chart','table','screen','valuation','portfolio','research','report','spreadsheet','data','backtest','strategy','decision','timeline','thesis')`),
   check("project_artifacts_status_ck", sql`${table.status} IN ('active','archived')`),
   check("project_artifacts_origin_ck", sql`${table.origin} IN ('direct','conversation','import','fork','engine')`),
@@ -248,7 +251,7 @@ export const projectArtifactVersions = pgTable("project_artifact_versions", {
 
 export const projectArtifactReferences = pgTable("project_artifact_references", {
   id: text("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
   artifactId: text("artifact_id").notNull().references(() => projectArtifacts.id, { onDelete: "cascade" }),
   version: integer("version"),
   targetType: text("target_type").notNull(),

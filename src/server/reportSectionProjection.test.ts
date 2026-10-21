@@ -114,3 +114,28 @@ test("selected rich reports preserve authored prose and opaque canonical table p
   assert.ok(projection.blocks.some((block) => block.text === source.blocks[0].text && block.attrs.sourceBlockId === "author-paragraph"));
   assert.deepEqual(tables(projection), [recordedTable]);
 });
+
+test("optional projection metadata is JSON-stable without inventing absent engine or receipt custody", () => {
+  const pack = generateReportPack({
+    templateId: "company_tearsheet", title: "Recorded without engine metadata",
+    sectionData: { table: recordedTable },
+  });
+  const projection = projectReportSections({ ...pack, metadata: { outputHash: pack.metadata.outputHash, passportIds: [] } });
+  assert.deepEqual(JSON.parse(JSON.stringify(projection)), projection);
+  for (const block of projection.blocks) {
+    assert.equal(Object.hasOwn(block.attrs, "engineId"), false);
+    assert.equal(Object.hasOwn(block.attrs, "engineVersion"), false);
+    assert.equal(Object.hasOwn(block.attrs, "receiptId"), false);
+  }
+  const withCustody = projectReportSections({
+    ...pack, metadata: { outputHash: pack.metadata.outputHash, passportIds: ["passport:recorded"],
+      engineId: "recorded-engine", engineVersion: "2.0", receiptId: "receipt:recorded" },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(withCustody)), withCustody);
+  for (const block of withCustody.blocks) {
+    assert.equal(block.attrs.engineId, "recorded-engine");
+    assert.equal(block.attrs.engineVersion, "2.0");
+    assert.equal(block.attrs.receiptId, "receipt:recorded");
+    assert.deepEqual(block.attrs.passportIds, ["passport:recorded"]);
+  }
+});

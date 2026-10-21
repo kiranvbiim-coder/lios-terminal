@@ -45,11 +45,11 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
   };
   return <section className="h-full overflow-auto p-3" data-testid="workbench-artifact-pane">
     <div className="mb-3 flex items-center justify-between gap-3">
-      <span className="text-xs text-muted-foreground">Project {context.projectId} · Chat {context.chatId}</span>
+      <span className="text-xs text-muted-foreground">{context.projectId ? `Project ${context.projectId} · ` : ""}Chat {context.chatId}</span>
       <button type="button" data-testid="workbench-return-chat" className="rounded border border-border px-3 py-2 text-sm" onClick={() => returnToChat()}>Return to same Chat</button>
     </div>
     {notice && <p role="alert" className="mb-3 text-sm text-amber-200">{notice}</p>}
-    <ArtifactPane artifactId={context.artifactId} projectId={context.projectId} version={revision.requestedVersion}
+    <ArtifactPane artifactId={context.artifactId} projectId={context.projectId} owningChatId={context.chatId} version={revision.requestedVersion}
       onVersionChange={selectVersion} onDisplayedVersionChange={reportVersion} onDirtyChange={reportDirty}
       sessions={sessions.data ?? []} onClose={() => returnToChat()}
       onAsk={(id, title, prompt) => {

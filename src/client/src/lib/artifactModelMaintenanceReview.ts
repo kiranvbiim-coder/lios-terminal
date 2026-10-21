@@ -12,7 +12,7 @@ export interface ModelMaintenanceReviewState {
 export const initialModelMaintenanceReviewState: ModelMaintenanceReviewState = { selected: null, pending: null, review: null, result: null, error: null };
 
 function sameContext(a: ModelMaintenanceContext, b: ModelMaintenanceContext): boolean {
-  return a.artifactId === b.artifactId && a.projectId === b.projectId && a.version === b.version
+  return a.artifactId === b.artifactId && a.projectId === b.projectId && a.owningChatId === b.owningChatId && a.version === b.version
     && a.headVersion === b.headVersion && a.contentHash === b.contentHash && a.available === b.available;
 }
 export function modelMaintenanceReviewMatches(review: ArtifactModelMaintenanceReview, context: ModelMaintenanceContext, target: ArtifactModelMaintenanceTarget | null): boolean {

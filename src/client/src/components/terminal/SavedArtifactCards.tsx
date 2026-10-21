@@ -2,7 +2,7 @@ import * as React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { FileBarChart } from "lucide-react";
 import { savedMessageArtifactRefs, type SavedMessageArtifactRef } from "@shared/conversationArtifactRefs";
-import { useProjectArtifacts, type ArtifactDetail, type ProjectArtifactRecord } from "@/lib/useArtifacts";
+import { useOwnedArtifacts, type ArtifactDetail, type ProjectArtifactRecord } from "@/lib/useArtifacts";
 
 const KIND_LABEL: Record<string, string> = {
   chart: "Chart",
@@ -84,20 +84,24 @@ export function SavedArtifactCardList({ cards, activeId, onOpen }: {
     </div>
   );
 }
+export function savedArtifactMatchesScope(artifact: Pick<ProjectArtifactRecord, "projectId" | "owningChatId">, projectId: number | null, chatId: number | null): boolean {
+  return projectId !== null ? artifact.projectId === projectId : chatId !== null && artifact.projectId === null && artifact.owningChatId === chatId;
+}
 
 /**
  * Restores the saved-Artifact cards of an assistant message from its persisted metadata after reload/restart.
  * `onOpen` focuses the SAME canonical Artifact in the contextual panel; the panel loads it through the
  * tenant/Project access-checked Artifact query.
  */
-export default function SavedArtifactCards({ metadata, projectId, activeId, onOpen }: {
+export default function SavedArtifactCards({ metadata, projectId, chatId = null, activeId, onOpen }: {
   metadata: unknown;
   projectId: number | null;
+  chatId?: number | null;
   activeId: string | null;
   onOpen: (artifactId: string, version: number) => void;
 }) {
   const refs = savedMessageArtifactRefs(metadata);
-  const list = useProjectArtifacts(refs.length > 0 ? projectId : null);
+  const list = useOwnedArtifacts({ projectId: refs.length ? projectId : null, owningChatId: refs.length ? chatId : null });
   // The active list is a bounded page that excludes archived Artifacts, so absence there proves nothing.
   // Refs not in the list are resolved by the exact access-checked Artifact query at the retained version.
   const listed = list.data;
@@ -109,14 +113,14 @@ export default function SavedArtifactCards({ metadata, projectId, activeId, onOp
         if (!res.ok) throw new Error("Failed to load Artifact.");
         return res.json();
       },
-      enabled: Boolean(projectId) && listed !== undefined && !listed.some((artifact) => artifact.id === ref.id),
+      enabled: Boolean(projectId || chatId) && (listed === undefined || !listed.some((artifact) => artifact.id === ref.id)),
     })),
   });
-  if (!refs.length || !projectId) return null;
+  if (!refs.length || (!projectId && !chatId)) return null;
   const cards = refs.map((ref, index) => {
-    const fromList = listed?.find((artifact) => artifact.id === ref.id);
+    const fromList = listed?.find((artifact) => artifact.id === ref.id && savedArtifactMatchesScope(artifact, projectId, chatId));
     const query = exact[index];
-    const detail = query?.data && query.data.artifact.projectId === projectId ? query.data : undefined;
+    const detail = query?.data && savedArtifactMatchesScope(query.data.artifact, projectId, chatId) ? query.data : undefined;
     const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
     const wrongProject = Boolean(query?.data) && !detail;
     const lookup = live ? "found" : wrongProject || query?.isError ? "missing" : "pending";

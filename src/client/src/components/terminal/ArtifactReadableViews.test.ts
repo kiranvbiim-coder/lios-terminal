@@ -8,6 +8,7 @@ import BacktestArtifactView from "./BacktestArtifactView";
 import PortfolioArtifactView from "./PortfolioArtifactView";
 import ValuationArtifactView from "./ValuationArtifactView";
 import { dcfSensitivityValuation } from "./dcfSensitivityArtifact.fixture";
+import { ReadableRowsTable } from "./ReadableValueTable";
 
 const save = async () => undefined;
 const facts = { savedAt: "2026-10-20T10:30:00.000Z", sourceCount: 0, receiptCount: 1 };
@@ -176,4 +177,12 @@ test("portfolio shows readable holdings and model results without JSON", () => {
   assert.equal((run.match(/aria-label="Results"/g) ?? []).length, 1);
   assert.doesNotMatch(run, /aria-label="Risk"/);
   assert.doesNotMatch(run, RAW_JSON);
+});
+
+test("columns recorded after the visible row page remain discoverable without widening that page", () => {
+  const rows: Array<Record<string, unknown>> = Array.from({ length: 101 }, (_, index) => ({ index }));
+  rows[100].lateRecordedMetric = 7;
+  const markup = renderToStaticMarkup(createElement(ReadableRowsTable, { title: "Trades", rows, limit: 100 }));
+  assert.match(markup, /Late recorded metric/i);
+  assert.equal((markup.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr/g) ?? []).length, 100);
 });

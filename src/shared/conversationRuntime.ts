@@ -298,7 +298,7 @@ export const conversationArtifactDraftSchema = z.object({
   sourceRefs: z.array(z.string().trim().min(1).max(1_000)).max(100).default([]),
   executionReceiptIds: z.array(z.string().uuid()).max(100).default([]),
   data: z.record(z.unknown()).default({}),
-  persistence: z.enum(["ephemeral", "project_candidate"]).default("ephemeral"),
+  persistence: z.enum(["ephemeral", "chat_candidate", "project_candidate"]).default("ephemeral"),
 }).strict();
 export type ConversationArtifactDraft = z.infer<typeof conversationArtifactDraftSchema>;
 
