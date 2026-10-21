@@ -19,7 +19,7 @@ function validId(value: number | null): value is number {
 export function captureChatWorkbenchOrigin(
   mode: ChatWorkbenchMode, projectId: number | null, chatId: number | null, symbol?: string | null,
 ): ChatWorkbenchOrigin {
-  const validatedSymbol = typeof symbol === "string" && /^[A-Z0-9][A-Z0-9.\\-]{0,15}$/.test(symbol) ? symbol : null;
+  const validatedSymbol = typeof symbol === "string" && /^[A-Z0-9][A-Z0-9.-]{0,15}$/.test(symbol) ? symbol : null;
   const hint = validatedSymbol ? { symbol: validatedSymbol } : {};
   if (mode === "temporary") return { mode, projectId: null, chatId: null, ...hint };
   if (mode === "quick") return { mode, projectId: null, chatId: validId(chatId) ? chatId : null, ...hint };
