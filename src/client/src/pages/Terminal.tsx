@@ -469,8 +469,10 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       setMaximizedPane(null);
       chatWorkbenchOriginRef.current = null;
     } else if (chatOrigin) {
-      // Chat without a saved Artifact enters the same existing terminal. Keep the
-      // exact originating Chat without creating a fake P4 object or restoring stale panes.
+      // Only a validated unique symbol from this Chat may select company context.
+      // It opens an existing entity tab; all earlier professional tabs remain intact.
+      // P5/source entitlements still govern data in the resulting panels.
+      if (chatOrigin.symbol) setTabsState(current => openEntityTab(current, chatOrigin.symbol!));
       chatWorkbenchOriginRef.current = chatOrigin;
     }
     handleSurface("workbench");
