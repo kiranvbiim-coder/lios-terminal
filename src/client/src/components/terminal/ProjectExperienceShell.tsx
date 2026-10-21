@@ -62,6 +62,7 @@ import {
   X,
 } from "lucide-react";
 import type { ArtifactWorkbenchContext, ViewMode } from "@/lib/terminalTypes";
+import { captureChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
 import type { LifecycleAction } from "@shared/objectLifecycle";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
@@ -169,8 +170,9 @@ interface Props {
   activeView: ViewMode;
   activeSymbol?: string;
   workspaceAdapter: WorkspaceAdapter;
-  onOpenWorkbench: (context?: ArtifactWorkbenchContext) => void;
+  onOpenWorkbench: (context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => void;
   workbenchReturn?: { context: ArtifactWorkbenchContext; request: number; prompt?: string } | null;
+  chatWorkbenchReturn?: { origin: ChatWorkbenchOrigin; request: number } | null;
   onOpenEnvironment: () => void;
   account: { name: string; email?: string };
   onLogout: () => void;
@@ -296,7 +298,7 @@ export default function ProjectExperienceShell({
   activeView,
   activeSymbol,
   workspaceAdapter,
-  onOpenWorkbench: navigateWorkbench, workbenchReturn,
+  onOpenWorkbench: navigateWorkbench, workbenchReturn, chatWorkbenchReturn,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
@@ -413,14 +415,24 @@ export default function ProjectExperienceShell({
   const artifactDraftDirtyRef = useRef(false);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
+  const handledChatWorkbenchReturn = useRef<number | null>(null);
   const onOpenWorkbench = () => {
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
     if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
       const displayed = displayedArtifactRef.current;
       if (displayed?.artifactId !== conversationArtifactRef || displayed.requestedVersion !== artifactViewVersion || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
       navigateWorkbench({ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version });
-    } else navigateWorkbench();
+    } else navigateWorkbench(undefined, captureChatWorkbenchOrigin(chatMode, selection.projectId, selection.chatId));
   };
+  useEffect(() => {
+    if (!chatWorkbenchReturn || handledChatWorkbenchReturn.current === chatWorkbenchReturn.request) return;
+    const { origin } = chatWorkbenchReturn;
+    if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+      selection.setProjectId(origin.projectId); selection.setChatId(origin.chatId); return;
+    }
+    handledChatWorkbenchReturn.current = chatWorkbenchReturn.request;
+    setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
+  }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
     const { context, prompt } = workbenchReturn;
