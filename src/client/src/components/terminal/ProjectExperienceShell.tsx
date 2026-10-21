@@ -427,7 +427,9 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!chatWorkbenchReturn || handledChatWorkbenchReturn.current === chatWorkbenchReturn.request) return;
     const { origin } = chatWorkbenchReturn;
-    if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+    // Temporary Chat remains mounted with its private draft. Do not reset the
+    // previous saved selection merely because the temporary route carries no IDs.
+    if (origin.mode !== "temporary" && (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId)) {
       selection.setProjectId(origin.projectId); selection.setChatId(origin.chatId); return;
     }
     handledChatWorkbenchReturn.current = chatWorkbenchReturn.request;
