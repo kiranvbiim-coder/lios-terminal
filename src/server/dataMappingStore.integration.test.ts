@@ -22,6 +22,8 @@ test("fresh embedded database confirms and lists actual mapping revisions with t
     const rows = await dataMappingStore.list({ ownerUserId: 17, organizationId: null });
     assert.equal(rows.find(row => row.active)?.id, second.id);
     assert.equal(rows.filter(row => row.active).length, 1);
+    await assert.rejects(dataMappingStore.confirm({ ...input, providerField: "other_revenue" }));
+    assert.deepEqual(await dataMappingStore.list({ ownerUserId: 17, organizationId: null }), rows);
     assert.deepEqual(await dataMappingStore.list({ ownerUserId: 18, organizationId: null }), []);
   } finally {
     await closeDb();

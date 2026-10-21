@@ -371,7 +371,7 @@ export default function ConversationRuntimeTrace({
         {workVisible && artifact?.type === "artifact" && artifact.persistedArtifact && (
           <div className="flex items-center gap-2 font-ui text-[12px] text-muted-foreground" data-testid="trace-saved-artifact">
             <FileBarChart className="h-3 w-3 text-fuchsia-300" aria-hidden="true" />
-            <span className="min-w-0 truncate">{artifact.artifact.title} · saved in Project · v{artifact.persistedArtifact.version}</span>
+            <span className="min-w-0 truncate">{artifact.artifact.title} · saved in {artifact.artifact.projectId === null ? "Chat" : "Project"} · v{artifact.persistedArtifact.version}</span>
           </div>
         )}
 

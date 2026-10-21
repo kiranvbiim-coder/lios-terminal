@@ -413,3 +413,13 @@ test("guided form builds with fifty nine-digit prefilled cash flows", () => {
   const guided = buildP5GuidedInputs({ modelPath: "valuation/dcf-sensitivity", entity: "AAPL", missing: ["netDebt"], issues: [], provided: { freeCashFlows: flows, "bearCase.freeCashFlows": flows, "bullCase.freeCashFlows": flows } });
   assert.ok(guided);
 });
+
+test("guided cash-flow lists reject missing forecast years rather than collapsing the horizon", () => {
+  const guided = buildP5GuidedInputs({ modelPath: "valuation/dcf-sensitivity", entity: "AAPL", missing: [], issues: [], provided: {} });
+  assert.ok(guided);
+  for (const freeCashFlows of ["100, , 120", ",100,120", "100,120,", "100;;120"]) {
+    const validation = validateP5GuidedValues(guided, { freeCashFlows });
+    assert.equal(validation.parsed, null);
+    assert.ok(validation.errors.freeCashFlows);
+  }
+});

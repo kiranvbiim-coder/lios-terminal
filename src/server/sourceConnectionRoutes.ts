@@ -256,7 +256,19 @@ export function registerSourceConnectionRoutes(app: Express): void {
       return;
     }
     try {
-      const result = await queryDatabaseSource(req.user!.id, parsed.data.connectionId, parsed.data.query, parsed.data.params, req.user!);
+      let query = parsed.data.query;
+      if (parsed.data.datasetKey) {
+        const parts = parsed.data.datasetKey.split(".");
+        if (parts.length !== 2 || parts.some(part => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) throw new Error("Mapped database datasets require an exact schema.table identity.");
+        // Mapped reads are derived from the selected dataset, never arbitrary
+        // SQL relabelled by an independent caller-supplied mapping key.
+        const expected = `SELECT * FROM ${parts[0]}.${parts[1]}`;
+        if (query.trim().replace(/;$/, "").toLowerCase() !== expected.toLowerCase() || parsed.data.params.length) throw new Error("Mapped queries must select the complete exact confirmed dataset without SQL overrides.");
+        const catalog = await discoverDatabaseConnection(req.user!.id, parsed.data.connectionId, req.user!);
+        if (!catalog.tables.some(table => table.schema === parts[0] && table.name === parts[1])) throw new Error("Mapped dataset is not present in the authorized connection catalogue.");
+        query = expected;
+      }
+      const result = await queryDatabaseSource(req.user!.id, parsed.data.connectionId, query, parsed.data.params, req.user!);
       const semantic = parsed.data.datasetKey
         ? await mapConfirmedDatabaseRecords(
           { ownerUserId: req.user!.id, organizationId: req.user!.organizationId ?? null },

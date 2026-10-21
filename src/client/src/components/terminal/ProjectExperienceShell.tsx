@@ -680,6 +680,20 @@ export default function ProjectExperienceShell({
     temporaryWorkingContextRef.current = null;
   };
   const openWorkSearchResult = async (result: WorkSearchResult) => {
+    if (result.kind === "artifact" && result.projectId === null && result.chatId && result.artifactId) {
+      if (busy || !(await confirmConversationSwitch())) return;
+      const response = await fetch(`/api/project-chats/${result.chatId}`);
+      if (!response.ok) throw new Error("This owning Chat is no longer available.");
+      const chat = await response.json() as ProjectChat;
+      const exact = await fetch(`/api/artifacts/${encodeURIComponent(result.artifactId)}`);
+      if (!exact.ok) throw new Error("This exact Artifact is no longer available.");
+      const detail = await exact.json();
+      if (chat.scope !== "quick" || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
+      pendingArtifactOpenRef.current = result.artifactId;
+      pendingArtifactFocusRef.current = false;
+      await openChat(chat, true);
+      return;
+    }
     if (result.kind === "chat" && result.chatId) {
       let chat = [...(allChatsQuery.data ?? []), ...quickChats].find((item) => item.id === result.chatId) ?? null;
       if (!chat) {

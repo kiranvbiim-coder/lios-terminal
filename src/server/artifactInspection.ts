@@ -55,8 +55,7 @@ export async function inspectArtifact(ctx: TenantContext, raw: unknown): Promise
     rights.push({ id: policy.id, permittedUses: policy.permittedUses, attribution: policy.attribution });
   }
   if (cell?.value.lineage?.custody === "server_projection" && cell.value.lineage.modelRunId) {
-    if (artifact.projectId === null) throw new Error("Server model projection lineage requires its owning Project.");
-    await loadIntegratedModelArtifactSource(ctx, cell.value.lineage.modelRunId, artifact.projectId);
+    await loadIntegratedModelArtifactSource(ctx, cell.value.lineage.modelRunId, artifact.projectId, true, artifact.owningChatId);
   }
   const references = (await listArtifactReferences(ctx, artifact.id)).filter(item => item.version === null || item.version === target.version)
     .map(({ targetType, targetRef, label, version: refVersion }) => ({ targetType: artifactReferenceTypeSchema.parse(targetType), targetRef, label, version: refVersion }));

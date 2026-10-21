@@ -147,8 +147,8 @@ function parseGuidedNumber(raw: string, percent: boolean): number | null {
 }
 
 function parseGuidedList(raw: string, percent: boolean): number[] | null {
-  const parts = raw.split(/\s*[,;]\s*/).map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return null;
+  const parts = raw.split(/\s*[,;]\s*/).map((part) => part.trim());
+  if (!parts.length || parts.some(part => part.length === 0)) return null;
   const values = parts.map((part) => parseGuidedNumber(part, percent));
   return values.every((value): value is number => value !== null) ? values : null;
 }

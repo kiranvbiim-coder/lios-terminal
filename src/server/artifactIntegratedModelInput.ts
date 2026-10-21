@@ -205,6 +205,7 @@ async function replayIntegratedModelRun(ctx: TenantContext, artifactId: string, 
     eq(artifactInteractionReceipts.createdByUserId, ctx.userId),
   )).limit(1);
   if (!receipt?.toVersion) return null;
+  if (artifact.headVersion !== receipt.toVersion) throw new IntegratedModelArtifactError(409, "Artifact head advanced after this recomputation; review the current revision before retrying.");
   const proof = receipt.detail.modelRecompute as { runId?: string; review?: ArtifactIntegratedModelReview } | undefined;
   if (!proof?.runId || !proof.review) throw new IntegratedModelArtifactError(409, "Recompute replay receipt is incomplete.");
   const review = proof.review;

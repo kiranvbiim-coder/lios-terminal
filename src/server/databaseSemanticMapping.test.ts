@@ -52,8 +52,10 @@ test("database mapping uses only the active confirmed revision and refuses missi
   assert.equal(result.mappings[0].version, 2);
   await assert.rejects(mapConfirmedDatabaseRecords(scope, 3, "public.accounts", [{ other: 2 }], store), /missing confirmed field/);
   await assert.rejects(mapConfirmedDatabaseRecords(scope, 3, "public.accounts", [{ gross_sales: "unknown" }], store), /finite number/);
-  await confirm({ providerField: "net_sales" });
-  await assert.rejects(mapConfirmedDatabaseRecords(scope, 3, "public.accounts", [{ gross_sales: 2, net_sales: 1 }], store), /duplicate semantic targets/);
+  await assert.rejects(confirm({ providerField: "net_sales" }));
+  const unchanged = await mapConfirmedDatabaseRecords(scope, 3, "public.accounts", [{ gross_sales: 2, net_sales: 1 }], store);
+  assert.equal(unchanged.semanticRecords[0]["financial_statements.revenue"], 2_000);
+  assert.equal(unchanged.mappings.length, 1);
 });
 
 test("confirmed transforms execute explicitly without inferring unmapped columns", async () => {

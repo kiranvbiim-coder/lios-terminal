@@ -93,6 +93,9 @@ export function createDataMappingStore(persistence: DataMappingPersistence) {
         datasetKey: parsed.datasetKey,
         providerField: parsed.providerField,
       };
+      const { providerField: _field, ...datasetScope } = identity;
+      const activeDataset = await persistence.list(datasetScope);
+      if (activeDataset.some(row => isInScope(row, datasetScope) && row.active && row.providerField !== parsed.providerField && row.targetFieldId === parsed.targetFieldId)) throw new Error("This canonical target already has an active mapping from another source column.");
       const prior = (await persistence.list(identity)).filter((row) => isSameIdentity(row, identity));
       const version = prior.reduce((max, row) => Math.max(max, row.version), 0) + 1;
       const next: StoredDataMapping = {
@@ -153,6 +156,12 @@ async function ensureDataMappingTable(): Promise<void> {
       ON data_field_mappings (organization_id, owner_user_id)`));
     await getDb().execute(sql.raw(`CREATE INDEX IF NOT EXISTS data_field_mapping_lookup_idx
       ON data_field_mappings (organization_id, owner_user_id, provider_id, dataset_key, provider_field)`));
+    await getDb().execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS data_field_mapping_active_target_personal
+      ON data_field_mappings (owner_user_id, provider_id, dataset_key, target_field_id)
+      WHERE active = true AND organization_id IS NULL`));
+    await getDb().execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS data_field_mapping_active_target_org
+      ON data_field_mappings (organization_id, owner_user_id, provider_id, dataset_key, target_field_id)
+      WHERE active = true AND organization_id IS NOT NULL`));
   })().catch((error) => {
     tableReady = null;
     throw error;
@@ -208,6 +217,12 @@ export const databaseDataMappingPersistence: DataMappingPersistence = {
     return db.transaction(async (tx) => {
       const orgCondition = organizationCondition(scope.organizationId);
       if (!orgCondition) throw new Error("mapping scope organization condition is required");
+      const collisions = await tx.select({ id: dataFieldMappings.id, providerField: dataFieldMappings.providerField }).from(dataFieldMappings).where(and(
+        orgCondition, eq(dataFieldMappings.ownerUserId, scope.ownerUserId),
+        eq(dataFieldMappings.providerId, scope.providerId), eq(dataFieldMappings.datasetKey, scope.datasetKey),
+        eq(dataFieldMappings.targetFieldId, next.targetFieldId), eq(dataFieldMappings.active, true),
+      ));
+      if (collisions.some(row => row.providerField !== scope.providerField)) throw new Error("This canonical target already has an active mapping from another source column.");
       await tx.update(dataFieldMappings).set({ active: false }).where(and(
         orgCondition,
         eq(dataFieldMappings.ownerUserId, scope.ownerUserId),
