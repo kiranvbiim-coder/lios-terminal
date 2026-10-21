@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, type ChangeEvent } from "react";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, Scatter, CartesianGrid, LineChart, Line, Legend, ComposedChart, BarChart, Bar } from "recharts";
 import { Landmark } from "lucide-react";
@@ -88,17 +89,17 @@ function parseIncomeEnergyCsv(text: string): { incomes: number[]; energy: number
 
 export default function EconomicsPolicyQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<EconPolicyMethod>("taylor");
+  const [method, setMethod] = useTerminalArtifactState<EconPolicyMethod>("EconomicsPolicyQuantPanel.method", "taylor");
   const [result, setResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ── Leontief I-O ──
-  const [ioRows, setIoRows] = useState<string[]>(["0.15,0.25,0.05", "0.30,0.10,0.20", "0.10,0.20,0.10"]);
-  const [finalDemandInput, setFinalDemandInput] = useState("100,200,150");
+  const [ioRows, setIoRows] = useTerminalArtifactState<string[]>("EconomicsPolicyQuantPanel.ioRows", ["0.15,0.25,0.05", "0.30,0.10,0.20", "0.10,0.20,0.10"]);
+  const [finalDemandInput, setFinalDemandInput] = useTerminalArtifactState("EconomicsPolicyQuantPanel.finalDemandInput", "100,200,150");
 
   // ── Taylor Rule ──
-  const [useLiveInflation, setUseLiveInflation] = useState(true);
+  const [useLiveInflation, setUseLiveInflation] = useTerminalArtifactState("EconomicsPolicyQuantPanel.useLiveInflation", true);
   const { data: cpiDetail } = useIndicatorDetail("CPIAUCSL");
   const liveInflationPct = useMemo(() => {
     const h = cpiDetail?.history;
@@ -106,15 +107,15 @@ export default function EconomicsPolicyQuantPanel() {
     const latest = h[h.length - 1], yearAgo = h[h.length - 13];
     return ((latest.value - yearAgo.value) / yearAgo.value) * 100;
   }, [cpiDetail]);
-  const [manualInflation, setManualInflation] = useState("3.0");
-  const [inflationTarget, setInflationTarget] = useState("2.0");
+  const [manualInflation, setManualInflation] = useTerminalArtifactState("EconomicsPolicyQuantPanel.manualInflation", "3.0");
+  const [inflationTarget, setInflationTarget] = useTerminalArtifactState("EconomicsPolicyQuantPanel.inflationTarget", "2.0");
   const [outputGap, setOutputGap] = useState("0.0");
-  const [neutralRate, setNeutralRate] = useState("2.0");
-  const [inflationWeight, setInflationWeight] = useState("0.5");
+  const [neutralRate, setNeutralRate] = useTerminalArtifactState("EconomicsPolicyQuantPanel.neutralRate", "2.0");
+  const [inflationWeight, setInflationWeight] = useTerminalArtifactState("EconomicsPolicyQuantPanel.inflationWeight", "0.5");
   const [outputGapWeight, setOutputGapWeight] = useState("0.5");
 
   // ── Phillips Curve ──
-  const [usePhillipsLiveData, setUsePhillipsLiveData] = useState(true);
+  const [usePhillipsLiveData, setUsePhillipsLiveData] = useTerminalArtifactState("EconomicsPolicyQuantPanel.usePhillipsLiveData", true);
   const { data: unrateDetail } = useIndicatorDetail("UNRATE");
   const phillipsLiveSeries = useMemo(() => {
     if (!cpiDetail?.history || !unrateDetail?.history) return null;
@@ -132,13 +133,13 @@ export default function EconomicsPolicyQuantPanel() {
     }
     return unemployment.length >= 8 ? { unemployment, inflation } : null;
   }, [cpiDetail, unrateDetail]);
-  const [manualUnemployment, setManualUnemployment] = useState("3.5,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0");
-  const [manualInflationSeries, setManualInflationSeries] = useState("6.8,6.2,5.5,5.0,4.4,3.8,3.2,2.8,2.1,1.5");
+  const [manualUnemployment, setManualUnemployment] = useTerminalArtifactState("EconomicsPolicyQuantPanel.manualUnemployment", "3.5,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0");
+  const [manualInflationSeries, setManualInflationSeries] = useTerminalArtifactState("EconomicsPolicyQuantPanel.manualInflationSeries", "6.8,6.2,5.5,5.0,4.4,3.8,3.2,2.8,2.1,1.5");
 
   // ── Shared household population (Gini / tax micro-sim / carbon tax) ──
-  const [popSize, setPopSize] = useState("5000");
-  const [popMeanLog, setPopMeanLog] = useState("11.0");
-  const [popSigmaLog, setPopSigmaLog] = useState("0.7");
+  const [popSize, setPopSize] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popSize", "5000");
+  const [popMeanLog, setPopMeanLog] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popMeanLog", "11.0");
+  const [popSigmaLog, setPopSigmaLog] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popSigmaLog", "0.7");
   const [uploadedIncomes, setUploadedIncomes] = useState<number[] | null>(null);
   const [uploadedEnergy, setUploadedEnergy] = useState<number[] | null>(null);
   const generatedIncomes = useMemo(() => sampleLognormal(Number(popSize) || 0, Number(popMeanLog), Number(popSigmaLog)), [popSize, popMeanLog, popSigmaLog]);
@@ -164,12 +165,12 @@ export default function EconomicsPolicyQuantPanel() {
   }
 
   // ── Income tax micro-sim brackets ──
-  const [oldBrackets, setOldBrackets] = useState([{ threshold: "0", rate: "10" }, { threshold: "50000", rate: "20" }, { threshold: "100000", rate: "30" }]);
-  const [newBrackets, setNewBrackets] = useState([{ threshold: "0", rate: "5" }, { threshold: "70000", rate: "20" }, { threshold: "150000", rate: "35" }]);
+  const [oldBrackets, setOldBrackets] = useTerminalArtifactState("EconomicsPolicyQuantPanel.oldBrackets", [{ threshold: "0", rate: "10" }, { threshold: "50000", rate: "20" }, { threshold: "100000", rate: "30" }]);
+  const [newBrackets, setNewBrackets] = useTerminalArtifactState("EconomicsPolicyQuantPanel.newBrackets", [{ threshold: "0", rate: "5" }, { threshold: "70000", rate: "20" }, { threshold: "150000", rate: "35" }]);
 
   // ── Carbon tax ──
-  const [carbonTaxPerTon, setCarbonTaxPerTon] = useState("50");
-  const [emissionFactor, setEmissionFactor] = useState("0.002");
+  const [carbonTaxPerTon, setCarbonTaxPerTon] = useTerminalArtifactState("EconomicsPolicyQuantPanel.carbonTaxPerTon", "50");
+  const [emissionFactor, setEmissionFactor] = useTerminalArtifactState("EconomicsPolicyQuantPanel.emissionFactor", "0.002");
   const energySpend = useMemo(() => {
     if (uploadedEnergy) return uploadedEnergy;
     // Synthetic energy spend correlated with income (richer households

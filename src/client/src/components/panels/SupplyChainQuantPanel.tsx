@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, type ChangeEvent } from "react";
 import { Network } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -196,17 +197,17 @@ const SUPPLY_CHAIN_METHODS: { key: SupplyChainMethod; label: string }[] = [
 
 export default function SupplyChainQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<SupplyChainMethod>("route");
+  const [method, setMethod] = useTerminalArtifactState<SupplyChainMethod>("SupplyChainQuantPanel.method", "route");
   const [result, setResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [ports, setPorts] = useState(DEFAULT_PORTS);
+  const [ports, setPorts] = useTerminalArtifactState("SupplyChainQuantPanel.ports", DEFAULT_PORTS);
 
-  const [serviceLevelPct, setServiceLevelPct] = useState("95");
-  const [demandStdDev, setDemandStdDev] = useState("250");
-  const [echelonLTs, setEchelonLTs] = useState("7,14,30");
-  const [echelonNames, setEchelonNames] = useState("Retailer,Regional Depot,Central Factory");
+  const [serviceLevelPct, setServiceLevelPct] = useTerminalArtifactState("SupplyChainQuantPanel.serviceLevelPct", "95");
+  const [demandStdDev, setDemandStdDev] = useTerminalArtifactState("SupplyChainQuantPanel.demandStdDev", "250");
+  const [echelonLTs, setEchelonLTs] = useTerminalArtifactState("SupplyChainQuantPanel.echelonLTs", "7,14,30");
+  const [echelonNames, setEchelonNames] = useTerminalArtifactState("SupplyChainQuantPanel.echelonNames", "Retailer,Regional Depot,Central Factory");
   const [uploadedDemandForStdDev, setUploadedDemandForStdDev] = useState<number[] | null>(null);
 
   function handleDemandCsvUpload(e: ChangeEvent<HTMLInputElement>) {
@@ -248,23 +249,23 @@ export default function SupplyChainQuantPanel() {
     e.target.value = "";
   }
 
-  const [networkNodesInput, setNetworkNodesInput] = useState("Supplier_Taiwan,Assembly_Shenzhen,Port_Shanghai,Port_LA,Distribution_Center");
-  const [networkEdges, setNetworkEdges] = useState([
+  const [networkNodesInput, setNetworkNodesInput] = useTerminalArtifactState("SupplyChainQuantPanel.networkNodesInput", "Supplier_Taiwan,Assembly_Shenzhen,Port_Shanghai,Port_LA,Distribution_Center");
+  const [networkEdges, setNetworkEdges] = useTerminalArtifactState("SupplyChainQuantPanel.networkEdges", [
     { source: "Supplier_Taiwan", target: "Assembly_Shenzhen", weight: "80" },
     { source: "Assembly_Shenzhen", target: "Port_Shanghai", weight: "90" },
     { source: "Port_Shanghai", target: "Port_LA", weight: "70" },
     { source: "Port_LA", target: "Distribution_Center", weight: "100" },
   ]);
-  const [sourceNode, setSourceNode] = useState("Supplier_Taiwan");
-  const [sinkNode, setSinkNode] = useState("Distribution_Center");
+  const [sourceNode, setSourceNode] = useTerminalArtifactState("SupplyChainQuantPanel.sourceNode", "Supplier_Taiwan");
+  const [sinkNode, setSinkNode] = useTerminalArtifactState("SupplyChainQuantPanel.sinkNode", "Distribution_Center");
 
-  const [supplierCount, setSupplierCount] = useState("20");
-  const [singleSourceCount, setSingleSourceCount] = useState("4");
-  const [bufferDays, setBufferDays] = useState("30");
+  const [supplierCount, setSupplierCount] = useTerminalArtifactState("SupplyChainQuantPanel.supplierCount", "20");
+  const [singleSourceCount, setSingleSourceCount] = useTerminalArtifactState("SupplyChainQuantPanel.singleSourceCount", "4");
+  const [bufferDays, setBufferDays] = useTerminalArtifactState("SupplyChainQuantPanel.bufferDays", "30");
 
   // ── Dark advanced supply-chain routes (facility location / stochastic inventory / supplier portfolio / disruption sim / resilience frontier) ──
-  const [advancedSourceMode, setAdvancedSourceMode] = useState<InputSourceMode>("manual");
-  const [advancedInputs, setAdvancedInputs] = useState<Record<AdvancedSupplyChainMethod, string>>({
+  const [advancedSourceMode, setAdvancedSourceMode] = useTerminalArtifactState<InputSourceMode>("SupplyChainQuantPanel.advancedSourceMode", "manual");
+  const [advancedInputs, setAdvancedInputs] = useTerminalArtifactState<Record<AdvancedSupplyChainMethod, string>>("SupplyChainQuantPanel.advancedInputs", {
     "facility-location": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["facility-location"], null, 2),
     "stochastic-inventory": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["stochastic-inventory"], null, 2),
     "supplier-portfolio": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["supplier-portfolio"], null, 2),

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, memo } from "react";
 import { 
   Building2, Search, Percent, ShieldAlert, Scale, 
@@ -24,8 +25,8 @@ function median(nums: number[]) {
 }
 
 function MnaDealDeskPanel() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSector, setSelectedSector] = useState("All");
+  const [searchTerm, setSearchTerm] = useTerminalArtifactState("MnaDealDeskPanel.searchTerm", "");
+  const [selectedSector, setSelectedSector] = useTerminalArtifactState("MnaDealDeskPanel.selectedSector", "All");
   // Starts empty rather than seeded with plausible-looking deals (real
   // acquirer names like "Pfizer"/"Oracle" paired with fabricated targets,
   // values, and multiples) -- that reads as real precedent-transaction data
@@ -43,34 +44,34 @@ function MnaDealDeskPanel() {
     setDeals(prev => prev.map(d => (d.id === id ? { ...d, [key]: val } : d)));
 
   // Accretion / Dilution Modeler Inputs
-  const [offerPrice, setOfferPrice] = useState(45); // Target share price (current spot is $35)
-  const [cashPct, setCashPct] = useState(40); // Funding: % Cash
-  const [debtPct, setDebtPct] = useState(30); // Funding: % Debt (remainder is Stock)
-  const [costSavings, setCostSavings] = useState(60); // In Millions ($)
-  const [revSynergies, setRevSynergies] = useState(25); // In Millions ($)
+  const [offerPrice, setOfferPrice] = useTerminalArtifactState("MnaDealDeskPanel.offerPrice", 45);
+  const [cashPct, setCashPct] = useTerminalArtifactState("MnaDealDeskPanel.cashPct", 40);
+  const [debtPct, setDebtPct] = useTerminalArtifactState("MnaDealDeskPanel.debtPct", 30);
+  const [costSavings, setCostSavings] = useTerminalArtifactState("MnaDealDeskPanel.costSavings", 60);
+  const [revSynergies, setRevSynergies] = useTerminalArtifactState("MnaDealDeskPanel.revSynergies", 25);
   
   const [advancedAccretion, setAdvancedAccretion] = useState<{ proFormaEps: number; standaloneAcquirerEps: number; accretionDilutionPct: number; newSharesIssued: number; debtFinancing: number; breakEvenSynergiesAfterTax: number; receipt: AdvancedReceipt } | null>(null);
   const [accretionError, setAccretionError] = useState<string | null>(null);
   const [accretionRunning, setAccretionRunning] = useState(false);
   // Defense / Poison Pill Inputs
   const [triggerPct, setTriggerPct] = useState(15);
-  const [insiderControl, setInsiderControl] = useState(12);
+  const [insiderControl, setInsiderControl] = useTerminalArtifactState("MnaDealDeskPanel.insiderControl", 12);
 
   // LBO Modeler Inputs
-  const [lboEntryEbitda, setLboEntryEbitda] = useState(50); // $50M EBITDA
-  const [lboEntryMultiple, setLboEntryMultiple] = useState(10.0); // 10x Entry EV
-  const [lboLeverageMultiple, setLboLeverageMultiple] = useState(6.0); // 6.0x Debt/EBITDA
-  const [lboDebtCost, setLboDebtCost] = useState(6.5); // 6.5% interest
-  const [lboEbitdaGrowth, setLboEbitdaGrowth] = useState(8.0); // 8% growth rate
-  const [lboExitMultiple, setLboExitMultiple] = useState(10.0); // 10x exit multiple
-  const [lboCapexPct, setLboCapexPct] = useState(15.0); // Capex % of EBITDA
+  const [lboEntryEbitda, setLboEntryEbitda] = useTerminalArtifactState("MnaDealDeskPanel.lboEntryEbitda", 50);
+  const [lboEntryMultiple, setLboEntryMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboEntryMultiple", 10.0);
+  const [lboLeverageMultiple, setLboLeverageMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboLeverageMultiple", 6.0);
+  const [lboDebtCost, setLboDebtCost] = useTerminalArtifactState("MnaDealDeskPanel.lboDebtCost", 6.5);
+  const [lboEbitdaGrowth, setLboEbitdaGrowth] = useTerminalArtifactState("MnaDealDeskPanel.lboEbitdaGrowth", 8.0);
+  const [lboExitMultiple, setLboExitMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboExitMultiple", 10.0);
+  const [lboCapexPct, setLboCapexPct] = useTerminalArtifactState("MnaDealDeskPanel.lboCapexPct", 15.0); // Capex % of EBITDA
 
   // VC Waterfall Inputs
-  const [vcPreMoneyVal, setVcPreMoneyVal] = useState(20); // $20M pre-money
-  const [vcRoundSize, setVcRoundSize] = useState(5); // $5M Series A
-  const [vcOptionPoolPct, setVcOptionPoolPct] = useState(10); // 10% post-round option pool
-  const [vcLiqPrefMultiplier, setVcLiqPrefMultiplier] = useState(1.0); // 1.0x Liquidation Preference
-  const [vcIsParticipating, setVcIsParticipating] = useState(false); // Participating preferred toggle
+  const [vcPreMoneyVal, setVcPreMoneyVal] = useTerminalArtifactState("MnaDealDeskPanel.vcPreMoneyVal", 20);
+  const [vcRoundSize, setVcRoundSize] = useTerminalArtifactState("MnaDealDeskPanel.vcRoundSize", 5);
+  const [vcOptionPoolPct, setVcOptionPoolPct] = useTerminalArtifactState("MnaDealDeskPanel.vcOptionPoolPct", 10);
+  const [vcLiqPrefMultiplier, setVcLiqPrefMultiplier] = useTerminalArtifactState("MnaDealDeskPanel.vcLiqPrefMultiplier", 1.0);
+  const [vcIsParticipating, setVcIsParticipating] = useTerminalArtifactState("MnaDealDeskPanel.vcIsParticipating", false);
 
   // LBO Calculations -- uses the shared LBO engine (lib/valuationModels.ts)
   // also used by the DCF panel's LBO tab, rather than a second independent

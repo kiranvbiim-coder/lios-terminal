@@ -8,7 +8,7 @@ import {
   listProjectChatMessages,
 } from "./projectChatStore";
 import { getProject } from "./projectStore";
-import { getArtifact, persistConversationDraft } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { listProjectResources } from "./projectResourceStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { requireMasterAiOn } from "./masterAiGate";
@@ -759,6 +759,14 @@ async function runProjectChat(
             const event = runtimeEvent;
             if (event.type === "artifact") {
               pendingArtifacts.push(event);
+              if (event.persistedArtifact) {
+                const artifact = await getArtifact(context, event.persistedArtifact.id);
+                const version = await getArtifactVersion(context, artifact.id, event.persistedArtifact.version);
+                if (artifact.projectId !== chat.projectId || (artifact.projectId === null && artifact.owningChatId !== chatId)) throw new Error("Updated Artifact is outside this conversation owner.");
+                persistedArtifacts.push(retainedArtifactMessageRef({ artifact, version }));
+                pendingArtifacts.pop();
+                await ledger.recordRuntimeEvent(event); await transcript.recordEvent(event); emit(event);
+              }
               return;
             }
             await ledger.recordRuntimeEvent(event);

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { CloudSun, Ship, Palmtree } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -14,7 +15,7 @@ function fmt(v: number | null, digits = 1, suffix = ""): string {
 }
 
 export default function GlobalClimatePanel() {
-  const [tag, setTag] = useState<LocationTag | "all">("all");
+  const [tag, setTag] = useTerminalArtifactState<LocationTag | "all">("GlobalClimatePanel.tag", "all");
   const { data: snapshots, isLoading } = useClimateAll(tag === "all" ? undefined : tag);
   const [focusCode, setFocusCode] = useState<string | null>(null);
 

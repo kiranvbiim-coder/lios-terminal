@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Sparkles, UploadCloud, Loader2, FileWarning, Database, Clock, Compass,
@@ -117,7 +118,7 @@ const MODEL_TYPE_LABEL: Record<string, string> = {
 export default function UideEnginePanel() {
   const [fixtureId, setFixtureId] = useState<string | null>(null);
   const [profile, setProfile] = useState<WorkbookProfile | null>(null);
-  const [activeSheet, setActiveSheet] = useState(0);
+  const [activeSheet, setActiveSheet] = useTerminalArtifactState("UideEnginePanel.activeSheet", 0);
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [fixtures, setFixtures] = useState<FixtureMeta[]>([]);
   const [isUploading, setIsUploading] = useState(false);

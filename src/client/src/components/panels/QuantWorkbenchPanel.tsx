@@ -1,8 +1,10 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   QUANT_MODEL_FAMILIES,
   modelsForQuantFamily,
   type QuantModelFamilyKey,
+  type QuantModelKey,
 } from "@/lib/quantModelCatalog";
 import { loadTerminalViewState, patchTerminalViewState } from "@/lib/terminalViewState";
 import QuantWorkbenchLegacyPanel from "./QuantWorkbenchLegacyPanel";
@@ -26,18 +28,23 @@ function initialState() {
 }
 
 export default function QuantWorkbenchPanel() {
-  const initial = initialState();
+  const terminal = useTerminalArtifactContext();
+  const initial = terminal ? { section: "lab" as Section, family: "factor-structure" as QuantModelFamilyKey } : initialState();
   // Operational workstations open on computation. Section + family focus are
   // persisted so analytical workspace snapshots retain where the analyst was
   // navigating even before the legacy 18-mode lab is internally decomposed.
-  const [section, setSection] = useState<Section>(initial.section);
-  const [selectedFamily, setSelectedFamily] = useState<QuantModelFamilyKey>(initial.family);
+  const [section, setSection] = useTerminalArtifactState<Section>("QuantWorkbenchPanel.section", initial.section);
+  const [selectedFamily, setSelectedFamily] = useTerminalArtifactState<QuantModelFamilyKey>("QuantWorkbenchPanel.selectedFamily", initial.family);
+  const [selectedModel, setSelectedModel] = useTerminalArtifactState<QuantModelKey>("QuantWorkbenchLegacyPanel.tab", "pca");
   const definition = WORKSTATION_DEFINITIONS.quant;
   const selectedFamilyDefinition = QUANT_MODEL_FAMILIES.find((item) => item.key === selectedFamily) ?? QUANT_MODEL_FAMILIES[0];
   const selectedFamilyModels = modelsForQuantFamily(selectedFamilyDefinition.key);
+  useEffect(() => {
+    if (!selectedFamilyModels.some(model => model.key === selectedModel) && selectedFamilyModels[0]) setSelectedModel(selectedFamilyModels[0].key);
+  }, [selectedFamily]);
 
   useEffect(() => {
-    patchTerminalViewState("quantworkbench", undefined, { section, family: selectedFamily });
+    if (!terminal) patchTerminalViewState("quantworkbench", undefined, { section, family: selectedFamily });
   }, [section, selectedFamily]);
 
   let body: ReactNode;
@@ -62,7 +69,7 @@ export default function QuantWorkbenchPanel() {
           </button>
         </div>
         <div className="min-h-0 flex-1">
-          <QuantWorkbenchLegacyPanel />
+          <QuantWorkbenchLegacyPanel selectedModel={selectedModel} onModelChange={model => { setSelectedModel(model); const family = QUANT_MODEL_FAMILIES.find(item => item.modelKeys.includes(model)); if (family) setSelectedFamily(family.key); }}/>
         </div>
       </div>
     );

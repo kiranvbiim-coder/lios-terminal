@@ -14,6 +14,9 @@ import { conversationArtifactDraftSchema } from "@shared/conversationRuntime";
 import { trustManifestSchema } from "@shared/trustContracts";
 import { requireAuth, requireRole } from "./auth";
 import { tenantContext } from "./tenantContext";
+import { openTerminalArtifact } from "./terminalArtifact";
+import { updateTerminalArtifact } from "./terminalArtifactTool";
+import { addProjectChatMessage } from "./projectChatStore";
 import {
   compareArtifactVersions,
   createArtifact,
@@ -193,6 +196,27 @@ export function registerArtifactRoutes(app: Express): void {
         status: query.status === "trash" ? "archived" : query.status,
         trash: query.status === "trash", limit: query.limit,
       }));
+    } catch (error) { fail(res, error); }
+  });
+
+  app.post("/api/chats/:chatId/artifacts/open-terminal", requireAuth, async (req, res) => {
+    try { res.json(await openTerminalArtifact(ctx(req), pathId(req.params.chatId), req.body)); }
+    catch (error) { fail(res, error); }
+  });
+  app.post("/api/chats/:chatId/artifacts/terminal-operation", requireAuth, async (req, res) => {
+    try {
+      const chatId = pathId(req.params.chatId);
+      const body = z.object({ instruction: z.string().trim().min(1).max(2000), update: z.unknown() }).strict().parse(req.body);
+      const { parseTerminalArtifactInstruction } = await import("@shared/terminalArtifactOperations");
+      const operations = parseTerminalArtifactInstruction(body.instruction);
+      if (!operations) throw new Error("This request is not an explicit supported terminal operation.");
+      const { terminalArtifactUpdateSchema } = await import("@shared/terminalArtifactOperations");
+      const update = terminalArtifactUpdateSchema.parse(body.update);
+      if (JSON.stringify(update.operations) !== JSON.stringify(operations)) throw new Error("Terminal operation does not match the explicit instruction.");
+      const result = await updateTerminalArtifact(ctx(req), chatId, update, new AbortController().signal);
+      await addProjectChatMessage(ctx(req), chatId, { role: "user", content: body.instruction });
+      await addProjectChatMessage(ctx(req), chatId, { role: "assistant", content: `Updated the existing terminal Artifact · v${result.version}. Its presentation settings changed; no financial calculation was claimed.`, metadata: { persistedArtifacts: [{ id: result.artifactId, version: result.version, kind: "screen" }] } });
+      res.json(result);
     } catch (error) { fail(res, error); }
   });
 

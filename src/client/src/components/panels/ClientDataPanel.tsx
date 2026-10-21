@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Upload, FileSpreadsheet, ChevronDown, ChevronRight, Trash2, ShieldCheck } from "lucide-react";
 
@@ -115,7 +116,7 @@ export default function ClientDataPanel() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<DatasetDetail | null>(null);
-  const [activeSheet, setActiveSheet] = useState(0);
+  const [activeSheet, setActiveSheet] = useTerminalArtifactState("ClientDataPanel.activeSheet", 0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {

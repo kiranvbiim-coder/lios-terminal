@@ -26,7 +26,7 @@ interface Props {
 }
 
 export default function ResidualIncomeTab({ symbol, curr, price, sharesOut, costOfEquity, termGrowth, bookValueOfEquity, forecastNetIncome, onResult }: Props) {
-  const ov = useOverridable<"payoutRatio">();
+  const ov = useOverridable<"payoutRatio">("ResidualIncomeTab.ov");
   const payoutRatio = ov.getValue("payoutRatio", 0); // % of net income paid out as dividends; 0 = full retention (clean surplus)
   const [advanced, setAdvanced] = useState<{ equityValue: number; residualIncomePv: number; terminalValuePv: number; receipt: AdvancedReceipt } | null>(null);
   const [advancedError, setAdvancedError] = useState<string | null>(null);

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BrainCircuit, Check, CirclePause, CirclePlay, GitBranch, ListRestart, Pencil, Play, RefreshCw, ShieldCheck, X } from "lucide-react";
@@ -46,14 +47,14 @@ function outputSummary(task: BrainTask) {
 
 export default function LimuriaBrainPanel({ symbol, role }: { symbol: string; role: string }) {
   const canAuthor = role === "internal_admin" || role === "internal_analyst";
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [view, setView] = useState<View>("graph");
-  const [question, setQuestion] = useState(`Should we invest in ${symbol || "AAPL"} over the next 12 months?`);
-  const [primaryEntity, setPrimaryEntity] = useState((symbol || "AAPL").toUpperCase());
+  const [selectedId, setSelectedId] = useTerminalArtifactState<number | null>("LimuriaBrainPanel.selectedId", null);
+  const [view, setView] = useTerminalArtifactState<View>("LimuriaBrainPanel.view", "graph");
+  const [question, setQuestion] = useTerminalArtifactState("LimuriaBrainPanel.question", `Should we invest in ${symbol || "AAPL"} over the next 12 months?`);
+  const [primaryEntity, setPrimaryEntity] = useTerminalArtifactState("LimuriaBrainPanel.primaryEntity", (symbol || "AAPL").toUpperCase());
   const [message, setMessage] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [editCriteria, setEditCriteria] = useState("");
-  const [editInput, setEditInput] = useState("");
+  const [editCriteria, setEditCriteria] = useTerminalArtifactState("LimuriaBrainPanel.editCriteria", "");
+  const [editInput, setEditInput] = useTerminalArtifactState("LimuriaBrainPanel.editInput", "");
 
   const { data: runs = [] } = useQuery<BrainRunSummary[]>({ queryKey: ["/api/brain/runs"] });
   useEffect(() => { if (!selectedId && runs[0]) setSelectedId(runs[0].id); }, [runs, selectedId]);

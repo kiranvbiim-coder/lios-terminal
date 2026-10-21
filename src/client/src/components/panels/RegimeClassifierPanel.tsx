@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useQuotes, useMarketSentiment, useNews } from "@/lib/useFinance";
@@ -60,7 +61,7 @@ const REGIME_FORECASTS_SCHEMA: JsonFieldSchema[] = [
 ];
 type HmmFit = { result: { currentStateProbs: number[] }; labels: string[] };
 function RegimeConditionedForecastRunner({ hmm }: { hmm: HmmFit | null }) {
-  const [regimeForecastsState, setRegimeForecastsState] = useState<Record<string, unknown>>(() => applySchemaDefaults(REGIME_FORECASTS_SCHEMA, {}));
+  const [regimeForecastsState, setRegimeForecastsState] = useTerminalArtifactState<Record<string, unknown>>("RegimeConditionedForecastRunner.regimeForecastsState", () => applySchemaDefaults(REGIME_FORECASTS_SCHEMA, {}));
   const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,9 +103,9 @@ const REGIME_BLEND_WEIGHTS_SCHEMA: JsonFieldSchema[] = [
   },
 ];
 export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
-  const [blendAssets, setBlendAssets] = useState("");
-  const [blendProbabilities, setBlendProbabilities] = useState("");
-  const [blendWeightsState, setBlendWeightsState] = useState<Record<string, unknown>>(() => applySchemaDefaults(REGIME_BLEND_WEIGHTS_SCHEMA, {}));
+  const [blendAssets, setBlendAssets] = useTerminalArtifactState("RegimeClassifierPanel.blendAssets", "");
+  const [blendProbabilities, setBlendProbabilities] = useTerminalArtifactState("RegimeClassifierPanel.blendProbabilities", "");
+  const [blendWeightsState, setBlendWeightsState] = useTerminalArtifactState<Record<string, unknown>>("RegimeClassifierPanel.blendWeightsState", () => applySchemaDefaults(REGIME_BLEND_WEIGHTS_SCHEMA, {}));
   const regimeBlend = useMutation({
     mutationFn: async () => {
       const assets = blendAssets.split(",").map((asset) => asset.trim().toUpperCase()).filter(Boolean);
@@ -118,8 +119,8 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
       return runAdvancedPortfolioRisk<RegimeBlendResult>("portfolio/regime-blend", { assets, regimeProbabilities: probabilities, regimeWeights: weights });
     },
   });
-  const [watchlist, setWatchlist] = useState<RegimeAsset[]>(DEFAULT_WATCHLIST);
-  const [watchInput, setWatchInput] = useState("");
+  const [watchlist, setWatchlist] = useTerminalArtifactState<RegimeAsset[]>("RegimeClassifierPanel.watchlist", DEFAULT_WATCHLIST);
+  const [watchInput, setWatchInput] = useTerminalArtifactState("RegimeClassifierPanel.watchInput", "");
   const ASSETS = useMemo(() => [...CORE_ASSETS, ...watchlist], [watchlist]);
 
   const addWatchAsset = () => {
@@ -192,7 +193,7 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
   // hand-tuned score heuristic above. States aren't pre-labeled; the fitted
   // state with the higher mean/lower variance is interpreted as "calm" and
   // the other as "stressed" after fitting.
-  const [hmmStates, setHmmStates] = useState<2 | 3>(2);
+  const [hmmStates, setHmmStates] = useTerminalArtifactState<2 | 3>("RegimeClassifierPanel.hmmStates", 2);
   const { data: spxHistory, isLoading: hmmLoading } = useQuery<OHLCVSeries>({
     queryKey: ["/api/finance/ohlcv", "^GSPC", "2Y", "1d"],
     queryFn: async () => {

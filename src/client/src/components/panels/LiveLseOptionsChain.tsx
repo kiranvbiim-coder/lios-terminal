@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { Save, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -25,12 +26,12 @@ function optionsPath(symbol: string, params: { page: number; limit: number; expi
 /** Real LSE chain browser. The theoretical options grid remains a separate panel. */
 export default function LiveLseOptionsChain({ symbol }: Props) {
   const { data: status } = useQuery<{ configured: boolean }>({ queryKey: ["/api/lse/status"], queryFn: async () => (await fetch("/api/lse/status")).json(), staleTime: 60_000 });
-  const [expiry, setExpiry] = useState("");
-  const [dte, setDte] = useState("45");
-  const [type, setType] = useState<ContractType>("all");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
-  const [fullRange, setFullRange] = useState(false);
+  const [expiry, setExpiry] = useTerminalArtifactState("LiveLseOptionsChain.expiry", "");
+  const [dte, setDte] = useTerminalArtifactState("LiveLseOptionsChain.dte", "45");
+  const [type, setType] = useTerminalArtifactState<ContractType>("LiveLseOptionsChain.type", "all");
+  const [page, setPage] = useTerminalArtifactState("LiveLseOptionsChain.page", 1);
+  const [limit, setLimit] = useTerminalArtifactState("LiveLseOptionsChain.limit", 50);
+  const [fullRange, setFullRange] = useTerminalArtifactState("LiveLseOptionsChain.fullRange", false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const currencySymbol = getCurrencySymbol(symbol);

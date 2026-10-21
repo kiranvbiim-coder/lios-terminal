@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "./terminalArtifactState";
 
 export type AdvancedRatesModel = {
   path: string;
@@ -83,14 +84,15 @@ export function ReceiptSummary({ receipt }: { receipt?: Receipt }) {
 
 export function AdvancedRatesDerivativesRunner({ modelPaths, title = "ADVANCED ANALYTICS" }: { modelPaths: string[]; title?: string }) {
   const models = useMemo(() => modelPaths.map((path) => ADVANCED_RATES_DERIVATIVES[path]).filter((model): model is AdvancedRatesModel => Boolean(model)), [modelPaths]);
-  const [path, setPath] = useState(models[0]?.path ?? "");
+  const terminal = useTerminalArtifactContext();
+  const [path, setPath] = useTerminalArtifactState(`advancedRates.${title}.path`, models[0]?.path ?? "");
   const selected = models.find((model) => model.path === path) ?? models[0];
-  const [text, setText] = useState(() => selected ? JSON.stringify(selected.parameters, null, 2) : "{}");
+  const [text, setText] = useTerminalArtifactState(`advancedRates.${title}.${path}.parameters`, () => selected ? JSON.stringify(selected.parameters, null, 2) : "{}");
   const [result, setResult] = useState<AdvancedResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  useEffect(() => { if (selected) { setText(JSON.stringify(selected.parameters, null, 2)); setResult(null); setError(null); } }, [selected?.path]);
+  useEffect(() => { if (selected) { if (!terminal) setText(JSON.stringify(selected.parameters, null, 2)); setResult(null); setError(null); } }, [selected?.path]);
   if (!selected) return null;
   const run = async () => {
     setError(null); setResult(null);

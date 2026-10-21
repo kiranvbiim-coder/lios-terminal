@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Database, Search, Plus, X, Sigma, AlertTriangle, CheckCircle2, FileInput, Layers3 } from "lucide-react";
@@ -43,22 +44,22 @@ function statusClass(status?: string) {
 function categoryLabel(metric: FinancialMetricDefinition) { return metric.category.replace(/-/g, " ").toUpperCase(); }
 
 export default function UniversalFinanceDataPanel({ symbol: initialSymbol }: Props) {
-  const [symbol, setSymbol] = useState((initialSymbol || "AAPL").toUpperCase());
-  const [query, setQuery] = useState("EV/EBITDA");
-  const [selectedId, setSelectedId] = useState("evEbitda");
+  const [symbol, setSymbol] = useTerminalArtifactState("UniversalFinanceDataPanel.symbol", (initialSymbol || "AAPL").toUpperCase());
+  const [query, setQuery] = useTerminalArtifactState("UniversalFinanceDataPanel.query", "EV/EBITDA");
+  const [selectedId, setSelectedId] = useTerminalArtifactState("UniversalFinanceDataPanel.selectedId", "evEbitda");
   const [manualVersion, setManualVersion] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualValue, setManualValue] = useState("");
-  const [manualPeriod, setManualPeriod] = useState("CURRENT");
-  const [manualAsOf, setManualAsOf] = useState(() => new Date().toISOString().slice(0, 10));
-  const [manualSource, setManualSource] = useState("");
-  const [manualSourceUrl, setManualSourceUrl] = useState("");
-  const [manualNote, setManualNote] = useState("");
+  const [manualValue, setManualValue] = useTerminalArtifactState("UniversalFinanceDataPanel.manualValue", "");
+  const [manualPeriod, setManualPeriod] = useTerminalArtifactState("UniversalFinanceDataPanel.manualPeriod", "CURRENT");
+  const [manualAsOf, setManualAsOf] = useTerminalArtifactState("UniversalFinanceDataPanel.manualAsOf", () => new Date().toISOString().slice(0, 10));
+  const [manualSource, setManualSource] = useTerminalArtifactState("UniversalFinanceDataPanel.manualSource", "");
+  const [manualSourceUrl, setManualSourceUrl] = useTerminalArtifactState("UniversalFinanceDataPanel.manualSourceUrl", "");
+  const [manualNote, setManualNote] = useTerminalArtifactState("UniversalFinanceDataPanel.manualNote", "");
   const [manualSync, setManualSync] = useState<"idle" | "synced" | "local">("idle");
   const [customOpen, setCustomOpen] = useState(false);
-  const [customLabel, setCustomLabel] = useState("");
-  const [customFormula, setCustomFormula] = useState("");
-  const [customUnit, setCustomUnit] = useState<FinancialMetricUnit>("multiple");
+  const [customLabel, setCustomLabel] = useTerminalArtifactState("UniversalFinanceDataPanel.customLabel", "");
+  const [customFormula, setCustomFormula] = useTerminalArtifactState("UniversalFinanceDataPanel.customFormula", "");
+  const [customUnit, setCustomUnit] = useTerminalArtifactState<FinancialMetricUnit>("UniversalFinanceDataPanel.customUnit", "multiple");
   const [activeScenario, setActiveScenario] = useState<TerminalScenario | null>(() => getActiveScenario());
 
   const company = useLseCompany(symbol);

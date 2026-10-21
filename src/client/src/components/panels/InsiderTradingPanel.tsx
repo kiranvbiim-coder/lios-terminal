@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UserRoundSearch } from "lucide-react";
@@ -33,8 +34,8 @@ function fmtMoney(v: number | null | undefined, curr: string) {
 
 function LseView({ onSymbol }: { onSymbol: (s: string) => void }) {
   const { data: status } = useLseStatus();
-  const [symbol, setSymbol] = useState("");
-  const [type, setType] = useState("");
+  const [symbol, setSymbol] = useTerminalArtifactState("LseView.symbol", "");
+  const [type, setType] = useTerminalArtifactState("LseView.type", "");
   const { data: trades, isLoading } = useLseInsiderTrades(symbol || undefined, type || undefined);
   const configured = status?.configured ?? false;
 
@@ -106,11 +107,11 @@ function LseView({ onSymbol }: { onSymbol: (s: string) => void }) {
 }
 
 function EdgarView() {
-  const [ticker, setTicker] = useState("AAPL");
-  const [input, setInput] = useState("AAPL");
-  const [page, setPage] = useState(1);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [ticker, setTicker] = useTerminalArtifactState("EdgarView.ticker", "AAPL");
+  const [input, setInput] = useTerminalArtifactState("EdgarView.input", "AAPL");
+  const [page, setPage] = useTerminalArtifactState("EdgarView.page", 1);
+  const [from, setFrom] = useTerminalArtifactState("EdgarView.from", "");
+  const [to, setTo] = useTerminalArtifactState("EdgarView.to", "");
   const edgarQuery = useQuery<EdgarInsiderPage | EdgarInsiderTransaction[]>({
     queryKey: ["/api/edgar/insiders", ticker, page, from, to],
     queryFn: async () => {

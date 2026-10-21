@@ -1,4 +1,13 @@
-import { useConversationArtifactView } from "@/lib/conversationArtifactView";
+import { ChatTerminalControl, type ChatTerminalRenderer } from "./ChatTerminalSurface";
+import TerminalScreenArtifact from "./TerminalScreenArtifact";
+import { initialTerminalScreenState, readTerminalScreenState } from "@shared/terminalArtifact";
+import { captureChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
+import { useArtifact, createArtifactVersion, type ArtifactDetail } from "@/lib/useArtifacts";
+import { getTerminalCapability } from "@/lib/terminalCatalog";
+import { apiRequest } from "@/lib/queryClient";
+import { parseTerminalArtifactInstruction, applyTerminalArtifactOperations } from "@shared/terminalArtifactOperations";
+import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalContext } from "@/lib/chatTerminalContext";
+import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
 import ChatSourcesControl from "./ChatSourcesControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
@@ -169,8 +178,10 @@ interface Props {
   activeView: ViewMode;
   activeSymbol?: string;
   workspaceAdapter: WorkspaceAdapter;
-  onOpenWorkbench: (context?: ArtifactWorkbenchContext) => void;
+  onOpenWorkbench: (context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => void;
   workbenchReturn?: { context: ArtifactWorkbenchContext; request: number; prompt?: string } | null;
+  renderTerminalPanel?: ChatTerminalRenderer;
+  chatWorkbenchReturn?: { origin: ChatWorkbenchOrigin; request: number } | null;
   onOpenEnvironment: () => void;
   account: { name: string; email?: string };
   onLogout: () => void;
@@ -293,14 +304,15 @@ function NavItem({
 
 export default function ProjectExperienceShell({
   audience,
-  activeView,
-  activeSymbol,
+  activeView: workbenchView,
+  activeSymbol: workbenchSymbol,
   workspaceAdapter,
   onOpenWorkbench: navigateWorkbench, workbenchReturn,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
   onOpenCommand,
+  renderTerminalPanel, chatWorkbenchReturn,
 }: Props) {
   const [lifecycleRequest, setLifecycleRequest] = useState<LifecycleRequest | null>(null);
   const lifecycleTrigger = useRef<HTMLElement | null>(null);
@@ -410,16 +422,66 @@ export default function ProjectExperienceShell({
   const openedChatOwnerRef = useRef<{ chatId: number; ownerUserId: number } | null>(null);
   const artifactOwnerId = chatMode === "temporary" ? undefined : selection.projectId ? projectsQuery.data?.find(project => project.id === selection.projectId)?.ownerUserId : [...(quickChatsQuery.data ?? []), ...(archivedQuickChatsQuery.data ?? [])].find(chat => chat.id === selection.chatId)?.ownerUserId ?? (openedChatOwnerRef.current?.chatId === selection.chatId ? openedChatOwnerRef.current.ownerUserId : undefined);
   const [conversationArtifactRef, setConversationArtifactRef, artifactFocusMode, setArtifactFocusMode, restoredArtifactView, artifactViewVersion, setArtifactViewVersion] = useConversationArtifactView(artifactOwnerId, selection.projectId, chatMode === "temporary" ? null : selection.chatId);
+  const terminalSelectionRef = useRef({ chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion });
+  terminalSelectionRef.current = { chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion };
   const artifactDraftDirtyRef = useRef(false);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
+  const terminalDetail = useArtifact(chatMode === "temporary" ? null : conversationArtifactRef, artifactViewVersion);
+  const retainedScreen = terminalDetail.data?.version.content.kind === "screen" && readTerminalScreenState(terminalDetail.data.version.content.state) ? terminalDetail.data.version.content : null;
+  const selectedTerminalScope = retainedScreen ? readTerminalScreenState(retainedScreen.state)?.sourceScope : undefined;
+  const [temporaryTerminal, setTemporaryTerminal] = useState<Extract<import("@shared/artifactContracts").ArtifactContent, {kind:"screen"}> | null>(null);
+  const terminalContext: ChatTerminalContext | null = chatMode === "temporary"
+    ? temporaryTerminal ? { view: temporaryTerminal.view as ViewMode, symbol: temporaryTerminal.symbol } : null
+    : retainedScreen ? { view: retainedScreen.view as ViewMode, symbol: retainedScreen.symbol } : null;
+  const activeView = terminalContext?.view ?? workbenchView;
+  const activeSymbol = terminalContext ? terminalContext.symbol ?? undefined : workbenchSymbol;
+  const terminalOpeningRef = useRef(false);
+  const openTerminalPanel = async (context: ChatTerminalContext, message?: string) => {
+    if (artifactDraftDirtyRef.current || terminalOpeningRef.current) { setLifecycleNotice("Wait for analytical state to finish saving before switching terminal tools."); return false; }
+    const capability = chatTerminalCapabilities(audience).find(item => item.view === context.view);
+    if (!capability) { setLifecycleNotice("This terminal tool is not available for this account."); return false; }
+    const selectedSymbol = capability.symbolAware ? context.symbol : null;
+    const state = { ...initialTerminalScreenState(selectedSymbol, sourceScope), stockTape: context.stockTape ?? false, macroTape: context.macroTape ?? false };
+    const screen = { kind: "screen" as const, view: context.view, symbol: selectedSymbol, state: { terminal: state } };
+    if (chatMode === "temporary") { setTemporaryTerminal(screen); setArtifactFocusMode(false); return true; }
+    terminalOpeningRef.current = true; setBusy(true);
+    try {
+      let chatId = selection.chatId;
+      let createdHere = false;
+      if (!chatId) {
+        const created = chatMode === "project" && selection.projectId ? await createProjectChat(selection.projectId) : await createQuickChat();
+        chatId = created.id; openedChatOwnerRef.current = { chatId, ownerUserId: created.ownerUserId };
+        createdHere = true;
+        await openChat(created, true);
+      }
+      const title = `${getTerminalCapability(context.view).label}${selectedSymbol ? ` · ${selectedSymbol}` : ""}`;
+      const result = await (await apiRequest("POST", `/api/chats/${chatId}/artifacts/open-terminal`, { requestId: crypto.randomUUID(), view: context.view, symbol: selectedSymbol, title, state, message })).json() as ArtifactDetail;
+      if (terminalSelectionRef.current.chatId !== chatId && !(createdHere && terminalSelectionRef.current.chatId === null)) { setLifecycleNotice("The terminal view was saved in its originating Chat. Reopen that Chat to continue."); return false; }
+      rememberConversationArtifactView(result.artifact.ownerUserId, result.artifact.projectId, chatId, { artifactId: result.artifact.id, revision: result.version.version, focus: false });
+      if (terminalSelectionRef.current.chatId === chatId) { terminalSelectionRef.current.setArtifact(result.artifact.id); terminalSelectionRef.current.setVersion(result.version.version); }
+      setArtifactFocusMode(false);
+      invalidate(result.artifact.projectId, chatId); invalidateArtifacts(result.artifact.projectId, result.artifact.id);
+      setSection("conversation"); setProjectHomeRequested(false);
+      return true;
+    } catch (cause) { setLifecycleNotice(cause instanceof Error ? cause.message : "Terminal view could not be retained. Your prompt remains available."); return false; }
+    finally { terminalOpeningRef.current = false; setBusy(false); }
+  };
+  const handledChatReturn = useRef<number | null>(null);
+  useEffect(() => {
+    if (!chatWorkbenchReturn || handledChatReturn.current === chatWorkbenchReturn.request) return;
+    const { origin } = chatWorkbenchReturn;
+    if (origin.mode !== "temporary" && (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId)) { selection.setProjectId(origin.projectId); selection.setChatId(origin.chatId); return; }
+    handledChatReturn.current = chatWorkbenchReturn.request;
+    setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
+  }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
   const onOpenWorkbench = () => {
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
     if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
       const displayed = displayedArtifactRef.current;
       if (displayed?.artifactId !== conversationArtifactRef || displayed.requestedVersion !== artifactViewVersion || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
       navigateWorkbench({ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version });
-    } else navigateWorkbench();
+    } else navigateWorkbench(undefined, captureChatWorkbenchOrigin(chatMode, selection.projectId, selection.chatId));
   };
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
@@ -576,8 +638,8 @@ export default function ProjectExperienceShell({
 
   useEffect(() => {
     const scopedProjectId = chatMode === "project" ? selection.projectId : null;
-    setSourceScope(loadComposerSourceScope(scopedProjectId));
-  }, [chatMode, selection.projectId]);
+    setSourceScope(selectedTerminalScope ?? loadComposerSourceScope(scopedProjectId));
+  }, [chatMode, selection.projectId, conversationArtifactRef, selectedTerminalScope]);
 
   useEffect(() => {
     if (followLatestRef.current) {
@@ -835,6 +897,7 @@ export default function ProjectExperienceShell({
 
   const startTemporary = async () => {
     if (!(await confirmConversationSwitch())) return;
+    setTemporaryTerminal(null);
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false);
     selection.setChatId(null);
     setChatMode("temporary");
@@ -853,7 +916,7 @@ export default function ProjectExperienceShell({
     projectId: input.projectId ?? selection.projectId,
     sessionId: input.sessionId ?? null,
     conversationId: input.conversationId ?? selection.chatId,
-    activeObjectId: conversationArtifactRef ?? (activeSymbol ? `security:${activeSymbol}` : `panel:${activeView}`),
+    activeObjectId: !terminalContext && conversationArtifactRef ? conversationArtifactRef : (activeSymbol ? `security:${activeSymbol}` : `panel:${activeView}`),
   });
 
   const applyWorkspaceAction = async (
@@ -862,6 +925,11 @@ export default function ProjectExperienceShell({
   ): Promise<void> => {
     const context = currentWorkspaceRuntimeContext();
     if (action.type === "open-panel") {
+      const terminalCapability = renderTerminalPanel && chatTerminalCapabilities(audience).find(item => item.view === action.view);
+      if (terminalCapability) {
+        await openTerminalPanel({ view: terminalCapability.view, symbol: action.symbol ?? terminalContext?.symbol ?? null });
+        return;
+      }
       await workspaceAdapter.openPanel({
         panelId: action.view,
         symbol: action.symbol ?? null,
@@ -1038,6 +1106,28 @@ export default function ProjectExperienceShell({
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
+    if (artifactDraftDirtyRef.current) { setLifecycleNotice("Wait for the current analytical state to save, or reset its local edits before sending another instruction."); return; }
+    const terminalOperations = parseTerminalArtifactInstruction(message);
+    if (terminalOperations && terminalContext) {
+      if (artifactDraftDirtyRef.current) { setLifecycleNotice("Wait for analytical state to finish saving, then apply this instruction."); return; }
+      try {
+        if (chatMode === "temporary" && temporaryTerminal) {
+          const state = readTerminalScreenState(temporaryTerminal.state);
+          if (!state) throw new Error("Temporary terminal state is unavailable.");
+          setTemporaryTerminal({ ...temporaryTerminal, state: { ...temporaryTerminal.state, terminal: applyTerminalArtifactOperations(temporaryTerminal.view, state, terminalOperations) } });
+        } else {
+          if (!selection.chatId || !terminalDetail.data) throw new Error("Load the selected saved terminal revision first.");
+          const detail = terminalDetail.data;
+          const result = await (await apiRequest("POST", `/api/chats/${selection.chatId}/artifacts/terminal-operation`, { instruction: message, update: { artifactId: detail.artifact.id, baseVersion: detail.version.version, baseHash: detail.version.contentHash, operations: terminalOperations } })).json() as { version: number };
+          setArtifactViewVersion(result.version);
+          invalidate(detail.artifact.projectId, selection.chatId); invalidateArtifacts(detail.artifact.projectId, detail.artifact.id);
+        }
+        setInput("");
+      } catch (cause) { setLifecycleNotice(cause instanceof Error ? cause.message : "Terminal operation was not applied."); }
+      return;
+    }
+    const terminalRequest = !hasStagedAttachments && !override?.approval && !override?.continuationOf && renderTerminalPanel ? parseChatTerminalRequest(message, terminalContext?.symbol ?? null, audience) : null;
+    if (terminalRequest) { if (await openTerminalPanel(terminalRequest, message)) setInput(""); return; }
     if (sourceScope === "files" && !hasStagedAttachments) {
       setLifecycleNotice("Files scope requires at least one explicitly attached Project file.");
       return;
@@ -1077,7 +1167,8 @@ export default function ProjectExperienceShell({
     const context = {
       symbol: activeSymbol,
       view: activeView,
-      activeObjectRefs: conversationArtifactRef ? [conversationArtifactRef] : [activeSymbol ? `security:${activeSymbol}` : `panel:${activeView}`],
+      activeObjectRefs: conversationArtifactRef && chatMode !== "temporary" ? [conversationArtifactRef] : [activeSymbol ? `security:${activeSymbol}` : `panel:${activeView}`],
+      ...(retainedScreen && terminalDetail.data ? { terminalArtifact: { artifactId: terminalDetail.data.artifact.id, version: terminalDetail.data.version.version, contentHash: terminalDetail.data.version.contentHash } } : {}),
       personalFinance: chatMode === "project" && pendingPersonalFinance ? pendingPersonalFinance : undefined,
       selection: selectedTextContext && policy.allowSelection
         ? {
@@ -1364,9 +1455,24 @@ export default function ProjectExperienceShell({
     }
   };
 
-  const updateSourceScope = (next: ConversationSourceScope) => {
+  const updateSourceScope = async (next: ConversationSourceScope) => {
+    if (artifactDraftDirtyRef.current) { setLifecycleNotice("Wait for analytical state to save before changing its source posture."); return; }
+    if (retainedScreen && terminalDetail.data) {
+      const state = readTerminalScreenState(retainedScreen.state);
+      if (!state) return;
+      setBusy(true);
+      try {
+        const version = await createArtifactVersion(terminalDetail.data.artifact.id, { baseVersion: terminalDetail.data.version.version, content: { ...retainedScreen, state: { ...retainedScreen.state, terminal: { ...state, sourceScope: next } } } });
+        setArtifactViewVersion(version.version); invalidateArtifacts(terminalDetail.data.artifact.projectId, terminalDetail.data.artifact.id);
+      } catch (cause) { setLifecycleNotice(cause instanceof Error ? cause.message : "Source posture was not changed."); return; }
+      finally { setBusy(false); }
+    }
+    if (chatMode === "temporary" && temporaryTerminal) {
+      const state = readTerminalScreenState(temporaryTerminal.state);
+      if (state) setTemporaryTerminal({ ...temporaryTerminal, state: { ...temporaryTerminal.state, terminal: { ...state, sourceScope: next } } });
+    }
     setSourceScope(next);
-    saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
+    if (chatMode !== "temporary") saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
     recordP1ShellEvent("source_scope_change", next);
   };
 
@@ -1792,7 +1898,7 @@ export default function ProjectExperienceShell({
             }}
           />
         ) : (
-          <div className="lios-project-chat-surface flex h-full min-h-0 min-w-0">
+          <div className="lios-project-chat-surface relative flex h-full min-h-0 min-w-0">
             <div className={artifactFocusMode && conversationArtifactRef ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
             <header className="lios-conversation-header flex h-11 shrink-0 items-center gap-2 border-b border-border/55 px-4">
               <div className="min-w-0 flex-1 truncate font-ui text-[14px] font-semibold text-foreground">
@@ -2180,6 +2286,7 @@ export default function ProjectExperienceShell({
                 <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
                   <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
+                  {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
@@ -2286,6 +2393,7 @@ export default function ProjectExperienceShell({
               </div>
             </div>
             </div>
+            {chatMode === "temporary" && temporaryTerminal && <aside className="lios-artifact-sidecar w-[48%] overflow-auto border-l p-3"><button type="button" onClick={() => setTemporaryTerminal(null)}>Close terminal Artifact</button><TerminalScreenArtifact key={temporaryTerminal.view} content={temporaryTerminal} revision={1} onSave={async content => { if (content.kind === "screen") setTemporaryTerminal(content); }} ephemeral/></aside>}
             {conversationArtifactRef && chatMode !== "temporary" && selection.chatId && (
               <ConversationArtifactSidecar focus={artifactFocusMode} onExitFocus={() => setArtifactFocusMode(false)}
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}

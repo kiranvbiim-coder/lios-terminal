@@ -78,7 +78,7 @@ export default function ReverseDcfTab({
   const safeDa = daPercentStartingPoint ?? 0;
   const safeCapex = capexPercentStartingPoint ?? 0;
   const safeNwc = nwcChangePercentStartingPoint ?? 0;
-  const ov = useOverridable<"fcfGrowthRate">();
+  const ov = useOverridable<"fcfGrowthRate">("ReverseDcfTab.ov");
   const fcfGrowthRatePct = ov.getValue("fcfGrowthRate", revenueGrowthStartingPoint ?? 0);
   const [advanced, setAdvanced] = useState<{ impliedRevenueGrowthPct?: number; impliedEbitMarginPct?: number; repricedEquityValue: number; absoluteError: number; receipt: AdvancedReceipt } | null>(null);
   const [advancedError, setAdvancedError] = useState<string | null>(null);

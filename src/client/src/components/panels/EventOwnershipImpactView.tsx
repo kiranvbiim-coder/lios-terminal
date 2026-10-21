@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { ArrowRight, CalendarDays, ExternalLink, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -88,12 +89,12 @@ function EventRow({ row }: { row: EventOwnershipRecord }) {
 
 export default function EventOwnershipImpactView({ symbol, onSymbol, onNav, compact = false }: Props) {
   const [ticker, setTicker] = useState((symbol || "").toUpperCase());
-  const [input, setInput] = useState((symbol || "").toUpperCase());
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [kind, setKind] = useState<"all" | EventOwnershipRecord["kind"]>("all");
-  const [page, setPage] = useState(1);
-  const [cotCode, setCotCode] = useState("");
+  const [input, setInput] = useTerminalArtifactState("EventOwnershipImpactView.input", (symbol || "").toUpperCase());
+  const [from, setFrom] = useTerminalArtifactState("EventOwnershipImpactView.from", "");
+  const [to, setTo] = useTerminalArtifactState("EventOwnershipImpactView.to", "");
+  const [kind, setKind] = useTerminalArtifactState<"all" | EventOwnershipRecord["kind"]>("EventOwnershipImpactView.kind", "all");
+  const [page, setPage] = useTerminalArtifactState("EventOwnershipImpactView.page", 1);
+  const [cotCode, setCotCode] = useTerminalArtifactState("EventOwnershipImpactView.cotCode", "");
   const lseStatus = useLseStatus();
   const lseInsiders = useLseInsiderTrades(ticker || undefined);
   const dividends = useLseDividends(ticker);

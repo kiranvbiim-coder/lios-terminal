@@ -216,6 +216,23 @@ export async function addProjectChatMessage(
   return row;
 }
 
+/** Retain a navigation request and its canonical Artifact card atomically under the existing Chat owner. */
+export async function retainTerminalNavigationMessages(ctx: TenantContext, chatId: number, requestId: string, input: {
+  user: string; assistant: string; artifactRef: { id: string; version: number; title: string; kind: string };
+}): Promise<void> {
+  await getProjectChat(ctx, chatId);
+  await getDb().transaction(async tx => {
+    // Updating the owned Chat acquires its row lock before inspecting retry markers.
+    const now = new Date();
+    const owned = await tx.update(projectChats).set({ lastActivityAt: now, updatedAt: now }).where(ownedChatFilter(ctx, chatId)).returning();
+    if (!owned.length) throw new ProjectChatAccessDeniedError();
+    const messages = await tx.select().from(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+    const existing = messages.filter(message => message.metadata.terminalNavigationRequestId === requestId);
+    if (!existing.some(message => message.role === "user")) await tx.insert(projectChatMessages).values({ chatId, role: "user", content: input.user, metadata: { terminalNavigationRequestId: requestId } });
+    if (!existing.some(message => message.role === "assistant")) await tx.insert(projectChatMessages).values({ chatId, role: "assistant", content: input.assistant, metadata: { terminalNavigationRequestId: requestId, persistedArtifacts: [input.artifactRef] } });
+  });
+}
+
 export async function clearProjectChatMessages(ctx: TenantContext, chatId: number): Promise<void> {
   await getProjectChat(ctx, chatId);
   await getDb().delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));

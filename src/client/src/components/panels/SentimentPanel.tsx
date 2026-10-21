@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useMarketSentiment, useNews, useQuotes, useMarketGainers, useMarketLosers } from "@/lib/useFinance";
 import { Activity, TrendingUp, TrendingDown, Minus, Plus, X } from "lucide-react";
@@ -86,8 +87,8 @@ function loadHistory(): SentimentObservation[] {
 }
 
 export default function SentimentPanel({ onSymbol, onNav }: Props) {
-  const [assets, setAssets] = useState<string[]>(DEFAULT_SENTIMENT_ASSETS);
-  const [assetInput, setAssetInput] = useState("");
+  const [assets, setAssets] = useTerminalArtifactState<string[]>("SentimentPanel.assets", DEFAULT_SENTIMENT_ASSETS);
+  const [assetInput, setAssetInput] = useTerminalArtifactState("SentimentPanel.assetInput", "");
   const [history, setHistory] = useState<SentimentObservation[]>(loadHistory);
   const { data: sentiment } = useMarketSentiment();
   const { data: news = [] } = useNews(undefined, "market");

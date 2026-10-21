@@ -1,4 +1,5 @@
-import { useState, useMemo, Fragment } from "react";
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { FileSpreadsheet, X, Upload } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -53,11 +54,17 @@ function formatMetric(metric: FinancialMetric, curr: string): string {
 export default function FinancialStatementsPanel({ symbol: initialSymbol }: Props) {
   const { data: status } = useLseStatus();
   const queryClient = useQueryClient();
-  const [symbol, setSymbol] = useState(initialSymbol ?? "AAPL");
-  const [statement, setStatement] = useState<Statement>("balance");
-  const [viewMode, setViewMode] = useState<ViewMode>("values");
-  const [period, setPeriod] = useState<"FY" | "Q1" | "Q2" | "Q3" | "Q4">("FY");
-  const [depth, setDepth] = useState<number>(5);
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol ?? "AAPL");
+  const [symbolDraft, setSymbolDraft] = useState(symbol);
+  useEffect(() => setSymbolDraft(symbol), [symbol]);
+  const commitSymbol = () => {
+    const next = symbolDraft.trim().toUpperCase();
+    if (/^[A-Z^][A-Z0-9.^=_-]{0,24}$/.test(next) && next !== symbol) setSymbol(next);
+  };
+  const [statement, setStatement] = useTerminalArtifactState<Statement>("FinancialStatementsPanel.statement", "balance");
+  const [viewMode, setViewMode] = useTerminalArtifactState<ViewMode>("FinancialStatementsPanel.viewMode", "values");
+  const [period, setPeriod] = useTerminalArtifactState<"FY" | "Q1" | "Q2" | "Q3" | "Q4">("FinancialStatementsPanel.period", "FY");
+  const [depth, setDepth] = useTerminalArtifactState<number>("FinancialStatementsPanel.depth", 5);
   const [showImportModal, setShowImportModal] = useState(false);
   const configured = status?.configured ?? false;
   const curr = getCurrencySymbol(symbol);
@@ -147,9 +154,9 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
   // whole session regardless of which ticker is being viewed, since a
   // formula like "Adjusted EBITDA = EBITDA - Stock Comp" is often reusable
   // across companies, not tied to one.
-  const balanceCustom = useCustomLineItems();
-  const incomeCustom = useCustomLineItems();
-  const cashflowCustom = useCustomLineItems();
+  const balanceCustom = useCustomLineItems("FinancialStatementsPanel.balanceCustom");
+  const incomeCustom = useCustomLineItems("FinancialStatementsPanel.incomeCustom");
+  const cashflowCustom = useCustomLineItems("FinancialStatementsPanel.cashflowCustom");
   const customState = statement === "balance" ? balanceCustom : statement === "income" ? incomeCustom : cashflowCustom;
   const customItems = customState.items;
 
@@ -229,8 +236,11 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
         <FileSpreadsheet className="w-4 h-4 text-[hsl(38,95%,55%)]" />
         <span className="panel-label">FINANCIAL STATEMENTS</span>
         <input
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          aria-label="Financial statements stock symbol"
+          value={symbolDraft}
+          onChange={(e) => setSymbolDraft(e.target.value.toUpperCase())}
+          onBlur={commitSymbol}
+          onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commitSymbol(); } }}
           placeholder="TICKER..."
           className="ml-2 bg-transparent border border-border px-2 py-1 font-terminal text-[9px] text-foreground w-24 focus:outline-none focus:border-[hsl(38,95%,50%)]/40"
         />

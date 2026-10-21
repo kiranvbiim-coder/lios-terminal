@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
+import { useState, useMemo, useEffect } from "react";
 import { Building2 } from "lucide-react";
 import { useLseStatus, useLseCompany, useLseFinancials, useLseDividends, useLseSplits } from "@/lib/useLse";
 import { getCurrencySymbol } from "@/lib/finance";
@@ -43,7 +44,10 @@ function formatAnalysisMetric(metric: FinancialMetric | undefined, curr: string)
 export default function CompanyFundamentalsPanel({ symbol: initialSymbol }: Props) {
   const isClient = useAudience() === "client";
   const { data: status } = useLseStatus();
-  const [symbol, setSymbol] = useState(initialSymbol ?? "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol ?? "AAPL");
+  const [symbolDraft, setSymbolDraft] = useState(symbol);
+  useEffect(() => setSymbolDraft(symbol), [symbol]);
+  const commitSymbol = () => { const next = symbolDraft.trim().toUpperCase(); if (/^[A-Z^][A-Z0-9.^=_-]{0,24}$/.test(next) && next !== symbol) setSymbol(next); };
   const configured = status?.configured ?? false;
   const curr = getCurrencySymbol(symbol);
 
@@ -98,8 +102,11 @@ export default function CompanyFundamentalsPanel({ symbol: initialSymbol }: Prop
         <span className="panel-label">COMPANY FUNDAMENTALS &amp; FILINGS</span>
         {!isClient && <ProvenanceBadge compact details={{ kind: "source", source: "London Strategic Edge data connector", method: configured ? "Provider-backed company profile, statements, dividends and splits" : "Source readiness only — financial values withheld until provider is configured", limitations: configured ? undefined : ["No placeholder fundamentals are generated", "Provider credentials are not embedded in the client"] }} />}
         <input
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          aria-label="Company fundamentals stock symbol"
+          value={symbolDraft}
+          onChange={(e) => setSymbolDraft(e.target.value.toUpperCase())}
+          onBlur={commitSymbol}
+          onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commitSymbol(); } }}
           placeholder="TICKER..."
           className="ml-4 bg-transparent border border-border px-2 py-1 font-terminal text-[9px] text-foreground w-28 focus:outline-none focus:border-[hsl(38,95%,50%)]/40"
         />

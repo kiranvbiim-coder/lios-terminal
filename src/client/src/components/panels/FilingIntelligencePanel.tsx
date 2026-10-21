@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { Scan, FileText, ExternalLink, Sliders, AlertTriangle, Search } from "lucide-react";
 import { useOHLCV, useQuote } from "@/lib/useFinance";
@@ -33,10 +34,10 @@ const FORM_LABELS: Record<string, string> = {
 // linked filing. Text is never fabricated or scraped automatically; only
 // the accession/date binding is automatic.
 function FilingDiffRunner({ filings }: { filings: EdgarFilingSummary[] | undefined }) {
-  const [oldAccession, setOldAccession] = useState("");
-  const [newAccession, setNewAccession] = useState("");
-  const [oldText, setOldText] = useState("");
-  const [newText, setNewText] = useState("");
+  const [oldAccession, setOldAccession] = useTerminalArtifactState("FilingDiffRunner.oldAccession", "");
+  const [newAccession, setNewAccession] = useTerminalArtifactState("FilingDiffRunner.newAccession", "");
+  const [oldText, setOldText] = useTerminalArtifactState("FilingDiffRunner.oldText", "");
+  const [newText, setNewText] = useTerminalArtifactState("FilingDiffRunner.newText", "");
   const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,10 +99,10 @@ function alignedDailyReturnsPct(bars: OHLCVBar[] | undefined): Map<string, numbe
 // inferred from a headline.
 function EventStudyRunner({ filings, assetBars, symbol }: { filings: EdgarFilingSummary[] | undefined; assetBars: OHLCVBar[] | undefined; symbol: string }) {
   const { data: marketData } = useOHLCV("^GSPC", "1Y", "1d");
-  const [eventAccession, setEventAccession] = useState("");
-  const [estimationWindow, setEstimationWindow] = useState("60");
-  const [eventWindowBefore, setEventWindowBefore] = useState("5");
-  const [eventWindowAfter, setEventWindowAfter] = useState("5");
+  const [eventAccession, setEventAccession] = useTerminalArtifactState("EventStudyRunner.eventAccession", "");
+  const [estimationWindow, setEstimationWindow] = useTerminalArtifactState("EventStudyRunner.estimationWindow", "60");
+  const [eventWindowBefore, setEventWindowBefore] = useTerminalArtifactState("EventStudyRunner.eventWindowBefore", "5");
+  const [eventWindowAfter, setEventWindowAfter] = useTerminalArtifactState("EventStudyRunner.eventWindowAfter", "5");
   const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -159,12 +160,12 @@ function EventStudyRunner({ filings, assetBars, symbol }: { filings: EdgarFiling
 }
 
 export default function FilingIntelligencePanel({ symbol, onSymbol }: Props) {
-  const [activeSegment, setActiveSegment] = useState<"filings" | "technical" | "search" | "diff" | "event">("filings");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchArmed, setSearchArmed] = useState(false);
-  const [searchOffset, setSearchOffset] = useState(0);
-  const [searchFrom, setSearchFrom] = useState("");
-  const [searchTo, setSearchTo] = useState("");
+  const [activeSegment, setActiveSegment] = useTerminalArtifactState<"filings" | "technical" | "search" | "diff" | "event">("FilingIntelligencePanel.activeSegment", "filings");
+  const [searchQuery, setSearchQuery] = useTerminalArtifactState("FilingIntelligencePanel.searchQuery", "");
+  const [searchArmed, setSearchArmed] = useTerminalArtifactState("FilingIntelligencePanel.searchArmed", false);
+  const [searchOffset, setSearchOffset] = useTerminalArtifactState("FilingIntelligencePanel.searchOffset", 0);
+  const [searchFrom, setSearchFrom] = useTerminalArtifactState("FilingIntelligencePanel.searchFrom", "");
+  const [searchTo, setSearchTo] = useTerminalArtifactState("FilingIntelligencePanel.searchTo", "");
   const { data: searchResults, isFetching: isSearchFetching } = useSecFilingSearch(
     searchQuery,
     symbol,

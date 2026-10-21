@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { useTerminalArtifactState } from "./terminalArtifactState";
 
 // Shared state management for "live data, but every field is yours to
 // override" worksheets (the DCF worksheet / WACC builder pattern). Tracks
@@ -11,8 +12,8 @@ import { useCallback, useState } from "react";
 //   const revenue = ov.getValue("revenue", liveRevenue);
 //   <EditableValue value={revenue} isOverridden={ov.isOverridden("revenue")}
 //     onChange={(v) => ov.setOverride("revenue", v)} onReset={() => ov.resetOverride("revenue")} />
-export function useOverridable<K extends string>() {
-  const [overrides, setOverrides] = useState<Partial<Record<K, number>>>({});
+export function useOverridable<K extends string>(artifactKey = "worksheet.overrides") {
+  const [overrides, setOverrides] = useTerminalArtifactState<Partial<Record<K, number>>>(artifactKey, {});
 
   const getValue = useCallback(
     (key: K, liveValue: number): number => overrides[key] ?? liveValue,

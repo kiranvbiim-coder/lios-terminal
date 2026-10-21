@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Landmark } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -23,7 +24,7 @@ function pctClass(n: number | null) {
 export default function IndicatorExplorerPanel() {
   const { data: indicators, isLoading: listLoading } = useIndicators();
   const [selected, setSelected] = useState<string | null>(null);
-  const [points, setPoints] = useState(240);
+  const [points, setPoints] = useTerminalArtifactState("IndicatorExplorerPanel.points", 240);
   const activeSeriesId = selected ?? indicators?.[0]?.seriesId ?? "";
   const { data: detail, isLoading: detailLoading } = useIndicatorDetail(activeSeriesId, { points });
 

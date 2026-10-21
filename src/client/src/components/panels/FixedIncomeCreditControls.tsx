@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { ReceiptSummary } from "@/lib/advancedRatesDerivatives";
@@ -297,11 +298,11 @@ function routeId(path: string): string { return path.replace(/[^a-z0-9]+/gi, "-"
 
 export function FixedIncomeCreditRouteGroup({ paths, title = "INSTITUTIONAL FI / CREDIT" }: { paths: FixedIncomeCreditRoute[]; title?: string }) {
   const models = useMemo(() => paths.map((path) => FIXED_INCOME_CREDIT_WORKFLOWS.find((spec) => spec.path === path)).filter((spec): spec is WorkflowSpec => Boolean(spec)), [paths]);
-  const [path, setPath] = useState(models[0]?.path ?? "fixed-income/spread-analytics");
+  const [path, setPath] = useTerminalArtifactState("FixedIncomeCreditRouteGroup.path", models[0]?.path ?? "fixed-income/spread-analytics");
   const selected = models.find((spec) => spec.path === path) ?? models[0];
-  const [parameters, setParameters] = useState<Record<string, unknown>>(() => (selected ? (JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>) : {}));
-  const [mode, setMode] = useState<DataMode>("manual");
-  const [privateImport, setPrivateImport] = useState<PrivateImportMetadata>({ sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" });
+  const [parameters, setParameters] = useTerminalArtifactState<Record<string, unknown>>("FixedIncomeCreditRouteGroup.parameters", () => (selected ? (JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>) : {}));
+  const [mode, setMode] = useTerminalArtifactState<DataMode>("FixedIncomeCreditRouteGroup.mode", "manual");
+  const [privateImport, setPrivateImport] = useTerminalArtifactState<PrivateImportMetadata>("FixedIncomeCreditRouteGroup.privateImport", { sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" });
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);

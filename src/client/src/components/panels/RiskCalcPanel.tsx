@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Shield, Calculator, AlertTriangle, Info } from "lucide-react";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -35,28 +36,28 @@ function ResultRow({ label, value, cls = "", sub = "" }: { label: string; value:
 }
 
 export default function RiskCalcPanel({ onNav }: Props) {
-  const [tab, setTab] = useState<"kelly"|"fixed"|"var"|"ev">("kelly");
+  const [tab, setTab] = useTerminalArtifactState<"kelly"|"fixed"|"var"|"ev">("RiskCalcPanel.tab", "kelly");
 
   // Kelly inputs
-  const [winRate,  setWinRate]  = useState(55);   // %
-  const [avgWin,   setAvgWin]   = useState(2.0);  // R
-  const [avgLoss,  setAvgLoss]  = useState(1.0);  // R
-  const [portfolio,setPortfolio]= useState(100000);
+  const [winRate,  setWinRate] = useTerminalArtifactState("RiskCalcPanel.winRate", 55);
+  const [avgWin,   setAvgWin] = useTerminalArtifactState("RiskCalcPanel.avgWin", 2.0);
+  const [avgLoss,  setAvgLoss] = useTerminalArtifactState("RiskCalcPanel.avgLoss", 1.0);
+  const [portfolio,setPortfolio] = useTerminalArtifactState("RiskCalcPanel.portfolio", 100000);
 
   // Fixed fractional
-  const [riskPct,   setRiskPct]   = useState(1.0); // % per trade
-  const [entryPrice,setEntryPrice]= useState(100);
-  const [stopPrice, setStopPrice] = useState(95);
+  const [riskPct,   setRiskPct] = useTerminalArtifactState("RiskCalcPanel.riskPct", 1.0);
+  const [entryPrice,setEntryPrice] = useTerminalArtifactState("RiskCalcPanel.entryPrice", 100);
+  const [stopPrice, setStopPrice] = useTerminalArtifactState("RiskCalcPanel.stopPrice", 95);
 
   // VaR
-  const [posSize,    setPosSize]    = useState(10000);
-  const [dailyVol,   setDailyVol]  = useState(1.5); // %
-  const [confidence, setConfidence]= useState(95);  // %
+  const [posSize,    setPosSize] = useTerminalArtifactState("RiskCalcPanel.posSize", 10000);
+  const [dailyVol,   setDailyVol] = useTerminalArtifactState("RiskCalcPanel.dailyVol", 1.5);
+  const [confidence, setConfidence] = useTerminalArtifactState("RiskCalcPanel.confidence", 95);
 
   // Expected Value
-  const [prob,   setProb]   = useState(60);  // %
-  const [reward, setReward] = useState(300); // $
-  const [risk,   setRisk]   = useState(100); // $
+  const [prob,   setProb] = useTerminalArtifactState("RiskCalcPanel.prob", 60);
+  const [reward, setReward] = useTerminalArtifactState("RiskCalcPanel.reward", 300);
+  const [risk,   setRisk] = useTerminalArtifactState("RiskCalcPanel.risk", 100);
 
   // Kelly computations
   const kelly = useMemo(() => {

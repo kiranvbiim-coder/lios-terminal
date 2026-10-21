@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Palmtree } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -49,7 +50,7 @@ export default function TourismIndicatorPanel() {
   const { data: wbCatalog, isLoading: wbCatalogLoading } = useWbCatalog("tourism_hospitality");
   const { data: countries } = useWbCountries();
   const [wbCode, setWbCode] = useState<string | null>(null);
-  const [wbCountry, setWbCountry] = useState("US");
+  const [wbCountry, setWbCountry] = useTerminalArtifactState("TourismIndicatorPanel.wbCountry", "US");
   const activeWbCode = wbCode ?? wbCatalog?.[0]?.code ?? "";
   const { data: wbDetail, isLoading: wbDetailLoading } = useWbIndicator(activeWbCode, wbCountry);
 

@@ -293,6 +293,7 @@ export const artifactInspectTool: ConversationToolDefinition = {
 };
 
 function assertEditable(content: ArtifactContent, edit: Edit, engineOwned: boolean): void {
+  if (content.kind === "screen" && content.state.terminal !== undefined) throw new Error("Interactive terminal state and recorded analysis require their typed operation or canonical execution owner; generic maintenance cannot edit them.");
   const root = edit.path[0];
   if (typeof root !== "string" || !editableRoots[content.kind].includes(root) || edit.path.some(key => typeof key === "string" && protectedFields.test(key))) throw new Error("Artifact edit targets protected identity, evidence, history or deterministic output fields.");
   if (content.kind === "thesis" && root === "claims" && edit.op === "set" && edit.path.at(-1) !== "text") throw new Error("Thesis claim edits may revise text, not invent supported status or confidence.");

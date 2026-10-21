@@ -1,3 +1,5 @@
+import { isObservedQuote } from "@/lib/quoteObservation";
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useScreener, useDirectoryScreener, useDirectoryRegions, useBondScreener, useMacroScreener } from "@/lib/useFinance";
@@ -77,23 +79,23 @@ const MODES: Array<{ id: ScreenMode; label: string; icon: typeof Trophy }> = [
 const DYNAMIC_SCREENER_FIELDS = buildDynamicAnalyticsCatalog().filter((field) => ["market_data.price", "market_data.marketCap", "market_data.volume", "market_data.peRatio", "financial_statements.eps", "metric.pe", "metric.epsBasic", "metric.epsDiluted"].includes(field.id));
 
 export default function ScreenerPanel({ onSymbol }: Props) {
-  const [mode, setMode] = useState<ScreenMode>("equity");
-  const [sector, setSector] = useState("All");
-  const [sortField, setSortField] = useState<SortField>("changePercent");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [minPe, setMinPe] = useState("");
-  const [maxPe, setMaxPe] = useState("");
-  const [minBeta, setMinBeta] = useState("");
-  const [maxBeta, setMaxBeta] = useState("");
-  const [minDivYield, setMinDivYield] = useState("");
-  const [minRoe, setMinRoe] = useState("");
-  const [minRevGrowth, setMinRevGrowth] = useState("");
-  const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [equityPage, setEquityPage] = useState(1);
-  const [dynamicFieldId, setDynamicFieldId] = useState("market_data.marketCap");
-  const [dynamicOperator, setDynamicOperator] = useState<DynamicFilterOperator>("gte");
-  const [dynamicValue, setDynamicValue] = useState("");
+  const [mode, setMode] = useTerminalArtifactState<ScreenMode>("screener.mode", "equity");
+  const [sector, setSector] = useTerminalArtifactState("screener.sector", "All");
+  const [sortField, setSortField] = useTerminalArtifactState<SortField>("screener.sortField", "changePercent");
+  const [sortDir, setSortDir] = useTerminalArtifactState<SortDir>("screener.sortDir", "desc");
+  const [minPe, setMinPe] = useTerminalArtifactState("screener.minPe", "");
+  const [maxPe, setMaxPe] = useTerminalArtifactState("screener.maxPe", "");
+  const [minBeta, setMinBeta] = useTerminalArtifactState("screener.minBeta", "");
+  const [maxBeta, setMaxBeta] = useTerminalArtifactState("screener.maxBeta", "");
+  const [minDivYield, setMinDivYield] = useTerminalArtifactState("screener.minDivYield", "");
+  const [minRoe, setMinRoe] = useTerminalArtifactState("screener.minRoe", "");
+  const [minRevGrowth, setMinRevGrowth] = useTerminalArtifactState("screener.minRevGrowth", "");
+  const [activeStrategy, setActiveStrategy] = useTerminalArtifactState<string | null>("screener.activeStrategy", null);
+  const [showAdvanced, setShowAdvanced] = useTerminalArtifactState("screener.showAdvanced", false);
+  const [equityPage, setEquityPage] = useTerminalArtifactState("screener.equityPage", 1);
+  const [dynamicFieldId, setDynamicFieldId] = useTerminalArtifactState("screener.dynamicFieldId", "market_data.marketCap");
+  const [dynamicOperator, setDynamicOperator] = useTerminalArtifactState<DynamicFilterOperator>("screener.dynamicOperator", "gte");
+  const [dynamicValue, setDynamicValue] = useTerminalArtifactState("screener.dynamicValue", "");
 
   const filters: Record<string, string> = { sector };
   if (minPe) filters.minPe = minPe;
@@ -330,9 +332,10 @@ export default function ScreenerPanel({ onSymbol }: Props) {
             </thead>
             <tbody>
               {visibleSorted.map((s: any) => {
+                const observed = isObservedQuote(s);
                 const isUp = s.changePercent >= 0;
                 const curr = getCurrencySymbol(s.symbol);
-                const near52High = s.high52 && s.price && (s.price / s.high52) > 0.95;
+                const near52High = observed && Number.isFinite(s.high52) && s.high52 > 0 && (s.price / s.high52) > 0.95;
                 return (
                   <tr
                     key={s.symbol}
@@ -344,12 +347,12 @@ export default function ScreenerPanel({ onSymbol }: Props) {
                     <td className="py-2 px-2.5 font-terminal text-[9px] text-muted-foreground max-w-[160px] truncate">{s.name}</td>
                     <td className="py-2 px-2.5 font-terminal text-[10px] tabular-nums">
                       <span className="inline-flex items-center gap-1">
-                        {curr}{formatPrice(s.price)}
+                        {observed ? `${curr}${formatPrice(s.price)}` : "—"}
                         {s.status && <DataStatusBadge status={s.status} compact />}
                       </span>
                     </td>
-                    <td className={`py-2 px-2.5 font-terminal text-[10px] tabular-nums font-semibold ${pctClass(s.changePercent)}`}>
-                      {isUp ? "▲" : "▼"} {Math.abs(s.changePercent).toFixed(2)}%
+                    <td className={`py-2 px-2.5 font-terminal text-[10px] tabular-nums font-semibold ${observed ? pctClass(s.changePercent) : "text-muted-foreground"}`}>
+                      {observed && Number.isFinite(s.changePercent) ? `${isUp ? "▲" : "▼"} ${Math.abs(s.changePercent).toFixed(2)}%` : "—"}
                     </td>
                     <td className="py-2 px-2.5 font-terminal text-[10px] tabular-nums">{formatBig(s.marketCap, s.symbol)}</td>
                     <td className="py-2 px-2.5 font-terminal text-[10px] tabular-nums">{s.pe !== null ? s.pe.toFixed(1) : "—"}</td>
@@ -360,7 +363,7 @@ export default function ScreenerPanel({ onSymbol }: Props) {
                       </span>
                       {near52High && <span className="ml-1 font-terminal text-[7px] text-[hsl(38,95%,55%)]">★</span>}
                     </td>
-                    <td className="py-2 px-2.5 font-terminal text-[9px] tabular-nums text-muted-foreground">{(s.volume / 1e6).toFixed(1)}M</td>
+                    <td className="py-2 px-2.5 font-terminal text-[9px] tabular-nums text-muted-foreground">{observed && Number.isFinite(s.volume) ? `${(s.volume / 1e6).toFixed(1)}M` : "—"}</td>
                     <td className="py-2 px-2.5 font-terminal text-[8px] text-[hsl(186,80%,55%)]">{s.sector || "—"}</td>
                   </tr>
                 );
@@ -391,12 +394,12 @@ export default function ScreenerPanel({ onSymbol }: Props) {
 // exchange, sector, and asset class. Server-paginated (20/page) since the
 // underlying universe is far larger than the equity screener's curated ~160.
 function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }) {
-  const [region, setRegion] = useState("");
-  const [assetClass, setAssetClass] = useState("");
-  const [exchange, setExchange] = useState("");
-  const [query, setQuery] = useState("");
-  const [primaryListingOnly, setPrimaryListingOnly] = useState(true);
-  const [page, setPage] = useState(1);
+  const [region, setRegion] = useTerminalArtifactState("DirectoryScreenerView.region", "");
+  const [assetClass, setAssetClass] = useTerminalArtifactState("DirectoryScreenerView.assetClass", "");
+  const [exchange, setExchange] = useTerminalArtifactState("DirectoryScreenerView.exchange", "");
+  const [query, setQuery] = useTerminalArtifactState("DirectoryScreenerView.query", "");
+  const [primaryListingOnly, setPrimaryListingOnly] = useTerminalArtifactState("DirectoryScreenerView.primaryListingOnly", true);
+  const [page, setPage] = useTerminalArtifactState("DirectoryScreenerView.page", 1);
 
   const { data: regions = [] } = useDirectoryRegions();
   const filters: Record<string, string> = {};
@@ -477,10 +480,10 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
 // see the pending ticker-audit remediation) -- this screens actual real
 // yield-curve reference data by threshold, which is what's reliably available.
 function BondScreenerView() {
-  const [country, setCountry] = useState("");
-  const [minYield, setMinYield] = useState("");
-  const [maxYield, setMaxYield] = useState("");
-  const [query, setQuery] = useState("");
+  const [country, setCountry] = useTerminalArtifactState("BondScreenerView.country", "");
+  const [minYield, setMinYield] = useTerminalArtifactState("BondScreenerView.minYield", "");
+  const [maxYield, setMaxYield] = useTerminalArtifactState("BondScreenerView.maxYield", "");
+  const [query, setQuery] = useTerminalArtifactState("BondScreenerView.query", "");
 
   const filters: Record<string, string> = {};
   if (country) filters.country = country;
@@ -539,11 +542,11 @@ function BondScreenerView() {
 // dataset) across countries, filterable by country/category and a
 // current-value threshold range.
 function MacroScreenerView() {
-  const [country, setCountry] = useState("");
-  const [category, setCategory] = useState("");
-  const [minValue, setMinValue] = useState("");
-  const [maxValue, setMaxValue] = useState("");
-  const [query, setQuery] = useState("");
+  const [country, setCountry] = useTerminalArtifactState("MacroScreenerView.country", "");
+  const [category, setCategory] = useTerminalArtifactState("MacroScreenerView.category", "");
+  const [minValue, setMinValue] = useTerminalArtifactState("MacroScreenerView.minValue", "");
+  const [maxValue, setMaxValue] = useTerminalArtifactState("MacroScreenerView.maxValue", "");
+  const [query, setQuery] = useTerminalArtifactState("MacroScreenerView.query", "");
 
   const filters: Record<string, string> = {};
   if (country) filters.country = country;
@@ -692,10 +695,10 @@ function scoreColor(score: number, kind: RadarKind): string {
 }
 
 function RadarScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }) {
-  const [kind, setKind] = useState<RadarKind>("opportunities");
-  const [symbolsInput, setSymbolsInput] = useState("");
-  const [appliedSymbols, setAppliedSymbols] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [kind, setKind] = useTerminalArtifactState<RadarKind>("RadarScreenerView.kind", "opportunities");
+  const [symbolsInput, setSymbolsInput] = useTerminalArtifactState("RadarScreenerView.symbolsInput", "");
+  const [appliedSymbols, setAppliedSymbols] = useTerminalArtifactState<string[]>("RadarScreenerView.appliedSymbols", []);
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("RadarScreenerView.selected", null);
 
   const { data, isLoading, isError } = useRadar(kind, appliedSymbols);
   const results = data?.results ?? [];

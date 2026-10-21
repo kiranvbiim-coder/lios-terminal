@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Zap } from "lucide-react";
 import { useLseStatus, useLseOptionsFlow } from "@/lib/useLse";
@@ -22,9 +23,9 @@ function fmtTime(ts: string) {
 
 export default function OptionsFlowScannerPanel({ onSymbol }: Props) {
   const { data: status } = useLseStatus();
-  const [underlying, setUnderlying] = useState("");
-  const [type, setType] = useState<"call" | "put" | "">("");
-  const [minPremium, setMinPremium] = useState(50_000);
+  const [underlying, setUnderlying] = useTerminalArtifactState("OptionsFlowScannerPanel.underlying", "");
+  const [type, setType] = useTerminalArtifactState<"call" | "put" | "">("OptionsFlowScannerPanel.type", "");
+  const [minPremium, setMinPremium] = useTerminalArtifactState("OptionsFlowScannerPanel.minPremium", 50_000);
   const { data: prints, isLoading } = useLseOptionsFlow(underlying || undefined, type || undefined, minPremium);
   const configured = status?.configured ?? false;
 

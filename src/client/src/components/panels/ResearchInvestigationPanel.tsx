@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -125,26 +126,26 @@ function statusClass(status: InvestigationStatus) {
 export default function ResearchIntelligencePanel({ symbol, role, starterQuestion, starterSymbol }: Props) {
   const canAuthor = role === "internal_admin" || role === "internal_analyst";
   const researchSymbol = starterSymbol?.trim().toUpperCase() || symbol?.trim().toUpperCase() || "";
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<InvestigationStatus | "all">("all");
-  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useTerminalArtifactState<number | null>("ResearchInvestigationPanel.selectedId", null);
+  const [statusFilter, setStatusFilter] = useTerminalArtifactState<InvestigationStatus | "all">("ResearchIntelligencePanel.statusFilter", "all");
+  const [search, setSearch] = useTerminalArtifactState("ResearchIntelligencePanel.search", "");
   const [showCreate, setShowCreate] = useState(false);
-  const [title, setTitle] = useState("");
-  const [question, setQuestion] = useState(starterQuestion?.trim() || "");
-  const [thesis, setThesis] = useState("");
-  const [noteTitle, setNoteTitle] = useState("");
-  const [note, setNote] = useState("");
+  const [title, setTitle] = useTerminalArtifactState("ResearchIntelligencePanel.title", "");
+  const [question, setQuestion] = useTerminalArtifactState("ResearchIntelligencePanel.question", starterQuestion?.trim() || "");
+  const [thesis, setThesis] = useTerminalArtifactState("ResearchIntelligencePanel.thesis", "");
+  const [noteTitle, setNoteTitle] = useTerminalArtifactState("ResearchIntelligencePanel.noteTitle", "");
+  const [note, setNote] = useTerminalArtifactState("ResearchIntelligencePanel.note", "");
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [view, setView] = useState<ResearchView>("evidence");
-  const [researchQuery, setResearchQuery] = useState(starterQuestion?.trim() || "");
-  const [sourceClasses, setSourceClasses] = useState(["filing", "news", "official_data", "published_content", "private_data"]);
+  const [view, setView] = useTerminalArtifactState<ResearchView>("ResearchIntelligencePanel.view", "evidence");
+  const [researchQuery, setResearchQuery] = useTerminalArtifactState("ResearchIntelligencePanel.researchQuery", starterQuestion?.trim() || "");
+  const [sourceClasses, setSourceClasses] = useTerminalArtifactState("ResearchIntelligencePanel.sourceClasses", ["filing", "news", "official_data", "published_content", "private_data"]);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [annotationId, setAnnotationId] = useState<number | null>(null);
-  const [annotation, setAnnotation] = useState("");
-  const [fromEvidenceId, setFromEvidenceId] = useState("");
-  const [toEvidenceId, setToEvidenceId] = useState("");
-  const [relationshipType, setRelationshipType] = useState<Relationship["relationshipType"]>("supports");
-  const [selectedBriefId, setSelectedBriefId] = useState<number | null>(null);
+  const [annotation, setAnnotation] = useTerminalArtifactState("ResearchIntelligencePanel.annotation", "");
+  const [fromEvidenceId, setFromEvidenceId] = useTerminalArtifactState("ResearchIntelligencePanel.fromEvidenceId", "");
+  const [toEvidenceId, setToEvidenceId] = useTerminalArtifactState("ResearchIntelligencePanel.toEvidenceId", "");
+  const [relationshipType, setRelationshipType] = useTerminalArtifactState<Relationship["relationshipType"]>("ResearchIntelligencePanel.relationshipType", "supports");
+  const [selectedBriefId, setSelectedBriefId] = useTerminalArtifactState<number | null>("ResearchInvestigationPanel.selectedBriefId", null);
   const [decisionHandoff, setDecisionHandoff] = useState<{ id: number; title: string } | null>(null);
   const appliedStarterRef = useRef<string | null>(null);
 

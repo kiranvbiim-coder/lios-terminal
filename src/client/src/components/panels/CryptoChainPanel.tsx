@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { Bitcoin, Plus, X, Database, ShieldCheck } from "lucide-react";
 import { useQuotes } from "@/lib/useFinance";
@@ -42,8 +43,8 @@ function formatPrice(value: number | null | undefined) {
 }
 
 export default function CryptoChainPanel({ onSymbol }: Props) {
-  const [cryptos, setCryptos] = useState<CryptoEntry[]>(DEFAULT_CRYPTOS);
-  const [coinInput, setCoinInput] = useState("");
+  const [cryptos, setCryptos] = useTerminalArtifactState<CryptoEntry[]>("CryptoChainPanel.cryptos", DEFAULT_CRYPTOS);
+  const [coinInput, setCoinInput] = useTerminalArtifactState("CryptoChainPanel.coinInput", "");
   const symbols = useMemo(() => cryptos.map((coin) => coin.sym), [cryptos]);
   const { data: quotes = [], isLoading, dataUpdatedAt } = useQuotes(symbols);
   const quoteMap = useMemo(() => new Map(quotes.map((quote) => [quote.symbol, quote])), [quotes]);

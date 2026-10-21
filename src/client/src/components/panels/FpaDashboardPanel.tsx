@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, memo } from "react";
 import { BarChart2, DollarSign, Percent, TrendingUp, Sliders, Play, Settings, ShieldAlert, Cpu, Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,20 +12,20 @@ import { computeNPV, computeIRR, computeMIRR, paybackPeriod, discountedPaybackPe
 
 function FpaDashboardPanel() {
   // Driver-Based Planning Inputs
-  const [headcountGrowth, setHeadcountGrowth] = useState(15); // % growth
-  const [pricePerUnit, setPricePerUnit] = useState(120); // $ unit price
-  const [cac, setCac] = useState(250); // $ Customer Acquisition Cost
-  const [churnRate, setChurnRate] = useState(1.8); // % monthly churn
+  const [headcountGrowth, setHeadcountGrowth] = useTerminalArtifactState("FpaDashboardPanel.headcountGrowth", 15);
+  const [pricePerUnit, setPricePerUnit] = useTerminalArtifactState("FpaDashboardPanel.pricePerUnit", 120);
+  const [cac, setCac] = useTerminalArtifactState("FpaDashboardPanel.cac", 250);
+  const [churnRate, setChurnRate] = useTerminalArtifactState("FpaDashboardPanel.churnRate", 1.8);
   
   // Project Yield Inputs (P50/P90)
-  const [pOption, setPOption] = useState<"P50" | "P90" | "P99">("P50");
-  const [conceptionMonths, setConceptionMonths] = useState(18); // IDC Construction months
+  const [pOption, setPOption] = useTerminalArtifactState<"P50" | "P90" | "P99">("FpaDashboardPanel.pOption", "P50");
+  const [conceptionMonths, setConceptionMonths] = useTerminalArtifactState("FpaDashboardPanel.conceptionMonths", 18);
 
   // Capital Budgeting: cashflows[0] is the initial outlay (t=0), the rest are
   // period 1..N net cash flows -- user-editable, not tied to any other tab's model.
-  const [cbCashflows, setCbCashflows] = useState<number[]>([-1000, 250, 300, 350, 350, 400]);
-  const [cbDiscountRate, setCbDiscountRate] = useState(10);
-  const [cbReinvestRate, setCbReinvestRate] = useState(8);
+  const [cbCashflows, setCbCashflows] = useTerminalArtifactState<number[]>("FpaDashboardPanel.cbCashflows", [-1000, 250, 300, 350, 350, 400]);
+  const [cbDiscountRate, setCbDiscountRate] = useTerminalArtifactState("FpaDashboardPanel.cbDiscountRate", 10);
+  const [cbReinvestRate, setCbReinvestRate] = useTerminalArtifactState("FpaDashboardPanel.cbReinvestRate", 8);
 
   const updateCbCashflow = (idx: number, value: number) => {
     setCbCashflows((prev) => prev.map((cf, i) => (i === idx ? value : cf)));

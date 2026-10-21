@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -77,30 +78,32 @@ type ChainRow = {
 const TREE_STEPS = 250;
 
 export default function OptionsPanelInstitutional({ symbol }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const initialSymbolRef = useRef(symbol);
   const { data: quote, isLoading } = useQuote(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
   const { data: yieldCurveData } = useYieldCurve();
 
-  const [expiryDays, setExpiryDays] = useState(30);
-  const [volatilityPct, setVolatilityPct] = useState(25);
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState(5);
-  const [dividendYieldPct, setDividendYieldPct] = useState(0);
-  const [exerciseStyle, setExerciseStyle] = useState<ExerciseStyle>("european");
-  const [metricView, setMetricView] = useState<MetricView>("greeks");
-  const [dataMode, setDataMode] = useState<"theoretical" | "live">("theoretical");
-  const [dividendMode, setDividendMode] = useState<DividendMode>("continuous");
-  const [discreteDividends, setDiscreteDividends] = useState<DiscreteDividend[]>([]);
-  const [cashDividendAmount, setCashDividendAmount] = useState(0);
-  const [cashDividendDays, setCashDividendDays] = useState(15);
-  const [ivTouched, setIvTouched] = useState(false);
-  const [qTouched, setQTouched] = useState(false);
-  const [rateTouched, setRateTouched] = useState(false);
-  const [payoffStrike, setPayoffStrike] = useState<number | null>(null);
-  const [payoffIsCall, setPayoffIsCall] = useState(true);
-  const [payoffIsLong, setPayoffIsLong] = useState(true);
-  const [strikes, setStrikes] = useState<number[]>([]);
-  const [strikesTouched, setStrikesTouched] = useState(false);
+  const [expiryDays, setExpiryDays] = useTerminalArtifactState("OptionsPanelInstitutional.expiryDays", 30);
+  const [volatilityPct, setVolatilityPct] = useTerminalArtifactState("OptionsPanelInstitutional.volatilityPct", 25);
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("OptionsPanelInstitutional.riskFreeRatePct", 5);
+  const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsPanelInstitutional.dividendYieldPct", 0);
+  const [exerciseStyle, setExerciseStyle] = useTerminalArtifactState<ExerciseStyle>("OptionsPanelInstitutional.exerciseStyle", "european");
+  const [metricView, setMetricView] = useTerminalArtifactState<MetricView>("OptionsPanelInstitutional.metricView", "greeks");
+  const [dataMode, setDataMode] = useTerminalArtifactState<"theoretical" | "live">("OptionsPanelInstitutional.dataMode", "theoretical");
+  const [dividendMode, setDividendMode] = useTerminalArtifactState<DividendMode>("OptionsPanelInstitutional.dividendMode", "continuous");
+  const [discreteDividends, setDiscreteDividends] = useTerminalArtifactState<DiscreteDividend[]>("OptionsPanelInstitutional.discreteDividends", []);
+  const [cashDividendAmount, setCashDividendAmount] = useTerminalArtifactState("OptionsPanelInstitutional.cashDividendAmount", 0);
+  const [cashDividendDays, setCashDividendDays] = useTerminalArtifactState("OptionsPanelInstitutional.cashDividendDays", 15);
+  const [ivTouched, setIvTouched] = useTerminalArtifactState("OptionsPanelInstitutional.ivTouched", false);
+  const [qTouched, setQTouched] = useTerminalArtifactState("OptionsPanelInstitutional.qTouched", false);
+  const [rateTouched, setRateTouched] = useTerminalArtifactState("OptionsPanelInstitutional.rateTouched", false);
+  const [payoffStrike, setPayoffStrike] = useTerminalArtifactState<number | null>("OptionsPanelInstitutional.payoffStrike", null);
+  const [payoffIsCall, setPayoffIsCall] = useTerminalArtifactState("OptionsPanelInstitutional.payoffIsCall", true);
+  const [payoffIsLong, setPayoffIsLong] = useTerminalArtifactState("OptionsPanelInstitutional.payoffIsLong", true);
+  const [strikes, setStrikes] = useTerminalArtifactState<number[]>("OptionsPanelInstitutional.strikes", []);
+  const [strikesTouched, setStrikesTouched] = useTerminalArtifactState("OptionsPanelInstitutional.strikesTouched", false);
   const [auditTarget, setAuditTarget] = useState<AuditTarget | null>(null);
   const [copied, setCopied] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -131,6 +134,8 @@ export default function OptionsPanelInstitutional({ symbol }: Props) {
   }, [autoStrikes, strikesTouched]);
 
   useEffect(() => {
+    if (terminal && initialSymbolRef.current === symbol) return;
+    initialSymbolRef.current = symbol;
     setStrikesTouched(false);
     setIvTouched(false);
     setQTouched(false);
@@ -146,6 +151,7 @@ export default function OptionsPanelInstitutional({ symbol }: Props) {
   }, [strikes, spot]);
 
   useEffect(() => {
+    if (terminal && terminal.state["OptionsPanelInstitutional.payoffStrike"] != null) return;
     if (atmStrike == null) return;
     setPayoffStrike(atmStrike);
     setAuditTarget((current) => current ?? { strike: atmStrike, isCall: true });

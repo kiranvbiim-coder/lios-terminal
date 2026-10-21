@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts";
 import { Cpu, Info, TrendingUp } from "lucide-react";
@@ -18,8 +19,8 @@ function normalPDF(x: number, mean: number, stdDev: number): number {
 
 export default function FractalPanel({ symbol }: Props) {
   const { data, isLoading } = useOHLCV(symbol, "1Y", "1d");
-  const [activeSegment, setActiveSegment] = useState<"fractal" | "regime">("fractal");
-  const [hurstWindow, setHurstWindow] = useState<"90d" | "180d" | "full">("full");
+  const [activeSegment, setActiveSegment] = useTerminalArtifactState<"fractal" | "regime">("FractalPanel.activeSegment", "fractal");
+  const [hurstWindow, setHurstWindow] = useTerminalArtifactState<"90d" | "180d" | "full">("FractalPanel.hurstWindow", "full");
 
   // Main mathematical calculations
   const analysis = useMemo(() => {

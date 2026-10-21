@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, Database, RefreshCw, TriangleAlert } from "lucide-react";
 import type { PointInTimeScalarSeriesSnapshot, PointInTimeYieldCurveSnapshot } from "@shared/pointInTimeData";
@@ -24,7 +25,7 @@ const NOWCAST_INPUTS_SCHEMA: JsonFieldSchema[] = [
   { kind: "numberArray", key: "currentIndicators", label: "Current Indicators", default: [] },
 ];
 function NowcastRunner({ series }: { series: PointInTimeScalarSeriesSnapshot | null }) {
-  const [nowcastInputs, setNowcastInputs] = useState<Record<string, unknown>>({ indicatorHistory: [], currentIndicators: [] });
+  const [nowcastInputs, setNowcastInputs] = useTerminalArtifactState<Record<string, unknown>>("NowcastRunner.nowcastInputs", { indicatorHistory: [], currentIndicators: [] });
   const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -100,11 +101,11 @@ function MacroModelTab({ curve, series }: { curve: PointInTimeYieldCurveSnapshot
 }
 
 export default function EconomicDataFabricPanel() {
-  const [seriesInput, setSeriesInput] = useState("FEDFUNDS");
-  const [seriesId, setSeriesId] = useState("FEDFUNDS");
+  const [seriesInput, setSeriesInput] = useTerminalArtifactState("EconomicDataFabricPanel.seriesInput", "FEDFUNDS");
+  const [seriesId, setSeriesId] = useTerminalArtifactState("EconomicDataFabricPanel.seriesId", "FEDFUNDS");
   const [series, setSeries] = useState<PointInTimeScalarSeriesSnapshot[]>([]);
   const [curves, setCurves] = useState<PointInTimeYieldCurveSnapshot[]>([]);
-  const [tab, setTab] = useState<"series" | "curve" | "macro" | "lineage">("series");
+  const [tab, setTab] = useTerminalArtifactState<"series" | "curve" | "macro" | "lineage">("EconomicDataFabricPanel.tab", "series");
   const [busy, setBusy] = useState<"series" | "curve" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const currentSeries = series[0] ?? null, currentCurve = curves[0] ?? null;

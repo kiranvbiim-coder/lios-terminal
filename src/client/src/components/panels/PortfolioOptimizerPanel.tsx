@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, useEffect, memo } from "react";
 import { useQueries, useMutation } from "@tanstack/react-query";
 import { ResponsiveContainer, ScatterChart, Scatter, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot } from "recharts";
@@ -359,38 +360,38 @@ const MANDATE_PRE_TRADE_SCHEMA: JsonFieldSchema[] = [
 ];
 
 function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym: string) => void; externalRiskMod?: number }) {
-  const [assets, setAssets] = useState<string[]>(DEFAULT_OPT_ASSETS);
-  const [advancedModel, setAdvancedModel] = useState<AdvancedPortfolioModel>("hrp");
-  const [factorRiskState, setFactorRiskState] = useState<Record<string, unknown>>(() => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["factor-risk"]));
+  const [assets, setAssets] = useTerminalArtifactState<string[]>("PortfolioOptimizerPanel.assets", DEFAULT_OPT_ASSETS);
+  const [advancedModel, setAdvancedModel] = useTerminalArtifactState<AdvancedPortfolioModel>("PortfolioOptimizerPanel.advancedModel", "hrp");
+  const [factorRiskState, setFactorRiskState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.factorRiskState", () => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["factor-risk"]));
   const [trackingErrorState, setTrackingErrorState] = useState<Record<string, unknown>>(() => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["tracking-error"]));
-  const [taxAwareState, setTaxAwareState] = useState<Record<string, unknown>>(() => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["tax-aware-rebalance"]));
-  const [stressAwareState, setStressAwareState] = useState<Record<string, unknown>>(() => seedStressAwareState(ADVANCED_PORTFOLIO_PLACEHOLDERS["stress-aware"]));
-  const [mandatePreTradeState, setMandatePreTradeState] = useState<Record<string, unknown>>(() => JSON.parse(MANDATE_PRE_TRADE_PLACEHOLDER));
-  const [riskBudgetText, setRiskBudgetText] = useState("");
-  const [allowShortBudget, setAllowShortBudget] = useState(false);
-  const [bayesianPriorStdPct, setBayesianPriorStdPct] = useState(5);
-  const [assetInput, setAssetInput] = useState("");
-  const [activeSegment, setActiveSegment] = useState<"frontier" | "execution" | "globalSearch" | "construction" | "factorAttribution">("frontier");
-  const [factorPortfolioState, setFactorPortfolioState] = useState<Record<string, unknown>>(() => JSON.parse(FACTOR_PORTFOLIO_PLACEHOLDER));
-  const [providerFactorRange, setProviderFactorRange] = useState<"1Y" | "2Y" | "3Y" | "5Y">("5Y");
+  const [taxAwareState, setTaxAwareState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.taxAwareState", () => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["tax-aware-rebalance"]));
+  const [stressAwareState, setStressAwareState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.stressAwareState", () => seedStressAwareState(ADVANCED_PORTFOLIO_PLACEHOLDERS["stress-aware"]));
+  const [mandatePreTradeState, setMandatePreTradeState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.mandatePreTradeState", () => JSON.parse(MANDATE_PRE_TRADE_PLACEHOLDER));
+  const [riskBudgetText, setRiskBudgetText] = useTerminalArtifactState("PortfolioOptimizerPanel.riskBudgetText", "");
+  const [allowShortBudget, setAllowShortBudget] = useTerminalArtifactState("PortfolioOptimizerPanel.allowShortBudget", false);
+  const [bayesianPriorStdPct, setBayesianPriorStdPct] = useTerminalArtifactState("PortfolioOptimizerPanel.bayesianPriorStdPct", 5);
+  const [assetInput, setAssetInput] = useTerminalArtifactState("PortfolioOptimizerPanel.assetInput", "");
+  const [activeSegment, setActiveSegment] = useTerminalArtifactState<"frontier" | "execution" | "globalSearch" | "construction" | "factorAttribution">("PortfolioOptimizerPanel.activeSegment", "frontier");
+  const [factorPortfolioState, setFactorPortfolioState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.factorPortfolioState", () => JSON.parse(FACTOR_PORTFOLIO_PLACEHOLDER));
+  const [providerFactorRange, setProviderFactorRange] = useTerminalArtifactState<"1Y" | "2Y" | "3Y" | "5Y">("PortfolioOptimizerPanel.providerFactorRange", "5Y");
   const [isExecutingSim, setIsExecutingSim] = useState(false);
   const [simLogs, setSimLogs] = useState<string[]>([]);
   const [simProgress, setSimProgress] = useState(100000);
-  const [sharesToLiquidate, setSharesToLiquidate] = useState(100000);
-  const [riskAversion, setRiskAversion] = useState(0.15);
-  const [daysToLiquidate, setDaysToLiquidate] = useState(5);
-  const [rfRate, setRfRate] = useState(4.0); // risk free rate %
-  const [viewAsset, setViewAsset] = useState("AAPL");
+  const [sharesToLiquidate, setSharesToLiquidate] = useTerminalArtifactState("PortfolioOptimizerPanel.sharesToLiquidate", 100000);
+  const [riskAversion, setRiskAversion] = useTerminalArtifactState("PortfolioOptimizerPanel.riskAversion", 0.15);
+  const [daysToLiquidate, setDaysToLiquidate] = useTerminalArtifactState("PortfolioOptimizerPanel.daysToLiquidate", 5);
+  const [rfRate, setRfRate] = useTerminalArtifactState("PortfolioOptimizerPanel.rfRate", 4.0);
+  const [viewAsset, setViewAsset] = useTerminalArtifactState("PortfolioOptimizerPanel.viewAsset", "AAPL");
   
   // Black-Litterman subjective views (adjustment to annualized expected returns)
-  const [viewReliance, setViewReliance] = useState(0); // adjustment %
-  const [viewBTC, setViewBTC] = useState(0); // adjustment %
+  const [viewReliance, setViewReliance] = useTerminalArtifactState("PortfolioOptimizerPanel.viewReliance", 0);
+  const [viewBTC, setViewBTC] = useTerminalArtifactState("PortfolioOptimizerPanel.viewBTC", 0);
 
   // GA global-search cross-check (Portfolio Optimizer, item 2) -- optional
   // "best K of N" cardinality constraint the closed-form/MC-sampled
   // optimizer above cannot express.
-  const [cardinalityEnabled, setCardinalityEnabled] = useState(false);
-  const [cardinalityK, setCardinalityK] = useState(4);
+  const [cardinalityEnabled, setCardinalityEnabled] = useTerminalArtifactState("PortfolioOptimizerPanel.cardinalityEnabled", false);
+  const [cardinalityK, setCardinalityK] = useTerminalArtifactState("PortfolioOptimizerPanel.cardinalityK", 4);
 
   const [simulationTrigger, setSimulationTrigger] = useState(0);
 

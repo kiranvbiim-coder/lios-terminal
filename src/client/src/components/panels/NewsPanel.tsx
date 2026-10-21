@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -19,12 +20,12 @@ function relativeTime(iso: string) {
 
 export default function NewsPanel({ symbol }: Props) {
   const [sourceFilter, setSourceFilter] = useState("ALL");
-  const [sentimentFilter, setSentimentFilter] = useState("ALL");
-  const [query, setQuery] = useState("");
+  const [sentimentFilter, setSentimentFilter] = useTerminalArtifactState("NewsPanel.sentimentFilter", "ALL");
+  const [query, setQuery] = useTerminalArtifactState("NewsPanel.query", "");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [page, setPage] = useTerminalArtifactState("NewsPanel.page", 1);
+  const [from, setFrom] = useTerminalArtifactState("NewsPanel.from", "");
+  const [to, setTo] = useTerminalArtifactState("NewsPanel.to", "");
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
     queryKey: ["/api/finance/news", symbol ?? "market", query, page, from, to],

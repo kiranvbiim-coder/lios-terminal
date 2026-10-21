@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,12 +51,12 @@ function formatCap(value: number | null) {
 }
 
 export default function HeatMapPanel({ onSymbol }: { onSymbol?: (sym: string) => void }) {
-  const [region, setRegion] = useState<"US" | "IN" | "JP" | "HK">("US");
-  const [sortBy, setSortBy] = useState<SortBy>("marketcap");
+  const [region, setRegion] = useTerminalArtifactState<"US" | "IN" | "JP" | "HK">("HeatMapPanel.region", "US");
+  const [sortBy, setSortBy] = useTerminalArtifactState<SortBy>("HeatMapPanel.sortBy", "marketcap");
   const { upHue, downHue } = useSemanticHues();
-  const [customTickers, setCustomTickers] = useState<Record<string, string[]>>({ US: [], IN: [], JP: [], HK: [] });
-  const [removedTickers, setRemovedTickers] = useState<Record<string, string[]>>({ US: [], IN: [], JP: [], HK: [] });
-  const [tickerInput, setTickerInput] = useState("");
+  const [customTickers, setCustomTickers] = useTerminalArtifactState<Record<string, string[]>>("HeatMapPanel.customTickers", { US: [], IN: [], JP: [], HK: [] });
+  const [removedTickers, setRemovedTickers] = useTerminalArtifactState<Record<string, string[]>>("HeatMapPanel.removedTickers", { US: [], IN: [], JP: [], HK: [] });
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("HeatMapPanel.tickerInput", "");
 
   const symbols = useMemo(() => {
     const base = REGION_UNIVERSE[region].filter((symbol) => !removedTickers[region].includes(symbol));

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -70,7 +71,7 @@ const NORMALIZATION_TARGET_METRICS: Array<{ id: string; label: string }> = [
 ];
 
 export default function RatiosTab({ symbol, curr, balCurrent, balPrior, incCurrent, incPrior, cfCurrent, incomeReportsFull, balanceReportsFull, computedWaccPct }: AnalysisTabProps & { computedWaccPct?: number }) {
-  const ov = useOverridable<RatioKey>();
+  const ov = useOverridable<RatioKey>("RatiosTab.ov");
   const defaults: Record<RatioKey, number> = {
     cash: balCurrent?.cashAndCashEquivalents ?? 0,
     receivables: balCurrent?.netReceivables ?? 0,
@@ -147,12 +148,12 @@ export default function RatiosTab({ symbol, curr, balCurrent, balPrior, incCurre
   });
 
   const [normFormOpen, setNormFormOpen] = useState(false);
-  const [normTargetMetric, setNormTargetMetric] = useState(NORMALIZATION_TARGET_METRICS[1].id);
-  const [normTypeId, setNormTypeId] = useState(NORMALIZATION_LIBRARY[0].id);
-  const [normKind, setNormKind] = useState<NormalizationAdjustmentKind>(NORMALIZATION_LIBRARY[0].suggestedKind);
-  const [normAmount, setNormAmount] = useState(0);
-  const [normPeriod, setNormPeriod] = useState(normalizationPeriod);
-  const [normRationale, setNormRationale] = useState("");
+  const [normTargetMetric, setNormTargetMetric] = useTerminalArtifactState("RatiosTab.normTargetMetric", NORMALIZATION_TARGET_METRICS[1].id);
+  const [normTypeId, setNormTypeId] = useTerminalArtifactState("RatiosTab.normTypeId", NORMALIZATION_LIBRARY[0].id);
+  const [normKind, setNormKind] = useTerminalArtifactState<NormalizationAdjustmentKind>("RatiosTab.normKind", NORMALIZATION_LIBRARY[0].suggestedKind);
+  const [normAmount, setNormAmount] = useTerminalArtifactState("RatiosTab.normAmount", 0);
+  const [normPeriod, setNormPeriod] = useTerminalArtifactState("RatiosTab.normPeriod", normalizationPeriod);
+  const [normRationale, setNormRationale] = useTerminalArtifactState("RatiosTab.normRationale", "");
   const submitNormalizationAdjustment = () => {
     const type = NORMALIZATION_LIBRARY.find(t => t.id === normTypeId);
     if (!type || !Number.isFinite(normAmount)) return;
@@ -170,14 +171,14 @@ export default function RatiosTab({ symbol, curr, balCurrent, balPrior, incCurre
   // every company's statement is structured differently, so a fixed ratio
   // set can never cover every analyst's need (a lender wants FFO/Total Debt,
   // a bank analyst wants Net Interest Margin). See client/src/lib/customLineItems.ts.
-  const customParticulars = useCustomLineItems();
-  const customRatios = useCustomLineItems();
+  const customParticulars = useCustomLineItems("RatiosTab.customParticulars");
+  const customRatios = useCustomLineItems("RatiosTab.customRatios");
   const allCustomItems = useMemo(
     () => [...customParticulars.items, ...customRatios.items],
     [customParticulars.items, customRatios.items],
   );
   const getBuiltinValue = (key: string): number | null => (key in v ? v[key as RatioKey] : null);
-  const [ratioFormat, setRatioFormat] = useState<Record<string, "ratio" | "percent">>({});
+  const [ratioFormat, setRatioFormat] = useTerminalArtifactState<Record<string, "ratio" | "percent">>("RatiosTab.ratioFormat", {});
 
   const particularRefs: RefOption[] = useMemo(
     () => [

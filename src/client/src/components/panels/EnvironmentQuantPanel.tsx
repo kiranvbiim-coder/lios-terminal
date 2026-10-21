@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Leaf } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -129,27 +130,27 @@ type AdvancedReceipt = {
 
 export default function EnvironmentQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<EnvironmentMethod>("climate");
+  const [method, setMethod] = useTerminalArtifactState<EnvironmentMethod>("EnvironmentQuantPanel.method", "climate");
   const [result, setResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ── Climate transition risk ──
-  const [scope1, setScope1] = useState("50000");
-  const [scope2, setScope2] = useState("20000");
-  const [scope3, setScope3] = useState("30000");
-  const [ebitdaUsd, setEbitdaUsd] = useState("50000000");
-  const [carbonPrice, setCarbonPrice] = useState("100");
+  const [scope1, setScope1] = useTerminalArtifactState("EnvironmentQuantPanel.scope1", "50000");
+  const [scope2, setScope2] = useTerminalArtifactState("EnvironmentQuantPanel.scope2", "20000");
+  const [scope3, setScope3] = useTerminalArtifactState("EnvironmentQuantPanel.scope3", "30000");
+  const [ebitdaUsd, setEbitdaUsd] = useTerminalArtifactState("EnvironmentQuantPanel.ebitdaUsd", "50000000");
+  const [carbonPrice, setCarbonPrice] = useTerminalArtifactState("EnvironmentQuantPanel.carbonPrice", "100");
 
   // ── Carbon credit MRV ──
-  const [grossOffset, setGrossOffset] = useState("100000");
-  const [permanenceRisk, setPermanenceRisk] = useState("10");
-  const [additionality, setAdditionality] = useState("0.9");
-  const [marketPrice, setMarketPrice] = useState("25");
+  const [grossOffset, setGrossOffset] = useTerminalArtifactState("EnvironmentQuantPanel.grossOffset", "100000");
+  const [permanenceRisk, setPermanenceRisk] = useTerminalArtifactState("EnvironmentQuantPanel.permanenceRisk", "10");
+  const [additionality, setAdditionality] = useTerminalArtifactState("EnvironmentQuantPanel.additionality", "0.9");
+  const [marketPrice, setMarketPrice] = useTerminalArtifactState("EnvironmentQuantPanel.marketPrice", "25");
 
   // ── Dark advanced climate routes (financed emissions / climate VaR / abatement curve / transition pathway) ──
-  const [advancedSourceMode, setAdvancedSourceMode] = useState<InputSourceMode>("manual");
-  const [advancedInputs, setAdvancedInputs] = useState<Record<AdvancedClimateMethod, string>>({
+  const [advancedSourceMode, setAdvancedSourceMode] = useTerminalArtifactState<InputSourceMode>("EnvironmentQuantPanel.advancedSourceMode", "manual");
+  const [advancedInputs, setAdvancedInputs] = useTerminalArtifactState<Record<AdvancedClimateMethod, string>>("EnvironmentQuantPanel.advancedInputs", {
     "financed-emissions": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["financed-emissions"], null, 2),
     "climate-var": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["climate-var"], null, 2),
     "abatement-curve": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["abatement-curve"], null, 2),

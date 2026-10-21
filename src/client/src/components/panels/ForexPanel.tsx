@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { observedQuotes } from "@/lib/quoteObservation";
 import { useQuery } from "@tanstack/react-query";
@@ -16,14 +17,14 @@ const COMMODITIES = [
 ];
 
 export default function ForexPanel() {
-  const [filterRegion, setFilterRegion] = useState<"ALL" | "MAJOR" | "ASIA" | "EM">("ALL");
+  const [filterRegion, setFilterRegion] = useTerminalArtifactState<"ALL" | "MAJOR" | "ASIA" | "EM">("ForexPanel.filterRegion", "ALL");
 
   // The main grid below is limited to the 10 pairs the server tracks
   // (FX_PAIRS_DEF); custom pairs bypass that and fetch any Yahoo-recognized
   // FX symbol live through the general quotes endpoint, the same one every
   // equity quote already uses.
-  const [customPairs, setCustomPairs] = useState<string[]>([]);
-  const [customInput, setCustomInput] = useState("");
+  const [customPairs, setCustomPairs] = useTerminalArtifactState<string[]>("ForexPanel.customPairs", []);
+  const [customInput, setCustomInput] = useTerminalArtifactState("ForexPanel.customInput", "");
   const addCustomPair = () => {
     const raw = customInput.trim().toUpperCase().replace(/[^A-Z]/g, "");
     if (raw.length !== 6) return;

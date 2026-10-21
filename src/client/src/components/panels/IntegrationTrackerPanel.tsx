@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { GitCompare, Calendar, CheckSquare, AlertTriangle, Play, CheckCircle2, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -32,7 +33,7 @@ const MOCK_TASKS = [
 ];
 
 export default function IntegrationTrackerPanel() {
-  const [selectedStream, setSelectedStream] = useState("All");
+  const [selectedStream, setSelectedStream] = useTerminalArtifactState("IntegrationTrackerPanel.selectedStream", "All");
 
   const filteredTasks = useMemo(() => {
     return MOCK_TASKS.filter(t => selectedStream === "All" || t.stream === selectedStream);

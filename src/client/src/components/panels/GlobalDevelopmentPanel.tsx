@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Globe2 } from "lucide-react";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
@@ -19,14 +20,14 @@ function fmtValue(v: number | null, unit: string): string {
 }
 
 export default function GlobalDevelopmentPanel() {
-  const [domain, setDomain] = useState<WbDomain>("economics_policy");
+  const [domain, setDomain] = useTerminalArtifactState<WbDomain>("GlobalDevelopmentPanel.domain", "economics_policy");
   const { data: catalog } = useWbCatalog(domain);
-  const [catalogMode, setCatalogMode] = useState<"curated" | "provider">("curated");
-  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogMode, setCatalogMode] = useTerminalArtifactState<"curated" | "provider">("GlobalDevelopmentPanel.catalogMode", "curated");
+  const [catalogPage, setCatalogPage] = useTerminalArtifactState("GlobalDevelopmentPanel.catalogPage", 1);
   const [catalogSearch, setCatalogSearch] = useState("");
   const providerCatalog = useWbProviderCatalog(catalogPage, 50, catalogSearch, catalogMode === "provider");
-  const [code, setCode] = useState<string>("");
-  const [focusCountry, setFocusCountry] = useState("US");
+  const [code, setCode] = useTerminalArtifactState<string>("GlobalDevelopmentPanel.code", "");
+  const [focusCountry, setFocusCountry] = useTerminalArtifactState("GlobalDevelopmentPanel.focusCountry", "US");
 
   const activeCode = code || (catalogMode === "provider" ? providerCatalog.data?.items[0]?.code : catalog?.[0]?.code) || "";
   const activeIndicator = catalogMode === "provider"

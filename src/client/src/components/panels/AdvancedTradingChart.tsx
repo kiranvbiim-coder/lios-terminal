@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart, createSeriesMarkers, type IChartApi, type ISeriesApi, type SeriesType, type UTCTimestamp } from "lightweight-charts";
 import { Eraser, Lock, Minus, MousePointer2, PenLine, Play, RectangleHorizontal, RotateCcw, Unlock } from "lucide-react";
@@ -23,13 +24,14 @@ function loadDrawings(symbol: string): ChartDrawing[] {
 }
 
 export default function AdvancedTradingChart({ data, symbol, chartType, overlays, oscillator, compareSymbols, srLevels = [], breakoutSignals = [], events = [], referenceLevels = [], onDrawingsChange }: Props) {
+  const terminal = useTerminalArtifactContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const priceRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const drawStartRef = useRef<ChartDrawingPoint | null>(null);
   const [drawMode, setDrawMode] = useState<"cursor" | "horizontal" | "trendline" | "rectangle">("cursor");
   const [drawColor, setDrawColor] = useState(DRAW_COLORS[0]);
-  const [drawings, setDrawings] = useState<ChartDrawing[]>(() => loadDrawings(symbol));
+  const [drawings, setDrawings] = useTerminalArtifactState<ChartDrawing[]>(`chart.drawings.${symbol}`, () => terminal ? [] : loadDrawings(symbol));
   const [renderVersion, setRenderVersion] = useState(0);
   const [replayMode, setReplayMode] = useState(false);
   const [replayIndex, setReplayIndex] = useState(data.length);
@@ -39,8 +41,8 @@ export default function AdvancedTradingChart({ data, symbol, chartType, overlays
   visibleDataRef.current = visibleData;
   useEffect(() => { onDrawingsChange?.(drawings); }, [drawings, onDrawingsChange]);
 
-  useEffect(() => { setDrawings(loadDrawings(symbol)); setReplayIndex(data.length); setReplayMode(false); }, [data.length, symbol]);
-  useEffect(() => { localStorage.setItem(`${DRAWING_KEY}${symbol}`, JSON.stringify(drawings)); }, [drawings, symbol]);
+  useEffect(() => { if (!terminal) setDrawings(loadDrawings(symbol)); setReplayIndex(data.length); setReplayMode(false); }, [data.length, symbol]);
+  useEffect(() => { if (!terminal) localStorage.setItem(`${DRAWING_KEY}${symbol}`, JSON.stringify(drawings)); }, [drawings, symbol]);
 
   const seriesPoints = useMemo(() => visibleData.map(point => ({ time: asTime(point.date), open: point.open, high: point.high, low: point.low, close: point.close })), [visibleData]);
 

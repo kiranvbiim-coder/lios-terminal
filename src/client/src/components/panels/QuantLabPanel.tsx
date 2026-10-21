@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useGatewayEvent, useGatewayReady } from "@/lib/gateway/GatewayProvider";
 import { useEffect, useMemo, useState } from "react";
 import { Archive, CheckCircle2, Clock, Copy, FlaskConical, GitCompareArrows, Link, Loader2, Play, Plus, RefreshCw, Save, Square, XCircle } from "lucide-react";
@@ -75,28 +76,28 @@ function QuantResultReceipt({ value }: { value: unknown }) {
 }
 
 export default function QuantLabPanel() {
-  const [workspace, setWorkspace] = useState<QuantWorkspace>("statistics");
+  const [workspace, setWorkspace] = useTerminalArtifactState<QuantWorkspace>("QuantLabPanel.workspace", "statistics");
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [models, setModels] = useState<LabModel[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [selectedExperimentId, setSelectedExperimentId] = useTerminalArtifactState<string | null>("QuantLabPanel.selectedExperimentId", null);
+  const [selectedRunId, setSelectedRunId] = useTerminalArtifactState<string | null>("QuantLabPanel.selectedRunId", null);
+  const [compareIds, setCompareIds] = useTerminalArtifactState<string[]>("QuantLabPanel.compareIds", []);
   const [comparison, setComparison] = useState<CompareResult | null>(null);
-  const [name, setName] = useState("Untitled Quant Experiment");
-  const [description, setDescription] = useState("");
-  const [modelId, setModelId] = useState("");
-  const [parameters, setParameters] = useState<Record<string, unknown>>({});
-  const [rawParameters, setRawParameters] = useState("{}");
-  const [datasetIds, setDatasetIds] = useState("");
+  const [name, setName] = useTerminalArtifactState("QuantLabPanel.name", "Untitled Quant Experiment");
+  const [description, setDescription] = useTerminalArtifactState("QuantLabPanel.description", "");
+  const [modelId, setModelId] = useTerminalArtifactState("QuantLabPanel.modelId", "");
+  const [parameters, setParameters] = useTerminalArtifactState<Record<string, unknown>>("QuantLabPanel.parameters", {});
+  const [rawParameters, setRawParameters] = useTerminalArtifactState("QuantLabPanel.rawParameters", "{}");
+  const [datasetIds, setDatasetIds] = useTerminalArtifactState("QuantLabPanel.datasetIds", "");
   const [dataFabricFieldIds, setDataFabricFieldIds] = useState<string[]>(() => loadDataFabricFields("lios.waveC.selectedFields"));
-  const [dataFabricFieldId, setDataFabricFieldId] = useState(QUANT_NUMERIC_FIELDS[0]?.id ?? "");
-  const [seed, setSeed] = useState("42");
-  const [timeoutMs, setTimeoutMs] = useState("30000");
-  const [investigationId, setInvestigationId] = useState("");
-  const [organizationId, setOrganizationId] = useState("");
+  const [dataFabricFieldId, setDataFabricFieldId] = useTerminalArtifactState("QuantLabPanel.dataFabricFieldId", QUANT_NUMERIC_FIELDS[0]?.id ?? "");
+  const [seed, setSeed] = useTerminalArtifactState("QuantLabPanel.seed", "42");
+  const [timeoutMs, setTimeoutMs] = useTerminalArtifactState("QuantLabPanel.timeoutMs", "30000");
+  const [investigationId, setInvestigationId] = useTerminalArtifactState("QuantLabPanel.investigationId", "");
+  const [organizationId, setOrganizationId] = useTerminalArtifactState("QuantLabPanel.organizationId", "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

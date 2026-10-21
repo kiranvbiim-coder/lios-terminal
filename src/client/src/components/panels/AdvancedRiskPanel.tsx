@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
@@ -69,14 +70,14 @@ type LiquidityRiskResult = { liquidityVaR: number; estimatedLiquidationCost: num
 type CreditMetricsResult = { expectedLoss: number; unexpectedLossStd: number; creditVar: number; economicCapital: number; tailExpectedShortfall: number; seed: number };
 
 export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: string }) {
-  const [input, setInput] = useState(initialSymbol || "AAPL");
-  const [symbol, setSymbol] = useState(initialSymbol || "AAPL");
-  const [benchmark, setBenchmark] = useState("^GSPC");
-  const [range, setRange] = useState("1Y");
-  const [positionValue, setPositionValue] = useState(100000);
-  const [tailSeed, setTailSeed] = useState(42);
-  const [liquidityInput, setLiquidityInput] = useState<Record<string, unknown>>(() => applySchemaDefaults(LIQUIDITY_VAR_SCHEMA, {}));
-  const [creditMetricsInput, setCreditMetricsInput] = useState<Record<string, unknown>>(() => applySchemaDefaults(CREDIT_METRICS_SCHEMA, {}));
+  const [input, setInput] = useTerminalArtifactState("AdvancedRiskPanel.input", initialSymbol || "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol || "AAPL");
+  const [benchmark, setBenchmark] = useTerminalArtifactState("AdvancedRiskPanel.benchmark", "^GSPC");
+  const [range, setRange] = useTerminalArtifactState("AdvancedRiskPanel.range", "1Y");
+  const [positionValue, setPositionValue] = useTerminalArtifactState("AdvancedRiskPanel.positionValue", 100000);
+  const [tailSeed, setTailSeed] = useTerminalArtifactState("AdvancedRiskPanel.tailSeed", 42);
+  const [liquidityInput, setLiquidityInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.liquidityInput", () => applySchemaDefaults(LIQUIDITY_VAR_SCHEMA, {}));
+  const [creditMetricsInput, setCreditMetricsInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.creditMetricsInput", () => applySchemaDefaults(CREDIT_METRICS_SCHEMA, {}));
   const tailReport = useMutation({
     mutationFn: async () => {
       if (returns.length < 30 || !Number.isFinite(positionValue) || positionValue <= 0) throw new Error("Tail report requires 30+ observed returns and a positive position value.");

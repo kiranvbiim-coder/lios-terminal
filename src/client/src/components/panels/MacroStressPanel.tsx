@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { Zap, RefreshCw, ChevronDown } from "lucide-react";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -107,7 +108,7 @@ function NumericInput({
   onChange: (v: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = useTerminalArtifactState("NumericInput.raw", "");
 
   const formatted = unit === "$"
     ? `$${value.toFixed(decimals)}`
@@ -156,7 +157,7 @@ function NumericInput({
 }
 
 export default function MacroStressPanel({ onSymbol, onNav }: Props) {
-  const [params, setParams] = useState<MacroParams>(DEFAULTS);
+  const [params, setParams] = useTerminalArtifactState<MacroParams>("MacroStressPanel.params", DEFAULTS);
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
   const fedFunds = useIndicatorDetail("FEDFUNDS");
   const cpi = useIndicatorDetail("CPIAUCSL");

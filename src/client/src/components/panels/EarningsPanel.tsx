@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,7 +77,7 @@ const REGION_COLORS: Record<string, string> = {
 };
 
 export default function EarningsPanel({ onSymbol }: { onSymbol?: (sym: string) => void }) {
-  const [regionFilter, setRegionFilter] = useState<"ALL" | "US" | "IN" | "JP" | "HK">("ALL");
+  const [regionFilter, setRegionFilter] = useTerminalArtifactState<"ALL" | "US" | "IN" | "JP" | "HK">("EarningsPanel.regionFilter", "ALL");
   const [showReported, setShowReported] = useState(false);
 
   const { data: events, isLoading } = useQuery<EarningsEvent[]>({

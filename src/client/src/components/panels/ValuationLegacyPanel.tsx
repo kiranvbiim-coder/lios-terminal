@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuote, useQuoteStatic, useFundamentals, useOHLCV } from "@/lib/useFinance";
 import { apiRequest } from "@/lib/queryClient";
@@ -215,6 +216,8 @@ function PiotroskiYearEditor({ ov, inputs, curr }: {
 
 // ── Main Component ────────────────────────────────────────────────
 function ValuationPanel({ symbol }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const initializedSymbol = useRef(symbol);
   const isInternal = useAudience() === "internal";
   const { data: quote, isLoading } = useQuote(symbol);
   const { data: quoteStatic } = useQuoteStatic(symbol);
@@ -279,7 +282,7 @@ function ValuationPanel({ symbol }: Props) {
       ]);
     },
   });
-  const [showAllProviderData, setShowAllProviderData] = useState(false);
+  const [showAllProviderData, setShowAllProviderData] = useTerminalArtifactState("ValuationPanel.showAllProviderData", false);
   const valuationSnapshotRefs = [
     financialSnapshot ? { ...financialSnapshot, entityKey: "financial" } : null,
     marketSnapshot ? { ...marketSnapshot, entityKey: "market" } : null,
@@ -302,13 +305,11 @@ function ValuationPanel({ symbol }: Props) {
   const [incCurrent, incPrior] = parseLatestTwoYears<IncomeData>(incomeReports);
   const [ratCurrent, ratPrior] = parseLatestTwoYears<RatiosData>(ratiosReports);
   const [cfCurrent, cfPrior] = parseLatestTwoYears<CashflowData>(cashflowReports);
-  const [activeTab, setActiveTab] = useState<
-    "fcf_worksheet" | "lbo" | "dupont" | "ratios" | "ddm" | "beneish" | "ohlson" | "comps" | "earnings_quality" |
-    "residual_income" | "eva" | "reverse_dcf" | "asset_value" | "model_agreement" | "provider_data" | "estimate_intelligence"
-  >("fcf_worksheet");
+  const [activeTab, setActiveTab] = useTerminalArtifactState<"fcf_worksheet" | "lbo" | "dupont" | "ratios" | "ddm" | "beneish" | "ohlson" | "comps" | "earnings_quality" |
+    "residual_income" | "eva" | "reverse_dcf" | "asset_value" | "model_agreement" | "provider_data" | "estimate_intelligence">("ValuationPanel.activeTab", "fcf_worksheet");
 
   // Per-year editable rows for Years 1–10
-  const [rows, setRows] = useState<YearRow[]>(() => Array(YEARS).fill(null).map(() => ({ ...DEFAULT_YEAR_ROW })));
+  const [rows, setRows] = useTerminalArtifactState<YearRow[]>("ValuationPanel.rows", () => Array(YEARS).fill(null).map(() => ({ ...DEFAULT_YEAR_ROW })));
 
   // Custom FCF adjustment lines -- real models almost always need bespoke
   // lines the fixed 6 assumption rows don't cover (stock-based comp
@@ -317,7 +318,7 @@ function ValuationPanel({ symbol }: Props) {
   // inputs or computed outputs (or another custom line), and its total is
   // added straight into that year's Free Cash Flow -- see the `worksheet`
   // useMemo below and client/src/lib/customLineItems.ts.
-  const dcfCustomItems = useCustomLineItems();
+  const dcfCustomItems = useCustomLineItems("ValuationPanel.dcfCustomItems");
   const dcfAvailableRefs: RefOption[] = [
     { ref: builtinRef("revenueGrowth"), label: "Revenue Growth %" },
     { ref: builtinRef("ebitdaMargin"), label: "EBITDA Margin %" },
@@ -338,9 +339,9 @@ function ValuationPanel({ symbol }: Props) {
   // WACC builder -- overridable: starts from sensible defaults, tracks which
   // fields the user has actually typed in, and can switch to fully observed
   // factor/rating alternatives when their underlying data is present.
-  const waccOv = useOverridable<keyof WACCInputs>();
-  const [equityCostMethod, setEquityCostMethod] = useState<"capm" | "ff3" | "carhart4" | "ff5">("capm");
-  const [debtCostMethod, setDebtCostMethod] = useState<"manual" | "synthetic">("manual");
+  const waccOv = useOverridable<keyof WACCInputs>("ValuationPanel.waccOv");
+  const [equityCostMethod, setEquityCostMethod] = useTerminalArtifactState<"capm" | "ff3" | "carhart4" | "ff5">("ValuationPanel.equityCostMethod", "capm");
+  const [debtCostMethod, setDebtCostMethod] = useTerminalArtifactState<"manual" | "synthetic">("ValuationPanel.debtCostMethod", "manual");
   const liveRiskFreeRate = useRiskFreeRate();
   const riskFreeRateBaseline = liveRiskFreeRate.isLive && liveRiskFreeRate.ratePercent !== null
     ? liveRiskFreeRate.ratePercent
@@ -418,35 +419,35 @@ function ValuationPanel({ symbol }: Props) {
   // fetch-on-keystroke) since the industry name has to match well enough
   // for the server's fuzzy lookup, and firing a request per keystroke
   // against an unmatched partial name would just be noise.
-  const [industryQuery, setIndustryQuery] = useState("");
-  const [industryLookupArmed, setIndustryLookupArmed] = useState(false);
+  const [industryQuery, setIndustryQuery] = useTerminalArtifactState("ValuationPanel.industryQuery", "");
+  const [industryLookupArmed, setIndustryLookupArmed] = useTerminalArtifactState("ValuationPanel.industryLookupArmed", false);
   const damodaranLookup = useDamodaranIndustryLookup(industryQuery, industryLookupArmed);
 
   // Terminal-value assumptions shared by the DCF worksheet and advanced tabs.
-  const [termGrowth, setTermGrowth] = useState(2.5);
-  const [tvMethod, setTvMethod] = useState<TerminalValueMethod>("gordon");
-  const [exitMultiple, setExitMultiple] = useState(10);
-  const [hybridWeight, setHybridWeight] = useState(50);
-  const [fadeStartGrowth, setFadeStartGrowth] = useState(12);
-  const [fadeYears, setFadeYears] = useState(5);
+  const [termGrowth, setTermGrowth] = useTerminalArtifactState("ValuationPanel.termGrowth", 2.5);
+  const [tvMethod, setTvMethod] = useTerminalArtifactState<TerminalValueMethod>("ValuationPanel.tvMethod", "gordon");
+  const [exitMultiple, setExitMultiple] = useTerminalArtifactState("ValuationPanel.exitMultiple", 10);
+  const [hybridWeight, setHybridWeight] = useTerminalArtifactState("ValuationPanel.hybridWeight", 50);
+  const [fadeStartGrowth, setFadeStartGrowth] = useTerminalArtifactState("ValuationPanel.fadeStartGrowth", 12);
+  const [fadeYears, setFadeYears] = useTerminalArtifactState("ValuationPanel.fadeYears", 5);
 
   // Cash flow basis -- FCFF discounts at WACC and needs the full EV->equity
   // bridge below; FCFE discounts at cost of equity and already nets out debt
   // financing flows, so it lands on equity value directly.
-  const [cashFlowMode, setCashFlowMode] = useState<"fcff" | "fcfe">("fcff");
-  const [fcfeNetBorrowingPct, setFcfeNetBorrowingPct] = useState(0); // % of revenue, net new debt raised each year
+  const [cashFlowMode, setCashFlowMode] = useTerminalArtifactState<"fcff" | "fcfe">("ValuationPanel.cashFlowMode", "fcff");
+  const [fcfeNetBorrowingPct, setFcfeNetBorrowingPct] = useTerminalArtifactState("ValuationPanel.fcfeNetBorrowingPct", 0);
   // Capital structure
-  const [netDebtOverride, setNetDebtOverride] = useState("");
-  const [sharesOverride, setSharesOverride] = useState("");
+  const [netDebtOverride, setNetDebtOverride] = useTerminalArtifactState("ValuationPanel.netDebtOverride", "");
+  const [sharesOverride, setSharesOverride] = useTerminalArtifactState("ValuationPanel.sharesOverride", "");
 
   // Y0 Revenue
-  const [y0RevOverride, setY0RevOverride] = useState("");
+  const [y0RevOverride, setY0RevOverride] = useTerminalArtifactState("ValuationPanel.y0RevOverride", "");
 
 
   // EV -> equity bridge adjustments beyond net debt -- no live data source for
   // these yet, so they're manual-entry (default 0) like the rest of this
   // panel's overridable fields rather than a fabricated number.
-  const bridgeOv = useOverridable<"preferredEquity" | "minorityInterest" | "pensionLiabilities" | "leaseAdjustments" | "nonOperatingAssets" | "jointVentureStakes">();
+  const bridgeOv = useOverridable<"preferredEquity" | "minorityInterest" | "pensionLiabilities" | "leaseAdjustments" | "nonOperatingAssets" | "jointVentureStakes">("ValuationPanel.bridgeOv");
   const bridgeInputs = {
     preferredEquity: bridgeOv.getValue("preferredEquity", 0),
     minorityInterest: bridgeOv.getValue("minorityInterest", 0),
@@ -457,6 +458,8 @@ function ValuationPanel({ symbol }: Props) {
   };
 
   useEffect(() => {
+    if (terminal && initializedSymbol.current === symbol) return;
+    initializedSymbol.current = symbol;
     setY0RevOverride("");
     setNetDebtOverride("");
     setSharesOverride("");
@@ -844,15 +847,15 @@ function ValuationPanel({ symbol }: Props) {
   }, [sensitivityGrid, termGrowth, cashFlowMode, costOfEquity, computedWACC, computeDcfWorksheet]);
 
   // ── LBO (simple) ──────────────────────────────────────────────────
-  const [entryMult, setEntryMult] = useState(12);
-  const [exitMult, setExitMult]   = useState(12);
+  const [entryMult, setEntryMult] = useTerminalArtifactState("ValuationPanel.entryMult", 12);
+  const [exitMult, setExitMult] = useTerminalArtifactState("ValuationPanel.exitMult", 12);
 
   // Debt tranches -- real LBOs almost never have one flat debt assumption:
   // senior secured, term loan B, mezzanine/PIK each carry different
   // leverage and interest, and pay down in seniority order (most senior
   // first) as the deal sweeps FCF. Defaults to a single tranche that
   // reproduces the original flat 5.0x @ 7.0% assumption exactly.
-  const [tranches, setTranches] = useState<LboTranche[]>([
+  const [tranches, setTranches] = useTerminalArtifactState<LboTranche[]>("ValuationPanel.tranches", [
     { id: "senior", label: "SENIOR DEBT", leverageMult: 5.0, interestRate: 7.0 },
   ]);
   const addTranche = useCallback(() => {
@@ -870,15 +873,15 @@ function ValuationPanel({ symbol }: Props) {
   // shortcut. Defaulting to 25 here reproduces that exact prior behavior;
   // making it explicit and editable is the point of unifying onto the
   // shared engine (also used by the M&A desk's LBO modeler).
-  const [lboCapexPct, setLboCapexPct] = useState(25);
+  const [lboCapexPct, setLboCapexPct] = useTerminalArtifactState("ValuationPanel.lboCapexPct", 25);
   // If true, any free cash flow left over once every debt tranche is fully
   // repaid is distributed to the sponsor immediately as an interim dividend
   // recap instead of sitting as balance-sheet cash until exit -- this is
   // what creates a real multi-period cash-flow stream for the IRR solver
   // (and for the GP/LP waterfall below) rather than a single entry/exit pair.
-  const [lboRecap, setLboRecap] = useState(false);
-  const [carryHurdle, setCarryHurdle] = useState(8);
-  const [carryPct, setCarryPct] = useState(20);
+  const [lboRecap, setLboRecap] = useTerminalArtifactState("ValuationPanel.lboRecap", false);
+  const [carryHurdle, setCarryHurdle] = useTerminalArtifactState("ValuationPanel.carryHurdle", 8);
+  const [carryPct, setCarryPct] = useTerminalArtifactState("ValuationPanel.carryPct", 20);
 
   const lboModel = useMemo(() => {
     const entryEbitda = baseRevenue * (rows[0].ebitdaMargin / 100);
@@ -914,7 +917,7 @@ function ValuationPanel({ symbol }: Props) {
   // debt and EVA tab both need them before this point too. Both the
   // auto-computed models below AND the manual-entry defaults for DuPont/
   // Altman/Piotroski draw from the same real numbers.
-  const dupontOv = useOverridable<"netIncome" | "revenue" | "totalAssets" | "totalEquity">();
+  const dupontOv = useOverridable<"netIncome" | "revenue" | "totalAssets" | "totalEquity">("ValuationPanel.dupontOv");
   const dupontDefaults = {
     netIncome: canonicalValue("netIncome", incCurrent?.netIncome ?? (baseRevenue * (rows[0].ebitdaMargin / 100) * 0.62)),
     revenue: canonicalValue("revenue", incCurrent?.revenue ?? baseRevenue),
@@ -940,7 +943,7 @@ function ValuationPanel({ symbol }: Props) {
   // filed figures (LSE financial_reports, SEC-sourced) when available, but
   // every raw input is click-to-edit so a ticker with no filed data (or a
   // hypothetical scenario) can still be scored by typing the numbers in. ──
-  const altmanOv = useOverridable<keyof AltmanZInputs>();
+  const altmanOv = useOverridable<keyof AltmanZInputs>("ValuationPanel.altmanOv");
   const altmanDefaults: AltmanZInputs = {
     totalCurrentAssets: canonicalValue("currentAssets", balCurrent?.totalCurrentAssets ?? 0),
     totalCurrentLiabilities: canonicalValue("currentLiabilities", balCurrent?.totalCurrentLiabilities ?? 0),
@@ -964,8 +967,8 @@ function ValuationPanel({ symbol }: Props) {
   const altmanResult: AltmanZResult = altmanZScore(altmanInputs);
   const altmanHasLiveData = !!(balCurrent && incCurrent && marketCap);
 
-  const piotroskiCurOv = useOverridable<keyof PiotroskiYearInputs>();
-  const piotroskiPriorOv = useOverridable<keyof PiotroskiYearInputs>();
+  const piotroskiCurOv = useOverridable<keyof PiotroskiYearInputs>("ValuationPanel.piotroskiCurOv");
+  const piotroskiPriorOv = useOverridable<keyof PiotroskiYearInputs>("ValuationPanel.piotroskiPriorOv");
   const piotroskiCurDefaults: PiotroskiYearInputs = {
     netIncome: incCurrent?.netIncome ?? 0, totalAssets: balCurrent?.totalAssets ?? 0,
     operatingCashFlow: cfCurrent?.operatingCashFlow ?? 0, longTermDebt: balCurrent?.longTermDebt ?? 0,

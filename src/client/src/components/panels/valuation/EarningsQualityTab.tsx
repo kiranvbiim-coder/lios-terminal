@@ -125,8 +125,8 @@ function computeReferenceScores(p: AnalysisTabProps) {
 
 export default function EarningsQualityTab(props: AnalysisTabProps) {
   const { symbol, curr, marketCap, balCurrent, balPrior, incCurrent, incPrior, cfCurrent, incomeReportsFull, balanceReportsFull } = props;
-  const curOv = useOverridable<CurKey>();
-  const priorOv = useOverridable<BalKey>();
+  const curOv = useOverridable<CurKey>("EarningsQualityTab.curOv");
+  const priorOv = useOverridable<BalKey>("EarningsQualityTab.priorOv");
   const [advancedMerton, setAdvancedMerton] = useState<{ assetValue: number; assetVolPct: number; distanceToDefault: number; riskNeutralDefaultProbabilityPct: number; equityRepricingError: number; volatilityRepricingErrorPct: number; receipt: AdvancedReceipt } | null>(null);
   const [mertonError, setMertonError] = useState<string | null>(null);
   const [mertonRunning, setMertonRunning] = useState(false);

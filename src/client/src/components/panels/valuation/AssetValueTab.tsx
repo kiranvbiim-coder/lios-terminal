@@ -19,7 +19,7 @@ type AssumptionKey =
   | "receivablesMultiple" | "inventoryMultiple" | "ppeMultiple" | "intangibleRebuildCost";
 
 export default function AssetValueTab({ symbol, curr, price, sharesOut, balanceSheet, onResult }: Props) {
-  const ov = useOverridable<AssumptionKey>();
+  const ov = useOverridable<AssumptionKey>("AssetValueTab.ov");
   const hasFiledData = balanceSheet !== null;
   const b = balanceSheet;
   const cash = b?.cashAndCashEquivalents ?? 0;

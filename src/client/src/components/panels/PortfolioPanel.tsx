@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, type ReactNode } from "react";
 import type { ViewMode } from "@/lib/terminalTypes";
 import AdvancedRiskPanel from "./AdvancedRiskPanel";
@@ -21,7 +22,7 @@ interface Props {
 
 export default function PortfolioPanel({ onSymbol, onNav, symbol = "AAPL", externalRiskMod }: Props) {
   const isClient = useAudience() === "client";
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useTerminalArtifactState<Section>("PortfolioPanel.section", "overview");
   const definition = WORKSTATION_DEFINITIONS.portfolio;
   const navigate = onNav ?? (() => undefined);
 

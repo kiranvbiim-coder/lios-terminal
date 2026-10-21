@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useYieldCurve } from "@/lib/useEconomics";
 import { AreaChart, Area, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid, Cell } from "recharts";
@@ -69,11 +70,11 @@ function YieldCurveSignalsRunner({ curve }: { curve: { label: string; yield: num
 }
 
 export default function YieldCurvePanel({}: Props) {
-  const [tab, setTab] = useState<"us" | "global">("us");
+  const [tab, setTab] = useTerminalArtifactState<"us" | "global">("YieldCurvePanel.tab", "us");
   const lseStatus = useLseStatus();
   const lseConfigured = lseStatus.data?.configured ?? false;
   const bondCountries = useLseBondsCountries();
-  const [globalCountry, setGlobalCountry] = useState<string>("");
+  const [globalCountry, setGlobalCountry] = useTerminalArtifactState<string>("YieldCurvePanel.globalCountry", "");
   const activeCountry = globalCountry || bondCountries.data?.[0]?.code || "";
   const bondScreen = useLseBondsScreen(tab === "global" ? activeCountry : undefined);
   const globalCurve = useMemo(() => {

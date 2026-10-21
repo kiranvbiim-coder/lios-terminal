@@ -47,6 +47,7 @@ export interface GovernedToolCall {
   researchReadDocuments?: P7ProjectDocument[];
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */
   activeArtifactRefs?: string[];
+  terminalArtifact?: { artifactId: string; version: number; contentHash: string };
   /** Server-owned Project resource transmission posture; false means resource content must not be disclosed. */
   resourceTransmissionAllowed?: boolean;
   stepId?: string;

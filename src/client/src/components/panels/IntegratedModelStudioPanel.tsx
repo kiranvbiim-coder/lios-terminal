@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { CheckCircle2, Database, ExternalLink, Play, RefreshCw, Save, ShieldAlert } from "lucide-react";
@@ -197,12 +198,13 @@ function shortDate(value: string | null): string {
 }
 
 export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string }) {
-  const [activeSymbol, setActiveSymbol] = useState((symbol || "AAPL").toUpperCase());
+  const terminalContext = useTerminalArtifactContext();
+  const [activeSymbol, setActiveSymbol] = useTerminalArtifactState("IntegratedModelStudioPanel.activeSymbol", (symbol || "AAPL").toUpperCase());
   const [snapshot, setSnapshot] = useState<PointInTimeDatasetSnapshot | null>(null);
   const [model, setModel] = useState<ModelResponse | null>(null);
   const [assumptions, setAssumptions] = useState<IntegratedModelAssumptions | null>(null);
-  const [scheduleState, setScheduleState] = useState<Record<string, unknown>>({});
-  const [tab, setTab] = useState<StatementTab>("income");
+  const [scheduleState, setScheduleState] = useTerminalArtifactState<Record<string, unknown>>("IntegratedModelStudioPanel.scheduleState", {});
+  const [tab, setTab] = useTerminalArtifactState<StatementTab>("IntegratedModelStudioPanel.tab", "income");
   const [revisions, setRevisions] = useState<RevisionReport | null>(null);
   const [variance, setVariance] = useState<VarianceReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -210,7 +212,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   const projectsQuery = useProjects();
   const invalidateArtifacts = useInvalidateArtifacts();
   const invalidateProjects = useInvalidateProjects();
-  const [destination, setDestination] = useState("");
+  const [destination, setDestination] = useTerminalArtifactState("IntegratedModelStudioPanel.destination", "");
   const [artifactSave, dispatchArtifactSave] = useReducer(modelArtifactSaveReducer, initialModelArtifactSaveState);
   const [openedArtifact, setOpenedArtifact] = useState<SavedModelArtifact | null>(null);
   const sessionsQuery = useProjectSessions(openedArtifact?.detail.artifact.projectId ?? null);
@@ -241,6 +243,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
     const cleanSymbol = activeSymbol.trim().toUpperCase();
     if (!cleanSymbol) return;
     if (modelInFlight.current) return;
+    terminalContext?.setSymbol(cleanSymbol);
     modelInFlight.current = true;
     setBusy(true);
     setError(null);
@@ -310,7 +313,8 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
       <Suspense fallback={<p role="status">Opening canonical Artifact…</p>}>
         <ArtifactPane artifactId={openedArtifact.detail.artifact.id} projectId={openedArtifact.detail.artifact.projectId} sessions={sessionsQuery.data ?? []}
           onClose={() => setOpenedArtifact(null)}
-          onAsk={() => {
+          onAsk={(id, title, stagedPrompt) => {
+            if (terminalContext?.onAsk) { terminalContext.onAsk(id, title, stagedPrompt); return; }
             window.location.hash = formatLiosAddress({ kind: "project", projectId: openedArtifact.request.projectId });
             setExperienceSurface("projects");
           }} />

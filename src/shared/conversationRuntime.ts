@@ -285,6 +285,11 @@ export const conversationRequestSchema = z.object({
     selection: conversationSelectionSchema.nullable().optional(),
     personalFinance: p6PersonalFinanceRequestSchema.optional(),
     nodeFinancePolicy: remoteNodePlacementPolicySchema.options[1].optional(),
+    terminalArtifact: z.object({
+      artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i),
+      version: z.number().int().positive(),
+      contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict().optional(),
   }).strict().optional(),
 }).strict();
 export type ConversationRequest = z.infer<typeof conversationRequestSchema>;

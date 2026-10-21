@@ -1,3 +1,4 @@
+import { bindTerminalArtifactIdentity } from "./terminalArtifactIdentity";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { and, asc, desc, eq, isNull, isNotNull } from "drizzle-orm";
@@ -636,7 +637,7 @@ async function createArtifactRecord(
   await validateArtifactOwner(ctx, input);
   // A Project takes lifecycle ownership; the originating Chat remains provenance, not a cascading parent.
   const owningChatId = input.projectId === null ? input.owningChatId ?? null : null;
-  const content = artifactContentSchema.parse(input.content);
+  const content = await bindTerminalArtifactIdentity(artifactContentSchema.parse(input.content));
   if (content.kind === "spreadsheet") await validateInitialSpreadsheetLineage(ctx, input.projectId, content, owningChatId);
   assertArtifactContentSafe(content);
   assertResearchClaimRefsSafe(content);
@@ -965,7 +966,7 @@ export async function createArtifactVersion(
   maintenanceProof?: ArtifactModelWriteProof,
 ): Promise<ProjectArtifactVersion> {
   const artifact = await getArtifact(ctx, input.artifactId);
-  let content = artifactContentSchema.parse(input.content);
+  let content = await bindTerminalArtifactIdentity(artifactContentSchema.parse(input.content));
   if (content.kind !== artifact.kind) throw new Error("Artifact kind cannot change across versions.");
   assertArtifactContentSafe(content);
   assertResearchClaimRefsSafe(content);
@@ -973,6 +974,12 @@ export async function createArtifactVersion(
   assertArtifactRefsSafe(input.dependencyRefs ?? [], "dependencyRefs");
   const base = await getArtifactVersion(ctx, input.artifactId, input.baseVersion);
   const baseContent = artifactContentSchema.parse(base.content);
+  if (content.kind === "screen" && baseContent.kind === "screen" && baseContent.state.terminal !== undefined) {
+    if (hashLedgerValue(content.state.recordedAnalysis ?? null) !== hashLedgerValue(baseContent.state.recordedAnalysis ?? null)) throw new Error("Recorded terminal calculations are immutable; recompute through the canonical engine owner.");
+    const nextTerminal = content.state.terminal as { marketMode?: unknown; asOf?: unknown } | undefined;
+    const beforeTerminal = baseContent.state.terminal as { marketMode?: unknown; asOf?: unknown };
+    if (!nextTerminal || nextTerminal.marketMode !== beforeTerminal.marketMode || nextTerminal.asOf !== beforeTerminal.asOf) throw new Error("Terminal presentation edits cannot mint or relabel market snapshots.");
+  }
   if (maintenanceProof) {
     if (content.kind !== "spreadsheet") throw new Error("Model maintenance cannot change Artifact kind.");
     const verified = await validateModelMaintenanceWrite(ctx, artifact, base, content, maintenanceProof);
@@ -1439,6 +1446,7 @@ export async function createArtifactProposal(
   if (artifact.headVersion !== input.baseVersion) throw new Error("Proposal base version is stale.");
   const baseVersion = await getArtifactVersion(ctx, artifact.id, input.baseVersion);
   const baseContent = artifactContentSchema.parse(baseVersion.content);
+  if (baseContent.kind === "screen" && baseContent.state.terminal !== undefined) throw new Error("Interactive terminal Artifacts require typed operations; generic proposals cannot change source posture or recorded analysis.");
   let proposed = input.type === "spreadsheet_ai_diff"
     ? applySpreadsheetDiffs(baseContent, input.diffs ?? [])
     : applyArtifactPatch(baseContent, input.patch ?? {});
@@ -1526,6 +1534,7 @@ export async function decideArtifactProposal(ctx: TenantContext, proposalId: str
   if (artifact.headVersion !== proposal.baseVersion) throw new Error("Artifact changed after this proposal was created; reject or recreate the proposal.");
   const base = await getArtifactVersion(ctx, artifact.id, proposal.baseVersion);
   const baseContent = artifactContentSchema.parse(base.content);
+  if (baseContent.kind === "screen" && baseContent.state.terminal !== undefined) throw new Error("Interactive terminal Artifacts require typed operations; generic proposals cannot change source posture or recorded analysis.");
   let proposedContent = proposal.proposalType === "spreadsheet_ai_diff"
     ? applySpreadsheetDiffs(baseContent, proposal.diffs as unknown as SpreadsheetCellDiff[])
     : applyArtifactPatch(baseContent, proposal.patch);

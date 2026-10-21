@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect } from "react";
 import { useQuotes, useIndexSparklines } from "@/lib/useFinance";
 import { formatPrice, pctClass, INDICES } from "@/lib/finance";
@@ -90,11 +91,11 @@ export default function MarketOverview({ activeSymbol, onSymbol, onNav }: Props)
   const { data: indices, isLoading: idxLoad } = useQuotes(indexSymbols);
   const { data: sparklines } = useIndexSparklines();
   
-  const [activeTab, setActiveTab] = useState<string>("US");
-  const [directorySearch, setDirectorySearch] = useState<string>("");
-  const [selectedSector, setSelectedSector] = useState<string>("All");
-  const [selectedAsset, setSelectedAsset] = useState<string>("all");
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [activeTab, setActiveTab] = useTerminalArtifactState<string>("MarketOverview.activeTab", "US");
+  const [directorySearch, setDirectorySearch] = useTerminalArtifactState<string>("MarketOverview.directorySearch", "");
+  const [selectedSector, setSelectedSector] = useTerminalArtifactState<string>("MarketOverview.selectedSector", "All");
+  const [selectedAsset, setSelectedAsset] = useTerminalArtifactState<string>("MarketOverview.selectedAsset", "all");
+  const [currentPage, setCurrentPage] = useTerminalArtifactState<number>("MarketOverview.currentPage", 1);
   const [dirData, setDirData] = useState<{ items: any[]; total: number; totalPages: number } | null>(null);
   const [dirLoading, setDirLoading] = useState<boolean>(false);
   const [clocks, setClocks] = useState<any[]>([]);

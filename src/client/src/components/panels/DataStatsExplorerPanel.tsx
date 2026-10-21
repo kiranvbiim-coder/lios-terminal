@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { Sigma, Download, ArrowUpDown } from "lucide-react";
@@ -26,9 +27,9 @@ function StatCell({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 function CompareMode() {
-  const [tickerInput, setTickerInput] = useState("AAPL,MSFT,GOOGL,AMZN");
-  const [symbols, setSymbols] = useState(tickerInput.split(",").map((s) => s.trim().toUpperCase()));
-  const [range, setRange] = useState("1Y");
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("CompareMode.tickerInput", "AAPL,MSFT,GOOGL,AMZN");
+  const [symbols, setSymbols] = useTerminalArtifactState("CompareMode.symbols", tickerInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [range, setRange] = useTerminalArtifactState("CompareMode.range", "1Y");
 
   const results = useQueries({
     queries: symbols.map((symbol) => ({
@@ -95,15 +96,15 @@ function CompareMode() {
 }
 
 export default function DataStatsExplorerPanel({ symbol: initialSymbol }: { symbol?: string }) {
-  const [mode, setMode] = useState<"single" | "compare">("single");
-  const [input, setInput] = useState(initialSymbol || "AAPL");
+  const [mode, setMode] = useTerminalArtifactState<"single" | "compare">("DataStatsExplorerPanel.mode", "single");
+  const [input, setInput] = useTerminalArtifactState("DataStatsExplorerPanel.input", initialSymbol || "AAPL");
   const [symbol, setSymbol] = useState(initialSymbol || "AAPL");
-  const [range, setRange] = useState("1Y");
-  const [dateFilter, setDateFilter] = useState("");
-  const [minAbsReturn, setMinAbsReturn] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [tablePage, setTablePage] = useState(1);
+  const [range, setRange] = useTerminalArtifactState("DataStatsExplorerPanel.range", "1Y");
+  const [dateFilter, setDateFilter] = useTerminalArtifactState("DataStatsExplorerPanel.dateFilter", "");
+  const [minAbsReturn, setMinAbsReturn] = useTerminalArtifactState("DataStatsExplorerPanel.minAbsReturn", "");
+  const [sortKey, setSortKey] = useTerminalArtifactState<SortKey>("DataStatsExplorerPanel.sortKey", "date");
+  const [sortDir, setSortDir] = useTerminalArtifactState<SortDir>("DataStatsExplorerPanel.sortDir", "desc");
+  const [tablePage, setTablePage] = useTerminalArtifactState("DataStatsExplorerPanel.tablePage", 1);
 
   const { data: series, isLoading, dataUpdatedAt } = useOHLCV(symbol, range, "1d");
   const bars = series?.bars ?? [];

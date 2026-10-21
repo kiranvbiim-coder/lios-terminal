@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Activity, Info, RefreshCw, Scale, ShieldCheck, Sliders, Target } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,6 +61,8 @@ function signedLabel(value: number, digits = 2) {
 }
 
 export default function OptionsRiskHedgePanel({ symbol }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const initializedSymbol = useRef(symbol);
   const { data: quote, isLoading } = useQuote(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
@@ -70,36 +73,36 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   const currencySymbol = getCurrencyInfo(currencyCode).symbol;
   const strikes = useMemo(() => buildStrikeLadder(spot), [spot]);
 
-  const [expiryDays, setExpiryDays] = useState(30);
-  const [volatilityPct, setVolatilityPct] = useState(25);
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState(5);
-  const [dividendYieldPct, setDividendYieldPct] = useState(0);
-  const [exerciseStyle, setExerciseStyle] = useState<ExerciseStyle>("european");
-  const [optionSide, setOptionSide] = useState<OptionSide>("call");
-  const [strike, setStrike] = useState(100);
-  const [signedDirection, setSignedDirection] = useState<1 | -1>(1);
-  const [contracts, setContracts] = useState(10);
-  const [contractMultiplier, setContractMultiplier] = useState(DEFAULT_MULTIPLIER);
+  const [expiryDays, setExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.expiryDays", 30);
+  const [volatilityPct, setVolatilityPct] = useTerminalArtifactState("OptionsRiskHedgePanel.volatilityPct", 25);
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("OptionsRiskHedgePanel.riskFreeRatePct", 5);
+  const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsRiskHedgePanel.dividendYieldPct", 0);
+  const [exerciseStyle, setExerciseStyle] = useTerminalArtifactState<ExerciseStyle>("OptionsRiskHedgePanel.exerciseStyle", "european");
+  const [optionSide, setOptionSide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.optionSide", "call");
+  const [strike, setStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.strike", 100);
+  const [signedDirection, setSignedDirection] = useTerminalArtifactState<1 | -1>("OptionsRiskHedgePanel.signedDirection", 1);
+  const [contracts, setContracts] = useTerminalArtifactState("OptionsRiskHedgePanel.contracts", 10);
+  const [contractMultiplier, setContractMultiplier] = useTerminalArtifactState("OptionsRiskHedgePanel.contractMultiplier", DEFAULT_MULTIPLIER);
 
-  const [hedgeMode, setHedgeMode] = useState<HedgeMode>("delta");
-  const [hedgeASide, setHedgeASide] = useState<OptionSide>("call");
-  const [hedgeAStrike, setHedgeAStrike] = useState(100);
-  const [hedgeAExpiryDays, setHedgeAExpiryDays] = useState(45);
-  const [hedgeBSide, setHedgeBSide] = useState<OptionSide>("put");
-  const [hedgeBStrike, setHedgeBStrike] = useState(100);
-  const [hedgeBExpiryDays, setHedgeBExpiryDays] = useState(90);
+  const [hedgeMode, setHedgeMode] = useTerminalArtifactState<HedgeMode>("OptionsRiskHedgePanel.hedgeMode", "delta");
+  const [hedgeASide, setHedgeASide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.hedgeASide", "call");
+  const [hedgeAStrike, setHedgeAStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeAStrike", 100);
+  const [hedgeAExpiryDays, setHedgeAExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeAExpiryDays", 45);
+  const [hedgeBSide, setHedgeBSide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.hedgeBSide", "put");
+  const [hedgeBStrike, setHedgeBStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeBStrike", 100);
+  const [hedgeBExpiryDays, setHedgeBExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeBExpiryDays", 90);
 
-  const [spotShockPct, setSpotShockPct] = useState(2);
-  const [volShockPoints, setVolShockPoints] = useState(2);
-  const [daysElapsed, setDaysElapsed] = useState(1);
-  const [rateShockBps, setRateShockBps] = useState(25);
-  const [cashDividendAmount, setCashDividendAmount] = useState(0);
-  const [cashDividendDays, setCashDividendDays] = useState(15);
-  const [marketCallText, setMarketCallText] = useState("");
-  const [marketPutText, setMarketPutText] = useState("");
-  const [volTouched, setVolTouched] = useState(false);
-  const [rateTouched, setRateTouched] = useState(false);
-  const [qTouched, setQTouched] = useState(false);
+  const [spotShockPct, setSpotShockPct] = useTerminalArtifactState("OptionsRiskHedgePanel.spotShockPct", 2);
+  const [volShockPoints, setVolShockPoints] = useTerminalArtifactState("OptionsRiskHedgePanel.volShockPoints", 2);
+  const [daysElapsed, setDaysElapsed] = useTerminalArtifactState("OptionsRiskHedgePanel.daysElapsed", 1);
+  const [rateShockBps, setRateShockBps] = useTerminalArtifactState("OptionsRiskHedgePanel.rateShockBps", 25);
+  const [cashDividendAmount, setCashDividendAmount] = useTerminalArtifactState("OptionsRiskHedgePanel.cashDividendAmount", 0);
+  const [cashDividendDays, setCashDividendDays] = useTerminalArtifactState("OptionsRiskHedgePanel.cashDividendDays", 15);
+  const [marketCallText, setMarketCallText] = useTerminalArtifactState("OptionsRiskHedgePanel.marketCallText", "");
+  const [marketPutText, setMarketPutText] = useTerminalArtifactState("OptionsRiskHedgePanel.marketPutText", "");
+  const [volTouched, setVolTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.volTouched", false);
+  const [rateTouched, setRateTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.rateTouched", false);
+  const [qTouched, setQTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.qTouched", false);
 
   const T = expiryDays / 365;
   const r = riskFreeRatePct / 100;
@@ -107,6 +110,8 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   const v = volatilityPct / 100;
 
   useEffect(() => {
+    if (terminal && initializedSymbol.current === symbol) return;
+    initializedSymbol.current = symbol;
     if (strikes.length === 0) return;
     const mid = Math.floor(strikes.length / 2);
     setStrike(strikes[mid]);

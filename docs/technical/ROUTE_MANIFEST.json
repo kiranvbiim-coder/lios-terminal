@@ -1630,6 +1630,30 @@
    "unprobed": false
   },
   {
+   "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/open-terminal",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/terminal-operation",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "GET",
    "path": "/api/client/auth/sso/:orgId",
    "reachableBy": [

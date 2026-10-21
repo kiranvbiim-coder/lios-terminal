@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -60,7 +61,7 @@ export function ReceiptSummary({ receipt }: { receipt?: AdvancedReceipt }) {
 
 /** A deliberate manual-import path: it never presents JSON as live data. */
 export function AdvancedManualWorkflow({ spec }: { spec: AdvancedWorkflowSpec }) {
-  const [parameters, setParameters] = useState("");
+  const [parameters, setParameters] = useTerminalArtifactState("AdvancedManualWorkflow.parameters", "");
   const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

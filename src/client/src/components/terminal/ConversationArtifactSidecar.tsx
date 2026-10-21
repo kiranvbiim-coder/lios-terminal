@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { ComponentProps } from "react";
 import { ArtifactPane } from "./ArtifactPane";
 
@@ -10,10 +10,23 @@ interface Props extends ComponentProps<typeof ArtifactPane> {
 
 export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpand, ...props }: Props) {
   const [displayed, setDisplayed] = useState<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  const cleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => cleanup.current?.(), []);
   const requestedVersion = props.version ?? null;
-  return <aside className={focus
+  return <aside style={focus ? undefined : { position: "relative", width: width ?? "48%", minWidth: 320, maxWidth: "80%" }} className={focus
     ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#060606]/95 p-3"
-    : "lios-artifact-sidecar block min-h-0 w-[42%] shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
+    : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
+    <div role="separator" aria-label="Resize analytical Artifact" aria-orientation="vertical" tabIndex={focus ? -1 : 0}
+      className={focus ? "hidden" : "absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"}
+      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setWidth(value => Math.max(320, (value ?? 600) + (event.key === "ArrowLeft" ? 40 : -40))); } }}
+      onPointerDown={event => {
+        event.preventDefault(); cleanup.current?.();
+        const aside = event.currentTarget.parentElement, initial = aside?.getBoundingClientRect().width ?? 600, start = event.clientX;
+        const move = (next: PointerEvent) => setWidth(Math.max(320, Math.min(window.innerWidth * 0.8, initial + start - next.clientX)));
+        const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); cleanup.current = null; };
+        cleanup.current = end; window.addEventListener("pointermove", move); window.addEventListener("pointerup", end, { once: true });
+      }}/>
     <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300/15 p-2" data-p4-artifact-focus={focus || undefined}>
       <span className="text-xs text-muted-foreground">{focus ? "Artifact Focus" : "Saved Artifact"}</span>
       <div className="flex gap-2">

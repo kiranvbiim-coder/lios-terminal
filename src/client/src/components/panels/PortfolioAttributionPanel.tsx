@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { PieChart as PieIcon } from "lucide-react";
@@ -27,11 +28,11 @@ function fmt(v: number, digits = 2): string {
 }
 
 function BrinsonTab() {
-  const [inputA, setInputA] = useState("AAPL:30,JPM:25,XOM:20,JNJ:25");
-  const [inputB, setInputB] = useState("AAPL:20,JPM:20,XOM:30,JNJ:30");
-  const [holdingsA, setHoldingsA] = useState(normalizeWeights(parseHoldings(inputA)));
-  const [holdingsB, setHoldingsB] = useState(normalizeWeights(parseHoldings(inputB)));
-  const [range, setRange] = useState("6M");
+  const [inputA, setInputA] = useTerminalArtifactState("BrinsonTab.inputA", "AAPL:30,JPM:25,XOM:20,JNJ:25");
+  const [inputB, setInputB] = useTerminalArtifactState("BrinsonTab.inputB", "AAPL:20,JPM:20,XOM:30,JNJ:30");
+  const [holdingsA, setHoldingsA] = useTerminalArtifactState("BrinsonTab.holdingsA", normalizeWeights(parseHoldings(inputA)));
+  const [holdingsB, setHoldingsB] = useTerminalArtifactState("BrinsonTab.holdingsB", normalizeWeights(parseHoldings(inputB)));
+  const [range, setRange] = useTerminalArtifactState("BrinsonTab.range", "6M");
 
   const allSymbols = useMemo(() => Array.from(new Set([...holdingsA, ...holdingsB].map((h) => h.symbol))), [holdingsA, holdingsB]);
   const { data: quotes } = useQuotes(allSymbols);
@@ -173,9 +174,9 @@ function BrinsonTab() {
 }
 
 function StyleTab() {
-  const [inputSym, setInputSym] = useState("AAPL");
-  const [symbol, setSymbol] = useState("AAPL");
-  const [range] = useState({ start: "2025-07-01", end: "2026-05-29" });
+  const [inputSym, setInputSym] = useTerminalArtifactState("StyleTab.inputSym", "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactState("StyleTab.symbol", "AAPL");
+  const [range] = useTerminalArtifactState("StyleTab.range", { start: "2025-07-01", end: "2026-05-29" });
   const ohlcv = useQueries({
     queries: [{
       queryKey: ["/api/finance/ohlcv", symbol, "2Y", "1d"],
@@ -251,7 +252,7 @@ function StyleTab() {
 }
 
 export default function PortfolioAttributionPanel() {
-  const [tab, setTab] = useState<Tab>("brinson");
+  const [tab, setTab] = useTerminalArtifactState<Tab>("PortfolioAttributionPanel.tab", "brinson");
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-[#070707] shrink-0">
