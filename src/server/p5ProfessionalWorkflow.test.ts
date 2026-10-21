@@ -146,3 +146,14 @@ test("P5 accepts explicit DCF sensitivity JSON without inventing model inputs", 
   assert.equal(intents[0].parameters?.waccPct, 10);
   assert.equal(intents[0].requiresEntity, true);
 });
+
+test("an explicit complete parameter object is not attributed to an unused selected Artifact", () => {
+  const req = conversationRequestSchema.parse({
+    requestId: "11111111-1111-4111-8111-111111111111",
+    message: 'Run reverse DCF for AAPL {"modelPath":"valuation/reverse-dcf","parameters":{"currentRevenue":100,"marketEquityValue":100,"netDebt":0,"waccPct":10,"terminalGrowthPct":2,"ebitMarginPct":20,"taxRatePct":20,"reinvestmentRatePct":10,"years":5,"solveFor":"revenue_growth"}}',
+    context: { activeObjectRefs: ["artifact:22222222-2222-4222-8222-222222222222"] },
+  });
+  const intent = resolveP5ProfessionalIntents(req).find(item => item.modelPath === "valuation/reverse-dcf");
+  assert.ok(intent?.parameters);
+  assert.equal(intent.activeArtifactRef, null);
+});

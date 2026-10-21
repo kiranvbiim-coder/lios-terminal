@@ -1607,6 +1607,30 @@
   },
   {
    "method": "GET",
+   "path": "/api/chats/:chatId/artifacts",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/keep-draft",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
    "path": "/api/client/auth/sso/:orgId",
    "reachableBy": [
     "anonymous",

@@ -15,6 +15,7 @@ import {
   type RuntimePermissionClass,
 } from "./runtimeContracts";
 import { p6PersonalFinanceRequestSchema } from "./p6FinanceContracts";
+import { p5GuidedInputsSchema } from "./p5GuidedInputs";
 
 export const conversationExecutionModeSchema = z.enum([
   "deterministic_first",
@@ -297,7 +298,7 @@ export const conversationArtifactDraftSchema = z.object({
   sourceRefs: z.array(z.string().trim().min(1).max(1_000)).max(100).default([]),
   executionReceiptIds: z.array(z.string().uuid()).max(100).default([]),
   data: z.record(z.unknown()).default({}),
-  persistence: z.enum(["ephemeral", "project_candidate"]).default("ephemeral"),
+  persistence: z.enum(["ephemeral", "chat_candidate", "project_candidate"]).default("ephemeral"),
 }).strict();
 export type ConversationArtifactDraft = z.infer<typeof conversationArtifactDraftSchema>;
 
@@ -350,6 +351,8 @@ export const conversationDataGapSchema = z.object({
   reason: z.enum(["unavailable", "not_connected", "entitlement", "quota", "frequency", "unsupported"]),
   providersChecked: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
   nextActions: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
+  /** Present when the missing input is a set of named model assumptions the existing recovery action can collect through a guided form. */
+  guidedInputs: p5GuidedInputsSchema.optional(),
 }).strict();
 export type ConversationDataGap = z.infer<typeof conversationDataGapSchema>;
 

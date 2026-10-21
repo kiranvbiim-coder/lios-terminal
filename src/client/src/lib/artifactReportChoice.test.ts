@@ -83,3 +83,12 @@ test("selection, Project, version, head, and hash changes reject the captured so
     { ...source, contentHash: " " },
   ]) assert.match(artifactReportSourceError(incomplete, incomplete)!, /incomplete/);
 });
+
+test("Quick Chat report requests preserve owning Chat and reject cross-chat substitution without requiring a Project", () => {
+  const quick = { ...source, projectId: null, owningChatId: 42 };
+  assert.equal(artifactReportSourceError(quick, quick), null);
+  const request = prepareArtifactReportRequest({ templateId: "risk_report", templates, title: "Chat analysis", captured: quick, current: quick });
+  assert.equal(request.selection?.id, quick.artifactId);
+  assert.match(artifactReportSourceError(quick, { ...quick, owningChatId: 43 })!, /revision changed/);
+  assert.match(artifactReportSourceError({ ...quick, owningChatId: null }, { ...quick, owningChatId: null })!, /incomplete/);
+});

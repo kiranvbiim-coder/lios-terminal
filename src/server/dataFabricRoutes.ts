@@ -305,9 +305,9 @@ export function registerDataFabricRoutes(app: Express): void {
   app.post("/api/financial-models/integrated/runs/:runId/artifact", requireRole(...AUTHOR_ROLES), async (req, res) => {
     const runId = z.string().uuid().safeParse(req.params.runId);
     const input = integratedModelArtifactRequestSchema.safeParse(req.body);
-    if (!runId.success || !input.success) return res.status(400).json({ error: "A valid model run ID and explicit Project ID are required." });
+    if (!runId.success || !input.success) return res.status(400).json({ error: "A valid model run ID and an explicit Project or persistent owning Chat are required." });
     try {
-      const retained = await retainIntegratedModelArtifact(tenantContext(req.user!), runId.data, input.data.projectId);
+      const retained = await retainIntegratedModelArtifact(tenantContext(req.user!), runId.data, input.data.projectId, undefined, input.data.owningChatId);
       res.json(retained);
     } catch (error) {
       if (error instanceof IntegratedModelArtifactError) return res.status(error.status).json({ error: error.message });

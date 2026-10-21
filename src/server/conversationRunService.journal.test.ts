@@ -17,7 +17,7 @@ import type { ExecutionJournalRecord } from "./exec/execution-journal";
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-conversation-journal-"));
 process.env.LIMURIA_DATA_DIR = dataDir;
 const { initDb, closeDb, getDb } = await import("./db");
-const { users } = await import("@shared/schema");
+const { users, projectArtifacts, projectArtifactVersions, projectChatMessages } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { ConversationStartError, startProjectChatRun, startTemporaryRun } = await import("./conversationRunService");
@@ -104,7 +104,7 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
     const bytes = fs.readFileSync(path.join(dataDir, "execution-journal", successfulIds[0]!));
     assert.equal(bytes.includes(Buffer.from((await journal.read(successfulIds[0]!, owner))!.stdout)), false);
   });
-  await t.test("meaningful Project output persists before completed; Quick output stays ephemeral", async () => {
+  await t.test("meaningful Project and Quick output persist before completed with exact message refs", async () => {
     for (const target of [chat, quick]) {
       const requestId = crypto.randomUUID();
       await startProjectChatRun(user, target.id, { requestId, ...financeRequest });
@@ -114,11 +114,8 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
       assert.ok(artifact?.type === "artifact");
       const terminal = events.at(-1);
       assert.equal(terminal?.type === "done" ? terminal.status : null, "completed");
-      if (target.scope === "quick") {
-        assert.equal(artifact.persistedArtifact, undefined);
-        assert.equal(artifact.artifact.persistence, "ephemeral");
-      } else {
-        assert.ok(artifact.persistedArtifact, "Project output persists before completed");
+        assert.equal(artifact.artifact.persistence, target.scope === "quick" ? "chat_candidate" : "project_candidate");
+        assert.ok(artifact.persistedArtifact, "Persistent Chat output persists before completed");
         const version = await getArtifactVersion(tenant, artifact.persistedArtifact.id, artifact.persistedArtifact.version);
         assert.deepEqual(version.sourceRefs, artifact.artifact.sourceRefs);
         assert.deepEqual(version.executionReceiptIds, artifact.artifact.executionReceiptIds);
@@ -137,7 +134,9 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
         workingContextSnapshotSchema.parse(terminal?.type === "done" ? terminal.workingContext : null);
         retainedVersions.push({ ...artifact.persistedArtifact, sources: version.sourceRefs, receipts: version.executionReceiptIds, dependencies: version.dependencyRefs, refreshSpec: version.refreshSpec });
         assert.equal(terminal?.type === "done" ? terminal.workingContext?.activeArtifact : null, artifact.persistedArtifact.id);
-      }
+        const assistant = (await listProjectChatMessages(tenant, target.id)).filter(message => message.role === "assistant").at(-1)!;
+        assert.ok(Array.isArray(assistant.metadata.persistedArtifacts));
+        assert.ok(assistant.metadata.persistedArtifacts.some(ref => typeof ref === "object" && ref !== null && "id" in ref && "version" in ref && ref.id === artifact.persistedArtifact?.id && ref.version === artifact.persistedArtifact?.version));
     }
   });
 
@@ -223,8 +222,11 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
     }
   });
 
-  await t.test("Temporary turns never create journal records", async () => {
+  await t.test("Temporary turns never create journal records, Artifacts, versions or messages", async () => {
     const before = fs.readdirSync(path.join(dataDir, "execution-journal")).sort();
+    const artifactsBefore = await getDb().select({ id: projectArtifacts.id }).from(projectArtifacts);
+    const versionsBefore = await getDb().select({ id: projectArtifactVersions.id }).from(projectArtifactVersions);
+    const messagesBefore = await getDb().select({ id: projectChatMessages.id }).from(projectChatMessages);
     const requestId = crypto.randomUUID();
     await startTemporaryRun(user, { requestId, history: [], ...financeRequest });
     const events = await eventsOf(requestId, user.id);
@@ -234,6 +236,9 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
     assert.equal(artifact.artifact.persistence, "ephemeral");
     assert.deepEqual(fs.readdirSync(path.join(dataDir, "execution-journal")).sort(), before);
     assert.equal(await journal.read(requestId, { userId: user.id, projectId: null, chatId: null }), null);
+    assert.deepEqual(await getDb().select({ id: projectArtifacts.id }).from(projectArtifacts), artifactsBefore);
+    assert.deepEqual(await getDb().select({ id: projectArtifactVersions.id }).from(projectArtifactVersions), versionsBefore);
+    assert.deepEqual(await getDb().select({ id: projectChatMessages.id }).from(projectChatMessages), messagesBefore);
   });
 
   await t.test("recovery interrupts stale running records without admitting or resuming a run", async () => {

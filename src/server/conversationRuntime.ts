@@ -98,12 +98,15 @@ import {
   isP5ProfessionalCapabilityId,
   p5FamilyForCapabilityId,
   buildP5AdvancedArtifact,
+  buildP5ProfessionalResultText,
   buildP5CompanyResearchArtifact,
   buildP5FundamentalsArtifact,
   buildP5ResearchReportArtifact,
   buildP5ReportFromArtifact,
 } from "./p5ProfessionalExecution";
-import { p5InputsFromArtifact } from "./p5ProfessionalWorkflow";
+import { describeP5InputGap, p5InputsFromArtifact } from "./p5ProfessionalWorkflow";
+import type { P5PlainLanguageGap } from "./p5PlainLanguageInputs";
+import { P5_GUIDED_INPUTS_ACTION, type P5GuidedInputs } from "@shared/p5GuidedInputs";
 import { defaultArtifactReportTemplate, getReportTemplate } from "./reportEngine";
 import { p5AdvancedModelPathSchema, p5ProfessionalExportProfileSchema, p5ReconciliationSchema } from "@shared/p5ProfessionalContracts";
 import { executeAdvancedQuant, AdvancedQuantInputError, type AdvancedQuantPath } from "./advancedQuantExecution";
@@ -271,6 +274,7 @@ class ConversationDataGapError extends Error {
     reason: "unavailable" | "not_connected" | "entitlement" | "quota" | "frequency" | "unsupported";
     providersChecked: string[];
     nextActions: string[];
+    guidedInputs?: P5GuidedInputs;
   }) {
     super(gap.message);
     this.name = "ConversationDataGapError";
@@ -2116,11 +2120,11 @@ async function emit(input: ConversationRuntimeInput, event: ConversationRuntimeE
 async function activeResearchSourcePolicy(
   input: ConversationRuntimeInput,
 ): Promise<Pick<GovernedToolCall, "allowedSourceRefs" | "researchSourcePolicy" | "researchSourcePolicyBinding">> {
-  if (input.scope !== "project" || !input.projectId) return { allowedSourceRefs: [] };
+  if (input.scope === "temporary") return { allowedSourceRefs: [] };
   const artifactId = activeArtifactId(input.request.context);
   if (!artifactId) return { allowedSourceRefs: [] };
   const artifact = await getArtifact(input.tenant, artifactId);
-  if (artifact.projectId !== input.projectId) throw new Error("Active ResearchArtifact belongs to a different Project.");
+  if (artifact.projectId !== input.projectId || (input.scope === "quick" && artifact.owningChatId !== input.chatId)) throw new Error("Active ResearchArtifact belongs to a different Chat ownership context.");
   const version = await getArtifactVersion(input.tenant, artifact.id, artifact.headVersion);
   const content = artifactContentSchema.parse(version.content);
   const binding = { artifactId: artifact.id, headVersion: artifact.headVersion, contentHash: version.contentHash };
@@ -2777,7 +2781,7 @@ async function executeP2CapabilityBundle(
         asOf: bars.at(-1)?.date ?? null,
         capabilities: capabilityIds,
       },
-      persistence: input.scope === "project" ? "project_candidate" : "ephemeral",
+      persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "quick" ? "chat_candidate" : "project_candidate",
     };
     artifacts.push(artifact);
     await emit(input, {
@@ -2878,7 +2882,7 @@ async function executeP2CapabilityBundle(
         pointInTimeVerified: result.pointInTimeVerified,
         warnings: result.warnings,
       },
-      persistence: input.scope === "project" ? "project_candidate" : "ephemeral",
+      persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "quick" ? "chat_candidate" : "project_candidate",
     };
     artifacts.push(artifact);
     await emit(input, {
@@ -3028,7 +3032,7 @@ async function executeP6Backtest(
       pointInTimeVerified: result.pointInTimeVerified,
       warnings: result.warnings,
     },
-    persistence: input.scope === "project" ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "quick" ? "chat_candidate" : "project_candidate",
   };
   const receipt = createReceipt({
     requestId,
@@ -3210,7 +3214,7 @@ async function executeP6PersonalFinance(
       monitoring: ["Refresh after new user-owned account or transaction imports."],
       linkedRefs: { models: [snapshot.engineId], sources: sourceRefs, scenarios: [], backtests: [], monitors: [] },
     },
-    persistence: input.scope === "project" ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "quick" ? "chat_candidate" : "project_candidate",
   };
   artifact.executionReceiptIds = [receipt.id];
   const text = personalFinanceText(snapshot);
@@ -3292,7 +3296,7 @@ async function executeTechnical(
       barsUsed: bars.length,
       asOf: bars.at(-1)?.date ?? null,
     },
-    persistence: input.scope === "project" ? "project_candidate" : "ephemeral",
+    persistence: input.scope === "temporary" ? "ephemeral" : input.scope === "quick" ? "chat_candidate" : "project_candidate",
   };
   const trustManifest = buildMarketTrustManifest({
     runtime: input,
@@ -3420,8 +3424,8 @@ async function p5AdvancedInputsFromCapability(
       throw sourceScopeGap(input.request.sourceScope ?? "auto", "project");
     }
     const artifact = await getArtifact(input.tenant, activeArtifactRef);
-    if (input.scope !== "project" || !input.projectId || artifact.projectId !== input.projectId) {
-      throw new Error("Professional Artifact inputs are restricted to the active Project.");
+    if (input.scope === "temporary" || artifact.projectId !== input.projectId || (input.scope === "quick" && artifact.owningChatId !== input.chatId)) {
+      throw new Error("Professional Artifact inputs are restricted to the active Chat ownership context.");
     }
     const version = await getArtifactVersion(input.tenant, artifact.id);
     const content = artifactContentSchema.parse(version.content);
@@ -3443,18 +3447,33 @@ async function p5AdvancedInputsFromCapability(
 }
 
 function p5ProfessionalInputGap(capability: ConversationCapabilityMatch, detail?: string): ConversationDataGapError {
-  const missing = capability.missingInputs.length ? capability.missingInputs : ["structured_model_inputs_or_active_artifact"];
   const workspaceCommand = typeof capability.parameters.workspaceCommand === "string" ? capability.parameters.workspaceCommand : null;
+  const modelPath = typeof capability.parameters.modelPath === "string" ? capability.parameters.modelPath : null;
+  const modelParameters = capability.parameters.modelParameters
+    && typeof capability.parameters.modelParameters === "object"
+    && !Array.isArray(capability.parameters.modelParameters)
+      ? capability.parameters.modelParameters as Record<string, unknown>
+      : null;
+  const description = describeP5InputGap({
+    label: capability.label,
+    modelPath,
+    entity: capability.symbol ?? capability.entityQuery,
+    missingInputs: capability.missingInputs,
+    modelParameters,
+    inputGap: (capability.parameters.inputGap as P5PlainLanguageGap | null | undefined) ?? null,
+    detail,
+  });
   return new ConversationDataGapError({
     field: "professional_model_inputs",
-    message: detail ?? (capability.label + " requires explicit deterministic model inputs. Missing: " + missing.join(", ") + ". LiOS did not invent assumptions."),
+    message: description.message,
     reason: "unavailable",
-    providersChecked: ["LiOS professional workflow registry", ...(typeof capability.parameters.modelPath === "string" ? [String(capability.parameters.modelPath)] : [])],
+    providersChecked: ["LiOS professional workflow registry", ...(modelPath ? [modelPath] : [])],
     nextActions: [
-      "Tell LiOS the assumptions or model inputs you want to use",
+      P5_GUIDED_INPUTS_ACTION,
       "Use a saved Valuation, Portfolio or Model Artifact",
       ...(workspaceCommand ? [workspaceCommand] : []),
     ],
+    ...(description.guidedInputs ? { guidedInputs: description.guidedInputs } : {}),
   });
 }
 
@@ -3598,6 +3617,7 @@ async function executeP5ProfessionalBundle(
     const primary = wantsResearch && marketOutput
       ? buildP5CompanyResearchArtifact({
           projectId: input.scope === "project" ? input.projectId : null,
+          scope: input.scope,
           symbol,
           quote: marketOutput.quote,
           technical,
@@ -3610,6 +3630,7 @@ async function executeP5ProfessionalBundle(
         })
       : buildP5FundamentalsArtifact({
           projectId: input.scope === "project" ? input.projectId : null,
+          scope: input.scope,
           symbol,
           income: statements.income,
           balance: statements.balance,
@@ -3627,6 +3648,7 @@ async function executeP5ProfessionalBundle(
       await emit(input, { ...eventBase(requestId), type: "tool_start", stepId: "emit-research-report-artifact", label: "Create Research Report Artifact", componentId: "lios.artifact-draft" });
       const report = buildP5ResearchReportArtifact({
         projectId: input.scope === "project" ? input.projectId : null,
+        scope: input.scope,
         symbol,
         quote: marketOutput.quote,
         technical,
@@ -3681,8 +3703,8 @@ async function executeP5ProfessionalBundle(
       } else {
         if (!sourceScopeAllowsProjectData(sourceScope)) throw sourceScopeGap(sourceScope, "project");
         const sourceArtifact = await getArtifact(input.tenant, sourceArtifactRef);
-        if (input.scope !== "project" || !input.projectId || sourceArtifact.projectId !== input.projectId) {
-          throw new Error("Professional reporting can only use an Artifact owned by the active Project.");
+        if (input.scope === "temporary" || sourceArtifact.projectId !== input.projectId || (input.scope === "quick" && sourceArtifact.owningChatId !== input.chatId)) {
+          throw new Error("Professional reporting requires an Artifact owned by the active Chat ownership context.");
         }
         const sourceVersion = await getArtifactVersion(input.tenant, sourceArtifact.id);
         const sourceContent = artifactContentSchema.parse(sourceVersion.content);
@@ -3754,6 +3776,7 @@ async function executeP5ProfessionalBundle(
         });
         const report = buildP5ReportFromArtifact({
           projectId: input.projectId,
+          scope: input.scope,
           sourceArtifactId: sourceVersionRef,
           sourceTitle: sourceArtifact.title,
           sourceContent,
@@ -3852,6 +3875,7 @@ async function executeP5ProfessionalBundle(
       receiptIds.push(receipt.id);
       const artifact = buildP5AdvancedArtifact({
         projectId: input.scope === "project" ? input.projectId : null,
+        scope: input.scope,
         symbol: symbol || capability.symbol,
         modelPath: p5AdvancedModelPathSchema.parse(resolved.modelPath),
         parameters: resolved.parameters,
@@ -3870,15 +3894,17 @@ async function executeP5ProfessionalBundle(
       });
       await emit(input, { ...eventBase(requestId), type: "receipt", receipt });
       await emit(input, { ...eventBase(requestId), type: "artifact", artifact });
-      textParts.push(
-        "### " + capability.label + "\n"
-        + "- Model: " + resolved.modelPath + "\n"
-        + "- Engine: " + run.receipt.modelId + "@" + run.receipt.modelVersion + "\n"
-        + "- Validation: " + run.receipt.validationLevel + "\n"
-        + "- Input provenance: " + run.receipt.dataClassification + "\n"
-        + "- Output hash: " + run.receipt.outputSnapshotHash + "\n"
-        + "- Output: " + artifact.title + " Artifact."
-      );
+      textParts.push(buildP5ProfessionalResultText({
+        label: capability.label,
+        modelPath: resolved.modelPath,
+        symbol: symbol || capability.symbol,
+        result: run.result,
+        validationLevel: run.receipt.validationLevel,
+        dataClassification: run.receipt.dataClassification,
+        sourceCount: run.receipt.sourceBindings.length,
+        warnings: run.receipt.warnings,
+        retentionScope: input.scope,
+      }));
     } catch (error) {
       if (error instanceof AdvancedQuantInputError || error instanceof PythonServiceDataError) {
         blocked.push({ capability, detail: error.message });
@@ -3961,8 +3987,8 @@ async function executeArtifactEditProposal(
   });
 
   const artifact = await getArtifact(input.tenant, artifactId);
-  if (input.scope !== "project" || !input.projectId || artifact.projectId !== input.projectId) {
-    throw new Error("Artifact conversational edits are restricted to the active Project.");
+  if (input.scope === "temporary" || artifact.projectId !== input.projectId || (input.scope === "quick" && artifact.owningChatId !== input.chatId)) {
+    throw new Error("Artifact conversational edits are restricted to the active Chat ownership context.");
   }
   const version = await getArtifactVersion(input.tenant, artifact.id);
   const content = artifactContentSchema.parse(version.content);

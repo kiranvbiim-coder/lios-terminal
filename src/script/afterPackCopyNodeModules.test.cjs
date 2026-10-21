@@ -302,3 +302,22 @@ test("dependency legal-byte mutation in candidate ASAR refuses archive replaceme
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test("target-rebuilt native addons survive replacement by the host JavaScript closure", async () => {
+  const fixture = await createPackFixture();
+  try {
+    const original = path.join(fixture.root, "original");
+    const relative = "node_modules/@fixture/runtime/build/Release/binding.node";
+    const targetFile = path.join(original, relative);
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.writeFileSync(targetFile, Buffer.from("target-electron-native-addon"));
+    fs.copyFileSync(path.join(fixture.projectDir, "node_modules/@fixture/runtime/package.json"), path.join(original, "node_modules/@fixture/runtime/package.json"));
+    const hostFile = path.join(fixture.projectDir, relative);
+    fs.mkdirSync(path.dirname(hostFile), { recursive: true });
+    fs.writeFileSync(hostFile, Buffer.from("wrong-host-node-addon"));
+    await finished(await asar.createPackage(original, fixture.asarPath));
+    await afterPack(fixture.context);
+    assert.deepEqual(asar.extractFile(fixture.asarPath, path.normalize(relative)), Buffer.from("target-electron-native-addon"));
+    assert.deepEqual(fs.readFileSync(path.join(fixture.resourcesDir, "app.asar.unpacked", relative)), Buffer.from("target-electron-native-addon"));
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});

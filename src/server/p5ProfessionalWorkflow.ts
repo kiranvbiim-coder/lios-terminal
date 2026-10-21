@@ -7,7 +7,15 @@ import {
 import type { ConversationCapabilityId, ConversationRequest } from "@shared/conversationRuntime";
 import type { ArtifactContent, ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { AdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
+import {
+  buildP5GuidedInputs,
+  flattenP5ParametersForForm,
+  p5GuidedFieldLabel,
+  p5RequiredInputKeys,
+  type P5GuidedInputs,
+} from "@shared/p5GuidedInputs";
 import { resolveExplicitReportTemplate } from "./reportEngine";
+import { extractP5PlainLanguageInputs, type P5PlainLanguageGap } from "./p5PlainLanguageInputs";
 
 export interface P5ProfessionalIntent {
   family: P5ProfessionalFamily;
@@ -20,6 +28,8 @@ export interface P5ProfessionalIntent {
   activeArtifactRef: string | null;
   requiresEntity: boolean;
   workspaceCommand: string;
+  /** Present when assumptions were typed in plain language but are incomplete or ambiguous. */
+  inputGap: P5PlainLanguageGap | null;
 }
 
 function activeArtifactRef(request: ConversationRequest): string | null {
@@ -168,6 +178,7 @@ function addIntent(
     inputProvenance?: unknown;
     activeArtifactRef?: string | null;
     requiresEntity?: boolean;
+    inputGap?: P5PlainLanguageGap | null;
   } = {},
 ) {
   const descriptor = p5WorkflowDescriptor(family);
@@ -185,6 +196,7 @@ function addIntent(
     activeArtifactRef: options.activeArtifactRef ?? null,
     requiresEntity: options.requiresEntity ?? false,
     workspaceCommand: descriptor.defaultWorkspaceCommand,
+    inputGap: options.inputGap ?? null,
   });
 }
 
@@ -206,6 +218,9 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
   const explicit = explicitAdvancedRun(message);
   const inferredPath = explicit.modelPath ?? inferP5AdvancedModelPath(message);
   const modelPath = inferredPath;
+  // Plain-language assumptions are read only when the user did not supply the expert JSON object.
+  const plain = !explicit.parameters && modelPath ? extractP5PlainLanguageInputs(message, modelPath) : null;
+  const plainComplete = plain?.status === "complete" ? plain : null;
   const modelFamily = modelPath ? familyForModelPath(modelPath) : null;
 
   if (/\b(?:investment research|equity research|company research|research report|full research|investment memo|company tear ?sheet)\b/i.test(message)) {
@@ -218,10 +233,11 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
   if (modelFamily) {
     addIntent(intents, modelFamily, `The request maps to institutional model ${modelPath}.`, {
       modelPath,
-      parameters: explicit.parameters,
-      inputProvenance: explicit.inputProvenance,
-      activeArtifactRef: artifactRef,
+      parameters: explicit.parameters ?? plainComplete?.parameters ?? null,
+      inputProvenance: explicit.inputProvenance ?? plainComplete?.inputProvenance,
+      activeArtifactRef: explicit.parameters || plainComplete ? null : artifactRef,
       requiresEntity: modelFamily === "valuation",
+      inputGap: plain?.status === "incomplete" ? plain.gap : null,
     });
   } else {
     if ((/^\s*value\b/i.test(message) || /\b(?:valuation|fair value|intrinsic value|dcf|residual income|economic value added|sum[- ]of[- ]parts|sotp)\b/i.test(message))
@@ -260,6 +276,52 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
   return intents;
 }
 
+export interface P5InputGapDescription {
+  message: string;
+  guidedInputs: P5GuidedInputs | undefined;
+}
+
+/**
+ * Describes exactly which model inputs are missing or unclear for a professional capability,
+ * and the guided-form definition (pre-filled with values already understood) that can collect them.
+ * Nothing is defaulted: every field the form shows blank is a value the user has not stated.
+ */
+export function describeP5InputGap(input: {
+  label: string;
+  modelPath: string | null;
+  entity: string | null;
+  missingInputs: string[];
+  modelParameters: Record<string, unknown> | null;
+  inputGap: P5PlainLanguageGap | null;
+  detail?: string;
+}): P5InputGapDescription {
+  const required = input.modelPath ? p5RequiredInputKeys(input.modelPath) : [];
+  const entityMissing = !input.entity && input.missingInputs.includes("company_or_security");
+  const known = input.inputGap
+    ? input.inputGap
+    : { missing: input.modelParameters ? [] : required, issues: [], provided: input.modelPath ? flattenP5ParametersForForm(input.modelPath, input.modelParameters) : {}, notes: [] };
+  const guidedInputs = input.modelPath
+    ? buildP5GuidedInputs({
+      modelPath: input.modelPath,
+      entity: entityMissing ? null : input.entity,
+      missing: [...(entityMissing ? ["entity"] : []), ...known.missing],
+      issues: known.issues,
+      provided: known.provided,
+    }) ?? undefined
+    : undefined;
+  if (input.detail) return { message: input.detail, guidedInputs };
+  if (!guidedInputs || !input.modelPath) {
+    const missing = input.missingInputs.length ? input.missingInputs : ["structured_model_inputs_or_active_artifact"];
+    return { message: input.label + " requires explicit deterministic model inputs. Missing: " + missing.join(", ") + ". LiOS did not invent assumptions.", guidedInputs: undefined };
+  }
+  const modelPath = input.modelPath;
+  const parts = [input.label + " requires explicit deterministic model inputs."];
+  if (guidedInputs.missing.length) parts.push("Missing: " + guidedInputs.missing.map((key) => p5GuidedFieldLabel(modelPath, key)).join("; ") + ".");
+  if (guidedInputs.issues.length) parts.push("Unclear: " + guidedInputs.issues.map((issue) => issue.message).join(" "));
+  if (known.notes.length) parts.push(known.notes.join(" "));
+  parts.push("LiOS did not invent assumptions.");
+  return { message: parts.join(" ").slice(0, 1_900), guidedInputs };
+}
 
 export function p5AdvancedPathFromEngineRef(engineRef: string | null | undefined): P5AdvancedModelPath | null {
   if (!engineRef) return null;

@@ -2,7 +2,8 @@ import type { ArtifactDetail, IntegratedModelArtifactRunResult, IntegratedModelI
 
 export interface EngineInputRevision {
   artifactId: string;
-  projectId: number;
+  projectId: number | null;
+  owningChatId?: number | null;
   version: number;
   headVersion: number;
   contentHash: string;
@@ -23,7 +24,7 @@ export function isIntegratedModelWorkbook(detail: ArtifactDetail): boolean {
 }
 
 function sameRevision(left: EngineInputRevision, right: EngineInputRevision): boolean {
-  return left.artifactId === right.artifactId && left.projectId === right.projectId && left.version === right.version
+  return left.artifactId === right.artifactId && left.projectId === right.projectId && left.owningChatId === right.owningChatId && left.version === right.version
     && left.contentHash === right.contentHash && left.headVersion === right.headVersion;
 }
 
@@ -109,9 +110,11 @@ export class ArtifactEngineInputReviewSession {
       const result = await this.transport.run(revision.artifactId, { version: review.version, contentHash: review.contentHash, reviewHash: review.reviewHash });
       if (!this.accepts(generation, revision)) return;
       if (!reviewMatches(result.review, revision) || result.review.reviewHash !== review.reviewHash
-        || result.outputArtifact.projectId !== revision.projectId || result.outputArtifact.id === revision.artifactId
-        || result.outputVersion.artifactId !== result.outputArtifact.id || result.receipt.runId === review.source.runId) {
-        throw new Error("The engine run response does not identify a new canonical output for this reviewed source.");
+        || result.outputArtifact.projectId !== revision.projectId || result.outputArtifact.id !== revision.artifactId
+        || (revision.projectId === null && result.outputArtifact.owningChatId !== revision.owningChatId)
+        || result.outputVersion.artifactId !== revision.artifactId || result.outputVersion.version !== revision.version + 1
+        || result.outputArtifact.headVersion !== result.outputVersion.version || result.receipt.runId === review.source.runId) {
+        throw new Error("The engine run response does not identify the next canonical revision of this reviewed Artifact.");
       }
       this.update({ ...initialEngineInputReviewState, result });
     } catch (cause) {

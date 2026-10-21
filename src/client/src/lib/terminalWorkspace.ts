@@ -141,7 +141,13 @@ const ACTIVE_WORKSPACE_KEY = "limuria-active-workspace";
 function isPaneShape(value: unknown): value is WorkspaceState["primary"] {
   if (!value || typeof value !== "object") return false;
   const pane = value as Partial<WorkspaceState["primary"]>;
-  return typeof pane.view === "string"
+  const artifact = pane.artifact;
+  return (pane.view !== "artifact" || Boolean(artifact
+    && (artifact.projectId === null || (Number.isSafeInteger(artifact.projectId) && artifact.projectId > 0))
+    && Number.isSafeInteger(artifact.chatId) && artifact.chatId > 0
+    && typeof artifact.artifactId === "string" && /^(?:artifact:)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(artifact.artifactId)
+    && Number.isSafeInteger(artifact.version) && artifact.version > 0))
+    && typeof pane.view === "string"
     && typeof pane.symbol === "string" && pane.symbol.trim() === pane.symbol
     && (pane.symbol === "" || /^[^\s\x00-\x1F]{1,32}$/.test(pane.symbol));
 }

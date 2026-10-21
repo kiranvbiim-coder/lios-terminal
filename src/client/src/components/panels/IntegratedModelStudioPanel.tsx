@@ -311,7 +311,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
         <ArtifactPane artifactId={openedArtifact.detail.artifact.id} projectId={openedArtifact.detail.artifact.projectId} sessions={sessionsQuery.data ?? []}
           onClose={() => setOpenedArtifact(null)}
           onAsk={() => {
-            window.location.hash = formatLiosAddress({ kind: "project", projectId: openedArtifact.detail.artifact.projectId });
+            window.location.hash = formatLiosAddress({ kind: "project", projectId: openedArtifact.request.projectId });
             setExperienceSurface("projects");
           }} />
       </Suspense>

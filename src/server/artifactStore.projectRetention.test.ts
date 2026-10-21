@@ -20,7 +20,7 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, organizations, projectArtifacts, projectArtifactVersions, artifactInteractionReceipts, projectLedgerEvents } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { normalizeConversationDraft } = await import("./artifactDiff");
-const { persistProjectConversationDraft, keepConversationDraft, createArtifactVersion, getArtifact, getArtifactVersion, listArtifactVersions } = await import("./artifactStore");
+const { persistConversationDraft, keepConversationDraft, createArtifactVersion, getArtifact, getArtifactVersion, listArtifactVersions } = await import("./artifactStore");
 
 function trustSnapshot(requestId: string): TrustManifest {
   return {
@@ -128,7 +128,7 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
   let retained: CreatedArtifact;
 
   await t.test("concurrent identical calls create one Artifact, initial version, interaction receipt and Ledger event", async () => {
-    const results = await Promise.all(Array.from({ length: 12 }, () => persistProjectConversationDraft(ctx, structuredClone(input))));
+    const results = await Promise.all(Array.from({ length: 12 }, () => persistConversationDraft(ctx, structuredClone(input))));
     retained = results[0];
     assert.equal(new Set(results.map(result => result.artifact.id)).size, 1);
     assert.equal(new Set(results.map(result => result.version.id)).size, 1);
@@ -180,20 +180,20 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
       dependencyRefs: ["artifact:linked-research@v3"],
       refreshSpec,
     };
-    const trusted = await persistProjectConversationDraft(ctx, trustedInput);
+    const trusted = await persistConversationDraft(ctx, trustedInput);
     assert.deepEqual(trusted.version.trustManifest, trustManifest);
     assert.deepEqual(trusted.version.dependencyRefs, ["artifact:linked-research@v3", "provider:filing-extract"]);
     assert.deepEqual(trusted.version.sourceRefs, trustedInput.draft.sourceRefs);
     assert.deepEqual(trusted.version.executionReceiptIds, trustedInput.draft.executionReceiptIds);
     assert.deepEqual(trusted.version.refreshSpec, refreshSpec);
     const before = await artifactRows(trusted.artifact.id);
-    assert.deepEqual(await persistProjectConversationDraft(ctx, structuredClone(trustedInput)), trusted);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...trustedInput, trustManifest: null }), /different content/);
-    await assert.rejects(persistProjectConversationDraft(ctx, {
+    assert.deepEqual(await persistConversationDraft(ctx, structuredClone(trustedInput)), trusted);
+    await assert.rejects(persistConversationDraft(ctx, { ...trustedInput, trustManifest: null }), /different content/);
+    await assert.rejects(persistConversationDraft(ctx, {
       ...trustedInput,
       trustManifest: { ...trustManifest, summary: { ...trustManifest.summary, confidence: "medium" } },
     }), /different content/);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...trustedInput, dependencyRefs: ["artifact:other@v1"] }), /different content/);
+    await assert.rejects(persistConversationDraft(ctx, { ...trustedInput, dependencyRefs: ["artifact:other@v1"] }), /different content/);
     for (const change of [
       { message: "Create a different risk report" },
       { sourceScope: "auto" as const },
@@ -202,28 +202,28 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
       { selection: { ...refreshSpec.selection!, id: "artifact:other" } },
       { engineRef: "engine:other" },
     ]) {
-      await assert.rejects(persistProjectConversationDraft(ctx, {
+      await assert.rejects(persistConversationDraft(ctx, {
         ...trustedInput, refreshSpec: { ...refreshSpec, ...change },
       }), /different content/);
     }
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...trustedInput, refreshSpec: null }), /different content/);
-    await assert.rejects(persistProjectConversationDraft(ctx, {
+    await assert.rejects(persistConversationDraft(ctx, { ...trustedInput, refreshSpec: null }), /different content/);
+    await assert.rejects(persistConversationDraft(ctx, {
       ...trustedInput, requestId: crypto.randomUUID(),
       refreshSpec: { ...refreshSpec, message: "api_key=abcdefgh12345678" },
     }), /credential-bearing/);
-    await assert.rejects(persistProjectConversationDraft(ctx, {
+    await assert.rejects(persistConversationDraft(ctx, {
       ...trustedInput, requestId: crypto.randomUUID(),
       refreshSpec: { ...refreshSpec, sourceScope: "everything" as ArtifactRefreshSpec["sourceScope"] },
     }));
     assert.deepEqual(await artifactRows(trusted.artifact.id), before);
 
-    const defaultDependencies = await persistProjectConversationDraft(ctx, { ...trustedInput, requestId: crypto.randomUUID(), dependencyRefs: undefined });
+    const defaultDependencies = await persistConversationDraft(ctx, { ...trustedInput, requestId: crypto.randomUUID(), dependencyRefs: undefined });
     assert.deepEqual(defaultDependencies.version.dependencyRefs, [...trustedInput.draft.sourceRefs, "provider:filing-extract"]);
     await closeDb();
     await initDb();
-    assert.deepEqual(await persistProjectConversationDraft(ctx, structuredClone(trustedInput)), trusted);
+    assert.deepEqual(await persistConversationDraft(ctx, structuredClone(trustedInput)), trusted);
     assert.deepEqual((await getArtifactVersion(ctx, trusted.artifact.id, 1)).refreshSpec, refreshSpec);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...trustedInput, refreshSpec: null }), /different content/);
+    await assert.rejects(persistConversationDraft(ctx, { ...trustedInput, refreshSpec: null }), /different content/);
     assert.deepEqual(await artifactRows(trusted.artifact.id), before);
   });
 
@@ -237,10 +237,10 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     ];
     const before = await artifactRows(retained.artifact.id);
     for (const change of variants) {
-      await assert.rejects(persistProjectConversationDraft(ctx, { ...input, draft: { ...draft, ...change } }), /retention key already contains different content/);
+      await assert.rejects(persistConversationDraft(ctx, { ...input, draft: { ...draft, ...change } }), /retention key already contains different content/);
     }
     assert.deepEqual(await artifactRows(retained.artifact.id), before);
-    const replay = await persistProjectConversationDraft(ctx, structuredClone(input));
+    const replay = await persistConversationDraft(ctx, structuredClone(input));
     assert.deepEqual(replay, retained);
   });
 
@@ -249,8 +249,8 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     const race = { projectId: project.id, draft: raceDraft, requestId: crypto.randomUUID() };
     const changed = { ...race, draft: { ...raceDraft, data: { ...raceDraft.data, question: "Concurrent differing content" } } };
     const results = await Promise.allSettled([
-      persistProjectConversationDraft(ctx, race),
-      persistProjectConversationDraft(ctx, changed),
+      persistConversationDraft(ctx, race),
+      persistConversationDraft(ctx, changed),
     ]);
     const winners = results.filter(result => result.status === "fulfilled");
     const losers = results.filter(result => result.status === "rejected");
@@ -262,8 +262,8 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     assert.deepEqual([rows.artifacts.length, rows.versions.length, rows.receipts.length, rows.ledger.length], [1, 1, 1, 1]);
     const winningInput = results[0].status === "fulfilled" ? race : changed;
     const losingInput = results[0].status === "fulfilled" ? changed : race;
-    assert.deepEqual(await persistProjectConversationDraft(ctx, winningInput), winner);
-    await assert.rejects(persistProjectConversationDraft(ctx, losingInput), /different content/);
+    assert.deepEqual(await persistConversationDraft(ctx, winningInput), winner);
+    await assert.rejects(persistConversationDraft(ctx, losingInput), /different content/);
   });
 
   await t.test("foreign owners, organization contexts, Projects and non-Project drafts are rejected before writes", async () => {
@@ -271,31 +271,31 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     const [organization] = await getDb().insert(organizations).values({ name: "Retention organization", slug: `retention-${crypto.randomUUID()}` }).returning();
     const orgCtx: TenantContext = { ...ctx, organizationId: organization.id };
     const before = await rowCounts();
-    await assert.rejects(persistProjectConversationDraft(strangerCtx, input), /not found or not owned/);
-    await assert.rejects(persistProjectConversationDraft(orgCtx, input), /not found or not owned/);
+    await assert.rejects(persistConversationDraft(strangerCtx, input), /not found or not owned/);
+    await assert.rejects(persistConversationDraft(orgCtx, input), /not found or not owned/);
     await assert.rejects(getArtifact(strangerCtx, retained.artifact.id), /not found or not owned/);
     await assert.rejects(getArtifactVersion(strangerCtx, retained.artifact.id, 1), /not found or not owned/);
     await assert.rejects(getArtifact(orgCtx, retained.artifact.id), /not found or not owned/);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...input, draft: { ...draft, projectId: otherProject.id } }), /different Project/);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...input, draft: { ...draft, projectId: null, persistence: "ephemeral" } }), /different Project/);
+    await assert.rejects(persistConversationDraft(ctx, { ...input, draft: { ...draft, projectId: otherProject.id } }), /different Project/);
+    await assert.rejects(persistConversationDraft(ctx, { ...input, draft: { ...draft, projectId: null, persistence: "ephemeral" } }), /different Project/);
     assert.deepEqual(await rowCounts(), before);
 
     const foreignProject = await createProject(strangerCtx, { name: "Stranger Project" });
     const orgProject = await createProject(orgCtx, { name: "Organization-scoped Project" });
     const scopedResults = await Promise.all([
-      persistProjectConversationDraft(ctx, { ...input, projectId: otherProject.id, draft: { ...draft, projectId: otherProject.id } }),
-      persistProjectConversationDraft(strangerCtx, { ...input, projectId: foreignProject.id, draft: { ...draft, projectId: foreignProject.id } }),
-      persistProjectConversationDraft(orgCtx, { ...input, projectId: orgProject.id, draft: { ...draft, projectId: orgProject.id } }),
+      persistConversationDraft(ctx, { ...input, projectId: otherProject.id, draft: { ...draft, projectId: otherProject.id } }),
+      persistConversationDraft(strangerCtx, { ...input, projectId: foreignProject.id, draft: { ...draft, projectId: foreignProject.id } }),
+      persistConversationDraft(orgCtx, { ...input, projectId: orgProject.id, draft: { ...draft, projectId: orgProject.id } }),
     ]);
     assert.equal(new Set([retained.artifact.id, ...scopedResults.map(result => result.artifact.id)]).size, 4);
     assert.equal(scopedResults[1].artifact.ownerUserId, stranger.id);
     assert.equal(scopedResults[2].artifact.organizationId, organization.id);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...input, projectId: orgProject.id, draft: { ...draft, projectId: orgProject.id } }), /not found or not owned/);
+    await assert.rejects(persistConversationDraft(ctx, { ...input, projectId: orgProject.id, draft: { ...draft, projectId: orgProject.id } }), /not found or not owned/);
   });
 
   await t.test("distinct request and draft identities remain distinct despite identical content", async () => {
-    const otherRequest = await persistProjectConversationDraft(ctx, { ...input, requestId: crypto.randomUUID() });
-    const otherDraft = await persistProjectConversationDraft(ctx, { ...input, draft: { ...draft, artifactId: crypto.randomUUID() } });
+    const otherRequest = await persistConversationDraft(ctx, { ...input, requestId: crypto.randomUUID() });
+    const otherDraft = await persistConversationDraft(ctx, { ...input, draft: { ...draft, artifactId: crypto.randomUUID() } });
     assert.equal(new Set([retained.artifact.id, otherRequest.artifact.id, otherDraft.artifact.id]).size, 3);
     assert.deepEqual(otherRequest.version.content, retained.version.content);
     assert.deepEqual(otherDraft.version.content, retained.version.content);
@@ -306,7 +306,7 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     const before = await rowCounts();
     await getDb().execute(sql`ALTER TABLE project_ledger_events ADD CONSTRAINT artifact_retention_test_failure CHECK (event_type <> 'artifact.created') NOT VALID`);
     try {
-      await assert.rejects(persistProjectConversationDraft(ctx, failedInput), (error: unknown) => {
+      await assert.rejects(persistConversationDraft(ctx, failedInput), (error: unknown) => {
         const cause = error instanceof Error ? error.cause ?? error : error;
         return /artifact_retention_test_failure/.test(String(cause));
       });
@@ -314,13 +314,13 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     } finally {
       await getDb().execute(sql`ALTER TABLE project_ledger_events DROP CONSTRAINT artifact_retention_test_failure`);
     }
-    const retried = await persistProjectConversationDraft(ctx, failedInput);
+    const retried = await persistConversationDraft(ctx, failedInput);
     const rows = await artifactRows(retried.artifact.id);
     assert.deepEqual([rows.artifacts.length, rows.versions.length, rows.receipts.length, rows.ledger.length], [1, 1, 1, 1]);
   });
 
   await t.test("explicit Keep is still non-deduplicating and can promote a non-Project draft", async () => {
-    const quickDraft = { ...researchDraft(project.id), projectId: null, persistence: "ephemeral" as const };
+    const quickDraft = { ...researchDraft(project.id), projectId: null, persistence: "chat_candidate" as const };
     const keepInput = { projectId: project.id, draft: quickDraft, requestId: crypto.randomUUID() };
     const first = await keepConversationDraft(ctx, keepInput);
     const second = await keepConversationDraft(ctx, keepInput);
@@ -344,7 +344,7 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     const before = await artifactRows(retained.artifact.id);
     await closeDb();
     await initDb();
-    const reopened = await persistProjectConversationDraft(ctx, structuredClone(input));
+    const reopened = await persistConversationDraft(ctx, structuredClone(input));
     assert.equal(reopened.artifact.id, retained.artifact.id);
     assert.equal(reopened.artifact.headVersion, 2);
     assert.equal(reopened.artifact.title, "User-renamed research");
@@ -352,7 +352,7 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     assert.deepEqual(await getArtifactVersion(ctx, retained.artifact.id), editedVersion);
     assert.equal((await listArtifactVersions(ctx, retained.artifact.id)).length, 2);
     assert.deepEqual(await artifactRows(retained.artifact.id), before);
-    await assert.rejects(persistProjectConversationDraft(ctx, { ...input, draft: { ...draft, title: "Different creation content after reopen" } }), /different content/);
-    await assert.rejects(persistProjectConversationDraft(strangerCtx, input), /not found or not owned/);
+    await assert.rejects(persistConversationDraft(ctx, { ...input, draft: { ...draft, title: "Different creation content after reopen" } }), /different content/);
+    await assert.rejects(persistConversationDraft(strangerCtx, input), /not found or not owned/);
   });
 });

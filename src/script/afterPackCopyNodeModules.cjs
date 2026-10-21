@@ -89,6 +89,36 @@ function verifyDependencyLegalBytes(asarPath, files) {
   }
 }
 
+/** Preserve the builder's target-rebuilt addons before replacing its incomplete JS closure. */
+function preserveTargetNativeAddons(closure, stagingDir, backupDir) {
+  const preserved = [];
+  for (const pkg of closure.packages) {
+    const root = path.join(stagingDir, pkg.path);
+    const manifest = path.join(root, "package.json");
+    if (!fs.existsSync(manifest)) continue;
+    const target = JSON.parse(fs.readFileSync(manifest, "utf8"));
+    function collect(directory) {
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name === "node_modules") continue;
+        const source = path.join(directory, entry.name);
+        if (entry.isDirectory()) collect(source);
+        else if (entry.isFile() && entry.name.endsWith(".node")) {
+          if (target.name !== pkg.name || target.version !== pkg.version) {
+            throw new Error(`[afterPackCopyNodeModules] Target native package identity drift: ${pkg.path}`);
+          }
+          const relative = path.relative(stagingDir, source);
+          const saved = path.join(backupDir, relative);
+          fs.mkdirSync(path.dirname(saved), { recursive: true });
+          fs.copyFileSync(source, saved);
+          preserved.push({ relative, saved });
+        }
+      }
+    }
+    collect(root);
+  }
+  return preserved;
+}
+
 module.exports = async function afterPack(context) {
   const { appOutDir, packager, electronPlatformName } = context;
   const projectDir = packager.projectDir;
@@ -136,6 +166,7 @@ module.exports = async function afterPack(context) {
     // 1. Extract everything electron-builder got right (dist/**, main.cjs,
     //    build-resources/**, package.json, ...) out of the original asar.
     asar.extractAll(asarPath, stagingDir);
+    const targetNativeAddons = preserveTargetNativeAddons(closure, stagingDir, path.join(workDir, "target-native-addons"));
 
     // Root rights/notice sources are outside electron-builder's src projectDir.
     // Put their actual bytes in the rebuilt archive, not only in a source tree.
@@ -157,6 +188,24 @@ module.exports = async function afterPack(context) {
     fs.rmSync(stagingNodeModules, { recursive: true, force: true });
     fs.mkdirSync(stagingNodeModules, { recursive: true });
     const dependencyLegalFiles = copyRuntimeClosure(closure, stagingDir);
+    for (const addon of targetNativeAddons) {
+      const destination = path.join(stagingDir, addon.relative);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(addon.saved, destination);
+    }
+    // Rebuild ABI-sensitive packages in the final staging tree, never the
+    // developer's host node_modules. A prior cached host rebuild is not proof.
+    const nativeModules = closure.packages.filter(pkg =>
+      fs.existsSync(path.join(stagingDir, pkg.path, "binding.gyp")),
+    ).map(pkg => pkg.name);
+    if (nativeModules.length) {
+      const { rebuild } = require("@electron/rebuild");
+      const electronVersion = packager.config?.electronVersion || require(path.join(projectDir, "node_modules/electron/package.json")).version;
+      await rebuild({
+        buildPath: stagingDir, electronVersion, platform: electronPlatformName,
+        arch: closure.target.arch, onlyModules: nativeModules, force: true,
+      });
+    }
 
     // Audit the graph actually copied, including dev-only and unlocked packages,
     // before replacing the archive or handing the bundle to code signing.

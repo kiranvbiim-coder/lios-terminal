@@ -1,4 +1,5 @@
 import { addressForSelection, formatLiosAddress, parseLiosAddress } from "@shared/liosAddress";
+import { resolveInitialSelection } from "./projectEntry";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
@@ -138,14 +139,9 @@ export function useProjectSelection(): {
   setChatId: (id: number | null) => void;
 } {
   // A LiOS address in the location hash (a link, a reload, back/forward) wins over the remembered selection.
-  const [projectId, setProjectState] = useState<number | null>(() => {
-    const fromHash = selectionFromHash();
-    return fromHash ? fromHash.projectId : getActiveProjectId();
-  });
-  const [chatId, setChatState] = useState<number | null>(() => {
-    const fromHash = selectionFromHash();
-    return fromHash ? fromHash.chatId : getActiveProjectChatId();
-  });
+  const [initialSelection] = useState(() => resolveInitialSelection(selectionFromHash(), { projectId: getActiveProjectId(), chatId: getActiveProjectChatId() }));
+  const [projectId, setProjectState] = useState<number | null>(initialSelection.projectId);
+  const [chatId, setChatState] = useState<number | null>(initialSelection.chatId);
 
   useEffect(() => {
     const onHashChange = () => {

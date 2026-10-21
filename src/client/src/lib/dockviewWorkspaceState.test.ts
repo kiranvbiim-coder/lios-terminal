@@ -5,6 +5,7 @@ import {
   LEGACY_DOCKVIEW_LAYOUT_STORAGE_KEYS,
   loadDockviewLayoutState,
   saveDockviewLayoutState,
+  resolveWorkspaceRendererState,
 } from "./dockviewWorkspaceState";
 
 function withFakeWindow(run: (storage: Map<string, string>) => void) {
@@ -60,4 +61,20 @@ test("corrupt current Dockview geometry is removed before it can be restored", (
     assert.equal(loadDockviewLayoutState(), null);
     assert.equal(storage.has(DOCKVIEW_LAYOUT_STORAGE_KEY), false);
   });
+});
+
+test("responsive renderer changes cannot remount an unsaved Artifact editor in either direction", () => {
+  const desktop = { isMobile: false, maximizedPane: null };
+  const mobile = { isMobile: true, maximizedPane: null };
+  assert.equal(resolveWorkspaceRendererState(desktop, true, null, true), desktop);
+  assert.equal(resolveWorkspaceRendererState(mobile, false, null, true), mobile);
+  assert.deepEqual(resolveWorkspaceRendererState(desktop, true, null, false), mobile);
+  assert.deepEqual(resolveWorkspaceRendererState(mobile, false, null, false), desktop);
+  assert.equal(resolveWorkspaceRendererState(desktop, false, null, false), desktop);
+});
+
+test("maximized renderer identity is retained while dirty and released after save or reset", () => {
+  const current = { isMobile: false, maximizedPane: "secondary" as const };
+  assert.equal(resolveWorkspaceRendererState(current, true, null, true), current);
+  assert.deepEqual(resolveWorkspaceRendererState(current, true, null, false), { isMobile: true, maximizedPane: null });
 });

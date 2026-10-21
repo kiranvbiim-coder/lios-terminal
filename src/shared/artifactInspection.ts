@@ -20,7 +20,7 @@ export type ArtifactInspectionTarget = z.infer<typeof artifactInspectionTargetSc
 export interface ArtifactInspection {
   target: ArtifactInspectionTarget;
   title: string;
-  projectId: number;
+  projectId: number | null;
   kind: string;
   sourceRefs: string[];
   executionReceiptIds: string[];

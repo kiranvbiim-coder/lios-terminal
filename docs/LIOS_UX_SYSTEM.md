@@ -146,7 +146,7 @@ Additional locks:
 - advanced source/execution/provider controls use progressive disclosure;
 - default composer is minimal;
 - one visible LiOS identity;
-- supported Project conversation Artifact drafts may already auto-retain in current source paths; regular Quick-Chat Artifact auto-persistence is a separate, still-open P1/P4 contract requirement under the 2026-10-20 owner lock;
+- meaningful successful Project and regular Quick-Chat outputs auto-retain through the existing P4 keeper and canonical Project/Chat ownership; Temporary Chats remain nonpersistent. Explicit Project promotion still requires a destination/scope preview. Candidate source and bounded packaged evidence are recorded in docs/PENDING_WORK.md, not full TC-13/SP/P14 acceptance.
 - high proactivity is allowed within permission/budget/governance limits;
 - passive status strip shows only real connected/provider/market/runtime state;
 - no dedicated permanent Decision area is required on Project Home;
@@ -407,7 +407,7 @@ Adapt and reorder only unpinned modules; preserve user pins. No template gate, m
 
 ## 4.3 Keep in Project
 
-Important regular Chat and Project outputs must auto-persist under canonical P4 identity and immutable content versions. Supported Project conversation output auto-retention exists on current source paths; broad regular Quick-Chat Artifact durability does not yet satisfy the 2026-10-20 owner lock. Keep must not gate durable normal-chat work. Chat and direct controls share the same object/version state, with real runtime and packaged acceptance still required. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
+Important regular Chat and Project outputs must auto-persist under canonical P4 identity and immutable content versions. Current candidate source retains supported successful Project and Quick Chat output through conversationRunService and P4 persistConversationDraft, with explicit owning Chat instead of an invented Project. Temporary Chats remain nonpersistent. Saved assistant messages retain exact Artifact/version references; reopening does not rerun tools. Candidate source and bounded packaged journeys are recorded in docs/PENDING_WORK.md; complete TC-13/Shipping Point/P14 qualification remains open. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
 
 Regular Quick Chats retain their authorized work without a Project destination; moving/linking into a Project is an optional explicit scope-aware action, preserving the Chat and P4 object identity. Temporary Chats remain non-persistent, including no automatic durable Artifact or memory creation; any explicit promotion requires a clear user action and governed destination. Failed explicit move/link must preserve the user's choice and retry state. Output concepts include charts, tables, models, screens, reports, research, sources, scenarios and recipes; the canonical schema controls serialized Artifact kinds, not this prose list.
 
@@ -1739,7 +1739,7 @@ If this journey is not effortless, adding more features does not count as progre
 
 The Project mental model remains **Projects → Chats → Artifacts**. P4 adds depth without adding a new permanent navigation taxonomy.
 
-- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Supported Project conversation drafts already auto-retain through existing P4 paths; regular Quick-Chat canonical Artifact durability without a Project remains a separate open requirement under the owner lock. Temporary Chats remain non-persistent unless explicitly promoted through a governed action. Users can create/open persistent work or export/import an authorized Project package.
+- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Supported successful Project and regular Quick-Chat outputs auto-retain through existing P4 paths in the current candidate; Quick work owns its canonical Artifact without a forced Project. Temporary Chats remain nonpersistent. Explicit Project promotion requires a destination and scope preview. Users can create/open persistent work or export/import an authorized Project package. Public issue #91 coordinates integration qualification; the canonical 206-item checklist and SP/P14 remain authoritative.
 - Every Artifact opens in one consistent `ArtifactPane` with readable title/status/version, source and execution-receipt context, Ask LiOS, review, fork, undo, export, archive, compare and Session reference actions. Raw adapter/hash/internal metadata belongs under Advanced or Show Work, not default chrome.
 - Conversation and direct controls operate on the same persistent Artifact identity. **Ask LiOS** passes the Artifact as active context. Supported mutation instructions create a review proposal; the user accepts or rejects it in the Artifact surface.
 - SpreadsheetArtifact exposes a real editable formula grid. Professional AI changes are explicit diffs and cannot silently overwrite the model.

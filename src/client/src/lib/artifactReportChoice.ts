@@ -31,19 +31,20 @@ export function recommendedArtifactReportTemplate(kind: ArtifactContent["kind"],
 export interface ArtifactReportSource {
   artifactId: string;
   versionArtifactId: string;
-  projectId: number;
+  projectId: number | null;
+  owningChatId?: number | null;
   version: number;
   headVersion: number;
   contentHash: string;
 }
 
 export function artifactReportSourceError(captured: ArtifactReportSource, current: ArtifactReportSource): string | null {
-  if (!captured.artifactId || captured.versionArtifactId !== captured.artifactId || captured.projectId <= 0
+  if (!captured.artifactId || captured.versionArtifactId !== captured.artifactId || (captured.projectId === null ? !captured.owningChatId : captured.projectId <= 0)
     || !Number.isInteger(captured.version) || captured.version < 1 || !captured.contentHash.trim()) {
     return "The saved Artifact source is incomplete. Reload before preparing a report request.";
   }
   if (captured.artifactId !== current.artifactId || captured.versionArtifactId !== current.versionArtifactId
-    || captured.projectId !== current.projectId || captured.version !== current.version
+    || captured.projectId !== current.projectId || captured.owningChatId !== current.owningChatId || captured.version !== current.version
     || captured.headVersion !== current.headVersion || captured.contentHash !== current.contentHash) {
     return "The selected Artifact revision changed. Review the current saved source before preparing a report request.";
   }

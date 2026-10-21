@@ -7,6 +7,7 @@ import {
   projectArtifactReferences,
   projectArtifactVersions,
   projectArtifacts,
+  projects,
   projectChats,
   projectResources,
   projectSessions,
@@ -36,6 +37,8 @@ import { defaultArtifactAdapterId } from "@shared/artifactAdapterRegistry";
 import { guardSpreadsheetCellLineage, type SpreadsheetContent } from "@shared/spreadsheetCellLineage";
 import type { TenantContext } from "./tenantContext";
 import type { ArtifactModelMaintenanceReview } from "@shared/artifactModelMaintenance";
+import type { ArtifactIntegratedModelReview } from "./artifactIntegratedModelInput";
+import { loadArtifactIntegratedModelReview } from "./artifactIntegratedModelInput";
 
 export type ArtifactReadContext = Pick<TenantContext, "userId" | "organizationId">;
 
@@ -43,7 +46,7 @@ export interface CreatedArtifact {
   artifact: ProjectArtifact;
   version: ProjectArtifactVersion;
 }
-import { getDb } from "./db";
+import { getDb, type DrizzleDb } from "./db";
 import { getProject } from "./projectStore";
 import { appendLedgerEventInTransaction, hashLedgerValue, sanitizeLedgerPayload } from "./ledgerStore";
 import { loadIntegratedModelArtifactSource } from "./integratedModelArtifact";
@@ -143,6 +146,33 @@ function contentHash(content: ArtifactContent): string {
 
 async function validateArtifactProject(ctx: TenantContext, projectId: number): Promise<void> {
   await getProject(ctx, projectId);
+}
+
+/** A retained Artifact belongs to a real Project or a real persistent Chat, never an invented Project. */
+async function validateArtifactOwner(ctx: ArtifactReadContext, input: { projectId: number | null; owningChatId?: number | null }, db: Pick<DrizzleDb, "select"> = getDb()): Promise<void> {
+  if (input.owningChatId != null) {
+    const [chat] = await db.select().from(projectChats).where(and(
+      eq(projectChats.id, input.owningChatId),
+      eq(projectChats.ownerUserId, ctx.userId),
+      tenantOrgClause(projectChats.organizationId, ctx),
+      isNull(projectChats.trashedAt),
+    )).limit(1).for("share");
+    if (!chat || chat.projectId !== input.projectId
+      || (input.projectId === null && chat.scope !== "quick")) throw new Error("Artifact owning Chat not found or not owned within this ownership boundary.");
+  } else if (input.projectId === null) {
+    throw new Error("A persistent Chat is required for an Artifact without a Project.");
+  }
+  if (input.projectId !== null) {
+    const [project] = await db.select().from(projects).where(and(
+      eq(projects.id, input.projectId), eq(projects.ownerUserId, ctx.userId),
+      tenantOrgClause(projects.organizationId, ctx), isNull(projects.trashedAt),
+    )).limit(1).for("share");
+    if (!project) throw new Error("Artifact Project not found or not owned within this ownership boundary.");
+  }
+}
+
+function artifactScopeClause(column: typeof projectArtifacts.projectId | typeof projectArtifacts.owningChatId | typeof projectArtifactReferences.projectId, value: number | null) {
+  return value === null ? isNull(column) : eq(column, value);
 }
 
 async function insertInteractionReceipt(
@@ -376,7 +406,7 @@ async function ledgerArtifactEvent(
   tx: any,
   ctx: TenantContext,
   input: {
-    projectId: number;
+    projectId: number | null;
     eventType: "artifact.created" | "artifact.versioned" | "artifact.forked" | "artifact.reference.created" | "artifact.proposal.created" | "artifact.proposal.accepted" | "artifact.proposal.rejected" | "artifact.action" | "artifact.exported" | "artifact.imported";
     artifactId: string;
     version?: number | null;
@@ -421,6 +451,9 @@ async function ledgerArtifactEvent(
   const lineageEdges = [...new Map(edges.map((edge) => [`${edge.from}\u0000${edge.relation}\u0000${edge.to}`, edge])).values()];
   return appendLedgerEventInTransaction(tx, ctx, {
     projectId: input.projectId,
+    chatId: input.projectId === null
+      ? (await tx.select({ owningChatId: projectArtifacts.owningChatId }).from(projectArtifacts).where(eq(projectArtifacts.id, input.artifactId)).limit(1))[0]?.owningChatId ?? null
+      : null,
     eventType: input.eventType,
     actorType: input.actorType ?? "user",
     requestId: input.requestId ?? null,
@@ -445,6 +478,7 @@ export async function getArtifactIncludingTrash(ctx: ArtifactReadContext, artifa
 export async function getArtifact(ctx: ArtifactReadContext, artifactId: string): Promise<ProjectArtifact> {
   const artifact = await getArtifactIncludingTrash(ctx, artifactId);
   if (artifact.trashedAt) throw new Error("Artifact not found or not owned by the requesting user.");
+  await validateArtifactOwner(ctx, artifact);
   return artifact;
 }
 
@@ -482,6 +516,25 @@ export async function listProjectArtifacts(
   return getDb().select().from(projectArtifacts).where(and(...conditions)).orderBy(desc(projectArtifacts.updatedAt), desc(projectArtifacts.id)).limit(limit).offset(offset);
 }
 
+export async function listChatArtifacts(
+  ctx: TenantContext,
+  chatId: number,
+  input: { status?: "active" | "archived"; trash?: boolean; limit?: number } = {},
+): Promise<ProjectArtifact[]> {
+  const [chat] = await getDb().select().from(projectChats).where(and(
+    eq(projectChats.id, chatId), eq(projectChats.ownerUserId, ctx.userId),
+    tenantOrgClause(projectChats.organizationId, ctx), isNull(projectChats.trashedAt),
+  )).limit(1);
+  if (!chat) throw new Error("Artifact owning Chat not found or not owned within this ownership boundary.");
+  await validateArtifactOwner(ctx, { projectId: chat.projectId, owningChatId: chatId });
+  return getDb().select().from(projectArtifacts).where(and(
+    artifactTenantFilter(ctx), eq(projectArtifacts.owningChatId, chatId),
+    artifactScopeClause(projectArtifacts.projectId, chat.projectId),
+    eq(projectArtifacts.status, input.status ?? (input.trash ? "archived" : "active")),
+    input.trash ? isNotNull(projectArtifacts.trashedAt) : isNull(projectArtifacts.trashedAt),
+  )).orderBy(desc(projectArtifacts.updatedAt)).limit(Math.min(Math.max(input.limit ?? 100, 1), 500));
+}
+
 export async function listOwnedArtifacts(
   ctx: TenantContext,
   input: { status?: "active" | "archived"; trash?: boolean; limit?: number } = {},
@@ -515,7 +568,7 @@ export async function listArtifactVersionSummaries(ctx: TenantContext, artifactI
 export async function listArtifactReferences(ctx: TenantContext, artifactId: string): Promise<ProjectArtifactReference[]> {
   const artifact = await getArtifact(ctx, artifactId);
   return getDb().select().from(projectArtifactReferences)
-    .where(and(eq(projectArtifactReferences.artifactId, artifactId), eq(projectArtifactReferences.projectId, artifact.projectId)))
+    .where(and(eq(projectArtifactReferences.artifactId, artifactId), artifactScopeClause(projectArtifactReferences.projectId, artifact.projectId)))
     .orderBy(desc(projectArtifactReferences.createdAt));
 }
 
@@ -526,7 +579,7 @@ export async function listArtifactProposals(ctx: TenantContext, artifactId: stri
     .orderBy(desc(projectArtifactProposals.createdAt));
 }
 
-async function validateInitialSpreadsheetLineage(ctx: TenantContext, projectId: number, content: SpreadsheetContent): Promise<void> {
+async function validateInitialSpreadsheetLineage(ctx: TenantContext, projectId: number | null, content: SpreadsheetContent, owningChatId?: number | null): Promise<void> {
   const runs = new Map<string, SpreadsheetContent>();
   for (const sheet of content.sheets) for (const [ref, cell] of Object.entries(sheet.cells)) {
     const lineage = cell.lineage;
@@ -536,11 +589,12 @@ async function validateInitialSpreadsheetLineage(ctx: TenantContext, projectId: 
       guardSpreadsheetCellLineage(null, { ...content, sheets: [{ ...sheet, cells: { [ref]: cell } }] });
       continue;
     }
+    if (projectId === null && owningChatId == null) throw new Error("Server model projection lineage requires its owning persistent context.");
     if (!lineage.modelRunId) throw new Error("Verified cell lineage requires an owned persisted model run.");
     let projected = runs.get(lineage.modelRunId);
     if (!projected) {
       // The source module imports this store only for callable retention functions; neither side initializes a projection at module load.
-      projected = (await loadIntegratedModelArtifactSource(ctx, lineage.modelRunId, projectId)).projection.content;
+      projected = (await loadIntegratedModelArtifactSource(ctx, lineage.modelRunId, projectId, false, owningChatId)).projection.content;
       runs.set(lineage.modelRunId, projected);
     }
     const sourceCell = projected.sheets.find(item => item.id === sheet.id)?.cells[ref];
@@ -554,7 +608,8 @@ async function validateInitialSpreadsheetLineage(ctx: TenantContext, projectId: 
 export async function createArtifact(
   ctx: TenantContext,
   input: {
-    projectId: number;
+    projectId: number | null;
+    owningChatId?: number | null;
     title: string;
     content: ArtifactContent;
     origin?: ArtifactOrigin;
@@ -578,9 +633,11 @@ async function createArtifactRecord(
   input: Parameters<typeof createArtifact>[1],
   retention?: { artifactId: string; draftType: string },
 ): Promise<CreatedArtifact> {
-  await validateArtifactProject(ctx, input.projectId);
+  await validateArtifactOwner(ctx, input);
+  // A Project takes lifecycle ownership; the originating Chat remains provenance, not a cascading parent.
+  const owningChatId = input.projectId === null ? input.owningChatId ?? null : null;
   const content = artifactContentSchema.parse(input.content);
-  if (content.kind === "spreadsheet") await validateInitialSpreadsheetLineage(ctx, input.projectId, content);
+  if (content.kind === "spreadsheet") await validateInitialSpreadsheetLineage(ctx, input.projectId, content, owningChatId);
   assertArtifactContentSafe(content);
   assertResearchClaimRefsSafe(content);
   const origin = artifactOriginSchema.parse(input.origin ?? "direct");
@@ -608,9 +665,11 @@ async function createArtifactRecord(
   const now = new Date();
   const db: any = getDb();
   return db.transaction(async (tx: any) => {
+    await validateArtifactOwner(ctx, input, tx);
     let insertion = tx.insert(projectArtifacts).values({
       id,
       projectId: input.projectId,
+      owningChatId,
       ownerUserId: ctx.userId,
       organizationId: ctx.organizationId,
       kind: content.kind,
@@ -627,7 +686,8 @@ async function createArtifactRecord(
     if (!artifact) {
       const [existing] = await tx.select().from(projectArtifacts).where(and(
         artifactTenantFilter(ctx, id),
-        eq(projectArtifacts.projectId, input.projectId),
+        artifactScopeClause(projectArtifacts.projectId, input.projectId),
+        artifactScopeClause(projectArtifacts.owningChatId, owningChatId),
       )).limit(1);
       if (!existing) throw new Error("Retained Artifact not found or not owned by the requesting user.");
       const [receipt] = await tx.select().from(artifactInteractionReceipts).where(and(
@@ -705,16 +765,18 @@ async function createArtifactRecord(
   });
 }
 
-export function retainedConversationArtifactId(ctx: TenantContext, projectId: number, requestId: string, draftId: string): string {
-  const identityHash = hashLedgerValue({ ownerUserId: ctx.userId, organizationId: ctx.organizationId, projectId, requestId, draftId });
+export function retainedConversationArtifactId(ctx: TenantContext, projectId: number | null, requestId: string, draftId: string, owningChatId?: number | null): string {
+  // Preserve existing Project replay IDs. Projectless identity includes its owning Chat.
+  const identityHash = hashLedgerValue({ ownerUserId: ctx.userId, organizationId: ctx.organizationId, projectId, requestId, draftId, ...(projectId === null ? { owningChatId: owningChatId ?? null } : {}) });
   const variant = ((parseInt(identityHash[16], 16) & 3) | 8).toString(16);
   return `artifact:${identityHash.slice(0, 8)}-${identityHash.slice(8, 12)}-8${identityHash.slice(13, 16)}-${variant}${identityHash.slice(17, 20)}-${identityHash.slice(20, 32)}`;
 }
 
-export async function persistProjectConversationDraft(
+export async function persistConversationDraft(
   ctx: TenantContext,
   input: {
-    projectId: number;
+    projectId: number | null;
+    owningChatId?: number | null;
     draft: ConversationArtifactDraft;
     requestId: string;
     trustManifest?: TrustManifest | null;
@@ -723,10 +785,12 @@ export async function persistProjectConversationDraft(
   },
 ): Promise<CreatedArtifact> {
   if (input.draft.projectId !== input.projectId) throw new Error("Draft belongs to a different Project.");
+  if (input.draft.persistence === "ephemeral") throw new Error("Temporary Artifact drafts cannot be retained.");
   const content = normalizeConversationDraft(input.draft);
-  const id = retainedConversationArtifactId(ctx, input.projectId, input.requestId, input.draft.artifactId);
+  const id = retainedConversationArtifactId(ctx, input.projectId, input.requestId, input.draft.artifactId, input.owningChatId);
   return createArtifactRecord(ctx, {
     projectId: input.projectId,
+    owningChatId: input.owningChatId ?? null,
     title: input.draft.title,
     content,
     origin: "conversation",
@@ -737,14 +801,15 @@ export async function persistProjectConversationDraft(
     refreshSpec: input.refreshSpec ?? null,
     actorType: "conversation",
     requestId: input.requestId,
-    note: `Automatically retained from Project conversation draft ${input.draft.artifactId}`,
+    note: `Automatically retained from conversation draft ${input.draft.artifactId}`,
   }, { artifactId: id, draftType: input.draft.artifactType });
 }
 
 export async function keepConversationDraft(
   ctx: TenantContext,
   input: {
-    projectId: number;
+    projectId: number | null;
+    owningChatId?: number | null;
     draft: ConversationArtifactDraft;
     requestId?: string | null;
     sessionId?: string | null;
@@ -754,9 +819,11 @@ export async function keepConversationDraft(
   },
 ) {
   if (input.draft.projectId !== null && input.draft.projectId !== input.projectId) throw new Error("Draft belongs to a different Project.");
+  if (input.draft.persistence === "ephemeral") throw new Error("Temporary Artifact drafts cannot be retained.");
   const content = normalizeConversationDraft(input.draft);
   const created = await createArtifact(ctx, {
     projectId: input.projectId,
+    owningChatId: input.owningChatId ?? null,
     title: input.draft.title,
     content,
     origin: "conversation",
@@ -793,6 +860,8 @@ export async function keepConversationDraftVersion(
   },
 ) {
   const artifact = await getArtifact(ctx, input.artifactId);
+  if (input.draft.persistence === "ephemeral") throw new Error("Temporary Artifact drafts cannot be retained.");
+  if (input.draft.projectId !== artifact.projectId) throw new Error("Draft belongs to a different Artifact ownership context.");
   const content = normalizeConversationDraft(input.draft);
   if (content.kind !== artifact.kind) {
     throw new Error(`Conversation work product kind "${content.kind}" cannot replace ${artifact.kind} Artifact ${artifact.id}. Keep it as a new Artifact instead.`);
@@ -816,22 +885,43 @@ export async function keepConversationDraftVersion(
 
 /** Internal verified-run proof; no public Artifact write schema accepts this argument. */
 interface ArtifactModelMaintenanceProof {
+  kind?: "maintenance";
   runId: string;
   baseContentHash: string;
   review: ArtifactModelMaintenanceReview;
 }
 
-async function validateModelMaintenanceWrite(ctx: TenantContext, artifact: ProjectArtifact, base: ProjectArtifactVersion, content: SpreadsheetContent, proof: ArtifactModelMaintenanceProof) {
-  if (!artifact.projectId || artifact.ownerUserId !== ctx.userId || base.contentHash !== proof.baseContentHash
+interface ArtifactModelRecomputeProof {
+  kind: "recompute";
+  runId: string;
+  baseContentHash: string;
+  review: ArtifactIntegratedModelReview;
+}
+
+type ArtifactModelWriteProof = ArtifactModelMaintenanceProof | ArtifactModelRecomputeProof;
+
+async function validateModelMaintenanceWrite(ctx: TenantContext, artifact: ProjectArtifact, base: ProjectArtifactVersion, content: SpreadsheetContent, proof: ArtifactModelWriteProof) {
+  if (artifact.ownerUserId !== ctx.userId || (artifact.projectId === null && artifact.owningChatId === null) || base.contentHash !== proof.baseContentHash
     || proof.review.artifactId !== artifact.id || proof.review.version !== base.version || proof.review.contentHash !== base.contentHash) throw new Error("Maintenance proof does not match the owned immutable model head.");
   const engineRef = base.refreshSpec?.engineRef;
   const priorRef = typeof engineRef === "string" ? engineRef.match(/^integrated_financial_model:([^:]+):run:([0-9a-f-]{36})$/) : null;
   if (!priorRef) throw new Error("Maintenance requires an existing persisted integrated model run.");
-  const previous = await loadIntegratedModelArtifactSource(ctx, priorRef[2], artifact.projectId, true);
-  const next = await loadIntegratedModelArtifactSource(ctx, proof.runId, artifact.projectId, true);
+  const previous = await loadIntegratedModelArtifactSource(ctx, priorRef[2], artifact.projectId, true, artifact.owningChatId);
+  const next = await loadIntegratedModelArtifactSource(ctx, proof.runId, artifact.projectId, true, artifact.owningChatId);
   const nativeResult = next.run.result;
-  if (next.run.modelVersion !== proof.review.engineRev || next.snapshot.id !== proof.review.targetDatasetSnapshotId
-    || next.snapshot.contentHash !== proof.review.targetContentHash
+  if (proof.kind === "recompute") {
+    const current = await loadArtifactIntegratedModelReview(ctx, artifact.id, base.version);
+    if (current.review.reviewHash !== proof.review.reviewHash
+      || previous.run.id !== proof.review.source.runId
+      || previous.run.resultHash !== proof.review.source.runResultHash
+      || previous.snapshot.id !== proof.review.source.datasetSnapshotId
+      || previous.snapshot.contentHash !== proof.review.source.datasetContentHash
+      || next.snapshot.id !== previous.snapshot.id || next.snapshot.contentHash !== previous.snapshot.contentHash
+      || next.policy.id !== proof.review.source.entitlementPolicyId || next.policy.contentHash !== proof.review.source.entitlementPolicyHash) throw new Error("Recompute proof no longer matches the exact reviewed source, rights and workbook inputs.");
+  } else if (next.snapshot.id !== proof.review.targetDatasetSnapshotId || next.snapshot.contentHash !== proof.review.targetContentHash) {
+    throw new Error("Maintenance proof does not match the current owned target snapshot.");
+  }
+  if (next.run.modelVersion !== proof.review.engineRev
     || hashLedgerValue(nativeResult.assumptions) !== hashLedgerValue(proof.review.assumptions)
     || hashLedgerValue(nativeResult.specializedSchedules) !== hashLedgerValue(proof.review.schedules)) throw new Error("Maintenance proof does not match the current owned native run and reviewed inputs.");
   const baseContent = artifactContentSchema.parse(base.content);
@@ -872,7 +962,7 @@ export async function createArtifactVersion(
     note?: string | null;
     action?: ArtifactAction;
   },
-  maintenanceProof?: ArtifactModelMaintenanceProof,
+  maintenanceProof?: ArtifactModelWriteProof,
 ): Promise<ProjectArtifactVersion> {
   const artifact = await getArtifact(ctx, input.artifactId);
   let content = artifactContentSchema.parse(input.content);
@@ -886,7 +976,8 @@ export async function createArtifactVersion(
   if (maintenanceProof) {
     if (content.kind !== "spreadsheet") throw new Error("Model maintenance cannot change Artifact kind.");
     const verified = await validateModelMaintenanceWrite(ctx, artifact, base, content, maintenanceProof);
-    const expectedRefs = [...verified.projection.sourceRefs, `model-maintenance-run:${verified.run.id}`, `model-maintenance-review-sha256:${maintenanceProof.review.reviewHash}`];
+    const proofKind = maintenanceProof.kind === "recompute" ? "model-recompute" : "model-maintenance";
+    const expectedRefs = [...verified.projection.sourceRefs, `${proofKind}-run:${verified.run.id}`, `${proofKind}-review-sha256:${maintenanceProof.review.reviewHash}`];
     if (hashLedgerValue(input.sourceRefs) !== hashLedgerValue([...new Set(expectedRefs)])
       || input.refreshSpec?.engineRef !== `integrated_financial_model:${verified.run.modelVersion}:run:${verified.run.id}`
       || input.trustManifest !== null || (input.executionReceiptIds?.length ?? 0) !== 0) throw new Error("Maintenance metadata must bind the new native run, never prior trust or execution authority.");
@@ -910,6 +1001,7 @@ export async function createArtifactVersion(
   const now = new Date();
   const db: any = getDb();
   return db.transaction(async (tx: any) => {
+    await validateArtifactOwner(ctx, artifact, tx);
     const [advanced] = await tx.update(projectArtifacts).set({
       headVersion: nextVersion,
       updatedAt: now,
@@ -950,7 +1042,7 @@ export async function createArtifactVersion(
         trustId: trustManifest?.trustId ?? null,
         dependencyCount: dependencyRefs.length,
         refreshKind: refreshSpec?.kind ?? null,
-        ...(maintenanceProof ? { modelMaintenance: { runId: maintenanceProof.runId, review: maintenanceProof.review } } : {}),
+        ...(maintenanceProof ? { [maintenanceProof.kind === "recompute" ? "modelRecompute" : "modelMaintenance"]: { runId: maintenanceProof.runId, review: maintenanceProof.review } } : {}),
       },
     });
     await ledgerArtifactEvent(tx, ctx, {
@@ -997,7 +1089,8 @@ export async function forkArtifact(
   const sourceArtifact = await getArtifact(ctx, input.artifactId);
   const sourceVersion = await getArtifactVersion(ctx, sourceArtifact.id, input.version);
   const targetProjectId = input.projectId ?? sourceArtifact.projectId;
-  await validateArtifactProject(ctx, targetProjectId);
+  const owningChatId = targetProjectId === null ? sourceArtifact.owningChatId : null;
+  await validateArtifactOwner(ctx, { projectId: targetProjectId, owningChatId });
   const content = artifactContentSchema.parse(sourceVersion.content);
   assertResearchClaimRefsSafe(content);
   const id = `artifact:${crypto.randomUUID()}`;
@@ -1008,6 +1101,7 @@ export async function forkArtifact(
     const [artifact] = await tx.insert(projectArtifacts).values({
       id,
       projectId: targetProjectId,
+      owningChatId,
       ownerUserId: ctx.userId,
       organizationId: ctx.organizationId,
       kind: sourceArtifact.kind,
@@ -1068,7 +1162,7 @@ async function validateReferenceTarget(
 ): Promise<void> {
   const db = getDb();
   if (type === "project") {
-    if (String(artifact.projectId) !== ref) throw new Error("Artifact can only reference its owning Project as a Project target.");
+    if (artifact.projectId === null || String(artifact.projectId) !== ref) throw new Error("Artifact can only reference its owning Project as a Project target.");
     return;
   }
   if (type === "session") {
@@ -1081,7 +1175,7 @@ async function validateReferenceTarget(
     const chatId = Number(ref);
     const [row] = await db.select({ id: projectChats.id, projectId: projectChats.projectId }).from(projectChats)
       .where(and(eq(projectChats.id, chatId), eq(projectChats.ownerUserId, ctx.userId), tenantOrgClause(projectChats.organizationId, ctx))).limit(1);
-    if (!row || row.projectId !== artifact.projectId) throw new Error("Chat reference is outside the Artifact Project.");
+    if (!row || row.projectId !== artifact.projectId || (artifact.projectId === null && row.id !== artifact.owningChatId)) throw new Error("Chat reference is outside the Artifact ownership boundary.");
     return;
   }
   if (type === "resource") {
@@ -1091,7 +1185,7 @@ async function validateReferenceTarget(
     return;
   }
   const target = await getArtifact(ctx, ref);
-  if (target.projectId !== artifact.projectId) throw new Error("Cross-Project Artifact references require an explicit fork.");
+  if (target.projectId !== artifact.projectId || (artifact.projectId === null && target.owningChatId !== artifact.owningChatId)) throw new Error("Cross-context Artifact references require an explicit fork.");
 }
 
 export async function createArtifactReference(
@@ -1197,7 +1291,7 @@ export async function relinkImportedArtifactFork(
   sourceVersion: number,
 ): Promise<ProjectArtifact> {
   const [artifact, source] = await Promise.all([getArtifact(ctx, artifactId), getArtifact(ctx, sourceArtifactId)]);
-  if (artifact.projectId !== source.projectId) throw new Error("Imported fork ancestry must remain inside one Project.");
+  if (artifact.projectId !== source.projectId || (artifact.projectId === null && artifact.owningChatId !== source.owningChatId)) throw new Error("Imported fork ancestry must remain inside one ownership context.");
   await getArtifactVersion(ctx, sourceArtifactId, sourceVersion);
   const db: any = getDb();
   return db.transaction(async (tx: any) => {
@@ -1275,7 +1369,7 @@ export async function trashArtifact(ctx: TenantContext, artifactId: string): Pro
 export async function restoreTrashedArtifact(ctx: TenantContext, artifactId: string): Promise<ProjectArtifact> {
   const artifact = await getArtifactIncludingTrash(ctx, artifactId);
   if (!artifact.trashedAt) throw new Error("Artifact is not in Trash.");
-  await getProject(ctx, artifact.projectId);
+  await validateArtifactOwner(ctx, artifact);
   const restoredStatus = artifact.trashedFromStatus === "archived" ? "archived" : "active";
   const [updated] = await getDb().update(projectArtifacts).set({
     status: restoredStatus,
@@ -1578,7 +1672,7 @@ export async function appendArtifactReviewNote(ctx: TenantContext, artifactId: s
   }
   return getDb().transaction(async tx => {
     const receipt = await tx.insert(artifactInteractionReceipts).values({ id: crypto.randomUUID(), artifactId, action: "inspect_source", actorType: "user", fromVersion: input.version, toVersion: input.version, requestId: null, detail: { reviewNote: input }, createdByUserId: ctx.userId }).returning();
-    await appendLedgerEventInTransaction(tx, ctx, { projectId: artifact.projectId, eventType: "artifact.reference.created", actorType: "user", payload: { artifactId, version: input.version, reviewReceiptId: receipt[0].id, status: input.status, supersedes: input.supersedes }, lineage: { nodes: [{ kind: "artifact", ref: `${artifactId}@v${input.version}`, version: String(input.version), hash: version.contentHash, asOf: null, metadata: {} }], edges: [] } });
+    await appendLedgerEventInTransaction(tx, ctx, { projectId: artifact.projectId, chatId: artifact.projectId === null ? artifact.owningChatId : null, eventType: "artifact.reference.created", actorType: "user", payload: { artifactId, version: input.version, reviewReceiptId: receipt[0].id, status: input.status, supersedes: input.supersedes }, lineage: { nodes: [{ kind: "artifact", ref: `${artifactId}@v${input.version}`, version: String(input.version), hash: version.contentHash, asOf: null, metadata: {} }], edges: [] } });
     return receipt[0];
   });
 }

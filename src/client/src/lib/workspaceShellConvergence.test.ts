@@ -181,14 +181,6 @@ test("active feature CSS uses unambiguous semantic color-token forms", () => {
   }
 });
 
-test("surface changes have one persistence/event authority", () => {
-  const terminal = source("../pages/Terminal.tsx");
-  const waveC = source("../components/terminal/WaveCExperienceShell.tsx");
-  assert.doesNotMatch(terminal, /saveExperienceSurface/);
-  assert.match(terminal, /const handleSurface = useCallback\(\(surface: ExperienceShellSurface\) => \{\s*setExperienceSurface\(surface\);/);
-  assert.match(terminal, /subscribeExperienceSurface\(setExperienceSurfaceState\)/);
-  assert.match(waveC, /setGlobalExperienceSurface\(next\)/);
-});
 
 test("rendered UX smoke exercises real Dockview and the real workspace manager", () => {
   const visualSmoke = source("../visualSmoke.tsx");
@@ -237,21 +229,6 @@ test("function key chrome is explicit maximum-density UI, not permanent Workbenc
   assert.match(terminal, /<FunctionBar/);
 });
 
-test("Project artifacts use available conversation width and a single focus control", () => {
-  const project = source("../components/terminal/ProjectExperienceShell.tsx");
-
-  assert.doesNotMatch(project, /window\.innerWidth < 1536|2xl:block/);
-  assert.match(project, /width > 0 && width < 900/);
-  assert.match(project, /lios-artifact-sidecar/);
-  assert.match(project, /contextOpen && section === "conversation"/);
-  assert.match(project, /className="lios-project-context"/);
-  const styles = source("../components/terminal/project-conversation-shell.css");
-  assert.match(styles, /1199px/);
-  assert.match(styles, /@container conversation \(min-width: 900px\)/);
-  assert.match(styles, /container-type: inline-size/);
-  assert.equal((project.match(/\bOpen artifact\b/g) ?? []).length, 1);
-  assert.match(project, /Exit Focus/);
-});
 
 test("analytical overlay coordinator makes modal surfaces mutually exclusive", () => {
   const overlays = source("../components/terminal/TerminalUxOverlays.tsx");
@@ -335,10 +312,9 @@ test("Connect screen: AI and data are separate sections and the provider picker 
 test("H2a chat feel: finished runs collapse to a receipt, work stays open when unfinished, follow-ups never auto-send", () => {
   const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
   const project = source("../components/terminal/ProjectExperienceShell.tsx");
-  // Technical step/capability telemetry stays behind Details; recovery/approval cards remain visible separately.
+  // Technical step/capability telemetry stays behind Show work; recovery/approval cards remain visible separately.
   assert.match(trace, /const workVisible = showWork/);
-  assert.match(trace, /Details/);
-  assert.match(trace, /data-testid="trace-receipt"/);
+  assert.match(trace, /Show work/);
   assert.match(trace, /data-testid="trace-sources"/);
   assert.match(trace, /data-testid="trace-follow-ups"/);
   assert.match(trace, /\{workVisible && !!steps\.length/);

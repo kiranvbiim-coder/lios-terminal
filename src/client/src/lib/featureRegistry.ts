@@ -75,7 +75,7 @@ export const PRIMARY_WORKSPACES: readonly WorkspaceDefinition[] = [
 ];
 
 const REGISTERED_VIEWS = new Set<ViewMode>(
-  PRIMARY_WORKSPACES.flatMap((workspace) => workspace.views),
+  [...PRIMARY_WORKSPACES.flatMap((workspace) => workspace.views), "artifact"],
 );
 
 export function isRegisteredView(value: string): value is ViewMode {
@@ -128,6 +128,7 @@ export function getVisibleViewsForWorkspace(
 }
 
 export function getWorkspaceForView(view: ViewMode): WorkspaceKey {
+  if (view === "artifact") return "outputs"; // Context-only: registered for exact Chat handoff, never a blank launch.
   return PRIMARY_WORKSPACES.find((workspace) => workspace.views.includes(view))?.key ?? "research";
 }
 

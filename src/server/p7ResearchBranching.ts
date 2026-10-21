@@ -222,7 +222,11 @@ export function createP7ResearchBranchingService(deps: P7ResearchBranchingDeps) 
 }
 
 export const p7ResearchBranchingService = createP7ResearchBranchingService({
-  getArtifact: async (ctx, artifactId) => getArtifact(ctx, artifactId),
+  getArtifact: async (ctx, artifactId) => {
+    const artifact = await getArtifact(ctx, artifactId);
+    if (artifact.projectId === null) throw new Error("Project research branching requires an Artifact in its owning Project.");
+    return { ...artifact, projectId: artifact.projectId };
+  },
   getArtifactVersion: async (ctx, artifactId, version) => getArtifactVersion(ctx, artifactId, version),
   forkArtifact: async (ctx, input) => forkArtifact(ctx, input),
   createArtifactProposal: async (ctx, input) => createArtifactProposal(ctx, input),

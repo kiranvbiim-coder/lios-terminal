@@ -8,13 +8,14 @@ import type { IntegratedModelAssumptions, SpecializedModelSchedules } from "@sha
 import { artifactInteractionReceipts, projectArtifactVersions } from "@shared/schema";
 import type { ProjectArtifact, ProjectArtifactVersion } from "@shared/schema";
 import { getDb } from "./db";
-import { getArtifact, getArtifactVersion } from "./artifactStore";
+import { createArtifactVersion, getArtifact, getArtifactVersion } from "./artifactStore";
 import { hashLedgerValue } from "./ledgerStore";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 import { saveFinancialModelRun } from "./financialModelRunStore";
 import { createModelInputLineage } from "./modelInputLineage";
 import type { ModelInputLineage } from "./modelInputLineage";
-import { IntegratedModelArtifactError, loadIntegratedModelArtifactSource, retainIntegratedModelArtifact } from "./integratedModelArtifact";
+import { IntegratedModelArtifactError, loadIntegratedModelArtifactSource } from "./integratedModelArtifact";
+import { mergeMaintainedWorkbook } from "./artifactModelMaintenance";
 import type { TenantContext } from "./tenantContext";
 
 export const artifactIntegratedModelReviewSchema = z.object({ version: z.number().int().positive() }).strict();
@@ -159,22 +160,23 @@ export function parseMaintenanceWorkbookInputs(content: unknown, baseline: Workb
 export async function loadArtifactIntegratedModelReview(ctx: TenantContext, artifactId: string, requestedVersion: number, maintenance = false) {
   artifactIntegratedModelReviewSchema.parse({ version: requestedVersion });
   const artifact = await getArtifact(ctx, artifactId);
-  if (!artifact.projectId || artifact.kind !== "spreadsheet" || artifact.ownerUserId !== ctx.userId) return invalid("Integrated model inputs require an owned Project spreadsheet Artifact.");
+  if (artifact.kind !== "spreadsheet" || artifact.ownerUserId !== ctx.userId) return invalid("Integrated model inputs require an owned spreadsheet Artifact.");
   if (artifact.headVersion !== requestedVersion) throw new IntegratedModelArtifactError(409, "Artifact head moved; review the current version before running.");
   // No workbook/result/source payload is read before the live actor, run, tenant and entitlement guards.
   const [metadata] = await getDb().select({ refreshSpec: projectArtifactVersions.refreshSpec, sourceRefs: projectArtifactVersions.sourceRefs, contentHash: projectArtifactVersions.contentHash }).from(projectArtifactVersions).where(and(eq(projectArtifactVersions.artifactId, artifactId), eq(projectArtifactVersions.version, requestedVersion))).limit(1);
   const ref = metadata?.refreshSpec?.kind === "engine" ? metadata.refreshSpec.engineRef : null;
   const match = typeof ref === "string" ? /^integrated_financial_model:([^:]+):run:([0-9a-f-]{36})$/.exec(ref) : null;
   if (!metadata || !match) return invalid("Artifact has no recognized integrated engine run identity.");
-  const source = await loadIntegratedModelArtifactSource(ctx, match[2], artifact.projectId, true);
+  const source = await loadIntegratedModelArtifactSource(ctx, match[2], artifact.projectId, true, artifact.owningChatId);
   if (source.run.modelVersion !== match[1]) return invalid("Artifact engine revision does not match its persisted run.");
   const version = await getArtifactVersion(ctx, artifactId, requestedVersion);
   const origins = await getDb().select().from(projectArtifactVersions).where(eq(projectArtifactVersions.artifactId, artifactId));
-  const origin = origins.filter(item => item.refreshSpec?.engineRef === ref).sort((a, b) => a.version - b.version)[0];
+  const origin = origins.filter(item => item.refreshSpec?.engineRef === ref && same(item.sourceRefs, version.sourceRefs)).sort((a, b) => a.version - b.version)[0];
   const [maintenanceReceipt] = origin ? await getDb().select({ detail: artifactInteractionReceipts.detail }).from(artifactInteractionReceipts).where(and(eq(artifactInteractionReceipts.artifactId, artifactId), eq(artifactInteractionReceipts.toVersion, origin.version), eq(artifactInteractionReceipts.createdByUserId, ctx.userId))).limit(1) : [];
-  const proof = maintenanceReceipt?.detail.modelMaintenance;
+  const proof = maintenanceReceipt?.detail.modelMaintenance ?? maintenanceReceipt?.detail.modelRecompute;
   const verifiedMaintenance = proof !== null && typeof proof === "object" && "runId" in proof && proof.runId === source.run.id
-    && maintenanceReceipt?.detail.contentHash === origin?.contentHash && origin?.sourceRefs.includes(`model-maintenance-run:${source.run.id}`);
+    && maintenanceReceipt?.detail.contentHash === origin?.contentHash
+    && (origin?.sourceRefs.includes(`model-maintenance-run:${source.run.id}`) || origin?.sourceRefs.includes(`model-recompute-run:${source.run.id}`));
   if (!origin || version.refreshSpec?.engineRef !== ref || !same(origin.sourceRefs, version.sourceRefs) || !source.projection.sourceRefs.every(item => version.sourceRefs.includes(item)) || (!same(origin.content, source.projection.content) && !verifiedMaintenance)) return invalid("Artifact run/source provenance no longer matches its immutable engine projection.");
   if (hashLedgerValue(version.content) !== version.contentHash || metadata.contentHash !== version.contentHash) return invalid("Current Artifact content hash does not match its recorded workbook.");
   const original = source.run.result as unknown as { assumptions: IntegratedModelAssumptions; specializedSchedules: SpecializedModelSchedules };
@@ -187,7 +189,7 @@ export async function loadArtifactIntegratedModelReview(ctx: TenantContext, arti
     source: { runId: source.run.id, runResultHash: source.run.resultHash, datasetSnapshotId: source.snapshot.id, datasetContentHash: source.snapshot.contentHash, entitlementPolicyId: source.policy.id, entitlementPolicyHash: source.policy.contentHash },
     ...inputs, sourceRefs: version.sourceRefs, inputHash,
   };
-  const reviewHash = hashLedgerValue({ ...reviewWithoutHash, owner: ctx, projectId: artifact.projectId, artifactOwnerUserId: artifact.ownerUserId, artifactOrganizationId: artifact.organizationId, artifactStatus: artifact.status, versionId: version.id, parentVersionId: version.parentVersionId, versionCreatedAt: version.createdAt, refreshSpec: version.refreshSpec, dependencyRefs: version.dependencyRefs, sourceRun: source.run, sourceSnapshot: source.snapshot, currentPolicy: source.policy });
+  const reviewHash = hashLedgerValue({ ...reviewWithoutHash, owner: ctx, projectId: artifact.projectId, owningChatId: artifact.owningChatId, artifactOwnerUserId: artifact.ownerUserId, artifactOrganizationId: artifact.organizationId, artifactStatus: artifact.status, versionId: version.id, parentVersionId: version.parentVersionId, versionCreatedAt: version.createdAt, refreshSpec: version.refreshSpec, dependencyRefs: version.dependencyRefs, sourceRun: source.run, sourceSnapshot: source.snapshot, currentPolicy: source.policy });
   // A concurrent head change invalidates even a preview; execution independently reloads every guard/hash.
   if ((await getArtifact(ctx, artifactId)).headVersion !== requestedVersion) throw new IntegratedModelArtifactError(409, "Artifact head moved during review.");
   return { review: { ...reviewWithoutHash, reviewHash } satisfies ArtifactIntegratedModelReview, source, projectId: artifact.projectId, artifact, version };
@@ -195,9 +197,31 @@ export async function loadArtifactIntegratedModelReview(ctx: TenantContext, arti
 export async function reviewArtifactIntegratedModelInputs(ctx: TenantContext, artifactId: string, request: z.infer<typeof artifactIntegratedModelReviewSchema>) {
   return (await loadArtifactIntegratedModelReview(ctx, artifactId, artifactIntegratedModelReviewSchema.parse(request).version)).review;
 }
+async function replayIntegratedModelRun(ctx: TenantContext, artifactId: string, request: z.infer<typeof artifactIntegratedModelRunSchema>): Promise<ArtifactIntegratedModelRun | null> {
+  const artifact = await getArtifact(ctx, artifactId);
+  const [receipt] = await getDb().select().from(artifactInteractionReceipts).where(and(
+    eq(artifactInteractionReceipts.artifactId, artifactId),
+    eq(artifactInteractionReceipts.requestId, `model-recompute:${request.reviewHash}`),
+    eq(artifactInteractionReceipts.createdByUserId, ctx.userId),
+  )).limit(1);
+  if (!receipt?.toVersion) return null;
+  if (artifact.headVersion !== receipt.toVersion) throw new IntegratedModelArtifactError(409, "Artifact head advanced after this recomputation; review the current revision before retrying.");
+  const proof = receipt.detail.modelRecompute as { runId?: string; review?: ArtifactIntegratedModelReview } | undefined;
+  if (!proof?.runId || !proof.review) throw new IntegratedModelArtifactError(409, "Recompute replay receipt is incomplete.");
+  const review = proof.review;
+  if (review.version !== request.version || review.contentHash !== request.contentHash || review.reviewHash !== request.reviewHash) throw new IntegratedModelArtifactError(409, "Recompute replay does not match the reviewed request; review again.");
+  const source = await loadIntegratedModelArtifactSource(ctx, proof.runId, artifact.projectId, true, artifact.owningChatId);
+  const original = await loadIntegratedModelArtifactSource(ctx, review.source.runId, artifact.projectId, true, artifact.owningChatId);
+  if (review.engineRev !== INTEGRATED_FINANCIAL_MODEL_VERSION || source.policy.contentHash !== review.source.entitlementPolicyHash
+    || original.snapshot.contentHash !== review.source.datasetContentHash || source.snapshot.id !== review.source.datasetSnapshotId) throw new IntegratedModelArtifactError(409, "Recompute replay source rights or revision changed; review again.");
+  const outputVersion = await getArtifactVersion(ctx, artifactId, receipt.toVersion);
+  return { review, outputArtifact: artifact, outputVersion, receipt: { runId: source.run.id, resultHash: source.run.resultHash, datasetSnapshotId: source.snapshot.id, datasetContentHash: source.snapshot.contentHash, inputHash: review.inputHash, calculatedAt: source.run.createdAt.toISOString(), deterministic: true }, lineage: { modelInput: null } };
+}
 export async function runArtifactIntegratedModelInputs(ctx: TenantContext, artifactId: string, rawRequest: z.infer<typeof artifactIntegratedModelRunSchema>): Promise<ArtifactIntegratedModelRun> {
   const request = artifactIntegratedModelRunSchema.parse(rawRequest);
-  const { review, source, projectId } = await loadArtifactIntegratedModelReview(ctx, artifactId, request.version);
+  const replay = await replayIntegratedModelRun(ctx, artifactId, request);
+  if (replay) return replay;
+  const { review, source, projectId, artifact, version } = await loadArtifactIntegratedModelReview(ctx, artifactId, request.version);
   if (request.contentHash !== review.contentHash || request.reviewHash !== review.reviewHash) throw new IntegratedModelArtifactError(409, "Reviewed inputs, source rights or engine revision changed; review again before running.");
   const result = runIntegratedFinancialModel({ datasetSnapshotId: source.snapshot.id, payload: financialDatasetPayloadSchema.parse(source.snapshot.payload), assumptions: review.assumptions, schedules: review.schedules });
   if (result.modelVersion !== review.engineRev || !same(result.assumptions, review.assumptions) || !same(result.specializedSchedules, review.schedules)) return invalid("Native engine did not preserve the exact reviewed parameters/revision.");
@@ -207,12 +231,18 @@ export async function runArtifactIntegratedModelInputs(ctx: TenantContext, artif
   // Recheck current source/head/rights before publishing any newly calculated output.
   const latest = await loadArtifactIntegratedModelReview(ctx, artifactId, request.version);
   if (latest.review.reviewHash !== review.reviewHash) throw new IntegratedModelArtifactError(409, "Reviewed source changed during execution; output was not retained.");
+  const fresh = await loadIntegratedModelArtifactSource(ctx, run.id, projectId, true, artifact.owningChatId);
   const artifactRef = `${artifactId}@v${review.version}`;
-  const lineageRefs = [artifactRef, `artifact-content-sha256:${review.contentHash}`, `integrated-model-review-sha256:${review.reviewHash}`, `financial-model-input-sha256:${review.inputHash}`, ...review.sourceRefs];
-  // Deterministic request identity is only P4 replay identity, not a manufactured execution receipt.
-  const hash = stableSnapshotHash({ reviewHash: review.reviewHash, runId: run.id });
-  const requestId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-${((parseInt(hash[16], 16) & 3) | 8).toString(16)}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-  const retained = await retainIntegratedModelArtifact(ctx, run.id, projectId, { requestId, sourceRefs: lineageRefs });
+  const sourceRefs = [...new Set([...fresh.projection.sourceRefs, `model-recompute-run:${run.id}`, `model-recompute-review-sha256:${review.reviewHash}`])];
+  const dependencyRefs = [...new Set([...version.dependencyRefs, ...version.sourceRefs, `${artifactId}@v${review.version}`])];
+  const outputVersion = await createArtifactVersion(ctx, {
+    artifactId, baseVersion: review.version,
+    content: mergeMaintainedWorkbook(spreadsheetArtifactContentSchema.parse(version.content), source.projection.content, fresh.projection.content),
+    sourceRefs, dependencyRefs, trustManifest: null, executionReceiptIds: [], actorType: "system",
+    requestId: `model-recompute:${review.reviewHash}`,
+    refreshSpec: { kind: "engine", sourceScope: "my_data", executionMode: "deterministic_first", capabilityIds: [], message: "Explicitly reviewed native model recomputation; authored overrides remain preserved, not engine outputs.", selection: null, engineRef: `integrated_financial_model:${run.modelVersion}:run:${run.id}` },
+    note: `Explicit model recomputation from ${artifactRef}; ${review.changedFields.length} reviewed input changes.`,
+  }, { kind: "recompute", runId: run.id, baseContentHash: review.contentHash, review });
   const modelInput = ctx.organizationId ? createModelInputLineage({ organizationId: ctx.organizationId, modelId: "integrated_financial_model", modelVersionId: result.modelVersion, datasetVersionId: source.snapshot.id, transformationNodeIds: [run.id, artifactRef], sourceCellRefs: [artifactRef, ...review.changedFields.map(change => `${artifactRef}#${change.sheetId}!${change.cell}`)], targetCellRefs: result.forecast.flatMap(period => [`${period.fiscalYear}:income.revenue`, `${period.fiscalYear}:balance.totalAssets`, `${period.fiscalYear}:cashflow.cashFromOperations`]), inputHash: review.inputHash, createdByUserId: ctx.userId }) : null;
-  return { review, outputArtifact: retained.artifact, outputVersion: retained.version, receipt: { runId: run.id, resultHash, datasetSnapshotId: source.snapshot.id, datasetContentHash: source.snapshot.contentHash, inputHash: review.inputHash, calculatedAt: run.createdAt.toISOString(), deterministic: true as const }, lineage: { modelInput } };
+  return { review, outputArtifact: await getArtifact(ctx, artifactId), outputVersion, receipt: { runId: run.id, resultHash, datasetSnapshotId: source.snapshot.id, datasetContentHash: source.snapshot.contentHash, inputHash: review.inputHash, calculatedAt: run.createdAt.toISOString(), deterministic: true as const }, lineage: { modelInput } };
 }

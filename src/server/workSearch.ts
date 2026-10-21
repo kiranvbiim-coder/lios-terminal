@@ -109,6 +109,7 @@ export async function searchProjectWork(
     db.select({
       id: projectArtifacts.id,
       projectId: projectArtifacts.projectId,
+      owningChatId: projectArtifacts.owningChatId,
       title: projectArtifacts.title,
       kind: projectArtifacts.kind,
       updatedAt: projectArtifacts.updatedAt,
@@ -183,7 +184,7 @@ export async function searchProjectWork(
       title: row.title,
       snippet: row.kind.replace(/_/g, " "),
       projectId: row.projectId,
-      chatId: null,
+      chatId: row.owningChatId,
       artifactId: row.id,
       resourceId: null,
       updatedAt: iso(row.updatedAt),

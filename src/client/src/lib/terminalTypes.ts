@@ -6,6 +6,7 @@ export type ViewMode =
   | "chart"
   | "news"
   | "agent"
+  | "artifact"
   | "screener"
   | "watchlist"
   | "alerts"
@@ -113,9 +114,18 @@ export type ViewMode =
 
 export type PaneId = "primary" | "secondary" | "tertiary" | "quaternary";
 
+/** Navigation references only; P4 remains the Artifact/revision authority. */
+export interface ArtifactWorkbenchContext {
+  projectId: number | null;
+  chatId: number;
+  artifactId: string;
+  version: number;
+}
+
 export interface PaneState {
   view: ViewMode;
   symbol: string;
+  artifact?: ArtifactWorkbenchContext;
 }
 
 /**

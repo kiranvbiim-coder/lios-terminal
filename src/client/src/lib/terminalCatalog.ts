@@ -81,6 +81,7 @@ const DOMAIN_BY_VIEW: Partial<Record<ViewMode, CapabilityDomain>> = {
 
 const DESCRIPTIONS: Partial<Record<ViewMode, string>> = {
   missioncontrol: "Resume work, launch workflows, and see active analytical contexts.",
+  artifact: "Continue the exact saved Chat Artifact in the full Workbench, then return to the same conversation.",
   entity: "Open a company or security as a persistent analytical context.",
   market: "Monitor cross-market conditions, leadership, and major moves.",
   quote: "Inspect price, market state, and core security descriptors.",

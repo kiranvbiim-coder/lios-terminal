@@ -42,7 +42,7 @@ import { runOnConversationSpine } from "./conversationSpineRun";
 import { requireMasterAiOn } from "./masterAiGate";
 import type { PersonaPreferenceUser } from "./personaPreferenceService";
 import { createConversationLedgerRecorder } from "./ledgerReproducibility";
-import { createArtifactProposal, listArtifactProposals, getArtifact, getArtifactVersion, persistProjectConversationDraft } from "./artifactStore";
+import { createArtifactProposal, listArtifactProposals, getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { normalizeConversationDraft } from "./artifactDiff";
 import {
   listProjectIntelligenceSnapshots,
@@ -412,7 +412,7 @@ async function runConversationRerun(
         const capabilityIds = result.plan.capabilities.map(capability => capability.id);
         const selection = request.context?.selection;
         for (const event of pendingArtifacts) {
-          const saved = await persistProjectConversationDraft(ctx, {
+          const saved = await persistConversationDraft(ctx, {
             projectId: workflow.projectId,
             requestId: request.requestId,
             draft: event.artifact,

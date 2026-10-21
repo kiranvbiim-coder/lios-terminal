@@ -523,7 +523,7 @@ Normal UX avoids:
 
 Use progressive disclosure, semantic zoom, adaptive Artifact panes and compact capability/source disclosure.
 
-Approved TC-13/P4 retention requirement: meaningful Project outputs must auto-persist as versioned Artifacts without manual Keep. Quick/Temporary promotion requires an explicit Project destination and scope preview; permission enforcement, provenance, immutable versions and accessible history remain required. Current conversation-produced Artifact retention still requires **Keep in Project**, even in Project Chat. Treat automatic Project-output persistence as open target work, not a current-source or shipped-capability claim; this gap does not imply loss of ordinary saved Projects, chats or already-kept Artifacts.
+Approved TC-13/P4 retention requirement (owner-confirmed issue #91 / PR #94): meaningful successful Project and regular/Quick Chat outputs auto-persist as versioned Artifacts without manual Keep or an invented Project; Temporary Chat remains nonpersistent. Explicit promotion into a Project still requires a destination and scope preview. Current candidate source implements Project retention and canonical Chat ownership (migration 0083), with isolated DB/HTTP/runtime evidence and a source-Electron deterministic Quick Chat retention/reopen journey recorded in `docs/PENDING_WORK.md`. This is candidate implementation evidence, not TC-13/Shipping Point/P14 or shipped-product acceptance. Final packaged journeys, permission/provenance/immutable-history qualification and the complete owner-approved convergence contract remain mandatory.
 
 ---
 

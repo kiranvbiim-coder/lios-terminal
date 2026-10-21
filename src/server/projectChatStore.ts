@@ -5,6 +5,8 @@ import {
   insertProjectChatSchema,
   projectChatMessages,
   projectChats,
+  projectArtifacts,
+  projectArtifactReferences,
   type ProjectChat,
   type ProjectChatMessage,
 } from "@shared/schema";
@@ -169,10 +171,20 @@ export async function promoteQuickChatToProject(ctx: TenantContext, chatId: numb
   if (chat.scope !== "quick" || chat.projectId !== null) throw new Error("Only Quick Chats can be moved into a Project.");
   await getProject(ctx, projectId);
   const now = new Date();
-  const [row] = await getDb().update(projectChats)
-    .set({ scope: "project", projectId, updatedAt: now, lastActivityAt: now })
-    .where(ownedChatFilter(ctx, chatId))
-    .returning();
+  const row = await getDb().transaction(async tx => {
+    const [updated] = await tx.update(projectChats)
+      .set({ scope: "project", projectId, updatedAt: now, lastActivityAt: now })
+      .where(and(ownedChatFilter(ctx, chatId), eq(projectChats.scope, "quick"), isNull(projectChats.projectId)))
+      .returning();
+    if (!updated) throw new ProjectChatAccessDeniedError();
+    const retained = await tx.update(projectArtifacts).set({ projectId, owningChatId: null, updatedAt: now })
+      .where(and(eq(projectArtifacts.owningChatId, chatId), eq(projectArtifacts.ownerUserId, ctx.userId), isNull(projectArtifacts.projectId)))
+      .returning();
+    for (const artifact of retained) {
+      await tx.update(projectArtifactReferences).set({ projectId }).where(eq(projectArtifactReferences.artifactId, artifact.id));
+    }
+    return updated;
+  });
   await touchProjectActivity(ctx, projectId);
   return row;
 }

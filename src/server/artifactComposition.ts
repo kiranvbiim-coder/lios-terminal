@@ -7,7 +7,6 @@ import { assertArtifactRefsSafe, createArtifactProposal, getArtifact, getArtifac
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
 import { hashLedgerValue } from "./ledgerStore";
 import { loadProjectAttachment } from "./projectAttachmentService";
-import { getProject } from "./projectStore";
 import type { TenantContext } from "./tenantContext";
 
 export const artifactCompositionRequestSchema = z.object({
@@ -184,7 +183,6 @@ function metadataRefs(metadata: Record<string, unknown>): string[] {
 export async function proposeArtifactComposition(ctx: TenantContext, artifactId: string, raw: unknown) {
   const input = artifactCompositionRequestSchema.parse(raw);
   const target = await getArtifact(ctx, artifactId);
-  await getProject(ctx, target.projectId);
   if (target.headVersion !== input.baseVersion) throw new Error("Artifact composition base version is stale.");
   const base = await getArtifactVersion(ctx, artifactId, input.baseVersion);
   if (hashLedgerValue(base.content) !== base.contentHash) throw new Error("Invalid target Artifact immutable content hash.");
@@ -198,6 +196,7 @@ export async function proposeArtifactComposition(ctx: TenantContext, artifactId:
   let sourceHash: string;
   let sourceRefs: string[];
   if (input.kind === "image") {
+    if (target.projectId === null) throw new Error("Project image attachments require an Artifact in their owning Project.");
     const { resource, reference, bytes } = await loadProjectAttachment(ctx, target.projectId, input.sourceId);
     if (reference.kind !== "image" || !["image/png", "image/jpeg"].includes(reference.mimeType)
       || reference.byteLength !== bytes.length || bytes.length > ARTIFACT_IMAGE_LIMITS.bytes
@@ -219,7 +218,7 @@ export async function proposeArtifactComposition(ctx: TenantContext, artifactId:
       sourceAttachmentId: reference.id, sourceResourceId: resource.id, sourceStorageVersion: 1, captionProvenance: "user_asserted" } };
   } else {
     const source = await getArtifact(ctx, input.sourceId);
-    if (source.projectId !== target.projectId) throw new Error("Selected source belongs to a different Project.");
+    if (source.projectId !== target.projectId || (target.projectId === null && source.owningChatId !== target.owningChatId)) throw new Error("Selected source belongs to a different Artifact ownership context.");
     const revision = await getArtifactVersion(ctx, source.id, input.sourceVersion!);
     if (hashLedgerValue(revision.content) !== revision.contentHash) throw new Error("Invalid source Artifact immutable content hash.");
     const captured = artifactContentSchema.parse(revision.content);

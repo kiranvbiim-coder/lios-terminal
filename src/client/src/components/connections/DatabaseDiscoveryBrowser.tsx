@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Database, Loader2, RefreshCw, Search, XCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import DatabaseConfirmedMapping from "./DatabaseConfirmedMapping";
 
 interface DiscoveredColumn {
   schema: string;
@@ -113,7 +114,7 @@ export default function DatabaseDiscoveryBrowser({ connectionId, connectionName,
                 <div className="overflow-x-auto border border-border">
                   <table className="w-full text-left font-terminal text-[8px]"><thead className="bg-[#0b0b0b] text-muted-foreground"><tr><th className="px-3 py-2">#</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Native type</th><th className="px-3 py-2">Nullable</th></tr></thead><tbody>{selectedTable.columns.map(column => <tr key={`${column.ordinalPosition}:${column.name}`} className="border-t border-border/60"><td className="px-3 py-2 text-muted-foreground">{column.ordinalPosition}</td><td className="px-3 py-2 text-foreground">{column.name}</td><td className="px-3 py-2 text-muted-foreground">{column.dataType || "unknown"}</td><td className="px-3 py-2 text-muted-foreground">{column.nullable ? "yes" : "no"}</td></tr>)}</tbody></table>
                 </div>
-                <div className="mt-3 border border-cyan-500/20 bg-cyan-500/[0.03] p-3 font-terminal text-[7px] leading-relaxed text-cyan-200">Discovery does not create canonical mappings automatically. Saved deterministic field mappings belong to V4-07 and will consume this catalog metadata.</div>
+                <DatabaseConfirmedMapping key={`${connectionId}:${selectedTable.schema}.${selectedTable.name}`} connectionId={connectionId} datasetKey={`${selectedTable.schema}.${selectedTable.name}`} columns={selectedTable.columns.map(column => column.name)}/>
               </> : <p className="font-terminal text-[8px] text-muted-foreground">Select a table to inspect its columns.</p>}
             </main>
           </div>

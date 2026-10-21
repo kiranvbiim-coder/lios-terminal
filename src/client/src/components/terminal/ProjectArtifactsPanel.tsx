@@ -51,6 +51,7 @@ export function ProjectArtifactsPanel({
   onFocusArtifact,
   onRerunArtifact,
   initialArtifactId = null,
+  initialVersion = null,
   selectedResourceId = null,
   resources = [],
 }: {
@@ -60,6 +61,7 @@ export function ProjectArtifactsPanel({
   onFocusArtifact?: (id: string, title: string) => void;
   onRerunArtifact?: (id: string, title: string, spec: ArtifactRefreshSpec) => void;
   initialArtifactId?: string | null;
+  initialVersion?: number | null;
   selectedResourceId?: string | null;
   resources?: ProjectResource[];
 }) {
@@ -67,6 +69,7 @@ export function ProjectArtifactsPanel({
   const archivedArtifacts = useProjectArtifacts(projectId, "archived");
   const invalidate = useInvalidateArtifacts();
   const [selected, setSelected] = useState<string | null>(initialArtifactId);
+  const [versionView, setVersionView] = useState<number | null>(initialVersion);
   const [resourceOpen, setResourceOpen] = useState(Boolean(selectedResourceId));
   const [newKind, setNewKind] = useState<ArtifactContent["kind"]>("spreadsheet");
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +147,8 @@ export function ProjectArtifactsPanel({
       <section className="mt-4">
         <ArtifactPane
           artifactId={selected}
+          version={selected === initialArtifactId ? versionView : null}
+          onVersionChange={setVersionView}
           projectId={projectId}
           sessions={sessions}
           onClose={() => setSelected(null)}

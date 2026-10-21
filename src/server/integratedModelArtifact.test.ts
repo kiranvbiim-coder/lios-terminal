@@ -27,7 +27,7 @@ const { createProject } = await import("./projectStore");
 const { createEntitlementPolicy } = await import("./dataEntitlementStore");
 const { saveFinancialModelRun } = await import("./financialModelRunStore");
 const { stableSnapshotHash } = await import("./pointInTimeDatasetStore");
-const { getArtifactVersion, createArtifact, createArtifactVersion, createArtifactProposal, decideArtifactProposal, persistProjectConversationDraft } = await import("./artifactStore");
+const { getArtifactVersion, createArtifact, createArtifactVersion, createArtifactProposal, decideArtifactProposal, persistConversationDraft } = await import("./artifactStore");
 const { retainIntegratedModelArtifact, projectIntegratedModelWorkbook } = await import("./integratedModelArtifact");
 const { registerDataFabricRoutes } = await import("./dataFabricRoutes");
 
@@ -209,7 +209,7 @@ test("SI-04.16 persisted engine run becomes one tenant-owned canonical P4 workbo
     const projection = projectIntegratedModelWorkbook(run, snapshot, policy);
     const historical = structuredClone(projection.content);
     for (const sheet of historical.sheets) for (const cell of Object.values(sheet.cells)) delete cell.lineage;
-    const old = await persistProjectConversationDraft(ctx, {
+    const old = await persistConversationDraft(ctx, {
       projectId: historicalProject.id, requestId: run.id,
       draft: { schemaVersion: "1", artifactId: run.id, artifactType: "financial.integrated.spreadsheet", title: `${run.symbol} integrated model · ${run.modelVersion}`, projectId: historicalProject.id, sourceRefs: projection.sourceRefs, executionReceiptIds: [], data: historical, persistence: "project_candidate" },
       dependencyRefs: projection.sourceRefs,

@@ -124,7 +124,6 @@ export async function discoverDatabaseSource(
   const connection = await ownedSourceConnection(userId, connectionId);
   if (!connection || connection.sourceType !== "database") throw new Error("Database source connection not found.");
   const credential = databaseCredential(connection);
-  if (!credential) throw new Error("Database credential is unavailable to this runtime.");
   const result = await discoverDatabaseSchema(databaseConfig(connection), credential);
   await recordAuditEvent(actor.id, "source_database_schema_discovered", { connectionId, organizationId: connection.organizationId, columnCount: result.length, ...auditActor(actor) });
   return result;
@@ -140,7 +139,6 @@ export async function queryDatabaseSource(
   const connection = await ownedSourceConnection(userId, connectionId);
   if (!connection || connection.sourceType !== "database") throw new Error("Database source connection not found.");
   const credential = databaseCredential(connection);
-  if (!credential) throw new Error("Database credential is unavailable to this runtime.");
   const result = await executeReadOnlyQuery(databaseConfig(connection), credential, query, params);
   const snapshot = await persistSourceSnapshot({
     connectionId,
@@ -167,7 +165,6 @@ export async function profileDatabaseSource(
   const connection = await ownedSourceConnection(userId, connectionId);
   if (!connection || connection.sourceType !== "database") throw new Error("Database source connection not found.");
   const credential = databaseCredential(connection);
-  if (!credential) throw new Error("Database credential is unavailable to this runtime.");
   const result = await profileDatabaseTable(databaseConfig(connection), credential, schema, table);
   const snapshot = await persistSourceSnapshot({
     connectionId,

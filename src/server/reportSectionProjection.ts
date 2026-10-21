@@ -40,10 +40,10 @@ export function projectReportSections(report: ReportPack, options: ReportProject
     const baseId = `${options.blockIdPrefix ?? "block"}-${index + 1}`;
     const attrs = {
       reportOutputHash: report.metadata.outputHash,
-      engineId: report.metadata.engineId,
-      engineVersion: report.metadata.engineVersion,
+      ...(report.metadata.engineId !== undefined ? { engineId: report.metadata.engineId } : {}),
+      ...(report.metadata.engineVersion !== undefined ? { engineVersion: report.metadata.engineVersion } : {}),
       passportIds: report.metadata.passportIds,
-      receiptId: report.metadata.receiptId,
+      ...(report.metadata.receiptId !== undefined ? { receiptId: report.metadata.receiptId } : {}),
       ...options.attrs,
       sectionType: section.type,
       order: section.order,

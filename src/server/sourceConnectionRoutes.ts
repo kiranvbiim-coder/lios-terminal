@@ -21,13 +21,15 @@ import { getConnectorById, testConnectorCredential } from "./connectorService";
 import { resolveCredential } from "./credentialVault";
 import { sourceConnectionConfigSchema, sourceConnectionTestSchema } from "@shared/schema";
 import { emitP9AutomationEvent } from "./p9AutomationService";
+import { mapConfirmedDatabaseRecords } from "./databaseSemanticMapping";
 
 const databaseQuerySchema = z.object({
   connectionId: z.number().int().positive(),
   query: z.string().trim().min(1).max(20_000),
   params: z.array(z.unknown()).max(100).default([]),
+  datasetKey: z.string().trim().min(1).max(240).optional(),
 });
-const databaseNormalizeSchema = databaseQuerySchema.extend({
+const databaseNormalizeSchema = databaseQuerySchema.omit({ datasetKey: true }).extend({
   symbol: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9.^_=-]+$/),
   identityColumn: z.string().trim().min(1).max(63),
   source: z.string().trim().min(1).max(500).default("Database BYOD source"),
@@ -254,7 +256,26 @@ export function registerSourceConnectionRoutes(app: Express): void {
       return;
     }
     try {
-      res.json(await queryDatabaseSource(req.user!.id, parsed.data.connectionId, parsed.data.query, parsed.data.params, req.user!));
+      let query = parsed.data.query;
+      if (parsed.data.datasetKey) {
+        const parts = parsed.data.datasetKey.split(".");
+        if (parts.length !== 2 || parts.some(part => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) { res.status(422).json({ error: "Mapped database datasets require an exact schema.table identity." }); return; }
+        // Mapped reads are derived from the selected dataset, never arbitrary
+        // SQL relabelled by an independent caller-supplied mapping key.
+        const expected = `SELECT * FROM ${parts[0]}.${parts[1]}`;
+        if (query.trim().replace(/;$/, "").toLowerCase() !== expected.toLowerCase() || parsed.data.params.length) { res.status(422).json({ error: "Mapped queries must select the complete exact confirmed dataset without SQL overrides." }); return; }
+        const catalog = await discoverDatabaseConnection(req.user!.id, parsed.data.connectionId, req.user!);
+        if (!catalog.tables.some(table => table.schema === parts[0] && table.name === parts[1])) { res.status(422).json({ error: "Mapped dataset is not present in the authorized connection catalogue." }); return; }
+        query = expected;
+      }
+      const result = await queryDatabaseSource(req.user!.id, parsed.data.connectionId, query, parsed.data.params, req.user!);
+      const semantic = parsed.data.datasetKey
+        ? await mapConfirmedDatabaseRecords(
+          { ownerUserId: req.user!.id, organizationId: req.user!.organizationId ?? null },
+          parsed.data.connectionId, parsed.data.datasetKey, result.rows,
+        )
+        : undefined;
+      res.json({ ...result, ...(semantic ?? {}) });
     } catch (error) {
       next(error);
     }

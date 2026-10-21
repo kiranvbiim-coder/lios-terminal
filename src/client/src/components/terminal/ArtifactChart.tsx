@@ -1,7 +1,10 @@
+// Direct node:tsx/server-rendered tests use the classic JSX transform.
+import * as React from "react";
 import { lazy, Suspense, useId, useMemo, useRef, useState } from "react";
 import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import { prepareArtifactChart, selectArtifactChartViewport } from "@/lib/artifactChartProjection";
+import { ExpertViewDisclosure } from "./ArtifactExpertView";
 const EChartsArtifactPlot=lazy(()=>import("./EChartsArtifactPlot"));
 
 type ChartContent = Extract<ArtifactContent, { kind: "chart" }>;
@@ -74,9 +77,9 @@ export default function ArtifactChart({ content, ...mode }: {
       <button type="button" data-testid="artifact-chart-save" disabled={saving || chartType === content.chartType} onClick={() => void save()} className={CONTROL}>{saving ? "Saving revision…" : "Save chart revision"}</button>
       {chartType !== content.chartType && <><button type="button" disabled={saving} onClick={() => { setChartType(content.chartType); setSaveError(null); setSaveMessage(null); }} className={CONTROL}>Reset chart type</button><span className="font-ui text-[13px] text-amber-200">Unsaved preview · recorded type: {content.chartType}</span></>}
     </div>}
-    <p className="font-ui text-[13px] text-muted-foreground">{content.rendererPreference === "echarts" ? "Apache ECharts (SVG) view" : "Recharts view"} · raw recorded values · one linear Y axis, fixed across series and windows · gaps are not connected. Series visibility and point inspection are local view controls, not Artifact edits.</p>
-    {content.rendererPreference !== "recharts" && content.rendererPreference !== "echarts" && <p className="font-ui text-[13px] text-amber-200">Recorded renderer preference: {content.rendererPreference}. This surface uses Recharts; saving the chart type preserves that preference.</p>}
-    {Object.keys(content.options).length > 0 && <details className="rounded border border-border/40 p-2"><summary className="cursor-pointer font-ui text-[13px] text-amber-200">Recorded chart options · not interpreted by this raw-value view</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-terminal text-[12px]">{JSON.stringify(content.options, null, 2)}</pre></details>}
+    <p className="font-ui text-[13px] text-muted-foreground">Exact recorded values · one linear Y axis, fixed across series and windows · gaps are not connected. Series visibility and point inspection are local view controls, not Artifact edits.</p>
+    {content.rendererPreference !== "recharts" && content.rendererPreference !== "echarts" && <p className="font-ui text-[13px] text-amber-200">This chart was saved with a different drawing preference ({content.rendererPreference}). It is shown with the standard chart view; saving the chart type keeps that preference.</p>}
+    {Object.keys(content.options).length > 0 && <ExpertViewDisclosure summary="Expert view" hint="Recorded chart settings not used by this view"><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-terminal text-[12px]">{JSON.stringify(content.options, null, 2)}</pre></ExpertViewDisclosure>}
     {saveError && <p role="alert" data-testid="artifact-chart-save-error" className="text-sm text-red-200">{saveError}</p>}
     {saveMessage && <p role="status" className="text-sm text-emerald-200">{saveMessage}</p>}
     {prepared.status !== "ready" ? <p role="alert" data-testid="artifact-chart-unavailable" className="rounded border border-amber-300/20 p-3 text-sm text-amber-200">{prepared.message} The recorded Artifact is unchanged.</p>
@@ -94,7 +97,7 @@ export default function ArtifactChart({ content, ...mode }: {
           <button type="button" aria-label="Next chart window" disabled={!viewport.hasNext} onClick={() => page(viewport.endExclusive)} className={CONTROL}>Next window</button>
         </nav>
         {!visibleSeries.length ? <p role="status" className="p-3 text-sm text-muted-foreground">All series are hidden. Select a series above to display it; exact recorded points remain available below.</p> : <div className="h-[320px] min-w-0 rounded border border-border/50 bg-[#0a0a0a] p-2" data-testid="artifact-chart-plot" role="img" aria-label={`${chartType} chart, ${visibleSeries.length} visible series. Use the exact point inspector below for keyboard access.`}>
-          {content.rendererPreference === "echarts" ? <Suspense fallback={<p role="status" className="p-3 text-sm">Loading the optional ECharts renderer…</p>}><EChartsArtifactPlot projection={prepared} viewport={viewport} chartType={chartType as "line"|"area"|"bar"|"scatter"} visibleIndices={visibleIndices}/></Suspense> : <><ResponsiveContainer width="100%" height="100%">
+          {content.rendererPreference === "echarts" ? <Suspense fallback={<p role="status" className="p-3 text-sm">Loading chart…</p>}><EChartsArtifactPlot projection={prepared} viewport={viewport} chartType={chartType as "line"|"area"|"bar"|"scatter"} visibleIndices={visibleIndices}/></Suspense> : <><ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={viewport.rows} margin={{ top: 12, right: 16, left: 12, bottom: 12 }}>
               <CartesianGrid stroke="#222" strokeDasharray="3 3"/>
               <XAxis dataKey={prepared.xKind === "number" ? "x" : "xIndex"} type={prepared.xKind === "number" ? "number" : "category"} allowDuplicatedCategory={false} domain={["dataMin", "dataMax"]} tick={TICK} stroke="#555" tickLine={false} minTickGap={35} tickFormatter={value => prepared.xKind === "category" ? coordinateLabel(prepared.xValues[Number(value)]) : exact(value)}/>

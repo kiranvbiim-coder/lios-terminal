@@ -27,12 +27,14 @@ import {
   loadDockviewLayoutState,
   saveDockviewLayoutState,
   subscribeDockviewLayoutRestore,
+  resolveWorkspaceRendererState,
   type DockviewLayoutState,
 } from "@/lib/dockviewWorkspaceState";
 
 interface Props {
   workspace: WorkspaceState;
   isMobile: boolean;
+  preserveArtifactDraft?: boolean;
   maximizedPane: PaneId | null;
   onFocus: (paneId: PaneId) => void;
   onClose: (paneId: PaneId) => void;
@@ -144,17 +146,21 @@ export default function DockviewWorkspaceGrid(props: Props) {
   const suppressSyncRef = useRef(false);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const layoutSaveTimer = useRef<number | null>(null);
+  const pendingLayout = useRef<DockviewLayoutState | null>(null);
+  const rendererState = useRef({ isMobile: props.isMobile, maximizedPane: props.maximizedPane });
+  rendererState.current = resolveWorkspaceRendererState(rendererState.current, props.isMobile, props.maximizedPane, props.preserveArtifactDraft ?? false);
   const runtimeValue = useMemo<RuntimeContextValue>(() => props, [props]);
   const components = useMemo(() => ({ liosPane: DockviewPane }), []);
 
   const persistLayout = useCallback((api: DockviewApi) => {
     if (suppressSyncRef.current || typeof window === "undefined") return;
+    const layout = api.toJSON() as unknown;
+    if (!layout || typeof layout !== "object" || Array.isArray(layout)) return;
+    pendingLayout.current = layout as DockviewLayoutState;
     if (layoutSaveTimer.current !== null) window.clearTimeout(layoutSaveTimer.current);
     layoutSaveTimer.current = window.setTimeout(() => {
-      const layout = api.toJSON() as unknown;
-      if (layout && typeof layout === "object" && !Array.isArray(layout)) {
-        saveDockviewLayoutState(layout as DockviewLayoutState);
-      }
+      saveDockviewLayoutState(pendingLayout.current);
+      layoutSaveTimer.current = null;
     }, 120);
   }, []);
 
@@ -195,6 +201,7 @@ export default function DockviewWorkspaceGrid(props: Props) {
   useEffect(() => subscribeDockviewLayoutRestore((layout) => {
     const api = apiRef.current;
     if (!api) return;
+    if (layoutSaveTimer.current !== null) { window.clearTimeout(layoutSaveTimer.current); layoutSaveTimer.current = null; }
     suppressSyncRef.current = true;
     try {
       api.clear();
@@ -212,11 +219,15 @@ export default function DockviewWorkspaceGrid(props: Props) {
   useEffect(() => () => {
     disposablesRef.current.forEach((item) => item.dispose());
     disposablesRef.current = [];
-    if (layoutSaveTimer.current !== null && typeof window !== "undefined") window.clearTimeout(layoutSaveTimer.current);
+    if (layoutSaveTimer.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(layoutSaveTimer.current);
+      // Leaving Chat/Workbench must retain the last drag, even inside the debounce window.
+      if (pendingLayout.current) saveDockviewLayoutState(pendingLayout.current);
+    }
   }, []);
 
-  if (props.isMobile || props.maximizedPane) {
-    return <ProfessionalWorkspaceGrid {...props} />;
+  if (rendererState.current.isMobile || rendererState.current.maximizedPane) {
+    return <ProfessionalWorkspaceGrid {...props} isMobile={rendererState.current.isMobile} maximizedPane={rendererState.current.maximizedPane} />;
   }
 
   return (

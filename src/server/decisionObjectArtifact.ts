@@ -103,6 +103,7 @@ export function decisionReceiptApprovalProblem(
 async function loadArtifactBody(ctx: TenantContext, artifactId: string, requestedVersion?: number) {
   const artifact = await getArtifact(ctx, artifactId);
   if (artifact.kind !== "decision" || !sameOwner(ctx, artifact)) throw new DecisionObjectArtifactError(400, "Decision approval links require an owned decision Artifact.");
+  if (artifact.projectId === null) throw new DecisionObjectArtifactError(400, "Canonical reviewer approval links require a Project decision Artifact.");
   await getProject(ctx, artifact.projectId);
   const version = await getArtifactVersion(ctx, artifact.id, requestedVersion);
   const content = decisionArtifactContentSchema.parse(version.content);
@@ -204,7 +205,7 @@ async function writeLinkOperation(ctx: TenantContext, artifactId: string, base: 
     // Serialize metadata mutations against P4 edits and each other without creating
     // another content store or pretending that linking performs reviewer approval.
     const [artifact] = await tx.select().from(projectArtifacts).where(artifactScope(ctx, artifactId)).limit(1).for("update");
-    if (!artifact) return missing();
+    if (!artifact || artifact.projectId === null) return missing();
     const [project] = await tx.select().from(projects).where(eq(projects.id, artifact.projectId)).limit(1).for("share");
     if (!project || !sameOwner(ctx, project)) return missing();
     if (artifact.kind !== "decision" || artifact.headVersion !== base.baseVersion) return stale("Artifact head moved; inspect the current decision body before linking.");

@@ -22,14 +22,16 @@ delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
 const { users, organizations, datasetSnapshots, financialModelRuns, projectArtifacts, projectArtifactVersions, artifactInteractionReceipts, projectLedgerEvents, dataEntitlementPolicies } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
+const { createProjectChat } = await import("./projectChatStore");
 const { createEntitlementPolicy } = await import("./dataEntitlementStore");
 const { saveFinancialModelRun } = await import("./financialModelRunStore");
 const { stableSnapshotHash } = await import("./pointInTimeDatasetStore");
 const { hashLedgerValue } = await import("./ledgerStore");
-const { getArtifact, getArtifactVersion, createArtifact, createArtifactVersion } = await import("./artifactStore");
+const { getArtifact, getArtifactVersion, createArtifact, createArtifactVersion, createArtifactProposal, decideArtifactProposal } = await import("./artifactStore");
 const { retainIntegratedModelArtifact } = await import("./integratedModelArtifact");
 const { parseIntegratedModelWorkbookInputs, reviewArtifactIntegratedModelInputs, runArtifactIntegratedModelInputs } = await import("./artifactIntegratedModelInput");
 const { registerArtifactRoutes } = await import("./artifactRoutes");
+const { getArtifactExportPlan } = await import("./artifactExport");
 type Workbook = Extract<ArtifactContent, { kind: "spreadsheet" }>;
 
 function cellFor(workbook: Workbook, sheetId: string, label: string) {
@@ -170,13 +172,16 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
     assert.equal((await getDb().select().from(financialModelRuns)).length, 1, "review never executes the engine or saves a run");
   });
 
-  await t.test("explicit execution recalculates from the unchanged real snapshot, saves owned run and NEW canonical output, replay writes only once", async () => {
-    const request = { version: reviewed.version, contentHash: reviewed.contentHash, reviewHash: reviewed.reviewHash };
-    output = await runArtifactIntegratedModelInputs(ctx, retained.artifact.id, request);
-    assert.notEqual(output.outputArtifact.id, retained.artifact.id);
+  await t.test("explicit execution advances the same canonical Artifact, preserves authored overrides and replays only once", async () => {
+    const isolated = await retainIntegratedModelArtifact(ctx, originalRun.id, project.id, { requestId: crypto.randomUUID(), sourceRefs: [] });
+    const edited = await createArtifactVersion(ctx, { artifactId: isolated.artifact.id, baseVersion: 1, content: (await getArtifactVersion(ctx, retained.artifact.id, editedVersion)).content as unknown as ArtifactContent });
+    const isolatedReview = await reviewArtifactIntegratedModelInputs(ctx, isolated.artifact.id, { version: edited.version });
+    const request = { version: isolatedReview.version, contentHash: isolatedReview.contentHash, reviewHash: isolatedReview.reviewHash };
+    output = await runArtifactIntegratedModelInputs(ctx, isolated.artifact.id, request);
+    assert.equal(output.outputArtifact.id, isolated.artifact.id);
     assert.equal(output.outputArtifact.projectId, project.id);
     assert.equal(output.outputArtifact.ownerUserId, owner.id);
-    assert.equal(output.outputVersion.version, 1);
+    assert.equal(output.outputVersion.version, 3);
     assert.notEqual(output.receipt.runId, originalRun.id);
     assert.deepEqual(output.outputVersion.executionReceiptIds, []);
     const [persisted] = await getDb().select().from(financialModelRuns).where(eq(financialModelRuns.id, output.receipt.runId));
@@ -187,21 +192,21 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
     const newRevenue = cellFor(outBook, "forecast-income", "Revenue [revenue]");
     const expected = persisted.result as unknown as IntegratedFinancialModelResult;
     assert.equal(newRevenue.sheet.cells[newRevenue.cell].raw, String(expected.forecast[0].income.revenue));
-    assert.notEqual(newRevenue.sheet.cells[newRevenue.cell].raw, "999999");
+    assert.equal(outBook.sheets.find(sheet => sheet.id === "forecast-income")!.cells.B2.raw, "999999", "authored output override is preserved, not labelled a new engine result");
     assert.equal((await getArtifact(ctx, retained.artifact.id)).headVersion, editedVersion);
     assert.equal((await getArtifactVersion(ctx, retained.artifact.id, editedVersion)).contentHash, reviewed.contentHash);
-    const artifactRef = `${retained.artifact.id}@v${editedVersion}`;
-    assert.ok(output.outputVersion.sourceRefs.includes(artifactRef));
+    const artifactRef = `${isolated.artifact.id}@v${edited.version}`;
+    assert.ok(output.outputVersion.sourceRefs.includes(`model-recompute-run:${output.receipt.runId}`));
     assert.ok(output.outputVersion.dependencyRefs.includes(artifactRef));
     assert.ok(output.lineage.modelInput?.sourceCellRefs.includes(artifactRef));
-    const ledger = (await getDb().select().from(projectLedgerEvents)).find(row => row.payload.artifactId === output.outputArtifact.id);
+    const ledger = (await getDb().select().from(projectLedgerEvents)).find(row => row.payload.artifactId === output.outputArtifact.id && JSON.stringify(row).includes(artifactRef));
     assert.ok(ledger);
     assert.ok(JSON.stringify(ledger).includes(artifactRef), "existing P3 Ledger carries original version lineage");
-    const repeated = await Promise.all(Array.from({ length: 3 }, () => runArtifactIntegratedModelInputs(ctx, retained.artifact.id, request)));
+    const repeated = await Promise.all(Array.from({ length: 3 }, () => runArtifactIntegratedModelInputs(ctx, isolated.artifact.id, request)));
     assert.ok(repeated.every(item => item.outputArtifact.id === output.outputArtifact.id && item.outputVersion.id === output.outputVersion.id));
-    assert.equal((await getDb().select().from(projectArtifactVersions).where(eq(projectArtifactVersions.artifactId, output.outputArtifact.id))).length, 1);
-    assert.equal((await getDb().select().from(artifactInteractionReceipts).where(eq(artifactInteractionReceipts.artifactId, output.outputArtifact.id))).length, 1);
-    assert.equal((await getDb().select().from(projectLedgerEvents)).filter(row => row.payload.artifactId === output.outputArtifact.id).length, 1);
+    assert.equal((await getDb().select().from(projectArtifactVersions).where(eq(projectArtifactVersions.artifactId, output.outputArtifact.id))).length, 3);
+    assert.equal((await getDb().select().from(artifactInteractionReceipts).where(eq(artifactInteractionReceipts.artifactId, output.outputArtifact.id))).length, 3);
+    assert.equal((await getDb().select().from(projectLedgerEvents)).filter(row => row.payload.artifactId === output.outputArtifact.id).length, 3);
     assert.equal((await getDb().select().from(financialModelRuns)).length, 2);
   });
 
@@ -276,6 +281,12 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
   });
 
   await t.test("actual HTTP review/run requires deterministic-model author role and passes precise status/errors/canonical output", async () => {
+    const retained = await retainIntegratedModelArtifact(ctx, originalRun.id, project.id, { requestId: crypto.randomUUID(), sourceRefs: [] });
+    const httpBook = structuredClone(baseline);
+    edit(httpBook, "assumptions", "Revenue Growth [revenueGrowth]", "0.27");
+    const httpEdited = await createArtifactVersion(ctx, { artifactId: retained.artifact.id, baseVersion: 1, content: httpBook });
+    let editedVersion = httpEdited.version;
+    const reviewed = await reviewArtifactIntegratedModelInputs(ctx, retained.artifact.id, { version: editedVersion });
     const app = express(); app.use(express.json());
     app.use((req, _res, next) => {
       const actor = [owner, foreign, reader].find(item => String(item.id) === req.get("x-test-user"));
@@ -301,7 +312,8 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
       const executed = await post("integrated-model-run", owner.id, { version: editedVersion, contentHash: preview.contentHash, reviewHash: preview.reviewHash });
       assert.equal(executed.status, 200); const body = await executed.json();
       assert.equal(body.outputArtifact.projectId, project.id);
-      assert.notEqual(body.outputArtifact.id, retained.artifact.id);
+      assert.equal(body.outputArtifact.id, retained.artifact.id);
+      editedVersion = body.outputVersion.version;
       const badBook = structuredClone((await getArtifactVersion(ctx, retained.artifact.id, editedVersion)).content) as unknown as Workbook;
       edit(badBook, "assumptions", "Revenue Growth [revenueGrowth]", "=SUM(A1)");
       const badVersion = await createArtifactVersion(ctx, { artifactId: retained.artifact.id, baseVersion: editedVersion, content: badBook, actorType: "user" });
@@ -361,5 +373,44 @@ test("SI-04.17 canonical workbook cells are reviewed, hash-bound and explicitly 
       await assert.rejects(runArtifactIntegratedModelInputs(ctx, artifact.id, { version: version.version, contentHash: version.contentHash, reviewHash: "0".repeat(64) }));
     }
     assert.equal((await getDb().select().from(financialModelRuns)).length, runsBefore);
+  });
+  await t.test("Quick Chat proposal acceptance, direct edits, reviewed recompute, export and reopen share immutable P4 custody", async () => {
+    const chat = await createProjectChat(ctx, { scope: "quick" });
+    const foreignChat = await createProjectChat(foreignCtx, { scope: "quick" });
+    await assert.rejects(retainIntegratedModelArtifact(ctx, originalRun.id, null, undefined, foreignChat.id), /persistent Chat/);
+    const saved = await retainIntegratedModelArtifact(ctx, originalRun.id, null, undefined, chat.id);
+    const workbook = saved.version.content as unknown as Workbook;
+    const { sheet, cell } = cellFor(workbook, "assumptions", "Revenue Growth [revenueGrowth]");
+    const proposal = await createArtifactProposal(ctx, {
+      artifactId: saved.artifact.id, baseVersion: 1, type: "spreadsheet_ai_diff", actorType: "conversation",
+      summary: "Explicitly propose owned growth assumption",
+      diffs: [{ sheetId: sheet.id, ref: cell, before: sheet.cells[cell], after: { raw: "0.24", format: null } }],
+    });
+    assert.equal((await getArtifact(ctx, saved.artifact.id)).headVersion, 1, "a conversation proposal does not apply or calculate");
+    await decideArtifactProposal(ctx, proposal.id, "accept");
+    const accepted = await getArtifactVersion(ctx, saved.artifact.id, 2);
+    const authored = structuredClone(accepted.content) as unknown as Workbook;
+    authored.sheets.find(item => item.id === "assumptions")!.cells[cell].raw = "0.26";
+    const direct = await createArtifactVersion(ctx, { artifactId: saved.artifact.id, baseVersion: 2, content: authored });
+    const review = await reviewArtifactIntegratedModelInputs(ctx, saved.artifact.id, { version: direct.version });
+    await assert.rejects(runArtifactIntegratedModelInputs(ctx, saved.artifact.id, { version: direct.version, contentHash: direct.contentHash, reviewHash: "0".repeat(64) }), /review again/);
+    const calculated = await runArtifactIntegratedModelInputs(ctx, saved.artifact.id, { version: review.version, contentHash: review.contentHash, reviewHash: review.reviewHash });
+    assert.equal(calculated.outputArtifact.id, saved.artifact.id);
+    assert.equal(calculated.outputArtifact.projectId, null);
+    assert.equal(calculated.outputArtifact.owningChatId, chat.id);
+    assert.equal(calculated.outputVersion.version, 4);
+    assert.deepEqual(await getArtifactVersion(ctx, saved.artifact.id, 1), saved.version);
+    assert.deepEqual(await getArtifactVersion(ctx, saved.artifact.id, 2), accepted);
+    const reopened = await getArtifactVersion(ctx, saved.artifact.id);
+    assert.equal(reopened.id, calculated.outputVersion.id);
+    const nextReview = await reviewArtifactIntegratedModelInputs(ctx, saved.artifact.id, { version: 4 });
+    assert.equal(nextReview.assumptions.revenueGrowth, 0.26);
+    const plan = await getArtifactExportPlan(ctx, saved.artifact.id, 4);
+    assert.equal(plan.contentHash, reopened.contentHash);
+    assert.ok(plan.formats.includes("xlsx"));
+    await assert.rejects(getArtifactExportPlan(foreignCtx, saved.artifact.id, 4), /not found/);
+    await getDb().update(dataEntitlementPolicies).set({ permittedUses: policy.permittedUses.filter(use => use !== "export") }).where(eq(dataEntitlementPolicies.id, policy.id));
+    await assert.rejects(getArtifactExportPlan(ctx, saved.artifact.id, 4), /does not currently permit/);
+    await getDb().update(dataEntitlementPolicies).set({ permittedUses: policy.permittedUses }).where(eq(dataEntitlementPolicies.id, policy.id));
   });
 });

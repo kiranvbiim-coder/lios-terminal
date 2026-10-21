@@ -214,17 +214,17 @@ export async function reviewArtifactModelMaintenance(ctx: TenantContext, artifac
 function requestIdentity(ctx: TenantContext, artifactId: string, request: z.infer<typeof artifactModelMaintenanceApplySchema>): string { return `model-maintenance:${hashLedgerValue({ actor: ctx.userId, organizationId: ctx.organizationId, artifactId, request })}`; }
 async function replayMaintenance(ctx: TenantContext, artifactId: string, request: z.infer<typeof artifactModelMaintenanceApplySchema>): Promise<ArtifactModelMaintenanceResult | null> {
   const artifact = await getArtifact(ctx, artifactId);
-  if (artifact.ownerUserId !== ctx.userId || !artifact.projectId) return fail(404, "Owned model Artifact not found.");
+  if (artifact.ownerUserId !== ctx.userId) return fail(404, "Owned model Artifact not found.");
   const [receipt] = await getDb().select().from(artifactInteractionReceipts).where(and(eq(artifactInteractionReceipts.artifactId, artifactId), eq(artifactInteractionReceipts.requestId, requestIdentity(ctx, artifactId, request)), eq(artifactInteractionReceipts.createdByUserId, ctx.userId))).limit(1);
   if (!receipt?.toVersion) return null;
   const detail = receipt.detail.modelMaintenance;
   if (!detail || typeof detail !== "object" || !("runId" in detail) || typeof detail.runId !== "string" || !("review" in detail)) return fail(409, "Maintenance replay receipt is incomplete.");
   // A receipt is replay identity, never continuing source authorization.
-  const source = await loadIntegratedModelArtifactSource(ctx, detail.runId, artifact.projectId, true);
+  const source = await loadIntegratedModelArtifactSource(ctx, detail.runId, artifact.projectId, true, artifact.owningChatId);
   const target = await loadTarget(ctx, request.targetDatasetSnapshotId);
   if (target.snapshot.contentHash !== request.targetContentHash || source.snapshot.id !== target.snapshot.id) return fail(409, "Maintenance replay source changed.");
   const review = detail.review as ArtifactModelMaintenanceReview;
-  const original = await loadIntegratedModelArtifactSource(ctx, review.source.runId, artifact.projectId, true);
+  const original = await loadIntegratedModelArtifactSource(ctx, review.source.runId, artifact.projectId, true, artifact.owningChatId);
   if (review.engineRev !== INTEGRATED_FINANCIAL_MODEL_VERSION || original.snapshot.contentHash !== review.source.datasetContentHash
     || !original.projection.sourceRefs.every(ref => review.sourceRefs.includes(ref))
     || target.policy.contentHash !== review.target.entitlementPolicyHash) return fail(409, "Maintenance replay source rights or engine revision changed.");
@@ -242,7 +242,7 @@ export async function applyArtifactModelMaintenance(ctx: TenantContext, artifact
   const resultHash = stableSnapshotHash({ modelVersion: result.modelVersion, datasetContentHash: loaded.target.snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules, forecast: result.forecast });
   const run = await saveFinancialModelRun({ result, resultHash, createdByUserId: ctx.userId });
   if (!run || run.createdByUserId !== ctx.userId) return fail(409, "Identical globally deduplicated run belongs to another actor; no foreign result was used.");
-  const fresh = await loadIntegratedModelArtifactSource(ctx, run.id, loaded.projectId, true);
+  const fresh = await loadIntegratedModelArtifactSource(ctx, run.id, loaded.projectId, true, loaded.artifact.owningChatId);
   const latest = await loadMaintenanceReview(ctx, artifactId, request);
   if (latest.review.reviewHash !== request.reviewHash) return fail(409, "Source, rights or head changed while the engine ran; no workbook was published.");
   const content = mergeMaintainedWorkbook(loaded.content, loaded.source.projection.content, fresh.projection.content);

@@ -7,10 +7,14 @@ import {
 import { classifyAskLiosIntent, buildAskLiosDelegation } from "@shared/askLiosRouter";
 import { resolveP5ProfessionalIntents } from "./p5ProfessionalWorkflow";
 
+// Uppercase finance abbreviations that appear in stated assumptions are never tickers.
 const COMMON_UPPERCASE_WORDS = new Set([
-  "AI", "AND", "DCF", "EQUITY", "FOR", "MACD", "OF", "ON", "OR", "PRICE",
-  "RSI", "SHARES", "STOCK", "STRATEGY", "THE", "TO", "VAR", "WITH",
+  "AI", "AND", "DCF", "EBIT", "EBITDA", "EQUITY", "EUR", "FCF", "FCFE", "FCFF", "FOR", "GBP", "MACD", "OF", "ON", "OR", "PRICE",
+  "RSI", "SHARES", "STOCK", "STRATEGY", "TGR", "THE", "TO", "USD", "VAR", "WACC", "WITH",
 ]);
+
+/** Prefix for a specific model input listed in `missingInputs` (after the generic structured-inputs marker). */
+const MODEL_INPUT_PREFIX = "model_input:";
 
 function cleanEntityPhrase(value: string): string | null {
   const cleaned = value
@@ -63,7 +67,7 @@ export function extractConversationEntityQuery(request: ConversationRequest): {
     /\b(?:research|analy[sz]e|analysis of|overview of|review|look into|assess|investigate|resolve|lookup|identify)\s+(?:the\s+)?(.+?)(?=$|[,.!?;]|\s+and\s+|\s+then\s+|\s+with\s+|\s+using\s+|\s+show\s+|\s+include\s+|\s+plus\s+)/i,
   );
   const ofSubject = named ? null : request.message.match(
-    /\b(?:charts?|technicals?|technical analysis|price|prices|quote|rsi|macd|support|resistance|momentum|levels|dcf|valuation)\s+(?:for|of|on)\s+(?:the\s+)?(.+?)(?=$|[,.!?;]|\s+and\s+|\s+with\s+|\s+using\s+|\s+over\s+)/i,
+    /\b(?:charts?|technicals?|technical analysis|price|prices|quote|rsi|macd|support|resistance|momentum|levels|dcf(?:\s+sensitivity)?|valuation)\s+(?:for|of|on)\s+(?:the\s+)?(.+?)(?=$|[,.!?;]|\s+and\s+|\s+with\s+|\s+using\s+|\s+over\s+)/i,
   );
   // Conversational phrasings only name a company when the name is capitalised, so
   // "tell me about inflation" is never mistaken for a company.
@@ -131,25 +135,35 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
       activeArtifactRef: null,
       requiresEntity: true,
       workspaceCommand: "/research",
+      inputGap: null,
     });
   }
 
   for (const professional of p5Intents) {
     const isExternalCompanyFlow = professional.family === "company_research" || professional.family === "company_fundamentals";
-    const explicitOrArtifactInputs = Boolean(professional.parameters || professional.activeArtifactRef);
+    const gap = professional.inputGap;
+    // Plain-language assumptions the user started to state (complete values are already parameters) must never be
+    // discarded in favour of an active Artifact's stored parameters: block and let the user finish or correct them.
+    const statedAssumptions = Boolean(gap && (gap.issues.length || gap.notes.length || Object.keys(gap.provided).length));
+    const explicitOrArtifactInputs = Boolean(professional.parameters || (professional.activeArtifactRef && !statedAssumptions));
     const needsModel = ["valuation", "portfolio_risk", "fixed_income", "derivatives", "macro_fx"].includes(professional.family)
       && !professional.modelPath
       && !professional.activeArtifactRef;
     const requiredInputs: string[] = [];
     if (professional.requiresEntity) requiredInputs.push("company_or_security");
     if (needsModel) requiredInputs.push("professional_model");
-    if (professional.modelPath && !explicitOrArtifactInputs) requiredInputs.push("structured_model_inputs_or_active_artifact");
+    if (professional.modelPath && !explicitOrArtifactInputs) {
+      requiredInputs.push(
+        "structured_model_inputs_or_active_artifact",
+        ...(gap ? [...gap.missing, ...gap.issues.map((issue) => issue.key)] : []).map((key) => MODEL_INPUT_PREFIX + key),
+      );
+    }
     if (professional.family === "research_reporting" && !explicitOrArtifactInputs && !entity) requiredInputs.push("source_artifact_or_company");
 
     const missingInputs = requiredInputs.filter((inputName) => {
       if (inputName === "company_or_security") return !entity;
       if (inputName === "professional_model") return !professional.modelPath;
-      if (inputName === "structured_model_inputs_or_active_artifact") return !explicitOrArtifactInputs;
+      if (inputName === "structured_model_inputs_or_active_artifact" || inputName.startsWith(MODEL_INPUT_PREFIX)) return !explicitOrArtifactInputs;
       if (inputName === "source_artifact_or_company") return !professional.activeArtifactRef && !entity;
       return false;
     });
@@ -182,6 +196,7 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
         family: professional.family,
         modelPath: professional.modelPath,
         modelParameters: professional.parameters,
+        inputGap: gap,
         inputProvenance: professional.inputProvenance,
         activeArtifactRef: professional.activeArtifactRef,
         workspaceCommand: professional.workspaceCommand,

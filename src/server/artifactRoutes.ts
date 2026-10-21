@@ -33,6 +33,7 @@ import {
   listArtifactVersions,
   listOwnedArtifacts,
   listProjectArtifacts,
+  listChatArtifacts,
   permanentlyDeleteArtifact,
   restoreTrashedArtifact,
   setArtifactStatus,
@@ -72,6 +73,7 @@ import {
   unlinkDecisionObjectArtifactApproval,
 } from "./decisionObjectArtifact";
 import { inspectArtifact } from "./artifactInspection";
+import { getProjectChat } from "./projectChatStore";
 
 const spreadsheetArtifactImportUpload = createMemoryUpload(
   ["xlsx", "csv", "xlsm"],
@@ -181,6 +183,34 @@ export function registerArtifactRoutes(app: Express): void {
     } catch (error) { fail(res, error); }
   });
 
+  app.get("/api/chats/:chatId/artifacts", requireAuth, async (req, res) => {
+    try {
+      const query = z.object({
+        status: z.enum(["active", "archived", "trash"]).optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+      }).parse(req.query);
+      res.json(await listChatArtifacts(ctx(req), pathId(req.params.chatId), {
+        status: query.status === "trash" ? "archived" : query.status,
+        trash: query.status === "trash", limit: query.limit,
+      }));
+    } catch (error) { fail(res, error); }
+  });
+
+  app.post("/api/chats/:chatId/artifacts/keep-draft", requireAuth, async (req, res) => {
+    try {
+      const body = z.object({
+        draft: conversationArtifactDraftSchema,
+        requestId: z.string().uuid().nullable().optional(),
+        trustManifest: trustManifestSchema.nullable().optional(),
+        dependencyRefs: z.array(z.string().trim().min(1).max(1_000)).max(5_000).default([]),
+        refreshSpec: artifactRefreshSpecSchema.nullable().optional(),
+      }).strict().parse(req.body);
+      const chatId = pathId(req.params.chatId);
+      const chat = await getProjectChat(ctx(req), chatId);
+      res.json(await keepConversationDraft(ctx(req), { projectId: chat.projectId, owningChatId: chatId, ...body }));
+    } catch (error) { fail(res, error); }
+  });
+
   app.post("/api/projects/:projectId/artifacts", requireAuth, async (req, res) => {
     try {
       const body = z.object({
@@ -262,7 +292,7 @@ export function registerArtifactRoutes(app: Express): void {
   app.get("/api/artifacts/:artifactId", async (req, res) => {
     try {
       const artifact = await getArtifact(ctx(req), pathText(req.params.artifactId));
-      const version = await getArtifactVersion(ctx(req), artifact.id);
+      const version = await getArtifactVersion(ctx(req), artifact.id, req.query.version === undefined ? undefined : pathVersion(req.query.version));
       res.json({ artifact, version });
     } catch (error) { fail(res, error); }
   });
