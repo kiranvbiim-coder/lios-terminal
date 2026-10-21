@@ -101,7 +101,7 @@ Extend the current Conversation Runtime, WorkflowPlan, context/ledger, Universal
 9. Save as task captures a versioned recipe, parameters, source requirements and output types; never raw credentials or cached authorization. Recheck policy on rerun. Scheduling remains a separate P9 action.
 10. Contextual installation/connection is a resumable runtime step. Add/Install registers capability; Connect authorizes an account. Readiness, failed/cancelled setup and exactly-once continuation must be tested through existing state/permission contracts.
 11. Comparison tables use existing typed Artifacts, cell-level evidence and immutable revisions. Evidence opens within the existing side pane. Generative output, deterministic calculation and user assumptions remain distinguishable.
-12. Quick research is default; optional deeper research is bounded and cancellable. Fallback obeys source suitability, entitlements and transmission policy. Local-only restrictions cannot be overridden to finish a task.
+12. Ordinary factual chat can give a quick answer when appropriate; explicit research objectives trigger a bounded, progressive, comprehensive investigation using both permitted structured and web/generative sources where available, without needless network calls when a source is unavailable or unnecessary. Cancellable deepening, fallback suitability, entitlements and AI transmission policy remain enforced; local-only restrictions cannot be overridden to finish a task.
 13. Reuse substantial permissively compatible OSS under the existing donor matrix and import protocol. Vane/GPT Researcher are adaptation candidates, Docling is an existing integration to extend; all imports need exact pins/path licenses/dependency rights/tests and desktop footprint proof. See the roadmap for the full candidate register.
 14. Fix/contain the reproduced numeric guard weakness and verify database execution boundaries before widening affected user-facing paths. Source-review concerns are not proof of an exploitable incident.
 15. Benchmark every task on declared hardware/build/fixture/provider conditions. Preserve local-first delivery and separately measure network latency. Product/code/packaged evidence remain distinct.
@@ -110,6 +110,19 @@ Scope separation: broad retrieval grants no cross-Project mutation authority; us
 Recorded informed consent may permit relevant private excerpts to approved cloud models without repeated routine prompts. Revocation, provider changes, tenant/firm/source restrictions and local-only policies must be enforced both at context packaging and provider routing. Consent does not create access rights; local-only work may not fall back to cloud.
 
 
+
+### Owner-confirmed convergence invariants — 2026-10-20
+
+The [20-decision TC experience lock](LIOS_UX_SYSTEM.md#owner-approved-universal-intelligence--workbench-convergence--2026-10-20) governs presentation and capability composition without introducing a new architecture. In particular:
+
+- **Visibility is not execution:** Chat is the default shell; the existing Workbench can supply backend engines while not displayed. Optional Artifact sidecar/focus and full Workbench are projections of the same state, not competing stores, windows, products or agents.
+- **Shared context / typed handoff:** conversation identity, allowed Project/Chat scope, selected entity/topic, Artifact ID + version/head, provenance, source policy, assumptions, time/units, pending edits and preferred layout must travel to the existing Workbench and back. Verify actual round-trip in source and an installed app; a surface navigation action alone is insufficient.
+- **Regular-Chat durability:** canonical P1+P4 identity, ACL, version and reference authorities must support durable work with a Chat owner without forcing an invented Project. Existing Project-backed Artifacts remain valid; Temporary data must not be silently persisted or promoted. Data-model evolution and migration require their own bounded owning tasks.
+- **Source routing:** preserve one P5/Connection Center registry and one rights/entitlement policy authority; chat's compact Sources selector is a view/override into it. Research tasks may run permitted structured retrieval and web/AI research concurrently or in a bounded progressive investigation; synthesis cannot promote search results or AI guesses into verified facts.
+- **Autonomy:** governed GM/P2 tooling orchestrates existing engines. Reusable informed AI transmission consent is separate from source access and consequential side-effect grants. Local-only and tenancy constraints always prevail. Long-running tasks continue only on an available authorized user-owned runtime with budgets/checkpoints.
+- **Comprehensive but calm:** P4 holds all authorized produced work while chat projects a useful subset. Runtime progress details remain behind an intentional inspection action, except cancellation and material errors, approvals, cost/permission implications and evidence/coverage limitations.
+
+The work remains within existing TC/P2/P4/P5/P7/GM/CA/SI-07 owners and existing SP/P14 milestones; it does not authorize live brokerage execution.
 
 ### Entity-only company research and coverage
 
