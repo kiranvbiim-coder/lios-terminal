@@ -21,6 +21,7 @@ import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
 import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
+import { returnToChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
@@ -264,9 +265,11 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const isMobile = useIsMobile();
   const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
   const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(null);
+  const chatWorkbenchOriginRef = useRef<ChatWorkbenchOrigin | null>(null);
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
+  const [chatWorkbenchReturn, setChatWorkbenchReturn] = useState<{ origin: ChatWorkbenchOrigin; request: number } | null>(null);
   const setTabsState = useCallback((update: TerminalTabsState | ((current: TerminalTabsState) => TerminalTabsState)) => {
     setTabsStateRaw(current => {
       const next = typeof update === "function" ? update(current) : update;
@@ -452,7 +455,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
     setExperienceSurfaceState(surface);
   }), []);
-  const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext) => {
+  const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
+    if (workbenchDirtyRef.current) return;
     if (context) {
       const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(), maximizedPane, workbenchDirtyRef.current);
       if (!result) return;
@@ -461,9 +465,21 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         : result.handoff;
       setTabsState(() => result.state);
       setMaximizedPane(null);
+      chatWorkbenchOriginRef.current = null;
+    } else if (chatOrigin) {
+      // Chat without a saved Artifact enters the same existing terminal. Keep the
+      // exact originating Chat without creating a fake P4 object or restoring stale panes.
+      chatWorkbenchOriginRef.current = chatOrigin;
     }
     handleSurface("workbench");
   }, [tabsState, maximizedPane, handleSurface, setTabsState]);
+  const handleReturnFromGeneralWorkbench = useCallback(() => {
+    const origin = returnToChatWorkbenchOrigin(chatWorkbenchOriginRef.current, workbenchDirtyRef.current);
+    if (!origin) return;
+    chatWorkbenchOriginRef.current = null;
+    setChatWorkbenchReturn(current => ({ origin, request: (current?.request ?? 0) + 1 }));
+    handleSurface("projects");
+  }, [handleSurface]);
   const handleReturnToChat = useCallback((context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => {
     const handoff = artifactHandoffRef.current;
     if (!handoff) {
@@ -1036,6 +1052,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               workspaceAdapter={livingWorkspaceAdapter}
               onOpenWorkbench={handleOpenWorkbench}
               workbenchReturn={workbenchReturn}
+              chatWorkbenchReturn={chatWorkbenchReturn}
               onOpenEnvironment={onOpenEnvironment}
             />
           </div>
@@ -1051,6 +1068,12 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             />
           ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
+            {chatWorkbenchOriginRef.current && !artifactHandoffRef.current && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 py-2">
+                <span className="font-ui text-xs text-muted-foreground">Professional Workbench · same LiOS session</span>
+                <button type="button" data-testid="workbench-return-chat-general" onClick={handleReturnFromGeneralWorkbench} disabled={workbenchDirty} className="rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/5 disabled:opacity-50">Return to Chat</button>
+              </div>
+            )}
             {workbenchDirty && <p role="status" className="shrink-0 border-b border-amber-300/30 p-2 text-sm text-amber-200">Unsaved Artifact edits · save or reset in the Artifact pane before leaving this workspace.</p>}
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               <DockviewWorkspaceGrid
