@@ -74,6 +74,8 @@ Final app archive SHA-256: `53cb5f3cfa446249663faa649f2fe7a21ac1fa14729cc57e96fc
 
 Post-packaging-repair verification: typecheck, 5497 project tests (four existing skips, zero failures) and all 10 archive/rights/native-addon packaging tests passed. The new real embedded mapping-store bootstrap regression passes. These later checks supersede earlier pre-bootstrap source totals; final packaged mapping replay still waits for local native readiness.
 
+Final review follow-through: Quick Chat search opens the real owning Chat and exact selected Artifact; server-projection lineage inspection uses Chat ownership; Show Work identifies saved-in-Chat without inventing a Project. Guided lists reject empty forecast-year tokens. Mapping confirmation refuses active duplicate canonical targets (with database uniqueness enforcement), and semantic reads are bound to the exact discovered schema.table rather than arbitrary SQL relabelled by a client dataset key. Stale recompute retries after later head advancement fail closed. Actual source-Electron SQLite query returned HTTP 200 with unchanged raw `12.5` and explicitly mapped `financial_statements.revenue: 12500000`, recorded confirmation revision and snapshot ID; an unrelated SQL override was refused. This smoke also repaired the local-database service's unnecessary credential precheck, delegating SQLite/DuckDB no-secret versus server-database credential requirements to the existing connector authority.
+
 #### Production/OSS mission — bounded P0/P11 repairs
 
 Verified PR #79 is merged at `5b992fc3c7be6904e424c2fa3187bbf78d1c1a22`, no open PR at mission start. Its strict Python implementation is retained, not recreated. Current mission requires independent review before merge in addition to protected hosted checks.
