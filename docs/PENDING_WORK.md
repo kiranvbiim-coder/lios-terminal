@@ -110,6 +110,25 @@ A later open-PR refresh found stacked **PR #97**, head `3f5a38e31e78ea22c3e04184
 
 Final source UI smoke additionally paused for 1.6 seconds while typing an original DCF revenue input: focus/value remained intact, the fieldset stayed interactive and autosave waited; leaving the input saved the value and reload restored it. Nested original model Artifact Ask now forwards through the existing canonical Ask callback instead of leaving the originating Chat; a real licensed integrated-model save/Ask journey remains separately unqualified.
 
+**PR #97 integrated runtime proof:** current source-Electron Chat 167 completed the existing guided DCF-sensitivity workflow with explicit synthetic manual base/grid/bear/bull assumptions and Master AI off, retaining `artifact:879f8f86-3045-867e-96ab-8d11adbc9910` v1. After closing that Artifact, Tools → Open workspace opened the original full Workbench's existing Entity tab at **X-RAY · MSFT**, with the prior Quote tab still present. Return to Chat restored Chat 167, `PR97 scoped company draft`, and no selected Artifact. This proves artifact-free scoped-symbol navigation, not P5 verified identity or real-data numerical qualification. TypeScript, 19 focused behavioral checks and production build passed after integrating the complete PR #97 delta.
+
+**Original spreadsheet runtime proof:** Chat 167 opened the existing Spreadsheet Studio as `artifact:b32c4538-f24a-837b-b81b-6c2e6a44305c`. Authored A1 `123.45`, then A2 `=A1*2`; the original grid calculated `246.9`, and both authored cell and recalculated output survived actual reload. At v4, Expand opened the same Artifact ID and v4 in full Dockview with `246.9`; Return to same Chat restored Chat 167, `worksheet roundtrip draft`, and the same grid result. This is actual original grid execution/replay, not a claim that every P11 finance family now has a same-screen run/receipt adapter.
+
+**Remaining original-engine integration tasks (not accepted as input-state restoration):**
+- [ ] Integrated Model Studio: restore an actor/source-authorized persisted run, snapshot and assumptions; the symbol-wide run list is not an authorization boundary.
+- [ ] Expose its existing server-supported owning-Chat workbook destination in the client and bind the output reference to the originating terminal screen.
+- [ ] Advanced rates/options/portfolio: pass an exact validated terminal target through the existing capability execution envelope and persist/reopen actual results and receipts through P4/P11; a generated receipt run ID alone is not retrievable run custody.
+- [ ] Preserve provider portfolio capture references and distinguish derived provider inputs from manual assumptions.
+- [ ] Quant Lab: retrieve restored older run IDs through its existing owner-scoped detail route, not only the latest 250 runs; retain explicit save-versus-run semantics.
+- [ ] Quant Lab: bind admitted dataset fields/transformations into actual engine parameters; attachment hashes alone do not prove source consumption or current rights.
+- [ ] Options hedge: remove unlabelled missing-market fallbacks and retain reproducible original-calculation terms/results without treating fallback spot/volatility as observations.
+
+These are code-level remainders under #91, not all external blockers. Source review identified the existing reusable seams (`capabilityExecutor`, `executeAdvancedQuant`, `validateTerminalArtifactTarget`, persisted model/Quant run stores and same-workbook `runArtifactIntegratedModelInputs`); no replacement engine or store is justified. The broad all-panel/all-family acceptance tasks remain open.
+
+**Final consolidated source/package gate:** TypeScript and production build passed; complete offline source gate passed **5516 tests across 880 files**, four existing explicit skips and zero failures, with 874 routes and the existing script-manifest gate. Current ad-hoc macOS package SHA-256 `4be722fc363fe254f3aca322e585fe1a4e08e0ddeaf25aecb52bc107a0f10d00`; deep strict signature verification passed. Actual final-package readiness/replay remains separate from source checks and the earlier package proof. No owner's installed Desktop app was replaced.
+
+**Current-package native replay:** the same final package subsequently reached its actual window after the initial 45-second readiness timeout, without a custody bypass. Existing native Chat 35 restored the original IBM DCF manual revenue `120`, shares `1500` and debt `8`; explicit Chat terminal-growth operation produced the same retained screen `artifact:94e9525b-3728-8e57-86cb-98fa7963d026` v3. Expand opened that exact ID/v3 in full Dockview with revenue `120`; Return to same Chat restored Chat 35 and `final package exact draft`. This is bounded current-package persistence/operation/Workbench proof, not cold-start performance, every finance engine, owner installed-app replacement or SP/P14 acceptance.
+
 
 
 #### Production/OSS mission — bounded P0/P11 repairs
