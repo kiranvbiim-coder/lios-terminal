@@ -71,6 +71,7 @@ import {
   X,
 } from "lucide-react";
 import type { ArtifactWorkbenchContext, ViewMode } from "@/lib/terminalTypes";
+import { resolveScopedWorkbenchSymbol } from "@/lib/chatWorkbenchContext";
 import type { LifecycleAction } from "@shared/objectLifecycle";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
@@ -481,7 +482,16 @@ export default function ProjectExperienceShell({
       const displayed = displayedArtifactRef.current;
       if (displayed?.artifactId !== conversationArtifactRef || displayed.requestedVersion !== artifactViewVersion || (artifactViewVersion !== null && displayed.version !== artifactViewVersion)) { setLifecycleNotice("Wait for the saved Artifact revision to load before opening Workbench."); return; }
       navigateWorkbench({ projectId: selection.projectId, chatId: selection.chatId, artifactId: conversationArtifactRef, version: displayed.version });
-    } else navigateWorkbench(undefined, captureChatWorkbenchOrigin(chatMode, selection.projectId, selection.chatId));
+    } else {
+      const symbol = resolveScopedWorkbenchSymbol({
+        mode: chatMode,
+        projectId: selection.projectId,
+        chatId: selection.chatId,
+        messages: messagesQuery.data ?? [],
+        temporaryContext: temporaryWorkingContextRef.current,
+      });
+      navigateWorkbench(undefined, captureChatWorkbenchOrigin(chatMode, selection.projectId, selection.chatId, symbol));
+    }
   };
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;

@@ -469,7 +469,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       setTabsState(() => result.state);
       setMaximizedPane(null);
       chatWorkbenchOriginRef.current = null;
-    } else if (chatOrigin) chatWorkbenchOriginRef.current = chatOrigin;
+    } else if (chatOrigin) {
+      // Only a validated unique symbol from this Chat may select company context.
+      // It opens an existing entity tab; all earlier professional tabs remain intact.
+      // P5/source entitlements still govern data in the resulting panels.
+      if (chatOrigin.symbol) setTabsState(current => openEntityTab(current, chatOrigin.symbol!));
+      chatWorkbenchOriginRef.current = chatOrigin;
+    }
     handleSurface("workbench");
   }, [tabsState, maximizedPane, handleSurface, setTabsState]);
   const handleReturnToChat = useCallback((context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => {
