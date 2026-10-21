@@ -7,6 +7,8 @@ export interface ChatWorkbenchOrigin {
   mode: ChatWorkbenchMode;
   projectId: number | null;
   chatId: number | null;
+  /** Verified unique conversation symbol; navigation hint only, never a P5 rights grant. */
+  symbol?: string;
 }
 
 function validId(value: number | null): value is number {
@@ -15,12 +17,14 @@ function validId(value: number | null): value is number {
 
 /** No saved Chat or ticker/Artifact is invented to open the full existing Workbench. */
 export function captureChatWorkbenchOrigin(
-  mode: ChatWorkbenchMode, projectId: number | null, chatId: number | null,
+  mode: ChatWorkbenchMode, projectId: number | null, chatId: number | null, symbol?: string | null,
 ): ChatWorkbenchOrigin {
-  if (mode === "temporary") return { mode, projectId: null, chatId: null };
-  if (mode === "quick") return { mode, projectId: null, chatId: validId(chatId) ? chatId : null };
+  const validatedSymbol = typeof symbol === "string" && /^[A-Z0-9][A-Z0-9.\\-]{0,15}$/.test(symbol) ? symbol : null;
+  const hint = validatedSymbol ? { symbol: validatedSymbol } : {};
+  if (mode === "temporary") return { mode, projectId: null, chatId: null, ...hint };
+  if (mode === "quick") return { mode, projectId: null, chatId: validId(chatId) ? chatId : null, ...hint };
   const scopedProjectId = validId(projectId) ? projectId : null;
-  return { mode, projectId: scopedProjectId, chatId: scopedProjectId && validId(chatId) ? chatId : null };
+  return { mode, projectId: scopedProjectId, chatId: scopedProjectId && validId(chatId) ? chatId : null, ...hint };
 }
 
 /**
