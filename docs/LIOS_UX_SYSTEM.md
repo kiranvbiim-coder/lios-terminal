@@ -9,6 +9,59 @@ Each applicable SP requires a real Minimum Shippable Journey, target/package exe
 Truth ladder: **contract locked → code integrated → tests passed → packaged/provisioned → user accessible → vertical flagship passed → shipping point accepted → release proven**.
 
 
+## Owner-approved universal intelligence / Workbench convergence — 2026-10-20
+
+**Authority and scope:** Owner-confirmed decisions 01–20; source-of-truth for the visible experience under TC / SI-07 and existing P2/P4/P5/P7/GM/CA owners. This section clarifies prior 2026-10-01/02 UX language where inconsistent; it is **required future behavior**, not a claim of implemented or shipped functionality. Coordinate implementation under the existing [public issue #91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) and [canonical active tracker](PENDING_WORK.md). Do not fork the architecture or create a new execution board.
+
+### The definitive Workbench display model — no ambiguity
+
+1. **Chat is the signed-in default and normal full-time surface.** Minimal sidebar/composer, readable streamed answers, only essential quiet status (such as `Researching Apple…`) and a Stop/Cancel action. No always-visible agent list, per-source progress wall, developer console, tool steps, raw JSON, module menus, or dense finance dashboard. Project Home may remain a secondary deliberate destination, never the mandatory first stop.
+2. **Background intelligence, not a second background UI:** using the existing user-owned runtime, the chat orchestrator may invoke permitted research, providers, BYOAI, agents, models, calculation engines, reports, connectors and existing Workbench capabilities *without rendering the Workbench*. Actual background continuation depends on an active authorized runtime and its budgets; closing the only runtime does not magically continue jobs.
+3. **Artifact preview is contextual and optional.** Surface one or a few relevant, readable clickable Artifact cards in the conversation; clicking opens the *same canonical P4 object* in a resizable right sidecar with Artifact / Evidence / History when relevant. Auto-created additional work is discoverable in the chat/Project/Workbench library, not dumped into the conversation. Small/narrow windows may use a focused view instead of a cramped pane.
+4. **The full existing Workbench is an on-demand expansion, not an additional product, hidden OS window, restricted 'pro' mode or rebuilt replacement.** It opens through **Expand Workspace**, a contextually relevant Artifact action or direct user navigation, using current entity/topic, exact Artifact ID/version, permissions/source selection, analytical assumptions, time/units and best saved layout. Load only initially relevant panels, yet expose **the complete existing source catalog and all authorized professional tools** without requiring new implementation copies. Do not show all tools simultaneously. The UI may keep Workbench mounted/lazily loaded for engineering reasons, but it must not be visually exposed by default.
+5. **Full round-trip continuity.** Chat and Workbench read/write the same canonical state. Edits in either view produce governed versioned changes, deterministic recalculation where applicable, refreshed rendered outputs and evidence/receipt history. Back to Chat restores the same investigation and selection. Entry/exit/reopen must never silently switch company, Project, source posture or Artifact head; material ambiguity or conflicting edits require review rather than guessing.
+6. **Advanced inspection is discoverable, not forced.** Source/Evidence, Show Work, selected tools/diagnostics and layout controls open only on request or when a material error, missing source, contradiction, permission/approval requirement or relevant limitation must be shown. Never conceal approval, stop, errors, cost/permission consequences or source uncertainty for cosmetic simplicity. Do not display hidden model chain-of-thought.
+
+**Reference scenario:** Open LiOS → sign in → type “Research Apple” → compact working state → progressive grounded findings and relevant Artifact cards → open one in a sidecar → expand into the existing Apple Workbench with selected financial models/sources/assumptions → edit the model and record a new authorized version → return to chat with context unchanged → restart and reopen exactly that work. No required Project creation or manual handoff; an advanced user can enter the Workbench directly.
+
+### Twenty locked product decisions
+
+| # | Owner decision | Required behavior / restriction |
+|---|---|---|
+| 01 | Structured + web/AI research together | For research objectives, pursue both permitted source classes where available; no fabricated coverage, forced web calls for ordinary chat, or hidden search cost. |
+| 02 | Intelligent optional Projects | Reuse an appropriate authorized Project, otherwise keep working in the regular Chat and offer linking unobtrusively; never silently select an unrelated Project. |
+| 03 | Adaptive Artifact presentation | Compact previews in Chat, substantial Artifact in side pane/focus, full context-aware Workbench on expand. |
+| 04 | Context-aware full Workbench | Reuse the complete installed Workbench and its provider/tool catalog, selecting relevant panels and saved layout first. |
+| 05 | Bidirectional versioned work | Chat and Workbench share active object, sources, assumptions, calculation, revisions, evidence and history. |
+| 06 | Progressive comprehensive research | Research requests begin a bounded comprehensive investigation, yield useful verified results progressively and may deepen in governed stages. |
+| 07 | Persistent/resumable research | Checkpoint authorized work and resume through the user-owned runtime; no fictitious compute after shutdown. |
+| 08 | Optional monitoring | Suggest recurring updates after a relevant task; never start indefinite monitoring without explicit user choice. |
+| 09 | Shared Source catalog | Source Auto selection by default; a compact Sources control opens/searches/filters the **same** canonical Workbench connection/catalog registry and rights, not a duplicated registry. |
+| 10 | Evidence reconciliation | Verify entity, period, currency, units, timestamps, entitlements and conflicts; distinguish deterministic values, assumptions and AI interpretation. |
+| 11 | One-time AI-data authorization | After informed approved connection/scope consent, allow routine relevant AI processing without repetitive prompts; revocation, firm/source ACLs and local-only restrictions still apply. |
+| 12 | Highly autonomous orchestration | Chat can execute approved multi-step workflows using full existing Workbench capabilities and permitted external integrations, rather than just open tools. |
+| 13 | Risk-based autonomy | Routine read/research/compute/Artifact actions execute within scoped grants; payments, external publishing, destructive changes and any future brokerage actions require stronger authorization. Existing prohibition on live brokerage execution remains in force. |
+| 14 | Intelligent capability generation | Discover permitted schemas/files, confirm material semantic mappings, assemble reusable analysis and dashboards through existing engines/Workbench; do not create a second capability framework. |
+| 15 | Cross-Project permitted intelligence | Find relevant approved Project/Chat/Artifact content while honoring source/client/tenant exclusions and provenance; retrieval grants no cross-Project mutation. |
+| 16 | Intelligent data-gap recovery | Search lawful alternative registries/web/providers and continue useful qualitative work; label unsupported financial numbers as unknown, not zero or invented. |
+| 17 | **Extremely minimal visible UX (A)** | Default: quiet status + progressive useful output, not visible multi-agent panels. Detail only on demand or for consequential/error states. |
+| 18 | Comprehensive, selective Artifacts | Generate appropriate full work-product set within limits, surface only most useful Chat previews; persist accessible remainder with evidence and revisions. |
+| 19 | Automatic saving without forced Project | Save regular Chat research, canonical Artifacts, revisions and Workbench context by default; offer optional Project linking. **Temporary Chats stay non-persistent** and must not silently create Projects/Artifacts/memory. |
+| 20 | Universal intelligence OS | Same conversation/research/Artifact/Workbench model for any topic and connected data; Finance is a deep specialist, not a topic gate. |
+
+**Source custody and model quality are non-negotiable:** one-time consent never transmits prohibited private data; a model completion does not prove a working web retriever or claim validation; deterministic engines own material finance calculations; actual provider entitlements, mapping and numerical evidence determine what can be claimed. Default Auto must make best effort within rights and budgets rather than claiming invisible successes.
+
+### Implementation priorities and visible acceptance (no duplicate stack)
+
+- **P0 / contract and collision review — TC/SI-07 issue #91:** preserve authoritative SI program, Shipping Points, P14 and canonical owners. Treat [PR #93](https://github.com/kiranvbiim-coder/lios-terminal/pull/93) (quiet chat, typed/rendered/saved Project Artifacts) and [PR #92](https://github.com/kiranvbiim-coder/lios-terminal/pull/92) (source custody) as in-flight; independently review/reconcile, not duplicate or auto-merge. Track truth separately: contract / code / real journey / packaged / SP / release.
+- **P1 / chat-to-Workbench state:** use existing `ProjectExperienceShell`, `Terminal`, `DockviewWorkspaceGrid`, canonical Working Context and P4 Artifact state. Current `onOpenWorkbench` surface switch alone is not evidence of an exact Artifact/entity/source/assumption/layout handoff. Specify and test a typed handoff plus return-to-chat and saved layout round-trip, without another shell.
+- **P1 / chat-owned durable Artifact:** existing Project-backed keep/auto-save paths do not fulfill regular Quick-Chat persistence. Extend canonical P1 chat and P4 Artifact ownership/reference contracts safely for regular Chats, without a fake/invisible Project, bypassing tenant ACLs, or duplicating P4 storage. Migrate and test existing Project Artifacts; Temporary Chats never auto-save.
+- **P1 / shared sources and data gaps:** connect the minimal Sources chooser to existing P5/Workbench source catalog and rights-aware Auto router; enable the permitted parallel structured + web/AI research plan under P7/GM, with source-by-source citations, explicit coverage gaps and cost boundaries.
+- **P2 / comprehensive orchestration and Artifacts:** canonical P2/GM agent runtime executes approved workflows through existing Workbench engines; P4 stores all meaningful results but only selective previews surface. Add failure/resume/stop and source-revocation/cost/permission test cases; no always-visible tool dashboard.
+- **P2 / deeper professional journeys:** native cross-Project retrieval, confirmed database mappings and repeatable user-owned monitoring on request; benchmark meaningful donor reuse under existing donor policy and CA registry, not a new import campaign.
+
+**Minimum real acceptance:** the flagship Apple request must succeed through actual configured permitted sources and provider, chat-owned saved Artifacts, contextual existing Workbench open, direct/chatted versioned edits, return to Chat and restart. Also verify one non-finance research case and one connected company-database task, as well as no-ticker/private-company research with explicit data gaps. Run keyboard/narrow-layout/privacy/tenant revocation/AI-off/error/cancel tests on a real installed target. Synthetic fixtures may prove isolated mechanisms; they do not establish real-provider/web/AI or SP/P14 acceptance.
+
 ## 0.0A Simple desktop and plugin journey extension — 2026-10-02
 
 **Owner-approved direction; visual/runtime acceptance pending.** Full decisions and benchmarks: [Terminal Convergence §0.0.12](LIOS_EXECUTION_ROADMAP.md#0012-general-ai-research-and-desktop-experience-expansion--owner-decisions-2026-10-02).
@@ -32,7 +85,7 @@ The new user sees the composer immediately and a contextual **Connect AI** actio
 
 ### Conversation, memory and work products
 
-Any-topic conversation and web research share the existing minimal composer. Factual queries search by default; quick answers precede optional deep research. General documents/reports/tables/charts are supported alongside finance tools. Relevant permitted sources may span Projects, with attribution and exclusions; firm/client/tenant policies still apply.
+Any-topic conversation and web research share the existing minimal composer. Ordinary factual questions may receive a quick answer without retrieval when appropriate; explicit research objectives trigger bounded progressive investigation with permitted structured and web/generative sources where useful and available. General documents/reports/tables/charts use the same professional work paths as finance tools. Relevant permitted sources may span Projects, with attribution and exclusions; firm/client/tenant policies still apply.
 
 Broad automatic memory has inspect/edit/delete controls. Temporary chats do not contribute durable memory or inherit private context by default. Prefer simple controls and source explanations over exposing hidden Working Context.
 
@@ -93,7 +146,7 @@ Additional locks:
 - advanced source/execution/provider controls use progressive disclosure;
 - default composer is minimal;
 - one visible LiOS identity;
-- substantial Project Artifacts must auto-persist (required target; current source still requires explicit Keep, pending TC-13/P4 integration);
+- supported Project conversation Artifact drafts may already auto-retain in current source paths; regular Quick-Chat Artifact auto-persistence is a separate, still-open P1/P4 contract requirement under the 2026-10-20 owner lock;
 - high proactivity is allowed within permission/budget/governance limits;
 - passive status strip shows only real connected/provider/market/runtime state;
 - no dedicated permanent Decision area is required on Project Home;
@@ -354,9 +407,9 @@ Adapt and reorder only unpinned modules; preserve user pins. No template gate, m
 
 ## 4.3 Keep in Project
 
-Important Project outputs must auto-persist under P4 identity and immutable content versions; Keep must not be a prerequisite to retaining substantial Project work in the required UX. Current source still requires explicit Keep, so automatic persistence remains a TC-13/P4 integration gap, not implemented behavior or passing SP evidence. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
+Important regular Chat and Project outputs must auto-persist under canonical P4 identity and immutable content versions. Supported Project conversation output auto-retention exists on current source paths; broad regular Quick-Chat Artifact durability does not yet satisfy the 2026-10-20 owner lock. Keep must not gate durable normal-chat work. Chat and direct controls share the same object/version state, with real runtime and packaged acceptance still required. Chat and direct controls share the same object and revision state. Material AI edits require review; rejection leaves the version unchanged and undo creates a compensating version.
 
-Quick/Temporary Keep requires an explicit existing/new Project destination and scope preview. Failed saves retain the destination and reuse a newly created Project on retry. Output concepts include charts, tables, models, screens, reports, research, sources, scenarios and recipes; the canonical schema controls serialized Artifact kinds, not this prose list.
+Regular Quick Chats retain their authorized work without a Project destination; moving/linking into a Project is an optional explicit scope-aware action, preserving the Chat and P4 object identity. Temporary Chats remain non-persistent, including no automatic durable Artifact or memory creation; any explicit promotion requires a clear user action and governed destination. Failed explicit move/link must preserve the user's choice and retry state. Output concepts include charts, tables, models, screens, reports, research, sources, scenarios and recipes; the canonical schema controls serialized Artifact kinds, not this prose list.
 
 ## 5. Composer
 
@@ -489,7 +542,7 @@ Navigation should not reset context unnecessarily.
 
 Do not expose hidden chain-of-thought.
 
-For complex workflows, show a concise inspectable execution trail such as:
+For complex workflows, keep the default UI at quiet Working/Stop with progressive verified answers. Only when the user requests **Show Work** (or material error/approval needs attention), show a concise inspectable execution trail such as:
 
 - resolving entities;
 - checking 4 sources;
@@ -1686,7 +1739,7 @@ If this journey is not effortless, adding more features does not count as progre
 
 The Project mental model remains **Projects → Chats → Artifacts**. P4 adds depth without adding a new permanent navigation taxonomy.
 
-- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Current source requires explicit Keep for conversation outputs, including Project work; required important Project auto-persistence remains pending TC-13/P4 integration, not closed by this implementation lock. Quick/Temporary Keep explicitly selects and previews the destination scope. Users can create/open persistent work or export/import a Project package.
+- Rich adaptive Project Home includes **Project Artifacts** without becoming a separate object authority. Supported Project conversation drafts already auto-retain through existing P4 paths; regular Quick-Chat canonical Artifact durability without a Project remains a separate open requirement under the owner lock. Temporary Chats remain non-persistent unless explicitly promoted through a governed action. Users can create/open persistent work or export/import an authorized Project package.
 - Every Artifact opens in one consistent `ArtifactPane` with readable title/status/version, source and execution-receipt context, Ask LiOS, review, fork, undo, export, archive, compare and Session reference actions. Raw adapter/hash/internal metadata belongs under Advanced or Show Work, not default chrome.
 - Conversation and direct controls operate on the same persistent Artifact identity. **Ask LiOS** passes the Artifact as active context. Supported mutation instructions create a review proposal; the user accepts or rejects it in the Artifact surface.
 - SpreadsheetArtifact exposes a real editable formula grid. Professional AI changes are explicit diffs and cannot silently overwrite the model.
