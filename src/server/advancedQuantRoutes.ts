@@ -6,10 +6,15 @@ import { QUANT_MODEL_REGISTRY } from "./quantModelRegistry";
 import {
   AdvancedQuantInputError,
   advancedQuantCatalog,
+  parseAdvancedQuantRunRequest,
   isAdvancedQuantPath,
   type AdvancedQuantExecution,
 } from "./advancedQuantExecution";
 import { capabilityExecutor, CapabilityExecutionError } from "./capabilityExecutor";
+import { terminalExecutionTargetSchema, type TerminalExecutionTarget } from "@shared/terminalArtifact";
+import { tenantContext } from "./tenantContext";
+import { validateTerminalExecutionTarget, admitTerminalExecutionSources } from "./terminalArtifactTool";
+import { createTerminalArtifactEngineVersion } from "./artifactStore";
 
 export {
   ADVANCED_QUANT_PATHS,
@@ -48,10 +53,28 @@ export function registerAdvancedQuantRoutes(app: Express): void {
       return;
     }
 
+    let terminalTarget: TerminalExecutionTarget | null = null;
+    let executionInput = req.body;
+    if (req.body && typeof req.body === "object" && !Array.isArray(req.body) && req.body.terminalArtifact !== undefined) {
+      const parsed = terminalExecutionTargetSchema.safeParse(req.body.terminalArtifact);
+      if (!parsed.success) { res.status(400).json({ error: "Invalid exact terminal execution target.", issues: parsed.error.issues }); return; }
+      terminalTarget = parsed.data;
+      const { terminalArtifact: _target, ...parameters } = req.body;
+      executionInput = parameters;
+      try {
+        const ctx = tenantContext(req.user!);
+        await validateTerminalExecutionTarget(ctx, terminalTarget, new AbortController().signal);
+        const request = parseAdvancedQuantRunRequest(parameters);
+        if (!request.success) { res.status(400).json({ error: "Invalid native input provenance." }); return; }
+        await admitTerminalExecutionSources(ctx, request.data.inputProvenance, request.data.parameters, undefined, false, undefined, path);
+      }
+      catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Terminal execution target is no longer current." }); return; }
+    }
+
     try {
       const execution = await capabilityExecutor.execute(
         registryEntry.id,
-        req.body,
+        executionInput,
         { surface: "api", userId: req.user!.id },
       ) as AdvancedQuantExecution;
       const { receipt } = execution;
@@ -76,7 +99,15 @@ export function registerAdvancedQuantRoutes(app: Express): void {
         capabilityId: registryEntry.id,
         ...auditActor(req.user!),
       });
-      res.json(execution.response);
+      if (terminalTarget) {
+        try {
+          const ctx = tenantContext(req.user!);
+          const saved = await createTerminalArtifactEngineVersion(ctx, terminalTarget, execution);
+          res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: terminalTarget.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+        } catch (error) {
+          res.status(409).json({ error: `Native calculation completed but its terminal result was not retained: ${error instanceof Error ? error.message : "target changed"}. Authored inputs are preserved; reopen the current revision before explicitly running again.` });
+        }
+      } else res.json(execution.response);
     } catch (error) {
       if (error instanceof AdvancedQuantInputError) {
         res.status(400).json({

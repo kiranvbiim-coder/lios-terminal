@@ -15,8 +15,8 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, projects } = await import("@shared/schema");
 const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { openTerminalArtifact } = await import("./terminalArtifact");
-const { updateTerminalArtifact } = await import("./terminalArtifactTool");
-const { getArtifact, getArtifactVersion, createArtifactVersion, createArtifactProposal } = await import("./artifactStore");
+const { updateTerminalArtifact, admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+const { getArtifact, getArtifactVersion, createArtifactVersion, createArtifactProposal, createArtifact, createTerminalArtifactEngineVersion, undoArtifactHead } = await import("./artifactStore");
 
 test("existing terminal work is a Chat-owned immutable Artifact, not a shadow session", { timeout: 90_000 }, async t => {
   t.after(async () => { await closeDb(); fs.rmSync(dataDir, { recursive: true, force: true }); });
@@ -59,6 +59,26 @@ test("existing terminal work is a Chat-owned immutable Artifact, not a shadow se
   await assert.rejects(getArtifact(foreign, retained.artifact.id));
   await assert.rejects(createArtifactProposal(tenant, { artifactId: retained.artifact.id, baseVersion: 2, type: "artifact_patch", summary: "Attempt to bypass typed source control", patch: { state: { terminal: { ...initialTerminalScreenState("IBM"), sourceScope: "web" } } }, actorType: "conversation" }), /typed operations/);
   await assert.rejects(createArtifactVersion(tenant, { artifactId: retained.artifact.id, baseVersion: 2, content: { ...current.content, symbol: "AAPL" } }), /subject|invalid/i);
+  const forged = { ...current.content, state: { ...current.content.state, terminalExecutions: { forged: { receipt: { runId: crypto.randomUUID() }, price: 999 } } } };
+  await assert.rejects(createArtifactVersion(tenant, { artifactId: retained.artifact.id, baseVersion: 2, content: forged }), /native results are immutable/);
+  await assert.rejects(createArtifact(tenant, { projectId: null, owningChatId: chat.id, title: "Forged engine output", content: forged }), /owned native engine run/);
+  await assert.rejects(createTerminalArtifactEngineVersion(tenant, { artifactId: retained.artifact.id, baseVersion: 2, baseHash: current.contentHash, slot: "forged", authoredState: initialTerminalScreenState("IBM") }, { result: { price: 999 }, receipt: {} } as never), /actual native execution/);
+  const plain = await createArtifact(tenant, { projectId: null, owningChatId: chat.id, title: "Plain screen transition", content: { kind: "screen", view: "chart", symbol: "IBM", state: {} } });
+  await assert.rejects(createArtifactProposal(tenant, { artifactId: plain.artifact.id, baseVersion: 1, type: "artifact_patch", summary: "Forge terminal results through plain screen", patch: { state: forged.state } }), /cannot mint terminal execution state/);
+  const { resolveAdvancedQuantInputProvenance } = await import("@shared/quantModelRegistry");
+  const declared = resolveAdvancedQuantInputProvenance({ marketPrice: 123 }, { dataClassification: "cached", sourceBindings: [{ contractFamily: "fixed-income-credit", field: "marketPrice", connectorId: "private-import", provider: "private", priority: "manual_override", sourceReference: "user-supplied:missing", asOf: "2026-01-01T00:00:00.000Z", retrievedAt: "2026-01-01T00:00:00.000Z", freshness: "cached", snapshot: { id: crypto.randomUUID(), contentHash: "0".repeat(64) }, transformations: [] }] });
+  assert.equal(declared.success, true);
+  if (declared.success) await assert.rejects(admitTerminalExecutionSources(tenant, declared.data, { marketPrice: 123 }, undefined, true, undefined, "fixed-income/spread-analytics"), /snapshot is unavailable/);
+  const [client] = await getDb().insert(users).values({ email: `${crypto.randomUUID()}@example.test`, passwordHash: "fixture-only", name: "Client chart owner", role: "client_user", organizationId: null }).returning();
+  const clientTenant = { userId: client.id, organizationId: null, role: client.role };
+  const clientChat = await createProjectChat(clientTenant, { scope: "quick" });
+  const clientScreen = await openTerminalArtifact(clientTenant, clientChat.id, { ...request, requestId: crypto.randomUUID() });
+  if (clientScreen.version.content.kind !== "screen") throw new Error("Expected the original client chart screen.");
+  const clientContent = { ...clientScreen.version.content, state: { ...clientScreen.version.content.state, terminal: { ...initialTerminalScreenState("IBM"), stockTape: true } } } as typeof current.content;
+  await createArtifactVersion(clientTenant, { artifactId: clientScreen.artifact.id, baseVersion: 1, content: clientContent });
+  const restored = await undoArtifactHead(clientTenant, clientScreen.artifact.id);
+  assert.equal(restored.version, 3);
+  assert.deepEqual(restored.content, clientScreen.version.content, "Restoring an owned chart is not internal numerical execution.");
   await closeDb(); await initDb();
   assert.deepEqual((await getArtifactVersion(tenant, retained.artifact.id, 2)).content, current.content);
 });

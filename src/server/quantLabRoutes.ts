@@ -24,6 +24,12 @@ import {
 import { quantModelWorkspace } from "@shared/quantLab";
 import { QUANT_MODEL_REGISTRY } from "./quantModelRegistry";
 import { registerAdvancedQuantRoutes } from "./advancedQuantRoutes";
+import { resolveQuantDatasetInputs } from "./quantLabDatasetInputs";
+import type { QuantRun } from "@shared/schema";
+async function admitRunResultRead(userId: number, run: QuantRun) {
+  if (!run.datasetSnapshotIds.length) return;
+  await resolveQuantDatasetInputs(userId, null, run.datasetSnapshotIds, run.datasetInputBindings, run.parameters, run.datasetSnapshotHashes, undefined, false, "read");
+}
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -76,7 +82,10 @@ export function registerQuantLabRoutes(app: Express): void {
     const id = parseId(req.params.id); if (!id) return res.status(400).json({ error: "Invalid experiment id." });
     const experiment = await getQuantExperiment(id, req.user!.role === "internal_compliance" ? undefined : req.user!.id);
     if (!experiment) return res.status(404).json({ error: "Experiment not found." });
-    res.json({ experiment, runs: await listQuantRuns(req.user!.id, id, req.user!.role === "internal_compliance") });
+    const runs = await listQuantRuns(req.user!.id, id, req.user!.role === "internal_compliance");
+    try { for (const run of runs) await admitRunResultRead(req.user!.id, run); }
+    catch (error) { failure(res, error, 403); return; }
+    res.json({ experiment, runs });
   });
 
   app.patch("/api/quant-lab/experiments/:id", requireRole(...AUTHOR_ROLES), async (req, res) => {
@@ -112,19 +121,27 @@ export function registerQuantLabRoutes(app: Express): void {
   app.get("/api/quant-lab/runs", requireRole(...READ_ROLES), async (req, res) => {
     const experimentId = req.query.experimentId ? parseId(req.query.experimentId) : undefined;
     if (req.query.experimentId && !experimentId) return res.status(400).json({ error: "Invalid experiment id." });
-    res.json(await listQuantRuns(req.user!.id, experimentId ?? undefined, req.user!.role === "internal_compliance"));
+    try {
+      const runs = await listQuantRuns(req.user!.id, experimentId ?? undefined, req.user!.role === "internal_compliance");
+      for (const run of runs) await admitRunResultRead(req.user!.id, run);
+      res.json(runs);
+    } catch (error) { failure(res, error, 403); }
   });
 
   app.get("/api/quant-lab/runs/:id", requireRole(...READ_ROLES), async (req, res) => {
     const id = parseId(req.params.id); if (!id) return res.status(400).json({ error: "Invalid run id." });
     const run = await getQuantRun(id, req.user!.role === "internal_compliance" ? undefined : req.user!.id);
     if (!run) return res.status(404).json({ error: "Run not found." });
+    try { await admitRunResultRead(req.user!.id, run); }
+    catch (error) { failure(res, error, 403); return; }
     res.json({ run, envelope: quantRunEnvelope(run) });
   });
 
   app.post("/api/quant-lab/runs/:id/cancel", requireRole(...AUTHOR_ROLES), async (req, res) => {
     const id = parseId(req.params.id); if (!id) return res.status(400).json({ error: "Invalid run id." });
     const run = await cancelQuantRun(id, req.user!.id); if (!run) return res.status(404).json({ error: "Run not found." });
+    try { await admitRunResultRead(req.user!.id, run); }
+    catch (error) { failure(res, error, 403); return; }
     await recordAuditEvent(req.user!.id, "quant_run_cancel_requested", { runId: id, ...auditActor(req.user!) });
     res.json(run);
   });
@@ -138,7 +155,11 @@ export function registerQuantLabRoutes(app: Express): void {
   app.get("/api/quant-lab/compare", requireRole(...READ_ROLES), async (req, res) => {
     const left = parseId(req.query.left); const right = parseId(req.query.right);
     if (!left || !right) return res.status(400).json({ error: "Two valid run ids are required." });
-    try { res.json(await compareQuantRuns(left, right, req.user!.id)); }
+    try {
+      const runs = await Promise.all([getQuantRun(left, req.user!.id), getQuantRun(right, req.user!.id)]);
+      for (const run of runs) { if (!run) throw new Error("Owned Quant run not found."); await admitRunResultRead(req.user!.id, run); }
+      res.json(await compareQuantRuns(left, right, req.user!.id));
+    }
     catch (error) { failure(res, error, 404); }
   });
 }

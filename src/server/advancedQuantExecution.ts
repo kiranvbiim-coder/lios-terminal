@@ -52,6 +52,12 @@ export type AdvancedQuantExecution = {
   headers: Record<string, string>;
 };
 
+const nativeExecutionOwners = new WeakMap<AdvancedQuantExecution, number>();
+/** Only the real server runner can bind a completed native calculation to its current actor. */
+export function isOwnedNativeAdvancedExecution(execution: AdvancedQuantExecution, userId: number): boolean {
+  return nativeExecutionOwners.get(execution) === userId;
+}
+
 export class AdvancedQuantInputError extends Error {
   constructor(
     public readonly code: "invalid_body" | "invalid_provenance",
@@ -161,6 +167,7 @@ export async function executeAdvancedQuant(
   body: unknown,
   options: {
     signal?: AbortSignal;
+    userId?: number;
     isolationMode?: "legacy-host" | "strict";
     callEngine?: AdvancedQuantEngineCall;
     runId?: string;
@@ -205,10 +212,12 @@ export async function executeAdvancedQuant(
     calculatedAt: options.calculatedAt,
   });
 
-  return {
+  const execution = {
     result,
     receipt,
     response: advancedQuantRunResponse(result, receipt),
     headers: advancedQuantReceiptHeaders(receipt),
   };
+  if (options.userId !== undefined && options.callEngine === undefined) nativeExecutionOwners.set(execution, options.userId);
+  return execution;
 }

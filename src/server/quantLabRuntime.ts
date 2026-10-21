@@ -8,6 +8,8 @@ import { notifyDataChanged } from "./gatewayRuntime";
 import { callPythonService, getPythonServiceEnvironment, PythonServiceDataError } from "./pythonService";
 import { QUANT_MODEL_REGISTRY } from "./quantModelRegistry";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
+import { resolveQuantDatasetInputs } from "./quantLabDatasetInputs";
+import { requirePythonInputFields } from "./pythonInputContract";
 
 const MAX_CONCURRENCY = Math.max(1, Math.min(Number(process.env.QUANT_LAB_CONCURRENCY) || 2, 8));
 const MAX_ACTIVE_PER_USER = 5;
@@ -139,6 +141,7 @@ export async function cloneQuantExperiment(id: string, ownerUserId: number) {
     id: crypto.randomUUID(), name: `${source.name} (Clone)`, description: source.description,
     workspace: source.workspace, status: "active", modelId: source.modelId, modelVersion: source.modelVersion,
     parameters: source.parameters, datasetSnapshotIds: source.datasetSnapshotIds, seed: source.seed,
+    datasetInputBindings: source.datasetInputBindings,
     timeoutMs: source.timeoutMs, investigationId: source.investigationId, organizationId: source.organizationId,
     ownerUserId, parentExperimentId: source.id,
   }).returning();
@@ -170,19 +173,23 @@ export async function enqueueQuantRun(experimentId: string, ownerUserId: number,
   assertCurrentQuantModelVersion(experiment);
   await enforceQuota(ownerUserId);
   const model = resolveModel(experiment.modelId);
-  const parameters = request.parameters ?? experiment.parameters;
+  const authoredParameters = request.parameters ?? experiment.parameters;
   const datasetSnapshotIds = request.datasetSnapshotIds ?? experiment.datasetSnapshotIds;
+  const datasetInputBindings = request.datasetInputBindings ?? experiment.datasetInputBindings;
+  const resolvedInputs = await resolveQuantDatasetInputs(ownerUserId, experiment.organizationId, datasetSnapshotIds, datasetInputBindings, authoredParameters);
+  await requirePythonInputFields(model.engineEndpoint!, datasetInputBindings.map(binding => binding.parameter));
+  const parameters = resolvedInputs.parameters;
   const seed = request.seed === undefined ? experiment.seed : request.seed;
   const timeoutMs = request.timeoutMs ?? experiment.timeoutMs;
   if (byteSize(parameters) > MAX_INPUT_BYTES) throw new Error("Run parameters exceed the 1 MB input limit.");
-  const hashes = await snapshotHashes(datasetSnapshotIds, experiment.organizationId);
+  const hashes = resolvedInputs.hashes;
   if (model.determinism === "seeded_stochastic" && (seed === null || seed === undefined)) {
     throw new Error("Seeded stochastic models require an explicit seed.");
   }
   const normalizedParameters = model.determinism === "seeded_stochastic" ? { ...parameters, seed } : parameters;
   const environment = await environmentFor(model); const libraryVersions = await libraryVersionsFor(model);
   const environmentHash = stableSnapshotHash({ environment, libraryVersions });
-  const inputHash = stableSnapshotHash({ modelId: model.id, modelVersion: model.version, parameters: normalizedParameters, datasetSnapshotHashes: hashes, seed });
+  const inputHash = stableSnapshotHash({ modelId: model.id, modelVersion: model.version, parameters: normalizedParameters, datasetSnapshotHashes: hashes, datasetInputBindings, seed });
   const cacheKey = stableSnapshotHash({ ownerUserId, inputHash, environmentHash });
   const sequence = await nextSequence(experiment.id);
   if (!request.bypassCache) {
@@ -191,23 +198,30 @@ export async function enqueueQuantRun(experimentId: string, ownerUserId: number,
     )).orderBy(desc(quantRuns.completedAt)).limit(1);
     if (cached) {
       const now = new Date();
-      const [created] = await getDb().insert(quantRuns).values({
+      return getDb().transaction(async tx => {
+        await resolveQuantDatasetInputs(ownerUserId, experiment.organizationId, datasetSnapshotIds, datasetInputBindings, parameters, hashes, tx, true);
+        const [created] = await tx.insert(quantRuns).values({
         id: crypto.randomUUID(), experimentId: experiment.id, sequence, status: "succeeded", progressPct: 100,
         modelId: model.id, modelVersion: model.version, engine: model.engine, engineEndpoint: model.engineEndpoint!,
-        parameters: normalizedParameters, datasetSnapshotIds, datasetSnapshotHashes: hashes, seed, timeoutMs,
+        parameters: normalizedParameters, datasetSnapshotIds, datasetSnapshotHashes: hashes, datasetInputBindings, seed, timeoutMs,
         inputHash, cacheKey, cachedFromRunId: cached.id, environment, environmentHash, libraryVersions,
-        output: cached.output, outputHash: cached.outputHash, diagnostics: { ...(cached.diagnostics ?? {}), cacheHit: true },
+        output: cached.output, outputHash: cached.outputHash, diagnostics: { ...(cached.diagnostics ?? {}), cacheHit: true, sourceRefs: resolvedInputs.sourceRefs },
         warnings: cached.warnings, ownerUserId, startedAt: now, completedAt: now, durationMs: 0,
       }).returning();
-      return created;
+        return created;
+      });
     }
   }
-  const [created] = await getDb().insert(quantRuns).values({
+  const created = await getDb().transaction(async tx => {
+    await resolveQuantDatasetInputs(ownerUserId, experiment.organizationId, datasetSnapshotIds, datasetInputBindings, parameters, hashes, tx, true);
+    const [row] = await tx.insert(quantRuns).values({
     id: crypto.randomUUID(), experimentId: experiment.id, sequence, status: "queued", progressPct: 0,
     modelId: model.id, modelVersion: model.version, engine: model.engine, engineEndpoint: model.engineEndpoint!,
-    parameters: normalizedParameters, datasetSnapshotIds, datasetSnapshotHashes: hashes, seed, timeoutMs,
-    inputHash, cacheKey, environment, environmentHash, libraryVersions, warnings: model.limitations, ownerUserId,
-  }).returning();
+    parameters: normalizedParameters, datasetSnapshotIds, datasetSnapshotHashes: hashes, datasetInputBindings, seed, timeoutMs,
+    inputHash, cacheKey, environment, environmentHash, libraryVersions, diagnostics: { sourceRefs: resolvedInputs.sourceRefs }, warnings: model.limitations, ownerUserId,
+    }).returning();
+    return row;
+  });
   queue.push(created.id); pump();
   return created;
 }
@@ -220,17 +234,28 @@ async function executeRun(id: string): Promise<void> {
   await db.update(quantRuns).set({ status: "running", progressPct: 10, startedAt }).where(and(eq(quantRuns.id, id), eq(quantRuns.status, "queued")));
   notifyDataChanged("quantlab", { userId: run.ownerUserId });
   try {
+    const experiment = await getQuantExperiment(run.experimentId, run.ownerUserId);
+    if (!experiment) throw new Error("Owned Quant experiment is no longer available.");
+    const admitted = await resolveQuantDatasetInputs(run.ownerUserId, experiment.organizationId, run.datasetSnapshotIds, run.datasetInputBindings, run.parameters, run.datasetSnapshotHashes);
+    if (stableSnapshotHash(admitted.parameters) !== stableSnapshotHash(run.parameters)) throw new Error("Quant source parameters changed before execution.");
+    assertCurrentQuantModelVersion(run);
+    await requirePythonInputFields(run.engineEndpoint, run.datasetInputBindings.map(binding => binding.parameter), controller.signal);
     const output = await callPythonService<unknown>(run.engineEndpoint, run.parameters, { signal: controller.signal, timeoutMs: run.timeoutMs });
     const outputBytes = byteSize(output);
     if (outputBytes > MAX_OUTPUT_BYTES) throw new Error("Model output exceeded the 5 MB persistence limit.");
     const completedAt = new Date();
-    await db.update(quantRuns).set({
+    await db.transaction(async tx => {
+      await resolveQuantDatasetInputs(run.ownerUserId, experiment.organizationId, run.datasetSnapshotIds, run.datasetInputBindings, run.parameters, run.datasetSnapshotHashes, tx, true);
+      if (controller.signal.aborted) throw controller.signal.reason ?? new DOMException("Cancelled before result retention.", "AbortError");
+      await tx.update(quantRuns).set({
       status: "succeeded", progressPct: 100, output, outputHash: stableSnapshotHash(output), completedAt,
       durationMs: completedAt.getTime() - startedAt.getTime(), diagnostics: {
         cacheHit: false, inputBytes: byteSize(run.parameters), outputBytes,
+        sourceRefs: admitted.sourceRefs,
         queueWaitMs: startedAt.getTime() - run.queuedAt.getTime(), executionMs: completedAt.getTime() - startedAt.getTime(),
       },
-    }).where(eq(quantRuns.id, id));
+      }).where(eq(quantRuns.id, id));
+    });
     notifyDataChanged("quantlab", { userId: run.ownerUserId });
   } catch (error) {
     const completedAt = new Date(); const reasonName = controller.signal.reason?.name;
@@ -300,7 +325,7 @@ export async function getQuantRun(id: string, ownerUserId?: number) {
 export async function rerunQuantRun(id: string, ownerUserId: number, bypassCache = true) {
   const run = await getQuantRun(id, ownerUserId); if (!run) throw new Error("Run not found.");
   assertCurrentQuantModelVersion(run);
-  return enqueueQuantRun(run.experimentId, ownerUserId, { parameters: run.parameters, datasetSnapshotIds: run.datasetSnapshotIds, seed: run.seed, timeoutMs: run.timeoutMs, bypassCache });
+  return enqueueQuantRun(run.experimentId, ownerUserId, { parameters: run.parameters, datasetSnapshotIds: run.datasetSnapshotIds, datasetInputBindings: run.datasetInputBindings, seed: run.seed, timeoutMs: run.timeoutMs, bypassCache });
 }
 
 export async function compareQuantRuns(leftId: string, rightId: string, ownerUserId: number) {

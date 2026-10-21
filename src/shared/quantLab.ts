@@ -8,6 +8,18 @@ export const quantWorkspaceSchema = z.enum([
 export const quantExperimentStatusSchema = z.enum(["active", "archived"]);
 export const quantRunStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "cancelled", "timed_out"]);
 
+export const quantDatasetInputBindingSchema = z.object({
+  snapshotId: z.string().uuid(),
+  field: z.string().trim().min(1).max(160),
+  parameter: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,99}$/).refine(value => !["constructor", "prototype", "seed"].includes(value), { message: "Bind a numerical model input, not a reserved runtime control." }),
+  selection: z.enum(["values", "last"]),
+  scale: z.number().finite().refine(value => value !== 0).default(1),
+}).strict();
+export type QuantDatasetInputBinding = z.infer<typeof quantDatasetInputBindingSchema>;
+export const quantDatasetInputBindingsSchema = z.array(quantDatasetInputBindingSchema).max(50).superRefine((bindings, ctx) => {
+  if (new Set(bindings.map(binding => binding.parameter)).size !== bindings.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Each engine parameter requires exactly one dataset binding." });
+});
+
 export const createQuantExperimentSchema = z.object({
   name: z.string().trim().min(1).max(160),
   description: z.string().trim().max(4000).default(""),
@@ -15,6 +27,7 @@ export const createQuantExperimentSchema = z.object({
   modelId: z.string().trim().min(1).max(200),
   parameters: z.record(z.unknown()).default({}),
   datasetSnapshotIds: z.array(z.string().min(1).max(100)).max(50).default([]),
+  datasetInputBindings: quantDatasetInputBindingsSchema.default([]),
   seed: z.number().int().min(0).max(2_147_483_647).nullable().default(null),
   timeoutMs: z.number().int().min(1_000).max(120_000).default(30_000),
   investigationId: z.number().int().positive().nullable().default(null),
@@ -28,6 +41,7 @@ export const editQuantExperimentSchema = createQuantExperimentSchema.partial().e
 export const quantRunRequestSchema = z.object({
   parameters: z.record(z.unknown()).optional(),
   datasetSnapshotIds: z.array(z.string().min(1).max(100)).max(50).optional(),
+  datasetInputBindings: quantDatasetInputBindingsSchema.optional(),
   seed: z.number().int().min(0).max(2_147_483_647).nullable().optional(),
   timeoutMs: z.number().int().min(1_000).max(120_000).optional(),
   bypassCache: z.boolean().default(false),

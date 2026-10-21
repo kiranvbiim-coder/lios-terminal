@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 import { type DataStackPin } from "./dataStackPins";
+import type { QuantDatasetInputBinding } from "./quantLab";
 import { ENTITY_IDENTITY_STATUSES, ENTITY_LIFECYCLE_STATUSES, LEGAL_ENTITY_KINDS } from "./globalInstrumentMaster";
 import {
   userRoleEnum,
@@ -1274,6 +1275,7 @@ export const quantExperiments = pgTable("quant_experiments", {
   modelVersion: text("model_version").notNull(),
   parameters: jsonb("parameters").notNull().$type<Record<string, unknown>>().default({}),
   datasetSnapshotIds: jsonb("dataset_snapshot_ids").notNull().$type<string[]>().default([]),
+  datasetInputBindings: jsonb("dataset_input_bindings").notNull().$type<QuantDatasetInputBinding[]>().default([]),
   seed: integer("seed"),
   timeoutMs: integer("timeout_ms").notNull().default(30000),
   investigationId: integer("investigation_id").references(() => researchInvestigations.id, { onDelete: "set null" }),
@@ -1302,6 +1304,7 @@ export const quantRuns = pgTable("quant_runs", {
   parameters: jsonb("parameters").notNull().$type<Record<string, unknown>>(),
   datasetSnapshotIds: jsonb("dataset_snapshot_ids").notNull().$type<string[]>().default([]),
   datasetSnapshotHashes: jsonb("dataset_snapshot_hashes").notNull().$type<Record<string, string>>().default({}),
+  datasetInputBindings: jsonb("dataset_input_bindings").notNull().$type<QuantDatasetInputBinding[]>().default([]),
   seed: integer("seed"),
   timeoutMs: integer("timeout_ms").notNull(),
   inputHash: text("input_hash").notNull(),

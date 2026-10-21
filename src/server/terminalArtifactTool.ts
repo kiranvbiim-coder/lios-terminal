@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { terminalArtifactUpdateSchema, applyTerminalArtifactOperations } from "@shared/terminalArtifactOperations";
 import { readTerminalScreenState } from "@shared/terminalArtifact";
+import { terminalExecutionTargetSchema, type TerminalExecutionTarget } from "@shared/terminalArtifact";
+import { getProject } from "./projectStore";
 import { artifactContentSchema } from "@shared/artifactContracts";
 import { getArtifact, getArtifactVersion, createArtifactVersion } from "./artifactStore";
 import { getProjectChat } from "./projectChatStore";
@@ -9,9 +11,12 @@ import { hashLedgerValue } from "./ledgerStore";
 import { assertNotAborted } from "./conversationRuntimeCore";
 import type { ConversationToolDefinition } from "./conversationRuntime";
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
-import { eq } from "drizzle-orm";
-import { portfolios } from "@shared/schema";
-import { getDb } from "./db";
+import { and, eq, isNull } from "drizzle-orm";
+import { portfolios, datasetSnapshots, users } from "@shared/schema";
+import { getDb, type DrizzleDb } from "./db";
+import type { ResolvedAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
+import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
+import { requirePythonInputFields } from "./pythonInputContract";
 
 export async function validateTerminalArtifactTarget(ctx: TenantContext, chatId: number, binding: { artifactId: string; version: number; contentHash: string }, signal: AbortSignal) {
   assertNotAborted(signal);
@@ -24,6 +29,69 @@ export async function validateTerminalArtifactTarget(ctx: TenantContext, chatId:
   if (version.contentHash !== binding.contentHash || hashLedgerValue(content) !== binding.contentHash || content.kind !== "screen" || !readTerminalScreenState(content.state)) throw new Error("Selected terminal Artifact revision binding is invalid.");
   assertNotAborted(signal);
   return { artifact, version };
+}
+
+/** Validate an explicit original-panel native Run before starting numerical work. */
+export async function validateTerminalExecutionTarget(ctx: TenantContext, raw: TerminalExecutionTarget, signal: AbortSignal) {
+  const target = terminalExecutionTargetSchema.parse(raw);
+  assertNotAborted(signal);
+  const [actor] = await getDb().select({ id: users.id }).from(users).where(and(eq(users.id, ctx.userId), eq(users.active, true), eq(users.role, ctx.role),
+    ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId))).limit(1);
+  if (!actor || !["internal_admin", "internal_analyst"].includes(ctx.role)) throw new Error("Current native model author access changed.");
+  const artifact = await getArtifact(ctx, target.artifactId);
+  if (artifact.projectId === null) {
+    if (!artifact.owningChatId) throw new Error("Select an existing owned persistent terminal Chat.");
+    await validateTerminalArtifactTarget(ctx, artifact.owningChatId, { artifactId: target.artifactId, version: target.baseVersion, contentHash: target.baseHash }, signal);
+  } else {
+    await getProject(ctx, artifact.projectId);
+    if (artifact.ownerUserId !== ctx.userId || artifact.status !== "active" || artifact.headVersion !== target.baseVersion) throw new Error("Terminal Artifact changed; reopen its current owned revision.");
+  }
+  const version = await getArtifactVersion(ctx, artifact.id, target.baseVersion);
+  if (version.contentHash !== target.baseHash) throw new Error("Terminal Artifact native target hash changed.");
+  const content = artifactContentSchema.parse(version.content);
+  const state = content.kind === "screen" ? readTerminalScreenState(content.state) : null;
+  if (!state || hashLedgerValue({ ...state, panelState: {} }) !== hashLedgerValue({ ...target.authoredState, panelState: {} })) throw new Error("Native calculation cannot change terminal subject, source, scenario or time posture.");
+  for (const ref of [...version.sourceRefs, ...(version.dependencyRefs ?? [])]) {
+    if (!ref.startsWith("entitlement-policy:")) continue;
+    const policy = await getEntitlementPolicyById(ref.slice("entitlement-policy:".length));
+    const now = new Date();
+    if (!policy || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now || !policy.permittedUses.includes("display")) throw new Error("Current rights no longer permit this terminal source.");
+  }
+  assertNotAborted(signal);
+}
+
+/** Admit actual immutable source values, never source IDs supplied only as declarations. */
+export async function admitTerminalExecutionSources(ctx: TenantContext, provenance: ResolvedAdvancedQuantInputProvenance, parameters: Record<string, unknown>, db: Pick<DrizzleDb, "select"> = getDb(), lock = false, requiredUses: readonly string[] = ["display", "model_input", "derived_output"], modelPath?: string): Promise<string[]> {
+  if (provenance.dataClassification === "manual" || provenance.dataClassification === "synthetic") return [];
+  if (provenance.dataClassification === "model_derived") throw new Error("A model-derived native run requires an admitted persisted upstream model adapter.");
+  if (!modelPath) throw new Error("Source-bound native runs require the selected engine input contract.");
+  if (!lock && requiredUses.includes("model_input")) await requirePythonInputFields(`/advanced/${modelPath}`, (provenance.sourceBindings ?? []).flatMap(binding => binding.field === "manual-import" ? Object.keys(parameters) : [binding.field.split(".")[0]]));
+  const refs: string[] = [];
+  for (const binding of provenance.sourceBindings ?? []) {
+    const metadataQuery = db.select({ id: datasetSnapshots.id, organizationId: datasetSnapshots.organizationId, createdByUserId: datasetSnapshots.createdByUserId,
+      provider: datasetSnapshots.provider, dataClass: datasetSnapshots.dataClass, contentHash: datasetSnapshots.contentHash,
+      entitlementPolicyId: datasetSnapshots.entitlementPolicyId, availableAt: datasetSnapshots.availableAt, expiresAt: datasetSnapshots.expiresAt }).from(datasetSnapshots).where(eq(datasetSnapshots.id, binding.snapshot.id));
+    const [source] = await (lock ? metadataQuery.for("share") : metadataQuery).limit(1);
+    const now = new Date();
+    if (!source || !canAccessDatasetSnapshot(source, ctx) || source.contentHash !== binding.snapshot.contentHash || source.provider !== binding.provider
+      || source.availableAt > now || source.expiresAt !== null && source.expiresAt <= now) throw new Error("Native source snapshot is unavailable or outside the current tenant.");
+    const policy = source.entitlementPolicyId ? await getEntitlementPolicyById(source.entitlementPolicyId, db, lock) : null;
+    if (!policy || policy.provider !== source.provider || policy.dataClass !== source.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now
+      || policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_")
+      || !requiredUses.every(use => policy.permittedUses.includes(use))) throw new Error("Current source rights do not permit this native calculation and retained result.");
+    if (binding.transformations.length || provenance.transformations.length) throw new Error("Source transformations require an explicit admitted engine input adapter.");
+    const [snapshot] = await db.select({ payload: datasetSnapshots.payload, lineage: datasetSnapshots.lineage, provider: datasetSnapshots.provider }).from(datasetSnapshots).where(eq(datasetSnapshots.id, source.id)).limit(1);
+    if (!snapshot || hashLedgerValue({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) !== source.contentHash) throw new Error("Native source content does not match its immutable hash.");
+    const parts = binding.field.split(".");
+    if (parts.some(part => ["__proto__", "prototype", "constructor"].includes(part))) throw new Error("Unsafe native source field.");
+    const read = (value: unknown) => parts.reduce<unknown>((next, key) => next && typeof next === "object" && Object.hasOwn(next, key) ? (next as Record<string, unknown>)[key] : undefined, value);
+    const sourceValue = binding.field === "manual-import" ? snapshot.payload : read(snapshot.payload);
+    const inputValue = binding.field === "manual-import" ? parameters : read(parameters);
+    if (sourceValue === undefined || inputValue === undefined || hashLedgerValue(sourceValue) !== hashLedgerValue(inputValue)) throw new Error("Native source fields do not match actual engine inputs; use an admitted transformation adapter.");
+    refs.push(`dataset-snapshot:${source.id}`, `dataset-content-sha256:${source.contentHash}`, `entitlement-policy:${policy.id}`);
+  }
+  if (!refs.length) throw new Error("Source-bound native execution requires admitted immutable inputs.");
+  return [...new Set(refs)];
 }
 export async function updateTerminalArtifact(ctx: TenantContext, chatId: number, raw: unknown, signal: AbortSignal) {
   const input = terminalArtifactUpdateSchema.parse(raw);

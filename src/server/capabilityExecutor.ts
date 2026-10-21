@@ -25,7 +25,7 @@ export type CapabilityHandler = (
 export type AdvancedQuantRunner = (
   path: AdvancedQuantPath,
   input: unknown,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; userId?: number },
 ) => Promise<AdvancedQuantExecution>;
 
 export class CapabilityExecutionError extends Error {
@@ -161,7 +161,7 @@ export function createDefaultCapabilityExecutor(options: {
   for (const entry of ALL_ADVANCED_QUANT) {
     const path = advancedQuantPathForCapability(entry.id);
     if (!path || !registry.has(entry.id)) continue;
-    executor.register(entry.id, (input, context) => runAdvancedQuant(path, input, { signal: context.signal }));
+    executor.register(entry.id, (input, context) => runAdvancedQuant(path, input, { signal: context.signal, userId: context.userId }));
   }
 
   return executor;

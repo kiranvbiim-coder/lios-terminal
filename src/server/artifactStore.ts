@@ -1,4 +1,7 @@
 import { bindTerminalArtifactIdentity } from "./terminalArtifactIdentity";
+import type { AdvancedQuantExecution } from "./advancedQuantExecution";
+import { terminalExecutionTargetSchema, readTerminalScreenState, type TerminalExecutionTarget } from "@shared/terminalArtifact";
+import { advancedQuantRunReceiptSchema } from "@shared/quantModelRegistry";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { and, asc, desc, eq, isNull, isNotNull } from "drizzle-orm";
@@ -14,6 +17,7 @@ import {
   projectSessions,
   type ProjectArtifact,
   type ProjectArtifactProposal,
+  users,
   type ProjectArtifactReference,
   type ProjectArtifactVersion,
 } from "@shared/schema";
@@ -483,6 +487,19 @@ export async function getArtifact(ctx: ArtifactReadContext, artifactId: string):
   return artifact;
 }
 
+async function admitNativeTerminalRead(ctx: ArtifactReadContext, row: ProjectArtifactVersion): Promise<void> {
+  const content = artifactContentSchema.parse(row.content);
+  if (content.kind !== "screen" || !content.state.terminalExecutions) return;
+  const [actor] = await getDb().select({ role: users.role }).from(users).where(and(eq(users.id, ctx.userId), eq(users.active, true),
+    ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId))).limit(1);
+  if (!actor) throw new Error("Current native result reader access changed.");
+  const { admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+  for (const record of Object.values(content.state.terminalExecutions as Record<string, unknown>)) {
+    const receipt = advancedQuantRunReceiptSchema.parse((record as Record<string, unknown>).receipt);
+    await admitTerminalExecutionSources({ ...ctx, role: actor.role }, receipt.inputProvenance, receipt.parameters, getDb(), false, ["display", "derived_output"], receipt.modelPath);
+  }
+}
+
 export async function getArtifactVersion(
   ctx: ArtifactReadContext,
   artifactId: string,
@@ -495,6 +512,7 @@ export async function getArtifactVersion(
     .limit(1);
   if (!row) throw new Error("Artifact version not found.");
   artifactContentSchema.parse(row.content);
+  await admitNativeTerminalRead(ctx, row);
   return row;
 }
 
@@ -551,9 +569,11 @@ export async function listOwnedArtifacts(
 
 export async function listArtifactVersions(ctx: TenantContext, artifactId: string): Promise<ProjectArtifactVersion[]> {
   await getArtifact(ctx, artifactId);
-  return getDb().select().from(projectArtifactVersions)
+  const rows = await getDb().select().from(projectArtifactVersions)
     .where(eq(projectArtifactVersions.artifactId, artifactId))
     .orderBy(desc(projectArtifactVersions.version));
+  for (const row of rows) await admitNativeTerminalRead(ctx, row);
+  return rows;
 }
 
 /** Bounded native history discovery never loads retained work bodies merely to list version identities. */
@@ -639,6 +659,7 @@ async function createArtifactRecord(
   const owningChatId = input.projectId === null ? input.owningChatId ?? null : null;
   const content = await bindTerminalArtifactIdentity(artifactContentSchema.parse(input.content));
   if (content.kind === "spreadsheet") await validateInitialSpreadsheetLineage(ctx, input.projectId, content, owningChatId);
+  if (content.kind === "screen" && content.state.terminalExecutions !== undefined) throw new Error("Terminal execution records must originate from an owned native engine run.");
   assertArtifactContentSafe(content);
   assertResearchClaimRefsSafe(content);
   const origin = artifactOriginSchema.parse(input.origin ?? "direct");
@@ -945,6 +966,43 @@ async function validateModelMaintenanceWrite(ctx: TenantContext, artifact: Proje
   return next;
 }
 
+const terminalEngineWrites = new WeakMap<object, { kind: "execution" | "restore"; userId: number; artifactId: string; baseVersion: number; hash: string }>();
+
+/** The original native executor supplies the result; P4 remains the only immutable result store. */
+export async function createTerminalArtifactEngineVersion(ctx: TenantContext, rawTarget: TerminalExecutionTarget, execution: AdvancedQuantExecution) {
+  const target = terminalExecutionTargetSchema.parse(rawTarget);
+  const { isOwnedNativeAdvancedExecution } = await import("./advancedQuantExecution");
+  if (!isOwnedNativeAdvancedExecution(execution, ctx.userId)) throw new Error("Terminal results require an actual native execution owned by the current actor.");
+  const { validateTerminalExecutionTarget, admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+  await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+  const artifact = await getArtifact(ctx, target.artifactId);
+  if (artifact.ownerUserId !== ctx.userId || artifact.status !== "active" || artifact.headVersion !== target.baseVersion) throw new Error("Terminal Artifact changed before native result retention.");
+  const base = await getArtifactVersion(ctx, target.artifactId, target.baseVersion);
+  if (base.contentHash !== target.baseHash) throw new Error("Terminal native result target hash changed.");
+  const before = artifactContentSchema.parse(base.content);
+  const terminal = before.kind === "screen" ? readTerminalScreenState(before.state) : null;
+  if (before.kind !== "screen" || !terminal) throw new Error("Native execution requires the selected original terminal screen.");
+  if (hashLedgerValue({ ...terminal, panelState: {} }) !== hashLedgerValue({ ...target.authoredState, panelState: {} })) throw new Error("Native execution cannot silently change terminal source, subject, scenario or time posture.");
+  const records = before.state.terminalExecutions;
+  if (records !== undefined && (!records || typeof records !== "object" || Array.isArray(records))) throw new Error("Saved terminal execution records are invalid.");
+  const currentRecords = { ...(records as Record<string, unknown> | undefined), [target.slot]: execution.response };
+  const content = { ...before, state: { ...before.state, terminal: target.authoredState, terminalExecutions: currentRecords } };
+  const proof = {};
+  terminalEngineWrites.set(proof, { kind: "execution", userId: ctx.userId, artifactId: artifact.id, baseVersion: base.version, hash: contentHash(content) });
+  const refs = base.sourceRefs.filter(ref => !/^advanced-quant-(?:run|input-sha256|output-sha256):/.test(ref));
+  for (const record of Object.values(currentRecords)) {
+    const receipt = advancedQuantRunReceiptSchema.parse((record as Record<string, unknown>).receipt);
+    refs.push(`advanced-quant-run:${receipt.runId}`, `advanced-quant-input-sha256:${receipt.inputSnapshotHash}`, `advanced-quant-output-sha256:${receipt.outputSnapshotHash}`);
+    refs.push(...await admitTerminalExecutionSources(ctx, receipt.inputProvenance, receipt.parameters, undefined, false, undefined, receipt.modelPath));
+  }
+  try {
+    return await createArtifactVersion(ctx, { artifactId: artifact.id, baseVersion: base.version, content, sourceRefs: [...new Set(refs)],
+      dependencyRefs: [...new Set([...(base.dependencyRefs ?? []), ...refs.filter(ref => /^(?:entitlement-policy|dataset-snapshot|dataset-content-sha256):/.test(ref))])],
+      trustManifest: null, actorType: "system", requestId: execution.receipt.runId,
+      note: `Original native ${execution.receipt.modelPath} run retained on the same terminal Artifact. ${execution.receipt.dataClassification} input provenance; no external rights or stored execution-receipt ID is fabricated.` }, undefined, proof);
+  } finally { terminalEngineWrites.delete(proof); }
+}
+
 export async function createArtifactVersion(
   ctx: TenantContext,
   input: {
@@ -964,6 +1022,7 @@ export async function createArtifactVersion(
     action?: ArtifactAction;
   },
   maintenanceProof?: ArtifactModelWriteProof,
+  terminalEngineProof?: object,
 ): Promise<ProjectArtifactVersion> {
   const artifact = await getArtifact(ctx, input.artifactId);
   let content = await bindTerminalArtifactIdentity(artifactContentSchema.parse(input.content));
@@ -974,11 +1033,17 @@ export async function createArtifactVersion(
   assertArtifactRefsSafe(input.dependencyRefs ?? [], "dependencyRefs");
   const base = await getArtifactVersion(ctx, input.artifactId, input.baseVersion);
   const baseContent = artifactContentSchema.parse(base.content);
+  const terminalProof = terminalEngineProof ? terminalEngineWrites.get(terminalEngineProof) : null;
+  const nativeWriteAuthorized = Boolean(terminalProof && terminalProof.userId === ctx.userId && terminalProof.artifactId === artifact.id && terminalProof.baseVersion === input.baseVersion && terminalProof.hash === contentHash(content));
+  if (content.kind === "screen" && content.state.terminalExecutions !== undefined && (baseContent.kind !== "screen" || baseContent.state.terminal === undefined)) throw new Error("Terminal execution records require an existing original terminal screen and native run.");
   if (content.kind === "screen" && baseContent.kind === "screen" && baseContent.state.terminal !== undefined) {
-    if (hashLedgerValue(content.state.recordedAnalysis ?? null) !== hashLedgerValue(baseContent.state.recordedAnalysis ?? null)) throw new Error("Recorded terminal calculations are immutable; recompute through the canonical engine owner.");
+    if (!nativeWriteAuthorized && hashLedgerValue(content.state.recordedAnalysis ?? null) !== hashLedgerValue(baseContent.state.recordedAnalysis ?? null)) throw new Error("Recorded terminal calculations are immutable; recompute through the canonical engine owner.");
     const nextTerminal = content.state.terminal as { marketMode?: unknown; asOf?: unknown } | undefined;
     const beforeTerminal = baseContent.state.terminal as { marketMode?: unknown; asOf?: unknown };
     if (!nextTerminal || nextTerminal.marketMode !== beforeTerminal.marketMode || nextTerminal.asOf !== beforeTerminal.asOf) throw new Error("Terminal presentation edits cannot mint or relabel market snapshots.");
+    if (hashLedgerValue(content.state.terminalExecutions ?? null) !== hashLedgerValue(baseContent.state.terminalExecutions ?? null)) {
+      if (!nativeWriteAuthorized) throw new Error("Terminal native results are immutable; execute through the original engine owner.");
+    }
   }
   if (maintenanceProof) {
     if (content.kind !== "spreadsheet") throw new Error("Model maintenance cannot change Artifact kind.");
@@ -1009,6 +1074,18 @@ export async function createArtifactVersion(
   const db: any = getDb();
   return db.transaction(async (tx: any) => {
     await validateArtifactOwner(ctx, artifact, tx);
+    if (nativeWriteAuthorized) {
+      const [actor] = await tx.select({ id: users.id }).from(users).where(and(eq(users.id, ctx.userId), eq(users.active, true), eq(users.role, ctx.role),
+        ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId))).for("share").limit(1);
+      if (!actor || terminalProof?.kind === "execution" && !["internal_admin", "internal_analyst"].includes(ctx.role)) throw new Error("Current native model author access changed before retention.");
+      if (content.kind === "screen" && content.state.terminalExecutions && typeof content.state.terminalExecutions === "object") {
+        const { admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+        for (const record of Object.values(content.state.terminalExecutions)) {
+          const receipt = advancedQuantRunReceiptSchema.parse((record as Record<string, unknown>).receipt);
+          await admitTerminalExecutionSources(ctx, receipt.inputProvenance, receipt.parameters, tx, true, terminalProof?.kind === "restore" ? ["display", "derived_output"] : undefined, receipt.modelPath);
+        }
+      }
+    }
     const [advanced] = await tx.update(projectArtifacts).set({
       headVersion: nextVersion,
       updatedAt: now,
@@ -1450,6 +1527,7 @@ export async function createArtifactProposal(
   let proposed = input.type === "spreadsheet_ai_diff"
     ? applySpreadsheetDiffs(baseContent, input.diffs ?? [])
     : applyArtifactPatch(baseContent, input.patch ?? {});
+  if (proposed.kind === "screen" && (proposed.state.terminal !== undefined || proposed.state.terminalExecutions !== undefined)) throw new Error("Generic proposals cannot mint terminal execution state.");
   if (proposed.kind === "spreadsheet") proposed = guardSpreadsheetCellLineage(baseContent.kind === "spreadsheet" ? baseContent : null, proposed);
   assertArtifactContentSafe(proposed);
   assertResearchClaimRefsSafe(proposed);
@@ -1538,6 +1616,7 @@ export async function decideArtifactProposal(ctx: TenantContext, proposalId: str
   let proposedContent = proposal.proposalType === "spreadsheet_ai_diff"
     ? applySpreadsheetDiffs(baseContent, proposal.diffs as unknown as SpreadsheetCellDiff[])
     : applyArtifactPatch(baseContent, proposal.patch);
+  if (proposedContent.kind === "screen" && (proposedContent.state.terminal !== undefined || proposedContent.state.terminalExecutions !== undefined)) throw new Error("Generic proposals cannot mint terminal execution state.");
   if (proposedContent.kind === "spreadsheet") proposedContent = guardSpreadsheetCellLineage(baseContent.kind === "spreadsheet" ? baseContent : null, proposedContent);
   assertArtifactContentSafe(proposedContent);
   assertResearchClaimRefsSafe(proposedContent);
@@ -1635,9 +1714,14 @@ export async function restoreArtifactRevision(ctx: TenantContext, artifactId: st
   const artifact = await getArtifact(ctx, artifactId);
   if (targetVersion >= baseVersion) throw new Error("Select an earlier revision to restore.");
   const revision = await getArtifactVersion(ctx, artifact.id, targetVersion);
-  return createArtifactVersion(ctx, {
+  const restoredContent = artifactContentSchema.parse(revision.content);
+  const proof = {};
+  if (restoredContent.kind === "screen" && restoredContent.state.terminal !== undefined) {
+    terminalEngineWrites.set(proof, { kind: "restore", userId: ctx.userId, artifactId: artifact.id, baseVersion, hash: contentHash(restoredContent) });
+  }
+  try { return await createArtifactVersion(ctx, {
     artifactId: artifact.id, baseVersion,
-    content: artifactContentSchema.parse(revision.content),
+    content: restoredContent,
     adapterId: revision.adapterId,
     sourceRefs: revision.sourceRefs,
     executionReceiptIds: revision.executionReceiptIds,
@@ -1647,7 +1731,7 @@ export async function restoreArtifactRevision(ctx: TenantContext, artifactId: st
     refreshSpec: revision.refreshSpec ? artifactRefreshSpecSchema.parse(revision.refreshSpec) : null,
     note: `Restored revision ${targetVersion} as a new version after v${baseVersion}`,
     action: "undo",
-  });
+  }, undefined, proof); } finally { terminalEngineWrites.delete(proof); }
 }
 
 export async function undoArtifactHead(ctx: TenantContext, artifactId: string) {

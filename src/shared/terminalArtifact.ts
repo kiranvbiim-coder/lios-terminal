@@ -21,6 +21,19 @@ export const terminalScreenStateSchema = z.object({
 }).strict();
 export type TerminalScreenState = z.infer<typeof terminalScreenStateSchema>;
 
+/** Immutable target plus authored inputs captured by an explicit original-panel Run action. */
+export const terminalExecutionTargetSchema = z.object({
+  artifactId: z.string().trim().min(1).max(240),
+  baseVersion: z.number().int().positive(),
+  baseHash: z.string().regex(/^[a-f0-9]{64}$/),
+  slot: z.string().trim().min(1).max(240).refine(value => !["__proto__", "constructor", "prototype"].includes(value)),
+  authoredState: terminalScreenStateSchema,
+}).strict();
+export type TerminalExecutionTarget = z.infer<typeof terminalExecutionTargetSchema>;
+export interface TerminalExecutionVersion {
+  artifactId: string; baseVersion: number; version: number; contentHash: string;
+}
+
 export function initialTerminalScreenState(symbol: string | null, sourceScope: TerminalScreenState["sourceScope"] = "auto"): TerminalScreenState {
   return terminalScreenStateSchema.parse({ schemaVersion: 1, subject: { symbol }, sourceScope });
 }

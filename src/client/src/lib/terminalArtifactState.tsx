@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useMemo, useCallback, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { decodeTerminalPanelValue, encodeTerminalPanelValue, type TerminalScreenState } from "@shared/terminalArtifact";
+import { decodeTerminalPanelValue, encodeTerminalPanelValue, type TerminalScreenState, type TerminalExecutionTarget, type TerminalExecutionVersion } from "@shared/terminalArtifact";
 import type { ChatTerminalContext, ChatTerminalControls } from "./chatTerminalContext";
 import type { WorkspaceAudience } from "./featureRegistry";
 
@@ -18,6 +18,9 @@ interface PanelContext {
   setEditing: (key: string, editing: boolean) => void;
   onAsk?: (id: string, title: string, stagedPrompt?: string) => void;
   target?: TerminalArtifactTarget;
+  executions?: Record<string, unknown>;
+  captureExecution?: (slot: string) => TerminalExecutionTarget;
+  completeExecution?: (version: TerminalExecutionVersion, submitted: TerminalExecutionTarget) => Promise<void>;
 }
 const PanelStateContext = createContext<PanelContext | null>(null);
 export const TerminalArtifactStateProvider = PanelStateContext.Provider;
