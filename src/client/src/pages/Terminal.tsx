@@ -453,6 +453,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
 
   useEffect(() => subscribeExperienceSurface(surface => {
     if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
+    // A later unrelated Workbench visit must not inherit a previous Chat's return target.
+    if (surface !== "workbench") chatWorkbenchOriginRef.current = null;
     setExperienceSurfaceState(surface);
   }), []);
   const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
