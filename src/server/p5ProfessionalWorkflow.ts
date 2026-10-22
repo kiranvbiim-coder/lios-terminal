@@ -248,7 +248,8 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
       addIntent(intents, "portfolio_risk", "The request asks for deterministic portfolio/risk analytics.", { activeArtifactRef: artifactRef });
     }
     // "Explain how inflation affects rates" is a concept question for the AI, not a request to run an engine.
-    const conceptQuestion = /^\s*(?:explain|why|what (?:is|are)|how (?:does|do|is|are))\b/i.test(message) && !/\d/.test(message) && !artifactRef;
+    const conceptQuestion = /\b(?:explain|why|what(?:'s| is| are)|how (?:does|do|is|are)|describe|difference between)\b/i.test(message) && !/\d/.test(message) && !artifactRef
+      && !/\b(?:run|calculate|compute|solve|build|price|optimi[sz]e)\b/i.test(message);
     if (!conceptQuestion && /\b(?:fixed income|bond analytics|duration|convexity|yield to maturity|yield curve|credit spread|\boas\b)\b/i.test(message)) {
       addIntent(intents, "fixed_income", "The request asks for deterministic fixed-income analytics.", { activeArtifactRef: artifactRef });
     }

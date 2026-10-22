@@ -19,6 +19,9 @@ export function classifyAskLiosIntent(message: string): AskLiosIntent {
   const trimmed = message.trim();
   if (!trimmed) return { kind: "chat" };
   if (/^(explain|define|teach|what does|how does)\b/i.test(trimmed)) return { kind: "chat" };
+  // A conceptual question with no explicit figures and no command verb is a request to understand, not to run an engine.
+  if (/\b(what(?:'s| is| are| was)|why|describe|difference between|meaning of|tell me about)\b/i.test(trimmed)
+    && !/\d/.test(trimmed) && !/\b(run|calculate|compute|solve|build|show|price|optimi[sz]e)\b/i.test(trimmed)) return { kind: "chat" };
   for (const hint of ENGINE_HINTS) {
     if (hint.pattern.test(trimmed)) return { kind: "compute", engineId: hint.engineId, view: hint.view };
   }

@@ -34,6 +34,9 @@ test("ordinary explanatory finance questions remain chat instead of being over-r
   assert.deepEqual(classifyAskLiosIntent("Show the option chain"), { kind: "chat" });
   assert.deepEqual(classifyAskLiosIntent("Explain fixed income"), { kind: "chat" });
   assert.deepEqual(classifyAskLiosIntent("Explain WACC"), { kind: "chat" });
+  assert.deepEqual(classifyAskLiosIntent("In two sentences, what is bond duration?"), { kind: "chat" }, "A concept question is answered, not captured by an engine.");
+  assert.equal(classifyAskLiosIntent("What is the duration of a 10 year 5% bond").kind, "compute", "Explicit figures still reach the deterministic engine.");
+  assert.equal(classifyAskLiosIntent("Calculate what the DV01 is").kind, "compute", "A command verb keeps engine routing.");
 });
 
 test("deterministic delegation is governed, capability-invoking, and non-mutating", () => {
