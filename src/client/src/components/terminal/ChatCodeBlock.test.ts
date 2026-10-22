@@ -27,7 +27,8 @@ test("streaming snippets are labelled generating and cannot be copied prematurel
 
 test("untrusted code and language remain escaped, inert text, never HTML", () => {
   const markup = render("<script>alert(1)</script>", "<img onerror=x>");
-  assert.doesNotMatch(markup, /<script\b|<img\b|\sonerror=/i);
+  assert.doesNotMatch(markup, /<script\b|<img\b/i, "literal HTML elements must never render");
+  assert.doesNotMatch(markup, /\sonerror="[^"]*"/i, "no executable attributes on real elements");
   assert.match(markup, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(markup, /&lt;img onerror=x&gt;/);
 });
