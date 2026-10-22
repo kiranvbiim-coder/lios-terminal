@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { readIntelligenceObjectDrag } from "@/lib/terminalObjectDnD";
 import type { PaneId, PaneState, WorkspaceState } from "@/lib/terminalTypes";
+import { appendWorkspaceSlot, removeWorkspaceSlot, workspaceFromSlots, type WorkspaceSlot } from "@/lib/workspaceComposerModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 
 interface Props {
@@ -12,24 +13,11 @@ interface Props {
   onClose: () => void;
 }
 
-interface Slot { objectId: string; pane: PaneState }
-
 const PANE_IDS: PaneId[] = ["primary", "secondary", "tertiary", "quaternary"];
-
-function workspaceFromSlots(slots: readonly Slot[]): WorkspaceState | null {
-  if (!slots.length) return null;
-  return {
-    primary: slots[0].pane,
-    secondary: slots[1]?.pane ?? null,
-    tertiary: slots[2]?.pane ?? null,
-    quaternary: slots[3]?.pane ?? null,
-    focusedPane: "primary",
-  };
-}
 
 export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose }: Props) {
   const [objects, setObjects] = useState<IntelligenceObject[]>(() => loadIntelligenceObjects());
-  const [slots, setSlots] = useState<Slot[]>(() => {
+  const [slots, setSlots] = useState<WorkspaceSlot[]>(() => {
     const panes = [workspace.primary, workspace.secondary, workspace.tertiary ?? null, workspace.quaternary ?? null].filter(Boolean) as PaneState[];
     return panes.map((pane, index) => ({ objectId: `workspace:${index}`, pane }));
   });
@@ -50,11 +38,9 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
       setNotice("All four panes are occupied. Remove one before adding another.");
       return;
     }
-    const candidate: Slot = { objectId: object.id, pane: { view: object.view, symbol: object.symbol ?? "" } };
+    const candidate: WorkspaceSlot = { objectId: object.id, pane: { view: object.view, symbol: object.symbol ?? "" } };
     // Do not silently evict a pane on a fifth selection or drop.
-    setSlots((current) => current.length >= PANE_IDS.length || current.some((slot) => slot.objectId === object.id)
-      ? current
-      : [...current, candidate]);
+    setSlots((current) => appendWorkspaceSlot(current, candidate));
     setNotice("Added an object to the workspace.");
   };
 
@@ -77,7 +63,7 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent
         className="lios-v4-overlay flex h-[min(90dvh,820px)] w-[calc(100vw-24px)] max-w-6xl flex-col gap-0 overflow-hidden rounded-xl border-border bg-[#090909] p-0 text-foreground shadow-2xl"
-        onOpenAutoFocus={(event) => { event.preventDefault(); searchRef.current?.focus(); }}
+        onOpenAutoFocus={(event) => { if (searchRef.current) { event.preventDefault(); searchRef.current.focus(); } }}
       >
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-4 pr-14 text-left sm:px-5">
           <div className="flex items-start gap-3">
@@ -111,7 +97,7 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
                       <span className="font-ui text-xs font-semibold capitalize text-muted-foreground">{paneId} pane</span>
                       {slot && (
                         <button type="button" onClick={() => {
-                            setSlots((current) => current.filter((_item, itemIndex) => itemIndex !== index));
+                            setSlots((current) => removeWorkspaceSlot(current, index));
                             setNotice("Removed a pane from the workspace.");
                           }}
                           aria-label={`Remove ${capability?.label ?? paneId} from ${paneId} pane`}
