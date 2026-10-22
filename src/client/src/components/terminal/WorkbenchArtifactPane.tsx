@@ -23,10 +23,20 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
   const versionCallback = useRef(onVersionChange);
   versionCallback.current = onVersionChange;
   useEffect(() => {
-    setRevision(current => advanceArtifactWorkbenchRevision(current, { type: "context", version: context.version, dirty: dirty.current }));
+    const next = advanceArtifactWorkbenchRevision(revisionRef.current, { type: "context", version: context.version, dirty: dirty.current });
+    if (next !== revisionRef.current) {
+      revisionRef.current = next;
+      setRevision(next);
+    }
   }, [context.version]);
   const selectVersion = useCallback((version: number | null) => {
-    setRevision(current => advanceArtifactWorkbenchRevision(current, { type: "select", version }));
+    // Update the return guard before React commits the render. A fast Return
+    // click must never navigate to a prior revision while the new one loads.
+    const next = advanceArtifactWorkbenchRevision(revisionRef.current, { type: "select", version });
+    if (next !== revisionRef.current) {
+      revisionRef.current = next;
+      setRevision(next);
+    }
   }, []);
   const reportVersion = useCallback((version: number, artifactId: string) => {
     if (artifactId !== context.artifactId) return;
