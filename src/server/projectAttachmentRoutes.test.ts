@@ -486,6 +486,18 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   const promotedFile = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
   assert.equal(promotedFile.status, 200, "the original Quick file download must survive promotion");
   assert.equal(await promotedFile.text(), privatePayload);
+  const promotedChatFollowUp = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "Review this originally uploaded note after moving the Chat.",
+      sourceScope: "files", attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  assert.equal(promotedChatFollowUp.status, 200, await promotedChatFollowUp.text());
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1,
+    "promotion and further reuse must not duplicate the original file");
 
   // Original professional revisions must still work after promotion, using the
   // immutable original source and the existing version endpoint, not a new store.
