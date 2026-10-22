@@ -470,7 +470,7 @@ interface ArtifactPaneProps {
   artifactId: string;
   version?: number | null;
   onVersionChange?: (version: number | null) => void;
-  onDisplayedVersionChange?: (version: number, artifactId: string) => void;
+  onDisplayedVersionChange?: (version: number, artifactId: string, requestedVersion: number | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   projectId: number | null;
   owningChatId?: number | null;
@@ -599,7 +599,7 @@ function ArtifactPaneWorkspace({
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
-  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
+  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
     setExportPlan(null);
