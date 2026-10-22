@@ -166,6 +166,7 @@ import {
   recordP1ShellEvent,
   resolveComposerPersistenceTarget,
   saveComposerSourceScope,
+  sourceScopeForChatMode,
 } from "@/lib/p1Shell";
 import { recordP2ConversationEvent } from "@/lib/p2ConversationTelemetry";
 import { recordP3TrustManifest } from "@/lib/p3TrustTelemetry";
@@ -648,7 +649,7 @@ export default function ProjectExperienceShell({
 
   useEffect(() => {
     const scopedProjectId = chatMode === "project" ? selection.projectId : null;
-    setSourceScope(selectedTerminalScope ?? loadComposerSourceScope(scopedProjectId));
+    setSourceScope(sourceScopeForChatMode(chatMode, selectedTerminalScope ?? loadComposerSourceScope(scopedProjectId)));
   }, [chatMode, selection.projectId, conversationArtifactRef, selectedTerminalScope]);
 
   useEffect(() => {
@@ -913,6 +914,7 @@ export default function ProjectExperienceShell({
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false);
     selection.setChatId(null);
     setChatMode("temporary");
+    setSourceScope(sourceScopeForChatMode("temporary", loadComposerSourceScope(null)));
     setTemporaryMessages([]);
     temporaryWorkingContextRef.current = null;
     setStreaming("");
@@ -1469,6 +1471,10 @@ export default function ProjectExperienceShell({
   };
 
   const updateSourceScope = async (next: ConversationSourceScope) => {
+    if (sourceScopeForChatMode(chatMode, next) !== next) {
+      setLifecycleNotice("Temporary Chat supports Auto or Web sources only. Start a regular Chat to attach files or use My Data.");
+      return;
+    }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Wait for analytical state to save before changing its source posture."); return; }
     if (retainedScreen && terminalDetail.data) {
       const state = readTerminalScreenState(retainedScreen.state);
