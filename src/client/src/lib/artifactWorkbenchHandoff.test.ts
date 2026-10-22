@@ -256,7 +256,7 @@ test("recovered navigation never grants a second signed-in account the first acc
   });
 });
 
-test("restart recovery rejects stale, unrelated, modified, and corrupt layout snapshots", () => {
+test("restart recovery rejects unrelated, modified, future, and corrupt layout snapshots", () => {
   withRecoveryStorage((storage) => {
     const before = state(), opened = openArtifactWorkbench(before, context, null, null, false)!;
     saveArtifactWorkbenchRecovery("owner@example.com", opened.handoff);
@@ -272,9 +272,14 @@ test("restart recovery rejects stale, unrelated, modified, and corrupt layout sn
     crossChat.tabs[0].workspace.secondary!.artifact!.chatId = 999;
     assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", crossChat, "internal"), null);
     storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
-    const stale = JSON.parse(original);
-    stale.capturedAt -= 8 * 24 * 60 * 60 * 1_000;
-    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(stale));
+    const longLived = JSON.parse(original);
+    longLived.capturedAt -= 90 * 24 * 60 * 60 * 1_000;
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(longLived));
+    assert.ok(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"),
+      "an unchanged same-Artifact professional workspace must resume after months of inactivity");
+    const future = JSON.parse(original);
+    future.capturedAt = Date.now() + 120_000;
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(future));
     assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"), null);
     assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
     storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, "{corrupt-json");
@@ -298,5 +303,24 @@ test("restart return navigation cannot resurrect a restricted pane for a trial a
     assert.notEqual(recovered.priorTab.workspace.secondary?.view, "clientdata");
     assert.deepEqual(returnFromArtifactWorkbench(opened.state, recovered, context, false)?.state.tabs[0].workspace,
       recovered.priorTab.workspace);
+  });
+});
+
+
+test("Project Chat also recovers the original Workbench and the saved Artifact revision after desktop restart", () => {
+  withRecoveryStorage(() => {
+    const before = state();
+    const opened = openArtifactWorkbench(before, context, { grid: { id: "project-analysis" } }, null, false)!;
+    saveArtifactWorkbenchRecovery("project-owner@example.com", opened.handoff);
+    const reloaded = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    reloaded.tabs[0].workspace.secondary!.artifact!.version = 6;
+    const recovered = loadArtifactWorkbenchRecovery("project-owner@example.com", reloaded, "internal");
+    assert.ok(recovered);
+    const restored = returnFromArtifactWorkbench(reloaded, recovered, { ...context, version: 6 }, false)!;
+    assert.deepEqual(restored.context, { ...context, version: 6 });
+    assert.equal(restored.context.projectId, 17);
+    assert.equal(restored.context.chatId, 42);
+    assert.equal(restored.state.activeTabId, before.activeTabId);
+    assert.deepEqual(restored.state.tabs, before.tabs);
   });
 });
