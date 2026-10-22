@@ -366,8 +366,8 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                   <Input
                     type="email"
                     id={`${formId}-email`}
-                        autoComplete="email"
-                        placeholder="name@limuria.com"
+                    autoComplete="email"
+                    placeholder="name@limuria.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
