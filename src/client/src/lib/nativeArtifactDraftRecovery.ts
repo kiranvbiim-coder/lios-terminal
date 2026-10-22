@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { artifactContentSchema, type ArtifactContent } from "@shared/artifactContracts";
 import { getDesktopWorkspaceBridge, type ProtectedArtifactDraftIdentity, type ProtectedArtifactDraftSnapshot } from "./desktopWorkspace";
+import { apiRequest } from "./queryClient";
 
 export interface NativeArtifactDraftContext extends ProtectedArtifactDraftIdentity {
   baseVersion: number;
@@ -14,6 +15,30 @@ interface RecoveryState {
   notice: string | null;
 }
 const queues = new Map<string, Promise<unknown>>();
+const scopedGrants = new Map<string, { grant: string; expiresAt: number }>();
+
+/** The server authenticates P4 ownership and the exact immutable revision.
+ * A short-lived MAC capability is required by Electron for every local draft
+ * read, write or delete; the renderer's email string is NOT authorization. */
+async function authorizedDraftScope(context: NativeArtifactDraftContext) {
+  const key = nativeDraftRecoveryKey(context) + "\\0" + context.baseVersion + "\\0" + context.contentHash;
+  const existing = scopedGrants.get(key);
+  if (existing && existing.expiresAt > Date.now() + 10_000) {
+    return { ...context, grant: existing.grant };
+  }
+  const response = await apiRequest("POST",
+    `/api/artifacts/${encodeURIComponent(context.artifactId)}/native-draft-grant`,
+    { baseVersion: context.baseVersion, contentHash: context.contentHash });
+  const body: unknown = await response.json();
+  if (!body || typeof body !== "object") throw new Error("Native recovery permission is unavailable.");
+  const result = body as { grant?: unknown; expiresAt?: unknown };
+  if (typeof result.grant !== "string" || typeof result.expiresAt !== "number"
+      || !Number.isFinite(result.expiresAt) || result.expiresAt < Date.now() + 1_000) {
+    throw new Error("Native recovery permission is invalid.");
+  }
+  scopedGrants.set(key, { grant: result.grant, expiresAt: result.expiresAt });
+  return { ...context, grant: result.grant };
+}
 // Invalidate any scheduled or queued pre-save write when the canonical P4
 // revision has succeeded. Serialization alone does not cancel a late timer.
 const writeEpochs = new Map<string, number>();
@@ -35,13 +60,13 @@ function bridge() {
 export function nativeDraftRecoveryKey(identity: ProtectedArtifactDraftIdentity): string {
   return identity.owner.trim().toLowerCase() + "\0" + identity.artifactId;
 }
-export async function clearNativeArtifactDraft(identity: ProtectedArtifactDraftIdentity): Promise<void> {
+export async function clearNativeArtifactDraft(identity: NativeArtifactDraftContext): Promise<void> {
   const native = bridge();
   if (!native) return;
   const key = nativeDraftRecoveryKey(identity);
   writeEpochs.set(key, writeEpoch(key) + 1);
   await queueMutation(key, async () => {
-    await native.clearArtifactDraftRecovery!(identity);
+    await native.clearArtifactDraftRecovery!(await authorizedDraftScope(identity));
   });
 }
 /**
@@ -96,7 +121,7 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
           if (live) setState({ key, status: "disabled", candidate: null, notice: null });
           return;
         }
-        const candidate = await native.readArtifactDraftRecovery!(context);
+        const candidate = await native.readArtifactDraftRecovery!(await authorizedDraftScope(context));
         if (live) setState({ key, status: "ready", candidate, notice: null });
       } catch {
         if (live) setState({ key, status: "error", candidate: null, notice: "Encrypted draft recovery could not be read. Your saved Artifact is unchanged." });
@@ -133,7 +158,7 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
       if (scheduledEpoch !== writeEpoch(identityKey)) return;
       void queueMutation(identityKey, async () => {
         if (scheduledEpoch !== writeEpoch(identityKey)) return;
-        await native.writeArtifactDraftRecovery!({ ...context, content: draft });
+        await native.writeArtifactDraftRecovery!({ ...await authorizedDraftScope(context), content: draft });
       }).catch(() => setState(current => current.key === key
         ? { ...current, status: "error", notice: "Protected draft checkpoint failed. Save the Artifact revision to protect your work." }
         : current));
