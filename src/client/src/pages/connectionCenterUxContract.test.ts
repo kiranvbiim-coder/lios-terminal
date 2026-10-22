@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./DataConnectionCenter.tsx", import.meta.url), "utf8");
+const sourceCards = readFileSync(new URL("../components/panels/DataSourcesPanel.tsx", import.meta.url), "utf8");
 
 // Source-level guards only. Browser focus/keyboard, screen reader, narrow
 // viewport and packaged Desktop must be tested separately on exact PR head.
@@ -35,4 +36,15 @@ test("credential UI retains password masking and truthfully reports connection o
   assert.match(source, /No AI provider connected/);
   assert.match(source, /No data source connected yet/);
   assert.match(source, /onClick=\{handleEnterTerminal\}/);
+});
+
+test("connection removal requires confirmation in both Connection Center entry paths", () => {
+  assert.match(source, /data-testid="connection-remove-confirm"/);
+  assert.match(source, /setConfirmingRemoval\(true\)/);
+  assert.match(source, /return false;/);
+  assert.match(source, /Could not remove the saved connection/);
+  assert.match(sourceCards, /data-testid="source-remove-confirm"/);
+  assert.match(sourceCards, /setConfirmingRemoval\(true\)/);
+  assert.match(sourceCards, /onDeleteConnection\(item\.connectionId!\)/);
+  assert.match(sourceCards, /min-h-10/);
 });
