@@ -1206,7 +1206,7 @@ export default function ProjectExperienceShell({
         }
         traceOwnerChatRef.current = chatId;
 
-        if (chatMode !== "temporary" && pendingAttachmentFiles.length && !override?.continuationOf) {
+        if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
             const attachment = await uploadProjectChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file);
             attachmentsForRequest = [...attachmentsForRequest, attachment];
