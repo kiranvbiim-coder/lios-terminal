@@ -42,7 +42,7 @@ export function matchesNativeArtifactDraft(
   candidate: ProtectedArtifactDraftSnapshot, context: NativeArtifactDraftContext, expectedKind: string,
 ): boolean {
   return candidate.baseVersion === context.baseVersion && candidate.contentHash === context.contentHash
-    && candidate.content && typeof candidate.content === "object"
+    && candidate.content !== null && typeof candidate.content === "object"
     && (candidate.content as ArtifactContent).kind === expectedKind
     && artifactContentSchema.safeParse(candidate.content).success;
 }
