@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import ConversationTrustPanel from "./ConversationTrustPanel";
+import ResearchSourceList from "./ResearchSourceList";
+import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
@@ -162,6 +164,7 @@ export default function ConversationRuntimeTrace({
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
   const trust = [...events].reverse().find((event) => event.type === "trust");
   const summary = summarizeRuntimeTrace(events, busy);
+  const recordedSources = collectCitationSources(events);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -199,7 +202,7 @@ export default function ConversationRuntimeTrace({
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(approval || governedApproval);
-  const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0;
+  const canShowWork = !!plan || trust?.type === "trust" || recordedSources.length > 0;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -266,7 +269,7 @@ export default function ConversationRuntimeTrace({
         {workVisible && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-[12px] text-muted-foreground" data-testid="trace-work-summary">
             {stepCount > 0 && <span>{stepCount} step{stepCount === 1 ? "" : "s"}</span>}
-            {summary.sources.length > 0 && <span>{summary.sources.length} source{summary.sources.length === 1 ? "" : "s"}</span>}
+            {recordedSources.length > 0 && <span>{recordedSources.length} source{recordedSources.length === 1 ? "" : "s"}</span>}
             {duration && <span>{duration}</span>}
             {requestId && <span className="font-terminal">Run {requestId}</span>}
             {onOpenTerminal && (
@@ -282,14 +285,7 @@ export default function ConversationRuntimeTrace({
           </div>
         )}
 
-        {workVisible && summary.sources.length > 0 && (
-          <div className="flex flex-wrap gap-1.5" data-testid="trace-sources" aria-label="Sources used">
-            {summary.sources.slice(0, 6).map((source) => (
-              <span key={source} className="rounded-full border border-border/55 bg-white/[0.02] px-2.5 py-1 font-ui text-[12px] text-foreground/85">{source}</span>
-            ))}
-            {summary.sources.length > 6 && <span className="px-1 py-1 font-ui text-[12px] text-muted-foreground">+{summary.sources.length - 6} more</span>}
-          </div>
-        )}
+        {workVisible && recordedSources.length > 0 && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
 
         {workVisible && !!capabilities.length && (
           <div className="border-t border-border/45 pt-2.5" data-p2-capability-resolution="true">
