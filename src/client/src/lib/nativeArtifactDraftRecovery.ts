@@ -14,6 +14,10 @@ interface RecoveryState {
   notice: string | null;
 }
 const queues = new Map<string, Promise<unknown>>();
+// Invalidate any scheduled or queued pre-save write when the canonical P4
+// revision has succeeded. Serialization alone does not cancel a late timer.
+const writeEpochs = new Map<string, number>();
+function writeEpoch(key: string): number { return writeEpochs.get(key) ?? 0; }
 function queueMutation<T>(key: string, action: () => Promise<T>): Promise<T> {
   const previous = queues.get(key) ?? Promise.resolve();
   const current = previous.catch(() => undefined).then(action);
@@ -34,7 +38,9 @@ export function nativeDraftRecoveryKey(identity: ProtectedArtifactDraftIdentity)
 export async function clearNativeArtifactDraft(identity: ProtectedArtifactDraftIdentity): Promise<void> {
   const native = bridge();
   if (!native) return;
-  await queueMutation(nativeDraftRecoveryKey(identity), async () => {
+  const key = nativeDraftRecoveryKey(identity);
+  writeEpochs.set(key, writeEpoch(key) + 1);
+  await queueMutation(key, async () => {
     await native.clearArtifactDraftRecovery!(identity);
   });
 }
@@ -96,8 +102,12 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
     if (!native) return;
     // Keep writes serialized with delete-on-save; never let a delayed write
     // resurrect an already-committed draft after canonical P4 persistence.
+    const identityKey = nativeDraftRecoveryKey(context);
+    const scheduledEpoch = writeEpoch(identityKey);
     const timer = setTimeout(() => {
-      void queueMutation(nativeDraftRecoveryKey(context), async () => {
+      if (scheduledEpoch !== writeEpoch(identityKey)) return;
+      void queueMutation(identityKey, async () => {
+        if (scheduledEpoch !== writeEpoch(identityKey)) return;
         await native.writeArtifactDraftRecovery!({ ...context, content: draft });
       }).catch(() => setState(current => current.key === key
         ? { ...current, status: "error", notice: "Protected draft checkpoint failed. Save the Artifact revision to protect your work." }
