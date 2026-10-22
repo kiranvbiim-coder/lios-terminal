@@ -17,7 +17,7 @@ export interface ArtifactWorkbenchRevisionSelection {
 }
 type RevisionSelectionEvent =
   | { type: "select"; version: number | null }
-  | { type: "loaded"; version: number }
+  | { type: "loaded"; version: number; requestedVersion?: number | null }
   | { type: "context"; version: number; dirty: boolean };
 
 /**
@@ -39,6 +39,10 @@ export function advanceArtifactWorkbenchRevision(
   current: ArtifactWorkbenchRevisionSelection, event: RevisionSelectionEvent,
 ): ArtifactWorkbenchRevisionSelection {
   if (event.type === "loaded") {
+    // Bound callbacks identify the query selection that actually loaded the
+    // version. Ignore callbacks from a previous query even if they report the
+    // same number as the last displayed revision.
+    if ("requestedVersion" in event && event.requestedVersion !== current.requestedVersion) return current;
     if (current.requestedVersion !== null && event.version !== current.requestedVersion) return current;
     // null means "latest head", never "any cached historical version".
     // A late v1 response after selecting latest from v3 must not roll back
