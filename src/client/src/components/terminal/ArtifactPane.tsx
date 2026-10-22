@@ -697,7 +697,10 @@ function ArtifactPaneWorkspace({
     invalidateAutomation(projectId);
   });
   const clearSavedRecovery = () => {
-    if (recoveryOwner) void clearNativeArtifactDraft({ owner: recoveryOwner, artifactId })
+    if (recoveryOwner) void clearNativeArtifactDraft({
+      owner: recoveryOwner, artifactId,
+      baseVersion: data.version.version, contentHash: data.version.contentHash,
+    })
       .catch(() => setError("Saved revision confirmed, but encrypted draft cleanup needs review on reopening."));
   };
   const save=async(next:ArtifactContent)=>{
