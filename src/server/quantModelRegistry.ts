@@ -14,6 +14,23 @@ export const QUANT_MODEL_REGISTRY: QuantModelRegistryEntry[] = [
   ...ADVANCED_QUANT_REGISTRY,
   ...ADVANCED_QUANT_DEPTH2_REGISTRY,
   {
+    id: "typescript.decision-analysis", label: "Original Decision Tournament And Thesis Stress", category: "decision_intelligence",
+    program: "financial_modelling", engine: "typescript", status: "implemented", validationLevel: "benchmark_required",
+    determinism: "deterministic", dataMode: "user_supplied", version: "1.0.0", apiEndpoint: "/api/decision-analysis",
+    surfaces: ["Decision Engine"], components: ["runModelTournament", "stressThesis", "findDecisionBoundary"],
+    sourceFiles: ["server/decisionEngine.ts", "server/decisionRoutes.ts"], references: [],
+    limitations: ["Manual decision inputs and ordinal quality scores are not verified source quality or approval authority."],
+    nextValidation: "Independent scenario, confidence and boundary qualification; no terminal retention promotes numerical assurance.",
+  },
+  {
+    id: "typescript.decision-reverse-dcf", label: "Original Decision Reverse DCF", category: "valuation",
+    program: "financial_modelling", engine: "typescript", status: "implemented", validationLevel: "benchmark_required",
+    determinism: "deterministic", dataMode: "user_supplied", version: "1.0.0", apiEndpoint: "/api/decision-analysis/reverse-dcf",
+    surfaces: ["Decision Engine"], components: ["calculateReverseDcf"], sourceFiles: ["server/decisionEngine.ts", "server/decisionRoutes.ts"], references: [],
+    limitations: ["Manual FCFF-growth solve is distinct from the advanced operating-model revenue-growth solver."],
+    nextValidation: "Independent valuation reconciliation across boundary and growth/discount conventions.",
+  },
+  {
     id: "factor-risk-model",
     label: "Provider-backed factor risk model",
     category: "risk",

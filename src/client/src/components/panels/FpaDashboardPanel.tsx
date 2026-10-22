@@ -11,6 +11,7 @@ import { computeNPV, computeIRR, computeMIRR, paybackPeriod, discountedPaybackPe
 
 
 function FpaDashboardPanel() {
+  const [activeTab, setActiveTab] = useTerminalArtifactState("FpaDashboardPanel.activeTab", "budget");
   // Driver-Based Planning Inputs
   const [headcountGrowth, setHeadcountGrowth] = useTerminalArtifactState("FpaDashboardPanel.headcountGrowth", 15);
   const [pricePerUnit, setPricePerUnit] = useTerminalArtifactState("FpaDashboardPanel.pricePerUnit", 120);
@@ -176,7 +177,7 @@ function FpaDashboardPanel() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <Tabs defaultValue="budget" className="h-full flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <div className="border-b border-border bg-[#070707] px-4 shrink-0">
             <TabsList className="bg-transparent gap-4 p-0">
               <TabsTrigger value="budget" className="border-b-2 border-transparent data-[state=active]:border-[hsl(38,95%,50%)] rounded-none py-2 text-[10px] uppercase font-semibold">Budget vs Actuals</TabsTrigger>

@@ -7,7 +7,7 @@ import { useEdgarFilings, type EdgarFilingSummary } from "@/lib/useOfficialSourc
 import { useSecFilingSearch } from "@/lib/useSecFilingSearch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrencySymbol } from "@/lib/finance";
-import { ReceiptSummary, runAdvancedManual, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 interface Props {
   symbol: string;
   onSymbol: (sym: string) => void;
@@ -38,7 +38,8 @@ function FilingDiffRunner({ filings }: { filings: EdgarFilingSummary[] | undefin
   const [newAccession, setNewAccession] = useTerminalArtifactState("FilingDiffRunner.newAccession", "");
   const [oldText, setOldText] = useTerminalArtifactState("FilingDiffRunner.oldText", "");
   const [newText, setNewText] = useTerminalArtifactState("FilingDiffRunner.newText", "");
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("research", "filing-diff");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const oldFiling = filings?.find((filing) => filing.accessionNumber === oldAccession) ?? null;
@@ -46,8 +47,8 @@ function FilingDiffRunner({ filings }: { filings: EdgarFilingSummary[] | undefin
   const run = async () => {
     if (!oldFiling || !newFiling) { setError("Select both the older and newer filing being compared."); return; }
     if (!oldText.trim() || !newText.trim()) { setError("Paste the actual section text copied from each linked filing."); return; }
-    setLoading(true); setError(null); setResult(null);
-    try { setResult(await runAdvancedManual("research", "filing-diff", { oldText, newText, maxChanges: 100 })); }
+    setLoading(true); setError(null); 
+    try { await nativeWorkflow.run({ oldText, newText, maxChanges: 100 }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Filing diff unavailable."); }
     finally { setLoading(false); }
   };
@@ -103,7 +104,8 @@ function EventStudyRunner({ filings, assetBars, symbol }: { filings: EdgarFiling
   const [estimationWindow, setEstimationWindow] = useTerminalArtifactState("EventStudyRunner.estimationWindow", "60");
   const [eventWindowBefore, setEventWindowBefore] = useTerminalArtifactState("EventStudyRunner.eventWindowBefore", "5");
   const [eventWindowAfter, setEventWindowAfter] = useTerminalArtifactState("EventStudyRunner.eventWindowAfter", "5");
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("econometrics", "event-study");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -126,12 +128,12 @@ function EventStudyRunner({ filings, assetBars, symbol }: { filings: EdgarFiling
     const est = Number(estimationWindow), before = Number(eventWindowBefore), after = Number(eventWindowAfter);
     if (!Number.isFinite(est) || est < 20) { setError("estimationWindow must be at least 20 trading days."); return; }
     if (!Number.isFinite(before) || before < 0 || !Number.isFinite(after) || after < 0) { setError("eventWindowBefore/eventWindowAfter must be non-negative."); return; }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("econometrics", "event-study", {
+      await nativeWorkflow.run({
         assetReturnsPct: aligned.assetReturnsPct, marketReturnsPct: aligned.marketReturnsPct,
         eventIndex, estimationWindow: est, eventWindowBefore: before, eventWindowAfter: after,
-      }));
+      });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Event study unavailable."); }
     finally { setLoading(false); }
   };

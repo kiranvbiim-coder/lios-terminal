@@ -1,9 +1,10 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useState, useMemo, type ChangeEvent } from "react";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, Scatter, CartesianGrid, LineChart, Line, Legend, ComposedChart, BarChart, Bar } from "recharts";
 import { Landmark } from "lucide-react";
 import { useIndicatorDetail } from "@/lib/useEconomics";
-import { AdvancedManualWorkflow } from "./advancedMacroForecastResearch";
+import { AdvancedManualWorkflow, ReceiptSummary, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 
 // Economics & Policy domain's own real quant engine (LIMURIA_ENGINES port
 // plan Phase 5) -- lives here, under the actual `economics_policy` domain's
@@ -90,7 +91,11 @@ function parseIncomeEnergyCsv(text: string): { incomes: number[]; energy: number
 export default function EconomicsPolicyQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<EconPolicyMethod>("EconomicsPolicyQuantPanel.method", "taylor");
-  const [result, setResult] = useState<unknown>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const [localResult, setResult] = useState<Record<string, unknown> | null>(null);
+  const slot = `economics.original.${method}`;
+  const result = terminal?.target ? native.stored?.[slot] as Record<string, unknown> ?? null : localResult;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,7 +114,7 @@ export default function EconomicsPolicyQuantPanel() {
   }, [cpiDetail]);
   const [manualInflation, setManualInflation] = useTerminalArtifactState("EconomicsPolicyQuantPanel.manualInflation", "3.0");
   const [inflationTarget, setInflationTarget] = useTerminalArtifactState("EconomicsPolicyQuantPanel.inflationTarget", "2.0");
-  const [outputGap, setOutputGap] = useState("0.0");
+  const [outputGap, setOutputGap] = useTerminalArtifactState("EconomicsPolicyQuantPanel.outputGap", "0.0");
   const [neutralRate, setNeutralRate] = useTerminalArtifactState("EconomicsPolicyQuantPanel.neutralRate", "2.0");
   const [inflationWeight, setInflationWeight] = useTerminalArtifactState("EconomicsPolicyQuantPanel.inflationWeight", "0.5");
   const [outputGapWeight, setOutputGapWeight] = useState("0.5");
@@ -195,13 +200,15 @@ export default function EconomicsPolicyQuantPanel() {
         path = "/api/quant/economics/leontief-io";
         body = { ioMatrix: matrix, finalDemand };
       } else if (method === "taylor") {
-        const inflationPct = useLiveInflation && liveInflationPct != null ? liveInflationPct : Number(manualInflation);
+        if (useLiveInflation && (liveInflationPct === null || !Number.isFinite(liveInflationPct))) throw new Error("Live inflation is unavailable. Explicitly select manual inflation to run a manual scenario; no fallback is substituted.");
+        const inflationPct = useLiveInflation ? liveInflationPct! : Number(manualInflation);
         path = "/api/quant/economics/taylor-rule";
         body = {
           inflationPct, inflationTargetPct: Number(inflationTarget), outputGapPct: Number(outputGap),
           neutralRealRatePct: Number(neutralRate), inflationWeight: Number(inflationWeight), outputGapWeight: Number(outputGapWeight),
         };
       } else if (method === "phillips") {
+        if (usePhillipsLiveData && !phillipsLiveSeries) throw new Error("Live paired inflation/unemployment observations are unavailable. Explicitly choose manual series; no fallback is substituted.");
         const series = usePhillipsLiveData && phillipsLiveSeries ? phillipsLiveSeries : { unemployment: parseNumList(manualUnemployment), inflation: parseNumList(manualInflationSeries) };
         if (series.unemployment.length < 8) { setError("Need at least 8 paired observations."); setLoading(false); return; }
         path = "/api/quant/economics/phillips-curve";
@@ -220,12 +227,8 @@ export default function EconomicsPolicyQuantPanel() {
         path = "/api/quant/economics/carbon-tax-dividend";
         body = { householdEnergySpendMonthly: energySpend, householdIncomes: incomes, carbonTaxPerTon: Number(carbonTaxPerTon), emissionFactorTonsPerDollar: Number(emissionFactor) };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Economics & Policy engine unavailable right now.");
-      }
-      setResult(await res.json());
+      const output = await native.run<Record<string, unknown>>(path, body as Record<string, unknown>, slot, path);
+      if (!terminal?.target) setResult(output);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Economics & Policy engine unavailable right now.");
     } finally {
@@ -399,7 +402,8 @@ export default function EconomicsPolicyQuantPanel() {
 
         {result != null && method === "phillips" && (() => {
           const r = result as { intercept: number; slope: number; rSquared: number; slopeStdError: number; slopeTStat: number; slopePValue: number; nObs: number };
-          const series = usePhillipsLiveData && phillipsLiveSeries ? phillipsLiveSeries : { unemployment: parseNumList(manualUnemployment), inflation: parseNumList(manualInflationSeries) };
+          const receipt = result.receipt as AdvancedReceipt & { parameters?: { unemploymentPct: number[]; inflationPct: number[] } } | undefined;
+          const series = receipt?.parameters ? { unemployment: receipt.parameters.unemploymentPct, inflation: receipt.parameters.inflationPct } : usePhillipsLiveData && phillipsLiveSeries ? phillipsLiveSeries : { unemployment: parseNumList(manualUnemployment), inflation: parseNumList(manualInflationSeries) };
           const scatterData = series.unemployment.map((u, i) => ({ unemployment: u, inflation: series.inflation[i] }));
           const xs = [Math.min(...series.unemployment), Math.max(...series.unemployment)];
           const lineData = xs.map((x) => ({ unemployment: x, fitted: r.intercept + r.slope * x }));
@@ -502,6 +506,7 @@ export default function EconomicsPolicyQuantPanel() {
             </>
           );
         })()}
+        {result && <><p className="text-xs text-muted-foreground">Recorded original economics-policy calculation. Input edits require an explicit Run; browser-derived or illustrative inputs are not an immutable provider source.</p><ReceiptSummary receipt={result.receipt as AdvancedReceipt | undefined}/></>}
       </div>
     </div>
   );

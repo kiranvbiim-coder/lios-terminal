@@ -1,3 +1,5 @@
+import { useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -7,10 +9,11 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tool
 import type { ViewMode } from "@/lib/terminalTypes";
 import type { OHLCVSeries } from "@/lib/finance";
 import { fitGaussianHMM } from "@/lib/quantModels";
-import { assertWeights, parseNumberList, runAdvancedPortfolioRisk } from "@/lib/advancedPortfolioRisk";
+import { assertWeights, parseNumberList, withManualProvenance, type AdvancedRiskResponse } from "@/lib/advancedPortfolioRisk";
 import { AdvancedPortfolioRiskReceipt } from "@/lib/advancedPortfolioRiskReceipt";
+import { isObservedQuote } from "@/lib/quoteObservation";
 import { StructuredJsonEditor, applySchemaDefaults, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
-import { ReceiptSummary, runAdvancedManual, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 interface Props { onNav: (v: ViewMode) => void; onSymbol: (s: string) => void; }
 type RegimeBlendResult = { weights: Record<string, number> };
 
@@ -62,7 +65,8 @@ const REGIME_FORECASTS_SCHEMA: JsonFieldSchema[] = [
 type HmmFit = { result: { currentStateProbs: number[] }; labels: string[] };
 function RegimeConditionedForecastRunner({ hmm }: { hmm: HmmFit | null }) {
   const [regimeForecastsState, setRegimeForecastsState] = useTerminalArtifactState<Record<string, unknown>>("RegimeConditionedForecastRunner.regimeForecastsState", () => applySchemaDefaults(REGIME_FORECASTS_SCHEMA, {}));
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("forecasting", "regime-conditioned");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const run = async () => {
@@ -72,12 +76,12 @@ function RegimeConditionedForecastRunner({ hmm }: { hmm: HmmFit | null }) {
       setError(`Provide exactly ${hmm.result.currentStateProbs.length} finite forecast paths, one per fitted HMM state, in state order (${hmm.labels.join(", ")}).`);
       return;
     }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("forecasting", "regime-conditioned", {
+      await nativeWorkflow.run({
         regimeProbabilities: hmm.result.currentStateProbs,
         regimeForecasts,
-      }));
+      });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Regime-conditioned forecast unavailable."); }
     finally { setLoading(false); }
   };
@@ -103,10 +107,16 @@ const REGIME_BLEND_WEIGHTS_SCHEMA: JsonFieldSchema[] = [
   },
 ];
 export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const nativeScope = `RegimeClassifierPanel.${terminal?.symbol ?? "manual"}`;
+  function runAdvancedPortfolioRisk<T extends Record<string, unknown>>(path: string, parameters: Record<string, unknown>): Promise<AdvancedRiskResponse<T>> {
+    return quant.run<AdvancedRiskResponse<T>>(path, withManualProvenance(parameters), `${nativeScope}.${path}`);
+  }
   const [blendAssets, setBlendAssets] = useTerminalArtifactState("RegimeClassifierPanel.blendAssets", "");
   const [blendProbabilities, setBlendProbabilities] = useTerminalArtifactState("RegimeClassifierPanel.blendProbabilities", "");
   const [blendWeightsState, setBlendWeightsState] = useTerminalArtifactState<Record<string, unknown>>("RegimeClassifierPanel.blendWeightsState", () => applySchemaDefaults(REGIME_BLEND_WEIGHTS_SCHEMA, {}));
-  const regimeBlend = useMutation({
+  const regimeBlendMutation = useMutation({
     mutationFn: async () => {
       const assets = blendAssets.split(",").map((asset) => asset.trim().toUpperCase()).filter(Boolean);
       const probabilities = parseNumberList(blendProbabilities, "Regime probabilities");
@@ -119,6 +129,7 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
       return runAdvancedPortfolioRisk<RegimeBlendResult>("portfolio/regime-blend", { assets, regimeProbabilities: probabilities, regimeWeights: weights });
     },
   });
+  const regimeBlend = { ...regimeBlendMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.portfolio/regime-blend`] as typeof regimeBlendMutation.data : regimeBlendMutation.data };
   const [watchlist, setWatchlist] = useTerminalArtifactState<RegimeAsset[]>("RegimeClassifierPanel.watchlist", DEFAULT_WATCHLIST);
   const [watchInput, setWatchInput] = useTerminalArtifactState("RegimeClassifierPanel.watchInput", "");
   const ASSETS = useMemo(() => [...CORE_ASSETS, ...watchlist], [watchlist]);
@@ -148,15 +159,11 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
   const oil   = qMap.get("CL=F");
 
   // Derive regime scores from cross-asset signals
-  const signals = useMemo(() => {
-    const eq  = sp500?.changePercent ?? 0;
-    const bd  = tlt?.changePercent   ?? 0;
-    const gd  = gold?.changePercent  ?? 0;
-    const vx  = vix?.price           ?? 20;
-    const bk  = btc?.changePercent   ?? 0;
-    const dx  = dxy?.changePercent   ?? 0;
-    const ol  = oil?.changePercent   ?? 0;
-    const sent= sentiment?.score     ?? 50;
+  const signals = useMemo<Record<string, number>>(() => {
+    if (![sp500, tlt, gold, vix, btc, dxy, oil].every(quote => isObservedQuote(quote))
+      || ![sp500?.changePercent, tlt?.changePercent, gold?.changePercent, vix?.price, btc?.changePercent, dxy?.changePercent, oil?.changePercent, sentiment?.score].every(value => typeof value === "number" && Number.isFinite(value))) return {};
+    const eq = sp500!.changePercent, bd = tlt!.changePercent, gd = gold!.changePercent, vx = vix!.price;
+    const bk = btc!.changePercent, dx = dxy!.changePercent, ol = oil!.changePercent, sent = sentiment!.score;
 
     const scores = {
       goldilocks:  Math.max(0, eq*3 + bk*0.5 - vx*0.5 + sent*0.3 - gd*0.5),
@@ -173,17 +180,17 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
   }, [sp500, tlt, gold, vix, btc, dxy, oil, sentiment]);
 
   const dominant = Object.entries(signals).sort(([,a],[,b]) => b-a)[0];
-  const dominantRegime = REGIMES.find(r => r.id === dominant[0]) ?? REGIMES[0];
+  const dominantRegime = REGIMES.find(regime => regime.id === dominant?.[0]);
 
-  const radarData = REGIMES.map(r => ({ subject: r.label.split(" ").slice(1).join(" "), value: signals[r.id] ?? 0 }));
+  const radarData = REGIMES.filter(regime => signals[regime.id] !== undefined).map(regime => ({ subject: regime.label.split(" ").slice(1).join(" "), value: signals[regime.id] }));
 
   // Asset matrix: how each performs in current regime
   const assetImpact = useMemo(() => {
-    return ASSETS.map(a => {
-      const q = qMap.get(a.sym);
-      const chg = q?.changePercent ?? 0;
-      const riskAlignment = dominant[0] === "riskOn" ? (a.riskOn ? 1 : -1) : dominant[0] === "riskoff" ? (!a.riskOn ? 1 : -1) : 0;
-      return { ...a, chg, price: q?.price ?? 0, riskAlignment };
+    return ASSETS.flatMap(asset => {
+      const quote = qMap.get(asset.sym);
+      if (!isObservedQuote(quote) || !quote || !Number.isFinite(quote.changePercent)) return [];
+      const riskAlignment = dominant?.[0] === "riskOn" ? (asset.riskOn ? 1 : -1) : dominant?.[0] === "riskoff" ? (!asset.riskOn ? 1 : -1) : 0;
+      return [{ ...asset, chg: quote.changePercent, price: quote.price, riskAlignment }];
     });
   }, [qMap, dominant]);
 
@@ -260,35 +267,35 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
       </div>
 
       {/* Dominant regime banner */}
-      <div className="shrink-0 px-5 py-3 border-b border-border" style={{ borderLeft: `4px solid ${dominantRegime.color}`, backgroundColor: `${dominantRegime.color}10` }}>
-        <div className="font-terminal text-[8px] text-muted-foreground tracking-widest">CURRENT REGIME (LIMURIA AI CLASSIFICATION)</div>
+      {!dominantRegime ? <p role="status" className="p-4 text-sm text-amber-200">Current regime unavailable: complete observed cross-asset quotes and sentiment are required. No zero returns, assumed VIX or neutral sentiment were substituted. Manual regime blending remains available below.</p> : <div className="shrink-0 px-5 py-3 border-b border-border" style={{ borderLeft: `4px solid ${dominantRegime.color}`, backgroundColor: `${dominantRegime.color}10` }}>
+        <div className="font-terminal text-[8px] text-muted-foreground tracking-widest">CURRENT REGIME · HEURISTIC CROSS-ASSET SCORE, NOT AI INFERENCE</div>
         <div className="flex items-end gap-3 mt-1">
           <span className="font-terminal text-xl font-bold" style={{ color: dominantRegime.color }}>{dominantRegime.label}</span>
-          <span className="font-terminal text-[9px] text-muted-foreground mb-0.5">Confidence: {dominant[1]}%</span>
+          <span className="font-terminal text-[9px] text-muted-foreground mb-0.5">Normalized score: {dominant[1]}% · not a probability</span>
         </div>
         <div className="font-terminal text-[9px] text-muted-foreground mt-1">{dominantRegime.desc}</div>
-      </div>
+      </div>}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Radar + scores */}
         <div className="flex-1 flex flex-col p-4 space-y-4 overflow-y-auto scrollbar-thin">
           {/* Radar chart */}
-          <div>
-            <div className="font-terminal text-[8px] tracking-widest text-muted-foreground mb-2">REGIME PROBABILITY DISTRIBUTION</div>
+          {dominantRegime && <div>
+            <div className="font-terminal text-[8px] tracking-widest text-muted-foreground mb-2">NORMALIZED REGIME SCORES · NOT PROBABILITIES</div>
             <div className="bg-[#080808] border border-border p-3 h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="hsl(0,0%,12%)" />
                   <PolarAngleAxis dataKey="subject" tick={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, fill: "hsl(0,0%,55%)" }} />
                   <Radar name="Regime Score" dataKey="value" stroke="hsl(38,95%,55%)" fill="hsl(38,95%,55%)" fillOpacity={0.25} strokeWidth={1.5} dot={{ r: 2, fill: "hsl(38,95%,55%)" }} />
-                  <Tooltip contentStyle={{ background: "#0d0d0d", border: "1px solid hsl(0,0%,15%)", fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }} formatter={(v: number) => [`${v}%`, "Probability"]} />
+                  <Tooltip contentStyle={{ background: "#0d0d0d", border: "1px solid hsl(0,0%,15%)", fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }} formatter={(v: number) => [`${v}%`, "Normalized score"]} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </div>}
 
           {/* Score breakdown */}
-          <div>
+          {dominantRegime && <div>
             <div className="font-terminal text-[8px] tracking-widest text-muted-foreground mb-2">REGIME SCORE BREAKDOWN</div>
             <div className="space-y-1.5">
               {REGIMES.map(r => (
@@ -301,7 +308,7 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           <div className="border border-border bg-[#080808] p-3 space-y-2">
             <div className="font-terminal text-[8px] tracking-widest text-muted-foreground">REGIME-CONDITIONED PORTFOLIO BLEND</div>
@@ -404,7 +411,7 @@ export default function RegimeClassifierPanel({ onSymbol, onNav }: Props) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-terminal text-[7.5px] text-muted-foreground">{a.sym}</span>
-                  {aligned && <span className="font-terminal text-[7px] text-[hsl(142,71%,55%)] border border-[hsl(142,71%,25%)] px-1">FAVORED IN {dominantRegime.label.split(" ").slice(1).join(" ")}</span>}
+                  {aligned && dominantRegime && <span className="font-terminal text-[7px] text-[hsl(142,71%,55%)] border border-[hsl(142,71%,25%)] px-1">FAVORED IN {dominantRegime.label.split(" ").slice(1).join(" ")}</span>}
                   {contra  && <span className="font-terminal text-[7px] text-[hsl(0,80%,55%)] border border-[hsl(0,80%,25%)] px-1">UNFAVORED</span>}
                 </div>
               </div>

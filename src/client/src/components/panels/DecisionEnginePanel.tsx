@@ -1,5 +1,7 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
-import { useEffect, useMemo, useState } from "react";
+import { useAdvancedWorkflow, ReceiptSummary } from "./advancedMacroForecastResearch";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Activity, AlertTriangle, BadgeCheck, Calculator, Check, ChevronRight, FileCheck2,
@@ -9,7 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ConceptExplainer } from "./ConceptExplainer";
 import { calculateClientScenarioActions } from "@/lib/scenarioActionClient";
 import type { ScenarioActionInput, ScenarioActionResult } from "../../../../server/scenarioActionEngine";
-import type { ScenarioPipelineResult } from "../../../../server/scenarioPipeline";
+import { z } from "zod";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 import { takePendingDecisionReview, subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
 
@@ -35,11 +37,32 @@ type Approval = { id: number; outcome: string; receiptVersionId: number; snapsho
 type Monitor = { id: number; name: string; indicator: string; operator: string; threshold: number; unit: string; action: string; status: string; currentValue: number | null; lastEvaluatedAt: string | null };
 type Replay = { id: number; receiptVersionId: number; changed: boolean; replaySnapshotHash: string; asOf: string; result: { reproducible?: boolean; message?: string }; createdAt: string };
 type Detail = { decision: DecisionCase; receipts: Receipt[]; approvals: Approval[]; monitoringRules: Monitor[]; replays: Replay[]; policyDigest: string; permissions: { read_decisions: boolean; author_decisions: boolean; review_decisions: boolean }; reviewDeniedReason: string | null };
+type ReceiptHydration = { decisionId: number; previousId: number | null; artifactId: string | null; baseVersion: number | null };
+type PipelineReceiptReference = { decisionId: number; receiptId: number; snapshotHash: string; traceHash: string };
 type Investigation = { id: number; title: string; question: string; primarySymbol: string | null; organizationId: number | null };
 type FinancialSnapshotRef = { id: string; contentHash: string; dataClass?: string; entityKey?: string; availableAt?: string; capturedAt?: string };
 type FactorSnapshotListItem = { snapshotId: string; contentHash: string; request: { symbols: string[]; benchmarkSymbol: string; range: string; asOf: string }; capturedAt: string; expiresAt: number; organizationScope: string; included: string[]; excluded: Array<{ securityId: string; reason: string }>; periodCount: number };
 type FactorSnapshotRef = { snapshotId: string; contentHash: string; request?: { symbols?: string[]; asOf?: string }; capturedAt?: string; securities?: Array<{ securityId: string }> };
 type BrainRun = { id: number; title: string; question: string; status: string; investigationId: number | null };
+
+// Presentation validation only; the existing decision receipt remains the result/approval owner.
+const pipelineTraceViewSchema = z.object({
+  traceHash: z.string().regex(/^[a-f0-9]{64}$/),
+  models: z.object({ baselineChecks: z.object({ passed: z.boolean() }).passthrough(), scenarioChecks: z.object({ passed: z.boolean() }).passthrough() }).passthrough(),
+  factorRisk: z.object({ decomposition: z.object({ result: z.object({ scenario: z.object({ portfolioPnl: z.number().finite(), securities: z.array(z.object({ securityId: z.string(), factorPnl: z.number().finite() }).passthrough()) }).passthrough().nullable().optional() }).passthrough() }).passthrough() }).passthrough(),
+  action: z.object({
+    input: z.object({ currentWeights: z.record(z.string(), z.number().finite()).optional() }).passthrough(),
+    coverage: z.object({ assetsWithExposure: z.number(), assets: z.number() }).passthrough(),
+    result: z.object({ candidates: z.array(z.object({ expectedImpact: z.number().finite().nullable() }).passthrough()) }).passthrough(),
+  }).passthrough(),
+  recommendation: z.string().nullable(), rankedCandidates: z.array(z.object({ label: z.string() }).passthrough()), limitations: z.array(z.string()),
+}).passthrough();
+const pipelineViewSchema = z.object({
+  trace: pipelineTraceViewSchema,
+  receiptCalculation: z.object({ name: z.literal("Scenario-to-action pipeline"), deterministicRef: z.string(), modelVersion: z.string(), value: z.number().finite(), scenarioPipelineArtifact: pipelineTraceViewSchema }).passthrough(),
+});
+type PipelineView = z.infer<typeof pipelineViewSchema>;
+type PipelinePreview = { result: PipelineView; decisionId: number | null; artifactId: string | null; version: number | null; inputKey: string };
 
 const inputClass = "h-8 w-full border border-border bg-black px-2 font-mono text-[9px] outline-none focus:border-amber-400/60";
 const areaClass = "w-full border border-border bg-black px-2 py-2 font-mono text-[9px] leading-relaxed outline-none focus:border-amber-400/60 resize-y";
@@ -118,7 +141,7 @@ function statusTone(status: string) {
   if (["rejected", "breached", "expired"].includes(status)) return "text-red-300 border-red-400/30";
   return "text-amber-300 border-amber-400/30";
 }
-function scenarioFactorPnl(trace: ScenarioPipelineResult["trace"]): number | null {
+function scenarioFactorPnl(trace: PipelineView["trace"]): number | null {
   const scenario = trace.factorRisk.decomposition.result.scenario;
   if (!scenario) return null;
   const weights = trace.action.input.currentWeights ?? {};
@@ -126,9 +149,22 @@ function scenarioFactorPnl(trace: ScenarioPipelineResult["trace"]): number | nul
 }
 
 export default function DecisionEnginePanel({ symbol, role, initialDecisionId }: { symbol: string; role: string; initialDecisionId?: number }) {
+  const terminal = useTerminalArtifactContext();
   const authorRole = role === "internal_admin" || role === "internal_analyst";
   const reviewerRole = role === "internal_admin" || role === "internal_compliance";
-  const [selectedId, setSelectedId] = useState<number | null>(() => initialDecisionId ?? takePendingDecisionReview());
+  const [selectedId, setSelectedId] = useTerminalArtifactState<number | null>("DecisionEnginePanel.selectedId", () => initialDecisionId ?? (terminal ? null : takePendingDecisionReview()));
+  const [receiptHydration, setReceiptHydration] = useState<ReceiptHydration | null>(() => !terminal && selectedId ? { decisionId: selectedId, previousId: null, artifactId: null, baseVersion: null } : null);
+  const selectionOwner = useRef({ terminal, selectedId, pending: receiptHydration !== null });
+  selectionOwner.current = { terminal, selectedId, pending: receiptHydration !== null };
+  const selectDecision = useCallback((id: number) => {
+    const { terminal: owner, selectedId: previousId, pending } = selectionOwner.current;
+    if (owner?.readOnly || pending || previousId === id) return;
+    selectionOwner.current.pending = true;
+    owner?.setEditing?.("decision-hydration", true);
+    setReceiptHydration({ decisionId: id, previousId, artifactId: owner?.target?.artifactId ?? null, baseVersion: owner?.target?.version ?? null });
+    setSelectedId(id);
+  }, [setSelectedId]);
+  useEffect(() => () => selectionOwner.current.terminal?.setEditing?.("decision-hydration", false), []);
   const [view, setView] = useTerminalArtifactState<View>("DecisionEnginePanel.view", "receipt");
   const [message, setMessage] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -147,27 +183,34 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   const [counterarguments, setCounterarguments] = useTerminalArtifactState("DecisionEnginePanel.counterarguments", "Demand may be cyclical rather than structural | Monitor order growth and guidance");
   const [contradictions, setContradictions] = useTerminalArtifactState("DecisionEnginePanel.contradictions", "");
   const [calculations, setCalculations] = useTerminalArtifactState("DecisionEnginePanel.calculations", "Base valuation | 100 | valuation:model-v1 | v1");
-  const [triggers, setTriggers] = useState("Guidance break | Revenue growth | lt | 8 | percent | Reopen decision and rerun downside case |");
+  const [triggers, setTriggers] = useTerminalArtifactState("DecisionEnginePanel.triggers", "Guidance break | Revenue growth | lt | 8 | percent | Reopen decision and rerun downside case |");
   const [finalDecision, setFinalDecision] = useTerminalArtifactState("DecisionEnginePanel.finalDecision", "");
   const [rationale, setRationale] = useTerminalArtifactState("DecisionEnginePanel.rationale", "");
   const [waiverReason, setWaiverReason] = useTerminalArtifactState("DecisionEnginePanel.waiverReason", "");
   const [monitorValues, setMonitorValues] = useTerminalArtifactState<Record<number, string>>("DecisionEnginePanel.monitorValues", {});
   const [reverseDcf, setReverseDcf] = useTerminalArtifactState("DecisionEnginePanel.reverseDcf", { enterpriseValue: "1500", currentFreeCashFlow: "100", forecastYears: "5", discountRate: "0.10", terminalGrowthRate: "0.03" });
-  const [analysis, setAnalysis] = useState<Record<string, any> | null>(null);
-  const [reverseResult, setReverseResult] = useState<Record<string, any> | null>(null);
+  const original = useTerminalQuantRun();
+  const [localAnalysis, setAnalysis] = useState<Record<string, any> | null>(null);
+  const [localReverse, setReverseResult] = useState<Record<string, any> | null>(null);
+  const analysis: Record<string, any> | null = terminal?.target ? original.stored?.["decision.original-analysis"] as Record<string, any> ?? null : localAnalysis;
+  const reverseResult: Record<string, any> | null = terminal?.target ? original.stored?.["decision.original-reverse-dcf"] as Record<string, any> ?? null : localReverse;
   const [boundaryPoints, setBoundaryPoints] = useTerminalArtifactState("DecisionEnginePanel.boundaryPoints", "8 | 80\n12 | 100\n16 | 120");
   const [boundaryThreshold, setBoundaryThreshold] = useTerminalArtifactState("DecisionEnginePanel.boundaryThreshold", "90");
-  const [quantConsensus, setQuantConsensus] = useState<Record<string, any> | null>(null);
+  const nativeConsensus = useAdvancedWorkflow("decision", "model-tournament");
+  const quantConsensus: Record<string, any> | null = nativeConsensus.result;
   const [mcdaCriteria, setMcdaCriteria] = useTerminalArtifactState("DecisionEnginePanel.mcdaCriteria", "Valuation upside | 0.4 | maximize\nExecution risk | 0.35 | minimize\nTime to breakeven | 0.25 | minimize");
   const [mcdaAlternatives, setMcdaAlternatives] = useTerminalArtifactState("DecisionEnginePanel.mcdaAlternatives", "Proceed now | 22 | 6 | 18\nDefer | 10 | 2 | 9");
-  const [mcdaResult, setMcdaResult] = useState<Record<string, any> | null>(null);
+  const nativeMcda = useAdvancedWorkflow("decision", "mcda");
+  const mcdaResult: Record<string, any> | null = nativeMcda.result;
   const [voiStates, setVoiStates] = useTerminalArtifactState("DecisionEnginePanel.voiStates", "Bull | 0.5\nBear | 0.5");
   const [voiAlternatives, setVoiAlternatives] = useTerminalArtifactState("DecisionEnginePanel.voiAlternatives", "Proceed now | 120 | 80\nDefer | 100 | 100");
-  const [voiResult, setVoiResult] = useState<Record<string, any> | null>(null);
+  const nativeVoi = useAdvancedWorkflow("decision", "value-of-information");
+  const voiResult: Record<string, any> | null = nativeVoi.result;
   const [uncertaintyEstimate, setUncertaintyEstimate] = useTerminalArtifactState("DecisionEnginePanel.uncertaintyEstimate", "100");
   const [uncertaintyConfidence, setUncertaintyConfidence] = useTerminalArtifactState("DecisionEnginePanel.uncertaintyConfidence", "95");
   const [uncertaintyFactors, setUncertaintyFactors] = useTerminalArtifactState("DecisionEnginePanel.uncertaintyFactors", "Revenue growth | 8 | 1.2 | market\nDiscount rate | 0.5 | -6 | model\nData completeness | 3 | 0.8 | data");
-  const [uncertaintyResult, setUncertaintyResult] = useState<Record<string, any> | null>(null);
+  const nativeUncertainty = useAdvancedWorkflow("decision", "uncertainty");
+  const uncertaintyResult: Record<string, any> | null = nativeUncertainty.result;
   const [scenarioNodes, setScenarioNodes] = useTerminalArtifactState("DecisionEnginePanel.scenarioNodes", "Revenue growth | 12 | market\nMargin | 20 | company\nValuation | 100 | company");
   const [scenarioEdges, setScenarioEdges] = useTerminalArtifactState("DecisionEnginePanel.scenarioEdges", "Revenue growth | Margin | 0.3 | elasticity |\nMargin | Valuation | 2 | elasticity |");
   const [scenarioShocks, setScenarioShocks] = useTerminalArtifactState("DecisionEnginePanel.scenarioShocks", "Revenue growth | -4");
@@ -180,7 +223,8 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   const [scenarioActionCosts, setScenarioActionCosts] = useTerminalArtifactState<Record<string, unknown>>("DecisionEnginePanel.scenarioActionCosts", { costs: {} });
   const [scenarioActionResult, setScenarioActionResult] = useState<ScenarioActionResult | null>(null);
   const [scenarioActionError, setScenarioActionError] = useState("");
-  const [scenarioResult, setScenarioResult] = useState<Record<string, any> | null>(null);
+  const nativeScenario = useAdvancedWorkflow("decision", "scenario-graph");
+  const scenarioResult: Record<string, any> | null = nativeScenario.result;
   const [pipelineScenarioId, setPipelineScenarioId] = useTerminalArtifactState("DecisionEnginePanel.pipelineScenarioId", "");
   const [pipelineScenarioName, setPipelineScenarioName] = useTerminalArtifactState("DecisionEnginePanel.pipelineScenarioName", "");
   const [financialDatasetSnapshotId, setFinancialDatasetSnapshotId] = useTerminalArtifactState("DecisionEnginePanel.financialDatasetSnapshotId", "");
@@ -191,9 +235,9 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   const [pipelineTerminalGrowth, setPipelineTerminalGrowth] = useTerminalArtifactState("DecisionEnginePanel.pipelineTerminalGrowth", "0.03");
   const [pipelineNetDebt, setPipelineNetDebt] = useTerminalArtifactState("DecisionEnginePanel.pipelineNetDebt", "");
   const [pipelineSharesOutstanding, setPipelineSharesOutstanding] = useTerminalArtifactState("DecisionEnginePanel.pipelineSharesOutstanding", "");
-  const [scenarioPipelinePreview, setScenarioPipelinePreview] = useState<ScenarioPipelineResult | null>(null);
+  const [pipelinePreview, setScenarioPipelinePreview] = useState<PipelinePreview | null>(null);
+  const [pipelineReceiptRef, setPipelineReceiptRef] = useTerminalArtifactState<PipelineReceiptReference | null>("DecisionEnginePanel.pipelineReceipt", null);
   const [scenarioPipelineError, setScenarioPipelineError] = useState("");
-  const [scenarioPipelineAttached, setScenarioPipelineAttached] = useState(false);
 
   const { data: cases = [], isLoading } = useQuery<DecisionCase[]>({ queryKey: ["/api/decisions"] });
   const { data: investigations = [] } = useQuery<Investigation[]>({ queryKey: ["/api/research/investigations"] });
@@ -201,9 +245,21 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   const detailPath = selectedId ? `/api/decisions/${selectedId}` : "";
   const { data: fetchedDetail, error: detailError, isFetching: detailFetching, refetch: refetchDetail } = useQuery<Detail>({ queryKey: [detailPath], enabled: Boolean(selectedId), retry: false });
   const detail = !detailError && !detailFetching && fetchedDetail?.decision.id === selectedId ? fetchedDetail : undefined;
+  const restoredPipeline = useMemo((): PipelineView | null => {
+    if (!pipelineReceiptRef || pipelineReceiptRef.decisionId !== selectedId || !detail) return null;
+    const receipt = detail.receipts.find(item => item.id === pipelineReceiptRef.receiptId && item.snapshotHash === pipelineReceiptRef.snapshotHash);
+    const calculation = receipt?.calculations.find(item => item.name === "Scenario-to-action pipeline" && item.deterministicRef === `scenario-pipeline:${pipelineReceiptRef.traceHash}`);
+    const trace = calculation?.scenarioPipelineArtifact;
+    if (!trace || typeof trace !== "object" || !("traceHash" in trace) || trace.traceHash !== pipelineReceiptRef.traceHash) return null;
+    const parsed = pipelineViewSchema.safeParse({ trace, receiptCalculation: calculation });
+    return parsed.success ? parsed.data : null;
+  }, [pipelineReceiptRef, selectedId, detail]);
+  const localPipelinePreview = pipelinePreview?.decisionId === selectedId && pipelinePreview.artifactId === (terminal?.target?.artifactId ?? null) && pipelinePreview.version === (terminal?.target?.version ?? null) ? pipelinePreview.result : null;
+  const scenarioPipelinePreview = localPipelinePreview ?? restoredPipeline;
+  const scenarioPipelineAttached = pipelineReceiptRef?.decisionId === selectedId && pipelineReceiptRef.traceHash === scenarioPipelinePreview?.trace.traceHash;
   const canAuthor = authorRole && (!selectedId || detail?.permissions.author_decisions === true);
   const canReview = reviewerRole && detail?.permissions.review_decisions === true;
-  useEffect(() => subscribeDecisionReview(id => { setSelectedId(id); setView("receipt"); setShowCreate(false); setMessage(""); }), []);
+  useEffect(() => subscribeDecisionReview(id => { selectDecision(id); setView("receipt"); setShowCreate(false); setMessage(""); }), [selectDecision]);
   const financialAsOf = useMemo(() => new Date().toISOString(), [symbol]);
   const { data: financialSnapshot } = useQuery<FinancialSnapshotRef>({
     queryKey: ["/api/data-snapshots/financials/as-of", symbol],
@@ -246,29 +302,31 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   }, [financialSnapshot?.id, financialDatasetSnapshotId]);
   const latest = detail?.receipts[0];
 
-  useEffect(() => { if (!selectedId && cases.length) setSelectedId(cases[0].id); }, [cases, selectedId]);
+  useEffect(() => { if (!terminal && !selectedId && cases.length) selectDecision(cases[0].id); }, [terminal, cases, selectedId, selectDecision]);
   useEffect(() => {
     if (symbol && !title) setTitle(`${symbol.toUpperCase()} decision`);
   }, [symbol, title]);
   useEffect(() => {
-    if (!latest) return;
-    setRecommendation(latest.recommendation);
-    setInterpretation(latest.interpretation);
-    setRequiredEvidenceCount(String(latest.requiredEvidenceCount));
-    setAssumptions(formatLines(latest.assumptions, ["label", "value", "uncertainty", "basis", "invalidationCondition"]));
-    setModels(formatLines(latest.models, ["name", "version", "output", "methodologyQuality", "sourceCoverage", "validationScore", "independence"]));
-    setScenarios(formatLines(latest.scenarios, ["name", "probability", "outcome", "decision"]));
-    setAlternatives(formatLines(latest.alternatives, ["name", "description", "rejectedReason"]));
-    setCounterarguments(formatLines(latest.counterarguments, ["argument", "response"]));
-    setContradictions(formatLines(latest.contradictions, ["description", "resolved", "resolution"]));
-    setCalculations(formatLines(latest.calculations, ["name", "value", "deterministicRef", "modelVersion"]));
-    setTriggers(formatLines(latest.monitoringTriggers, ["name", "indicator", "operator", "threshold", "unit", "action", "sourceUrl"]));
-  }, [latest?.id]);
-  useEffect(() => {
-    setScenarioPipelinePreview(null);
-    setScenarioPipelineError("");
-    setScenarioPipelineAttached(false);
-  }, [pipelineScenarioId, financialDatasetSnapshotId, factorRiskSnapshotId, selectedId]);
+    if (!receiptHydration) return;
+    const finish = () => { setReceiptHydration(null); terminal?.setEditing?.("decision-hydration", false); };
+    if (receiptHydration.decisionId !== selectedId || receiptHydration.artifactId !== (terminal?.target?.artifactId ?? null)
+      || receiptHydration.baseVersion !== (terminal?.target?.version ?? null)) { finish(); return; }
+    if (terminal?.readOnly) return;
+    if (detailError) { setSelectedId(receiptHydration.previousId); setMessage(detailError.message); finish(); return; }
+    if (!detail) return;
+    setRecommendation(latest?.recommendation ?? "");
+    setInterpretation(latest?.interpretation ?? "");
+    setRequiredEvidenceCount(String(latest?.requiredEvidenceCount ?? 3));
+    setAssumptions(formatLines(latest?.assumptions ?? [], ["label", "value", "uncertainty", "basis", "invalidationCondition"]));
+    setModels(formatLines(latest?.models ?? [], ["name", "version", "output", "methodologyQuality", "sourceCoverage", "validationScore", "independence"]));
+    setScenarios(formatLines(latest?.scenarios ?? [], ["name", "probability", "outcome", "decision"]));
+    setAlternatives(formatLines(latest?.alternatives ?? [], ["name", "description", "rejectedReason"]));
+    setCounterarguments(formatLines(latest?.counterarguments ?? [], ["argument", "response"]));
+    setContradictions(formatLines(latest?.contradictions ?? [], ["description", "resolved", "resolution"]));
+    setCalculations(formatLines(latest?.calculations ?? [], ["name", "value", "deterministicRef", "modelVersion"]));
+    setTriggers(formatLines(latest?.monitoringTriggers ?? [], ["name", "indicator", "operator", "threshold", "unit", "action", "sourceUrl"]));
+    finish();
+  }, [receiptHydration, selectedId, terminal?.readOnly, terminal?.target?.artifactId, terminal?.target?.version, latest?.id, detail, detailError]);
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["/api/decisions"] });
@@ -386,18 +444,36 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
       portfolioCount: Object.keys(portfolioWeights).length,
     };
   }, [pipelineScenarioId, pipelineScenarioName, financialDatasetSnapshotId, factorRiskSnapshotId, pipelineProjectionYears, pipelineRevenueGrowth, pipelineDiscountRate, pipelineTerminalGrowth, pipelineNetDebt, pipelineSharesOutstanding, scenarioExposures, scenarioParsed.shocks, scenarioActionAlternatives.actionAlternatives, scenarioActionConstraints, scenarioActionCosts.costs]);
+  const pipelineInputKey = JSON.stringify(scenarioPipelineInputs.payload);
+  const pipelineInputKeyRef = useRef(pipelineInputKey); pipelineInputKeyRef.current = pipelineInputKey;
+  useEffect(() => { setScenarioPipelinePreview(null); setScenarioPipelineError(""); }, [pipelineInputKey, selectedId]);
   const runScenarioPipelinePreview = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => (await apiRequest("POST", "/api/scenario-pipeline/preview", payload)).json() as Promise<ScenarioPipelineResult>,
-    onSuccess: (result: ScenarioPipelineResult) => {
+    mutationFn: async (payload: Record<string, unknown>) => {
+      if (selectionOwner.current.terminal?.readOnly) throw new Error("Wait for the current terminal operation before previewing a scenario.");
+      selectionOwner.current.terminal?.setEditing?.("decision-pipeline-preview", true);
+      const binding = { decisionId: selectedId, artifactId: terminal?.target?.artifactId ?? null, version: terminal?.target?.version ?? null, inputKey: JSON.stringify(payload) };
+      const result = pipelineViewSchema.parse(await (await apiRequest("POST", "/api/scenario-pipeline/preview", payload)).json());
+      return { ...binding, result };
+    },
+    onSuccess: (preview: PipelinePreview) => {
+      const current = selectionOwner.current;
+      if (preview.decisionId !== current.selectedId || preview.artifactId !== (current.terminal?.target?.artifactId ?? null) || preview.version !== (current.terminal?.target?.version ?? null) || preview.inputKey !== pipelineInputKeyRef.current) {
+        setScenarioPipelineError("The scenario preview finished for an earlier terminal revision. Reopen that work or explicitly preview the current inputs.");
+        return;
+      }
       setScenarioPipelineError("");
-      setScenarioPipelineAttached(false);
-      setScenarioPipelinePreview(result);
+      setScenarioPipelinePreview(preview);
     },
     onError: (error: Error) => {
       setScenarioPipelinePreview(null);
       setScenarioPipelineError(error.message);
     },
   });
+  const setPreviewEditing = terminal?.setEditing;
+  useEffect(() => {
+    setPreviewEditing?.("decision-pipeline-preview", runScenarioPipelinePreview.isPending || localPipelinePreview !== null);
+    return () => setPreviewEditing?.("decision-pipeline-preview", false);
+  }, [setPreviewEditing, runScenarioPipelinePreview.isPending, localPipelinePreview]);
   const validPipelineCalculation = Boolean(
     scenarioPipelinePreview?.receiptCalculation
       && scenarioPipelinePreview.receiptCalculation.name === "Scenario-to-action pipeline"
@@ -410,19 +486,30 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
   const attachScenarioPipeline = useMutation({
     mutationFn: async () => {
       if (!selectedId || !latest?.id || !scenarioPipelinePreview || !validPipelineCalculation) throw new Error("Run a valid pipeline preview with an existing decision receipt selected first.");
-      return (await apiRequest("POST", `/api/decisions/${selectedId}/scenario-pipeline`, {
-        receiptVersionId: latest.id,
-        pipelineCalculation: scenarioPipelinePreview.receiptCalculation,
-      })).json() as Promise<Receipt>;
+      if (selectionOwner.current.terminal?.readOnly) throw new Error("Wait for the current terminal operation before attaching a scenario receipt.");
+      selectionOwner.current.terminal?.setEditing?.("decision-pipeline-attachment", true);
+      const binding = { decisionId: selectedId, artifactId: terminal?.target?.artifactId ?? null, version: terminal?.target?.version ?? null, traceHash: scenarioPipelinePreview.trace.traceHash };
+      const receipt = await (await apiRequest("POST", `/api/decisions/${selectedId}/scenario-pipeline`, {
+        receiptVersionId: latest.id, pipelineCalculation: scenarioPipelinePreview.receiptCalculation,
+      })).json() as Receipt;
+      return { receipt, binding };
     },
-    onSuccess: async (receipt: Receipt) => {
-      setScenarioPipelineAttached(true);
+    onSuccess: async ({ receipt, binding }) => {
+      const current = selectionOwner.current;
+      if (current.selectedId !== binding.decisionId || current.terminal?.target?.artifactId !== (binding.artifactId ?? undefined) || (current.terminal?.target?.version ?? null) !== binding.version) return;
+      setPipelineReceiptRef({ decisionId: binding.decisionId, receiptId: receipt.id, snapshotHash: receipt.snapshotHash, traceHash: binding.traceHash });
+      setScenarioPipelinePreview(null);
       setMessage(`Scenario pipeline attached to receipt v${receipt.version}; approval remains required.`);
       await refresh();
       await refetchDetail();
     },
     onError: (error: Error) => setScenarioPipelineError(error.message),
   });
+  const setPipelineEditing = terminal?.setEditing;
+  useEffect(() => {
+    setPipelineEditing?.("decision-pipeline-attachment", attachScenarioPipeline.isPending);
+    return () => setPipelineEditing?.("decision-pipeline-attachment", false);
+  }, [setPipelineEditing, attachScenarioPipeline.isPending]);
   const pipelineStageStatus = scenarioPipelinePreview ? "COMPLETE" : scenarioPipelineInputs.payload ? "READY" : "BLOCKED";
 
   const createCase = useMutation({
@@ -431,7 +518,7 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
       investigationId: investigationId ? Number(investigationId) : null,
       brainRunId: brainRunId ? Number(brainRunId) : null,
     })).json(),
-    onSuccess: async (created: DecisionCase) => { setSelectedId(created.id); setShowCreate(false); setTitle(""); setQuestion(""); setMessage("Decision case created."); await refresh(); },
+    onSuccess: async (created: DecisionCase) => { selectDecision(created.id); setShowCreate(false); setTitle(""); setQuestion(""); setMessage("Decision case created."); await refresh(); },
     onError: (error: Error) => setMessage(error.message),
   });
   const saveReceipt = useMutation({
@@ -454,17 +541,17 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
     onError: (error: Error) => setMessage(error.message),
   });
   const runAnalysis = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/decision-analysis", { evidence: latest?.evidence ?? [], assumptions: parsed.assumptions, models: parsed.models, scenarios: parsed.scenarios, contradictions: parsed.contradictions, boundary: boundary ?? undefined })).json(),
-    onSuccess: setAnalysis,
+    mutationFn: async () => original.run<Record<string, any>>("decision-analysis", { evidence: latest?.evidence ?? [], assumptions: parsed.assumptions, models: parsed.models, scenarios: parsed.scenarios, contradictions: parsed.contradictions, boundary: boundary ?? undefined }, "decision.original-analysis", "/api/decision-analysis"),
+    onSuccess: result => { if (!terminal?.target) setAnalysis(result); },
     onError: (error: Error) => setMessage(error.message),
   });
   const runReverseDcf = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/decision-analysis/reverse-dcf", Object.fromEntries(Object.entries(reverseDcf).map(([key, value]) => [key, key === "forecastYears" ? Number.parseInt(value) : Number(value)])))).json(),
-    onSuccess: setReverseResult,
+    mutationFn: async () => original.run<Record<string, any>>("decision-reverse-dcf", Object.fromEntries(Object.entries(reverseDcf).map(([key, value]) => [key, key === "forecastYears" ? Number.parseInt(value) : Number(value)])), "decision.original-reverse-dcf", "/api/decision-analysis/reverse-dcf"),
+    onSuccess: result => { if (!terminal?.target) setReverseResult(result); },
     onError: (error: Error) => setMessage(error.message),
   });
   const runQuantConsensus = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/quant/advanced/decision/model-tournament", {
+    mutationFn: async () => nativeConsensus.run({
       candidates: parsed.models.map((entry: Record<string, unknown>) => ({
         name: entry.name,
         estimate: entry.output,
@@ -473,28 +560,23 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
         dataQualityScore: Math.max(1e-6, Math.min(100, Number(entry.sourceCoverage) * 100)),
         suitabilityScore: Math.max(1e-6, Math.min(100, Number(entry.independence) * 100)),
       })),
-    })).json(),
-    onSuccess: setQuantConsensus,
+    }),
     onError: (error: Error) => setMessage(error.message),
   });
   const runMcda = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/quant/advanced/decision/mcda", mcdaParsed)).json(),
-    onSuccess: setMcdaResult,
+    mutationFn: async () => nativeMcda.run(mcdaParsed),
     onError: (error: Error) => setMessage(error.message),
   });
   const runVoi = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/quant/advanced/decision/value-of-information", voiParsed)).json(),
-    onSuccess: setVoiResult,
+    mutationFn: async () => nativeVoi.run(voiParsed),
     onError: (error: Error) => setMessage(error.message),
   });
   const runUncertainty = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/quant/advanced/decision/uncertainty", uncertaintyParsed)).json(),
-    onSuccess: setUncertaintyResult,
+    mutationFn: async () => nativeUncertainty.run(uncertaintyParsed),
     onError: (error: Error) => setMessage(error.message),
   });
   const runScenarioGraph = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/quant/advanced/decision/scenario-graph", scenarioParsed)).json(),
-    onSuccess: setScenarioResult,
+    mutationFn: async () => nativeScenario.run(scenarioParsed),
     onError: (error: Error) => setMessage(error.message),
   });
   const runScenarioActions = () => {
@@ -551,7 +633,7 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
     } catch (error) { setMessage(error instanceof Error ? error.message : "Evaluation failed."); }
   };
 
-  return <div className="h-full min-h-0 flex flex-col bg-[#050505]">
+  return <div className="lios-decision-panel h-full min-h-0 flex flex-col bg-[#050505]">
     <header className="shrink-0 border-b border-border px-4 py-3 flex flex-wrap items-center gap-3 bg-[#070707]">
       <Scale className="w-4 h-4 text-amber-300" />
       <div><div className="font-terminal text-[10px] tracking-widest">DECISION ENGINE</div><div className="font-terminal text-[7px] text-muted-foreground mt-0.5">CHALLENGE, VERSION, APPROVE, MONITOR, AND REPLAY</div></div>
@@ -563,12 +645,12 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
     {detailFetching && <p role="status" className="p-3 text-sm">Checking exact canonical case {selectedId}…</p>}
     {detail?.reviewDeniedReason && <p role="status" className="border-b border-border p-3 text-sm text-amber-200">{detail.reviewDeniedReason} Presentation preferences cannot grant review permission.</p>}
 
-    <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
-      <aside className="min-h-0 border-b lg:border-b-0 lg:border-r border-border flex flex-col max-h-48 lg:max-h-none">
+    <div className="lios-decision-layout flex-1 min-h-0 grid">
+      <aside className="lios-decision-queue min-h-0 border-border flex flex-col">
         <div className="shrink-0 px-3 py-2 border-b border-border font-terminal text-[7px] text-muted-foreground">DECISION QUEUE / {cases.length}</div>
         <div className="overflow-y-auto">
           {isLoading && <div className="p-4 font-terminal text-[8px] text-muted-foreground">Loading cases...</div>}
-          {cases.map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)} className={`w-full text-left px-3 py-3 border-b border-border/70 ${selectedId === item.id ? "bg-amber-400/[0.06] border-l-2 border-l-amber-400" : "hover:bg-white/[0.02]"}`}>
+          {cases.map((item) => <button key={item.id} disabled={receiptHydration !== null} onClick={() => selectDecision(item.id)} className={`w-full text-left px-3 py-3 border-b border-border/70 ${selectedId === item.id ? "bg-amber-400/[0.06] border-l-2 border-l-amber-400" : "hover:bg-white/[0.02]"}`}>
             <div className="flex items-start gap-2"><span className="font-terminal text-[9px] flex-1 line-clamp-2">{item.title}</span><ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" /></div>
             <div className="mt-2 flex items-center gap-1.5"><span className={`px-1.5 py-0.5 border font-terminal text-[6px] uppercase ${statusTone(item.status)}`}>{item.status}</span><span className="font-mono text-[7px] text-muted-foreground uppercase">{item.materiality}</span></div>
           </button>)}
@@ -578,7 +660,7 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
 
       <main className="min-h-0 flex flex-col overflow-hidden">
         {!detail ? <div className="p-8 max-w-lg space-y-4"><FileCheck2 className="w-6 h-6 text-muted-foreground/50" /><div className="mt-3 font-terminal text-[9px] text-muted-foreground">Select or create a decision case.</div><ConceptExplainer title="WHAT IS A DECISION CASE?"><p>A decision case is one question you need to answer -- buy, hold, defer, escalate -- documented with the evidence, models, scenarios, and counterarguments behind it.</p><p>Saving it produces a <strong>receipt</strong>: a versioned, hash-sealed snapshot of exactly what you knew and assumed at the time. If a decision goes wrong later, the receipt shows whether the process was sound, not just the outcome.</p></ConceptExplainer></div> : <>
-          <section className="shrink-0 px-4 py-3 border-b border-border grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] gap-3">
+          <section className="lios-decision-summary shrink-0 px-4 py-3 border-b border-border grid grid-cols-1 gap-3">
             <div><div className="flex flex-wrap gap-2 items-center"><h2 className="font-terminal text-[11px] text-amber-200">{detail.decision.title}</h2><span className={`px-1.5 py-0.5 border font-terminal text-[6px] uppercase ${statusTone(detail.decision.status)}`}>{detail.decision.status}</span></div><p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{detail.decision.question}</p></div>
             <div className="flex items-center gap-3 font-mono text-[7px] text-muted-foreground"><span>RECEIPTS {detail.receipts.length}</span><span>TRIGGERS {detail.monitoringRules.length}</span><span>REPLAYS {detail.replays.length}</span></div>
           </section>
@@ -650,7 +732,9 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
                 <div className="p-4 border-b xl:border-b-0 xl:border-r border-border"><div className="font-terminal text-[7px] text-muted-foreground">MODEL TOURNAMENT / GOVERNANCE TRUST-WEIGHTING</div>{analysis.tournament?.ranked?.map((model: any, index: number) => <div key={`${model.name}-${model.version}`} className="mt-2 flex items-center gap-2 font-mono text-[9px]"><span className="text-muted-foreground">{index + 1}</span><span className="flex-1">{model.name} / {model.version}</span><span>{model.score}</span></div>)}</div>
                 <div className="p-4"><div className="font-terminal text-[7px] text-muted-foreground">DECISION BOUNDARY</div>{analysis.decisionBoundary ? <><div className="font-terminal text-[12px] text-amber-200 mt-2">{analysis.decisionBoundary.assumptionValue}</div><p className="mt-2 text-[9px] text-muted-foreground">The decision reverses once this assumption crosses {analysis.decisionBoundary.assumptionValue} (outcome threshold {analysis.decisionBoundary.threshold}).</p></> : <div className="mt-2 font-mono text-[9px] text-muted-foreground">Enter at least two boundary points bracketing the threshold above to locate the reversal point.</div>}</div>
               </section>}
+              {analysis?.receipt && <div className="p-4"><p className="text-xs text-muted-foreground">Recorded original decision analysis. Editing receipt fields does not recalculate this run or approve a decision.</p><ReceiptSummary receipt={analysis.receipt} /></div>}
               <section className="px-4 py-4 border-b border-border"><div className="flex items-center gap-2 mb-3"><Calculator className="w-4 h-4 text-amber-300" /><div className="font-terminal text-[9px]">REVERSE DCF / MARKET-IMPLIED EXPECTATIONS</div></div><div className="grid grid-cols-2 xl:grid-cols-5 gap-2">{Object.entries(reverseDcf).map(([key, value]) => <Field key={key} label={key.replace(/[A-Z]/g, (letter) => ` ${letter}`).toUpperCase()}><input value={value} onChange={(event) => setReverseDcf((current) => ({ ...current, [key]: event.target.value }))} className={inputClass} /></Field>)}</div><button onClick={() => runReverseDcf.mutate()} className="mt-3 h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[8px]">SOLVE IMPLIED GROWTH</button>{reverseResult && <div className="mt-3 font-mono text-[10px] text-emerald-300">Implied growth {reverseResult.impliedGrowthPercent}% / reproduced EV {reverseResult.reproducedEnterpriseValue}</div>}</section>
+              {reverseResult?.receipt && <div className="p-4"><p className="text-xs text-muted-foreground">Recorded original FCFF-growth solve. Edited inputs require an explicit new solve; this is not the operating-model revenue-growth solver.</p><ReceiptSummary receipt={reverseResult.receipt} /></div>}
               {canAuthor && <section className="px-4 py-4 border-b border-border">
                 <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-4 h-4 text-amber-300" /><div><div className="font-terminal text-[9px]">QUANTITATIVE CONSENSUS</div><div className="font-terminal text-[7px] text-muted-foreground mt-1">Different question from Model Tournament above: robust statistical blending of the models' numeric outputs (MAD-outlier detection + inverse-variance weighting), not governance/quality trust-weighting.</div></div></div>
                 <button onClick={() => runQuantConsensus.mutate()} disabled={parsed.models.length < 2 || runQuantConsensus.isPending} className="mt-2 h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[8px] disabled:opacity-40">BLEND MODEL OUTPUTS</button>
@@ -770,16 +854,18 @@ export default function DecisionEnginePanel({ symbol, role, initialDecisionId }:
                 <div className="flex flex-wrap items-center gap-2">
                   <button data-testid="preview-scenario-pipeline" onClick={() => { if (!scenarioPipelineInputs.payload) { setScenarioPipelineError(scenarioPipelineInputs.error); return; } setScenarioPipelineError(""); runScenarioPipelinePreview.mutate(scenarioPipelineInputs.payload); }} disabled={runScenarioPipelinePreview.isPending} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[8px] disabled:opacity-40">{runScenarioPipelinePreview.isPending ? "RUNNING PIPELINE…" : "PREVIEW PIPELINE"}</button>
                   {validPipelineCalculation && selectedId && latest?.id && <button data-testid="attach-scenario-pipeline" onClick={() => attachScenarioPipeline.mutate()} disabled={scenarioPipelineAttached || attachScenarioPipeline.isPending} className="h-8 px-3 border border-emerald-400/40 text-emerald-300 font-terminal text-[8px] disabled:opacity-40">{scenarioPipelineAttached ? "ATTACHED — APPROVAL REQUIRED" : attachScenarioPipeline.isPending ? "ATTACHING…" : "ATTACH PIPELINE TO RECEIPT"}</button>}
+                  {localPipelinePreview && <button type="button" onClick={() => setScenarioPipelinePreview(null)} className="h-8 px-3 border border-border text-xs">Dismiss unretained preview</button>}
                   {!latest && <span className="font-mono text-[7px] text-amber-200">Select an existing decision receipt before attachment.</span>}
                 </div>
                 {(scenarioPipelineError || (scenarioPipelineInputs.error && !scenarioPipelinePreview)) && <div role="alert" className="border border-red-400/30 px-2 py-2 font-mono text-[8px] text-red-300">{scenarioPipelineError || scenarioPipelineInputs.error}</div>}
+                {pipelineReceiptRef?.decisionId === selectedId && !localPipelinePreview && !detailFetching && !restoredPipeline && <p role="alert" className="text-xs text-amber-200">The exact saved scenario receipt is unavailable under current decision access. No new preview or latest receipt is substituted.</p>}
                 {scenarioPipelinePreview && <div className="border border-emerald-400/30 bg-[#080808] p-3 space-y-2 font-mono text-[8px]" aria-live="polite">
-                  <div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[8px] text-emerald-300">PIPELINE PREVIEW COMPLETE</span><span className="text-muted-foreground">TRACE {scenarioPipelinePreview.trace.traceHash}</span></div>
+                  <div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[8px] text-emerald-300">{scenarioPipelineAttached ? "RECORDED PIPELINE — DECISION RECEIPT" : "PIPELINE PREVIEW — NOT RETAINED UNTIL ATTACHED"}</span><span className="text-muted-foreground">TRACE {scenarioPipelinePreview.trace.traceHash}</span></div>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-1">
                     <div>MODEL BASELINE CHECKS: {scenarioPipelinePreview.trace.models.baselineChecks.passed ? "PASS" : "FAIL"} / SCENARIO: {scenarioPipelinePreview.trace.models.scenarioChecks.passed ? "PASS" : "FAIL"}</div>
                     <div>FACTOR P&amp;L / WEIGHTED: {scenarioFactorPnl(scenarioPipelinePreview.trace) === null ? "unavailable" : scenarioFactorPnl(scenarioPipelinePreview.trace)!.toFixed(4)}</div>
-                    <div>PORTFOLIO P&amp;L: {Number(scenarioPipelinePreview.trace.factorRisk.decomposition.result.scenario?.portfolioPnl ?? 0).toFixed(4)} / COVERAGE {scenarioPipelinePreview.trace.action.coverage.assetsWithExposure}/{scenarioPipelinePreview.trace.action.coverage.assets}</div>
-                    <div>ACTION CANDIDATE IMPACT: {Number(scenarioPipelinePreview.trace.action.result.candidates[0]?.expectedImpact ?? 0).toFixed(4)}</div>
+                    <div>PORTFOLIO P&amp;L: {scenarioPipelinePreview.trace.factorRisk.decomposition.result.scenario?.portfolioPnl?.toFixed(4) ?? "unavailable"} / COVERAGE {scenarioPipelinePreview.trace.action.coverage.assetsWithExposure}/{scenarioPipelinePreview.trace.action.coverage.assets}</div>
+                    <div>ACTION CANDIDATE IMPACT: {scenarioPipelinePreview.trace.action.result.candidates[0]?.expectedImpact?.toFixed(4) ?? "unavailable"}</div>
                     <div>CANDIDATE RECOMMENDATION: <span className="text-amber-200">{scenarioPipelinePreview.trace.recommendation ?? scenarioPipelinePreview.trace.rankedCandidates[0]?.label ?? "none"}</span></div>
                     <div>RECEIPT VALUE: {Number(scenarioPipelinePreview.receiptCalculation.value).toFixed(4)} / {scenarioPipelinePreview.receiptCalculation.deterministicRef}</div>
                   </div>

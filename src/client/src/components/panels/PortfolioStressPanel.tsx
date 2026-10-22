@@ -1,3 +1,5 @@
+import { useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { TERMINAL_STRESS_SCENARIOS as SCENARIOS } from "@shared/terminalStressScenarios";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
@@ -8,7 +10,7 @@ import { getCurrencySymbol } from "@/lib/finance";
 import { Flame, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import type { ViewMode } from "@/lib/terminalTypes";
-import { assertSquareMatrix, assertWeights, runAdvancedPortfolioRisk } from "@/lib/advancedPortfolioRisk";
+import { assertSquareMatrix, assertWeights, withManualProvenance, type AdvancedRiskResponse } from "@/lib/advancedPortfolioRisk";
 import { StructuredJsonEditor, applySchemaDefaults, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 import { AdvancedPortfolioRiskReceipt } from "@/lib/advancedPortfolioRiskReceipt";
 interface Props { onSymbol: (s: string) => void; onNav: (v: ViewMode) => void; }
@@ -59,9 +61,15 @@ function classifyAsset(sym: string): keyof typeof SCENARIOS[0]["factors"] {
 }
 
 export default function PortfolioStressPanel({ onSymbol }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const nativeScope = `PortfolioStressPanel.${terminal?.symbol ?? "manual"}`;
+  function runAdvancedPortfolioRisk<T extends Record<string, unknown>>(path: string, parameters: Record<string, unknown>): Promise<AdvancedRiskResponse<T>> {
+    return quant.run<AdvancedRiskResponse<T>>(path, withManualProvenance(parameters), `${nativeScope}.${path}`);
+  }
   const [reverseStressInput, setReverseStressInput] = useTerminalArtifactState<Record<string, unknown>>("PortfolioStressPanel.reverseStressInput", () => applySchemaDefaults(REVERSE_STRESS_SCHEMA, {}));
   const [correlationStressInput, setCorrelationStressInput] = useTerminalArtifactState<Record<string, unknown>>("PortfolioStressPanel.correlationStressInput", () => applySchemaDefaults(CORRELATION_BREAKDOWN_SCHEMA, {}));
-  const reverseStress = useMutation({
+  const reverseStressMutation = useMutation({
     mutationFn: async () => {
       const payload = reverseStressInput as { assets?: string[]; weights?: number[]; covMatrixPct2?: number[][]; targetPortfolioLossPct?: number };
       if (!payload.assets?.length || new Set(payload.assets).size !== payload.assets.length || !payload.weights || !payload.covMatrixPct2 || !Number.isFinite(payload.targetPortfolioLossPct) || payload.targetPortfolioLossPct! <= 0) throw new Error("Reverse stress requires unique assets, weights, a covariance matrix, and positive targetPortfolioLossPct.");
@@ -70,7 +78,8 @@ export default function PortfolioStressPanel({ onSymbol }: Props) {
       return runAdvancedPortfolioRisk<ReverseStressResult>("risk/reverse-stress", payload as Record<string, unknown>);
     },
   });
-  const correlationBreakdown = useMutation({
+  const reverseStress = { ...reverseStressMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.risk/reverse-stress`] as typeof reverseStressMutation.data : reverseStressMutation.data };
+  const correlationBreakdownMutation = useMutation({
     mutationFn: async () => {
       const payload = correlationStressInput as { assets?: string[]; weights?: number[]; assetVolatilityPct?: number[]; baseCorrelationMatrix?: number[][]; stressedPairwiseCorrelation?: number };
       if (!payload.assets?.length || new Set(payload.assets).size !== payload.assets.length || !payload.weights || !payload.assetVolatilityPct || !payload.baseCorrelationMatrix || !Number.isFinite(payload.stressedPairwiseCorrelation) || payload.stressedPairwiseCorrelation! < -0.99 || payload.stressedPairwiseCorrelation! > 0.999) throw new Error("Correlation stress requires unique assets, weights, volatilities, a base correlation matrix, and a stress correlation in [-0.99, 0.999].");
@@ -81,6 +90,7 @@ export default function PortfolioStressPanel({ onSymbol }: Props) {
       return runAdvancedPortfolioRisk<CorrelationBreakdownResult>("risk/correlation-breakdown", payload as Record<string, unknown>);
     },
   });
+  const correlationBreakdown = { ...correlationBreakdownMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.risk/correlation-breakdown`] as typeof correlationBreakdownMutation.data : correlationBreakdownMutation.data };
   const [scenario, setScenario] = useTerminalArtifactState("PortfolioStressPanel.scenario", SCENARIOS[0]);
   const [orgId, setOrgId] = useTerminalArtifactState<number | null>("PortfolioStressPanel.orgId", null);
   const [portfolioId, setPortfolioId] = useTerminalArtifactState<number | null>("PortfolioStressPanel.portfolioId", null);

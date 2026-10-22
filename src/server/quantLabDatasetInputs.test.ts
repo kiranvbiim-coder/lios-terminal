@@ -12,6 +12,8 @@ const { users, datasetSnapshots } = await import("@shared/schema");
 const { createEntitlementPolicy } = await import("./dataEntitlementStore");
 const { stableSnapshotHash } = await import("./pointInTimeDatasetStore");
 const { resolveQuantDatasetInputs } = await import("./quantLabDatasetInputs");
+const { admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+const { resolveAdvancedQuantInputProvenance, canonicalSnapshotColumnTransform } = await import("@shared/quantModelRegistry");
 
 test("admitted snapshot fields replace manual engine values with explicit scale and refuse missing/foreign/revoked inputs", async t => {
   t.after(async () => { await closeDb(); fs.rmSync(root, { recursive: true, force: true }); });
@@ -38,6 +40,18 @@ test("admitted snapshot fields replace manual engine values with explicit scale 
   await assert.rejects(resolveQuantDatasetInputs(foreign.id, null, [snapshot.id], [binding], {}), /current tenant/);
   await assert.rejects(resolveQuantDatasetInputs(owner.id, null, [snapshot.id], [binding, binding], {}), /exactly one dataset binding/);
   await assert.rejects(resolveQuantDatasetInputs(owner.id, null, [snapshot.id], [binding], {}, { [snapshot.id]: "0".repeat(64) }), /changed after run admission/);
+  const transformed = resolveAdvancedQuantInputProvenance({ data: [0.1, 0.2] }, { dataClassification: "cached", sourceBindings: [{
+    contractFamily: "statistics", field: "data", connectorId: "private-import", provider: "user_supplied", priority: "manual_override",
+    sourceReference: "user-supplied:synthetic", asOf: "2024-01-02T00:00:00.000Z", retrievedAt: "2024-01-02T00:00:00.000Z", freshness: "cached",
+    snapshot: { id: snapshot.id, contentHash: hash }, transformations: [canonicalSnapshotColumnTransform({ field: "value", selection: "values", scale: 0.01 })],
+  }] });
+  assert.equal(transformed.success, true);
+  if (transformed.success) {
+    const tenant = { userId: owner.id, organizationId: null, role: owner.role };
+    assert.ok((await admitTerminalExecutionSources(tenant, transformed.data, { data: [0.1, 0.2] }, getDb(), true, undefined, "stats/normality")).includes(`dataset-snapshot:${snapshot.id}`));
+    await assert.rejects(admitTerminalExecutionSources(tenant, transformed.data, { data: [999] }, getDb(), true, undefined, "stats/normality"), /do not match actual engine inputs/);
+    await assert.rejects(admitTerminalExecutionSources({ ...tenant, role: "client_user" }, transformed.data, { data: [0.1, 0.2] }, getDb(), true, ["display", "derived_output"], "stats/normality"), /Current source rights/);
+  }
   await getDb().update(datasetSnapshots).set({ entitlementPolicyId: null }).where(eq(datasetSnapshots.id, snapshot.id));
   await assert.rejects(resolveQuantDatasetInputs(owner.id, null, [snapshot.id], [binding], {}), /Current linked rights/);
   await assert.rejects(resolveQuantDatasetInputs(owner.id, null, [snapshot.id], [{ ...binding, parameter: "seed" }], {}), /reserved runtime control/);

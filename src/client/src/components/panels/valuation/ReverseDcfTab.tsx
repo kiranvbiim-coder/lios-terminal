@@ -3,7 +3,7 @@ import { useOverridable } from "@/lib/useOverridable";
 import { EditableValue, OverrideStatusBadge } from "@/components/panels/EditableValue";
 import { FormulaTooltip } from "@/components/panels/FormulaTooltip";
 import { computeImpliedGrowth, computeImpliedWacc, computeImpliedMargin } from "@/lib/valuationEngines";
-import { AdvancedReceiptFooter, runAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
+import { AdvancedReceiptFooter, useAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
 
 // Reverse DCF: instead of assuming growth/WACC/margin and solving for
 // value, this tab takes the REAL current market value (market cap + real
@@ -80,7 +80,8 @@ export default function ReverseDcfTab({
   const safeNwc = nwcChangePercentStartingPoint ?? 0;
   const ov = useOverridable<"fcfGrowthRate">("ReverseDcfTab.ov");
   const fcfGrowthRatePct = ov.getValue("fcfGrowthRate", revenueGrowthStartingPoint ?? 0);
-  const [advanced, setAdvanced] = useState<{ impliedRevenueGrowthPct?: number; impliedEbitMarginPct?: number; repricedEquityValue: number; absoluteError: number; receipt: AdvancedReceipt } | null>(null);
+  const nativeModel = useAdvancedModel<{ impliedRevenueGrowthPct?: number; impliedEbitMarginPct?: number; repricedEquityValue: number; absoluteError: number; receipt: AdvancedReceipt }>("valuation/reverse-dcf");
+  const advanced = nativeModel.result;
   const [advancedError, setAdvancedError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -99,7 +100,7 @@ export default function ReverseDcfTab({
       solveFor: "revenue_growth",
     };
     setRunning(true); setAdvancedError(null);
-    try { setAdvanced(await runAdvancedModel("valuation/reverse-dcf", parameters)); }
+    try { await nativeModel.run(parameters); }
     catch (error) { setAdvancedError(error instanceof Error ? error.message : "Reverse DCF run failed."); }
     finally { setRunning(false); }
   }
@@ -168,7 +169,7 @@ export default function ReverseDcfTab({
         <div className="border border-border bg-[#080808] p-3 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-[hsl(38,95%,55%)]">CANONICAL ADVANCED REVERSE DCF</span><button type="button" disabled={running || safeMarketEquity <= 0 || safeRevenue <= 0} onClick={runCanonicalReverseDcf} className="border border-[hsl(38,95%,50%)] px-2 py-1 font-terminal text-[8px] text-[hsl(38,95%,55%)] disabled:opacity-40">{running ? "RUNNING…" : "RUN RECEIPTED MODEL"}</button></div>
           {advancedError ? <div className="font-terminal text-[8px] text-red-400">{advancedError}</div> : null}
-          {advanced ? <AdvancedReceiptFooter receipt={advanced.receipt} /> : null}
+          {advanced ? <><p className="text-xs text-muted-foreground">Recorded native revenue-growth solve: {advanced.impliedRevenueGrowthPct == null ? "unavailable" : `${advanced.impliedRevenueGrowthPct.toFixed(3)}%`}; repriced equity {advanced.repricedEquityValue.toPrecision(10)}; absolute repricing error {advanced.absoluteError.toExponential(3)}. This saved native revenue-growth solve is distinct from the current worksheet's FCF-growth, WACC and margin diagnostics.</p><AdvancedReceiptFooter receipt={advanced.receipt}/></> : null}
         </div>
         <div className="bg-[#080808] border border-border p-3">
           <FormulaTooltip formula="Solves the discount rate implied by current market EV." className="font-terminal text-[8px] tracking-widest text-muted-foreground mb-1">IMPLIED DISCOUNT RATE</FormulaTooltip>

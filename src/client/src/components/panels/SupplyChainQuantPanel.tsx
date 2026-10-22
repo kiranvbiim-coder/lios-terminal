@@ -1,10 +1,11 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useState, useMemo, type ChangeEvent } from "react";
 import { Network } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
 import { InputSourceSelector, ModelInputEditor, ProvenanceReceipt, advancedInputProvenance, type InputSourceMode } from "./advancedOperationsClimate";
 import type { JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import { useAdvancedWorkflow } from "./advancedMacroForecastResearch";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 
 // Supply Chain domain's own real quant engine (LIMURIA_ENGINES port plan
 // Phase 8) -- lives here, under the actual `supply_chain` domain's own
@@ -198,7 +199,12 @@ const SUPPLY_CHAIN_METHODS: { key: SupplyChainMethod; label: string }[] = [
 export default function SupplyChainQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<SupplyChainMethod>("SupplyChainQuantPanel.method", "route");
-  const [result, setResult] = useState<unknown>(null);
+  const [localResult, setResult] = useState<{ method: string; output: unknown } | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const legacyResult = terminal?.target ? native.stored?.[`supplychain.${method}`] : localResult?.method === method ? localResult.output : null;
+  const nativeWorkflow = useAdvancedWorkflow("supply-chain", method);
+  const result = ["route", "safetystock", "bullwhip", "network", "resilience"].includes(method) ? legacyResult : nativeWorkflow.result;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -208,7 +214,7 @@ export default function SupplyChainQuantPanel() {
   const [demandStdDev, setDemandStdDev] = useTerminalArtifactState("SupplyChainQuantPanel.demandStdDev", "250");
   const [echelonLTs, setEchelonLTs] = useTerminalArtifactState("SupplyChainQuantPanel.echelonLTs", "7,14,30");
   const [echelonNames, setEchelonNames] = useTerminalArtifactState("SupplyChainQuantPanel.echelonNames", "Retailer,Regional Depot,Central Factory");
-  const [uploadedDemandForStdDev, setUploadedDemandForStdDev] = useState<number[] | null>(null);
+  const [uploadedDemandForStdDev, setUploadedDemandForStdDev] = useTerminalArtifactState<number[] | null>("SupplyChainQuantPanel.uploadedDemandForStdDev", null);
 
   function handleDemandCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -227,7 +233,7 @@ export default function SupplyChainQuantPanel() {
     e.target.value = "";
   }
 
-  const [uploadedBullwhip, setUploadedBullwhip] = useState<{ demand: number[]; orders: number[] } | null>(null);
+  const [uploadedBullwhip, setUploadedBullwhip] = useTerminalArtifactState<{ demand: number[]; orders: number[] } | null>("SupplyChainQuantPanel.uploadedBullwhip", null);
   const syntheticBullwhip = useMemo(() => {
     const demand = sampleLognormal(200, Math.log(1000), 0.05, 7).map((v) => Math.round(v));
     const orders = demand.map((d, i) => Math.round(d + (sampleLognormal(1, 0, 0.15, 900 + i)[0] - 1) * 400));
@@ -305,18 +311,11 @@ export default function SupplyChainQuantPanel() {
         const parsed: unknown = JSON.parse(advancedInputs[method]);
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Model input must be a JSON object.");
         const parameters = parsed as Record<string, unknown>;
-        const advancedRes = await apiRequest("POST", `/api/quant/advanced/supply-chain/${method}`, {
-          ...parameters, inputProvenance: advancedInputProvenance(parameters, advancedSourceMode),
-        });
-        setResult(await advancedRes.json());
+        await nativeWorkflow.run(parameters, advancedInputProvenance(parameters, advancedSourceMode));
         return;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Supply Chain engine unavailable right now.");
-      }
-      setResult(await res.json());
+      const output = await native.run<Record<string, unknown>>(method, body as Record<string, unknown>, `supplychain.${method}`, path);
+      if (!terminal?.target) setResult({ method, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Supply Chain engine unavailable right now.");
     } finally {
@@ -530,6 +529,7 @@ export default function SupplyChainQuantPanel() {
             </>
           );
         })()}
+        {result != null && !isAdvancedSupplyChainMethod(method) && <><p className="text-xs text-muted-foreground">Recorded original supply-chain engine result · explicit Run recalculates edited inputs on this same terminal Artifact.</p><ProvenanceReceipt receipt={(result as { receipt?: AdvancedReceipt }).receipt}/></>}
       </div>
     </div>
   );

@@ -2681,6 +2681,15 @@
    "unprobed": false
   },
   {
+   "method": "POST",
+   "path": "/api/data-snapshots/:id/entitlement",
+   "reachableBy": [
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "GET",
    "path": "/api/data-snapshots/:id/revisions",
    "reachableBy": [

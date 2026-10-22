@@ -1,4 +1,5 @@
 import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuote, useQuoteStatic, useFundamentals, useOHLCV } from "@/lib/useFinance";
@@ -804,18 +805,15 @@ function ValuationPanel({ symbol }: Props) {
     };
   }, [rows, worksheet.projections, cashFlowMode, costOfEquity, computedWACC, termGrowth]);
 
-  const dcfSensitivity = useMutation({
-    mutationFn: async (body: { expression: string; paramRanges: [number, number][] }) => (
-      await apiRequest("POST", "/api/quant/optimization/sensitivity-analysis", {
-        expression: body.expression,
-        paramNames: ["growth", "wacc", "termGrowth"],
-        paramRanges: body.paramRanges,
-        nSamples: 1024,
-      })
-    ).json() as Promise<{
+  const originalQuant = useTerminalQuantRun();
+  const dcfSensitivityMutation = useMutation({
+    mutationFn: async (body: { expression: string; paramRanges: [number, number][] }) => originalQuant.run<{
       paramNames: string[]; firstOrder: number[]; firstOrderConf: number[]; totalOrder: number[]; totalOrderConf: number[];
-    }>,
+    }>("/optimization/sensitivity-analysis", {
+      expression: body.expression, paramNames: ["growth", "wacc", "termGrowth"], paramRanges: body.paramRanges, nSamples: 1024,
+    }, `valuation.${symbol}.original-sobol`, "/api/quant/optimization/sensitivity-analysis"),
   });
+  const dcfSensitivity = { ...dcfSensitivityMutation, data: terminal?.target ? originalQuant.stored?.[`valuation.${symbol}.original-sobol`] as typeof dcfSensitivityMutation.data : dcfSensitivityMutation.data };
   const dcfSobolInputsKey = JSON.stringify(dcfSobolInputs);
   const dcfSensitivityReset = dcfSensitivity.reset;
   useEffect(() => { dcfSensitivityReset(); }, [dcfSobolInputsKey, dcfSensitivityReset]);

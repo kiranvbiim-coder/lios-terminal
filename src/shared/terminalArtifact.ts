@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { conversationSourceScopeSchema } from "./sourceScope";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
 /** Presentation and authored inputs of an existing P4 screen, not data/permission authority. */
 export const terminalScreenStateSchema = z.object({
@@ -32,6 +34,29 @@ export const terminalExecutionTargetSchema = z.object({
 export type TerminalExecutionTarget = z.infer<typeof terminalExecutionTargetSchema>;
 export interface TerminalExecutionVersion {
   artifactId: string; baseVersion: number; version: number; contentHash: string;
+}
+
+/** Bounded index for large ordered baskets; full numerical identity stays in the native receipt. */
+export function boundedTerminalExecutionSlot(slot: string): string {
+  if (slot.length <= 240) return slot;
+  const separator = slot.indexOf(".");
+  const family = separator > 0 ? slot.slice(0, Math.min(separator, 40)) : "native";
+  return `${family}.sha256.${bytesToHex(sha256(utf8ToBytes(slot)))}`;
+}
+
+/** UI controls and governed selection operations update the same recorded analytical posture. */
+export function writeTerminalPanelState(state: TerminalScreenState, key: string, value: unknown): TerminalScreenState {
+  const panelState = { ...state.panelState, [key]: value };
+  const next = { ...state, panelState };
+  if (key === "PortfolioStressPanel.portfolioId") next.portfolioId = value == null ? null : String(value);
+  if (key === "PortfolioStressPanel.scenario") next.scenarioId = value && typeof value === "object" && "id" in value ? String(value.id) : null;
+  if (key === "RiskReturnScatterPanel.benchmark" || key === "RiskReturnScatterPanel.customBenchmark") {
+    const custom = panelState["RiskReturnScatterPanel.customBenchmark"];
+    const preset = panelState["RiskReturnScatterPanel.benchmark"];
+    const selected = typeof custom === "string" && custom.trim() ? custom.trim().toUpperCase() : typeof preset === "string" ? preset : null;
+    next.benchmarkId = selected === "NONE" ? null : selected;
+  }
+  return next;
 }
 
 export function initialTerminalScreenState(symbol: string | null, sourceScope: TerminalScreenState["sourceScope"] = "auto"): TerminalScreenState {

@@ -1,3 +1,5 @@
+import { useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -12,7 +14,7 @@ import {
   fitGPD, evtVaR, evtExpectedShortfall, type GPDFit,
 } from "@/lib/quantModels";
 import { RangeSelector } from "@/components/panels/RangeSelector";
-import { runAdvancedPortfolioRisk } from "@/lib/advancedPortfolioRisk";
+import { withManualProvenance, type AdvancedRiskResponse } from "@/lib/advancedPortfolioRisk";
 import { AdvancedPortfolioRiskReceipt } from "@/lib/advancedPortfolioRiskReceipt";
 import { FixedIncomeCreditControls } from "@/components/panels/FixedIncomeCreditControls";
 import { StructuredJsonEditor, applySchemaDefaults, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
@@ -70,6 +72,12 @@ type LiquidityRiskResult = { liquidityVaR: number; estimatedLiquidationCost: num
 type CreditMetricsResult = { expectedLoss: number; unexpectedLossStd: number; creditVar: number; economicCapital: number; tailExpectedShortfall: number; seed: number };
 
 export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: string }) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const nativeScope = `AdvancedRiskPanel.${terminal?.symbol ?? "manual"}`;
+  function runAdvancedPortfolioRisk<T extends Record<string, unknown>>(path: string, parameters: Record<string, unknown>): Promise<AdvancedRiskResponse<T>> {
+    return quant.run<AdvancedRiskResponse<T>>(path, withManualProvenance(parameters), `${nativeScope}.${path}`);
+  }
   const [input, setInput] = useTerminalArtifactState("AdvancedRiskPanel.input", initialSymbol || "AAPL");
   const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol || "AAPL");
   const [benchmark, setBenchmark] = useTerminalArtifactState("AdvancedRiskPanel.benchmark", "^GSPC");
@@ -78,17 +86,18 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
   const [tailSeed, setTailSeed] = useTerminalArtifactState("AdvancedRiskPanel.tailSeed", 42);
   const [liquidityInput, setLiquidityInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.liquidityInput", () => applySchemaDefaults(LIQUIDITY_VAR_SCHEMA, {}));
   const [creditMetricsInput, setCreditMetricsInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.creditMetricsInput", () => applySchemaDefaults(CREDIT_METRICS_SCHEMA, {}));
-  const tailReport = useMutation({
+  const tailReportMutation = useMutation({
     mutationFn: async () => {
       if (returns.length < 30 || !Number.isFinite(positionValue) || positionValue <= 0) throw new Error("Tail report requires 30+ observed returns and a positive position value.");
       return runAdvancedPortfolioRisk<TailRiskResult>("risk/tail-report", {
-        assets: [symbol], returnsMatrixPct: returns.map((value) => [value * 100]), weights: [1],
+        assets: [symbol], returnsMatrixPct: returns.map(value => [value]), weights: [1],
         portfolioValue: positionValue, confidencePct: 99, ewmaLambda: 0.94, evtThresholdPct: 95,
         monteCarloSims: 20000, studentTDegreesFreedom: 6, seed: tailSeed,
       });
     },
   });
-  const liquidityVar = useMutation({
+  const tailReport = { ...tailReportMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.risk/tail-report`] as typeof tailReportMutation.data : tailReportMutation.data };
+  const liquidityVarMutation = useMutation({
     mutationFn: async () => {
       const payload = liquidityInput as { positions?: Array<{ name?: string; marketValue?: number; dailyVolumeValue?: number; bidAskSpreadBps?: number; dailyVolatilityPct?: number; liquidationDays?: number }>; participationRatePct?: number; confidencePct?: number };
       if (!payload.positions?.length || payload.positions.some((position) => !position.name || !Number.isFinite(position.marketValue) || !Number.isFinite(position.dailyVolumeValue) || position.dailyVolumeValue! <= 0 || !Number.isFinite(position.bidAskSpreadBps) || position.bidAskSpreadBps! < 0 || !Number.isFinite(position.dailyVolatilityPct) || position.dailyVolatilityPct! < 0 || !Number.isFinite(position.liquidationDays) || position.liquidationDays! <= 0)) throw new Error("Each manual liquidity position requires name, finite marketValue, positive dailyVolumeValue/liquidationDays, and non-negative spread/volatility.");
@@ -96,7 +105,8 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
       return runAdvancedPortfolioRisk<LiquidityRiskResult>("risk/liquidity-var", payload as Record<string, unknown>);
     },
   });
-  const creditMetricsRun = useMutation({
+  const liquidityVar = { ...liquidityVarMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.risk/liquidity-var`] as typeof liquidityVarMutation.data : liquidityVarMutation.data };
+  const creditMetricsRunMutation = useMutation({
     mutationFn: async () => {
       const { exposures, assetCorrelation, confidencePct, nSimulations, seed } = creditMetricsInput as { exposures?: Array<{ name?: string; ead?: number; pdPct?: number; lgdPct?: number; sector?: string }>; assetCorrelation?: number; confidencePct?: number; nSimulations?: number; seed?: number };
       if (!Array.isArray(exposures) || exposures.length === 0 || exposures.some((e) => !e.name || !Number.isFinite(e.ead) || (e.ead as number) < 0 || !Number.isFinite(e.pdPct) || (e.pdPct as number) < 0 || (e.pdPct as number) > 100 || !Number.isFinite(e.lgdPct) || (e.lgdPct as number) < 0 || (e.lgdPct as number) > 100)) throw new Error("Every exposure requires a name, non-negative EAD, and pdPct/lgdPct in [0, 100].");
@@ -106,6 +116,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
       return runAdvancedPortfolioRisk<CreditMetricsResult>("credit/creditmetrics", { exposures, assetCorrelation, confidencePct, nSimulations, seed });
     },
   });
+  const creditMetricsRun = { ...creditMetricsRunMutation, data: terminal?.target ? quant.stored?.[`${nativeScope}.credit/creditmetrics`] as typeof creditMetricsRunMutation.data : creditMetricsRunMutation.data };
 
   const curr = getCurrencySymbol(symbol);
   const { data: series, isLoading } = useOHLCV(symbol, range, "1d");
@@ -136,6 +147,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
   const dailyDrift = returns.length ? returns.reduce((s, v) => s + v, 0) / returns.length : 0;
 
   const varTable = useMemo(() => {
+    if (returns.length < 2) return [];
     return CONFIDENCE_LEVELS.map((conf) => ({
       confidence: conf,
       parametric: parametricVaR(positionValue, dailyVol, conf, 1),
@@ -177,10 +189,9 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
         <span className="ml-auto font-terminal text-[8px] text-muted-foreground tracking-widest">RISK</span>
       </div>
 
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center font-terminal text-[9px] text-muted-foreground">LOADING...</div>
-      ) : (
-        <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-5">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-5">
+          {isLoading && <p role="status" className="text-sm">Loading current observations; saved native results below remain available.</p>}
+          {returns.length < 2 ? <p role="status" className="text-sm text-amber-200">Observed return history is unavailable. Automatic performance and VaR comparisons are not calculated from zero prices or missing returns. Manual native engines and retained results remain available below.</p> : <>
           {/* Risk-adjusted ratios */}
           <div>
             <div className="font-terminal text-[9px] text-muted-foreground tracking-widest mb-2">RISK-ADJUSTED PERFORMANCE ({range})</div>
@@ -276,6 +287,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
               </>
             )}
           </div>
+          </>}
 
           <div className="border border-border bg-[#080808] p-3 space-y-3">
             <div className="font-terminal text-[9px] tracking-widest text-muted-foreground">ADVANCED TAIL &amp; LIQUIDITY ENGINES</div>
@@ -320,7 +332,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
             </div>
           </div>
           {/* EWMA volatility trend */}
-          <div>
+          {returns.length >= 2 && <div>
             <div className="font-terminal text-[9px] text-muted-foreground tracking-widest mb-2">EWMA VOLATILITY (ANNUALIZED, λ=0.94)</div>
             <div className="h-36 border border-border bg-[#0a0a0a] p-3">
               <ResponsiveContainer width="100%" height="100%">
@@ -338,9 +350,8 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </div>}
         </div>
-      )}
 
       <div className="px-4 py-1.5 border-t border-border bg-[#060606] shrink-0">
         <span className="font-terminal text-[7.5px] text-muted-foreground/70">EWMA (RiskMetrics convention) reacts faster to volatility shifts than the flat-window GARCH(1,1) elsewhere in this terminal.</span>

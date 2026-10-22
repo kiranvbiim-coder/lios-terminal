@@ -10,6 +10,7 @@ import {
 import { callPythonService } from "./pythonService";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 import { QUANT_MODEL_REGISTRY } from "./quantModelRegistry";
+import { runModelTournament, stressThesis, findDecisionBoundary, calculateReverseDcf } from "./decisionEngine";
 
 export const ADVANCED_QUANT_PATHS = [
   "fixed-income/bootstrap-par-curve", "fixed-income/spread-analytics", "fixed-income/key-rate-risk", "fixed-income/immunize-duration",
@@ -100,7 +101,7 @@ export function advancedQuantRunResponse(result: unknown, receipt: AdvancedQuant
 }
 
 export function buildAdvancedQuantRunReceipt(input: {
-  path: AdvancedQuantPath;
+  path: string;
   registryEntry?: QuantModelRegistryEntry;
   parameters: Record<string, unknown>;
   inputProvenance: ResolvedAdvancedQuantInputProvenance;
@@ -220,4 +221,54 @@ export async function executeAdvancedQuant(
   };
   if (options.userId !== undefined && options.callEngine === undefined) nativeExecutionOwners.set(execution, options.userId);
   return execution;
+}
+
+/** Existing registered base-model execution, retained only when explicitly requested by its original UI. */
+export async function executeRegisteredPythonQuant(route: string, apiEndpoint: string, parameters: Record<string, unknown>, userId: number, signal?: AbortSignal): Promise<AdvancedQuantExecution> {
+  const registryEntry = QUANT_MODEL_REGISTRY.find(entry => entry.engine === "python_sidecar" && entry.engineEndpoint === route && entry.apiEndpoint === apiEndpoint && entry.status !== "planned");
+  if (!registryEntry) throw new Error("Original numerical route has no executable canonical registry entry.");
+  const provenance = resolveAdvancedQuantInputProvenance(parameters, { dataClassification: "manual", manualInputs: parameters });
+  if (!provenance.success) throw new AdvancedQuantInputError("invalid_provenance", "Original numerical inputs are invalid.");
+  let result = await callPythonService<Record<string, unknown>>(route, parameters, { signal });
+  if (route === "/stats/ols-diagnostics" || route === "/stats/gls") {
+    const diagnostics: Array<{ key: string; route: string; parameters: Record<string, unknown> }> = [
+      { key: "heteroskedasticity", route: "/econometrics/heteroskedasticity", parameters: { residuals: result.residuals, x: parameters.x } },
+      { key: "influence", route: "/stats/influence-diagnostics", parameters: { y: parameters.y, x: parameters.x } },
+      { key: "reset", route: "/stats/reset-test", parameters: { y: parameters.y, x: parameters.x } },
+      { key: "autocorrelation", route: "/stats/autocorrelation-tests", parameters: { y: parameters.y, x: parameters.x, lags: 4 } },
+    ];
+    if (Array.isArray(parameters.x) && parameters.x.length >= 2) diagnostics.push({ key: "vif", route: "/stats/vif", parameters: { x: parameters.x } });
+    const outputs = await Promise.all(diagnostics.map(async diagnostic => {
+      try { return [diagnostic.key, await callPythonService(diagnostic.route, diagnostic.parameters, { signal })] as const; }
+      catch (error) { if (signal?.aborted) throw error; return [diagnostic.key, { error: error instanceof Error ? error.message : "Original diagnostic unavailable." }] as const; }
+    }));
+    result = { ...result, diagnostics: Object.fromEntries(outputs) };
+  }
+  const receipt = buildAdvancedQuantRunReceipt({ path: route, registryEntry, parameters, inputProvenance: provenance.data, result });
+  const execution = { result, receipt, response: advancedQuantRunResponse(result, receipt), headers: advancedQuantReceiptHeaders(receipt) };
+  nativeExecutionOwners.set(execution, userId);
+  return execution;
+}
+
+type DecisionAnalysisInput = Parameters<typeof stressThesis>[0] & {
+  models: Parameters<typeof runModelTournament>[0];
+  boundary?: { points: Parameters<typeof findDecisionBoundary>[0]; threshold: number };
+};
+function ownedDecisionExecution(modelId: string, parameters: Record<string, unknown>, result: unknown, userId: number): AdvancedQuantExecution {
+  const registryEntry = QUANT_MODEL_REGISTRY.find(entry => entry.id === modelId && entry.engine === "typescript");
+  if (!registryEntry) throw new Error("Original decision calculation is not registered.");
+  const provenance = resolveAdvancedQuantInputProvenance(parameters, { dataClassification: "manual", manualInputs: parameters });
+  if (!provenance.success) throw new Error("Original decision inputs are not valid manual parameters.");
+  const receipt = buildAdvancedQuantRunReceipt({ path: registryEntry.apiEndpoint!, registryEntry, parameters, inputProvenance: provenance.data, result });
+  const execution = { result, receipt, response: advancedQuantRunResponse(result, receipt), headers: advancedQuantReceiptHeaders(receipt) };
+  nativeExecutionOwners.set(execution, userId);
+  return execution;
+}
+export async function executeOriginalDecisionAnalysis(input: DecisionAnalysisInput, userId: number): Promise<AdvancedQuantExecution> {
+  const result = { tournament: runModelTournament(input.models), thesisStress: stressThesis(input),
+    decisionBoundary: input.boundary ? findDecisionBoundary(input.boundary.points, input.boundary.threshold) : null };
+  return ownedDecisionExecution("typescript.decision-analysis", { ...input }, result, userId);
+}
+export async function executeOriginalDecisionReverseDcf(input: Parameters<typeof calculateReverseDcf>[0], userId: number): Promise<AdvancedQuantExecution> {
+  return ownedDecisionExecution("typescript.decision-reverse-dcf", { ...input }, calculateReverseDcf(input), userId);
 }

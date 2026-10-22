@@ -14,9 +14,10 @@ import { getEntitlementPolicyById } from "./dataEntitlementStore";
 import { and, eq, isNull } from "drizzle-orm";
 import { portfolios, datasetSnapshots, users } from "@shared/schema";
 import { getDb, type DrizzleDb } from "./db";
-import type { ResolvedAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
-import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
+import { canonicalSnapshotColumnSchema, type ResolvedAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
+import { canAccessDatasetSnapshot, flattenSnapshotForColumnar } from "./columnarArtifactStore";
 import { requirePythonInputFields } from "./pythonInputContract";
+import { economicSnapshotContentHash } from "./economicDatasetStore";
 
 export async function validateTerminalArtifactTarget(ctx: TenantContext, chatId: number, binding: { artifactId: string; version: number; contentHash: string }, signal: AbortSignal) {
   assertNotAborted(signal);
@@ -76,16 +77,34 @@ export async function admitTerminalExecutionSources(ctx: TenantContext, provenan
     if (!source || !canAccessDatasetSnapshot(source, ctx) || source.contentHash !== binding.snapshot.contentHash || source.provider !== binding.provider
       || source.availableAt > now || source.expiresAt !== null && source.expiresAt <= now) throw new Error("Native source snapshot is unavailable or outside the current tenant.");
     const policy = source.entitlementPolicyId ? await getEntitlementPolicyById(source.entitlementPolicyId, db, lock) : null;
-    if (!policy || policy.provider !== source.provider || policy.dataClass !== source.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now
+    if (!policy || policy.licenseType === "unknown" || policy.provider !== source.provider || policy.dataClass !== source.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now
       || policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_")
       || !requiredUses.every(use => policy.permittedUses.includes(use))) throw new Error("Current source rights do not permit this native calculation and retained result.");
-    if (binding.transformations.length || provenance.transformations.length) throw new Error("Source transformations require an explicit admitted engine input adapter.");
-    const [snapshot] = await db.select({ payload: datasetSnapshots.payload, lineage: datasetSnapshots.lineage, provider: datasetSnapshots.provider }).from(datasetSnapshots).where(eq(datasetSnapshots.id, source.id)).limit(1);
-    if (!snapshot || hashLedgerValue({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) !== source.contentHash) throw new Error("Native source content does not match its immutable hash.");
+    const column = binding.transformations.length === 1 && binding.transformations[0].startsWith("canonical-column:")
+      ? canonicalSnapshotColumnSchema.parse(JSON.parse(binding.transformations[0].slice("canonical-column:".length))) : null;
+    if (provenance.transformations.length || binding.transformations.length && !column) throw new Error("Source transformations require an explicit admitted engine input adapter.");
+    const [snapshot] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, source.id)).limit(1);
+    const expectedHash = source.dataClass === "economic_series" || source.dataClass === "yield_curve"
+      ? economicSnapshotContentHash(snapshot?.payload, snapshot?.lineage)
+      : snapshot ? hashLedgerValue({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) : null;
+    if (!snapshot || expectedHash !== source.contentHash) throw new Error("Native source content does not match its immutable hash.");
     const parts = binding.field.split(".");
+    if (binding.field !== "manual-import" && !/^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(binding.field)) throw new Error("Source bindings require an exact top-level consumed engine parameter; nested paths require an admitted request-model adapter.");
     if (parts.some(part => ["__proto__", "prototype", "constructor"].includes(part))) throw new Error("Unsafe native source field.");
     const read = (value: unknown) => parts.reduce<unknown>((next, key) => next && typeof next === "object" && Object.hasOwn(next, key) ? (next as Record<string, unknown>)[key] : undefined, value);
-    const sourceValue = binding.field === "manual-import" ? snapshot.payload : read(snapshot.payload);
+    let sourceValue: unknown = binding.field === "manual-import" ? snapshot.payload : read(snapshot.payload);
+    if (column) {
+      const flattened = flattenSnapshotForColumnar(snapshot);
+      if (!flattened.numericColumns.includes(column.field) || column.rowsWhereFinite && !flattened.numericColumns.includes(column.rowsWhereFinite)) throw new Error("Source adapter requires canonical numeric snapshot columns.");
+      const rows = column.rowsWhereFinite ? flattened.records.filter(row => typeof row[column.rowsWhereFinite!] === "number" && Number.isFinite(row[column.rowsWhereFinite!] as number)) : flattened.records;
+      if (!rows.length) throw new Error("Source adapter has no selected observations.");
+      const selected = column.selection === "last" ? [rows[rows.length - 1]] : rows;
+      const values = selected.map(row => row[column.field]);
+      if (values.some(value => typeof value !== "number" || !Number.isFinite(value))) throw new Error("Source adapter refuses missing/non-finite selected observations.");
+      const scaled = (values as number[]).map(value => value * column.scale);
+      if (scaled.some(value => !Number.isFinite(value))) throw new Error("Source adapter scale produced non-finite input.");
+      sourceValue = column.selection === "last" ? scaled[0] : scaled;
+    }
     const inputValue = binding.field === "manual-import" ? parameters : read(parameters);
     if (sourceValue === undefined || inputValue === undefined || hashLedgerValue(sourceValue) !== hashLedgerValue(inputValue)) throw new Error("Native source fields do not match actual engine inputs; use an admitted transformation adapter.");
     refs.push(`dataset-snapshot:${source.id}`, `dataset-content-sha256:${source.contentHash}`, `entitlement-policy:${policy.id}`);

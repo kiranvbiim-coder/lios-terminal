@@ -1,8 +1,9 @@
+import { canonicalSnapshotColumnTransform } from "@shared/quantModelRegistry";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Activity, Database, RefreshCw, TriangleAlert } from "lucide-react";
 import type { PointInTimeScalarSeriesSnapshot, PointInTimeYieldCurveSnapshot } from "@shared/pointInTimeData";
-import { AdvancedManualWorkflow, ReceiptSummary, runAdvancedManual, runAdvancedSourced, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { AdvancedManualWorkflow, ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -26,7 +27,8 @@ const NOWCAST_INPUTS_SCHEMA: JsonFieldSchema[] = [
 ];
 function NowcastRunner({ series }: { series: PointInTimeScalarSeriesSnapshot | null }) {
   const [nowcastInputs, setNowcastInputs] = useTerminalArtifactState<Record<string, unknown>>("NowcastRunner.nowcastInputs", { indicatorHistory: [], currentIndicators: [] });
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("forecasting", "nowcast");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const targetHistory = series?.payload.observations.map((observation) => observation.value) ?? [];
@@ -39,9 +41,9 @@ function NowcastRunner({ series }: { series: PointInTimeScalarSeriesSnapshot | n
       return;
     }
     if (!Array.isArray(currentIndicators)) { setError("currentIndicators must be an array of numbers."); return; }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("forecasting", "nowcast", { targetHistory, indicatorHistory, currentIndicators }));
+      await nativeWorkflow.run({ targetHistory, indicatorHistory, currentIndicators });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Nowcast unavailable."); }
     finally { setLoading(false); }
   };
@@ -57,39 +59,41 @@ function NowcastRunner({ series }: { series: PointInTimeScalarSeriesSnapshot | n
 
 function MacroModelTab({ curve, series }: { curve: PointInTimeYieldCurveSnapshot | null; series: PointInTimeScalarSeriesSnapshot | null }) {
   const [fred, setFred] = useState<ProviderStatus | null>(null);
-  const [curveResult, setCurveResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeCurve = useAdvancedWorkflow("macro", "yield-curve-signals");
+  const curveResult = nativeCurve.result;
   const [curveError, setCurveError] = useState<string | null>(null);
   const [curveLoading, setCurveLoading] = useState(false);
   useEffect(() => { void json<ProviderStatus[]>("/api/finance/provider-status").then((items) => setFred(items.find((item) => item.id === "fred") ?? null)).catch(() => setFred(null)); }, []);
   const runCurve = async () => {
-    if (!curve || fred?.state !== "configured") return;
+    if (!curve) return;
     const points = curve.payload.points.filter((point) => point.yield !== null);
     if (points.length < 3) { setCurveError("Frozen curve has fewer than three valid nodes."); return; }
     const parameters = { maturitiesYears: points.map((point) => point.maturityYears), yieldsPct: points.map((point) => point.yield!) };
-    setCurveLoading(true); setCurveError(null); setCurveResult(null);
+    setCurveLoading(true); setCurveError(null); 
     try {
-      setCurveResult(await runAdvancedSourced("macro", "yield-curve-signals", parameters, {
+      await nativeCurve.run(parameters, {
         dataClassification: "cached",
-        sourceBindings: [{
-          contractFamily: "macro", field: "yield_curve", connectorId: "fred", provider: "FRED", priority: "primary",
+        sourceBindings: ([
+          ["maturitiesYears", "maturity_years"], ["yieldsPct", "yield_value"],
+        ] as const).map(([field, sourceField]) => ({
+          contractFamily: "macro", field, connectorId: "fred", provider: curve.provider, priority: "primary",
           sourceReference: `data-snapshots/curves/ust/${curve.id}`, asOf: curve.effectiveAt, retrievedAt: curve.retrievedAt,
           freshness: "frozen point-in-time snapshot", snapshot: { id: curve.id, contentHash: curve.contentHash },
-          transformations: ["drop null yield nodes", "use stored maturityYears and yieldsPct"],
-        }],
-        transformations: ["point-in-time yield curve snapshot"],
-      }));
+          transformations: [canonicalSnapshotColumnTransform({ field: sourceField, selection: "values", scale: 1, rowsWhereFinite: "yield_value" })],
+        })),
+      });
     } catch (cause) { setCurveError(cause instanceof Error ? cause.message : "Yield curve signal unavailable."); }
     finally { setCurveLoading(false); }
   };
   return <div className="space-y-3 p-4">
     <div className="font-terminal text-[9px] text-amber-300">ADVANCED MACRO WORKFLOWS</div>
     <div className={`border p-2 font-mono text-[8px] ${fred?.state === "configured" ? "border-emerald-400/30 text-emerald-300" : "border-amber-400/30 text-amber-200"}`}>
-      {fred?.state === "configured" ? "FRED CONNECTOR CONFIGURED — ONLY FROZEN FRED SNAPSHOTS ARE USED AS SOURCED INPUTS." : `FRED UNAVAILABLE — ${fred?.setup ?? "Set FRED_API_KEY or fredApiKey, then capture a snapshot. Manual imports below remain manual."}`}
+      {fred?.state === "configured" ? "FRED CONNECTOR CONFIGURED — ONLY FROZEN SNAPSHOTS ARE USED AS SOURCED INPUTS." : `FRED CONNECTOR UNAVAILABLE — ${fred?.setup ?? "Configure it before capturing new observations."} Existing frozen snapshots may still be calculated only when current linked rights permit. Manual imports remain manual.`}
     </div>
     <section className="space-y-2 border border-border p-3">
       <div className="font-terminal text-[9px]">YIELD-CURVE SIGNALS — FROZEN FRED UST CURVE</div>
       <div className="font-mono text-[7px] text-muted-foreground">{curve ? `SNAPSHOT ${curve.id} / AS-OF ${curve.effectiveAt} / HASH ${curve.contentHash}` : "NO FROZEN UST CURVE. CAPTURE ONE AFTER CONFIGURING FRED."}</div>
-      <button type="button" onClick={() => void runCurve()} disabled={!curve || fred?.state !== "configured" || curveLoading} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-[8px] text-amber-300 disabled:opacity-40">{curveLoading ? "RUNNING…" : "RUN SOURCED CURVE SIGNALS"}</button>
+      <button type="button" onClick={() => void runCurve()} disabled={!curve?.entitlementPolicyId || curveLoading} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-[8px] text-amber-300 disabled:opacity-40">{curveLoading ? "RUNNING…" : "RUN SOURCED CURVE SIGNALS"}</button>
       {curveError && <div role="alert" className="font-mono text-[8px] text-red-300">{curveError}</div>}
       {curveResult && <><pre className="max-h-36 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-[7px] text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(curveResult).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={curveResult.receipt} /></>}
     </section>
@@ -105,25 +109,62 @@ export default function EconomicDataFabricPanel() {
   const [seriesId, setSeriesId] = useTerminalArtifactState("EconomicDataFabricPanel.seriesId", "FEDFUNDS");
   const [series, setSeries] = useState<PointInTimeScalarSeriesSnapshot[]>([]);
   const [curves, setCurves] = useState<PointInTimeYieldCurveSnapshot[]>([]);
+  const [selectedSeriesId, setSelectedSeriesId] = useTerminalArtifactState<string | null>("EconomicDataFabricPanel.selectedSeriesSnapshot", null);
+  const [selectedCurveId, setSelectedCurveId] = useTerminalArtifactState<string | null>("EconomicDataFabricPanel.selectedCurveSnapshot", null);
+  const loadOwner = `${seriesId}:${selectedSeriesId ?? ""}:${selectedCurveId ?? ""}`;
+  const latestLoadOwner = useRef(loadOwner); latestLoadOwner.current = loadOwner;
+  const loadSequence = useRef(0);
+  useEffect(() => { if (selectedSeriesId === null && series[0]?.entityKey === seriesId) setSelectedSeriesId(series[0].id); }, [series, seriesId, selectedSeriesId, setSelectedSeriesId]);
+  useEffect(() => { if (selectedCurveId === null && curves[0]) setSelectedCurveId(curves[0].id); }, [curves, selectedCurveId, setSelectedCurveId]);
+  const [policyId, setPolicyId] = useTerminalArtifactState("EconomicDataFabricPanel.policyId", "");
   const [tab, setTab] = useTerminalArtifactState<"series" | "curve" | "macro" | "lineage">("EconomicDataFabricPanel.tab", "series");
   const [busy, setBusy] = useState<"series" | "curve" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const currentSeries = series[0] ?? null, currentCurve = curves[0] ?? null;
+  const currentSeries = selectedSeriesId ? series.find(item => item.id === selectedSeriesId) ?? null : series[0] ?? null;
+  const currentCurve = selectedCurveId ? curves.find(item => item.id === selectedCurveId) ?? null : curves[0] ?? null;
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    const owner = loadOwner;
     try { setError(null); const [s, c] = await Promise.all([
       json<PointInTimeScalarSeriesSnapshot[]>(`/api/data-snapshots/economics/${encodeURIComponent(seriesId)}`),
       json<PointInTimeYieldCurveSnapshot[]>("/api/data-snapshots/curves/ust"),
-    ]); setSeries(s); setCurves(c); } catch (cause) { setError(cause instanceof Error ? cause.message : "Economic data fabric unavailable."); }
-  }, [seriesId]);
-  useEffect(() => { void load(); }, [load]);
+    ]);
+      if (selectedSeriesId && !s.some(item=>item.id===selectedSeriesId)) {
+        const saved = await json<PointInTimeScalarSeriesSnapshot>(`/api/data-snapshots/${encodeURIComponent(selectedSeriesId)}`);
+        if (saved.dataClass !== "economic_series" || saved.entityKey !== seriesId) throw new Error("Selected series snapshot does not match the current series.");
+        s.push(saved);
+      }
+      if (selectedCurveId && !c.some(item=>item.id===selectedCurveId)) {
+        const saved = await json<PointInTimeYieldCurveSnapshot>(`/api/data-snapshots/${encodeURIComponent(selectedCurveId)}`);
+        if (saved.dataClass !== "yield_curve") throw new Error("Selected curve snapshot does not match the original curve.");
+        c.push(saved);
+      }
+      if (sequence === loadSequence.current && owner === latestLoadOwner.current) { setSeries(s); setCurves(c); }
+    } catch (cause) { if (sequence === loadSequence.current && owner === latestLoadOwner.current) setError(cause instanceof Error ? cause.message : "Economic data fabric unavailable."); }
+  }, [seriesId, selectedSeriesId, selectedCurveId, loadOwner]);
+  useEffect(() => { void load(); return () => { loadSequence.current++; }; }, [load]);
   const capture = async (kind: "series" | "curve") => {
+    const owner = loadOwner;
     setBusy(kind); setError(null);
-    try { await json(kind === "series" ? `/api/data-snapshots/economics/${encodeURIComponent(seriesId)}` : "/api/data-snapshots/curves/ust", { method: "POST", body: JSON.stringify(kind === "series" ? { points: 240 } : {}) }); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Capture failed."); } finally { setBusy(null); }
+    try {
+      const captured = await json<{ snapshot: PointInTimeScalarSeriesSnapshot | PointInTimeYieldCurveSnapshot }>(kind === "series" ? `/api/data-snapshots/economics/${encodeURIComponent(seriesId)}` : "/api/data-snapshots/curves/ust", { method: "POST", body: JSON.stringify(kind === "series" ? { points: 240 } : {}) });
+      if (owner !== latestLoadOwner.current) return;
+      if (kind === "series") setSelectedSeriesId(captured.snapshot.id); else setSelectedCurveId(captured.snapshot.id);
+      await load();
+    }
+    catch (cause) { if (owner === latestLoadOwner.current) setError(cause instanceof Error ? cause.message : "Capture failed."); } finally { setBusy(null); }
+  };
+  const linkPolicy = async () => {
+    const snapshot = tab === "curve" || tab === "macro" ? currentCurve : currentSeries;
+    if (!snapshot || !policyId.trim()) return;
+    const owner = loadOwner;
+    setError(null);
+    try { await json(`/api/data-snapshots/${snapshot.id}/entitlement`, { method: "POST", body: JSON.stringify({ contentHash: snapshot.contentHash, policyId: policyId.trim() }) }); await load(); }
+    catch (cause) { if (owner === latestLoadOwner.current) setError(cause instanceof Error ? cause.message : "Explicit policy linkage failed."); }
   };
   return <div className="h-full min-h-0 flex flex-col bg-background overflow-hidden">
     <header className="shrink-0 border-b border-border px-4 py-3 flex flex-wrap items-center gap-3"><Activity className="w-4 h-4 text-amber-300" /><div><div className="font-terminal text-[10px]">MACRO, RATES AND CURVE DATA FABRIC</div><div className="font-mono text-[7px] text-muted-foreground">FRED VINTAGES / IMMUTABLE AVAILABILITY / AS-OF REPLAY</div></div>
-      <form onSubmit={(event) => { event.preventDefault(); setSeriesId(seriesInput.trim().toUpperCase()); }} className="ml-auto flex"><input aria-label="FRED series ID" value={seriesInput} onChange={(event) => setSeriesInput(event.target.value)} className="h-8 w-32 border border-border bg-black px-2 font-mono text-[9px] uppercase outline-none focus:border-amber-400/50" /><button title="Load FRED series" className="w-8 h-8 border border-l-0 border-border text-amber-300"><RefreshCw className="w-3.5 h-3.5 mx-auto" /></button></form>
+      <form onSubmit={(event) => { event.preventDefault(); setSelectedSeriesId(null); setSeries([]); setSeriesId(seriesInput.trim().toUpperCase()); }} className="ml-auto flex"><input aria-label="FRED series ID" value={seriesInput} onChange={(event) => setSeriesInput(event.target.value)} className="h-8 w-32 border border-border bg-black px-2 font-mono text-[9px] uppercase outline-none focus:border-amber-400/50" /><button title="Load FRED series" className="w-8 h-8 border border-l-0 border-border text-amber-300"><RefreshCw className="w-3.5 h-3.5 mx-auto" /></button></form>
       <button onClick={() => capture("series")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-[7px] text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "series" ? "CAPTURING" : "CAPTURE SERIES"}</button>
       <button onClick={() => capture("curve")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-[7px] text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "curve" ? "CAPTURING" : "CAPTURE UST CURVE"}</button>
     </header>
@@ -134,6 +175,13 @@ export default function EconomicDataFabricPanel() {
       ["CURVE VERSIONS", curves.length], ["CURVE TENORS", currentCurve?.quality.validObservationCount ?? 0],
     ].map(([label, value]) => <div key={label} className="border-r border-border px-3 py-2"><div className="font-mono text-[7px] text-muted-foreground">{label}</div><div className="font-terminal text-[9px] truncate">{value}</div></div>)}</div>
     <nav className="shrink-0 border-b border-border px-4 py-2 flex gap-1">{(["series", "curve", "macro", "lineage"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`h-7 border px-3 font-terminal text-[7px] ${tab === item ? "border-amber-400/50 text-amber-300" : "border-border text-muted-foreground"}`}>{item.toUpperCase()}</button>)}</nav>
+    <div className="flex flex-wrap gap-3 border-b border-border p-3 text-xs">
+      <label>Recorded series <select aria-label="Recorded economic series snapshot" value={currentSeries?.id ?? ""} onChange={event=>setSelectedSeriesId(event.target.value)}><option value="" disabled>Unavailable</option>{series.map(item=><option key={item.id} value={item.id}>{item.id} · {item.availableAt}</option>)}</select></label>
+      <label>Recorded curve <select aria-label="Recorded economic curve snapshot" value={currentCurve?.id ?? ""} onChange={event=>setSelectedCurveId(event.target.value)}><option value="" disabled>Unavailable</option>{curves.map(item=><option key={item.id} value={item.id}>{item.id} · {item.availableAt}</option>)}</select></label>
+      <label>Existing policy ID <input aria-label="Existing economic source policy ID" value={policyId} onChange={event=>setPolicyId(event.target.value)}/></label>
+      <button type="button" onClick={()=>void linkPolicy()} disabled={!policyId.trim()}>Link reviewed policy to selected source</button>
+      <p>Only current admin/compliance can link an existing matching policy. No rights are created from a configured connector; immutable historical hashes are unchanged.</p>
+    </div>
     <div className="min-h-0 flex-1 overflow-auto">
       {tab === "series" && (!currentSeries ? <div className="p-8 font-terminal text-[9px] text-muted-foreground">NO FROZEN SERIES. CAPTURE {seriesId} TO BEGIN.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-[7px] text-muted-foreground">{currentSeries.payload.name} / {currentSeries.payload.unit || "UNITLESS"} / {currentSeries.payload.frequency.toUpperCase()} / AVAILABLE {new Date(currentSeries.availableAt).toLocaleString()} / HASH {currentSeries.contentHash.slice(0, 12)}</div><table className="w-full font-mono text-[8px]"><thead className="sticky top-0 bg-black text-muted-foreground"><tr>{["OBSERVATION", "VALUE", "VINTAGE START", "VINTAGE END", "SOURCE AVAILABLE"].map((item) => <th key={item} className="border-b border-border px-3 py-2 text-right first:text-left">{item}</th>)}</tr></thead><tbody>{[...currentSeries.payload.observations].reverse().map((row) => <tr key={row.date} className="border-b border-border/50"><td className="px-3 py-1.5">{row.date}</td><td className="px-3 py-1.5 text-right">{row.value.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td><td className="px-3 py-1.5 text-right">{row.realtimeStart ?? "--"}</td><td className="px-3 py-1.5 text-right">{row.realtimeEnd ?? "--"}</td><td className="px-3 py-1.5 text-right">{new Date(row.availableAt).toLocaleDateString()}</td></tr>)}</tbody></table></>)}
       {tab === "curve" && (!currentCurve ? <div className="p-8 font-terminal text-[9px] text-muted-foreground">NO FROZEN TREASURY CURVE.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-[7px] text-muted-foreground">UST NOMINAL / {currentCurve.payload.curveDate} / AVAILABLE {new Date(currentCurve.availableAt).toLocaleString()} / HASH {currentCurve.contentHash.slice(0, 12)}</div><div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6">{currentCurve.payload.points.map((point) => <div key={point.label} className="border-r border-b border-border p-4"><div className="font-terminal text-[8px] text-muted-foreground">{point.label} / {point.seriesId}</div><div className="mt-2 font-mono text-lg">{point.yield === null ? "--" : `${point.yield.toFixed(3)}%`}</div><div className="mt-1 font-mono text-[7px] text-muted-foreground">{point.observationDate ?? "NO DATE"}</div></div>)}</div></>)}

@@ -353,6 +353,17 @@ test("SI-04.16 persisted engine run becomes one tenant-owned canonical P4 workbo
       assert.equal(saved.version.id, retained.version.id);
       const unauthorized = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId: project.id }) });
       assert.equal(unauthorized.status, 403);
+      const policyUrl = `http://127.0.0.1:${address.port}/api/data-snapshots/${snapshot.id}/entitlement`;
+      await getDb().update(datasetSnapshots).set({ organizationId: orgA.id }).where(eq(datasetSnapshots.id, snapshot.id));
+      try {
+        for (const [actor, suppliedHash, status] of [[owner, snapshot.contentHash, 403], [client, snapshot.contentHash, 403], [compliance, "0".repeat(64), 409], [compliance, snapshot.contentHash, 200]] as const) {
+          const linked = await fetch(policyUrl, { method: "POST", headers: { "content-type": "application/json", "x-test-user": String(actor.id) }, body: JSON.stringify({ contentHash: suppliedHash, policyId: policy.id }) });
+          assert.equal(linked.status, status);
+        }
+        const [unchanged] = await getDb().select().from(datasetSnapshots).where(eq(datasetSnapshots.id, snapshot.id));
+        assert.equal(unchanged.contentHash, snapshot.contentHash, "Explicit rights linkage must never rewrite historical source hashes.");
+        assert.equal(unchanged.entitlementPolicyId, policy.id);
+      } finally { await getDb().update(datasetSnapshots).set({ organizationId: null }).where(eq(datasetSnapshots.id, snapshot.id)); }
     } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 });

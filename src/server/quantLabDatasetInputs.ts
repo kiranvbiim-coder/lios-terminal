@@ -5,6 +5,7 @@ import { canAccessDatasetSnapshot, flattenSnapshotForColumnar } from "./columnar
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
 import { getDb, type DrizzleDb } from "./db";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
+import { economicSnapshotContentHash } from "./economicDatasetStore";
 
 /** Reuse canonical snapshot flattening; no gap filling, implicit scaling or opaque hash-only attachment. */
 export async function resolveQuantDatasetInputs(ownerUserId: number, organizationId: number | null, snapshotIds: readonly string[], rawBindings: readonly QuantDatasetInputBinding[], parameters: Record<string, unknown>, expectedHashes?: Record<string, string>, db: Pick<DrizzleDb, "select"> = getDb(), lock = false, purpose: "execute" | "read" = "execute") {
@@ -26,10 +27,13 @@ export async function resolveQuantDatasetInputs(ownerUserId: number, organizatio
     if (!metadata || !canAccessDatasetSnapshot(metadata, { userId: actor.id, organizationId: actor.organizationId }) || metadata.availableAt > now || metadata.expiresAt !== null && metadata.expiresAt <= now) throw new Error("Quant dataset is unavailable in the current tenant.");
     if (expectedHashes && expectedHashes[id] !== metadata.contentHash) throw new Error("Quant dataset changed after run admission.");
     const policy = metadata.entitlementPolicyId ? await getEntitlementPolicyById(metadata.entitlementPolicyId, db, lock) : null;
-    if (!policy || policy.provider !== metadata.provider || policy.dataClass !== metadata.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now || !(purpose === "execute" ? ["display", "model_input", "derived_output"] : ["display", "derived_output"]).every(use => policy.permittedUses.includes(use))) throw new Error("Current linked rights do not permit Quant source input and derived output.");
+    if (!policy || policy.licenseType === "unknown" || policy.provider !== metadata.provider || policy.dataClass !== metadata.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now || !(purpose === "execute" ? ["display", "model_input", "derived_output"] : ["display", "derived_output"]).every(use => policy.permittedUses.includes(use))) throw new Error("Current linked rights do not permit Quant source input and derived output.");
     if (policy.accessScope === "internal_only" && !actor.role.startsWith("internal_")) throw new Error("Quant source requires internal access.");
     const [snapshot] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, id)).limit(1);
-    if (!snapshot || stableSnapshotHash({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) !== metadata.contentHash) throw new Error("Quant source content does not match its immutable snapshot hash.");
+    const expectedHash = metadata.dataClass === "economic_series" || metadata.dataClass === "yield_curve"
+      ? economicSnapshotContentHash(snapshot?.payload, snapshot?.lineage)
+      : snapshot ? stableSnapshotHash({ payload: snapshot.payload, provider: snapshot.provider, lineage: snapshot.lineage }) : null;
+    if (!snapshot || expectedHash !== metadata.contentHash) throw new Error("Quant source content does not match its immutable snapshot hash.");
     const { records, numericColumns } = flattenSnapshotForColumnar(snapshot);
     if (!records.length) throw new Error("Quant source has no admitted observations.");
     if (records.some(row => ["available_at", "published_at", "quote_at", "observation_at", "as_of", "date"].some(key => typeof row[key] === "string" && Number.isFinite(Date.parse(row[key] as string)) && Date.parse(row[key] as string) > now.getTime()))) throw new Error("Quant source includes observations not yet available; no future values were selected.");

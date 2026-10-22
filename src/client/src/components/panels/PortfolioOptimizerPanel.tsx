@@ -1,4 +1,5 @@
 import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { boundedTerminalExecutionSlot } from "@shared/terminalArtifact";
 import { useState, useMemo, useEffect, memo } from "react";
 import { useQueries, useMutation, useQuery } from "@tanstack/react-query";
 import { ResponsiveContainer, ScatterChart, Scatter, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot } from "recharts";
@@ -366,7 +367,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
   const [assets, setAssets] = useTerminalArtifactState<string[]>("PortfolioOptimizerPanel.assets", DEFAULT_OPT_ASSETS);
   const quant = useTerminalQuantRun();
   function runAdvancedPortfolioRisk<T extends Record<string, unknown>>(path: string, parameters: Record<string, unknown>, transformations: readonly string[] = []): Promise<AdvancedRiskResponse<T>> {
-    return quant.run<AdvancedRiskResponse<T>>(path, withManualProvenance(parameters, transformations), `portfolio.${assets.join(",")}.${path}`);
+    return quant.run<AdvancedRiskResponse<T>>(path, withManualProvenance(parameters, transformations), boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.${path}`));
   }
   const [advancedModel, setAdvancedModel] = useTerminalArtifactState<AdvancedPortfolioModel>("PortfolioOptimizerPanel.advancedModel", "hrp");
   const [factorRiskState, setFactorRiskState] = useTerminalArtifactState<Record<string, unknown>>("PortfolioOptimizerPanel.factorRiskState", () => JSON.parse(ADVANCED_PORTFOLIO_PLACEHOLDERS["factor-risk"]));
@@ -437,13 +438,14 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
   // genetic-algorithm) over this basket's real mu/Sigma, built on demand
   // (not on every render) since a 100-pop/150-generation run takes a few
   // real seconds.
-  const gaCrossCheck = useMutation({
-    mutationFn: async (body: { expression: string; bounds: [number, number][] }) => (
-      await apiRequest("POST", "/api/quant/optimization/genetic-algorithm", {
-        expression: body.expression, bounds: body.bounds, popSize: 100, nGenerations: 150,
-      })
-    ).json() as Promise<{ bestX: number[]; bestF: number; generationsRun: number }>,
+  const gaCrossCheckMutation = useMutation({
+    mutationFn: async (body: { expression: string; bounds: [number, number][] }) => quant.run<{
+      bestX: number[]; bestF: number; generationsRun: number; receipt?: { parameters?: Record<string, unknown> };
+    }>("/optimization/genetic-algorithm", {
+      expression: body.expression, bounds: body.bounds, popSize: 100, nGenerations: 150,
+    }, "portfolio.original-ga", "/api/quant/optimization/genetic-algorithm"),
   });
+  const gaCrossCheck = { ...gaCrossCheckMutation, data: terminal?.target ? quant.stored?.["portfolio.original-ga"] as typeof gaCrossCheckMutation.data : gaCrossCheckMutation.data };
   const gaCrossCheckReset = gaCrossCheck.reset;
   useEffect(() => { gaCrossCheckReset(); }, [assets, cardinalityEnabled, cardinalityK, gaCrossCheckReset]);
 
@@ -787,7 +789,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       viewMatrix: payload.viewMatrix, viewReturnsPct: payload.viewReturnsPct, viewUncertaintyPct2: payload.viewUncertaintyPct2,
     }, ["Browser-estimated displayed basket covariance and authored views. No immutable provider source binding is asserted."]),
   });
-  const blPosterior = { ...blPosteriorMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/black-litterman`] as typeof blPosteriorMutation.data : blPosteriorMutation.data };
+  const blPosterior = { ...blPosteriorMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/black-litterman`)] as typeof blPosteriorMutation.data : blPosteriorMutation.data };
   const blPosteriorMutate = blPosterior.mutate;
   const blPosteriorReset = blPosterior.reset;
   function runBlPosterior() {
@@ -824,7 +826,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<PortfolioWeightsResult>("portfolio/hrp", { assets, covMatrix: covMatrixPct2 }, ["Browser-estimated basket covariance from displayed return history; converted fraction-squared to percent-squared. No immutable provider source binding is asserted."]);
     },
   });
-  const hrpRun = { ...hrpMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/hrp`] as typeof hrpMutation.data : hrpMutation.data };
+  const hrpRun = { ...hrpMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/hrp`)] as typeof hrpMutation.data : hrpMutation.data };
 
   const riskBudgetMutation = useMutation({
     mutationFn: async () => {
@@ -835,7 +837,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<RiskBudgetResult>("portfolio/risk-budget", { assets, covMatrix: covMatrixPct2, riskBudgets: budgets, allowShort: allowShortBudget }, ["Browser-estimated basket covariance converted fraction-squared to percent-squared; user-authored risk budgets. No immutable provider source binding is asserted."]);
     },
   });
-  const riskBudgetRun = { ...riskBudgetMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/risk-budget`] as typeof riskBudgetMutation.data : riskBudgetMutation.data };
+  const riskBudgetRun = { ...riskBudgetMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/risk-budget`)] as typeof riskBudgetMutation.data : riskBudgetMutation.data };
 
   const factorRiskMutation = useMutation({
     mutationFn: async () => {
@@ -853,7 +855,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<FactorRiskResult>("portfolio/factor-risk", payload as unknown as Record<string, unknown>);
     },
   });
-  const factorRiskRun = { ...factorRiskMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/factor-risk`] as typeof factorRiskMutation.data : factorRiskMutation.data };
+  const factorRiskRun = { ...factorRiskMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/factor-risk`)] as typeof factorRiskMutation.data : factorRiskMutation.data };
 
   const trackingErrorMutation = useMutation({
     mutationFn: async () => {
@@ -869,7 +871,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<TrackingErrorResult>("portfolio/tracking-error", payload as unknown as Record<string, unknown>);
     },
   });
-  const trackingErrorRun = { ...trackingErrorMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/tracking-error`] as typeof trackingErrorMutation.data : trackingErrorMutation.data };
+  const trackingErrorRun = { ...trackingErrorMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/tracking-error`)] as typeof trackingErrorMutation.data : trackingErrorMutation.data };
 
   const taxAwareMutation = useMutation({
     mutationFn: async () => {
@@ -885,7 +887,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<TaxAwareResult>("portfolio/tax-aware-rebalance", payload as unknown as Record<string, unknown>);
     },
   });
-  const taxAwareRun = { ...taxAwareMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/tax-aware-rebalance`] as typeof taxAwareMutation.data : taxAwareMutation.data };
+  const taxAwareRun = { ...taxAwareMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/tax-aware-rebalance`)] as typeof taxAwareMutation.data : taxAwareMutation.data };
 
   const stressAwareMutation = useMutation({
     mutationFn: async () => {
@@ -899,7 +901,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<StressAwareResult>("portfolio/stress-aware", payload as unknown as Record<string, unknown>);
     },
   });
-  const stressAwareRun = { ...stressAwareMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/stress-aware`] as typeof stressAwareMutation.data : stressAwareMutation.data };
+  const stressAwareRun = { ...stressAwareMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/stress-aware`)] as typeof stressAwareMutation.data : stressAwareMutation.data };
 
   const bayesianShrinkageMutation = useMutation({
     mutationFn: async () => {
@@ -920,7 +922,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<BayesianShrinkageResult>("portfolio/bayesian-mean-shrinkage", { assets, sampleMeanReturnsPct, standardErrorsPct, priorStdPct: bayesianPriorStdPct }, ["Browser-estimated sample return means and standard errors from displayed history; fraction returns converted to percent. No immutable provider source binding is asserted."]);
     },
   });
-  const bayesianShrinkageRun = { ...bayesianShrinkageMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/bayesian-mean-shrinkage`] as typeof bayesianShrinkageMutation.data : bayesianShrinkageMutation.data };
+  const bayesianShrinkageRun = { ...bayesianShrinkageMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/bayesian-mean-shrinkage`)] as typeof bayesianShrinkageMutation.data : bayesianShrinkageMutation.data };
 
   const ledoitWolfMutation = useMutation({
     mutationFn: async () => {
@@ -934,7 +936,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       return runAdvancedPortfolioRisk<LedoitWolfResult>("portfolio/ledoit-wolf-covariance", { assets, returnsMatrixPct }, ["Displayed basket daily returns assembled into an observation-major matrix and converted from fractions to percent. No immutable provider source binding is asserted."]);
     },
   });
-  const ledoitWolfRun = { ...ledoitWolfMutation, data: terminal?.target ? terminal.executions?.[`portfolio.${assets.join(",")}.portfolio/ledoit-wolf-covariance`] as typeof ledoitWolfMutation.data : ledoitWolfMutation.data };
+  const ledoitWolfRun = { ...ledoitWolfMutation, data: terminal?.target ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/ledoit-wolf-covariance`)] as typeof ledoitWolfMutation.data : ledoitWolfMutation.data };
 
   const mandatePreTradeRun = useMutation({
     mutationFn: async () => {
@@ -1025,7 +1027,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
 
 
   if (isLoading || !optimizationData) {
-    const recorded = Object.entries(terminal?.executions ?? {}).filter(([slot]) => slot.startsWith(`portfolio.${assets.join(",")}.`));
+    const recorded = Object.entries(terminal?.executions ?? {}).filter(([slot]) => slot.startsWith("portfolio."));
     return <div className="h-full overflow-auto p-4 space-y-4 bg-[#050505]">
       <p role="status" className="text-sm">{isLoading ? "Loading current basket observations…" : "Current basket observations are unavailable. Saved native calculations below remain recorded results; no live inputs or refreshed values were substituted."}</p>
       {recorded.map(([slot, value]) => <section key={slot} className="border border-border p-3"><ReadableValueTable title={slot} values={value as Record<string, unknown>} options={{ showExact: true }}/></section>)}
@@ -1044,7 +1046,9 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
   // GA result -> normalized weights -> real portfolio stats, scored with
   // the exact same w.mu / w^T*Sigma*w math as the Monte-Carlo maxSharpe
   // point above, so the two rows in the comparison table are apples-to-apples.
-  const gaWeights = gaCrossCheck.data && gaCrossCheck.data.bestX.length === assets.length
+  const recordedGaExpression = gaCrossCheck.data?.receipt?.parameters?.expression;
+  const currentGaExpression = buildMaxSharpeGaExpression(optimizationData.annExpectedReturns, optimizationData.covMatrix, rfRate / 100, cardinalityEnabled ? cardinalityK : undefined);
+  const gaWeights = gaCrossCheck.data && (!terminal?.target || recordedGaExpression === currentGaExpression) && gaCrossCheck.data.bestX.length === assets.length
     ? normalizeWeights(gaCrossCheck.data.bestX)
     : null;
   const gaStats = gaWeights
@@ -1961,6 +1965,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
                 </div>
               )}
 
+              {gaCrossCheck.data && !gaWeights && <section className="space-y-2"><p className="text-xs text-muted-foreground">Recorded original GA output. The current basket objective differs; saved weights are not recombined with refreshed moments. Input order and objective remain in its receipt.</p><ReadableValueTable title="Recorded GA result" values={gaCrossCheck.data} options={{ showExact: true }}/></section>}
               {!gaWeights || !gaStats ? (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground/40 font-terminal text-[9px] italic text-center px-6">
                   {gaCrossCheck.isPending

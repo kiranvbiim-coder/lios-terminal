@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { encodeTerminalPanelValue, terminalScreenStateSchema, type TerminalScreenState } from "./terminalArtifact";
+import { encodeTerminalPanelValue, terminalScreenStateSchema, writeTerminalPanelState, type TerminalScreenState } from "./terminalArtifact";
 import { TERMINAL_STRESS_SCENARIOS } from "./terminalStressScenarios";
 
 const symbol = z.string().trim().toUpperCase().regex(/^[A-Z0-9^][A-Z0-9.^=:/_-]{0,39}$/);
@@ -63,8 +63,8 @@ export const terminalArtifactUpdateSchema = z.object({ artifactId: z.string().re
 
 /** Only presentation/selection fields are mutable here; observations, formulas and receipts are never accepted. */
 export function applyTerminalArtifactOperations(view: string, state: TerminalScreenState, operations: TerminalArtifactOperation[]): TerminalScreenState {
-  const next = terminalScreenStateSchema.parse({ ...state, panelState: { ...state.panelState } });
-  const put = (key: string, value: unknown) => { next.panelState[key] = encodeTerminalPanelValue(value); };
+  let next = terminalScreenStateSchema.parse({ ...state, panelState: { ...state.panelState } });
+  const put = (key: string, value: unknown) => { next = writeTerminalPanelState(next, key, encodeTerminalPanelValue(value)); };
   for (const operation of operations.map(value => terminalArtifactOperationSchema.parse(value))) {
     if (operation.type === "chart.settings") {
       if (view !== "chart") throw new Error("Chart settings require the active chart screen.");
@@ -90,18 +90,16 @@ export function applyTerminalArtifactOperations(view: string, state: TerminalScr
       put(operation.selection.target, operation.selection.value);
     } else if (operation.type === "portfolio.select") {
       if (!["portfolio", "portfoliostress"].includes(view)) throw new Error("Portfolio selection requires a portfolio screen.");
-      next.portfolioId = operation.portfolioId === null ? null : String(operation.portfolioId);
       put("PortfolioStressPanel.portfolioId", operation.portfolioId);
       if (view === "portfolio") put("PortfolioPanel.section", "stress");
     } else if (operation.type === "benchmark.select") {
       if (view !== "riskreturn") throw new Error("Benchmark selection requires the risk/return screen.");
-      next.benchmarkId = operation.symbol; put("RiskReturnScatterPanel.benchmark", operation.symbol ?? "NONE");
+      put("RiskReturnScatterPanel.benchmark", operation.symbol ?? "NONE");
       put("RiskReturnScatterPanel.customBenchmark", "");
     } else if (operation.type === "scenario.select") {
       if (!["portfolio", "portfoliostress"].includes(view)) throw new Error("Scenario selection requires the portfolio stress tool.");
       const scenario = TERMINAL_STRESS_SCENARIOS.find(item => item.id === operation.scenarioId);
       if (!scenario) throw new Error("Choose an existing stress scenario; this operation cannot invent scenario assumptions.");
-      next.scenarioId = scenario.id;
       put("PortfolioStressPanel.scenario", scenario);
       if (view === "portfolio") put("PortfolioPanel.section", "stress");
     } else {

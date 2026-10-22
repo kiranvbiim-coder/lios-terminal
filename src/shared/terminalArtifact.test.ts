@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { encodeTerminalPanelValue, decodeTerminalPanelValue, initialTerminalScreenState } from "./terminalArtifact";
+import { encodeTerminalPanelValue, decodeTerminalPanelValue, initialTerminalScreenState, boundedTerminalExecutionSlot, terminalExecutionTargetSchema, writeTerminalPanelState } from "./terminalArtifact";
 import { artifactContentSchema } from "./artifactContracts";
 import { applyTerminalArtifactOperations } from "./terminalArtifactOperations";
 
@@ -33,4 +33,33 @@ test("typed scenario and benchmark selections address existing panel controls wi
   assert.equal(benchmark.panelState["RiskReturnScatterPanel.benchmark"], "SPY");
   assert.equal(benchmark.panelState["RiskReturnScatterPanel.customBenchmark"], "");
   assert.throws(() => applyTerminalArtifactOperations("chart", { ...state, sourceScope: "my_data" }, [{ type: "source.settings", sourceScope: "auto" }]), /explicitly/);
+});
+
+test("large ordered portfolio baskets retain distinct valid execution slots", () => {
+  const assets = Array.from({ length: 300 }, (_, index) => `ASSET${index}`);
+  const slot = boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/hrp`);
+  assert.ok(slot.length <= 240);
+  assert.notEqual(slot, boundedTerminalExecutionSlot(`portfolio.${assets.toReversed().join(",")}.portfolio/hrp`));
+  assert.notEqual(slot, boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.portfolio/risk-budget`));
+  assert.doesNotThrow(() => terminalExecutionTargetSchema.parse({ artifactId: "artifact:large-basket", baseVersion: 1, baseHash: "a".repeat(64), slot, authoredState: initialTerminalScreenState(null) }));
+});
+
+test("manual benchmark, portfolio and scenario controls cannot drift from the recorded screen posture", () => {
+  const base = initialTerminalScreenState(null, "my_data");
+  const preset = writeTerminalPanelState(base, "RiskReturnScatterPanel.benchmark", "^NSEI");
+  const custom = writeTerminalPanelState(preset, "RiskReturnScatterPanel.customBenchmark", " msft ");
+  assert.equal(custom.benchmarkId, "MSFT");
+  const cleared = writeTerminalPanelState(custom, "RiskReturnScatterPanel.customBenchmark", "");
+  assert.equal(cleared.benchmarkId, "^NSEI");
+  const none = writeTerminalPanelState(cleared, "RiskReturnScatterPanel.benchmark", "NONE");
+  assert.equal(none.benchmarkId, null);
+  const portfolio = writeTerminalPanelState(none, "PortfolioStressPanel.portfolioId", 42);
+  assert.equal(portfolio.portfolioId, "42");
+  assert.equal(writeTerminalPanelState(portfolio, "PortfolioStressPanel.portfolioId", null).portfolioId, null);
+  const scenario = writeTerminalPanelState(portfolio, "PortfolioStressPanel.scenario", { id: "bear", factors: { equity: -0.2 } });
+  assert.equal(scenario.scenarioId, "bear");
+  assert.equal(scenario.sourceScope, "my_data");
+  assert.equal(scenario.marketMode, "live");
+  assert.equal(scenario.asOf, null);
+  assert.deepEqual(base.panelState, {}, "Updating the screen never mutates another revision's controls.");
 });

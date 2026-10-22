@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArtifactContent } from "@shared/artifactContracts";
-import { initialTerminalScreenState, readTerminalScreenState, terminalExecutionTargetSchema, type TerminalScreenState, type TerminalExecutionTarget, type TerminalExecutionVersion } from "@shared/terminalArtifact";
+import { initialTerminalScreenState, readTerminalScreenState, writeTerminalPanelState, terminalExecutionTargetSchema, type TerminalScreenState, type TerminalExecutionTarget, type TerminalExecutionVersion } from "@shared/terminalArtifact";
 import { TerminalArtifactStateProvider, useTerminalArtifactRenderer, useTerminalArtifactAudience, type TerminalArtifactTarget } from "@/lib/terminalArtifactState";
 import { chatTerminalCapabilities } from "@/lib/chatTerminalContext";
 import TickerTape from "./TickerTape";
@@ -54,15 +54,8 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
       return { ...previous, ...(view ? { view } : {}), symbol: next.subject.symbol, state: { ...previous.state, terminal: next } };
     });
   }, [disabled]);
-  const initialize = useCallback((key: string, value: unknown) => change(state => Object.hasOwn(state.panelState, key) ? state : ({ ...state, panelState: { ...state.panelState, [key]: value } })), [change]);
-  const update = useCallback((key: string, updater: (value: unknown) => unknown) => change(state => {
-    const value = updater(state.panelState[key]);
-    return { ...state,
-      ...(key === "PortfolioStressPanel.portfolioId" ? { portfolioId: value === null ? null : String(value) } : {}),
-      ...(key === "RiskReturnScatterPanel.benchmark" ? { benchmarkId: typeof value === "string" ? value : null } : {}),
-      ...(key === "PortfolioStressPanel.scenario" && value && typeof value === "object" && "id" in value ? { scenarioId: String(value.id) } : {}),
-      panelState: { ...state.panelState, [key]: value } };
-  }), [change]);
+  const initialize = useCallback((key: string, value: unknown) => change(state => Object.hasOwn(state.panelState, key) ? state : writeTerminalPanelState(state, key, value)), [change]);
+  const update = useCallback((key: string, updater: (value: unknown) => unknown) => change(state => writeTerminalPanelState(state, key, updater(state.panelState[key]))), [change]);
   const setSymbol = useCallback((symbol: string) => change(state => state.subject.symbol === symbol ? state : ({ ...state, subject: { symbol } })), [change]);
   const save = useCallback(async () => {
     if (pending.current || disabled || ephemeral || !dirty || editorKeys.current.size > 0) return;
@@ -89,7 +82,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
     onAsk?.(id, title, stagedPrompt);
   }, [dirty, saving, activeEditors.size, onAsk]);
   const captureExecution = useCallback((slot: string): TerminalExecutionTarget => {
-    if (disabled || pending.current || [...editorKeys.current].some(key => key.startsWith("native-quant:")) || !target || ephemeral) throw new Error("Open a current saved terminal Artifact before retaining a native run.");
+    if (disabled || pending.current || editorKeys.current.size > 0 || !target || ephemeral) throw new Error("Finish editing or pending terminal work before retaining a native run.");
     return terminalExecutionTargetSchema.parse({ artifactId: target.artifactId, baseVersion: target.version, baseHash: target.contentHash, slot, authoredState: readTerminalScreenState(draftRef.current.state) });
   }, [disabled, target, ephemeral]);
   const completeExecution = useCallback(async (version: TerminalExecutionVersion, submitted: TerminalExecutionTarget) => {
@@ -122,7 +115,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
       <label><input type="checkbox" checked={terminal.stockTape} disabled={disabled} onChange={event => change(state => ({ ...state, stockTape: event.target.checked }))}/> Stock ticker tape</label>
       <label><input type="checkbox" checked={terminal.macroTape} disabled={disabled} onChange={event => change(state => ({ ...state, macroTape: event.target.checked }))}/> Macro ticker tape</label>
     </div>
-    <p className="text-xs text-muted-foreground">Live view · market observations refresh through existing authorized terminal sources. Saved state retains authored inputs and settings, not a frozen price snapshot.</p>
+    <p className="text-xs text-muted-foreground">{liveAllowed ? "Live observations may refresh through authorized terminal sources." : "Owned-data scope · external market observations are not fetched by this view."} Saved state retains authored inputs and recorded runs separately; it is not a frozen market snapshot.</p>
     <p className="text-xs text-muted-foreground">Source scope: {terminal.sourceScope} · {terminal.subject.listingId ? `Canonical listing ${terminal.subject.listingId}` : "No canonical listing has been resolved; the explicit symbol is a navigation hint, not verified identity."}</p>
     {draft.state.recordedAnalysis !== null && typeof draft.state.recordedAnalysis === "object" && !Array.isArray(draft.state.recordedAnalysis) && <details className="border border-border p-2"><summary>Recorded analytical result · saved revision, not refreshed by the live view</summary><ReadableValueTable title="Recorded analysis" values={draft.state.recordedAnalysis as Record<string, unknown>} options={{ showExact: true }} /></details>}
     {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
@@ -136,7 +129,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
         }}
         onBlurCapture={() => setEditing("focused-control", false)}
         className="min-h-[450px] min-w-0 flex-1 overflow-auto">
-        {!liveAllowed && !["clientdata", "uide", "spreadsheet", "personalfinance"].includes(draft.view) ? <p role="status">This source scope does not permit this live-market panel to fetch external observations. Use an authorized owned-data or spreadsheet tool, or explicitly choose Auto/Web in Sources. No external request was substituted.</p> : capability.symbolAware && !draft.symbol ? <p role="status">Choose an explicit symbol through Chat to open this financial view.</p> : render({ view: capability.view, symbol: draft.symbol }, { onSymbol: symbol => change(state => ({ ...state, subject: { symbol } }), capability.symbolAware ? undefined : "quote"), onNav: view => {
+        {!liveAllowed && !["clientdata", "uide", "spreadsheet", "personalfinance", "riskcalc"].includes(draft.view) ? <p role="status">This source scope does not permit this live-market panel to fetch external observations. Use an authorized owned-data or spreadsheet tool, or explicitly choose Auto/Web in Sources. No external request was substituted.</p> : capability.symbolAware && !draft.symbol ? <p role="status">Choose an explicit symbol through Chat to open this financial view.</p> : render({ view: capability.view, symbol: draft.symbol }, { onSymbol: symbol => change(state => ({ ...state, subject: { symbol } }), capability.symbolAware ? undefined : "quote"), onNav: view => {
           if (chatTerminalCapabilities(audience).some(item => item.view === view)) change(state => state, view);
           else setError("This destination is not available for this account in the terminal Artifact.");
         } })}

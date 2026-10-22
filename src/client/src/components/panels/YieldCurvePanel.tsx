@@ -8,7 +8,7 @@ import { fitNelsonSiegel } from "@/lib/quantModels";
 import { useLseStatus, useLseBondsCountries, useLseBondsScreen } from "@/lib/useLse";
 import { parseTenorYears, formatTenorLabel } from "@/lib/bondTenor";
 import { AdvancedRatesDerivativesRunner } from "@/lib/advancedRatesDerivatives";
-import { ReceiptSummary, runAdvancedManual, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 
 // Tenor label -> maturity in years, for Nelson-Siegel fitting.
 const MATURITY_YEARS: Record<string, number> = {
@@ -43,7 +43,8 @@ function findYield(curve: { label: string; yield: number | null }[] | undefined,
 // fabricating a sourced hash. Only renders once the US tab has confirmed
 // isLive, so a missing FRED key never silently substitutes a default.
 function YieldCurveSignalsRunner({ curve }: { curve: { label: string; yield: number | null }[] }) {
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("macro", "yield-curve-signals");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const points = curve
@@ -51,12 +52,12 @@ function YieldCurveSignalsRunner({ curve }: { curve: { label: string; yield: num
     .sort((a, b) => MATURITY_YEARS[a.label] - MATURITY_YEARS[b.label]);
   const run = async () => {
     if (points.length < 3) { setError("Live curve has fewer than three valid labelled tenors."); return; }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("macro", "yield-curve-signals", {
+      await nativeWorkflow.run({
         maturitiesYears: points.map((p) => MATURITY_YEARS[p.label]),
         yieldsPct: points.map((p) => p.yield as number),
-      }));
+      });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Yield curve signal unavailable."); }
     finally { setLoading(false); }
   };

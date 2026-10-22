@@ -1,4 +1,5 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useState, useMemo, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { FlaskConical, Upload } from "lucide-react";
@@ -9,8 +10,37 @@ import { computeDailyReturns, bootstrapMeanCI, permutationTestMeanDiff } from "@
 import { pca, engleGrangerTest, kalmanDynamicBeta, olsRegression, rollingVolatility, rollingBeta, rollingCorrelation, fitTCopula, type CopulaFit, fitHoltWinters, forecastHoltWinters, autoARIMA, forecastARIMA, fitGARCH11, computeCovarianceMatrix, riskDecomposition, counterpartyCVA, liquidityCostEstimate, maxDrawdownPct, detectHiddenRelationships, type HiddenRelationshipPair } from "@/lib/quantModels";
 import { blackScholesMerton } from "@/lib/optionsModels";
 import { useIndicators, useIndicatorDetail } from "@/lib/useEconomics";
-import { AdvancedManualWorkflow } from "./advancedMacroForecastResearch";
+import { AdvancedManualWorkflow, ReceiptSummary, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
+/** Original base models keep their URLs and numerical bodies; P4 alone retains results. */
+function useOriginalQuantResult<T>(slot: string) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const [local, setLocal] = useState<T | null>(null);
+  const result = terminal?.target ? quant.stored?.[slot] as T ?? null : local;
+  const post = async (route: string, parameters: unknown): Promise<T> => {
+    if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) throw new Error("Original model parameters must be an object.");
+    const output = await quant.run<Record<string, unknown>>(route, parameters as Record<string, unknown>, slot, route);
+    if (!terminal?.target) setLocal(output as T);
+    return output as T;
+  };
+  return [result, setLocal, post] as const;
+}
+
+function originalRunParameters(result: unknown): Record<string, unknown> | null {
+  if (!result || typeof result !== "object" || !("receipt" in result)) return null;
+  const receipt = result.receipt;
+  if (!receipt || typeof receipt !== "object" || !("parameters" in receipt)) return null;
+  return receipt.parameters && typeof receipt.parameters === "object" && !Array.isArray(receipt.parameters) ? receipt.parameters as Record<string, unknown> : null;
+}
+
+function RecordedOriginalRun({ result }: { result: unknown }) {
+  const parameters = originalRunParameters(result);
+  if (!parameters) return null;
+  const run = result as { receipt?: AdvancedReceipt };
+  return <details className="border border-border p-2 text-xs"><summary>Recorded original run · edited controls and refreshed observations do not recalculate it</summary><ReceiptSummary receipt={run.receipt}/><ReadableValueTable title="Exact submitted engine inputs" values={parameters} options={{ showExact: true }}/></details>;
+}
 type Tab = "pca" | "hidden" | "pairs" | "beta" | "rolling" | "copula" | "forecast" | "forecastupgrade" | "advancedforecast" | "bond" | "portfolio" | "creditrisk" | "oprisk" | "stats" | "panelcausal" | "tsecon" | "optionsvol" | "mlcluster";
 const TABS: { key: Tab; label: string }[] = [
   { key: "pca", label: "PCA / FACTOR DECOMPOSITION" },
@@ -46,6 +76,8 @@ interface BondPriceResult {
   dv01Amount: number;
   maturityDate: string;
   dayCountUsed: string;
+  settlementDateUsed?: string;
+  receipt?: AdvancedReceipt;
 }
 
 function useSymbolOHLCV(symbols: string[], range = "1Y") {
@@ -667,7 +699,7 @@ function BondPricingTab() {
   const [yearsToMaturity, setYearsToMaturity] = useTerminalArtifactState("BondPricingTab.yearsToMaturity", "10");
   const [marketYieldPct, setMarketYieldPct] = useTerminalArtifactState("BondPricingTab.marketYieldPct", "4.5");
   const [dayCount, setDayCount] = useTerminalArtifactState<"30/360" | "ACT/ACT" | "ACT/360" | "ACT/365">("BondPricingTab.dayCount", "30/360");
-  const [result, setResult] = useState<BondPriceResult | null>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<BondPriceResult>("qwb.bond");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -676,23 +708,10 @@ function BondPricingTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/quant/fixed-income/bond-price", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          faceValue: Number(faceValue),
-          couponRatePct: Number(couponRatePct),
-          frequency: Number(frequency),
-          yearsToMaturity: Number(yearsToMaturity),
-          marketYieldPct: Number(marketYieldPct),
-          dayCount,
-        }),
+      await postOriginal("/api/quant/fixed-income/bond-price", {
+        faceValue: Number(faceValue), couponRatePct: Number(couponRatePct), frequency: Number(frequency),
+        yearsToMaturity: Number(yearsToMaturity), marketYieldPct: Number(marketYieldPct), dayCount,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Bond pricing engine unavailable right now.");
-      }
-      setResult(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bond pricing engine unavailable right now.");
       setResult(null);
@@ -767,8 +786,9 @@ function BondPricingTab() {
             ))}
           </div>
           <div className="font-terminal text-[7.5px] text-muted-foreground/70">
-            Priced with real QuantLib bond math (settlement today, {result.dayCountUsed} day-count convention) — clean/dirty price shown both as % of par (the market convention) and rescaled to the face value entered. Modified duration and convexity are the standard first- and second-order approximations for how this bond's price moves with yield, not a prediction of where yields go next.
+            Recorded QuantLib bond calculation (settlement {result.settlementDateUsed ?? "not recorded"}, {result.dayCountUsed} day-count convention) — clean/dirty price shown both as % of par and in the submitted face-value units. Modified duration and convexity describe the recorded run, not edited terms or a prediction of future yields. Explicit Price Bond creates a new run.
           </div>
+          <ReceiptSummary receipt={result.receipt}/>
         </>
       )}
     </div>
@@ -812,7 +832,7 @@ function PortfolioOptimizerTab() {
   const [method, setMethod] = useTerminalArtifactState<PortfolioMethod>("PortfolioOptimizerTab.method", "max-sharpe");
   const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("PortfolioOptimizerTab.riskFreeRatePct", "4");
   const [confidence, setConfidence] = useTerminalArtifactState("PortfolioOptimizerTab.confidence", "95");
-  const [result, setResult] = useState<WeightsResult | FrontierResult | null>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<WeightsResult | FrontierResult>(`qwb.portfolio.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -840,10 +860,13 @@ function PortfolioOptimizerTab() {
   // riskDecomposition()), not a sidecar hop -- it's a closed-form matrix
   // computation, not a simulation.
   const decomposition = useMemo(() => {
-    if (!result || method === "efficient-frontier" || !inputs) return null;
+    if (!result || method === "efficient-frontier") return null;
+    const recorded = originalRunParameters(result);
+    const calculation = recorded ? { assets: recorded.assets as string[], covMatrix: recorded.covMatrix as number[][] } : inputs;
+    if (!calculation?.covMatrix) return null;
     const weightsResult = result as WeightsResult;
-    const weights = inputs.assets.map((a) => weightsResult.weights[a] ?? 0);
-    return riskDecomposition(inputs.assets, weights, inputs.covMatrix);
+    const weights = calculation.assets.map(asset => weightsResult.weights[asset] ?? 0);
+    return riskDecomposition(calculation.assets, weights, calculation.covMatrix);
   }, [result, method, inputs]);
 
   async function runOptimize() {
@@ -874,12 +897,7 @@ function PortfolioOptimizerTab() {
         break;
     }
     try {
-      const res = await fetch(methodDef.path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Portfolio optimizer unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(methodDef.path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Portfolio optimizer unavailable right now.");
     } finally {
@@ -926,6 +944,7 @@ function PortfolioOptimizerTab() {
       ) : null}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result && !isFrontier && (
         <>
@@ -1081,7 +1100,7 @@ function CreditRiskTab() {
   const [eadInput, setEadInput] = useTerminalArtifactState("CreditRiskTab.eadInput", "10000000,2000000,1500000,3000000,1000000");
   const [assetCorr, setAssetCorr] = useTerminalArtifactState("CreditRiskTab.assetCorr", "20");
   const [cvConfidence, setCvConfidence] = useTerminalArtifactState("CreditRiskTab.cvConfidence", "99");
-  const [cvResult, setCvResult] = useState<CreditVarResult | null>(null);
+  const [cvResult, setCvResult, postOriginal] = useOriginalQuantResult<CreditVarResult>("qwb.credit.credit-var");
   const [cvLoading, setCvLoading] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
   const [cvUploadCount, setCvUploadCount] = useState<number | null>(null);
@@ -1121,20 +1140,10 @@ function CreditRiskTab() {
     setCvError(null);
     setCvResult(null);
     try {
-      const res = await fetch("/api/quant/credit/credit-var", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          obligors, pdPct, lgdPct, ead,
-          assetCorrelation: Number(assetCorr) / 100,
-          confidence: Number(cvConfidence),
-          nSims: 50000, seed: 42,
-        }),
+      await postOriginal("/api/quant/credit/credit-var", {
+        obligors, pdPct, lgdPct, ead, assetCorrelation: Number(assetCorr) / 100,
+        confidence: Number(cvConfidence), nSims: 50000, seed: 42,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Credit risk engine unavailable right now.");
-      }
-      setCvResult(await res.json());
     } catch (err) {
       setCvError(err instanceof Error ? err.message : "Credit risk engine unavailable right now.");
     } finally {
@@ -1207,6 +1216,7 @@ function CreditRiskTab() {
           </button>
         </div>
         {cvError && <div className="mt-2 font-terminal text-[9px] text-red-400">{cvError}</div>}
+        <RecordedOriginalRun result={cvResult}/>
         {cvResult && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-3">
             {[
@@ -1276,7 +1286,7 @@ function OpRiskLiquidityTab() {
   const [severityMu, setSeverityMu] = useTerminalArtifactState("OpRiskLiquidityTab.severityMu", "9.0");
   const [severitySigma, setSeveritySigma] = useTerminalArtifactState("OpRiskLiquidityTab.severitySigma", "1.5");
   const [opConfidence, setOpConfidence] = useTerminalArtifactState("OpRiskLiquidityTab.opConfidence", "99");
-  const [opResult, setOpResult] = useState<OperationalRiskResult | null>(null);
+  const [opResult, setOpResult, postOriginal] = useOriginalQuantResult<OperationalRiskResult>("qwb.credit.operational-risk-lda");
   const [opLoading, setOpLoading] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
@@ -1285,21 +1295,10 @@ function OpRiskLiquidityTab() {
     setOpError(null);
     setOpResult(null);
     try {
-      const res = await fetch("/api/quant/credit/operational-risk-lda", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          annualFrequency: Number(annualFreq),
-          severityMu: Number(severityMu),
-          severitySigma: Number(severitySigma),
-          confidence: Number(opConfidence),
-          nSims: 20000, seed: 42,
-        }),
+      await postOriginal("/api/quant/credit/operational-risk-lda", {
+        annualFrequency: Number(annualFreq), severityMu: Number(severityMu), severitySigma: Number(severitySigma),
+        confidence: Number(opConfidence), nSims: 20000, seed: 42,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Operational risk engine unavailable right now.");
-      }
-      setOpResult(await res.json());
     } catch (err) {
       setOpError(err instanceof Error ? err.message : "Operational risk engine unavailable right now.");
     } finally {
@@ -1343,6 +1342,7 @@ function OpRiskLiquidityTab() {
           {opLoading ? "SIMULATING (20,000 YEARS)..." : "RUN LDA SIMULATION"}
         </button>
         {opError && <div className="mt-2 font-terminal text-[9px] text-red-400">{opError}</div>}
+        <RecordedOriginalRun result={opResult}/>
         {opResult && (
           <div className="grid grid-cols-3 gap-1.5 mt-3">
             {[
@@ -1429,7 +1429,17 @@ function StatisticsSuiteTab() {
   const [maxLagsInput, setMaxLagsInput] = useTerminalArtifactState("StatisticsSuiteTab.maxLagsInput", "");
   const [normType, setNormType] = useTerminalArtifactState<"huber" | "bisquare" | "tukey">("StatisticsSuiteTab.normType", "huber");
 
-  const [result, setResult] = useState<unknown>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const [localResult, setResult] = useState<unknown>(null);
+  const storedResult = native.stored?.[`qwb.stats.${method}`];
+  const result = terminal?.target && !["bootstrap", "permutation"].includes(method) ? storedResult ?? null : localResult;
+  function readDiagnostic<T>(name: string, local: T): T {
+    if (!terminal?.target) return local;
+    const stored = storedResult as { diagnostics?: Record<string, unknown> } | undefined;
+    const output = stored?.diagnostics?.[name];
+    return (output && typeof output === "object" && !("error" in output) ? output : null) as T;
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1500,11 +1510,16 @@ function StatisticsSuiteTab() {
     return cols;
   }
 
-  const [heteroResult, setHeteroResult] = useState<{ breuschPaganStatistic: number; breuschPaganPValue: number; conclusion: string } | null>(null);
-  const [influenceResult, setInfluenceResult] = useState<{ cooksDistance: number[]; leverage: number[]; dffits: number[]; influenceThreshold: number; flaggedObservations: number[] } | null>(null);
-  const [vifResult, setVifResult] = useState<{ predictorIndex: number[]; vif: number[] } | null>(null);
-  const [resetResult, setResetResult] = useState<{ statistic: number; pValue: number; conclusion: string } | null>(null);
-  const [autocorrResult, setAutocorrResult] = useState<{ breuschGodfreyLmStatistic: number; breuschGodfreyLmPValue: number; ljungBoxPValues: number[]; durbinWatson: number; conclusion: string } | null>(null);
+  const [localHetero, setHeteroResult] = useState<{ breuschPaganStatistic: number; breuschPaganPValue: number; conclusion: string } | null>(null);
+  const heteroResult = readDiagnostic("heteroskedasticity", localHetero);
+  const [localInfluence, setInfluenceResult] = useState<{ cooksDistance: number[]; leverage: number[]; dffits: number[]; influenceThreshold: number; flaggedObservations: number[] } | null>(null);
+  const influenceResult = readDiagnostic("influence", localInfluence);
+  const [localVif, setVifResult] = useState<{ predictorIndex: number[]; vif: number[] } | null>(null);
+  const vifResult = readDiagnostic("vif", localVif);
+  const [localReset, setResetResult] = useState<{ statistic: number; pValue: number; conclusion: string } | null>(null);
+  const resetResult = readDiagnostic("reset", localReset);
+  const [localAutocorr, setAutocorrResult] = useState<{ breuschGodfreyLmStatistic: number; breuschGodfreyLmPValue: number; ljungBoxPValues: number[]; durbinWatson: number; conclusion: string } | null>(null);
+  const autocorrResult = readDiagnostic("autocorrelation", localAutocorr);
 
   async function runStats() {
     setLoading(true);
@@ -1550,6 +1565,10 @@ function StatisticsSuiteTab() {
           path = "/api/quant/stats/probit"; body = { y: parseNumList(yBinInput), x: buildRegressionX() }; break;
         case "robust":
           path = "/api/quant/stats/robust-regression"; body = { y: parseNumList(yRegInput), x: buildRegressionX(), normType }; break;
+      }
+      if (terminal?.target) {
+        await native.run(path, body as Record<string, unknown>, `qwb.stats.${method}`, path);
+        return;
       }
       const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) {
@@ -1728,6 +1747,7 @@ function StatisticsSuiteTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && (
         <StatsResultView method={method} result={result} />
@@ -1959,7 +1979,7 @@ function TimeSeriesEconometricsTab() {
   const [maxLags, setMaxLags] = useTerminalArtifactState("TimeSeriesEconometricsTab.maxLags", "4");
   const [detOrder, setDetOrder] = useTerminalArtifactState("TimeSeriesEconometricsTab.detOrder", "0");
 
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.tsecon.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2027,12 +2047,7 @@ function TimeSeriesEconometricsTab() {
           body = { series: seriesArrays[0] };
           break;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Econometrics engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Econometrics engine unavailable right now.");
     } finally {
@@ -2109,7 +2124,8 @@ function TimeSeriesEconometricsTab() {
       </div>
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
-      {result != null && <TsEconResultView method={method} result={result} seriesNames={loadedNames} />}
+      <RecordedOriginalRun result={result}/>
+      {result != null && <TsEconResultView method={method} result={result} seriesNames={originalRunParameters(result)?.seriesNames as string[] ?? loadedNames} />}
     </div>
   );
 }
@@ -2254,7 +2270,7 @@ const PANEL_CAUSAL_METHODS: { key: PanelCausalMethod; label: string }[] = [
 function PanelCausalTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<PanelCausalMethod>("PanelCausalTab.method", "panelols");
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.panelcausal.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panelCovType, setPanelCovType] = useTerminalArtifactState<"unadjusted" | "robust" | "clustered" | "kernel">("PanelCausalTab.panelCovType", "unadjusted");
@@ -2443,12 +2459,7 @@ function PanelCausalTab() {
           body = { equations: surEquations.map((eq) => ({ name: eq.name, y: eq.y, x: [eq.x] })) };
           break;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Econometrics engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Econometrics engine unavailable right now.");
     } finally {
@@ -2569,6 +2580,7 @@ function PanelCausalTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
       {result != null && <PanelCausalResultView method={method} result={result} />}
     </div>
   );
@@ -2744,7 +2756,7 @@ const OPTIONS_VOL_METHODS: { key: OptionsVolMethod; label: string }[] = [
 function OptionsVolatilityTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<OptionsVolMethod>("OptionsVolatilityTab.method", "sabr");
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.optionsvol.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2832,12 +2844,7 @@ function OptionsVolatilityTab() {
           v0: Number(hV0), kappa: Number(hKappa), theta: Number(hTheta), sigma: Number(hSigma), rho: Number(hRho),
         };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Options volatility engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Options volatility engine unavailable right now.");
     } finally {
@@ -2962,11 +2969,13 @@ function OptionsVolatilityTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "sabr" && (() => {
         const r = result as { alpha: number; rho: number; nu: number; beta: number; calibrationRmseVolPts: number; fitQuality: string; fittedVolsPct: number[]; strikesUsed: number };
-        const strikes = sabrChainQuotes ? sabrChainQuotes.map((c) => c.strike) : parseNumList(manualStrikes);
-        const marketVols = sabrChainQuotes ? sabrChainQuotes.map((c) => (c.iv as number) * 100) : parseNumList(manualVols);
+        const recorded = originalRunParameters(result);
+        const strikes = recorded ? recorded.strikes as number[] : sabrChainQuotes ? sabrChainQuotes.map(quote => quote.strike) : parseNumList(manualStrikes);
+        const marketVols = recorded ? recorded.marketVolsPct as number[] : sabrChainQuotes ? sabrChainQuotes.map(quote => (quote.iv as number) * 100) : parseNumList(manualVols);
         const chartData = strikes.map((k, i) => ({ strike: k, market: marketVols[i], fitted: r.fittedVolsPct[i] }));
         return (
           <>
@@ -3056,7 +3065,6 @@ function ForecastingUpgradeTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<ForecastUpgradeMethod>("ForecastingUpgradeTab.method", "sarimax");
   const [source, setSource] = useTerminalArtifactState<UpgradeDataSource>("ForecastingUpgradeTab.source", "fred");
-  const [result, setResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -3066,6 +3074,7 @@ function ForecastingUpgradeTab() {
 
   const [tickerInput, setTickerInput] = useTerminalArtifactState("ForecastingUpgradeTab.tickerInput", "AAPL");
   const [tickerSymbol, setTickerSymbol] = useTerminalArtifactState("ForecastingUpgradeTab.tickerSymbol", "AAPL");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.forecast.${source}.${source === "fred" ? fredSeriesId : tickerSymbol}.${method}`);
   const [tickerResult] = useSymbolOHLCV(source === "ticker" ? [tickerSymbol] : [], "2Y");
 
   const levelSeries = useMemo((): { dates: string[]; values: number[] } | null => {
@@ -3134,12 +3143,7 @@ function ForecastingUpgradeTab() {
         path = "/api/quant/forecasting/garch";
         body = { returnsPct, p: Number(garchP), q: Number(garchQ), vol: garchVol, dist: garchDist };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Forecasting engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Forecasting engine unavailable right now.");
     } finally {
@@ -3260,10 +3264,12 @@ function ForecastingUpgradeTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "sarimax" && (() => {
         const r = result as { forecast: number[]; lowerCI: number[]; upperCI: number[]; fittedValues: number[]; aic: number; bic: number; logLikelihood: number };
-        const histTail = levelSeries!.values.slice(-40).map((v, i) => ({ idx: i, actual: v, forecast: null as number | null }));
+        const originalSeries = originalRunParameters(result)?.series as number[] | undefined;
+        const histTail = (originalSeries ?? levelSeries?.values ?? []).slice(-40).map((v, i) => ({ idx: i, actual: v, forecast: null as number | null }));
         const fcRows = r.forecast.map((v, i) => ({ idx: histTail.length + i, actual: null as number | null, forecast: v, lower: r.lowerCI[i], upper: r.upperCI[i] }));
         const chartData = [...histTail, ...fcRows];
         return (
@@ -3340,10 +3346,11 @@ function ForecastingUpgradeTab() {
 
       {result != null && method === "changepoint" && (() => {
         const r = result as { method: string; changepoints: { index: number; confidence: number | null; meanBefore: number; meanAfter: number }[] };
-        const dates = levelSeries!.dates;
+        const dates = originalRunParameters(result) ? [] : levelSeries?.dates ?? [];
         return (
           <>
             <div className="font-terminal text-[8px] text-muted-foreground">{r.changepoints.length} changepoint(s) detected via {r.method.toUpperCase()}.</div>
+            {originalRunParameters(result) && <p className="text-xs text-muted-foreground">Recorded input indices; source date labels were not retained. Refreshed observations are not substituted.</p>}
             <div className="border border-border overflow-x-auto scrollbar-thin">
               <table className="w-full font-terminal text-[8px]">
                 <thead><tr className="border-b border-border text-muted-foreground">
@@ -3468,7 +3475,6 @@ function buildTickerSummaryFeatures(perTicker: { symbol: string; returns: number
 function MachineLearningTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<MlMethod>("MachineLearningTab.method", "classification");
-  const [result, setResult] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -3481,8 +3487,9 @@ function MachineLearningTab() {
   // ── Multi-ticker clustering ──
   const [clusterTickersInput, setClusterTickersInput] = useTerminalArtifactState("MachineLearningTab.clusterTickersInput", "AAPL,MSFT,GOOGL,AMZN,META,NVDA,TSLA,JPM,XOM,KO");
   const [clusterSymbols, setClusterSymbols] = useTerminalArtifactState("MachineLearningTab.clusterSymbols", clusterTickersInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.ml.${method}`);
   const clusterResults = useSymbolOHLCV(method === "clustering" ? clusterSymbols : []);
-  const clusterDataReady = method === "clustering" && clusterSymbols.length >= 6 && clusterResults.every((r) => !!r.data);
+  const clusterDataReady = method === "clustering" && clusterSymbols.length >= 6 && clusterResults.length === clusterSymbols.length && clusterResults.every(query => (query.data?.bars?.length ?? 0) >= 40);
   const [nClusters, setNClusters] = useTerminalArtifactState("MachineLearningTab.nClusters", "3");
 
   const [modelType, setModelType] = useTerminalArtifactState<"random_forest" | "gradient_boosting" | "logistic" | "linear">("MachineLearningTab.modelType", "random_forest");
@@ -3516,12 +3523,7 @@ function MachineLearningTab() {
         path = "/api/quant/ml/anomaly-detection";
         body = { features, contamination: Number(contamination) };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "ML engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ML engine unavailable right now.");
     } finally {
@@ -3581,6 +3583,7 @@ function MachineLearningTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "classification" && (() => {
         const r = result as { testAccuracy: number; trainAccuracy: number; precisionMacro: number; recallMacro: number; f1Macro: number; confusionMatrix: number[][]; featureImportances: Record<string, number> | null; nTrain: number; nTest: number };
@@ -3634,8 +3637,9 @@ function MachineLearningTab() {
 
       {result != null && method === "clustering" && (() => {
         const r = result as { clusterLabels: number[]; silhouetteScore: number; clusterCenters: number[][]; clusterSizes: number[] };
-        const perTicker = clusterResults.map((res, i) => ({ symbol: clusterSymbols[i], returns: computeDailyReturns((res.data!.bars ?? []).map((b) => b.close)) }));
-        const { features } = buildTickerSummaryFeatures(perTicker);
+        const recorded = originalRunParameters(result);
+        const features = recorded ? recorded.features as number[][] : buildTickerSummaryFeatures(clusterResults.map((res, i) => ({ symbol: clusterSymbols[i], returns: computeDailyReturns((res.data?.bars ?? []).map(bar => bar.close)) }))).features;
+        const labels = recorded ? features.map((_, index) => `Input row ${index + 1}`) : clusterSymbols;
         return (
           <>
             <div className="grid grid-cols-2 gap-1.5">
@@ -3645,12 +3649,12 @@ function MachineLearningTab() {
             <div className="border border-border overflow-x-auto scrollbar-thin">
               <table className="w-full font-terminal text-[8px]">
                 <thead><tr className="border-b border-border text-muted-foreground">
-                  <th className="text-left p-1.5">TICKER</th><th className="text-right p-1.5">CLUSTER</th>
+                  <th className="text-left p-1.5">{recorded ? "INPUT ROW · TICKER LABEL NOT RETAINED" : "TICKER"}</th><th className="text-right p-1.5">CLUSTER</th>
                   <th className="text-right p-1.5">MEAN RET %</th><th className="text-right p-1.5">VOL %</th>
                   <th className="text-right p-1.5">SKEW</th><th className="text-right p-1.5">MAX DD %</th>
                 </tr></thead>
                 <tbody>
-                  {clusterSymbols.map((sym, i) => (
+                  {labels.map((sym, i) => (
                     <tr key={sym} className="border-b border-border/30">
                       <td className="p-1.5">{sym}</td>
                       <td className="text-right p-1.5 tabular-nums">{r.clusterLabels[i]}</td>
@@ -3667,13 +3671,15 @@ function MachineLearningTab() {
         );
       })()}
 
-      {result != null && method === "anomaly" && bars && (() => {
+      {result != null && method === "anomaly" && (() => {
         const r = result as { isAnomaly: boolean[]; anomalyScore: number[]; anomalyCount: number };
-        const { dates, returns } = buildAnomalyFeatures(bars);
-        const chartData = dates.map((d, i) => ({ date: d, return: returns[i], anomalyReturn: r.isAnomaly[i] ? returns[i] : null }));
+        const recorded = originalRunParameters(result);
+        const originalFeatures = recorded?.features as number[][] | undefined;
+        const observations = originalFeatures ? { dates: originalFeatures.map((_, index) => `Input ${index + 1}`), returns: originalFeatures.map(row => row[0]) } : bars ? buildAnomalyFeatures(bars) : { dates: [], returns: [] };
+        const chartData = observations.dates.map((date, index) => ({ date, return: observations.returns[index], anomalyReturn: r.isAnomaly[index] ? observations.returns[index] : null }));
         return (
           <>
-            {statCard("ANOMALOUS DAYS FLAGGED", `${r.anomalyCount} / ${dates.length}`)}
+            {statCard("ANOMALOUS DAYS FLAGGED", `${r.anomalyCount} / ${observations.dates.length}`)}
             <div className="h-56 border border-border p-2">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>

@@ -6,7 +6,7 @@ import {
   GitCompareArrows, Plus, RefreshCw, Save, ShieldCheck, Target,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ReceiptSummary, runAdvancedManual, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 
 type Metric = "revenue" | "ebitda" | "ebit" | "eps" | "free_cash_flow" | "gross_margin" | "operating_margin" | "net_margin" | "capex" | "price_target" | "recommendation_score";
 type View = "overview" | "revisions" | "benchmarks" | "blind_spots" | "divergence" | "input";
@@ -78,7 +78,8 @@ function ConsensusDivergenceRunner({ series }: { series: Analysis["series"] }) {
   const [selectedKey, setSelectedKey] = useTerminalArtifactState("ConsensusDivergenceRunner.selectedKey", "");
   const [internalEstimate, setInternalEstimate] = useTerminalArtifactState("ConsensusDivergenceRunner.internalEstimate", "");
   const [marketPrice, setMarketPrice] = useTerminalArtifactState("ConsensusDivergenceRunner.marketPrice", "");
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const nativeWorkflow = useAdvancedWorkflow("research", "consensus-divergence");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const item = series.find((entry) => entry.key === selectedKey) ?? null;
@@ -90,9 +91,9 @@ function ConsensusDivergenceRunner({ series }: { series: Analysis["series"] }) {
     if (!Number.isFinite(internal)) { setError("Provide a finite internal estimate."); return; }
     const marketValue = marketPrice.trim() === "" ? undefined : Number(marketPrice);
     if (marketValue !== undefined && !Number.isFinite(marketValue)) { setError("Market price must be finite, or left blank."); return; }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("research", "consensus-divergence", { analystEstimates, internalEstimate: internal, ...(marketValue !== undefined ? { marketPrice: marketValue } : {}) }));
+      await nativeWorkflow.run({ analystEstimates, internalEstimate: internal, ...(marketValue !== undefined ? { marketPrice: marketValue } : {}) });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Consensus divergence unavailable."); }
     finally { setLoading(false); }
   };

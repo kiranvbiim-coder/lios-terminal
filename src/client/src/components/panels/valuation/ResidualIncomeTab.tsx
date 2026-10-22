@@ -3,7 +3,7 @@ import { useOverridable } from "@/lib/useOverridable";
 import { EditableValue, OverrideStatusBadge } from "@/components/panels/EditableValue";
 import { FormulaTooltip } from "@/components/panels/FormulaTooltip";
 import { computeResidualIncome } from "@/lib/valuationEngines";
-import { AdvancedReceiptFooter, runAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
+import { AdvancedReceiptFooter, useAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
 
 // Residual Income (RI) tab: equity value = book value + PV(excess returns
 // above the cost of equity charge on book value). The forecast net income
@@ -28,7 +28,8 @@ interface Props {
 export default function ResidualIncomeTab({ symbol, curr, price, sharesOut, costOfEquity, termGrowth, bookValueOfEquity, forecastNetIncome, onResult }: Props) {
   const ov = useOverridable<"payoutRatio">("ResidualIncomeTab.ov");
   const payoutRatio = ov.getValue("payoutRatio", 0); // % of net income paid out as dividends; 0 = full retention (clean surplus)
-  const [advanced, setAdvanced] = useState<{ equityValue: number; residualIncomePv: number; terminalValuePv: number; receipt: AdvancedReceipt } | null>(null);
+  const nativeModel = useAdvancedModel<{ equityValue: number; residualIncomePv: number; terminalValuePv: number; receipt: AdvancedReceipt }>("valuation/residual-income");
+  const advanced = nativeModel.result;
   const [advancedError, setAdvancedError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -56,7 +57,7 @@ export default function ResidualIncomeTab({ symbol, curr, price, sharesOut, cost
   async function runCanonicalResidualIncome() {
     const parameters = { bookValueEquity: bv0, roePct, costOfEquityPct: costOfEquity, payoutRatioPct: payoutRatio, terminalRoePct: roePct.at(-1), terminalGrowthPct: termGrowth };
     setRunning(true); setAdvancedError(null);
-    try { setAdvanced(await runAdvancedModel("valuation/residual-income", parameters)); }
+    try { await nativeModel.run(parameters); }
     catch (error) { setAdvancedError(error instanceof Error ? error.message : "Residual-income run failed."); }
     finally { setRunning(false); }
   }
@@ -69,14 +70,13 @@ export default function ResidualIncomeTab({ symbol, curr, price, sharesOut, cost
     terminalGrowth: termGrowth / 100,
   }), [bv0, costOfEquity, forecastNetIncome, forecastBookValue, termGrowth]);
 
-  const canonicalEquityValue = advanced?.equityValue ?? result.intrinsicValue;
-  const valuePerShare = sharesOut > 0 ? canonicalEquityValue / sharesOut : 0;
+  const valuePerShare = sharesOut > 0 ? result.intrinsicValue / sharesOut : 0;
   const upside = price > 0 ? ((valuePerShare - price) / price) * 100 : NaN;
 
   useEffect(() => {
-    onResult?.(hasRealBookValue ? canonicalEquityValue : null);
+    onResult?.(hasRealBookValue ? result.intrinsicValue : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasRealBookValue, canonicalEquityValue, onResult]);
+  }, [hasRealBookValue, result.intrinsicValue, onResult]);
 
   const uptxt = upside >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]";
 
@@ -110,7 +110,7 @@ export default function ResidualIncomeTab({ symbol, curr, price, sharesOut, cost
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-[hsl(38,95%,55%)]">CANONICAL ADVANCED RESIDUAL INCOME</span><button type="button" disabled={running || !hasRealBookValue || roePct.length === 0} onClick={runCanonicalResidualIncome} className="border border-[hsl(38,95%,50%)] px-2 py-1 font-terminal text-[8px] text-[hsl(38,95%,55%)] disabled:opacity-40">{running ? "RUNNING…" : "RUN RECEIPTED MODEL"}</button></div>
         <div className="font-terminal text-[7px] text-muted-foreground">Formal units: money (book value, equity value); percent (ROE, cost of equity, payout, terminal growth). All supplied values are MANUAL because worksheet source data lacks an immutable source binding.</div>
         {advancedError ? <div className="font-terminal text-[8px] text-red-400">{advancedError}</div> : null}
-        {advanced ? <><div className="font-terminal text-[8px] text-muted-foreground">Reconciled canonical equity value <b className="text-foreground">{curr}{(advanced.equityValue / 1e9).toFixed(2)}B</b>; prior worksheet estimate {curr}{(result.intrinsicValue / 1e9).toFixed(2)}B; delta {curr}{((advanced.equityValue - result.intrinsicValue) / 1e6).toFixed(1)}M. The engine uses the displayed ROE path derived from the worksheet’s net-income/book-value roll-forward.</div><AdvancedReceiptFooter receipt={advanced.receipt} /></> : null}
+        {advanced ? <><div className="font-terminal text-[8px] text-muted-foreground">Recorded native equity value <b className="text-foreground">{curr}{(advanced.equityValue / 1e9).toFixed(2)}B</b>. Current worksheet estimate {curr}{(result.intrinsicValue / 1e9).toFixed(2)}B is calculated separately from current inputs. The saved native run is not automatically recalculated when inputs change.</div><AdvancedReceiptFooter receipt={advanced.receipt} /></> : null}
       </div>
 
       <div className="bg-[#080808] border border-border p-4">

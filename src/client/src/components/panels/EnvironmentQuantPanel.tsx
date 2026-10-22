@@ -1,10 +1,11 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Leaf } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
 import { InputSourceSelector, ModelInputEditor, ProvenanceReceipt, advancedInputProvenance, type InputSourceMode } from "./advancedOperationsClimate";
 import type { JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import { useAdvancedWorkflow } from "./advancedMacroForecastResearch";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 
 // Environment & Sustainability domain's own real quant engine
 // (LIMURIA_ENGINES port plan Phase 9) -- built directly inside the actual
@@ -131,7 +132,12 @@ type AdvancedReceipt = {
 export default function EnvironmentQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
   const [method, setMethod] = useTerminalArtifactState<EnvironmentMethod>("EnvironmentQuantPanel.method", "climate");
-  const [result, setResult] = useState<unknown>(null);
+  const [localResult, setResult] = useState<{ method: string; output: unknown } | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const legacyResult = terminal?.target ? native.stored?.[`environment.${method}`] : localResult?.method === method ? localResult.output : null;
+  const nativeWorkflow = useAdvancedWorkflow("climate", method);
+  const result = method === "climate" || method === "carbon" ? legacyResult : nativeWorkflow.result;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,18 +183,11 @@ export default function EnvironmentQuantPanel() {
         const parsed: unknown = JSON.parse(advancedInputs[method]);
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Model input must be a JSON object.");
         const parameters = parsed as Record<string, unknown>;
-        const advancedRes = await apiRequest("POST", `/api/quant/advanced/climate/${method}`, {
-          ...parameters, inputProvenance: advancedInputProvenance(parameters, advancedSourceMode),
-        });
-        setResult(await advancedRes.json());
+        await nativeWorkflow.run(parameters, advancedInputProvenance(parameters, advancedSourceMode));
         return;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Environment engine unavailable right now.");
-      }
-      setResult(await res.json());
+      const output = await native.run<Record<string, unknown>>(method, body as Record<string, unknown>, `environment.${method}`, path);
+      if (!terminal?.target) setResult({ method, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Environment engine unavailable right now.");
     } finally {
@@ -298,6 +297,7 @@ export default function EnvironmentQuantPanel() {
             </>
           );
         })()}
+        {result != null && !isAdvancedClimateMethod(method) && <><p className="text-xs text-muted-foreground">Recorded original environment-engine result · explicit Run recalculates edited manual inputs on this same terminal Artifact.</p><ProvenanceReceipt receipt={(result as { receipt?: AdvancedReceipt }).receipt}/></>}
       </div>
     </div>
   );
