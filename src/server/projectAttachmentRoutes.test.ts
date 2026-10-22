@@ -494,8 +494,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
       dependencyRefs: [quickRef.sourceRef],
     }),
   });
-  assert.equal(sameProjectDifferentChatClaim.status, 404, await sameProjectDifferentChatClaim.text(),
-    "another Chat in the SAME Project has no authority to claim the promoted Chat's Quick file");
+  assert.equal(sameProjectDifferentChatClaim.status, 404, await sameProjectDifferentChatClaim.text());
   const ownPromotedChatDraft = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
@@ -504,8 +503,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
       dependencyRefs: [quickRef.sourceRef],
     }),
   });
-  assert.equal(ownPromotedChatDraft.status, 200, await ownPromotedChatDraft.text(),
-    "the exact promoted Chat can still create a new Project-owned Artifact from its own original file");
+  assert.equal(ownPromotedChatDraft.status, 200, await ownPromotedChatDraft.text());
   const promotedChatFollowUp = await fetch(conversationUrlFor(address.port, quick.id), {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
@@ -561,8 +559,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
       dependencyRefs: [sameProjectRef.sourceRef],
     }),
   });
-  assert.equal(sameProjectRevisionSpoof.status, 404, await sameProjectRevisionSpoof.text(),
-    "the original Artifact may retain its inherited file, never claim another same-Project Chat file");
+  assert.equal(sameProjectRevisionSpoof.status, 404, await sameProjectRevisionSpoof.text());
 
   // Even after moving another owned Chat to a DIFFERENT Project, its saved file
   // cannot be claimed in this Project's Artifact source/dependency manifest.
