@@ -20,7 +20,7 @@ import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContex
 import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
-import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
+import { clearArtifactWorkbenchRecovery, loadArtifactWorkbenchRecovery, openArtifactWorkbench, returnFromArtifactWorkbench, saveArtifactWorkbenchRecovery } from "@/lib/artifactWorkbenchHandoff";
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import { TerminalArtifactRendererProvider } from "@/lib/terminalArtifactState";
@@ -266,7 +266,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const audience: WorkspaceAudience = isInternal ? "internal" : isTrial ? "trial" : "client";
   const isMobile = useIsMobile();
   const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
-  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(null);
+  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(
+    loadArtifactWorkbenchRecovery(session.email, tabsState, audience),
+  );
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
@@ -466,6 +468,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       artifactHandoffRef.current = artifactHandoffRef.current?.priorTab.id === result.handoff.priorTab.id
         ? { ...result.handoff, priorTab: artifactHandoffRef.current.priorTab, priorLayout: artifactHandoffRef.current.priorLayout, priorMaximizedPane: artifactHandoffRef.current.priorMaximizedPane }
         : result.handoff;
+      // Store the small, account-bound return navigation snapshot before the
+      // Artifact pane displaces the prior saved Terminal tab.
+      if (artifactHandoffRef.current) saveArtifactWorkbenchRecovery(session.email, artifactHandoffRef.current);
       setTabsState(() => result.state);
       setMaximizedPane(null);
       chatWorkbenchOriginRef.current = null;
@@ -482,6 +487,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     const handoff = artifactHandoffRef.current;
     if (!handoff) {
       if (dirty || workbenchDirtyRef.current) return;
+      clearArtifactWorkbenchRecovery();
       setWorkbenchReturn(current => ({ context, request: (current?.request ?? 0) + 1, prompt }));
       handleSurface("projects");
       return;
@@ -493,6 +499,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
     requestDockviewLayoutRestore(handoff.priorLayout);
     artifactHandoffRef.current = null;
+    clearArtifactWorkbenchRecovery();
     handleSurface("projects");
   }, [tabsState, handleSurface, setTabsState]);
   const handleWorkbenchVersion = useCallback((paneId: PaneId, version: number) => {
