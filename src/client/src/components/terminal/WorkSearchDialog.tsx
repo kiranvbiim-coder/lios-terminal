@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FileText, FolderKanban, MessageSquare, Search, Sparkles, X } from "lucide-react";
 import { workSearchResponseSchema, type WorkSearchResult } from "@shared/workSearch";
+import { WORK_SEARCH_FILTERS, clampWorkSearchSelection, countWorkSearchKind, filterWorkSearchResults, workSearchEmptyMessage, type WorkSearchFilter } from "@/lib/workSearchFilters";
 
 interface Props {
   open: boolean;
@@ -29,6 +30,10 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
+  const [filter, setFilter] = useState<WorkSearchFilter>("all");
+  const [opening, setOpening] = useState(false);
+  const openingRef = useRef(false);
+  const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
 
@@ -37,6 +42,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery("");
     setResults([]);
+    setFilter("all");
     setError(null);
     setSelected(0);
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -52,9 +58,9 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
       return;
     }
     const controller = new AbortController();
+    setLoading(true);
+    setError(null);
     const timer = window.setTimeout(async () => {
-      setLoading(true);
-      setError(null);
       try {
         const response = await fetch(`/api/work-search?q=${encodeURIComponent(normalized)}&limit=30`, { signal: controller.signal });
         if (!response.ok) throw new Error("Search is temporarily unavailable.");
@@ -63,7 +69,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
         setResults(parsed.results);
         setSelected(0);
       } catch (searchError) {
-        if (searchError instanceof DOMException && searchError.name === "AbortError") return;
+        if (controller.signal.aborted || (searchError instanceof DOMException && searchError.name === "AbortError")) return;
         setResults([]);
         setError(searchError instanceof Error ? searchError.message : "Search is temporarily unavailable.");
       } finally {
@@ -76,23 +82,34 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
     };
   }, [open, query]);
 
+  const visibleResults = useMemo(() => filterWorkSearchResults(results, filter), [results, filter]);
+  useEffect(() => {
+    setSelected((index) => clampWorkSearchSelection(index, visibleResults.length));
+  }, [visibleResults.length]);
+
   const status = useMemo(() => {
-    if (query.trim().length < 2) return "Search chats, Projects, files and Artifacts.";
+    if (query.trim().length < 2) return workSearchEmptyMessage(query, filter, results.length);
     if (loading) return "Searching your LiOS work…";
     if (error) return error;
-    if (!results.length) return "No matching work.";
-    return `${results.length} result${results.length === 1 ? "" : "s"}`;
-  }, [error, loading, query, results.length]);
+    if (!visibleResults.length) return workSearchEmptyMessage(query, filter, results.length);
+    return `${visibleResults.length} of ${results.length} returned matches shown.`;
+  }, [error, filter, loading, query, results.length, visibleResults.length]);
 
   if (!open) return null;
 
   const run = async (result: WorkSearchResult) => {
+    if (openingRef.current) return;
+    openingRef.current = true;
+    setOpening(true);
     try {
       await onSelect(result);
       onClose();
     } catch (openError) {
-      setResults([]);
+      // Keep the already-authorized results so the user can retry or pick another.
       setError(openError instanceof Error ? openError.message : "That item is no longer available.");
+    } finally {
+      openingRef.current = false;
+      setOpening(false);
     }
   };
 
@@ -105,26 +122,50 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setQuery(event.target.value); setResults([]); setSelected(0); }}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, results.length - 1))); }
+              if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, visibleResults.length - 1))); }
               if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
-              if (event.key === "Enter" && results[selected]) { event.preventDefault(); void run(results[selected]); }
+              if (event.key === "Enter" && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
               if (event.key === "Escape") onClose();
             }}
             className="min-w-0 flex-1 bg-transparent font-ui text-[15px] text-foreground outline-none placeholder:text-muted-foreground/55"
             placeholder="Search chats, Projects, files and Artifacts"
             aria-label="Search LiOS work"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={visibleResults.length > 0}
+            aria-controls={listId}
+            aria-activedescendant={!loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
             autoComplete="off"
           />
-          {query && <button type="button" onClick={() => setQuery("")} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
+          {query && <button type="button" onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Close search"><X className="h-4 w-4" /></button>
         </div>
-        <div className="max-h-[58vh] overflow-y-auto p-2">
-          {results.map((result, index) => (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
+          {WORK_SEARCH_FILTERS.map((entry) => (
             <button
-              key={result.id}
+              key={entry.value}
               type="button"
+              aria-pressed={filter === entry.value}
+              onClick={() => { setFilter(entry.value); setSelected(0); inputRef.current?.focus(); }}
+              className={`min-h-9 rounded-lg border px-3 py-1.5 font-ui text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${filter === entry.value ? "border-cyan-300/50 bg-cyan-300/[0.1] text-cyan-100" : "border-border/55 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"}`}
+            >
+              {entry.label} <span aria-hidden="true">({countWorkSearchKind(results, entry.value)})</span>
+            </button>
+          ))}
+        </div>
+        <p role="status" aria-live="polite" className="px-4 py-2 font-ui text-[12px] text-muted-foreground">{status}</p>
+        {error && visibleResults.length > 0 && <p role="alert" className="mx-3 mb-2 rounded-md border border-red-400/30 p-2 font-ui text-[12px] text-red-200">{error}</p>}
+        <div id={listId} role="listbox" aria-label="Matching LiOS work" className="max-h-[52vh] overflow-y-auto p-2">
+          {!loading && visibleResults.map((result, index) => (
+            <button
+              key={`${result.kind}:${result.id}`}
+              id={`${listId}-item-${index}`}
+              role="option"
+              aria-selected={selected === index}
+              type="button"
+              disabled={opening}
               onMouseEnter={() => setSelected(index)}
               onClick={() => void run(result)}
               className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors ${selected === index ? "bg-white/[0.06]" : "hover:bg-white/[0.035]"}`}
@@ -139,7 +180,8 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
               </span>
             </button>
           ))}
-          {!results.length && <div className={`px-5 py-12 text-center font-ui text-[13px] ${error ? "text-red-300" : "text-muted-foreground"}`} role={error ? "alert" : "status"}>{status}</div>}
+          {!loading && !visibleResults.length && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">{workSearchEmptyMessage(query, filter, results.length)}</div>}
+          {loading && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">Searching…</div>}
         </div>
       </DialogContent>
     </Dialog>
