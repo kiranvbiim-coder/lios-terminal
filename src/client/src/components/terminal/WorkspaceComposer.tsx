@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { Boxes, LayoutGrid, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { Boxes, LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { readIntelligenceObjectDrag } from "@/lib/terminalObjectDnD";
 import type { PaneId, PaneState, WorkspaceState } from "@/lib/terminalTypes";
@@ -33,17 +34,28 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
     return panes.map((pane, index) => ({ objectId: `workspace:${index}`, pane }));
   });
   const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
 
   const candidates = useMemo(() => objects.filter((object) => object.view && `${object.label} ${object.symbol ?? ""} ${object.kind} ${object.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())).slice(0, 100), [objects, query]);
 
   const addObject = (object: IntelligenceObject) => {
     if (!object.view) return;
+    if (slots.some((slot) => slot.objectId === object.id)) {
+      setNotice("This object is already in the workspace.");
+      return;
+    }
+    if (slots.length >= PANE_IDS.length) {
+      setNotice("All four panes are occupied. Remove one before adding another.");
+      return;
+    }
     const candidate: Slot = { objectId: object.id, pane: { view: object.view, symbol: object.symbol ?? "" } };
-    setSlots((current) => {
-      const deduped = current.filter((slot) => slot.objectId !== object.id);
-      return [...deduped, candidate].slice(-4);
-    });
+    // Do not silently evict a pane on a fifth selection or drop.
+    setSlots((current) => current.length >= PANE_IDS.length || current.some((slot) => slot.objectId === object.id)
+      ? current
+      : [...current, candidate]);
+    setNotice("Added an object to the workspace.");
   };
 
   const drop = (event: DragEvent) => {
