@@ -322,6 +322,24 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
       attrs: {},
     }] },
   };
+  // Source strings are not authorization: this second Chat is owned by the same
+  // user, but must not be able to claim the first Chat's uploaded file as evidence.
+  const spoofedOtherChat = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft, dependencyRefs: [quickRef.sourceRef] }),
+  });
+  assert.equal(spoofedOtherChat.status, 404, await spoofedOtherChat.text());
+  const spoofedDependency = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, artifactId: crypto.randomUUID(), sourceRefs: [] },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(spoofedDependency.status, 404, await spoofedDependency.text());
+
   const artifactSave = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
@@ -357,6 +375,29 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
       attrs: {},
     }] },
   };
+  // Even an owned file from ANOTHER Chat cannot be substituted into this
+  // Artifact's next version or dependency manifest.
+  const siblingUpload = await fetch(`http://127.0.0.1:${address.port}/api/quick-chats/${otherQuick.id}/attachments`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id) },
+    body: attachmentForm("sibling-private.txt", "Other Chat's private evidence."),
+  });
+  const siblingUploadBody = await siblingUpload.text();
+  assert.equal(siblingUpload.status, 201, siblingUploadBody);
+  const siblingRef = conversationAttachmentRefSchema.parse((JSON.parse(siblingUploadBody) as { attachment: unknown }).attachment);
+  const forgedRevision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: { ...revisionDraft, sourceRefs: [siblingRef.sourceRef] }, dependencyRefs: [siblingRef.sourceRef] }),
+  });
+  assert.equal(forgedRevision.status, 404, await forgedRevision.text());
+  const forgedDependencyRevision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: revisionDraft, dependencyRefs: [siblingRef.sourceRef] }),
+  });
+  assert.equal(forgedDependencyRevision.status, 404, await forgedDependencyRevision.text());
+
   const revision = await fetch(artifactPath + "/keep-draft-version", {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
