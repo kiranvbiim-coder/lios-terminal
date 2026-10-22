@@ -748,30 +748,58 @@ function ConnectionCard({
   conn: SavedConnection;
   onTest: () => void;
   onEdit: () => void;
-  onRemove: () => void;
+  onRemove: () => Promise<boolean>;
 }) {
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState(false);
   const Icon = STATUS_ICON[conn.status] ?? KeyRound;
   const color = STATUS_COLOR[conn.status] ?? "text-muted-foreground";
   const borderColor = STATUS_BORDER[conn.status] ?? "border-border";
   const recovery = connectionRecoveryPresentation(conn.status);
 
+  const remove = async () => {
+    setRemoving(true);
+    setRemoveError(false);
+    try {
+      const removed = await onRemove();
+      if (!removed) setRemoveError(true);
+    } catch {
+      setRemoveError(true);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   return (
-    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
-      <div className="flex items-center gap-2">
-        <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
-        <span className="font-terminal text-[9px] font-bold uppercase text-foreground truncate">{conn.name}</span>
-        <span className={`ml-auto font-terminal text-[8px] uppercase ${color} shrink-0`}>{conn.status}</span>
+    <article className={`rounded-lg border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon className={`h-4 w-4 shrink-0 ${color}`} aria-hidden="true" />
+        <h3 className="min-w-0 flex-1 truncate font-ui text-sm font-semibold text-foreground">{conn.name}</h3>
+        <span className={`font-ui text-xs ${color}`}>{conn.status.replaceAll("_", " ")}</span>
       </div>
-      <div className="font-terminal text-[8px] text-muted-foreground mt-1">
-        {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+      <p className="mt-1 font-ui text-xs text-muted-foreground">
+        {conn.sourceType.replaceAll("_", " ")}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+      </p>
+      {conn.statusDetail && <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{conn.statusDetail}</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <button type="button" onClick={onTest} disabled={removing} className={`min-h-10 rounded-md px-3 py-2 font-ui text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button type="button" onClick={onEdit} disabled={removing} className="min-h-10 rounded-md px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">{recovery.editLabel}</button>
+        {!confirmingRemoval && (
+          <button type="button" onClick={() => setConfirmingRemoval(true)} className="min-h-10 rounded-md px-3 py-2 font-ui text-sm text-muted-foreground hover:text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400" aria-label={`Remove saved connection ${conn.name}`}>Remove</button>
+        )}
       </div>
-      {conn.statusDetail && <div className="font-terminal text-[8px] text-muted-foreground mt-1 truncate">{conn.statusDetail}</div>}
-      <div className="flex gap-3 mt-2">
-        <button onClick={onTest} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
-        <button onClick={onEdit} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
-        <button onClick={onRemove} className="font-terminal text-[8px] text-muted-foreground hover:text-rose-400 uppercase">Remove</button>
-      </div>
-    </div>
+      {confirmingRemoval && (
+        <div data-testid="connection-remove-confirm" className="mt-2 rounded-md border border-rose-400/30 bg-rose-400/[0.035] p-3">
+          <p className="font-ui text-sm leading-5 text-foreground">Remove the saved connection to {conn.name} from LiOS?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => { setConfirmingRemoval(false); setRemoveError(false); }} disabled={removing} className="min-h-10 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">Cancel</button>
+            <button type="button" onClick={() => void remove()} disabled={removing} className="min-h-10 rounded-md border border-rose-400/50 px-3 py-2 font-ui text-sm font-semibold text-rose-200 hover:bg-rose-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 disabled:opacity-40">{removing ? "Removing…" : "Remove connection"}</button>
+          </div>
+          {removeError && <p role="alert" className="mt-2 font-ui text-sm text-rose-200">Could not remove this connection. Check the connection and try again.</p>}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1061,11 +1089,16 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     } catch { refresh(); }
   }
 
-  async function handleDeleteConnection(connectionId: number) {
+  async function handleDeleteConnection(connectionId: number): Promise<boolean> {
     try {
       await apiRequest("DELETE", `/api/setup/source-connections/${connectionId}`);
+      setSaveNotice(null);
       refresh();
-    } catch { /* silent */ }
+      return true;
+    } catch (error) {
+      setSaveNotice(error instanceof Error ? `Could not remove the saved connection: ${error.message}` : "Could not remove the saved connection. Retry after checking your connection.");
+      return false;
+    }
   }
 
   function handleEditConnection(conn: SavedConnection) {
