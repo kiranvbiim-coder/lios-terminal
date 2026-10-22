@@ -775,7 +775,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "chart": content = <ChartPanel symbol={pane.symbol} onSymbol={chatControls ? onSymbol : (nextSymbol) => updatePaneSymbolAndView(paneId, nextSymbol, "chart")} />; break;
       case "news": content = <NewsPanel symbol={pane.symbol} />; break;
       case "agent": content = <AgentPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} context={askLiosContext ?? undefined} initialPrompt={askLiosPrompt ?? undefined} />; break;
-      case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
+      case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} recoveryOwner={session.email} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
       case "screener": content = <ScreenerPanel onSymbol={onSymbol} />; break;
       case "watchlist": content = <WatchlistPanel activeSymbol={pane.symbol} onSymbol={onSymbol} role={session.role} />; break;
       case "alerts": content = <AlertsPanel onSymbol={onSymbol} role={session.role} />; break;
