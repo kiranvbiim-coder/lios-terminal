@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { artifactContentSchema, type ArtifactContent } from "@shared/artifactContracts";
 import { getDesktopWorkspaceBridge, type ProtectedArtifactDraftIdentity, type ProtectedArtifactDraftSnapshot } from "./desktopWorkspace";
 
@@ -44,6 +44,17 @@ export async function clearNativeArtifactDraft(identity: ProtectedArtifactDraftI
     await native.clearArtifactDraftRecovery!(identity);
   });
 }
+/**
+ * A user who edits and then restores the exact saved content has no unsaved
+ * work to recover. Only a true dirty-to-clean transition in this mounted editor
+ * may remove its previous checkpoint; a second clean viewer must not clear it.
+ */
+export function shouldClearRevertedNativeDraft(
+  wasDirty: boolean, nowDirty: boolean, ready: boolean, hasRecoveryCandidate: boolean,
+): boolean {
+  return ready && wasDirty && !nowDirty && !hasRecoveryCandidate;
+}
+
 export function matchesNativeArtifactDraft(
   candidate: ProtectedArtifactDraftSnapshot, context: NativeArtifactDraftContext, expectedKind: string,
 ): boolean {
@@ -96,6 +107,20 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
   const ready = state.key === key && state.status === "ready";
   const candidate = ready ? state.candidate : null;
   const matching = candidate && context ? matchesNativeArtifactDraft(candidate, context, draft.kind) : false;
+  const dirtyHistory = useRef({ key, dirty: false });
+  useEffect(() => {
+    if (dirtyHistory.current.key !== key) dirtyHistory.current = { key, dirty: false };
+    if (!ready || candidate) return;
+    const wasDirty = dirtyHistory.current.dirty;
+    dirtyHistory.current.dirty = dirty;
+    if (context && shouldClearRevertedNativeDraft(wasDirty, dirty, ready, false)) {
+      void clearNativeArtifactDraft(context).catch(() => {
+        setState(current => current.key === key
+          ? { ...current, notice: "Unable to clear an obsolete checkpoint. Discard it when reopening." }
+          : current);
+      });
+    }
+  }, [key, ready, candidate, dirty]);
   useEffect(() => {
     if (!context || !ready || candidate || !dirty) return;
     const native = bridge();
