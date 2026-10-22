@@ -1,13 +1,119 @@
 import type { ArtifactWorkbenchContext, PaneId } from "./terminalTypes";
-import { activeTerminalTab } from "./terminalTabs";
+import { activeTerminalTab, isTerminalTabsState } from "./terminalTabs";
 import type { TerminalTab, TerminalTabsState } from "./terminalTabs";
 import type { DockviewLayoutState } from "./dockviewWorkspaceState";
+import type { WorkspaceAudience } from "./featureRegistry";
+import { sanitizeWorkspaceForAudience } from "./terminalWorkspace";
 
 export interface ArtifactWorkbenchHandoff {
   context: ArtifactWorkbenchContext;
   priorTab: TerminalTab;
   priorLayout: DockviewLayoutState | null;
   priorMaximizedPane: PaneId | null;
+}
+
+/**
+ * Restore only the navigation displaced by opening an Artifact inside the
+ * original Dockview tab. The Artifact, Chat and saved revision remain P4/server
+ * owned; this browser record cannot authorize data access or recover unsaved
+ * editor buffers.
+ */
+export const ARTIFACT_WORKBENCH_RECOVERY_KEY = "lios.artifact-workbench-return.v1";
+const RECOVERY_MAX_CHARS = 1_000_000;
+const RECOVERY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
+const RECOVERY_PANES = ["primary", "secondary", "tertiary", "quaternary"] as const;
+
+function validRecoveryContext(value: unknown): value is ArtifactWorkbenchContext {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const c = value as Partial<ArtifactWorkbenchContext>;
+  return (c.projectId === null || (Number.isSafeInteger(c.projectId) && (c.projectId ?? 0) > 0))
+    && Number.isSafeInteger(c.chatId) && (c.chatId ?? 0) > 0
+    && typeof c.artifactId === "string"
+    && /^(?:artifact:)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(c.artifactId)
+    && Number.isSafeInteger(c.version) && (c.version ?? 0) > 0;
+}
+
+function matchingRecoveredPane(state: TerminalTabsState, handoff: ArtifactWorkbenchHandoff): boolean {
+  const actual = state.tabs.find(tab => tab.id === handoff.priorTab.id);
+  if (!actual || actual.id !== handoff.priorTab.id) return false;
+  // The user can focus another Dockview pane after expanding the Artifact.
+  // Only the original replaced pane can prove this is still the same handoff.
+  const paneId = handoff.priorTab.workspace.focusedPane;
+  if (!RECOVERY_PANES.includes(paneId)) return false;
+  const pane = actual.workspace[paneId];
+  return pane?.view === "artifact" && !!pane.artifact
+    && pane.artifact.projectId === handoff.context.projectId
+    && pane.artifact.chatId === handoff.context.chatId
+    && pane.artifact.artifactId === handoff.context.artifactId
+    && Number.isSafeInteger(pane.artifact.version) && pane.artifact.version > 0;
+}
+
+export function clearArtifactWorkbenchRecovery(): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(ARTIFACT_WORKBENCH_RECOVERY_KEY); } catch {}
+}
+
+export function saveArtifactWorkbenchRecovery(ownerEmail: string, handoff: ArtifactWorkbenchHandoff): void {
+  if (typeof window === "undefined") return;
+  const owner = ownerEmail.trim().toLowerCase();
+  if (!owner || !validRecoveryContext(handoff.context)) return;
+  try {
+    const payload = JSON.stringify({ schemaVersion: 1, owner, capturedAt: Date.now(), handoff });
+    if (payload.length > RECOVERY_MAX_CHARS) return;
+    window.localStorage.setItem(ARTIFACT_WORKBENCH_RECOVERY_KEY, payload);
+  } catch {
+    // Navigation recovery may be unavailable in hardened/private storage.
+  }
+}
+
+export function loadArtifactWorkbenchRecovery(
+  ownerEmail: string, state: TerminalTabsState, audience: WorkspaceAudience,
+): ArtifactWorkbenchHandoff | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ARTIFACT_WORKBENCH_RECOVERY_KEY);
+    if (!raw) return null;
+    const parsed: unknown = raw.length <= RECOVERY_MAX_CHARS ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      clearArtifactWorkbenchRecovery(); return null;
+    }
+    const record = parsed as Record<string, unknown>;
+    // Never leak one authenticated user's previous workspace to another user.
+    // A different account keeps its own normal tab state; this hint is ignored.
+    if (record.owner !== ownerEmail.trim().toLowerCase()) return null;
+    if (record.schemaVersion !== 1 || typeof record.capturedAt !== "number"
+      || !Number.isFinite(record.capturedAt) || record.capturedAt > Date.now()
+      || Date.now() - record.capturedAt > RECOVERY_MAX_AGE_MS) {
+      clearArtifactWorkbenchRecovery(); return null;
+    }
+    const value = record.handoff;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      clearArtifactWorkbenchRecovery(); return null;
+    }
+    const candidate = value as Partial<ArtifactWorkbenchHandoff>;
+    if (!validRecoveryContext(candidate.context)
+      || !candidate.priorTab || !isTerminalTabsState({
+        tabs: [candidate.priorTab], activeTabId: candidate.priorTab.id, closedTabs: [],
+      })
+      || !RECOVERY_PANES.includes(candidate.priorTab.workspace.focusedPane)
+      || (candidate.priorMaximizedPane !== null && !RECOVERY_PANES.includes(candidate.priorMaximizedPane as typeof RECOVERY_PANES[number]))
+      || (candidate.priorLayout !== null && (typeof candidate.priorLayout !== "object" || Array.isArray(candidate.priorLayout)))
+      || !matchingRecoveredPane(state, candidate as ArtifactWorkbenchHandoff)) {
+      clearArtifactWorkbenchRecovery(); return null;
+    }
+    return {
+      context: { ...candidate.context },
+      priorTab: {
+        ...candidate.priorTab,
+        workspace: sanitizeWorkspaceForAudience(candidate.priorTab.workspace, audience),
+      },
+      priorLayout: candidate.priorLayout,
+      priorMaximizedPane: candidate.priorMaximizedPane,
+    };
+  } catch {
+    clearArtifactWorkbenchRecovery();
+    return null;
+  }
 }
 
 export interface ArtifactWorkbenchRevisionSelection {
