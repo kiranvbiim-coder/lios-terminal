@@ -10,6 +10,7 @@ import { fromUniverCellData, fromUniverWorkbookSnapshot, toUniverWorkbookProject
 import { colIndexToLetters } from "@/lib/spreadsheetEngine";
 import { spreadsheetContentComparisonKey, spreadsheetDraftHasChanges } from "@/lib/artifactSpreadsheetDraft";
 import { SpreadsheetCellSourceInspect } from "./SpreadsheetCellSourceInspect";
+import { useNativeArtifactDraftRecovery, type NativeArtifactDraftContext } from "@/lib/nativeArtifactDraftRecovery";
 
 type SpreadsheetContent = Extract<ArtifactContent, { kind: "spreadsheet" }>;
 interface Props {
@@ -19,10 +20,11 @@ interface Props {
   onDirtyChange?: (dirty: boolean) => void;
   disabled?: boolean;
   revisionKey?: string;
+  recoveryContext?: NativeArtifactDraftContext | null;
 }
 
 /** Univer owns only the editable projection. Save and review still go through the canonical P4 revision/proposal APIs. */
-export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDirtyChange, disabled = false, revisionKey }: Props) {
+export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDirtyChange, disabled = false, revisionKey, recoveryContext }: Props) {
   const id = useId();
   const container = useRef<HTMLDivElement | null>(null);
   const workbook = useRef<FWorkbook | null>(null);
@@ -36,13 +38,23 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
   const dirty = useRef(false);
   const externallyDisabled = useRef(disabled);
   dirtyCallback.current = onDirtyChange;
-  externallyDisabled.current = disabled || conflict;
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cellRef, setCellRef] = useState("B4");
   const [proposedRaw, setProposedRaw] = useState("");
   const [selected, setSelected] = useState<{ sheetId: string; sheetName: string; ref: string; cell: SpreadsheetCell } | null>(null);
+  const [checkpoint, setCheckpoint] = useState<SpreadsheetContent>(content);
+  const [checkpointSerial, setCheckpointSerial] = useState(0);
+  const [restoredDraft, setRestoredDraft] = useState<SpreadsheetContent | null>(null);
+  const recovery = useNativeArtifactDraftRecovery(recoveryContext ?? null, checkpoint, dirty.current, checkpointSerial, recovered => {
+    setRestoredDraft(recovered);
+    setCheckpoint(recovered);
+    dirty.current = true;
+    dirtyCallback.current?.(true);
+    setCheckpointSerial(value => value + 1);
+  });
+  externallyDisabled.current = disabled || conflict || recovery.blocked;
 
   useEffect(() => {
     if (revisionKey === baseline.revisionKey && incomingContentKey === baselineContentKey) return;
@@ -67,16 +79,19 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
     conflictRef.current = false;
     setConflict(false);
     setBaseline({ content, revisionKey });
+    setCheckpoint(content);
+    setRestoredDraft(null);
   }, [content, revisionKey, baseline, incomingContentKey, baselineContentKey]);
 
   useEffect(() => {
     if (!container.current) return;
     const content = baseline.content;
+    const projection = restoredDraft ?? content;
     setReady(false);
     setError(null);
     setSelected(null);
-    dirty.current = false;
-    dirtyCallback.current?.(false);
+    dirty.current = restoredDraft !== null && spreadsheetDraftHasChanges(content, restoredDraft);
+    dirtyCallback.current?.(dirty.current);
     const listeners: IDisposable[] = [];
     const { univer, univerAPI } = createUniver({
       locale: LocaleType.EN_US,
@@ -85,8 +100,8 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
       presets: [UniverSheetsCorePreset({ container: container.current, header: true, toolbar: true, disableAutoFocus: true })],
     });
     try {
-      workbook.current = univerAPI.createWorkbook(toUniverWorkbookProjection(content));
-      workbook.current.setActiveSheet(content.activeSheetId);
+      workbook.current = univerAPI.createWorkbook(toUniverWorkbookProjection(projection));
+      workbook.current.setActiveSheet(projection.activeSheetId);
       if (content.calculationMode === "manual") univerAPI.getFormula().stopCalculation();
       const current = workbook.current;
       current.setEditable(!externallyDisabled.current);
@@ -116,6 +131,10 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
           dirty.current = nextDirty;
           dirtyCallback.current?.(nextDirty);
         }
+        if (nextDirty) {
+          setCheckpoint(next);
+          setCheckpointSerial(value => value + 1);
+        }
       };
       listeners.push(current.onSelectionChange(inspectSelection), current.onCommandExecuted(inspectDraft));
       inspectSelection();
@@ -130,15 +149,15 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
       dirty.current = false;
       dirtyCallback.current?.(false);
     };
-  }, [baseline, id]);
+  }, [baseline, id, restoredDraft]);
 
   useEffect(() => {
-    workbook.current?.setEditable(!disabled && !saving && !conflict);
-  }, [disabled, saving, ready, conflict]);
+    workbook.current?.setEditable(!disabled && !saving && !conflict && !recovery.blocked);
+  }, [disabled, saving, ready, conflict, recovery.blocked]);
 
   const save = async () => {
     const current = workbook.current;
-    if (!current || saving || disabled || conflict) return;
+    if (!current || saving || disabled || conflict || recovery.blocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -153,7 +172,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
 
   const propose = async () => {
     const current = workbook.current;
-    if (!current || saving || disabled || conflict) return;
+    if (!current || saving || disabled || conflict || recovery.blocked) return;
     const sheetId = current.getActiveSheet().getSheetId();
     const sheet = baseline.content.sheets.find((candidate) => candidate.id === sheetId);
     try {
@@ -166,12 +185,19 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
 
   return <div data-testid="univer-artifact-editor">
     <p className="mb-2 font-terminal text-[12px] text-muted-foreground">SPREADSHEET · LOCAL EDITING · LIOS REVISION HISTORY</p>
+    {recovery.candidate && <div role="alert" data-testid="protected-univer-recovery" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-100">
+      {recovery.matching ? "Encrypted advanced worksheet edits were found. Recover for review, or discard the checkpoint." : "This protected draft belongs to another saved revision and cannot be applied here."}
+      <div className="mt-2 flex gap-2">{recovery.matching && <button type="button" onClick={recovery.restore} className="rounded border px-2 py-1">Recover advanced worksheet</button>}
+        <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard checkpoint</button></div>
+    </div>}
+    {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
+    {dirty.current && recovery.status === "disabled" && <p role="status" className="mb-2 text-sm text-amber-200">Protected advanced spreadsheet recovery is unavailable. Save this revision before leaving.</p>}
     {conflict && <div role="alert" data-testid="spreadsheet-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-[13px] text-amber-200">A newer saved spreadsheet revision arrived. Your local draft has been retained; editing and saving are blocked until you explicitly reload.<button type="button" disabled={disabled || saving} onClick={() => { conflictRef.current = false; setConflict(false); setBaseline({ content, revisionKey }); }} className="ml-2 underline">Reload saved spreadsheet (discard local draft)</button></div>}
     <div ref={container} className="h-[540px] min-h-[360px] overflow-hidden rounded-lg border border-border/60" aria-label="Artifact spreadsheet" />
     {selected && <SpreadsheetCellSourceInspect sheetName={selected.sheetName} cellRef={selected.ref} cell={selected.cell}/>}
     {error && <p role="alert" className="mt-2 text-[13px] text-red-300">{error}</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <button disabled={!ready || saving || disabled || conflict} onClick={() => void save()} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-50">{saving ? "Saving revision…" : "Save spreadsheet revision"}</button>
+      <button disabled={!ready || saving || disabled || conflict || recovery.blocked} onClick={() => void save()} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-50">{saving ? "Saving revision…" : "Save spreadsheet revision"}</button>
       <div className="ml-auto flex gap-1">
         <input disabled={!ready || saving || disabled || conflict} aria-label="Proposed cell reference" value={cellRef} onChange={(event) => setCellRef(event.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]" />
         <input disabled={!ready || saving || disabled || conflict} aria-label="Proposed cell value" value={proposedRaw} onChange={(event) => setProposedRaw(event.target.value)} className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]" />
