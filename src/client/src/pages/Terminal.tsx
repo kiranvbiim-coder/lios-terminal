@@ -266,9 +266,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const audience: WorkspaceAudience = isInternal ? "internal" : isTrial ? "trial" : "client";
   const isMobile = useIsMobile();
   const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
-  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(
-    loadArtifactWorkbenchRecovery(session.email, tabsState, audience),
-  );
+  const [initialArtifactHandoff] = useState(() =>
+    loadArtifactWorkbenchRecovery(session.email, tabsState, audience));
+  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(initialArtifactHandoff);
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
