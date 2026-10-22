@@ -482,7 +482,9 @@ export default function ProjectExperienceShell({
         mode: chatMode,
         projectId: selection.projectId,
         chatId: selection.chatId,
-        messages: messagesQuery.data ?? [],
+        messages: chatMode === "temporary"
+          ? temporaryMessages.map(({ role }) => ({ role, metadata: {} }))
+          : messagesQuery.data ?? [],
         temporaryContext: temporaryWorkingContextRef.current,
       });
       navigateWorkbench(undefined, captureChatWorkbenchOrigin(chatMode, selection.projectId, selection.chatId, symbol));
