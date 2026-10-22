@@ -32,8 +32,22 @@ class LazyHttpTests(unittest.TestCase):
 
     def test_all_existing_http_paths_are_registered_exactly_once(self):
         paths = [route.path for route in main.app.routes if "POST" in getattr(route, "methods", set())]
-        self.assertEqual(set(paths), set(engine_routes.ROUTES_BY_PATH))
-        self.assertEqual(len(paths), 157)
+        # The authenticated input-contract is a non-numerical metadata endpoint:
+        # it queries the canonical allowlist but must not become an executable engine route.
+        self.assertEqual(paths.count("/input-contract"), 1)
+        numerical_paths = [route for route in paths if route != "/input-contract"]
+        self.assertEqual(set(numerical_paths), set(engine_routes.ROUTES_BY_PATH))
+        self.assertEqual(len(numerical_paths), 157)
+        self.assertEqual(len(paths), 158)
+        self.assertEqual(len(paths), len(set(paths)), "POST routes must stay unique")
+
+    def test_input_contract_is_authenticated_and_rejects_unknown_routes(self):
+        unauthenticated = self.client.post("/input-contract", json={"route": "/economics/taylor-rule"})
+        self.assertEqual(unauthenticated.status_code, 401, unauthenticated.text)
+        unknown = self.client.post("/input-contract", json={"route": "/not-an-engine"}, headers=HEADERS)
+        self.assertEqual(unknown.status_code, 400, unknown.text)
+        self.assertIn("Unknown numerical route", unknown.json()["detail"])
+        self.assertNotIn("/input-contract", engine_routes.ROUTES_BY_PATH)
 
     def test_authenticated_advanced_route_uses_known_answer(self):
         response = self.client.post(ROUTE, json=BODY, headers=HEADERS)
