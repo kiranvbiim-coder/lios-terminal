@@ -46,6 +46,7 @@ export const projectChats = pgTable("project_chats", {
     OR
     (${table.scope} = 'quick' AND ${table.projectId} IS NULL)
   `),
+  check("project_chats_attachment_manifest_ck", sql`jsonb_typeof(${table.attachmentManifest}) = 'array' AND jsonb_array_length(${table.attachmentManifest}) <= 250`),
 ]);
 
 export const projectChatMessages = pgTable("project_chat_messages", {
