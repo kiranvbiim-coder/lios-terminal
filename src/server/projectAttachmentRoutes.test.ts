@@ -456,6 +456,81 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(crossQuickRun.status, 404, await crossQuickRun.text());
   assert.equal((await listProjectChatMessages(ownerContext, otherQuick.id)).length, beforeQuickCrossScope.length);
 
+  // A Project cannot inherit a Quick Chat file merely because its owner can
+  // type a sourceRef. Moving the exact Chat into that Project is the custody step.
+  const sourceClaimUrl = `http://127.0.0.1:${address.port}/api/chats/${chat.id}/artifacts/keep-draft`;
+  const prePromotionClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: { ...reportDraft, artifactId: crypto.randomUUID() }, dependencyRefs: [quickRef.sourceRef] }),
+  });
+  assert.equal(prePromotionClaim.status, 404, await prePromotionClaim.text());
+
+  const promote = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${quick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: project.id }),
+  });
+  assert.equal(promote.status, 200, await promote.text());
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, project.id);
+  const promotedArtifact = await fetch(artifactPath, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedArtifact.status, 200);
+  const promotedRecord = await promotedArtifact.json() as {
+    artifact: { projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { sourceRefs: string[] };
+  };
+  assert.equal(promotedRecord.artifact.projectId, project.id, "the same original Artifact becomes Project-owned");
+  assert.equal(promotedRecord.artifact.owningChatId, null, "no duplicate Chat/Project Artifact authority");
+  assert.equal(promotedRecord.artifact.headVersion, 2);
+  assert.deepEqual(promotedRecord.version.sourceRefs, [quickRef.sourceRef]);
+  const promotedFile = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedFile.status, 200, "the original Quick file download must survive promotion");
+  assert.equal(await promotedFile.text(), privatePayload);
+
+  // Original professional revisions must still work after promotion, using the
+  // immutable original source and the existing version endpoint, not a new store.
+  const retainedAfterPromotion = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef], requestId: crypto.randomUUID(),
+    }),
+  });
+  assert.equal(retainedAfterPromotion.status, 200, await retainedAfterPromotion.text());
+  const promotedV3 = await fetch(artifactPath + "?version=3", { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedV3.status, 200);
+  assert.deepEqual(((await promotedV3.json()) as { version: { sourceRefs: string[] } }).version.sourceRefs, [quickRef.sourceRef]);
+  assert.equal((await fetch(artifactPath + "?version=1", { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+
+  // Even after moving another owned Chat to a DIFFERENT Project, its saved file
+  // cannot be claimed in this Project's Artifact source/dependency manifest.
+  const unrelatedProject = await createProject(ownerContext, { name: "Separate private evidence Project" });
+  const promoteSibling = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${otherQuick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: unrelatedProject.id }),
+  });
+  assert.equal(promoteSibling.status, 200, await promoteSibling.text());
+  const otherProjectClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID(), sourceRefs: [siblingRef.sourceRef] },
+      dependencyRefs: [siblingRef.sourceRef],
+    }),
+  });
+  assert.equal(otherProjectClaim.status, 404, await otherProjectClaim.text());
+  const forgedAfterPromotion = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID(), sourceRefs: [siblingRef.sourceRef] },
+      dependencyRefs: [siblingRef.sourceRef],
+    }),
+  });
+  assert.equal(forgedAfterPromotion.status, 404, await forgedAfterPromotion.text());
+
   const temporaryUrl = `http://127.0.0.1:${address.port}/api/project-chat/temporary/respond`;
   const unreviewedTemporaryVoice = await fetch(temporaryUrl, {
     method: "POST",
