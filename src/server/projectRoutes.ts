@@ -67,6 +67,8 @@ import {
 import { migrateLegacyWorkspacesToProjects } from "./projectMigrationService";
 import {
   loadProjectAttachment,
+  loadQuickChatAttachment,
+  uploadQuickChatAttachment,
   PROJECT_ATTACHMENT_SUPPORTED_EXTENSIONS,
   uploadProjectChatAttachment,
   ProjectAttachmentLimitError,
@@ -202,6 +204,36 @@ export function registerProjectRoutes(app: Express): void {
       const encodedName = encodeURIComponent(reference.fileName).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+      res.setHeader("Content-Length", String(bytes.byteLength));
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).send(bytes);
+    } catch (error) { fail(res, error); }
+  });
+
+
+  // Same file-only multipart gate and StorageProvider as Project uploads; Quick Chat owns the manifest.
+  app.post("/api/quick-chats/:chatId/attachments", parseProjectAttachmentUpload, async (req, res) => {
+    try {
+      const file = (req as Request & { file?: { buffer: Buffer; originalname: string } }).file;
+      if (!file) return res.status(400).json({ error: "Choose a file to attach." });
+      const attachment = await uploadQuickChatAttachment(ctx(req), pathId(req.params.chatId), {
+        bytes: file.buffer, originalName: file.originalname,
+      });
+      res.status(201).json({ attachment });
+    } catch (error) { fail(res, error); }
+  });
+
+  // Rechecks the original owning Chat even after a deliberate Quick→Project promotion.
+  app.get("/api/quick-chats/:chatId/attachments/:attachmentId/download", async (req, res) => {
+    try {
+      const { reference, bytes } = await loadQuickChatAttachment(
+        ctx(req), pathId(req.params.chatId), z.string().uuid().parse(req.params.attachmentId),
+      );
+      const asciiName = reference.fileName.replace(/[^\x20-\x7E]|["\\;]/g, "_").slice(0, 160) || "attachment";
+      const encodedName = encodeURIComponent(reference.fileName).replace(/[!'()*]/g, (character) => "%"+character.charCodeAt(0).toString(16).toUpperCase());
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Disposition", "attachment; filename=\""+asciiName+"\"; filename*=UTF-8''"+encodedName);
       res.setHeader("Content-Length", String(bytes.byteLength));
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, no-store");

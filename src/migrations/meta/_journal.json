@@ -596,6 +596,13 @@
       "when": 1792627200000,
       "tag": "0084_lios_quant_dataset_input_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792713600000,
+      "tag": "0085_lios_quick_chat_attachments",
+      "breakpoints": true
     }
   ]
 }

@@ -206,6 +206,7 @@ interface SavedMessageAttachment {
   fileName: string;
   mimeType: string;
   byteLength: number;
+  sourceRef?: string;
 }
 
 function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): SavedMessageAttachment[] {
@@ -214,14 +215,15 @@ function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): Sa
     if (!value || typeof value !== "object") return [];
     const item = value as Record<string, unknown>;
     if (typeof item.id !== "string" || typeof item.fileName !== "string" || typeof item.mimeType !== "string" || typeof item.byteLength !== "number") return [];
-    return [{ id: item.id, fileName: item.fileName, mimeType: item.mimeType, byteLength: item.byteLength }];
+    return [{ id: item.id, fileName: item.fileName, mimeType: item.mimeType, byteLength: item.byteLength, ...(typeof item.sourceRef === "string" ? { sourceRef: item.sourceRef } : {}) }];
   });
 }
 
-async function uploadProjectChatAttachment(projectId: number, chatId: number, file: File): Promise<ConversationAttachmentRef> {
+async function uploadProjectChatAttachment(projectId: number | null, chatId: number, file: File): Promise<ConversationAttachmentRef> {
   const form = new FormData();
   form.append("file", file, file.name);
-  const response = await fetch(`/api/projects/${projectId}/chats/${chatId}/attachments`, { method: "POST", body: form });
+  const endpoint = projectId === null ? `/api/quick-chats/${chatId}/attachments` : `/api/projects/${projectId}/chats/${chatId}/attachments`;
+  const response = await fetch(endpoint, { method: "POST", body: form });
   const payload = await response.json().catch(() => null) as { error?: string; attachment?: ConversationAttachmentRef } | null;
   if (!response.ok || !payload?.attachment) {
     const detail = payload?.error || `Attachment upload failed (${response.status}).`;
@@ -522,6 +524,7 @@ export default function ProjectExperienceShell({
   // The user's own most recent ticker fills the starter slot so an example is ready to send.
   const recentStarterSymbol = useMemo(() => loadRecentAnalyticalContexts().find((context) => context.symbol)?.symbol ?? null, []);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const firstSendChatRef = useRef<number | null>(null);
   const voiceRecorder = useVoiceRecorder((result) => {
     if (voiceTranscripts.length >= 5) {
       setLifecycleNotice("A single message can include at most five voice clips. Send this message before recording another.");
@@ -567,6 +570,11 @@ export default function ProjectExperienceShell({
     if (entrySurface === "conversation" && !selection.chatId && section === "conversation" && shellLoadState !== "loading" && shellLoadState !== "error") requestAnimationFrame(() => composerRef.current?.focus());
   }, [entrySurface, selection.chatId, section, shellLoadState]);
   useEffect(() => {
+    // Creating the first regular Chat is part of Send, not an intent to discard its staged files or transcript.
+    if (firstSendChatRef.current !== null && firstSendChatRef.current === selection.chatId) {
+      firstSendChatRef.current = null;
+      return;
+    }
     const preservedArtifactRef = pendingArtifactOpenRef.current;
     const preservedFocusMode = pendingArtifactFocusRef.current;
     pendingArtifactOpenRef.current = null;
@@ -1111,7 +1119,7 @@ export default function ProjectExperienceShell({
   }) => {
     const hasStagedAttachments = Boolean(override?.attachments?.length || pendingAttachmentRefs.length || pendingAttachmentFiles.length);
     const message = (override?.message ?? input).trim()
-      || (hasStagedAttachments ? "Analyze the attached Project file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
+      || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy) return;
     followLatestRef.current = true;
     setAwayFromLatest(false);
@@ -1139,15 +1147,15 @@ export default function ProjectExperienceShell({
     const terminalRequest = !hasStagedAttachments && !override?.approval && !override?.continuationOf && renderTerminalPanel ? parseChatTerminalRequest(message, terminalContext?.symbol ?? null, audience) : null;
     if (terminalRequest) { if (await openTerminalPanel(terminalRequest, message)) setInput(""); return; }
     if (sourceScope === "files" && !hasStagedAttachments) {
-      setLifecycleNotice("Files scope requires at least one explicitly attached Project file.");
+      setLifecycleNotice("Files scope requires at least one explicitly attached file.");
       return;
     }
     if (sourceScope === "web" && hasStagedAttachments) {
-      setLifecycleNotice("Web scope excludes Project file contents. Switch to Auto, My Data or Files to analyze the staged attachment(s).");
+      setLifecycleNotice("Web scope excludes attached file contents. Switch to Auto, My Data or Files to analyze them.");
       return;
     }
-    if (hasStagedAttachments && (chatMode !== "project" || !selection.projectId)) {
-      setLifecycleNotice("Attachments are saved to a Project. Open or create a Project chat before sending them.");
+    if (hasStagedAttachments && chatMode === "temporary") {
+      setLifecycleNotice("Temporary Chat does not save files. Use a regular Quick Chat or a Project Chat.");
       return;
     }
     if (!override?.approval && !override?.continuationOf && await runCommand(message)) return;
@@ -1294,13 +1302,14 @@ export default function ProjectExperienceShell({
             ? await createProjectChat(selection.projectId)
             : await createQuickChat();
           chatId = created.id;
+          firstSendChatRef.current = created.id;
           void openChat(created, true);
         }
         traceOwnerChatRef.current = chatId;
 
-        if (chatMode === "project" && selection.projectId && pendingAttachmentFiles.length && !override?.continuationOf) {
+        if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
-            const attachment = await uploadProjectChatAttachment(selection.projectId, chatId, file);
+            const attachment = await uploadProjectChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file);
             attachmentsForRequest = [...attachmentsForRequest, attachment];
             payload.attachments = attachmentsForRequest;
             setPendingAttachmentRefs(attachmentsForRequest);
@@ -1508,8 +1517,8 @@ export default function ProjectExperienceShell({
   ));
 
   const stageAttachmentFiles = (fileList: FileList | File[]) => {
-    if (chatMode !== "project" || !selection.projectId) {
-      setLifecycleNotice("Attachments are saved to a Project. Open or create a Project chat first.");
+    if (chatMode === "temporary") {
+      setLifecycleNotice("Temporary Chat does not retain files. Start a regular Quick Chat or Project Chat.");
       return;
     }
     const incoming = Array.from(fileList);
@@ -2004,12 +2013,14 @@ export default function ProjectExperienceShell({
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
                       {message.role === "assistant" && chatMode !== "temporary" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} chatId={selection.chatId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
-                      {message.role === "user" && selection.projectId && savedMessageAttachments(message).length > 0 && (
+                      {message.role === "user" && chatMode !== "temporary" && selection.chatId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
                           {savedMessageAttachments(message).map((attachment) => (
                             <a
                               key={attachment.id}
-                              href={`/api/projects/${selection.projectId}/attachments/${attachment.id}/download`}
+                              href={attachment.sourceRef?.startsWith("quick-attachment:")
+                                ? `/api/quick-chats/${selection.chatId}/attachments/${attachment.id}/download`
+                                : `/api/projects/${selection.projectId}/attachments/${attachment.id}/download`}
                               download={attachment.fileName}
                               className="flex min-w-0 items-center gap-2 rounded-md border border-border/50 bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-amber-300/25 hover:bg-white/[0.03]"
                               title={`Download ${attachment.fileName}`}
@@ -2111,9 +2122,9 @@ export default function ProjectExperienceShell({
               )}
               <div
                 className="lios-conversation-composer relative mx-auto max-w-4xl rounded-xl border border-border/70 bg-[#090909] shadow-2xl"
-                onDragOver={(event) => { if (chatMode === "project" && selection.projectId) event.preventDefault(); }}
+                onDragOver={(event) => { if (chatMode !== "temporary") event.preventDefault(); }}
                 onDrop={(event) => {
-                  if (chatMode !== "project" || !selection.projectId) return;
+                  if (chatMode === "temporary") return;
                   event.preventDefault();
                   stageAttachmentFiles(event.dataTransfer.files);
                 }}
@@ -2208,12 +2219,12 @@ export default function ProjectExperienceShell({
                     </div>
                     <div className="mt-1.5 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/80">
                       {sourceScope === "web"
-                        ? "Stored in this Project · Web scope excludes these file contents until you switch source scope"
+                        ? "Saved in this Chat · Web scope excludes file contents until you switch source scope"
                         : !transmissionPolicy.allowResourceReferences
-                          ? "Stored in this Project · current policy prevents sending file contents to AI"
+                          ? "Saved in this Chat · current policy prevents sending file contents to AI"
                           : sourceScope === "files"
-                            ? "Files scope · only explicitly attached files are staged as Project source material"
-                            : "Stored in this Project · file contents may be sent under the selected AI transmission policy"}
+                            ? "Files scope · only explicitly attached files are staged for this Chat"
+                            : "Saved in this Chat · file contents may be sent under the selected AI transmission policy"}
                     </div>
                   </div>
                 )}
@@ -2295,7 +2306,7 @@ export default function ProjectExperienceShell({
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
                 <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
-                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode !== "temporary"} />
                   {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2306,8 +2317,7 @@ export default function ProjectExperienceShell({
                     <DropdownMenuContent align="start" side="top" className="w-64">
                       <DropdownMenuItem
                         onSelect={() => {
-                          if (chatMode === "project" && selection.projectId) attachmentInputRef.current?.click();
-                          else setLifecycleNotice("Files are saved with a Project. Move this chat into a Project before attaching files.");
+                          attachmentInputRef.current?.click();
                         }}
                         disabled={busy || pendingAttachmentFiles.length + pendingAttachmentRefs.length >= 5 || chatMode === "temporary"}
                       >

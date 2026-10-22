@@ -6917,6 +6917,30 @@
    "unprobed": false
   },
   {
+   "method": "POST",
+   "path": "/api/quick-chats/:chatId/attachments",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quick-chats/:chatId/attachments/:attachmentId/download",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "GET",
    "path": "/api/radar/opportunities",
    "reachableBy": [
