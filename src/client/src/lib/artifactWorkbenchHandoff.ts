@@ -20,12 +20,30 @@ type RevisionSelectionEvent =
   | { type: "loaded"; version: number }
   | { type: "context"; version: number; dirty: boolean };
 
+/**
+ * The canonical ArtifactPane selection is explicitly user-directed, not a
+ * monotonically increasing write version. Reading historical v1 from a
+ * Workbench currently displaying v3 must work. The outer controlled prop
+ * change clears this local selection before another Artifact is shown.
+ */
+export function resolveArtifactPaneRequestedVersion(
+  artifactId: string,
+  controlledVersion: number | null | undefined,
+  selected: { artifactId: string; version: number } | null,
+): number | null | undefined {
+  return selected?.artifactId === artifactId ? selected.version : controlledVersion;
+}
+
 /** Context is a navigation projection, never permission for a stale observation to undo a local selection. */
 export function advanceArtifactWorkbenchRevision(
   current: ArtifactWorkbenchRevisionSelection, event: RevisionSelectionEvent,
 ): ArtifactWorkbenchRevisionSelection {
   if (event.type === "loaded") {
     if (current.requestedVersion !== null && event.version !== current.requestedVersion) return current;
+    // null means "latest head", never "any cached historical version".
+    // A late v1 response after selecting latest from v3 must not roll back
+    // the displayed revision or permit a stale return-to-Chat.
+    if (current.requestedVersion === null && event.version < current.displayedVersion) return current;
     return !current.loading && current.displayedVersion === event.version ? current
       : { ...current, displayedVersion: event.version, loading: false };
   }
