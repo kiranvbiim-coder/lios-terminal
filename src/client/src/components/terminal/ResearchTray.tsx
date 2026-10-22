@@ -139,7 +139,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   };
 
   return (
-    <aside className="lios-research-tray flex min-h-0 flex-col text-foreground" aria-label="Research continuity">
+    <aside className="lios-research-tray flex h-[min(620px,calc(100dvh-145px))] min-h-0 flex-col text-foreground" aria-label="Research continuity">
       <header className="flex shrink-0 items-start gap-3 border-b border-border/60 p-3 sm:p-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/[0.06] text-primary">
           <Pin className="h-5 w-5" aria-hidden="true" />
