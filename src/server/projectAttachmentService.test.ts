@@ -162,6 +162,12 @@ test("Project attachments are Project/chat scoped, persist content references, a
   assert.equal(quickRef.sourceRef, "quick-attachment:" + quickRef.id);
   assert.equal(quickRef.fileName, "notes.txt");
   assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  // A real embedded DB close/reopen proves that this is a persisted Chat manifest,
+  // not a renderer variable or a process-local mock.
+  await closeDb();
+  await initDb();
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1);
   const originalFiles = await listProjectResources(ownerContext, project.id);
   assert.equal(originalFiles.some(resource => (resource.metadata as { attachmentId?: string }).attachmentId === quickRef.id), false);
   assert.deepEqual((await loadQuickChatAttachment(ownerContext, quick.id, quickRef.id)).bytes, quickText);
