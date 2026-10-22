@@ -83,19 +83,19 @@ export default function QuickSwitcher({ tabs, activeTabId, favorites, recents, o
       <section ref={dialogRef} onKeyDown={onDialogKeyDown} className="flex max-h-[80dvh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-border bg-[#090909] shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="lios-quick-switcher-title" tabIndex={-1}>
         <h2 id="lios-quick-switcher-title" className="sr-only">Quick switcher</h2>
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-          <Search className="h-3.5 w-3.5 text-cyan-300" />
+          <Search className="h-3.5 w-3.5 text-primary" />
           <input ref={initialRef} role="combobox" aria-label="Search open tabs, favorites, and recent analysis" aria-autocomplete="list" aria-expanded="true" aria-controls="lios-quick-switcher-options" aria-activedescendant={items[selected] ? `lios-switch-option-${selected}` : undefined} value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} onKeyDown={onKeyDown} placeholder="Switch tabs, favorites, or recent work…" className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-primary" />
           <span className="hidden border border-border px-1.5 py-0.5 font-terminal text-[6px] text-muted-foreground sm:inline">⌘P</span>
           <button type="button" onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label="Close quick switcher"><X className="h-3.5 w-3.5" /></button>
         </div>
+        <p className="sr-only" role="status" aria-live="polite">{items.length} matching destinations</p>
         <div id="lios-quick-switcher-options" role="listbox" aria-label="Matching tabs, favorites and recent analysis" className="min-h-0 overflow-y-auto overscroll-contain scrollbar-thin">
-          <p className="sr-only" role="status" aria-live="polite">{items.length} matching destinations</p>
           {items.length ? items.map((item, index) => {
             const active = selected === index;
             const Icon = item.kind === "tab" ? Layers3 : item.kind === "favorite" ? Star : Clock3;
             return (
               <button key={item.key} id={`lios-switch-option-${index}`} type="button" role="option" aria-selected={active} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} onClick={() => { item.run(); onClose(); }} className={`flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${active ? "bg-primary/[0.10]" : "hover:bg-white/[0.035]"}`}>
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${item.kind === "favorite" ? "text-amber-300" : item.kind === "tab" ? "text-cyan-300" : "text-muted-foreground"}`} />
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${item.kind === "favorite" ? "text-amber-300" : item.kind === "tab" ? "text-primary" : "text-muted-foreground"}`} />
                 <span className="min-w-[130px] flex-1 truncate font-ui text-sm text-foreground">
                   {item.capability ? <GuidedCapabilityExplainer capability={item.capability}>{item.label}</GuidedCapabilityExplainer> : item.label}
                 </span>
