@@ -280,6 +280,29 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(quickMessages.some(m => m.role === "user" && Array.isArray(m.metadata.attachments)
     && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)), true);
 
+  // Second turn explicitly reuses the saved reference; no second multipart upload
+  // or ambient Chat-wide file transmission occurs. Original server custody is checked again.
+  const beforeFollowUp = await listProjectChatMessages(ownerContext, quick.id);
+  const followUp = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(),
+      message: "Review the same saved note again and identify evidence gaps.",
+      sourceScope: "files",
+      attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  assert.equal(followUp.status, 200, await followUp.text());
+  const afterFollowUp = await listProjectChatMessages(ownerContext, quick.id);
+  assert.ok(afterFollowUp.length > beforeFollowUp.length, "a follow-up must retain a new Chat turn");
+  assert.equal(afterFollowUp.filter(m => m.role === "user" && Array.isArray(m.metadata.attachments)
+    && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)).length, 2,
+    "both original and follow-up user messages must retain their exact, independently authorized file reference");
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1,
+    "referencing the same saved file must not fabricate a second upload or resource");
+
   // The runtime must reject another Chat's reference before saving a user message.
   const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
   const crossQuickRun = await fetch(conversationUrlFor(address.port, otherQuick.id), {

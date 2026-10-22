@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "./projectExperienceVisualState";
+import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, QUICK_CHAT_STARTER_PROMPTS, TEMPORARY_CHAT_STARTER_PROMPTS, starterPromptsForChatMode, resolveProjectConversationVisualIntensity } from "./projectExperienceVisualState";
 
 test("an empty Project or Quick Chat opens in the immersive orientation state", () => {
   assert.equal(resolveProjectConversationVisualIntensity({ messageCount: 0, streaming: false, busy: false }), "immersive");
@@ -40,4 +40,51 @@ test("starters use the user's own recent ticker, but never guess a portfolio or 
   assert.equal(fillStarterPrompt(research.prompt, "not a ticker!"), research.prompt);
   // A filled prompt has no placeholder to pre-select, so nothing is highlighted.
   assert.equal(findStarterPlaceholder(fillStarterPrompt(research.prompt, "AAPL")), null);
+});
+
+test("Quick Chat has universal first-use prompts; specialist finance starters require explicit Project mode", () => {
+  assert.deepEqual(starterPromptsForChatMode("quick"), QUICK_CHAT_STARTER_PROMPTS);
+  assert.deepEqual(starterPromptsForChatMode("project"), PROJECT_STARTER_PROMPTS);
+  assert.deepEqual(starterPromptsForChatMode("temporary"), TEMPORARY_CHAT_STARTER_PROMPTS);
+  assert.equal(starterPromptsForChatMode("quick").length, 3);
+  assert.equal(starterPromptsForChatMode("temporary").length, 3);
+  assert.ok(QUICK_CHAT_STARTER_PROMPTS.every(({ prompt }) => findStarterPlaceholder(prompt) !== null));
+  assert.ok(TEMPORARY_CHAT_STARTER_PROMPTS.every(({ prompt }) => findStarterPlaceholder(prompt) !== null));
+  assert.ok(!QUICK_CHAT_STARTER_PROMPTS.some(({ label }) => /portfolio|valuation|ticker/i.test(label)));
+  assert.ok(!TEMPORARY_CHAT_STARTER_PROMPTS.some(({ prompt }) => /attach|upload|file/i.test(prompt)),
+    "Temporary Chat must not advertise persistent file uploads");
+  assert.match(QUICK_CHAT_STARTER_PROMPTS[2].prompt, /after I attach it/);
+  assert.match(fillStarterPrompt(QUICK_CHAT_STARTER_PROMPTS[0].prompt, "AAPL"), /\[topic\]/,
+    "recent ticker is never silently inserted into an unrelated universal question");
+});
+
+test("signed-in first fold is Chat-first; a new Project and sources are optional", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const shell = fs.readFileSync(path.join(root, "components", "terminal", "ProjectExperienceShell.tsx"), "utf8");
+  assert.match(shell, /starterPromptsForChatMode\(chatMode\)\.map/);
+  assert.match(shell, /LiOS · Universal intelligence/);
+  assert.match(shell, /LiOS · Temporary Chat/);
+  assert.match(shell, /New Project \(optional\)/);
+  assert.match(shell, /Regular Chats save your work automatically/);
+  assert.match(shell, /Temporary Chat does not save your conversation/);
+  assert.doesNotMatch(shell, /LiOS · Financial intelligence/);
+  assert.match(shell, /ChatTerminalControl/);
+  assert.match(shell, /firstSendChatRef\.current = created\.id/);
+});
+
+test("archiving or trashing an open Quick Chat returns to Quick Chat, never a hidden Project", async () => {
+  const { resolveInitialChatMode } = await import("./projectEntry");
+  assert.equal(resolveInitialChatMode({ projectId: null, chatId: null }), "quick");
+  assert.equal(resolveInitialChatMode({ projectId: 77, chatId: null }), "project");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const shell = fs.readFileSync(path.join(root, "components", "terminal", "ProjectExperienceShell.tsx"), "utf8");
+  const actionBody = shell.slice(shell.indexOf("const handleChatLifecycleAction"), shell.indexOf("const handleProjectLifecycleAction"));
+  assert.equal((actionBody.match(/setChatMode\(resolveInitialChatMode\(\{ projectId: chat\.projectId, chatId: null \}\)\)/g) ?? []).length, 2);
+  assert.doesNotMatch(actionBody, /setChatMode\("project"\)/);
 });

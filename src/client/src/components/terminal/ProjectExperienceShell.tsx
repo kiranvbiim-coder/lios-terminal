@@ -118,9 +118,11 @@ import {
 } from "@/lib/livingWorkspaceAdapter";
 import { parseProjectWorkspaceDirectives } from "@/lib/projectWorkspaceDirectives";
 import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatMarkdown";
-import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
+import { fillStarterPrompt, findStarterPlaceholder, starterPromptsForChatMode, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/lib/chatSelectionActions";
+import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -240,16 +242,6 @@ function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
-
-const SELECTION_AI_ACTIONS = [
-  { id: "explain", label: "Explain", prompt: (text: string) => `Explain this selection in the current Project context:\n\n“${text}”` },
-  { id: "compare", label: "Compare", prompt: (text: string) => `Compare this selection with the most relevant peer, prior period, benchmark or scenario:\n\n“${text}”` },
-  { id: "model", label: "Model", prompt: (text: string) => `Model the financial implications of this selection using governed Project data and show assumptions:\n\n“${text}”` },
-  { id: "source", label: "Show source", prompt: (text: string) => `Show the source, provenance, observation/as-of dates and calculation path for this selection:\n\n“${text}”` },
-  { id: "alert", label: "Create alert", prompt: (text: string) => `Create a monitor or alert for the condition implied by this selection. Ask before any external action:\n\n“${text}”` },
-  { id: "report", label: "Add to report", prompt: (text: string) => `Add this selection and the relevant analysis to the current Project report or memo:\n\n“${text}”` },
-  { id: "ask", label: "Ask about this", prompt: (text: string) => `What should I know about this selection in the current Project context?\n\n“${text}”` },
-] as const;
 
 const QUICK_COMMANDS: Array<{ command: string; label: string; view?: ViewMode }> = [
   { command: "/chart", label: "Open Chart", view: "chart" },
@@ -825,7 +817,8 @@ export default function ProjectExperienceShell({
         await updateProjectChat(chat.id, { status: action === "archive" ? "archived" : "active" });
         if (action === "archive" && selection.chatId === chat.id) {
           selection.setChatId(null);
-          setChatMode("project");
+          // Return to the mode implied by the original Chat owner, never invent a Project.
+          setChatMode(resolveInitialChatMode({ projectId: chat.projectId, chatId: null }));
         }
         invalidate(chat.projectId, chat.id);
         return;
@@ -835,7 +828,8 @@ export default function ProjectExperienceShell({
         await trashProjectChat(chat.id);
         if (selection.chatId === chat.id) {
           selection.setChatId(null);
-          setChatMode("project");
+          // Return to the mode implied by the original Chat owner, never invent a Project.
+          setChatMode(resolveInitialChatMode({ projectId: chat.projectId, chatId: null }));
         }
         invalidate(chat.projectId, chat.id);
         return;
@@ -1546,6 +1540,30 @@ export default function ProjectExperienceShell({
     setPendingAttachmentFiles((current) => [...current, ...incoming]);
   };
 
+  const reuseSavedAttachment = (reference: ConversationAttachmentRef) => {
+    if (busy || chatMode === "temporary" || !selection.chatId) return;
+    if (sourceScope === "web") {
+      setLifecycleNotice("Web-only scope excludes file contents. Select Auto, My Data or Files before staging a saved attachment.");
+      return;
+    }
+    const result = stageSavedAttachmentForFollowUp(pendingAttachmentRefs, reference, pendingAttachmentFiles.length);
+    if (result.status === "already_staged") {
+      setLifecycleNotice("This file is already staged for the next message.");
+      return;
+    }
+    if (result.status === "limit_reached") {
+      setLifecycleNotice("A message can include at most five files. Remove a staged file first.");
+      return;
+    }
+    if (result.status !== "added") {
+      setLifecycleNotice("This saved file cannot be reused. Attach the file again or check its source.");
+      return;
+    }
+    setPendingAttachmentRefs(result.refs);
+    setLifecycleNotice("Saved file staged for the next message. It is not sent until you press Send.");
+    requestAnimationFrame(() => composerRef.current?.focus());
+  };
+
   const removePendingAttachment = (id: string) => {
     setPendingAttachmentRefs((current) => current.filter((attachment) => attachment.id !== id));
     setPendingAttachmentFiles((current) => current.filter((file) => `${file.name}:${file.size}:${file.lastModified}` !== id));
@@ -1557,12 +1575,7 @@ export default function ProjectExperienceShell({
   };
 
   const askActiveObject = () => {
-    if (selectedTextContext) {
-      applySelectionAiAction(`Analyze this selection in the current Project context:\n\n“${selectedTextContext}”`);
-      return;
-    }
-    const target = activeSymbol ? `security ${activeSymbol}` : `active ${activeView} view`;
-    applySelectionAiAction(`Analyze this ${target}. Use the current Project context and any focused analytical object.`);
+    applySelectionAiAction(activeObjectPromptForChatMode(chatMode, selectedTextContext, activeSymbol, activeView));
   };
 
   const selectMention = (resource: ProjectResource) => {
@@ -1952,13 +1965,13 @@ export default function ProjectExperienceShell({
                     <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                     </div>
-                    <div className="lios-chat-empty-state__eyebrow mt-5 font-terminal text-[12px] uppercase tracking-[0.2em] text-amber-200/80">LiOS · Financial intelligence</div>
+                    <div className="lios-chat-empty-state__eyebrow mt-5 font-terminal text-[12px] uppercase tracking-[0.2em] text-amber-200/80">{chatMode === "project" ? "LiOS · Project Chat" : chatMode === "temporary" ? "LiOS · Temporary Chat" : "LiOS · Universal intelligence"}</div>
                     <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-white">What do you want to understand, test or build?</h1>
                     <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
-                      Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
+                      {chatMode === "temporary" ? "Start with anything. Temporary Chat does not save your conversation or files." : chatMode === "project" ? "Work with your Project context and approved sources. Expand into the original Workbench when specialist depth helps." : "Ask about any topic. Regular Chats save your work automatically, and Projects remain optional."}
                     </p>
                     <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Example prompts">
-                      {PROJECT_STARTER_PROMPTS.map((starter) => (
+                      {starterPromptsForChatMode(chatMode).map((starter) => (
                         <button
                           key={starter.id}
                           type="button"
@@ -1981,8 +1994,8 @@ export default function ProjectExperienceShell({
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
-                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-[12px] font-semibold text-black transition-colors hover:bg-amber-300">
-                        <Plus className="h-3.5 w-3.5" /> Create a Project
+                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-[12px] font-medium text-muted-foreground transition-colors hover:border-amber-300/30 hover:text-foreground">
+                        <Plus className="h-3.5 w-3.5" /> New Project (optional)
                       </button>
                       <button
                         type="button"
@@ -2016,20 +2029,32 @@ export default function ProjectExperienceShell({
                       {message.role === "user" && chatMode !== "temporary" && selection.chatId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
                           {savedMessageAttachments(message).map((attachment) => (
-                            <a
-                              key={attachment.id}
-                              href={attachment.sourceRef?.startsWith("quick-attachment:")
-                                ? `/api/quick-chats/${selection.chatId}/attachments/${attachment.id}/download`
-                                : `/api/projects/${selection.projectId}/attachments/${attachment.id}/download`}
-                              download={attachment.fileName}
-                              className="flex min-w-0 items-center gap-2 rounded-md border border-border/50 bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-amber-300/25 hover:bg-white/[0.03]"
-                              title={`Download ${attachment.fileName}`}
-                            >
-                              <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-200" />
-                              <span className="min-w-0 flex-1 truncate font-ui text-[12px] text-foreground">{attachment.fileName}</span>
-                              <span className="shrink-0 font-terminal text-[11px] text-muted-foreground">{formatAttachmentSize(attachment.byteLength)}</span>
-                              <span className="shrink-0 font-terminal text-[11px] text-amber-200/80">DOWNLOAD</span>
-                            </a>
+                            <div key={attachment.id} className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <a
+                                href={attachment.sourceRef?.startsWith("quick-attachment:")
+                                  ? `/api/quick-chats/${selection.chatId}/attachments/${attachment.id}/download`
+                                  : `/api/projects/${selection.projectId}/attachments/${attachment.id}/download`}
+                                download={attachment.fileName}
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border/50 bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-amber-300/25 hover:bg-white/[0.03]"
+                                title={`Download ${attachment.fileName}`}
+                              >
+                                <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-200" />
+                                <span className="min-w-0 flex-1 truncate font-ui text-[12px] text-foreground">{attachment.fileName}</span>
+                                <span className="shrink-0 font-terminal text-[11px] text-muted-foreground">{formatAttachmentSize(attachment.byteLength)}</span>
+                                <span className="shrink-0 font-terminal text-[11px] text-amber-200/80">DOWNLOAD</span>
+                              </a>
+                              {"metadata" in message && savedChatAttachmentRefs(message.metadata)
+                                .filter((ref) => ref.id === attachment.id && ref.sourceRef === attachment.sourceRef)
+                                .map((ref) => (
+                                  <button key={ref.id} type="button"
+                                    disabled={busy}
+                                    aria-label={`Use ${ref.fileName} in next message`}
+                                    title="Reattach this saved file to your next question"
+                                    onClick={() => reuseSavedAttachment(ref)}
+                                    className="shrink-0 rounded-md border border-border/50 px-2.5 py-2 font-ui text-[11px] text-muted-foreground hover:border-amber-300/25 hover:text-foreground disabled:opacity-50"
+                                  >Use in next message</button>
+                                ))}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -2178,7 +2203,7 @@ export default function ProjectExperienceShell({
                       </button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {SELECTION_AI_ACTIONS.map((action) => (
+                      {selectionActionsForChatMode(chatMode).map((action) => (
                         <button
                           key={action.id}
                           type="button"
