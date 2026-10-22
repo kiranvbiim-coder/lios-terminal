@@ -24,6 +24,8 @@ export const projectChats = pgTable("project_chats", {
   ownerUserId: integer("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   organizationId: integer("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
   scope: projectChatScopeEnum("scope").notNull(),
+  // P12: canonical chat-owned attachment refs for regular Quick Chats. No invented Project.
+  attachmentManifest: jsonb("attachment_manifest").$type<unknown[]>().notNull().default([]),
   title: text("title").notNull(),
   pinned: boolean("pinned").notNull().default(false),
   status: projectChatStatusEnum("status").notNull().default("active"),
