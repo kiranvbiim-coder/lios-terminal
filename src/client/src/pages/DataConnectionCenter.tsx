@@ -12,6 +12,7 @@ import {
   Search, ExternalLink, Shield, Bot,
 } from "lucide-react";
 import DataImportWizard from "@/components/DataImportWizard";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ProviderConflictPanel from "@/components/panels/ProviderConflictPanel";
 import DataSourcesPanel from "@/components/panels/DataSourcesPanel";
 import { getDesktopWorkspaceBridge, type DesktopWorkspaceInfo } from "@/lib/desktopWorkspace";
@@ -206,19 +207,19 @@ const META_CONNECTOR_IDS = new Set(["database", "private_api", "file_upload"]);
 
 // ── Shared UI pieces ───────────────────────────────────────────────────────
 
-const inputCls = "w-full bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60";
+const inputCls = "min-h-11 w-full rounded-md bg-[#0d0d0d] border border-border px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">{label}</span>{children}</label>;
+  return <label className="block space-y-1.5"><span className="block font-ui text-xs font-medium text-muted-foreground">{label}</span>{children}</label>;
 }
 
 function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { testing: boolean; saving: boolean; canAct: boolean; onTest: () => void; onSave: () => void; saveLabel?: string }) {
   return (
     <div className="flex gap-2 pt-1">
-      <button onClick={onTest} disabled={!canAct || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+      <button type="button" onClick={onTest} disabled={!canAct || testing} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {testing ? "Testing..." : "Test Connection"}
       </button>
-      <button onClick={onSave} disabled={!canAct || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+      <button type="button" onClick={onSave} disabled={!canAct || saving} className="min-h-11 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {saving ? "Saving..." : saveLabel ?? "Save Connection"}
       </button>
     </div>
@@ -227,23 +228,28 @@ function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { tes
 
 function ResultBanner({ ok, detail }: { ok: boolean; detail: string }) {
   return (
-    <div className={`border px-3 py-2 font-terminal text-[9px] ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
+    <div role={ok ? "status" : "alert"} className={`rounded-md border px-3 py-2 font-ui text-sm leading-5 ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-300"}`}>
       {ok ? "✓ " : "✗ "}{detail}
     </div>
   );
 }
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  // Reuse the existing accessible Radix dialog rather than an unlabelled
+  // clickable backdrop. It owns initial focus, Tab containment, Escape,
+  // dismiss/return focus and accessible close behavior for credential forms.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
-      <div className="bg-[#0a0a0a] border border-border w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{title}</h3>
-          <button onClick={onClose} className="font-terminal text-[9px] text-muted-foreground hover:text-foreground">✕</button>
-        </div>
+    <Dialog open onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <DialogContent className="max-h-[min(90dvh,760px)] w-[calc(100vw-24px)] max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-xl border-border bg-[#0a0a0a] p-4 text-foreground shadow-2xl sm:p-6">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="font-ui text-lg font-semibold tracking-tight">{title}</DialogTitle>
+          <DialogDescription className="font-ui text-sm leading-5 text-muted-foreground">
+            Configure this connection. Credentials are handled by the existing LiOS connection service.
+          </DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1179,7 +1185,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <div className="flex flex-wrap gap-2 sm:justify-end">
               <button type="button" onClick={handleEnterTerminal} disabled={saving || (Boolean(aiProviderId) && aiModelBlocked)}
                 title={aiProviderId && aiModelBlocked ? aiModelAccessMessage(aiModelAccess) ?? undefined : undefined}
-                className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+                className="flex min-h-11 items-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
                 <Terminal className="w-3 h-3" /> {saving ? "Saving..." : connectionSummary.ctaLabel}
               </button>
             </div>
