@@ -20,6 +20,7 @@ const { listProjectResources, setProjectResourceContextMode } = await import("./
 const { registerProjectRoutes } = await import("./projectRoutes");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
 const { registerArtifactRoutes } = await import("./artifactRoutes");
+const { persistConversationDraft } = await import("./artifactStore");
 
 test("Project attachment HTTP routes enforce auth, file-only multipart, tenant scope, and safe downloads", { timeout: 60_000 }, async (t) => {
   await initDb();
@@ -504,6 +505,24 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
     }),
   });
   assert.equal(ownPromotedChatDraft.status, 200, await ownPromotedChatDraft.text());
+  const generatedDraft = { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() };
+  const retainedByRuntime = await persistConversationDraft(ownerContext, {
+    projectId: project.id, owningChatId: quick.id, draft: generatedDraft,
+    requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef],
+  });
+  assert.equal(retainedByRuntime.artifact.projectId, project.id);
+  assert.equal(retainedByRuntime.artifact.owningChatId, null,
+    "AI-retained Project Artifacts must not acquire a second Chat lifecycle owner");
+  assert.deepEqual(retainedByRuntime.version.sourceRefs, [quickRef.sourceRef]);
+  await assert.rejects(
+    () => persistConversationDraft(ownerContext, {
+      projectId: project.id, owningChatId: chat.id,
+      draft: { ...generatedDraft, artifactId: crypto.randomUUID() },
+      requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef],
+    }),
+    /File provenance not owned/,
+    "automatic retention must not claim a promoted file from a different Chat in the same Project",
+  );
   const promotedChatFollowUp = await fetch(conversationUrlFor(address.port, quick.id), {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
