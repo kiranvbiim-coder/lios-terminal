@@ -315,7 +315,11 @@ test("H2a chat feel: finished runs collapse to a receipt, work stays open when u
   // Technical step/capability telemetry stays behind Show work; recovery/approval cards remain visible separately.
   assert.match(trace, /const workVisible = showWork/);
   assert.match(trace, /Show work/);
-  assert.match(trace, /data-testid="trace-sources"/);
+  const sourceList = source("../components/terminal/ResearchSourceList.tsx");
+  assert.match(trace, /<ResearchSourceList/);
+  assert.match(trace, /recordedSources\.length > 0/);
+  assert.match(sourceList, /data-testid="trace-sources"/);
+  assert.match(sourceList, /inspectableSourceHref\(source\)/);
   assert.match(trace, /data-testid="trace-follow-ups"/);
   assert.match(trace, /\{workVisible && !!steps\.length/);
   assert.match(trace, /\{workVisible && !!capabilities\.length/);
