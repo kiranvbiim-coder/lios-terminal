@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactContentSchema } from "@shared/artifactContracts";
-import { matchesNativeArtifactDraft, nativeDraftRecoveryKey } from "./nativeArtifactDraftRecovery";
+import { matchesNativeArtifactDraft, nativeDraftRecoveryKey, shouldClearRevertedNativeDraft } from "./nativeArtifactDraftRecovery";
 
 const context = {
   owner: "Owner@Example.com",
@@ -25,4 +25,18 @@ test("native draft mutation ordering partitions by canonical Artifact and signed
   assert.equal(own, nativeDraftRecoveryKey({ ...context, owner: "owner@example.COM" }));
   assert.notEqual(own, nativeDraftRecoveryKey({ ...context, owner: "other@example.com" }));
   assert.notEqual(own, nativeDraftRecoveryKey({ ...context, artifactId: "artifact:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }));
+});
+
+
+test("only the editor that actually reverted unsaved content may clear its encrypted checkpoint", () => {
+  assert.equal(shouldClearRevertedNativeDraft(true, false, true, false), true,
+    "reverting all local changes removes the obsolete recovery prompt");
+  assert.equal(shouldClearRevertedNativeDraft(false, false, true, false), false,
+    "a clean second viewer must not erase another editor's local recovery");
+  assert.equal(shouldClearRevertedNativeDraft(true, true, true, false), false,
+    "still-dirty edits must retain the checkpoint");
+  assert.equal(shouldClearRevertedNativeDraft(true, false, false, false), false,
+    "no destructive cleanup before native recovery has been read");
+  assert.equal(shouldClearRevertedNativeDraft(true, false, true, true), false,
+    "an unresolved recovered candidate always requires an explicit user decision");
 });
