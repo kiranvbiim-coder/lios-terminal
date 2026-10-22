@@ -11,7 +11,7 @@ process.env.LIOS_ATTACHMENT_STORAGE_DIR = blobDir;
 
 const { initDb, closeDb, getDb } = await import("./db");
 const { users } = await import("@shared/schema");
-const { createProject, trashProject } = await import("./projectStore");
+const { createProject, trashProject, permanentlyDeleteProject } = await import("./projectStore");
 const { createProjectChat, getProjectChat, promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat, permanentlyDeleteProjectChat } = await import("./projectChatStore");
 const { createProjectResource, permanentlyDeleteProjectResource, setProjectResourceContextMode, trashProjectResource } = await import("./projectResourceStore");
 const {
@@ -190,6 +190,16 @@ test("Project attachments are Project/chat scoped, persist content references, a
   await trashProjectChat(ownerContext, quickSibling.id);
   await permanentlyDeleteProjectChat(ownerContext, quickSibling.id);
   await assert.rejects(() => readQuickChatAttachmentBlob(owner.id, quickSibling.id, deleteRef.id), ProjectAttachmentStorageUnavailableError);
+
+  const purgeProject = await createProject(ownerContext, { name: "Quick attachment promotion purge" });
+  const purgeChat = await createProjectChat(ownerContext, { scope: "quick" });
+  const purgeRef = await uploadQuickChatAttachment(ownerContext, purgeChat.id, { bytes: quickText, originalName: "purge.txt" });
+  await promoteQuickChatToProject(ownerContext, purgeChat.id, purgeProject.id);
+  await trashProjectChat(ownerContext, purgeChat.id);
+  await trashProject(ownerContext, purgeProject.id);
+  await permanentlyDeleteProject(ownerContext, purgeProject.id);
+  await assert.rejects(() => readQuickChatAttachmentBlob(owner.id, purgeChat.id, purgeRef.id), ProjectAttachmentStorageUnavailableError,
+    "permanently deleting a Project must also clean files owned by a promoted Quick Chat");
 
   await trashProjectResource(ownerContext, restoredText.id);
   await permanentlyDeleteProjectResource(ownerContext, restoredText.id);
