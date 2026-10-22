@@ -247,3 +247,205 @@ For each PR, supply: (1) exact user-visible broken seam & benchmark competitor w
 **Owner/external prerequisites which source alone cannot supply:** actual permitted provider accounts/model entitlements, opt-in paid API spend only when authorized, licensed private financial corpora/redistribution rights, external clean macOS/Windows signing identities and test machines, supported mobile/wear release capabilities where targeted. Apple Developer ID/notarization is owner-deferred rather than waived. Live brokerage execution is not needed for SP05/SP06; paper/no-action suffices. Do not claim the project finished while these remain blockers to agreed released scope.
 
 **No invented completion estimate or competitor parity percentage.** The next status update must show user journeys J00–J15 as PASS / FAIL / BLOCKED / NOT RUN for an exact release candidate, and the 206 ledger rows tagged implementation / source-tested / packaged / actual journey / accepted, with links rather than guessed percentages.
+
+
+## 8. IMPLEMENTATION ORDER: complete donor feature-to-consumer routing (2026-10-22)
+
+This section answers **which existing LiOS owner will actually use each donor capability and how to prove it works**. It supplements the same authoritative 92/10 ledgers; it neither upgrades status nor creates new workstreams. Original baseline `main` remains `1fa37cc`; [#98](https://github.com/kiranvbiim-coder/lios-terminal/pull/98) is the **sole draft** Chat–original terminal implementation (includes and supersedes closed #96/#97), not yet merged or fully accepted. Do not open overlapping financial terminal implementation branches. The #98 server + Artifact lifecycle/tenant audit and revised current-head CI are prerequisites.
+
+### 8.1 Critical truths & ownership
+
+- Exactly **18 / 92** baseline donors currently report an integrated/optional/connector/provider/partial/bridge *status*; **74** have documented/discovered/deferred/reference/rejected/standards-only labels. These are ledger classifications, NOT measures of whole-feature completion or package reuse.
+- **0 / 92** record `fullPackageSourceAuditComplete=true`; **0 / 92** claim donor-exhaustion. Registered source paths are partial evidence, not a call graph nor shipped product. Upstream README, a fork, a mock unit test, and a copied file do not close a donor.
+- A current review of `third_party/components.json` against protected main showed **18 records flagged bundled** with **122 existing repository-file destinations** and **six npm-package specifiers** (verified against the source tree; not a reproducible local package build). Propose automating this check in the *existing* `src/script/validate_universal_donor_adoption.mjs` source gate; also verify runtime package ABI and consumer. This does NOT say there are 122 independent products.
+- Each donor is routed to exactly one **primary** owner lane below; secondary consumers can reuse same canonical interface. **Every one of the 92** is assigned once, and every controlled mirror has a delta-review action. A reject/reference donor is **not mandated for installation**, but useful legal mechanisms, negative tests and validators still deserve a capability-based review.
+- Prioritize demonstrated product outcomes, not equal effort per donor. One OpenClaw runtime package might eliminate several workstream gaps; ten chart libraries should not mean ten chart engines.
+
+### 8.2 Seventeen product-level donor feature lanes (92 baseline donors, no orphan)
+
+| Route / product capability | One canonical LiOS owner | What the user must really be able to complete | J-case | Mandatory no-duplicate / safety condition |
+| --- | --- | --- | --- | --- |
+| **L01 Governed agents, tools and Home** | GM-11/12/13/14; P13 | Live authorized model→typed tool→bounded sandbox/checkpoint→reviewed P4 result, with denied/revoke/restart | J01/J03/J11/J13 | first real native agent capability; no second agent/permission store |
+| **L02 Universal Chat and human-readable tool results** | TC; P2/P4 | Any-topic prompt→native LiOS Chat composer/tool consent→live visible output→same canonical Artifact | J00/J01/J07/J08 | reuse UX mechanics but not a second terminal, composer or provider router |
+| **L03 User-owned model access and offline inference** | GM-22/P2/P12 | Local model detected/consented→verifiable completion & cancellation→privacy/cost routing→offline resume | J01/J02/J06 | no downloads of model weights without consent, license, checksum & storage warning |
+| **L04 Multi-source specialist research agents** | P5/P7/GM-12 | Owned model→approved evidence/source tools→cited independent specialist research→P4 review object | J04/J05/J09 | no parallel agent loops or claim of market data rights |
+| **L05 Document parsing, filings and verified evidence** | P5/P7/P4 | Authorized PDF/filing→page/table/cell/source anchors→contradictions→reopenable report | J04/J05/J07 | model OCR assets/source rights and XBRL taxonomy version stay explicit |
+| **L06 Governed Data Lab execution** | P5/P11 data lab | CSV/Parquet/user DB→read-only typed plan→correct derived table→export + revoke denial | J04/J07/J09 | current DuckDB remains single SQL execution owner; new engines only for proven gaps |
+| **L07 Entity identity, connected sources and local search** | P5/P7/P11 | Company legal name/no ticker→exact approved identity and market calendar→source-permitted observations or no-data | J04/J05/J09 | provider fees/rights and user data never inherited from donor packages |
+| **L08 Existing Dockview and living professional interfaces** | TC/P4/P5; PR #98 | Any-topic/Finance Chat→same P4 screen/workbook/graph→original complete Dockview→direct+Chat edits→reopen | J07/J08 | keep original terminal, one P4 Artifact store, one renderer authority; flexlayout stays rejected |
+| **L09 Canonical quant strategy and backtesting** | P11/GM | Owned timestamped bars→strategy parse/approval→point-in-time backtest→known-answer validation and P4 result | J09/J10/J14 | rejected runtimes supply bounded benchmark/tests only; never bypass P11 or attach live broker |
+| **L10 Governed execution and brokerage references** | GM/P5/P11 | User-confirmed action proposal→paper/no-action receipt→idempotent rollback/refusal | J09/J14 | no live broker trades, keys, exchange access, market making or automated custody granted |
+| **L11 Portfolio risk, optimization and attribution** | P11/P4 | User-owned positions and current permitted prices→independent optimizer/risk metrics→explicit model assumptions | J09/J10 | risk optimization known-answers and quantity/unit bounds; selected skfolio imported code is not full package |
+| **L12 Fundamentals, ratios and financial truth** | P5/P11 | Entitled statements with period/currency→deterministic ratios/forecast/model→source-to-cell confidence | J09/J10 | no fabricated estimates or unit conversions |
+| **L13 Quant AI, factor modeling and forecasting** | P11/GM | Point-in-time authorized dataset→train/validate→leakage-safe score/forecast→known-answer risk | J09/J10 | Qlib selected integration is a challenger, not an approved standalone execution stack |
+| **L14 Rates, options and financial pricing** | P11 | Curves/options/contracts with exact observation time→independently reconciled bond/Greek valuation→receipt | J09/J10 | C++/Java native payload/platform rights and numerical tolerances separately qualified |
+| **L15 Office, PDF and presentation deliverables** | P4/P11/CA | Typed P4 report/workbook/deck→real XLSX/DOCX/PPTX/PDF export→reimport/reopen with formulas/citations | J07/J08 | Univer enterprise/pro features and export bridges must be licensed separately |
+| **L16 Lineage, logs and observability** | P5/P10/GM | One task→source/model/tool/version receipts→local trace for troubleshoot/restart/rights audit | J03/J04/J14/J15 | standards compatibility does not mean runtime libraries are imported |
+| **L17 Local voice and multimodal pipeline** | P12/GM-22 | Mic→opt-in local pack→editable transcript→same governed Chat→optional TTS/restart | J06 | no unapproved speech model weights, audio cloud egress or claimed generative video |
+
+**Full membership partition** (machine-reconciled to all 92 baseline identities):
+
+- **L01** (5): `openclaw`, `hqtui`, `langgraphjs`, `pydantic-ai`, `opa`
+- **L02** (4): `assistant-ui`, `tool-ui`, `openterminal`, `openterminalui`
+- **L03** (3): `llama-cpp`, `mlx`, `ollama`
+- **L04** (4): `dexter`, `fin-agent`, `langalpha`, `tradingagents`
+- **L05** (6): `arelle`, `camelot`, `docling`, `edgartools`, `pdfplumber`, `unstructured`
+- **L06** (7): `arrow`, `datafusion`, `duckdb`, `ibis`, `pandera`, `polars`, `sqlglot`
+- **L07** (5): `exchange-calendars`, `finance-database`, `lse-data`, `splink`, `sqlite-vec`
+- **L08** (16): `antv-g6`, `apache-echarts`, `deck-gl`, `dockview`, `echarts`, `flexlayout`, `maplibre-gl-js`, `mermaid`, `monaco-editor`, `perspective`, `tanstack-table`, `tanstack-virtual`, `tiptap`, `univer`, `vis-timeline`, `xyflow`
+- **L09** (12): `backtest-kit`, `backtesting-py`, `backtrader`, `brue`, `brue-language`, `bt`, `freqtrade`, `lean`, `lse-terminal`, `nautilus-trader`, `vectorbt`, `zipline-reloaded`
+- **L10** (4): `ccxt`, `hummingbot`, `ib-async`, `vnpy`
+- **L11** (5): `cvxpy`, `pyportfolioopt`, `quantstats`, `riskfolio-lib`, `skfolio`
+- **L12** (2): `finance-toolkit`, `statsmodels`
+- **L13** (8): `lightgbm`, `optuna`, `prophet`, `qlib`, `scikit-learn`, `sktime`, `statsforecast`, `xgboost`
+- **L14** (4): `ore`, `py-vollib`, `quantlib`, `strata`
+- **L15** (4): `python-docx`, `python-pptx`, `react-pdf`, `xlsxwriter`
+- **L16** (2): `openlineage`, `opentelemetry-js`
+- **L17** (1): `whisper-cpp`
+
+### 8.3 Per-donor first useful feature and disposition gate — ALL 92, not a registry replacement
+
+The "first useful feature" is a **candidate extraction/validation target**, grounded in the already recorded donor component roles/subsystems when present; it is not a claim that this source path was fully read today or that upstream product features are licensed. Existing `baselineTruthStatus` is copied only as a snapshot. The real execution row stays in `third_party/universal-donor-adoption.json`, and the canonical 206 acceptance checkboxes remain solely in `docs/PENDING_WORK.md`.
+
+| Donor | Route | Initial mechanism / useful-package target to audit | Current ledger truth | Specific admission rule |
+| --- | --- | --- | --- | --- |
+| `antv-g6` | L08 | Full useful package inspection for existing dockview and living professional interfaces | `discovered` | verify license/pin first; full audit still open |
+| `apache-echarts` | L08 | p4 artifact adapter | `runtime_integrated_optional` | protect existing bounded integration and extend; full audit still open |
+| `arelle` | L05 | xbrl validation + taxonomy semantics | `documented_only` | inspect useful source package + tests; full audit still open |
+| `arrow` | L06 | columnar interchange | `contract_only_deferred` | protect existing bounded integration and extend; full audit still open |
+| `assistant-ui` | L02 | thread list and composer patterns | `documented_only` | inspect useful source package + tests; full audit still open |
+| `backtest-kit` | L09 | core backtest runtime | `documented_only` | inspect useful source package + tests; full audit still open |
+| `backtesting-py` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `rejected` | reference/negative tests only (no runtime install); full audit still open |
+| `backtrader` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `rejected` | reference/negative tests only (no runtime install); full audit still open |
+| `brue` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `documented_only` | inspect useful source package + tests; full audit still open |
+| `brue-language` | L09 | parser runtime strategy | `documented_only` | inspect useful source package + tests; full audit still open |
+| `bt` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `camelot` | L05 | Full useful package inspection for document parsing, filings and verified evidence | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `ccxt` | L10 | Full useful package inspection for governed execution and brokerage references | `documented_only` | inspect useful source package + tests; full audit still open |
+| `cvxpy` | L11 | optimization | `documented_only` | inspect useful source package + tests; full audit still open |
+| `datafusion` | L06 | Full useful package inspection for governed data lab execution | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `deck-gl` | L08 | Full useful package inspection for existing dockview and living professional interfaces | `discovered` | verify license/pin first; full audit still open |
+| `dexter` | L04 | agent loop tool executor | `documented_only` | inspect useful source package + tests; full audit still open |
+| `dockview` | L08 | react docking core | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `docling` | L05 | document parsing + pdf tables | `runtime_integrated_optional` | protect existing bounded integration and extend; full audit still open |
+| `duckdb` | L06 | Full useful package inspection for governed data lab execution | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `echarts` | L08 | advanced visualization | `runtime_integrated_optional` | protect existing bounded integration and extend; full audit still open |
+| `edgartools` | L05 | SEC CIK accession archive URL boundary | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `exchange-calendars` | L07 | Full useful package inspection for entity identity, connected sources and local search | `documented_only` | inspect useful source package + tests; full audit still open |
+| `fin-agent` | L04 | agent core tools | `documented_only` | inspect useful source package + tests; full audit still open |
+| `finance-database` | L07 | Full useful package inspection for entity identity, connected sources and local search | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `finance-toolkit` | L12 | Full useful package inspection for fundamentals, ratios and financial truth | `documented_only` | inspect useful source package + tests; full audit still open |
+| `flexlayout` | L08 | model driven docking | `rejected` | reference/negative tests only (no runtime install); full audit still open |
+| `freqtrade` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `rejected` | reference/negative tests only (no runtime install); full audit still open |
+| `hqtui` | L01 | typescript tui core | `documented_only` | inspect useful source package + tests; full audit still open |
+| `hummingbot` | L10 | Full useful package inspection for governed execution and brokerage references | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `ib-async` | L10 | Full useful package inspection for governed execution and brokerage references | `documented_only` | inspect useful source package + tests; full audit still open |
+| `ibis` | L06 | Full useful package inspection for governed data lab execution | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `langalpha` | L04 | workspace persistence | `documented_only` | inspect useful source package + tests; full audit still open |
+| `langgraphjs` | L01 | agent graph helper + checkpoint patterns | `documented_only` | inspect useful source package + tests; full audit still open |
+| `lean` | L09 | advanced quant runtime + multi asset backtesting | `documented_only` | inspect useful source package + tests; full audit still open |
+| `lightgbm` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `llama-cpp` | L03 | Full useful package inspection for user-owned model access and offline inference | `discovered` | verify license/pin first; full audit still open |
+| `lse-data` | L07 | python client | `runtime_integrated_connector` | protect existing bounded integration and extend; full audit still open |
+| `lse-terminal` | L09 | provider contracts and adapters | `documented_only` | inspect useful source package + tests; full audit still open |
+| `maplibre-gl-js` | L08 | Full useful package inspection for existing dockview and living professional interfaces | `discovered` | verify license/pin first; full audit still open |
+| `mermaid` | L08 | Full useful package inspection for existing dockview and living professional interfaces | `discovered` | verify license/pin first; full audit still open |
+| `mlx` | L03 | Full useful package inspection for user-owned model access and offline inference | `discovered` | verify license/pin first; full audit still open |
+| `monaco-editor` | L08 | browser editor core | `documented_only` | inspect useful source package + tests; full audit still open |
+| `nautilus-trader` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `ollama` | L03 | Full useful package inspection for user-owned model access and offline inference | `provider_integrated_external_runtime` | protect existing bounded integration and extend; full audit still open |
+| `opa` | L01 | policy engine candidate | `documented_only` | inspect useful source package + tests; full audit still open |
+| `openclaw` | L01 | terminal process and execution session kernel | `partially_integrated` | protect existing bounded integration and extend; full audit still open |
+| `openlineage` | L16 | data lineage schema | `standard_compatible_not_library` | protect existing bounded integration and extend; full audit still open |
+| `opentelemetry-js` | L16 | local observability + execution tracing | `standard_compatible_not_library` | protect existing bounded integration and extend; full audit still open |
+| `openterminal` | L02 | provider registry and fallback | `documented_only` | inspect useful source package + tests; full audit still open |
+| `openterminalui` | L02 | workspace command saved views linked panels | `documented_only` | inspect useful source package + tests; full audit still open |
+| `optuna` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `documented_only` | inspect useful source package + tests; full audit still open |
+| `ore` | L14 | Full useful package inspection for rates, options and financial pricing | `documented_only` | inspect useful source package + tests; full audit still open |
+| `pandera` | L06 | Full useful package inspection for governed data lab execution | `documented_only` | inspect useful source package + tests; full audit still open |
+| `pdfplumber` | L05 | Full useful package inspection for document parsing, filings and verified evidence | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `perspective` | L08 | streaming data artifact + pivot grid | `bridge_only` | protect existing bounded integration and extend; full audit still open |
+| `polars` | L06 | dataframe compute | `documented_only` | inspect useful source package + tests; full audit still open |
+| `prophet` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `py-vollib` | L14 | Full useful package inspection for rates, options and financial pricing | `documented_only` | inspect useful source package + tests; full audit still open |
+| `pydantic-ai` | L01 | typed python agent helper | `documented_only` | inspect useful source package + tests; full audit still open |
+| `pyportfolioopt` | L11 | Full useful package inspection for portfolio risk, optimization and attribution | `documented_only` | inspect useful source package + tests; full audit still open |
+| `python-docx` | L15 | Full useful package inspection for office, pdf and presentation deliverables | `documented_only` | inspect useful source package + tests; full audit still open |
+| `python-pptx` | L15 | Full useful package inspection for office, pdf and presentation deliverables | `documented_only` | inspect useful source package + tests; full audit still open |
+| `qlib` | L13 | quantitative risk analysis + numerical challenger | `partially_integrated` | protect existing bounded integration and extend; full audit still open |
+| `quantlib` | L14 | fixed income + derivatives | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `quantstats` | L11 | Full useful package inspection for portfolio risk, optimization and attribution | `documented_only` | inspect useful source package + tests; full audit still open |
+| `react-pdf` | L15 | Full useful package inspection for office, pdf and presentation deliverables | `discovered` | verify license/pin first; full audit still open |
+| `riskfolio-lib` | L11 | Full useful package inspection for portfolio risk, optimization and attribution | `documented_only` | inspect useful source package + tests; full audit still open |
+| `scikit-learn` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `skfolio` | L11 | effective number of assets recorded close | `documented_only` | inspect useful source package + tests; full audit still open |
+| `sktime` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `splink` | L07 | Full useful package inspection for entity identity, connected sources and local search | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `sqlglot` | L06 | Full useful package inspection for governed data lab execution | `documented_only` | inspect useful source package + tests; full audit still open |
+| `sqlite-vec` | L07 | local vector search | `documented_only` | inspect useful source package + tests; full audit still open |
+| `statsforecast` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `documented_only` | inspect useful source package + tests; full audit still open |
+| `statsmodels` | L12 | Full useful package inspection for fundamentals, ratios and financial truth | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `strata` | L14 | Full useful package inspection for rates, options and financial pricing | `documented_only` | inspect useful source package + tests; full audit still open |
+| `tanstack-table` | L08 | large table | `documented_only` | inspect useful source package + tests; full audit still open |
+| `tanstack-virtual` | L08 | virtualization | `documented_only` | inspect useful source package + tests; full audit still open |
+| `tiptap` | L08 | report artifact + research artifact | `runtime_integrated` | protect existing bounded integration and extend; full audit still open |
+| `tool-ui` | L02 | tool results + approval ui | `documented_only` | inspect useful source package + tests; full audit still open |
+| `tradingagents` | L04 | specialist finance agents | `partially_integrated` | protect existing bounded integration and extend; full audit still open |
+| `univer` | L08 | spreadsheet artifact | `partially_integrated` | protect existing bounded integration and extend; full audit still open |
+| `unstructured` | L05 | Full useful package inspection for document parsing, filings and verified evidence | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `vectorbt` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `rejected` | reference/negative tests only (no runtime install); full audit still open |
+| `vis-timeline` | L08 | Full useful package inspection for existing dockview and living professional interfaces | `discovered` | verify license/pin first; full audit still open |
+| `vnpy` | L10 | Full useful package inspection for governed execution and brokerage references | `reference_only` | benchmark/reference then selective audit; full audit still open |
+| `whisper-cpp` | L17 | core inference library | `runtime_integrated_optional` | protect existing bounded integration and extend; full audit still open |
+| `xgboost` | L13 | Full useful package inspection for quant ai, factor modeling and forecasting | `documented_only` | inspect useful source package + tests; full audit still open |
+| `xlsxwriter` | L15 | Full useful package inspection for office, pdf and presentation deliverables | `documented_only` | inspect useful source package + tests; full audit still open |
+| `xyflow` | L08 | research graph + workflow editor | `documented_only` | inspect useful source package + tests; full audit still open |
+| `zipline-reloaded` | L09 | Full useful package inspection for canonical quant strategy and backtesting | `reference_only` | benchmark/reference then selective audit; full audit still open |
+
+### 8.4 Controlled fork delta applications: all ten
+
+Forks are **review candidates**, not clone-and-run features. Compare the registered upstream pin and controlled mirror commit at a selected capability cut; deep-review only material security/packaging/algorithm/test changes, with exact path provenance, legal review and relevant upstream tests.
+
+| Fork | Ledger posture | Material next integration work (registry-based) | Gate |
+| --- | --- | --- | --- |
+| `openclaw` | `partially_integrated_pinned_paths` | Reuse already approved GM-11/GM-12 execution, approval and tool subsystems; compare fork changes to the separately approved upstream pin before any new import. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `cua` | `mirror_observed_no_runtime_claim` | Evaluate controlled-computer model-maintenance interactions behind existing GM-14 and user-approved native permissions; no direct Project data or filesystem authority. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `TradingAgents` | `partially_integrated_pinned_paths` | Existing approved TradingAgents source pin contributes bounded verified GM-12 risk-review mechanics; next qualify source-backed analyst/team workflow, full licensed dependency and packaged SP-05, not fork HEAD or live brokerage. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `FinRobot` | `partially_integrated_pinned_paths` | Three bounded Production-V2 packages are now integrated at the exact approved source pin with native V1 evidence: zero-I/O financial audit, result-contract validation, and semantic Artifact decision/change diff. Next inspect coherent equity-research, IC-memo and professional-report composition packages plus canonical consumer wiring, while keeping FinRobot provider, store, agent, server, report-runtime, finance-engine and broker authorities excluded unless separately approved. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `FinGPT` | `mirror_observed_no_runtime_claim` | Evaluate finance text/model benchmarks in opt-in user-managed AI runtime; independently verify model-weight, data and redistribution rights. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `LangAlpha` | `documented_only` | Inspect coherent research workspace/skills subsystem and adapt permitted portions behind LiOS Project, governed tools and Artifact authority. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `dexter-js` | `mirror_observed_no_runtime_claim` | Treat as a separate upstream from the registry's virattt/dexter; inspect license and source independently before reconciling any reusable planner/finance workflow. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `browser-use` | `mirror_observed_no_runtime_claim` | Evaluate browser research mechanisms under LiOS GM-14 governed browser/session, entitlements, screenshots and source lineage; no unmanaged browser process. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `qlib` | `partially_integrated_pinned_paths` | Bounded Qlib risk_analysis formula challenger behind P11/GM-12; qualify source-bound returns, remaining Qlib package/model/dataset rights and packaged SP-05 before claiming broader adoption. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+| `graphrag` | `partially_integrated_pinned_paths` | Continue coherent GraphRAG source-context evidence exploration behind existing P7/P5 while evaluating remaining package paths, Microsoft upstream dependencies, AI-use rights and packaged SP-03; currently only selected two MIT source paths are adapted, not full graph runtime. | Only pinned/lawful accepted delta can be adopted; `controlled_fork_reviewed` |
+
+### 8.5 Six cross-donor compositions that close user-visible gaps
+
+| Integration slice | Composition behind **existing** LiOS authority | First executable acceptance (not a promise of current support) | Failure/rights challenge |
+| --- | --- | --- | --- |
+| **D1 Agent & BYOAI** | OpenClaw verified process supervision/ACP/Gateway + pydantic-ai typed result patterns + existing BYOAI router and P13 tool registry; Ollama/llama.cpp/MLX only when eligible | Any-topic request→officially permitted model→approved sandbox tool→one reliable saved P4 Artifact→restart | No consumer-subscription impersonation, undeclared tokens/cost, external host execution, fabricated tool success |
+| **D2 Research, evidence, memory** | Docling+EdgarTools+Arelle parsing/tests + LangAlpha/Dexter/TradingAgents research methods + selected GraphRAG evidence paths + current P5 rights/retrieval | No-ticker or unrelated general research→actual authorized source pages/cells→cited contradiction grid→persist+revise | Wrong company, cited inaccessible premium data, forged snippet, revoked source, hallucinated current fact |
+| **D3 Professional creation** | Existing Univer spreadsheet model + Tiptap document editor + ECharts + DOCX/PPTX/XLSX/PDF donor render/export mechanisms + single P4 version custody | Chat generates DOCX/XLSX/PPTX/chart; user makes an edit → same version lineage → real target app reopen | Unsupported Pro plugin or import/export silently presented as OSS, broken formulas or lost lineage |
+| **D4 Institutional Finance** | P5 source identity/entitlements + Qlib risk challenger + QuantLib pricing + Riskfolio/skfolio/QuantStats tests + LSE provider + existing P11 deterministic engines | Entitled data→portfolio stress+DCF/relative valuation→independent known answers→living P4 Thesis/Decision→paper/no-action | Data rights, no-lookahead, units/periods, financial solver bounds, live broker action refused |
+| **D5 Terminal in Chat** | Existing Dockview full professional terminal + PR #98 P4 original-screen state + ECharts/Univer/Tiptap/Perspective only for needed output types | Open in ordinary Chat→directly edit original financial panel→whole Workbench→same exact Chat/Artifact→reopen | Preserve unsaved drafts, P5 rights, cross-client context, original 111 registered UI views and no second terminal |
+| **D6 Tasks and everywhere** | OpenClaw node/device execution mechanics + P9 tasks/notifications + P13 permissions + local memory + existing LiOS Home | Save approved research/recalculation→revalidate current rights/model→repeat on user-owned node→new version + quiet notification→resume | Revoked node, removed model, canceled run, side-effect replay, cross-user secrets |
+
+**Implementation dependency order** (existing SI/GM/TC/P owners): First finish/review #98 safely, prove real BYOAI+agent tool execution (D1), then source-grounded research (D2) and P4 Office (D3) while P11 authentic finance (D4) and release packaging proceed in parallel; finish contextual terminal integration (D5) and monitored user-owned continuity (D6) before SP/P14. Do not defer native packaging to the end.
+
+### 8.6 What an implementing PR MUST deliver for each selected donor
+
+1. Show the **real missing consumer journey** and original LiOS authority; name its canonical owner and SI/J/SP IDs. Inspect actual LiOS callers before importing anything.
+2. At the **recorded exact source pin**, inspect the coherent useful package's material source files, dependency closure, native assets, examples, adapters, negative cases and applicable upstream tests—not its README alone. Inspect the controlled fork/community deltas only when material. Port relevant tests.
+3. Write a path/mechanism/test disposition in the *existing canonical adoption/component records*: `DIRECT_REUSE | IMPORT | ADAPT | REPURPOSE | COMBINE | GENERALIZE | REFERENCE | DEFER_WITH_TRIGGER | EXCLUDE_WITH_RIGHTS/SECURITY/AUTHORITY_EVIDENCE`. A substantial LiOS-native remainder requires a formal donor exhaustion record (policy §22), not "easier to rewrite".
+4. Connect to **exactly one** canonical GM/P2/P4/P5/P7/P11/P12/P13 boundary. Verify installation and health rather than presenting an inert capability. Never import donor auth, memory, Chat, data store, execution, permission broker or renderer as a competing system of record.
+5. Prove the real installed workflow with valid account/source/OS rights and the no-provider/revoked/cancel/hostile/restart branches; capture exact code commit, targeted package hash, user-visible output, timing and source/Artifact receipt. Only then mark the existing workstream ledger row accepted.
+6. Reuse substantial upstream code **where lawful and actually suitable**; document per-path rights, notices, original pin, dependency substitution, rollback and model/third-party dataset entitlement. No ambient trading, no silent cloud spend, no unlicensed runtime/media assets.
+
+### 8.7 New research verification and licensing cautions
+
+- **Docling:** current upstream supports heterogeneous PDF/Office/image/audio ingestion and page/table representations; map only the approved parsing/conversion portions into user-owned P7 evidence, plus governed model-pack lifecycle and extraction receipts. See [Docling upstream](https://github.com/docling-project/docling).
+- **Univer:** its current upstream advertises broad Sheets/Docs/Slides capabilities but distinguishes open-source from Pro/plugin/server import/export/collaboration components. **Do not equate the current LiOS pinned Sheet bridge with every advertised Univer Office feature or assume all exporters are redistributable.** Verify the *pinned* source, edition and licensing per feature. See [Univer repository and capability matrix](https://github.com/dream-num/univer) and [SDK guide](https://docs.univer.ai/).
+- **Qlib:** upstream advertises a data→training→backtest research workflow; LiOS only has selected risk challenger code. Importing a full quant research runtime requires a real user-owned dataset, point-in-time checks, native pack closure, numerical challenger results and P11's single execution authority. See [Qlib research workflow](https://github.com/microsoft/qlib).
+- **OpenClaw:** primary source importer, but GM node/approval/ACP/process fragments are not the same thing as native GUI computer control, legally usable model accounts, or user-owned mobile binary qualification. The existing `computer.assess` reports unavailable; do not promote it from a donor fork observation.
+
+**Release definition:** All approved original SI-01..SI-07 objectives remain visible in [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) and the 206-row ledger. Completion requires the *real user outcome* from each committed product capability, full coherent donor audit/disposition for material selected packages, the seven SP acceptance gates, the 14 P14 categories, and external owner-provided model/source/signing rights. Nothing above is an acceptance claim.
