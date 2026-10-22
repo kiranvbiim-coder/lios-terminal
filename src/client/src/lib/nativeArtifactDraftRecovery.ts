@@ -117,7 +117,11 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
   };
   const restore = () => {
     if (!matching || !candidate) return;
-    applyRecovered(candidate.content as T);
+    const parsed = artifactContentSchema.safeParse(candidate.content);
+    if (!parsed.success) return;
+    // Apply normalized, schema-validated content only; stored plaintext strings
+    // never become edit authority merely because OS decryption succeeded.
+    applyRecovered(parsed.data as T);
     setState(current => current.key === key
       ? { ...current, candidate: null, notice: "Local edits restored for review. Save the Artifact to create a canonical revision." }
       : current);
