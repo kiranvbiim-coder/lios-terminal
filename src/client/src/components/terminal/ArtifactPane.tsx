@@ -99,7 +99,7 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       setContent(saved);
       if (saved.kind === "research") {
         setQuestion(saved.question); setSourceMode(saved.sourcePolicy.mode);
-        setAllowedRefs(saved.sourcePolicy.allowedSourceRefs.join("\\n"));
+        setAllowedRefs(saved.sourcePolicy.allowedSourceRefs.join("\n"));
       }
       setAdvancedDirty(false);
     });
@@ -124,9 +124,6 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
     pendingContent.current = submitted;
     try {
       await saveRef.current(next);
-      // P4 is canonical; the encrypted local checkpoint must not later
-      // resurrect a revision that has been acknowledged as saved.
-      if (recoveryContext) void clearNativeArtifactDraft(recoveryContext).catch(() => {});
       setContent(next); setBaseline(submitted); setPending(pendingContent.current !== null);
       setNotice("Document revision saved. Canonical revision refresh requested.");
     } catch (cause) {
@@ -696,6 +693,10 @@ function ArtifactPaneWorkspace({
     });
     invalidateAutomation(projectId);
   });
+  const clearSavedRecovery = () => {
+    if (recoveryOwner) void clearNativeArtifactDraft({ owner: recoveryOwner, artifactId })
+      .catch(() => setError("Saved revision confirmed, but encrypted draft cleanup needs review on reopening."));
+  };
   const save=async(next:ArtifactContent)=>{
     if (data.version.version !== data.artifact.headVersion) throw new Error("Open the current Artifact revision before editing.");
     if (next.kind === "portfolio") {
@@ -721,6 +722,7 @@ function ArtifactPaneWorkspace({
           trustManifest: data.version.trustManifest, dependencyRefs: data.version.dependencyRefs, refreshSpec: data.version.refreshSpec,
         });
         if (mounted.current) setSpreadsheetPendingRevision(true);
+        clearSavedRecovery();
         onVersionChange?.(saved.version);
         invalidate(projectId, artifactId);
       } catch (cause) {
@@ -740,6 +742,7 @@ function ArtifactPaneWorkspace({
           baseVersion:data.version.version,content:next,actorType:"user",
           trustManifest:data.version.trustManifest,dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
         });
+        clearSavedRecovery();
         onVersionChange?.(saved.version);
         invalidate(projectId,artifactId);
       } catch(cause) {
