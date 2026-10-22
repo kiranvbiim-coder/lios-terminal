@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { advanceArtifactWorkbenchRevision, openArtifactWorkbench, resolveArtifactPaneRequestedVersion, returnFromArtifactWorkbench } from "./artifactWorkbenchHandoff";
+import {
+  advanceArtifactWorkbenchRevision, clearArtifactWorkbenchRecovery, loadArtifactWorkbenchRecovery,
+  openArtifactWorkbench, resolveArtifactPaneRequestedVersion, returnFromArtifactWorkbench,
+  saveArtifactWorkbenchRecovery, ARTIFACT_WORKBENCH_RECOVERY_KEY,
+} from "./artifactWorkbenchHandoff";
 import { deserializeWorkspace, isWorkspaceState, serializeWorkspace } from "./terminalWorkspace";
 import { isViewVisibleToAudience } from "./featureRegistry";
 import type { ArtifactWorkbenchContext } from "./terminalTypes";
@@ -194,4 +198,105 @@ test("out-of-order Artifact callbacks are rejected by exact requested-version id
   assert.deepEqual(advanceArtifactWorkbenchRevision(pendingHistorical,
     { type: "loaded", version: 2, requestedVersion: 2 }),
     { requestedVersion: 2, displayedVersion: 2, loading: false });
+});
+
+
+function withRecoveryStorage(testCase: (storage: Map<string, string>) => void): void {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const storage = new Map<string, string>();
+  const fakeWindow = {
+    localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value); },
+      removeItem: (key: string) => { storage.delete(key); },
+    },
+  };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+  try { testCase(storage); }
+  finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+}
+
+test("desktop reload restores a Quick Chat Artifact return to the SAME original four-pane Dockview tab", () => {
+  withRecoveryStorage((storage) => {
+    const before = state(), quick = { ...context, projectId: null };
+    const geometry = { grid: { orientation: "HORIZONTAL", width: 1250, height: 720 }, activeGroup: "analysis" };
+    const opened = openArtifactWorkbench(before, quick, geometry, "tertiary", false)!;
+    saveArtifactWorkbenchRecovery(" OWNER@example.com ", opened.handoff);
+    assert.ok(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY));
+    // JSON roundtrip simulates the already-persisted tabs on an Electron restart.
+    const reloaded = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    // The user may have focused a different visible pane after expansion.
+    reloaded.tabs[0].workspace.focusedPane = "primary";
+    reloaded.tabs[0].workspace.secondary!.artifact!.version = 4;
+    const recovered = loadArtifactWorkbenchRecovery("owner@EXAMPLE.com", reloaded, "internal");
+    assert.ok(recovered);
+    assert.equal(recovered.context.artifactId, quick.artifactId);
+    assert.equal(recovered.context.chatId, quick.chatId);
+    assert.deepEqual(recovered.priorLayout, geometry);
+    assert.equal(recovered.priorMaximizedPane, "tertiary");
+    const returned = returnFromArtifactWorkbench(reloaded, recovered, { ...quick, version: 4 }, false)!;
+    assert.deepEqual(returned.context, { ...quick, version: 4 });
+    assert.deepEqual(returned.state, before, "return restores exact prior tab, not the temporary Artifact pane");
+    clearArtifactWorkbenchRecovery();
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+  });
+});
+
+test("recovered navigation never grants a second signed-in account the first account's tab", () => {
+  withRecoveryStorage((storage) => {
+    const opened = openArtifactWorkbench(state(), context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("one@example.com", opened.handoff);
+    assert.equal(loadArtifactWorkbenchRecovery("two@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), true,
+      "a different account cannot read this hint; it is not promoted to global state");
+    assert.ok(loadArtifactWorkbenchRecovery("one@example.com", opened.state, "internal"));
+  });
+});
+
+test("restart recovery rejects stale, unrelated, modified, and corrupt layout snapshots", () => {
+  withRecoveryStorage((storage) => {
+    const before = state(), opened = openArtifactWorkbench(before, context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("owner@example.com", opened.handoff);
+    const original = storage.get(ARTIFACT_WORKBENCH_RECOVERY_KEY)!;
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", before, "internal"), null,
+      "pre-expansion tab state cannot masquerade as an active recoverable handoff");
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const otherArtifact = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    otherArtifact.tabs[0].workspace.secondary!.artifact!.artifactId = "artifact:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", otherArtifact, "internal"), null);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const crossChat = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    crossChat.tabs[0].workspace.secondary!.artifact!.chatId = 999;
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", crossChat, "internal"), null);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const stale = JSON.parse(original);
+    stale.capturedAt -= 8 * 24 * 60 * 60 * 1_000;
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(stale));
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, "{corrupt-json");
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+  });
+});
+
+test("restart return navigation cannot resurrect a restricted pane for a trial account", () => {
+  withRecoveryStorage(() => {
+    const before = state();
+    const restricted = { ...before,
+      tabs: before.tabs.map((entry, i) => i === 0 ? {
+        ...entry,
+        workspace: { ...entry.workspace, secondary: { view: "clientdata" as const, symbol: "MSFT" } },
+      } : entry) };
+    const opened = openArtifactWorkbench(restricted, context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("owner@example.com", opened.handoff);
+    const recovered = loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "trial");
+    assert.ok(recovered);
+    assert.notEqual(recovered.priorTab.workspace.secondary?.view, "clientdata");
+    assert.deepEqual(returnFromArtifactWorkbench(opened.state, recovered, context, false)?.state.tabs[0].workspace,
+      recovered.priorTab.workspace);
+  });
 });
