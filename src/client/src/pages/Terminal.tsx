@@ -269,6 +269,17 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const [initialArtifactHandoff] = useState(() =>
     loadArtifactWorkbenchRecovery(session.email, tabsState, audience));
   const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(initialArtifactHandoff);
+  const handoffAudienceRef = useRef({ email: session.email.trim().toLowerCase(), audience });
+  // An account switch or entitlement-tier change cannot keep another user's
+  // in-memory return tab alive. The server still owns all Artifact read rights.
+  useEffect(() => {
+    const next = { email: session.email.trim().toLowerCase(), audience };
+    if (next.email !== handoffAudienceRef.current.email || next.audience !== handoffAudienceRef.current.audience) {
+      handoffAudienceRef.current = next;
+      artifactHandoffRef.current = null;
+      clearArtifactWorkbenchRecovery();
+    }
+  }, [session.email, audience]);
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
