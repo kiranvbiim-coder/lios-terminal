@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { advanceArtifactWorkbenchRevision, openArtifactWorkbench, returnFromArtifactWorkbench } from "./artifactWorkbenchHandoff";
+import { advanceArtifactWorkbenchRevision, openArtifactWorkbench, resolveArtifactPaneRequestedVersion, returnFromArtifactWorkbench } from "./artifactWorkbenchHandoff";
 import { deserializeWorkspace, isWorkspaceState, serializeWorkspace } from "./terminalWorkspace";
 import { isViewVisibleToAudience } from "./featureRegistry";
 import type { ArtifactWorkbenchContext } from "./terminalTypes";
@@ -145,4 +145,33 @@ test("Quick Chat uses the same Workbench editor and returns its exact saved revi
   const returned = returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, version: 4 }, false)!;
   assert.deepEqual(returned.context, { ...quick, version: 4 });
   assert.deepEqual(returned.state, before);
+});
+
+
+test("shared Artifact editor can navigate from head v4 to historical v1 and back without assuming versions rise", () => {
+  const artifactId = context.artifactId;
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, null), 4);
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId, version: 1 }), 1,
+    "selecting an older revision must cause the actual Artifact query to load historical v1");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId, version: 5 }), 5,
+    "newly saved canonical versions remain addressable immediately");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId: "artifact:other", version: 1 }), 4,
+    "an Artifact change must not inherit another Artifact's local history selection");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, null, null), null,
+    "latest head remains an explicit nullable selection, not an invented version");
+});
+
+test("delayed historical fetch cannot replace a selected latest-head revision during Workbench return", () => {
+  const loadedV3 = { requestedVersion: 3, displayedVersion: 3, loading: false };
+  const latest = advanceArtifactWorkbenchRevision(loadedV3, { type: "select", version: null });
+  assert.deepEqual(latest, { requestedVersion: null, displayedVersion: 3, loading: true });
+  assert.equal(advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 1 }), latest);
+  assert.equal(advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 2 }), latest);
+  const resolved = advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 4 });
+  assert.deepEqual(resolved, { requestedVersion: null, displayedVersion: 4, loading: false });
+  assert.equal(advanceArtifactWorkbenchRevision(resolved, { type: "loaded", version: 3 }), resolved);
+  const before = state();
+  const opened = openArtifactWorkbench(before, { ...context, version: 3 }, null, null, false)!;
+  assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff,
+    { ...context, version: resolved.displayedVersion }, false)?.context.version, 4);
 });
