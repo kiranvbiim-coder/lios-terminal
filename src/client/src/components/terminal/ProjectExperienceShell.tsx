@@ -2452,6 +2452,7 @@ export default function ProjectExperienceShell({
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
                     onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, requestedVersion: artifactViewVersion, version }; }}
                     artifactId={conversationArtifactRef}
+                    recoveryOwner={account.email}
                     version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
                     projectId={selection.projectId} owningChatId={selection.chatId}
                     sessions={selection.projectId ? home?.sessions ?? [] : []}
