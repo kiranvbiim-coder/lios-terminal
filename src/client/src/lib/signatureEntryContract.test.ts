@@ -49,6 +49,10 @@ test("public entry promises the approved universal Chat experience without manda
   assert.match(preview, /Temporary Chat without persistence/);
   assert.match(preview, /original professional Workbench/);
   assert.match(preview, /SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO/);
+  assert.match(preview, /function ConversationMockup\(\)/);
+  assert.match(preview, /Example LiOS chat, illustrative only/);
+  assert.match(preview, /VIEW FINANCE DEMO/);
+  assert.ok(preview.indexOf("<ConversationMockup />") < preview.indexOf("<TerminalMockup key={demoRun} />"), "first-fold demo must be universal Chat, with original financial demo retained in specialist section");
   assert.ok(preview.indexOf("Universal") < preview.indexOf("<Ticker items={tickerItems} />"), "illustrative market ticker belongs after the universal entry");
   for (const inaccurate of [
     "Every analysis lives inside a Project",
