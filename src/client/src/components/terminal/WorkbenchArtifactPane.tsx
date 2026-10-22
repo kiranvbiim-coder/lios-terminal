@@ -7,13 +7,14 @@ import type { ArtifactWorkbenchRevisionSelection } from "@/lib/artifactWorkbench
 
 interface Props {
   context: ArtifactWorkbenchContext;
+  recoveryOwner?: string;
   onVersionChange: (version: number) => void;
   onReturn: (context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => void;
   onDirtyChange: (dirty: boolean) => void;
 }
 
 /** Registered Dockview content using the same canonical P4 editor as the Chat sidecar. */
-export default function WorkbenchArtifactPane({ context, onVersionChange, onDirtyChange, onReturn }: Props) {
+export default function WorkbenchArtifactPane({ context, recoveryOwner, onVersionChange, onDirtyChange, onReturn }: Props) {
   const sessions = useProjectSessions(context.projectId);
   const [revision, setRevision] = useState<ArtifactWorkbenchRevisionSelection>({ requestedVersion: context.version, displayedVersion: context.version, loading: true });
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
       <button type="button" data-testid="workbench-return-chat" className="rounded border border-border px-3 py-2 text-sm" onClick={() => returnToChat()}>Return to same Chat</button>
     </div>
     {notice && <p role="alert" className="mb-3 text-sm text-amber-200">{notice}</p>}
-    <ArtifactPane artifactId={context.artifactId} projectId={context.projectId} owningChatId={context.chatId} version={revision.requestedVersion}
+    <ArtifactPane artifactId={context.artifactId} recoveryOwner={recoveryOwner} projectId={context.projectId} owningChatId={context.chatId} version={revision.requestedVersion}
       onVersionChange={selectVersion} onDisplayedVersionChange={reportVersion} onDirtyChange={reportDirty}
       sessions={sessions.data ?? []} onClose={() => returnToChat()}
       onAsk={(id, title, prompt) => {
