@@ -96,7 +96,7 @@ export function loadArtifactWorkbenchRecovery(
         tabs: [candidate.priorTab], activeTabId: candidate.priorTab.id, closedTabs: [],
       })
       || !RECOVERY_PANES.includes(candidate.priorTab.workspace.focusedPane)
-      || (candidate.priorMaximizedPane !== null && !RECOVERY_PANES.includes(candidate.priorMaximizedPane as typeof RECOVERY_PANES[number]))
+      || (candidate.priorMaximizedPane != null && !RECOVERY_PANES.includes(candidate.priorMaximizedPane as typeof RECOVERY_PANES[number]))
       || (candidate.priorLayout != null && (typeof candidate.priorLayout !== "object" || Array.isArray(candidate.priorLayout)))
       || !matchingRecoveredPane(state, candidate as ArtifactWorkbenchHandoff)) {
       clearArtifactWorkbenchRecovery(); return null;
@@ -108,7 +108,7 @@ export function loadArtifactWorkbenchRecovery(
         workspace: sanitizeWorkspaceForAudience(candidate.priorTab.workspace, audience),
       },
       priorLayout: candidate.priorLayout ?? null,
-      priorMaximizedPane: candidate.priorMaximizedPane,
+      priorMaximizedPane: candidate.priorMaximizedPane ?? null,
     };
   } catch {
     clearArtifactWorkbenchRecovery();
