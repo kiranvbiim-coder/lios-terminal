@@ -13,6 +13,7 @@ process.env.LIOS_ATTACHMENT_STORAGE_DIR = path.join(dataDir, "blobs");
 const { closeDb, getDb, initDb } = await import("./db");
 const { users } = await import("@shared/schema");
 const { PROJECT_ATTACHMENT_MAX_FILE_BYTES } = await import("./projectAttachmentStore");
+const { conversationAttachmentRefSchema } = await import("@shared/conversationRuntime");
 const { createProject } = await import("./projectStore");
 const { createProjectChat, getProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { listProjectResources, setProjectResourceContextMode } = await import("./projectResourceStore");
@@ -249,7 +250,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   });
   const quickBody = await quickUpload.text();
   assert.equal(quickUpload.status, 201, quickBody);
-  const { attachment: quickRef } = JSON.parse(quickBody) as { attachment: { id: string; sourceRef: string; fileName: string; byteLength: number } };
+  const quickRef = conversationAttachmentRefSchema.parse((JSON.parse(quickBody) as { attachment: unknown }).attachment);
   assert.equal(quickRef.sourceRef, "quick-attachment:" + quickRef.id);
   assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
   const quickDownload = `http://127.0.0.1:${address.port}/api/quick-chats/${quick.id}/attachments/${quickRef.id}/download`;
@@ -262,6 +263,22 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(quickDownloaded.headers.get("cache-control"), "private, no-store");
   assert.equal(quickDownloaded.headers.get("x-content-type-options"), "nosniff");
   assert.equal(await quickDownloaded.text(), privatePayload);
+
+  // A legitimate owner can use this exact file in the same Quick Chat, with a normal governed action path.
+  const ownerQuickRun = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "Backtest AAPL",
+      context: { symbol: "AAPL" }, sourceScope: "files", attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  const ownerRunBody = await ownerQuickRun.text();
+  assert.equal(ownerQuickRun.status, 200, ownerRunBody);
+  const quickMessages = await listProjectChatMessages(ownerContext, quick.id);
+  assert.equal(quickMessages.some(m => m.role === "user" && Array.isArray(m.metadata.attachments)
+    && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)), true);
 
   // The runtime must reject another Chat's reference before saving a user message.
   const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
