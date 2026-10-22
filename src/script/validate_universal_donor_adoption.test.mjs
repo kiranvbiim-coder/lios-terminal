@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
  loadUniversalDonorAdoptionSources,
  validateUniversalDonorAdoption,
+ verifyBundledDonorDestinations,
 } from "./validate_universal_donor_adoption.mjs";
 const copy=()=>structuredClone(loadUniversalDonorAdoptionSources());
 test("every one of 92 donors, 10 forks and 93 registered subsystems is reconciled with source registers",()=>{
@@ -13,6 +14,7 @@ test("every one of 92 donors, 10 forks and 93 registered subsystems is reconcile
  assert.equal(x.registeredSubsystems,93);
  assert.equal(x.pinnedBaseline+x.unPinnedBaseline,92);
  assert.equal(x.newProductFeaturesShippedByAudit,0);
+ assert.deepEqual(x.bundledDestinations,{sourcePaths:122,npmReferences:6});
  assert.equal(x.harvestingControlSchema,1);
  assert.equal(x.donorsFullyExhausted,0);
  assert.equal(Object.values(x.bySourceAuditStatus).reduce((a,b)=>a+b,0),92);
@@ -130,4 +132,14 @@ test("LangAlpha GM bounded parser remains a subcomponent of an existing approved
  const d=copy();
  d.ledger.selectedBaselineSourceAdoptions[0].baselineDonorId="not-a-donor";
  assert.throws(()=>validateUniversalDonorAdoption(d));
+});
+
+test("bundled donor source requires an existing regular file, not a manifest-only capability",()=>{
+ const components={components:[{id:"test-donor",bundled:true,destinationPaths:["server/reused.ts","npm:example@1.0.0"]}]};
+ const options={probe: target=>target==="src/server/reused.ts",npmPackages:{"node_modules/example":{version:"1.0.0"}}};
+ assert.deepEqual(verifyBundledDonorDestinations(components,options),{sourcePaths:1,npmReferences:1});
+ assert.throws(()=>verifyBundledDonorDestinations({components:[{...components.components[0],destinationPaths:["server/ghost.ts"]}]},options),/missing or not a regular file/);
+ assert.throws(()=>verifyBundledDonorDestinations({components:[{...components.components[0],destinationPaths:["../private.ts"]}]},options),/unsafe bundled destination/);
+ assert.throws(()=>verifyBundledDonorDestinations({components:[{...components.components[0],destinationPaths:["npm:example@2.0.0"]}]},options),/no longer matches the locked/);
+ assert.deepEqual(verifyBundledDonorDestinations({components:[{id:"unbundled",bundled:false,destinationPaths:["server/ghost.ts"]}]},options),{sourcePaths:0,npmReferences:0});
 });
