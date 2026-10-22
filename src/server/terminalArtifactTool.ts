@@ -87,6 +87,12 @@ async function admitOriginalFactorSources(ctx: TenantContext, provenance: Resolv
   return [...new Set(refs)];
 }
 
+/** A terminal Artifact alone never supplies cross-client portfolio-selection authority. */
+export function requireTerminalPortfolioOrganization(ctx: TenantContext): number {
+  if (!ctx.role.startsWith("internal_") || ctx.organizationId === null) throw new Error("Portfolio selection needs an explicitly authorized organization context.");
+  return ctx.organizationId;
+}
+
 export async function validateTerminalArtifactTarget(ctx: TenantContext, chatId: number, binding: { artifactId: string; version: number; contentHash: string }, signal: AbortSignal) {
   assertNotAborted(signal);
   const chat = await getProjectChat(ctx, chatId);
@@ -204,9 +210,10 @@ export async function updateTerminalArtifact(ctx: TenantContext, chatId: number,
   }
   const nextState = applyTerminalArtifactOperations(content.view, terminal, input.operations);
   for (const operation of input.operations) if (operation.type === "portfolio.select" && operation.portfolioId !== null) {
-    if (!ctx.role.startsWith("internal_")) throw new Error("This portfolio stress selector requires the existing internal portfolio role.");
-    const [portfolio] = await getDb().select().from(portfolios).where(eq(portfolios.id, operation.portfolioId)).limit(1);
-    if (!portfolio) throw new Error("Selected portfolio is not available.");
+    const organizationId = requireTerminalPortfolioOrganization(ctx);
+    const [portfolio] = await getDb().select({ organizationId: portfolios.organizationId }).from(portfolios)
+      .where(and(eq(portfolios.id, operation.portfolioId), eq(portfolios.organizationId, organizationId))).limit(1);
+    if (!portfolio) throw new Error("Selected portfolio is not available in the authorized organization.");
     nextState.panelState["PortfolioStressPanel.orgId"] = portfolio.organizationId;
   }
   const next = { ...content, state: { ...content.state, terminal: nextState } };

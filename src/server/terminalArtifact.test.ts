@@ -15,7 +15,7 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, projects } = await import("@shared/schema");
 const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { openTerminalArtifact } = await import("./terminalArtifact");
-const { updateTerminalArtifact, admitTerminalExecutionSources } = await import("./terminalArtifactTool");
+const { updateTerminalArtifact, admitTerminalExecutionSources, requireTerminalPortfolioOrganization } = await import("./terminalArtifactTool");
 const { getArtifact, getArtifactVersion, createArtifactVersion, createArtifactProposal, createArtifact, createTerminalArtifactEngineVersion, undoArtifactHead } = await import("./artifactStore");
 
 test("existing terminal work is a Chat-owned immutable Artifact, not a shadow session", { timeout: 90_000 }, async t => {
@@ -57,6 +57,16 @@ test("existing terminal work is a Chat-owned immutable Artifact, not a shadow se
   await assert.rejects(updateTerminalArtifact(tenant, chat.id, { ...update, baseVersion: 2 }, new AbortController().signal), /hash/);
   await assert.rejects(updateTerminalArtifact(tenant, otherChat.id, { ...update, baseVersion: 2, baseHash: current.contentHash }, new AbortController().signal), /owned/);
   await assert.rejects(getArtifact(foreign, retained.artifact.id));
+  const ownedPortfolioScreen = await openTerminalArtifact(tenant, chat.id, {
+    requestId: crypto.randomUUID(), view: "portfolio", title: "Owned portfolio screen",
+    symbol: null, state: initialTerminalScreenState(null),
+  });
+  await assert.rejects(updateTerminalArtifact(tenant, chat.id, {
+    artifactId: ownedPortfolioScreen.artifact.id,
+    baseVersion: ownedPortfolioScreen.version.version,
+    baseHash: ownedPortfolioScreen.version.contentHash,
+    operations: [{ type: "portfolio.select", portfolioId: 1 }],
+  }, new AbortController().signal), /authorized organization context/);
   await assert.rejects(createArtifactProposal(tenant, { artifactId: retained.artifact.id, baseVersion: 2, type: "artifact_patch", summary: "Attempt to bypass typed source control", patch: { state: { terminal: { ...initialTerminalScreenState("IBM"), sourceScope: "web" } } }, actorType: "conversation" }), /typed operations/);
   await assert.rejects(createArtifactVersion(tenant, { artifactId: retained.artifact.id, baseVersion: 2, content: { ...current.content, symbol: "AAPL" } }), /subject|invalid/i);
   const forged = { ...current.content, state: { ...current.content.state, terminalExecutions: { forged: { receipt: { runId: crypto.randomUUID() }, price: 999 } } } };
@@ -147,4 +157,13 @@ test("calculated technical work reopens the original chart without relabeling re
   assert.equal(terminal.marketMode, "live");
   assert.equal(terminal.asOf, null, "a recorded result is not automatically an authorized historical market snapshot");
   assert.equal(terminal.sourceScope, "web");
+});
+
+test("portfolio terminal operations need a verified organization and the existing internal role", () => {
+  const requireOrg = requireTerminalPortfolioOrganization;
+  const scopedInternal = { userId: 7, organizationId: 11, role: "internal_analyst" as const };
+  assert.equal(requireOrg(scopedInternal), 11);
+  assert.throws(() => requireOrg({ ...scopedInternal, organizationId: null }), /authorized organization/);
+  assert.throws(() => requireOrg({ ...scopedInternal, role: "client_user" }), /authorized organization/);
+  assert.throws(() => requireOrg({ ...scopedInternal, role: "client_admin" }), /authorized organization/);
 });
