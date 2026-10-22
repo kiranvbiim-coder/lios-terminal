@@ -14,7 +14,7 @@ const { closeDb, getDb, initDb } = await import("./db");
 const { users } = await import("@shared/schema");
 const { PROJECT_ATTACHMENT_MAX_FILE_BYTES } = await import("./projectAttachmentStore");
 const { createProject } = await import("./projectStore");
-const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
+const { createProjectChat, getProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { listProjectResources, setProjectResourceContextMode } = await import("./projectResourceStore");
 const { registerProjectRoutes } = await import("./projectRoutes");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
@@ -228,6 +228,53 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   const afterTypedProjectRequest = await listProjectChatMessages({ userId: owner.id, organizationId: null, role: owner.role }, chat.id);
   assert.equal(afterTypedProjectRequest.length, beforeVoiceReview.length + 2);
   assert.equal(afterTypedProjectRequest.at(-1)?.metadata?.voiceReview, undefined);
+
+
+  // A normal user must be able to upload in a regular Quick Chat without any Project.
+  const quick = await createProjectChat(ownerContext, { scope: "quick" });
+  const otherQuick = await createProjectChat(ownerContext, { scope: "quick" });
+  const quickEndpoint = `http://127.0.0.1:${address.port}/api/quick-chats/${quick.id}/attachments`;
+  const privatePayload = "Quick private report: verified water-quality reading.";
+  assert.equal((await fetch(quickEndpoint, { method: "POST", body: attachmentForm("notes.txt", privatePayload) })).status, 401);
+  assert.equal((await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(other.id) }, body: attachmentForm("notes.txt", privatePayload),
+  })).status, 404);
+  const invalidQuickForm = attachmentForm("notes.txt", privatePayload);
+  invalidQuickForm.append("projectId", String(project.id));
+  assert.equal((await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(owner.id) }, body: invalidQuickForm,
+  })).status, 400, "upload cannot smuggle a Project or other fields");
+  const quickUpload = await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(owner.id) }, body: attachmentForm("notes.txt", privatePayload),
+  });
+  const quickBody = await quickUpload.text();
+  assert.equal(quickUpload.status, 201, quickBody);
+  const { attachment: quickRef } = JSON.parse(quickBody) as { attachment: { id: string; sourceRef: string; fileName: string; byteLength: number } };
+  assert.equal(quickRef.sourceRef, "quick-attachment:" + quickRef.id);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  const quickDownload = `http://127.0.0.1:${address.port}/api/quick-chats/${quick.id}/attachments/${quickRef.id}/download`;
+  assert.equal((await fetch(quickDownload)).status, 401);
+  assert.equal((await fetch(quickDownload, { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  const siblingDownload = `http://127.0.0.1:${address.port}/api/quick-chats/${otherQuick.id}/attachments/${quickRef.id}/download`;
+  assert.equal((await fetch(siblingDownload, { headers: { "x-test-user-id": String(owner.id) } })).status, 404);
+  const quickDownloaded = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(quickDownloaded.status, 200);
+  assert.equal(quickDownloaded.headers.get("cache-control"), "private, no-store");
+  assert.equal(quickDownloaded.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(await quickDownloaded.text(), privatePayload);
+
+  // The runtime must reject another Chat's reference before saving a user message.
+  const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
+  const crossQuickRun = await fetch(conversationUrlFor(address.port, otherQuick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "What does my private note say?",
+      sourceScope: "files", attachments: [quickRef],
+    }),
+  });
+  assert.equal(crossQuickRun.status, 404, await crossQuickRun.text());
+  assert.equal((await listProjectChatMessages(ownerContext, otherQuick.id)).length, beforeQuickCrossScope.length);
 
   const temporaryUrl = `http://127.0.0.1:${address.port}/api/project-chat/temporary/respond`;
   const unreviewedTemporaryVoice = await fetch(temporaryUrl, {
