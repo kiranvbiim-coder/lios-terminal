@@ -42,3 +42,17 @@ test("Workspace Composer keeps the original professional integration plus respon
   assert.match(component, /onDrop=\{drop\}/);
   assert.match(component, /onApplyWorkspace\(next, "V5 Intelligence Composition"\)/);
 });
+
+test("recomposing a workspace preserves the exact artifact context and authored version", () => {
+  const artifact = { projectId: 7, chatId: 29, artifactId: "artifact-test", version: 4 };
+  const initial: WorkspaceSlot[] = [
+    { objectId: "artifact-pane", pane: { view: "artifact", symbol: "AAPL", artifact } },
+    { objectId: "chart-pane", pane: { view: "chart", symbol: "MSFT" } },
+  ];
+  const composed = workspaceFromSlots(initial);
+  assert.deepEqual(composed?.primary, initial[0].pane);
+  assert.deepEqual(composed?.primary.artifact, artifact);
+  assert.equal(composed?.primary.artifact?.version, 4);
+  assert.equal(composed?.secondary?.symbol, "MSFT");
+  assert.equal(composed?.focusedPane, "primary");
+});
