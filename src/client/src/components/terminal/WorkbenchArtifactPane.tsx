@@ -38,10 +38,10 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
       setRevision(next);
     }
   }, []);
-  const reportVersion = useCallback((version: number, artifactId: string) => {
+  const reportVersion = useCallback((version: number, artifactId: string, requestedVersion: number | null) => {
     if (artifactId !== context.artifactId) return;
     const current = revisionRef.current;
-    const next = advanceArtifactWorkbenchRevision(current, { type: "loaded", version });
+    const next = advanceArtifactWorkbenchRevision(current, { type: "loaded", version, requestedVersion });
     if (next === current) return;
     revisionRef.current = next;
     setRevision(next);
