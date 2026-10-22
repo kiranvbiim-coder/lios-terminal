@@ -71,38 +71,38 @@ const EXECUTION_STEPS = [
   },
   {
     step: "EXECUTE",
-    desc: "Deterministic engines + BYOAI inference in parallel",
+    desc: "Use permitted AI, sources and specialist engines as needed",
   },
   { step: "INSPECT", desc: "Evidence panel, data lineage, source attribution" },
   { step: "REFINE", desc: "Follow-up, drill-down, parameter adjustment" },
-  { step: "SAVE", desc: "Live artifact persisted to project ledger" },
-  { step: "MONITOR", desc: "Automated alerts, scheduled re-runs, watchlists" },
+  { step: "SAVE", desc: "Regular Chats and Artifacts save; Projects are optional" },
+  { step: "MONITOR", desc: "Optional, explicitly enabled updates and recurring work" },
 ];
 
 const FEATURES = [
   {
-    label: "PROJECTS / CHATS",
-    title: "Persistent intelligence workspaces",
-    desc: "Every analysis lives inside a Project. Chats retain full financial context — positions, universe filters, prior calculations — across sessions.",
-    tag: "ChatGPT-style context",
+    label: "CHAT / OPTIONAL PROJECTS",
+    title: "Start with a conversation",
+    desc: "Explore any topic in a regular Chat. Keep useful work and Artifacts automatically, organize larger work into optional Projects, or use Temporary Chat without persistence.",
+    tag: "Ask first",
   },
   {
     label: "LIVE ARTIFACTS",
     title: "Side-by-side interactive outputs",
-    desc: "Charts, models, tables, and reports render live beside the conversation. Scroll, filter, drill, export — without leaving the chat.",
-    tag: "Claude-style artifacts",
+    desc: "Open relevant charts, models, research and reports beside Chat. Refine the same saved Artifact, then expand into the original professional Workbench when deeper editing is useful.",
+    tag: "One saved work object",
   },
   {
     label: "EVIDENCE LAYER",
-    title: "Every claim cites its source",
-    desc: "Every data point surfaces its provider, timestamp, and confidence tier. AI-derived estimates are clearly labelled; engines remain authoritative.",
-    tag: "Perplexity-style citations",
+    title: "Inspect evidence and limitations",
+    desc: "For source-backed work, inspect permitted evidence, dates, calculation assumptions and gaps. LiOS must not invent missing observations or treat AI estimates as verified facts.",
+    tag: "Sources you can inspect",
   },
   {
     label: "BYOD / BYOAI",
-    title: "Bring your own data and models",
-    desc: "Connect any REST/GraphQL/SQL source. Route inference to Claude, GPT-4, Gemini, local Ollama, or any provider-neutral endpoint. Your keys, your cost.",
-    tag: "Provider-neutral",
+    title: "Bring your own AI access and data",
+    desc: "Choose supported APIs, local or self-hosted models, enterprise gateways and officially permitted account or CLI access. Source rights, consent and user-controlled costs govern every connection.",
+    tag: "Your access and permissions",
   },
 ];
 
@@ -613,10 +613,7 @@ export default function PublicProductPreview({
         </div>
       </nav>
 
-      {/* TICKER */}
-      <Ticker items={tickerItems} />
-
-      {/* HERO */}
+      {/* HERO: general intelligence comes first; illustrative finance ticker is shown with specialist depth. */}
       <section
         className="lios-reference-source-hero"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px 60px" }}
@@ -666,7 +663,7 @@ export default function PublicProductPreview({
                 textTransform: "uppercase",
               }}
             >
-              Financial
+              Universal
               <br />
               <span style={{ color: "#d4a017" }}>Intelligence</span>
               <br />
@@ -685,9 +682,9 @@ export default function PublicProductPreview({
                 maxWidth: 460,
               }}
             >
-              Projects, chats, live analytical artifacts, provider-neutral
-              BYOD/BYOAI, deterministic finance engines, persistent financial
-              state and automation.
+              Ask LiOS about any topic. Research, create and refine professional
+              work through one conversation. Open the original finance Workbench
+              only when you need its specialist depth.
             </p>
 
             <div
@@ -757,9 +754,9 @@ export default function PublicProductPreview({
               }}
             >
               {[
-                ["11", "Finance capability families"],
-                ["BYOD", "Your connected sources"],
-                ["BYOAI", "Provider-neutral AI"],
+                ["CHAT", "Start with any question"],
+                ["ARTIFACTS", "Living professional work"],
+                ["FINANCE", "Specialist on demand"],
               ].map(([val, label]) => (
                 <div key={label}>
                   <div
@@ -789,7 +786,8 @@ export default function PublicProductPreview({
             </div>
           </div>
 
-          <div id="reference-demo" aria-label="Illustrative product demo">
+          <div id="reference-demo" aria-label="Illustrative finance Workbench demo, not live model execution">
+            <p style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", margin: "0 0 12px" }}>SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO</p>
             <TerminalMockup key={demoRun} />
 
             {/* DCF artifact mockup */}
@@ -930,7 +928,7 @@ export default function PublicProductPreview({
               color: "#ede9e0",
             }}
           >
-            Ask → Execute → Inspect → Automate
+            Ask → Research → Create → Refine
           </h2>
           <div
             style={{
@@ -1017,7 +1015,7 @@ export default function PublicProductPreview({
               maxWidth: 600,
             }}
           >
-            The best of every intelligence interface
+            One conversation, professional depth
           </h2>
           <div
             style={{
@@ -1105,6 +1103,9 @@ export default function PublicProductPreview({
         </div>
       </section>
 
+      {/* The sample finance ticker belongs with the specialist capabilities, not the general-purpose entry. */}
+      <Ticker items={tickerItems} />
+
       {/* CAPABILITY FAMILIES */}
       <section
         style={{ borderTop: "1px solid #1f1f28", background: "#0d0d10" }}
@@ -1131,7 +1132,7 @@ export default function PublicProductPreview({
                   marginBottom: 16,
                 }}
               >
-                FINANCE-FIRST SCOPE
+                SPECIALIST FINANCE DEPTH
               </div>
               <h2
                 style={{
@@ -1144,7 +1145,7 @@ export default function PublicProductPreview({
                   color: "#ede9e0",
                 }}
               >
-                11 Capability Families
+                11 Financial Capability Families
               </h2>
             </div>
             <p
@@ -1157,8 +1158,8 @@ export default function PublicProductPreview({
                 margin: 0,
               }}
             >
-              Complexity lives inside LiOS. The user sees Projects, Chats, and
-              Artifacts.
+              Work begins in Chat. The complete finance terminal and specialist
+              tools are available on demand, not required for ordinary questions.
             </p>
           </div>
           <div
@@ -1278,16 +1279,16 @@ export default function PublicProductPreview({
                   margin: "0 0 36px",
                 }}
               >
-                LiOS is not limited to a fixed provider list. Any API key, OAuth
-                service, REST/OpenAPI/GraphQL endpoint, SQL database, file,
-                cloud storage, or MCP-compatible source converges into one
-                governed data layer.
+                Connect supported, authorized APIs, databases, files and services
+                under one governed source system. Choose legitimate AI access via
+                permitted provider accounts, APIs, local runtimes or enterprise
+                gateways. Nothing connected grants unlimited rights or free inference.
               </p>
               {[
                 ["REST / OpenAPI / GraphQL", "Any HTTP API with a schema"],
                 ["Databases / SQL", "Postgres, SQLite, DuckDB, PGlite"],
                 ["Files & Cloud Storage", "CSV, Excel, Parquet, S3, GCS"],
-                ["BYOAI", "Claude, GPT-4, Gemini, Ollama, any endpoint"],
+                ["BYOAI", "Authorized API, account/CLI, local or enterprise access where supported"],
                 ["MCP", "Governed tool exposure, not an auth bypass"],
               ].map(([title, sub]) => (
                 <div
@@ -1810,7 +1811,7 @@ export default function PublicProductPreview({
                   margin: 0,
                 }}
               >
-                Limuria Intelligence · Financial Intelligence Operating System ·
+                Limuria Intelligence · Universal Intelligence Operating System ·
                 v1.0.0
               </p>
             </div>
