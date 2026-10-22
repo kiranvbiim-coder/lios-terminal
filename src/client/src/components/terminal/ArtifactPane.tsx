@@ -23,6 +23,7 @@ import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4ArtifactWorkspace";
+import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -540,7 +541,7 @@ export function ArtifactPane(props: ArtifactPaneProps) {
     controlledRevision.current = { artifactId: props.artifactId, version: props.version };
     if (selection !== null) setSelection(null);
   }
-  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId && (props.version == null || selection.version >= props.version) ? selection.version : props.version;
+  const selectedVersion = resolveArtifactPaneRequestedVersion(props.artifactId, props.version, selection);
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
