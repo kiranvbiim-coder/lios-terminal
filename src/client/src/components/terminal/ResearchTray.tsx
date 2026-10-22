@@ -85,15 +85,27 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   }, [query, thread]);
   const threadDays = useMemo(() => groupResearchThreadByDay(filteredThread), [filteredThread]);
 
-  const persist = (next: ResearchTrayItem[]) => {
-    setItems(next);
-    saveResearchTray(next);
+  const persist = (next: ResearchTrayItem[]): boolean => {
+    try {
+      // Report a blocked/private/quota-limited storage failure rather than
+      // claiming a research note was durably saved when it was not.
+      saveResearchTray(next);
+      setItems(next);
+      return true;
+    } catch {
+      setNotice("Could not save research on this device. Check local storage availability and retry.");
+      return false;
+    }
   };
 
   const pinCurrent = () => {
-    persist(pinResearchContext(items, { view: activeView, symbol: activeSymbol }));
-    appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, detail: "Pinned to Research Tray for later use." });
-    setNotice("Current analysis pinned for later.");
+    if (!persist(pinResearchContext(items, { view: activeView, symbol: activeSymbol }))) return;
+    try {
+      appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, detail: "Pinned to Research Tray for later use." });
+      setNotice("Current analysis pinned for later.");
+    } catch {
+      setNotice("Analysis pinned, but the research history could not be updated.");
+    }
   };
 
   const addNote = () => {
@@ -106,11 +118,15 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
       title: activeSymbol ? activeSymbol + " · Research Note" : "Research Note",
       note,
     });
-    persist([item, ...items]);
-    appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
+    if (!persist([item, ...items])) return;
+    try {
+      appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
+      setNotice("Research note saved locally.");
+    } catch {
+      setNotice("Note saved, but the research history could not be updated.");
+    }
     setNewNote("");
     setAddingNote(false);
-    setNotice("Research note saved locally.");
   };
 
   const edit = (item: ResearchTrayItem) => {
@@ -122,17 +138,17 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   };
 
   const saveEdit = (item: ResearchTrayItem) => {
-    persist(updateResearchTrayItem(items, item.id, {
+    if (!persist(updateResearchTrayItem(items, item.id, {
       note: noteDraft,
       tags: tagsDraft.split(","),
       group: groupDraft,
-    }));
+    }))) return;
     setEditingId(null);
     setNotice("Research annotation saved locally.");
   };
 
   const remove = (item: ResearchTrayItem) => {
-    persist(removeResearchTrayItem(items, item.id));
+    if (!persist(removeResearchTrayItem(items, item.id))) return;
     setRemoveId(null);
     if (editingId === item.id) setEditingId(null);
     setNotice("Pinned item removed. Your research thread is unchanged.");
@@ -336,7 +352,15 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
                       <p className="font-ui text-sm leading-6">Clear research history on this device? Pinned notes and findings will remain.</p>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" onClick={() => setConfirmClear(false)} className={smallButton}>Cancel</button>
-                        <button type="button" onClick={() => { clearResearchThread(); setConfirmClear(false); setNotice("Research history cleared. Pinned findings are unchanged."); }}
+                        <button type="button" onClick={() => {
+                          try {
+                            clearResearchThread();
+                            setConfirmClear(false);
+                            setNotice("Research history cleared. Pinned findings are unchanged.");
+                          } catch {
+                            setNotice("Could not clear research history on this device. Check local storage availability.");
+                          }
+                        }}
                           className={smallButton + " border-rose-400/50 text-rose-200"}>Clear history</button>
                       </div>
                     </div>
