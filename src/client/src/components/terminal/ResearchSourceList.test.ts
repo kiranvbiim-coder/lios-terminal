@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ResearchSourceList, { inspectableSourceHref } from "./ResearchSourceList";
 import { collectCitationSources, type ChatCitationSource } from "@/lib/chatMarkdown";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
@@ -66,7 +69,5 @@ test("the full evidence catalog is capped truthfully and empty list has no chrom
 
 function requireSource(): string {
   // Source-contract assertion complements SSR without a browser or new test runner.
-  const fs = require("node:fs") as typeof import("node:fs");
-  const path = require("node:path") as typeof import("node:path");
-  return fs.readFileSync(path.join(__dirname, "ResearchSourceList.tsx"), "utf8");
+  return fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "ResearchSourceList.tsx"), "utf8");
 }
