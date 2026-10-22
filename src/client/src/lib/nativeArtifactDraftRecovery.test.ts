@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { artifactContentSchema } from "@shared/artifactContracts";
+import { artifactContentSchema, spreadsheetArtifactContentSchema } from "@shared/artifactContracts";
+import { fromUniverWorkbookSnapshot, toUniverWorkbookProjection } from "@shared/univerArtifact";
+import { spreadsheetDraftHasChanges } from "./artifactSpreadsheetDraft";
 import { matchesNativeArtifactDraft, nativeDraftRecoveryKey, shouldClearRevertedNativeDraft } from "./nativeArtifactDraftRecovery";
 
 const context = {
@@ -39,4 +41,34 @@ test("only the editor that actually reverted unsaved content may clear its encry
     "no destructive cleanup before native recovery has been read");
   assert.equal(shouldClearRevertedNativeDraft(true, false, true, true), false,
     "an unresolved recovered candidate always requires an explicit user decision");
+});
+
+
+test("advanced Univer worksheet recovery retains formulas, formats, multiple sheets and canonical source fields", () => {
+  const original = spreadsheetArtifactContentSchema.parse({
+    kind: "spreadsheet", rendererPreference: "univer", activeSheetId: "model",
+    sheets: [
+      { id: "model", name: "Model", rowCount: 30, columnCount: 12, cells: {
+        B4: { raw: "123.00", format: "0.00" },
+        C4: { raw: "=B4*(1+0.15)", format: "0.00" },
+      } },
+      { id: "actuals", name: "Actuals", rowCount: 30, columnCount: 12, cells: {
+        B4: { raw: "111.00", format: "0.00" },
+      } },
+    ],
+  });
+  const nativeSnapshot = toUniverWorkbookProjection(original);
+  nativeSnapshot.sheets.model.cellData![3]![1]!.v = 456;
+  nativeSnapshot.sheets.actuals.cellData![3]![1]!.v = 222;
+  const localUnsaved = fromUniverWorkbookSnapshot(nativeSnapshot, original, "actuals");
+  assert.equal(spreadsheetDraftHasChanges(original, localUnsaved), true);
+  assert.equal(localUnsaved.activeSheetId, "actuals");
+  assert.equal(localUnsaved.sheets[0].cells.B4.raw, "456");
+  assert.equal(localUnsaved.sheets[0].cells.C4.raw, "=B4*(1+0.15)");
+  assert.equal(localUnsaved.sheets[0].cells.B4.format, "0.00");
+  assert.equal(localUnsaved.sheets[1].cells.B4.raw, "222");
+  assert.equal(matchesNativeArtifactDraft({ baseVersion: 3, contentHash: context.contentHash, content: localUnsaved },
+    context, "spreadsheet"), true);
+  assert.deepEqual(fromUniverWorkbookSnapshot(toUniverWorkbookProjection(localUnsaved), localUnsaved, "actuals"),
+    localUnsaved, "reopening the protected projection preserves the same unsaved formulas, values and worksheets");
 });
