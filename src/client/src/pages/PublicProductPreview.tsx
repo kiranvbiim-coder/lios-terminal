@@ -332,6 +332,49 @@ function TerminalMockup() {
   );
 }
 
+
+/** Non-executable public preview of the default Chat experience, distinct from the specialist terminal demo. */
+function ConversationMockup() {
+  return (
+    <div
+      className="lios-reference-conversation-demo"
+      aria-label="Example LiOS chat, illustrative only"
+      style={{
+        border: "1px solid #292731",
+        background: "#111115",
+        borderRadius: 14,
+        padding: 20,
+        boxShadow: "0 18px 55px rgba(0,0,0,0.3)",
+        fontFamily: "'Inter', sans-serif",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, borderBottom: "1px solid #292731", paddingBottom: 14 }}>
+        <strong style={{ color: "#ede9e0", fontSize: 14 }}>LiOS · Quick Chat</strong>
+        <span style={{ color: "#d4a017", fontSize: 9, letterSpacing: "0.1em", fontFamily: "'JetBrains Mono', monospace" }}>ILLUSTRATIVE PREVIEW</span>
+      </div>
+      <div style={{ padding: "24px 0 14px", color: "#ede9e0", fontSize: 23, fontWeight: 600, lineHeight: 1.25 }}>Ask about anything. Keep the work.</div>
+      <div style={{ alignSelf: "flex-end", margin: "6px 0 18px 38px", borderRadius: 12, padding: "14px 16px", background: "#25232b", color: "#dfdce0", fontSize: 13, lineHeight: 1.55 }}>
+        Research how clean energy policy affects small businesses. Create a report with evidence gaps.
+      </div>
+      <section aria-label="Example assistant response" style={{ borderLeft: "2px solid #d4a017", padding: "4px 0 4px 15px" }}>
+        <div style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", marginBottom: 8 }}>LIOS · SAMPLE RESPONSE</div>
+        <p style={{ color: "#cec9d0", margin: 0, fontSize: 13, lineHeight: 1.7 }}>
+          I can compare permitted sources, distinguish findings from assumptions and build a professional report. Missing or unavailable evidence stays explicit.
+        </p>
+        <div style={{ marginTop: 16, border: "1px solid #34303a", borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <div>
+            <div style={{ color: "#e6e2e6", fontSize: 12, fontWeight: 600 }}>Research report</div>
+            <div style={{ color: "#aaa3b0", fontSize: 10, marginTop: 4 }}>Artifact preview · source access required</div>
+          </div>
+          <span style={{ color: "#d4a017", fontSize: 11 }}>Preview →</span>
+        </div>
+      </section>
+      <div style={{ color: "#958e9d", border: "1px solid #38333f", borderRadius: 12, padding: "14px 16px", marginTop: 22, fontSize: 13 }}>Message LiOS…</div>
+      <p style={{ color: "#948c99", fontSize: 10, margin: "12px 0 0", lineHeight: 1.5 }}>Static demonstration only. Sign in to access permitted AI, sources and tools.</p>
+    </div>
+  );
+}
+
 function Ticker({ items }: { items: string[] }) {
   return (
     <div
@@ -740,7 +783,7 @@ export default function PublicProductPreview({
                   (e.currentTarget.style.borderColor = "#2e2e3a")
                 }
               >
-                VIEW DEMO
+                VIEW FINANCE DEMO
               </button>
             </div>
 
@@ -786,116 +829,8 @@ export default function PublicProductPreview({
             </div>
           </div>
 
-          <div id="reference-demo" aria-label="Illustrative finance Workbench demo, not live model execution">
-            <p style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", margin: "0 0 12px" }}>SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO</p>
-            <TerminalMockup key={demoRun} />
-
-            {/* DCF artifact mockup */}
-            <div
-              style={{
-                marginTop: 12,
-                background: "#111115",
-                border: "1px solid #1f1f28",
-                padding: "16px 20px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 12,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    color: "#d4a017",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  VALUATION ARTIFACT · MSFT DCF
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9,
-                    color: "#3a3840",
-                  }}
-                >
-                  WACC SENSITIVITY
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(5, 1fr)",
-                  gap: 1,
-                  fontSize: 10,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}
-              >
-                {["", "7.5%", "8.0%", "8.5%", "9.0%"].map((h, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      background: i === 0 ? "transparent" : "#16161c",
-                      color: i === 0 ? "#3a3840" : "#6b6870",
-                      padding: "5px 8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {h}
-                  </div>
-                ))}
-                {[
-                  ["g=2.5%", "$441", "$418", "$397", "$378"],
-                  ["g=3.0%", "$463", "$438", "$414", "$393"],
-                  ["g=3.5%", "$489", "$460", "$434", "$410"],
-                ].map((row, ri) =>
-                  row.map((cell, ci) => (
-                    <div
-                      key={`${ri}-${ci}`}
-                      style={{
-                        background:
-                          ci === 0
-                            ? "#0d0d10"
-                            : ri === 1 && ci === 2
-                              ? "#1a1507"
-                              : "#111115",
-                        color:
-                          ci === 0
-                            ? "#6b6870"
-                            : ri === 1 && ci === 2
-                              ? "#d4a017"
-                              : "#ede9e0",
-                        padding: "5px 8px",
-                        textAlign: "center",
-                        border:
-                          ri === 1 && ci === 2
-                            ? "1px solid #d4a017"
-                            : "1px solid #1f1f28",
-                        fontWeight: ri === 1 && ci === 2 ? 600 : 400,
-                      }}
-                    >
-                      {cell}
-                    </div>
-                  )),
-                )}
-              </div>
-              <div
-                style={{
-                  marginTop: 8,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9,
-                  color: "#3a3840",
-                }}
-              >
-                ↳ DEMO DATA · Illustrative DCF · Not a live calculation or
-                source receipt
-              </div>
-            </div>
+          <div aria-label="Illustrative LiOS chat preview; no live AI, tools or research">
+            <ConversationMockup />
           </div>
         </div>
       </section>
@@ -1229,6 +1164,118 @@ export default function PublicProductPreview({
               </div>
             ))}
           </div>
+          <div id="reference-demo" aria-label="Illustrative specialist finance Workbench demo, not live execution" style={{ maxWidth: 900, margin: "40px auto 0" }}>
+            <p style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", margin: "0 0 12px" }}>SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO</p>
+            <TerminalMockup key={demoRun} />
+
+            {/* DCF artifact mockup */}
+            <div
+              style={{
+                marginTop: 12,
+                background: "#111115",
+                border: "1px solid #1f1f28",
+                padding: "16px 20px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    color: "#d4a017",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  VALUATION ARTIFACT · MSFT DCF
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    color: "#3a3840",
+                  }}
+                >
+                  WACC SENSITIVITY
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(5, 1fr)",
+                  gap: 1,
+                  fontSize: 10,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                {["", "7.5%", "8.0%", "8.5%", "9.0%"].map((h, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: i === 0 ? "transparent" : "#16161c",
+                      color: i === 0 ? "#3a3840" : "#6b6870",
+                      padding: "5px 8px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {h}
+                  </div>
+                ))}
+                {[
+                  ["g=2.5%", "$441", "$418", "$397", "$378"],
+                  ["g=3.0%", "$463", "$438", "$414", "$393"],
+                  ["g=3.5%", "$489", "$460", "$434", "$410"],
+                ].map((row, ri) =>
+                  row.map((cell, ci) => (
+                    <div
+                      key={`${ri}-${ci}`}
+                      style={{
+                        background:
+                          ci === 0
+                            ? "#0d0d10"
+                            : ri === 1 && ci === 2
+                              ? "#1a1507"
+                              : "#111115",
+                        color:
+                          ci === 0
+                            ? "#6b6870"
+                            : ri === 1 && ci === 2
+                              ? "#d4a017"
+                              : "#ede9e0",
+                        padding: "5px 8px",
+                        textAlign: "center",
+                        border:
+                          ri === 1 && ci === 2
+                            ? "1px solid #d4a017"
+                            : "1px solid #1f1f28",
+                        fontWeight: ri === 1 && ci === 2 ? 600 : 400,
+                      }}
+                    >
+                      {cell}
+                    </div>
+                  )),
+                )}
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9,
+                  color: "#3a3840",
+                }}
+              >
+                ↳ DEMO DATA · Illustrative DCF · Not a live calculation or
+                source receipt
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -1735,7 +1782,7 @@ export default function PublicProductPreview({
                 e.currentTarget.style.borderColor = "#2e2e3a";
               }}
             >
-              VIEW DEMO
+              VIEW FINANCE DEMO
             </button>
           </div>
         </div>
