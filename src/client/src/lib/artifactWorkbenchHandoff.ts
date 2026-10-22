@@ -20,7 +20,8 @@ export interface ArtifactWorkbenchHandoff {
  */
 export const ARTIFACT_WORKBENCH_RECOVERY_KEY = "lios.artifact-workbench-return.v1";
 const RECOVERY_MAX_CHARS = 1_000_000;
-const RECOVERY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
+// Return geometry remains valid while the same owned Artifact pane remains in the saved tab.
+// Do not expire navigation after a week: persistent work can resume much later.
 const RECOVERY_PANES = ["primary", "secondary", "tertiary", "quaternary"] as const;
 
 function validRecoveryContext(value: unknown): value is ArtifactWorkbenchContext {
@@ -82,8 +83,7 @@ export function loadArtifactWorkbenchRecovery(
     // A different account keeps its own normal tab state; this hint is ignored.
     if (record.owner !== ownerEmail.trim().toLowerCase()) return null;
     if (record.schemaVersion !== 1 || typeof record.capturedAt !== "number"
-      || !Number.isFinite(record.capturedAt) || record.capturedAt > Date.now()
-      || Date.now() - record.capturedAt > RECOVERY_MAX_AGE_MS) {
+      || !Number.isFinite(record.capturedAt) || record.capturedAt > Date.now()) {
       clearArtifactWorkbenchRecovery(); return null;
     }
     const value = record.handoff;
