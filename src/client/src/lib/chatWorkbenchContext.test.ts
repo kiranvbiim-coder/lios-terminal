@@ -89,3 +89,17 @@ test("the latest unanswered turn in a Project never falls back to its previous a
     ...prior.messages, { role: "user", metadata: {} }, { role: "assistant", metadata: { workingContext: null } },
   ] }), null, "unresolved recent assistant responses must not silently fall back");
 });
+
+test("Temporary Chat uses memory-only turn order, not persisted Project or prior answer context", () => {
+  const base = { mode: "temporary" as const, projectId: 15, chatId: 29,
+    messages: [{ role: "assistant", metadata: {} }], temporaryContext: snapshot("temporary") };
+  assert.equal(resolveScopedWorkbenchSymbol(base), "MSFT");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, messages: [
+    ...base.messages, { role: "user", metadata: {} },
+  ] }), null, "an unanswered Temporary user question cannot borrow the preceding temporary ticker");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, messages: [
+    ...base.messages, { role: "user", metadata: {} }, { role: "assistant", metadata: {} },
+  ] }), "MSFT", "a new Temporary assistant answer may use its current in-memory scoped context");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, temporaryContext: snapshot("project") }), null,
+    "Temporary navigation never silently accepts a persisted Project snapshot");
+});
