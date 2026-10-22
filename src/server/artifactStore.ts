@@ -35,7 +35,7 @@ import {
   type ArtifactReferenceType,
   type SpreadsheetCellDiff,
 } from "@shared/artifactContracts";
-import type { ConversationArtifactDraft } from "@shared/conversationRuntime";
+import { conversationAttachmentRefSchema, type ConversationArtifactDraft } from "@shared/conversationRuntime";
 import { trustManifestSchema, type TrustManifest } from "@shared/trustContracts";
 import { projectWorkspaceSessionStateSchema } from "@shared/projectContracts";
 import { defaultArtifactAdapterId } from "@shared/artifactAdapterRegistry";
@@ -111,6 +111,36 @@ export function assertArtifactContentSafe(value: unknown, path = "content", dept
 export function assertArtifactRefsSafe(refs: readonly string[], label = "sourceRefs"): void {
   for (const ref of refs) {
     if (SECRET_REF.test(ref)) throw new Error(`${label} must not contain credential-bearing references.`);
+  }
+}
+
+/**
+ * A provenance string is not source authority. A Quick Chat Artifact cannot claim
+ * files belonging to another Chat (even another Chat of the same user). This is
+ * checked on BOTH initial retention and subsequent edits, not merely in the UI.
+ * All other source kinds retain their existing separate governance/entitlements.
+ */
+async function assertQuickChatAttachmentProvenance(
+  ctx: TenantContext,
+  chatId: number | null,
+  projectId: number | null,
+  refs: readonly string[],
+): Promise<void> {
+  if (projectId !== null || chatId === null) return;
+  const attachmentRefs = [...new Set(refs.filter(ref => /^(?:quick|project)-attachment:/i.test(ref)))];
+  if (!attachmentRefs.length) return;
+  if (attachmentRefs.some(ref => !/^quick-attachment:[0-9a-f-]{36}$/i.test(ref))) {
+    throw new Error("File provenance not owned by the Artifact Chat.");
+  }
+  const { getProjectChat } = await import("./projectChatStore");
+  const chat = await getProjectChat(ctx, chatId);
+  if (chat.scope !== "quick" || chat.projectId !== null) throw new Error("File provenance not owned by the Artifact Chat.");
+  const manifest = conversationAttachmentRefSchema.array().safeParse(chat.attachmentManifest);
+  if (!manifest.success) throw new Error("File provenance not owned by the Artifact Chat.");
+  for (const ref of attachmentRefs) {
+    if (!manifest.data.some(item => item.sourceRef === ref && ref === "quick-attachment:" + item.id)) {
+      throw new Error("File provenance not owned by the Artifact Chat.");
+    }
   }
 }
 
@@ -668,6 +698,9 @@ async function createArtifactRecord(
   const trustManifest = input.trustManifest == null ? null : trustManifestSchema.parse(input.trustManifest);
   if (trustManifest) assertArtifactTrustSafe(trustManifest);
   const dependencyRefs = resolveArtifactDependencyRefs(input.dependencyRefs, trustManifest);
+  await assertQuickChatAttachmentProvenance(ctx, owningChatId, input.projectId, [
+    ...(input.sourceRefs ?? []), ...dependencyRefs,
+  ]);
   const refreshSpec = input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
   if (refreshSpec) assertArtifactRefreshSpecSafe(refreshSpec);
   const id = retention?.artifactId ?? `artifact:${crypto.randomUUID()}`;
@@ -1062,6 +1095,9 @@ export async function createArtifactVersion(
     input.dependencyRefs === undefined ? (base.dependencyRefs ?? []) : input.dependencyRefs,
     trustManifest,
   );
+  await assertQuickChatAttachmentProvenance(ctx, artifact.owningChatId, artifact.projectId, [
+    ...(input.sourceRefs ?? base.sourceRefs), ...dependencyRefs,
+  ]);
   const refreshSpec = input.refreshSpec === undefined
     ? (base.refreshSpec ? artifactRefreshSpecSchema.parse(base.refreshSpec) : null)
     : input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
