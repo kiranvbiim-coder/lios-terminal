@@ -57,6 +57,16 @@ test("existing terminal work is a Chat-owned immutable Artifact, not a shadow se
   await assert.rejects(updateTerminalArtifact(tenant, chat.id, { ...update, baseVersion: 2 }, new AbortController().signal), /hash/);
   await assert.rejects(updateTerminalArtifact(tenant, otherChat.id, { ...update, baseVersion: 2, baseHash: current.contentHash }, new AbortController().signal), /owned/);
   await assert.rejects(getArtifact(foreign, retained.artifact.id));
+  const ownedPortfolioScreen = await openTerminalArtifact(tenant, chat.id, {
+    requestId: crypto.randomUUID(), view: "portfolio", title: "Owned portfolio screen",
+    symbol: null, state: initialTerminalScreenState(null),
+  });
+  await assert.rejects(updateTerminalArtifact(tenant, chat.id, {
+    artifactId: ownedPortfolioScreen.artifact.id,
+    baseVersion: ownedPortfolioScreen.version.version,
+    baseHash: ownedPortfolioScreen.version.contentHash,
+    operations: [{ type: "portfolio.select", portfolioId: 1 }],
+  }, new AbortController().signal), /authorized organization context/);
   await assert.rejects(createArtifactProposal(tenant, { artifactId: retained.artifact.id, baseVersion: 2, type: "artifact_patch", summary: "Attempt to bypass typed source control", patch: { state: { terminal: { ...initialTerminalScreenState("IBM"), sourceScope: "web" } } }, actorType: "conversation" }), /typed operations/);
   await assert.rejects(createArtifactVersion(tenant, { artifactId: retained.artifact.id, baseVersion: 2, content: { ...current.content, symbol: "AAPL" } }), /subject|invalid/i);
   await closeDb(); await initDb();
