@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Shield, KeyRound, AlertTriangle, Lock, UserPlus, Building2, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,7 @@ function licenseBlockedMessage(reason: string | undefined): string | null {
 }
 
 export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginProps) {
+  const formId = useId();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [clientMode, setClientMode] = useState<"signin" | "register">(initialMode);
@@ -312,7 +313,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
           <CardTitle className="mt-7 font-display text-2xl font-semibold tracking-[-0.035em] text-white">
             {clientMode === "register" ? "Create your workspace" : "Welcome back"}
           </CardTitle>
-          <CardDescription className="mx-auto mt-2 max-w-xs font-ui text-[11px] normal-case leading-5 tracking-normal text-muted-foreground">
+          <CardDescription className="mx-auto mt-2 max-w-xs font-ui text-sm normal-case leading-5 tracking-normal text-muted-foreground">
             {clientMode === "register"
               ? "Create your LiOS account. Your plan and executable capabilities are resolved securely after sign-in."
               : "Sign in and continue directly where your work left off."}
@@ -325,45 +326,51 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
               {clientMode === "register" && (
                 <>
                   <div className="space-y-2">
-                    <label className="font-terminal text-[8px] text-muted-foreground uppercase tracking-[0.16em] block">Your Name</label>
+                    <label htmlFor={`${formId}-name`} className="font-ui text-xs font-medium text-muted-foreground block">Your Name</label>
                     <div className="relative">
                       <Input
                         type="text"
+                        id={`${formId}-name`}
+                        autoComplete="name"
                         placeholder="Your full name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-[#0d0d0d] border-border text-xs focus-visible:ring-1 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-9"
+                        className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
                       />
-                      <User className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+                      <User className="w-3.5 h-3.5 absolute left-3 top-[15px] text-muted-foreground" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="font-terminal text-[8px] text-muted-foreground uppercase tracking-[0.16em] block">Organization <span className="normal-case text-muted-foreground/60">(optional)</span></label>
+                    <label htmlFor={`${formId}-organization`} className="font-ui text-xs font-medium text-muted-foreground block">Organization <span className="normal-case text-muted-foreground/60">(optional)</span></label>
                     <div className="relative">
                       <Input
                         type="text"
+                        id={`${formId}-organization`}
+                        autoComplete="organization"
                         placeholder="Company or workspace name"
                         value={organizationName}
                         onChange={(e) => setOrganizationName(e.target.value)}
-                        className="w-full bg-[#0d0d0d] border-border text-xs focus-visible:ring-1 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-9"
+                        className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
                       />
-                      <Building2 className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+                      <Building2 className="w-3.5 h-3.5 absolute left-3 top-[15px] text-muted-foreground" />
                     </div>
                   </div>
                 </>
               )}
 
               <div className="space-y-2">
-                <label className="font-terminal text-[8px] text-muted-foreground uppercase tracking-[0.16em] block">
+                <label htmlFor={`${formId}-email`} className="font-ui text-xs font-medium text-muted-foreground block">
                   Email
                 </label>
                 <div className="relative">
                   <Input
                     type="email"
-                    placeholder="name@limuria.com"
+                    id={`${formId}-email`}
+                        autoComplete="email"
+                        placeholder="name@limuria.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#0d0d0d] border-border text-xs focus-visible:ring-1 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-9"
+                    className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         if (clientMode === "register") void handleRegister();
@@ -371,21 +378,23 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                       }
                     }}
                   />
-                  <Shield className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+                  <Shield className="w-3.5 h-3.5 absolute left-3 top-[15px] text-muted-foreground" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="font-terminal text-[8px] text-muted-foreground uppercase tracking-[0.16em] block">
+                <label htmlFor={`${formId}-password`} className="font-ui text-xs font-medium text-muted-foreground block">
                   Password
                 </label>
                 <div className="relative">
                   <Input
                     type="password"
                     placeholder="••••••••"
+                    id={`${formId}-password`}
+                    autoComplete={clientMode === "register" ? "new-password" : "current-password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[#0d0d0d] border-border text-xs focus-visible:ring-1 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-9"
+                    className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         if (clientMode === "register") void handleRegister();
@@ -393,31 +402,33 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                       }
                     }}
                   />
-                  <Lock className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+                  <Lock className="w-3.5 h-3.5 absolute left-3 top-[15px] text-muted-foreground" />
                 </div>
               </div>
 
               {clientMode === "register" && (
                 <div className="space-y-2">
-                  <label className="font-terminal text-[8px] text-muted-foreground uppercase tracking-[0.16em] block">Confirm Password</label>
+                  <label htmlFor={`${formId}-confirm`} className="font-ui text-xs font-medium text-muted-foreground block">Confirm Password</label>
                   <div className="relative">
                     <Input
                       type="password"
                       placeholder="••••••••"
+                      id={`${formId}-confirm`}
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-[#0d0d0d] border-border text-xs focus-visible:ring-1 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-9"
+                      className="w-full bg-[#0d0d0d] border-border text-sm focus-visible:ring-2 focus-visible:ring-[hsl(38,95%,50%)] font-ui placeholder-muted-foreground text-foreground rounded-md pl-9 h-11"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") void handleRegister();
                       }}
                     />
-                    <Lock className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+                    <Lock className="w-3.5 h-3.5 absolute left-3 top-[15px] text-muted-foreground" />
                   </div>
                 </div>
               )}
 
               {errorMsg && (
-                <div className="p-3 bg-red-950/20 border border-red-900/60 text-red-500 text-[10px] uppercase font-bold flex gap-2 items-start leading-relaxed">
+                <div id={`${formId}-error`} role="alert" className="p-3 bg-red-950/20 border border-red-900/60 text-red-300 text-sm font-ui flex gap-2 items-start leading-relaxed">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                   <div>
                     <span className="block font-ui font-semibold normal-case tracking-normal">Sign-in couldn’t continue</span>
@@ -428,7 +439,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
 
               <button
                 onClick={clientMode === "register" ? handleRegister : handleLogin}
-                className="w-full flex items-center justify-center gap-1.5 h-9 bg-primary hover:bg-primary/90 text-black text-[10px] font-bold uppercase tracking-wider transition-colors duration-150"
+                className="w-full flex min-h-11 items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 text-black text-sm font-semibold rounded-md transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 {clientMode === "register" ? <UserPlus className="w-3.5 h-3.5" /> : <KeyRound className="w-3.5 h-3.5" />}
                 {clientMode === "register" ? "Start 7-Day Pro Trial" : "Sign In"}
@@ -438,7 +449,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                 <button
                   type="button"
                   onClick={() => void handleEnterpriseSso()}
-                  className="w-full border border-[hsl(38,95%,50%)/35%] h-9 text-[9px] uppercase tracking-wider text-[hsl(38,95%,60%)] hover:text-[hsl(38,95%,70%)] hover:border-[hsl(38,95%,50%)/65%] transition-colors flex items-center justify-center gap-2"
+                  className="w-full min-h-11 rounded-md border border-[hsl(38,95%,50%)/35%] px-2 text-sm font-medium text-[hsl(38,95%,60%)] hover:text-[hsl(38,95%,70%)] hover:border-[hsl(38,95%,50%)/65%] transition-colors flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <Building2 className="w-3.5 h-3.5" />
                   Sign in with organization SSO
@@ -451,12 +462,12 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                   setClientMode((mode) => mode === "signin" ? "register" : "signin");
                   setErrorMsg("");
                 }}
-                className="w-full border border-border h-9 text-[9px] uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/40%] transition-colors"
+                className="w-full min-h-11 rounded-md border border-border px-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/40%] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 {clientMode === "signin" ? "New to LiOS? Start your 7-day Pro trial" : "Already have LiOS? Sign in"}
               </button>
 
-              <div className="text-[8.5px] text-muted-foreground text-center space-y-1 mt-4">
+              <div className="text-xs leading-5 text-muted-foreground text-center space-y-1 mt-4">
                 <p>• Your 7-day Pro trial is controlled by the secure LiOS service, not your device clock.</p>
                 <p>• Your connected data and BYOAI credentials remain on this desktop.</p>
               </div>
