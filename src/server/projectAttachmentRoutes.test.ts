@@ -19,6 +19,7 @@ const { createProjectChat, getProjectChat, listProjectChatMessages } = await imp
 const { listProjectResources, setProjectResourceContextMode } = await import("./projectResourceStore");
 const { registerProjectRoutes } = await import("./projectRoutes");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
+const { registerArtifactRoutes } = await import("./artifactRoutes");
 
 test("Project attachment HTTP routes enforce auth, file-only multipart, tenant scope, and safe downloads", { timeout: 60_000 }, async (t) => {
   await initDb();
@@ -60,6 +61,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   });
   registerProjectRoutes(app);
   registerProjectConversationRoutes(app);
+  registerArtifactRoutes(app);
   server = createServer(app);
   await new Promise<void>((resolve, reject) => {
     server!.once("error", reject);
@@ -303,6 +305,103 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1,
     "referencing the same saved file must not fabricate a second upload or resource");
 
+  // One canonical signed-in HTTP journey: upload once → use on two Chat turns →
+  // retain an editable P4 report linked to that exact source → revise → DB reopen → retrieve.
+  // This explicitly exercises the same endpoints used by the Chat Artifact sidecar/Workbench.
+  const reportDraft = {
+    schemaVersion: "1",
+    artifactId: crypto.randomUUID(),
+    artifactType: "report",
+    title: "Quick Chat file research report",
+    projectId: null,
+    sourceRefs: [quickRef.sourceRef],
+    executionReceiptIds: [],
+    persistence: "chat_candidate",
+    data: { kind: "report", sections: [], blocks: [{
+      id: "summary", type: "paragraph", text: "Evidence from the explicitly attached Quick Chat file.",
+      attrs: {},
+    }] },
+  };
+  const artifactSave = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft, requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef] }),
+  });
+  const artifactSaveText = await artifactSave.text();
+  assert.equal(artifactSave.status, 200, artifactSaveText);
+  const retainedReport = JSON.parse(artifactSaveText) as {
+    artifact: { id: string; projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { version: number; sourceRefs: string[]; dependencyRefs: string[] };
+  };
+  assert.equal(retainedReport.artifact.projectId, null, "saving a Quick Chat Artifact must not create a Project");
+  assert.equal(retainedReport.artifact.owningChatId, quick.id);
+  assert.equal(retainedReport.version.version, 1);
+  assert.deepEqual(retainedReport.version.sourceRefs, [quickRef.sourceRef]);
+  assert.ok(retainedReport.version.dependencyRefs.includes(quickRef.sourceRef));
+
+  const artifactPath = `http://127.0.0.1:${address.port}/api/artifacts/${encodeURIComponent(retainedReport.artifact.id)}`;
+  assert.equal((await fetch(artifactPath + "?version=1", { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  const forgedArtifact = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(other.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft }),
+  });
+  assert.equal(forgedArtifact.status, 404, await forgedArtifact.text());
+
+  const revisionDraft = {
+    ...reportDraft,
+    artifactId: crypto.randomUUID(),
+    data: { kind: "report", sections: [], blocks: [{
+      id: "summary", type: "paragraph",
+      text: "Revised report, same original Quick Chat file and immutable source provenance.",
+      attrs: {},
+    }] },
+  };
+  const revision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: revisionDraft, requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef] }),
+  });
+  const revisionBody = await revision.text();
+  assert.equal(revision.status, 200, revisionBody);
+  const parsedRevision = JSON.parse(revisionBody) as {
+    artifact: { id: string; projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { version: number; sourceRefs: string[] };
+  };
+  assert.equal(parsedRevision.artifact.id, retainedReport.artifact.id);
+  assert.equal(parsedRevision.artifact.headVersion, 2);
+  assert.equal(parsedRevision.artifact.owningChatId, quick.id);
+  assert.deepEqual(parsedRevision.version.sourceRefs, [quickRef.sourceRef]);
+
+  // A real embedded-DB close/reopen is stronger than a same-process state assertion.
+  // The authenticated download uses the persisted blob; the historical report stays pinned.
+  await closeDb();
+  await initDb();
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1);
+  const originalAfterReopen = await fetch(artifactPath + "?version=1", {
+    headers: { "x-test-user-id": String(owner.id) },
+  });
+  assert.equal(originalAfterReopen.status, 200, await originalAfterReopen.text());
+  const revisedAfterReopen = await fetch(artifactPath + "?version=2", {
+    headers: { "x-test-user-id": String(owner.id) },
+  });
+  assert.equal(revisedAfterReopen.status, 200);
+  const revisedArtifactResponse = await revisedAfterReopen.json() as {
+    artifact: { id: string; headVersion: number };
+    version: { version: number; sourceRefs: string[] };
+  };
+  assert.equal(revisedArtifactResponse.artifact.id, retainedReport.artifact.id);
+  assert.equal(revisedArtifactResponse.artifact.headVersion, 2);
+  assert.equal(revisedArtifactResponse.version.version, 2);
+  assert.deepEqual(revisedArtifactResponse.version.sourceRefs, [quickRef.sourceRef]);
+  const fileAfterReopen = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(fileAfterReopen.status, 200);
+  assert.equal(await fileAfterReopen.text(), privatePayload);
+  assert.equal((await listProjectChatMessages(ownerContext, quick.id))
+    .filter((msg) => msg.role === "user" && Array.isArray(msg.metadata.attachments)).length, 2,
+    "saved Chat history and file references must survive reopening together");
+  
   // The runtime must reject another Chat's reference before saving a user message.
   const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
   const crossQuickRun = await fetch(conversationUrlFor(address.port, otherQuick.id), {
