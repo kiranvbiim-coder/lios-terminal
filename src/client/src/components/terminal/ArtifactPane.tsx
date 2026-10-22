@@ -166,11 +166,11 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
     {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={saving || pending || conflict} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
   </div>;
 }
-function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   if (props.content.rendererPreference === "univer") return <Suspense fallback={<p role="status">Loading spreadsheet editor…</p>}><UniverSpreadsheetEditor {...props} /></Suspense>;
   return <BuiltinSpreadsheetEditor {...props}/>;
 }
-function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey,recoveryContext}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   const [grid, setGrid] = useState(() => artifactSheetToGrid(content));
   const [draftContent, setDraftContent] = useState(content);
   const [tick, setTick] = useState(0);
@@ -181,6 +181,15 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   const draft = useRef({ content: draftContent, grid });
   draft.current = { content: draftContent, grid };
   const [conflict, setConflict] = useState(false);
+  const checkpoint = gridToArtifactSheet(draftContent, grid);
+  const isDirty = spreadsheetDraftHasChanges(baseline.current.content, checkpoint);
+  const recovery = useNativeArtifactDraftRecovery(recoveryContext ?? null, checkpoint, isDirty, tick, saved => {
+    setDraftContent(saved);
+    setGrid(artifactSheetToGrid(saved));
+    setConflict(false);
+    onDirtyChange?.(true);
+    setTick(current => current + 1);
+  });
   useEffect(() => {
     const local = gridToArtifactSheet(draft.current.content, draft.current.grid);
     const dirty = spreadsheetDraftHasChanges(baseline.current.content, local);
@@ -213,8 +222,14 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   const selectedInBounds = selectedCoordinates && selectedCoordinates.row < sheet.rowCount && selectedCoordinates.col < sheet.columnCount;
   const selectedCell = { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) };
   return <div>
+    {recovery.candidate && <div role="alert" data-testid="protected-spreadsheet-recovery" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-100">
+      {recovery.matching ? "Protected unsaved worksheet edits were found. Review or discard them before continuing." : "Encrypted worksheet edits belong to another saved revision and cannot be applied here."}
+      <div className="mt-2 flex gap-2">{recovery.matching && <button type="button" onClick={recovery.restore} className="rounded border px-2 py-1">Recover worksheet edits</button>}
+        <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard recovery</button></div>
+    </div>}
+    {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
     {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => { baseline.current = { content, revisionKey }; setDraftContent(content); setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1); }} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
-    <fieldset disabled={disabled || conflict} className="min-w-0">
+    <fieldset disabled={disabled || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <span className="font-terminal text-[12px] text-muted-foreground">SPREADSHEET · BASIC EDITOR</span>
       <label className="text-[13px] text-muted-foreground">Worksheet <select aria-label="Spreadsheet worksheet" value={sheet.id} onChange={e => selectSheet(e.target.value)} className="ml-1 rounded border border-border/50 bg-[#090909] px-2 py-1">{draftContent.sheets.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
