@@ -143,6 +143,8 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard recovery</button></div>
     </div>}
     {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
+    {advancedDirty && <p role="status" className="mb-2 text-sm text-amber-200">Advanced JSON editor changes are not included in local crash checkpoints. Save or reset them before leaving.</p>}
+    {dirty && recovery.status === "disabled" && <p role="status" className="mb-2 text-sm text-amber-200">Protected crash recovery is unavailable here. Save your revision to protect these edits.</p>}
     {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={()=>{setContent(incomingContent);if(incomingContent.kind==="research"){setQuestion(incomingContent.question);setSourceMode(incomingContent.sourcePolicy.mode);setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));}setBaseline(JSON.stringify(incomingContent));setBaseRevision(revision);saveRef.current=onSave;pendingContent.current=null;setConflict(false);setPending(false);setNotice(null);setRichError(null);setAdvancedDirty(false);}}>Discard local changes and reload revision</button></div>}
     <fieldset disabled={advancedDirty || recovery.blocked} className="min-w-0">
     {content.kind==="research"&&<div className="mb-3 space-y-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.015] p-3">
@@ -225,6 +227,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
         <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard recovery</button></div>
     </div>}
     {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
+    {isDirty && recovery.status === "disabled" && <p role="status" className="mb-2 text-sm text-amber-200">Protected crash recovery is unavailable here. Save this worksheet to protect your changes.</p>}
     {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => { baseline.current = { content, revisionKey }; setDraftContent(content); setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1); }} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
     <fieldset disabled={disabled || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
