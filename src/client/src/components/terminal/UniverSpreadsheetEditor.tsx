@@ -119,14 +119,18 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
       };
       const inspectDraft = () => {
         inspectSelection();
-        let nextDirty: boolean;
+        let next: SpreadsheetContent;
         try {
-          const next = fromUniverWorkbookSnapshot(current.save(), content, current.getActiveSheet().getSheetId());
-          nextDirty = spreadsheetDraftHasChanges(content, next);
+          next = fromUniverWorkbookSnapshot(current.save(), content, current.getActiveSheet().getSheetId());
         } catch (cause) {
-          nextDirty = true; // An unserializable draft must not pass the saved-head maintenance guard.
+          // The live workbook remains dirty; never persist a stale or partial
+          // projection when serialization failed.
+          dirty.current = true;
+          dirtyCallback.current?.(true);
           setError(cause instanceof Error ? cause.message : "The current spreadsheet draft could not be inspected.");
+          return;
         }
+        const nextDirty = spreadsheetDraftHasChanges(content, next);
         if (nextDirty !== dirty.current) {
           dirty.current = nextDirty;
           dirtyCallback.current?.(nextDirty);
