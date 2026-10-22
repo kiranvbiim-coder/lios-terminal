@@ -118,8 +118,9 @@ export function assertArtifactRefsSafe(refs: readonly string[], label = "sourceR
  * An authored source string is not evidence of file custody. In a Quick Chat,
  * only that exact Chat's saved manifest can back a quick-attachment reference.
  * Following explicit promotion, the Project owns the Artifact but the original
- * Chat still holds its file manifest; admit only files from Chats actually in
- * that same owned Project. Never accept a file from another Quick Chat/Project.
+ * Chat still holds its file manifest. New Project-scoped Chat drafts must be
+ * bound to THAT exact Chat; revisions without a Chat caller can preserve only
+ * previously validated immutable refs from their own base version.
  * This is provenance validation, NOT permission to transmit bytes to an AI.
  */
 async function assertQuickChatAttachmentProvenance(
@@ -127,6 +128,7 @@ async function assertQuickChatAttachmentProvenance(
   chatId: number | null,
   projectId: number | null,
   refs: readonly string[],
+  inheritedRefs: readonly string[] = [],
 ): Promise<void> {
   const attachmentRefs = [...new Set(refs.filter(ref => /^(?:quick|project)-attachment:/i.test(ref)))];
   if (!attachmentRefs.length) return;
@@ -143,9 +145,18 @@ async function assertQuickChatAttachmentProvenance(
     const chat = await getProjectChat(ctx, chatId!);
     if (chat.scope !== "quick" || chat.projectId !== null) deny();
     manifests = [chat.attachmentManifest];
+  } else if (chatId !== null) {
+    // An authenticated Project Chat route identifies the ONLY Chat allowed to
+    // contribute a historical Quick file, including after explicit promotion.
+    const { getProjectChat } = await import("./projectChatStore");
+    const chat = await getProjectChat(ctx, chatId);
+    if (chat.scope !== "project" || chat.projectId !== projectId) deny();
+    manifests = [chat.attachmentManifest];
   } else {
-    // Promotion transfers Artifact lifecycle ownership, not the original file
-    // blobs. A same-owner file still needs a current, same-Project Chat manifest.
+    // A Project-owned Artifact has no owningChatId after promotion. Editing
+    // may retain its already-validated Quick file refs, but a plain source
+    // string cannot add another Chat's file, even in the same Project.
+    if (quickRefs.some(ref => !inheritedRefs.includes(ref))) deny();
     const rows = await getDb().select({ attachmentManifest: projectChats.attachmentManifest })
       .from(projectChats).where(and(
         eq(projectChats.ownerUserId, ctx.userId),
@@ -717,7 +728,7 @@ async function createArtifactRecord(
   const trustManifest = input.trustManifest == null ? null : trustManifestSchema.parse(input.trustManifest);
   if (trustManifest) assertArtifactTrustSafe(trustManifest);
   const dependencyRefs = resolveArtifactDependencyRefs(input.dependencyRefs, trustManifest);
-  await assertQuickChatAttachmentProvenance(ctx, owningChatId, input.projectId, [
+  await assertQuickChatAttachmentProvenance(ctx, input.owningChatId ?? null, input.projectId, [
     ...(input.sourceRefs ?? []), ...dependencyRefs,
   ]);
   const refreshSpec = input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
@@ -1116,7 +1127,7 @@ export async function createArtifactVersion(
   );
   await assertQuickChatAttachmentProvenance(ctx, artifact.owningChatId, artifact.projectId, [
     ...(input.sourceRefs ?? base.sourceRefs), ...dependencyRefs,
-  ]);
+  ], [...base.sourceRefs, ...(base.dependencyRefs ?? [])]);
   const refreshSpec = input.refreshSpec === undefined
     ? (base.refreshSpec ? artifactRefreshSpecSchema.parse(base.refreshSpec) : null)
     : input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
