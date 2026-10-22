@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { queryClient } from "@/lib/queryClient";
 import { Activity, Compass, FolderKanban, Globe2, Keyboard, Library, LayoutDashboard, Radio, ShieldCheck, Sparkles, X } from "lucide-react";
 import {
   EXPERIENCE_SHELL_SURFACES,
@@ -114,7 +115,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   useEffect(() => {
     window.localStorage.setItem(AI_STATE_KEY, aiState);
     if (isClient || !aiStateHydrated.current) return;
-    void fetch("/api/wave-c/ai/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: aiState, mode: aiMode }) }).catch(() => undefined);
+    void fetch("/api/wave-c/ai/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: aiState, mode: aiMode }) })
+      // The composer's multi-step-agent control reads these queries; without invalidation it keeps guidance from before the change.
+      .then(() => Promise.all([queryClient.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] }), queryClient.invalidateQueries({ queryKey: ["/api/setup/status"] })]))
+      .catch(() => undefined);
   }, [aiMode, aiState]);
   useEffect(() => { window.localStorage.setItem(MARKET_PACK_KEY, pack.id); }, [pack.id]);
   useEffect(() => { window.localStorage.setItem(EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY, JSON.stringify(selectedFieldIds)); }, [selectedFieldIds]);
