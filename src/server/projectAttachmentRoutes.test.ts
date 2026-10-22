@@ -486,6 +486,26 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   const promotedFile = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
   assert.equal(promotedFile.status, 200, "the original Quick file download must survive promotion");
   assert.equal(await promotedFile.text(), privatePayload);
+  const sameProjectDifferentChatClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(sameProjectDifferentChatClaim.status, 404, await sameProjectDifferentChatClaim.text(),
+    "another Chat in the SAME Project has no authority to claim the promoted Chat's Quick file");
+  const ownPromotedChatDraft = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(ownPromotedChatDraft.status, 200, await ownPromotedChatDraft.text(),
+    "the exact promoted Chat can still create a new Project-owned Artifact from its own original file");
   const promotedChatFollowUp = await fetch(conversationUrlFor(address.port, quick.id), {
     method: "POST",
     headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
@@ -514,6 +534,35 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(promotedV3.status, 200);
   assert.deepEqual(((await promotedV3.json()) as { version: { sourceRefs: string[] } }).version.sourceRefs, [quickRef.sourceRef]);
   assert.equal((await fetch(artifactPath + "?version=1", { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  // A second Quick Chat, even after moving into the SAME Project, does not
+  // inherit the historical source authority of the first Artifact.
+  const sameProjectQuick = await createProjectChat(ownerContext, { scope: "quick" });
+  const sameProjectUpload = await fetch(`http://127.0.0.1:${address.port}/api/quick-chats/${sameProjectQuick.id}/attachments`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id) },
+    body: attachmentForm("project-sibling-secret.txt", "Separate source, never attached to the original Artifact."),
+  });
+  const sameProjectUploadBody = await sameProjectUpload.text();
+  assert.equal(sameProjectUpload.status, 201, sameProjectUploadBody);
+  const sameProjectRef = conversationAttachmentRefSchema.parse(
+    (JSON.parse(sameProjectUploadBody) as { attachment: unknown }).attachment);
+  const sameProjectPromotion = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${sameProjectQuick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: project.id }),
+  });
+  assert.equal(sameProjectPromotion.status, 200, await sameProjectPromotion.text());
+  const sameProjectRevisionSpoof = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID(),
+        sourceRefs: [sameProjectRef.sourceRef] },
+      dependencyRefs: [sameProjectRef.sourceRef],
+    }),
+  });
+  assert.equal(sameProjectRevisionSpoof.status, 404, await sameProjectRevisionSpoof.text(),
+    "the original Artifact may retain its inherited file, never claim another same-Project Chat file");
 
   // Even after moving another owned Chat to a DIFFERENT Project, its saved file
   // cannot be claimed in this Project's Artifact source/dependency manifest.
