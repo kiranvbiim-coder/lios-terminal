@@ -84,3 +84,15 @@ test("Research note edits and explicit delete retain unrelated canonical finding
   assert.equal(removed.some((item) => item.id === note.id), false);
   assert.equal(removed.some((item) => item.id === other.id), true);
 });
+
+
+test("blocked local storage produces truthful feedback rather than a false saved state", () => {
+  assert.match(source, /const persist = \(next: ResearchTrayItem\[\]\): boolean => \{/);
+  assert.match(source, /try \{\s*\/\/ Report a blocked/);
+  assert.match(source, /saveResearchTray\(next\)/);
+  assert.match(source, /setNotice\("Could not save research on this device/);
+  assert.match(source, /if \(!persist\(\[item, \.\.\.items\]\)\) return/);
+  assert.match(source, /if \(!persist\(updateResearchTrayItem/);
+  assert.match(source, /if \(!persist\(removeResearchTrayItem/);
+  assert.match(source, /Could not clear research history on this device/);
+});
