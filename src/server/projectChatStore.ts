@@ -164,6 +164,13 @@ export async function permanentlyDeleteProjectChat(ctx: TenantContext, chatId: n
     const deleted = await tx.delete(projectChats).where(and(ownedChatFilter(ctx, chatId), isNotNull(projectChats.trashedAt))).returning();
     if (!deleted.length) throw new ProjectChatAccessDeniedError();
   });
+  // Same post-commit cleanup semantics as permanent Project resource deletion:
+  // the removed chat cannot authorize orphaned blobs even if storage deletion fails.
+  try {
+    await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chatId, chat.attachmentManifest);
+  } catch {
+    console.error("[quick-chat-attachments] Private blob cleanup failed after permanent Chat deletion.");
+  }
 }
 
 export async function promoteQuickChatToProject(ctx: TenantContext, chatId: number, projectId: number): Promise<ProjectChat> {
@@ -217,8 +224,16 @@ export async function addProjectChatMessage(
 }
 
 export async function clearProjectChatMessages(ctx: TenantContext, chatId: number): Promise<void> {
-  await getProjectChat(ctx, chatId);
-  await getDb().delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+  const chat = await getProjectChat(ctx, chatId);
+  await getDb().transaction(async (tx) => {
+    await tx.delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+    await tx.update(projectChats).set({ attachmentManifest: [] }).where(ownedChatFilter(ctx, chatId));
+  });
+  try {
+    await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chatId, chat.attachmentManifest);
+  } catch {
+    console.error("[quick-chat-attachments] Private blob cleanup failed after clearing Chat.");
+  }
 }
 
 export async function autoTitleProjectChat(ctx: TenantContext, chatId: number, firstUserMessage: string): Promise<void> {
