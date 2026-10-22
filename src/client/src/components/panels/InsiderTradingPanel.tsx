@@ -192,7 +192,7 @@ function EdgarView() {
 }
 
 export default function InsiderTradingPanel({ onSymbol, onNav }: Props) {
-  const [source, setSource] = useState<"lse" | "edgar" | "events">("edgar");
+  const [source, setSource] = useTerminalArtifactState<"lse" | "edgar" | "events">("InsiderTradingPanel.source", "edgar");
 
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden">

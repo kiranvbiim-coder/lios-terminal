@@ -38,18 +38,18 @@ function fmtCompact(v: number): string {
 type Source = "fred" | "worldbank";
 
 export default function TourismIndicatorPanel() {
-  const [source, setSource] = useState<Source>("worldbank");
+  const [source, setSource] = useTerminalArtifactState<Source>("TourismIndicatorPanel.source", "worldbank");
 
   // ── US (FRED) ──────────────────────────────────────────────────────────
   const { data: indicators, isLoading: listLoading } = useTourismIndicators();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("TourismIndicatorPanel.selected", null);
   const activeSeriesId = selected ?? indicators?.[0]?.seriesId ?? "";
   const { data: detail, isLoading: detailLoading } = useTourismIndicatorDetail(activeSeriesId);
 
   // ── International (World Bank) ────────────────────────────────────────
   const { data: wbCatalog, isLoading: wbCatalogLoading } = useWbCatalog("tourism_hospitality");
   const { data: countries } = useWbCountries();
-  const [wbCode, setWbCode] = useState<string | null>(null);
+  const [wbCode, setWbCode] = useTerminalArtifactState<string | null>("TourismIndicatorPanel.wbCode", null);
   const [wbCountry, setWbCountry] = useTerminalArtifactState("TourismIndicatorPanel.wbCountry", "US");
   const activeWbCode = wbCode ?? wbCatalog?.[0]?.code ?? "";
   const { data: wbDetail, isLoading: wbDetailLoading } = useWbIndicator(activeWbCode, wbCountry);

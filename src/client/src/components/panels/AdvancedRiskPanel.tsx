@@ -84,6 +84,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
   const [range, setRange] = useTerminalArtifactState("AdvancedRiskPanel.range", "1Y");
   const [positionValue, setPositionValue] = useTerminalArtifactState("AdvancedRiskPanel.positionValue", 100000);
   const [tailSeed, setTailSeed] = useTerminalArtifactState("AdvancedRiskPanel.tailSeed", 42);
+  const validTailSeed = Number.isInteger(tailSeed) && tailSeed >= 0 && tailSeed <= 2_147_483_647;
   const [liquidityInput, setLiquidityInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.liquidityInput", () => applySchemaDefaults(LIQUIDITY_VAR_SCHEMA, {}));
   const [creditMetricsInput, setCreditMetricsInput] = useTerminalArtifactState<Record<string, unknown>>("AdvancedRiskPanel.creditMetricsInput", () => applySchemaDefaults(CREDIT_METRICS_SCHEMA, {}));
   const tailReportMutation = useMutation({
@@ -152,10 +153,10 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
       confidence: conf,
       parametric: parametricVaR(positionValue, dailyVol, conf, 1),
       historical: historicalVaR(positionValue, returns, conf),
-      monteCarlo: monteCarloVaR(positionValue, dailyVol, dailyDrift, conf, 1, 3000),
+      monteCarlo: validTailSeed ? monteCarloVaR(positionValue, dailyVol, dailyDrift, conf, 1, 3000, tailSeed) : null,
       cvar: expectedShortfall(positionValue, returns, conf),
     }));
-  }, [positionValue, dailyVol, dailyDrift, returns]);
+  }, [positionValue, dailyVol, dailyDrift, returns, tailSeed, validTailSeed]);
 
   // EVT (Peaks-Over-Threshold GPD) tail fit -- needs enough data for a
   // reliable 90th-percentile threshold with 8+ exceedances above it.
@@ -240,7 +241,7 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
                       <td className="px-3 py-2 font-terminal text-[10px] font-bold text-foreground">{row.confidence}%</td>
                       <td className="px-3 py-2 font-terminal text-[10px] tabular-nums text-right">{fmtMoney(row.parametric, curr)}</td>
                       <td className="px-3 py-2 font-terminal text-[10px] tabular-nums text-right">{fmtMoney(row.historical, curr)}</td>
-                      <td className="px-3 py-2 font-terminal text-[10px] tabular-nums text-right">{fmtMoney(row.monteCarlo, curr)}</td>
+                      <td className="px-3 py-2 font-terminal text-[10px] tabular-nums text-right">{row.monteCarlo === null ? "Invalid seed" : fmtMoney(row.monteCarlo, curr)}</td>
                       <td className="px-3 py-2 font-terminal text-[10px] tabular-nums text-right font-bold text-[hsl(0,80%,60%)]">{fmtMoney(row.cvar, curr)}</td>
                     </tr>
                   ))}
@@ -295,8 +296,9 @@ export default function AdvancedRiskPanel({ symbol: initialSymbol }: { symbol?: 
               <div className="space-y-2">
                 <div className="font-terminal text-[8px] text-foreground">TAIL RISK REPORT / {symbol} HISTORY</div>
                 <div className="font-terminal text-[7px] text-muted-foreground leading-relaxed">Uses the displayed return history as exact MANUAL run parameters because this panel does not retain an immutable OHLCV snapshot/provider binding. It is not presented as a live source-bound report.</div>
-                <label className="font-terminal text-[7px] text-muted-foreground">REPRODUCIBLE SEED <input type="number" value={tailSeed} onChange={(event) => setTailSeed(Math.trunc(Number(event.target.value) || 0))} className="ml-2 w-20 border border-border bg-transparent px-1 py-0.5 text-foreground" /></label>
-                <button disabled={tailReport.isPending || returns.length < 30} onClick={() => tailReport.mutate()} className="border border-amber-400/50 px-2 py-1 font-terminal text-[8px] text-amber-200 disabled:opacity-40">{tailReport.isPending ? "RUNNING…" : "RUN TAIL REPORT"}</button>
+                <label className="font-terminal text-[7px] text-muted-foreground">REPRODUCIBLE SEED <input type="number" min={0} max={2147483647} step={1} value={tailSeed} onChange={(event) => setTailSeed(Number(event.target.value))} className="ml-2 w-20 border border-border bg-transparent px-1 py-0.5 text-foreground" /></label>
+                {!validTailSeed && <p role="alert" className="text-xs text-destructive">Seed must be an integer from 0 to 2147483647. Monte Carlo comparison and new tail runs are unavailable until corrected; retained outputs are unchanged.</p>}
+                <button disabled={tailReport.isPending || returns.length < 30 || !validTailSeed} onClick={() => tailReport.mutate()} className="border border-amber-400/50 px-2 py-1 font-terminal text-[8px] text-amber-200 disabled:opacity-40">{tailReport.isPending ? "RUNNING…" : "RUN TAIL REPORT"}</button>
                 {tailReport.error && <div className="font-terminal text-[7px] text-red-300">{tailReport.error.message}</div>}
                 {tailReport.data && <><div className="grid grid-cols-3 gap-1 font-terminal text-[7px]"><span>HIST VAR {fmtMoney(tailReport.data.historicalVaR, curr)}</span><span>HIST ES {fmtMoney(tailReport.data.historicalES, curr)}</span><span>t-MC VAR {fmtMoney(tailReport.data.studentTMonteCarloVaR, curr)}</span><span>MAX DD {tailReport.data.maxDrawdownPct.toFixed(2)}%</span><span>DA-R {tailReport.data.drawdownAtRiskPct.toFixed(2)}%</span><span>SEED {tailReport.data.seed}</span></div><AdvancedPortfolioRiskReceipt receipt={tailReport.data.receipt} /></>}
               </div>

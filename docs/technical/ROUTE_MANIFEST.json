@@ -6576,6 +6576,24 @@
   },
   {
    "method": "POST",
+   "path": "/api/quant/risk/manual-original",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/statistics/resampling",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/quant/stats/autocorrelation-tests",
    "reachableBy": [
     "client_user",

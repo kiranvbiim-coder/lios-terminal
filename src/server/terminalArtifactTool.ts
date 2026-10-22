@@ -14,10 +14,78 @@ import { getEntitlementPolicyById } from "./dataEntitlementStore";
 import { and, eq, isNull } from "drizzle-orm";
 import { portfolios, datasetSnapshots, users } from "@shared/schema";
 import { getDb, type DrizzleDb } from "./db";
-import { canonicalSnapshotColumnSchema, type ResolvedAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
+import { canonicalSnapshotColumnSchema, quantInputSourceBindingSchema, type ResolvedAdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
 import { canAccessDatasetSnapshot, flattenSnapshotForColumnar } from "./columnarArtifactStore";
 import { requirePythonInputFields } from "./pythonInputContract";
 import { economicSnapshotContentHash } from "./economicDatasetStore";
+import { factorRiskSnapshotContentHash, buildFactorAttributionInput, validateDecomposeWeights, factorRiskDecomposeRequestSchema, type FactorRiskSnapshot } from "./factorRiskModel";
+import { stableSnapshotHash } from "./pointInTimeDatasetStore";
+
+/** Explicit adapter for the ORIGINAL captured factor estimator, not the Python factor optimizer. */
+async function admitOriginalFactorSources(ctx: TenantContext, provenance: ResolvedAdvancedQuantInputProvenance, parameters: Record<string, unknown>, db: Pick<DrizzleDb, "select">, lock: boolean, requiredUses: readonly string[]): Promise<string[]> {
+  const binding = provenance.sourceBindings?.[0];
+  if (provenance.sourceBindings?.length !== 1 || !binding || binding.field !== "modelInput"
+    || binding.provider !== "factor_risk_model" || binding.contractFamily !== "factor-risk-model"
+    || binding.sourceReference !== `dataset-snapshot:${binding.snapshot.id}`
+    || provenance.derivedFrom?.modelId !== "factor-risk-model" || provenance.derivedFrom.modelVersion !== "1.0.0"
+    || provenance.derivedFrom.outputSnapshotHash !== binding.snapshot.contentHash
+    || provenance.transformations.length || binding.transformations.join() !== "factor-risk:arithmetic-average-of-estimated-period-returns") throw new Error("Original factor decomposition requires its exact captured model binding and arithmetic-average adapter.");
+  const refs: string[] = [];
+  const load = async (id: string, expectedHash: string, provider: string) => {
+    const query = db.select().from(datasetSnapshots).where(eq(datasetSnapshots.id, id));
+    const [row] = await (lock ? query.for("share") : query).limit(1);
+    const now = new Date();
+    if (!row || row.organizationId !== ctx.organizationId || !canAccessDatasetSnapshot(row, ctx)
+      || row.contentHash !== expectedHash || row.provider !== provider || row.availableAt > now
+      || row.expiresAt !== null && row.expiresAt <= now) throw new Error("Factor source snapshot is unavailable, expired, hash-mismatched or outside the current tenant.");
+    const policy = row.entitlementPolicyId ? await getEntitlementPolicyById(row.entitlementPolicyId, db, lock) : null;
+    if (!policy || policy.licenseType === "unknown" || policy.provider !== row.provider || policy.dataClass !== row.dataClass
+      || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now
+      || policy.accessScope === "internal_only" && !ctx.role.startsWith("internal_")
+      || !requiredUses.every(use => policy.permittedUses.includes(use))) throw new Error(`Factor source ${id} requires a current authoritative entitlement policy permitting ${requiredUses.join(", ")}; cache availability is not a licence.`);
+    refs.push(`dataset-snapshot:${row.id}`, `dataset-content-sha256:${row.contentHash}`, `entitlement-policy:${policy.id}`);
+    return row;
+  };
+  const source = await load(binding.snapshot.id, binding.snapshot.contentHash, binding.provider);
+  if (source.dataClass !== "factor_risk" || source.createdByUserId !== ctx.userId) throw new Error("Captured factor model must belong to the current author.");
+  const snapshot = source.payload as unknown as FactorRiskSnapshot;
+  if (snapshot.snapshotId !== source.id || snapshot.contentHash !== source.contentHash
+    || source.id !== `factor-risk-${source.contentHash.slice(0, 24)}`
+    || snapshot.request.scope !== (ctx.organizationId === null ? "local" : `organization:${ctx.organizationId}`)
+    || binding.asOf !== `${snapshot.request.asOf}T00:00:00.000Z` || binding.retrievedAt !== snapshot.capturedAt
+    || factorRiskSnapshotContentHash(snapshot) !== source.contentHash) throw new Error("Captured factor model does not match its original immutable content identity.");
+  const request = { snapshotId: source.id, portfolioWeights: parameters.portfolioWeights, benchmarkWeights: parameters.benchmarkWeights, scenario: parameters.scenario };
+  const parsed = factorRiskDecomposeRequestSchema.parse(request);
+  const securityIds = snapshot.securities.map(security => security.securityId);
+  const weightError = validateDecomposeWeights(parsed.portfolioWeights, securityIds, "portfolioWeights")
+    ?? (parsed.benchmarkWeights ? validateDecomposeWeights(parsed.benchmarkWeights, securityIds, "benchmarkWeights") : null);
+  if (weightError) throw new Error(weightError);
+  if (parameters.snapshotId !== source.id || parameters.contentHash !== source.contentHash
+    || parameters.factorReturnSelection !== "arithmetic-average-of-estimated-period-returns"
+    || stableSnapshotHash(parameters.modelInput) !== stableSnapshotHash(buildFactorAttributionInput(snapshot, parsed))
+    || stableSnapshotHash(parameters.sourceProvenance) !== stableSnapshotHash(snapshot.sources)) throw new Error("Factor receipt inputs or provenance do not match the original captured model and exact weights.");
+  // These are dependencies of the hashed original capture, not guessed from a provider name.
+  const dependencies = [
+    { metadata: snapshot.sources.benchmark, fields: ["ohlcv"] },
+    ...snapshot.securities.map(security => ({ metadata: snapshot.sources.securities[security.securityId], fields: ["ohlcv", "fundamentals"] })),
+  ];
+  for (const { metadata, fields } of dependencies) {
+    const bindings = metadata?.sourceBindings?.map(value => quantInputSourceBindingSchema.parse(value)) ?? [];
+    if (bindings.length !== fields.length || !fields.every(field => bindings.filter(item => item.field === field).length === 1)) throw new Error("Factor capture lacks immutable upstream OHLCV/fundamentals snapshot bindings and legal dependency evidence. Existing marketData summary provenance cannot authorize retained model results.");
+    for (const upstream of bindings) {
+      if (upstream.transformations.length || upstream.snapshot.id === source.id) throw new Error("Factor upstream dependency requires an admitted untransformed immutable source, not another model or self-reference.");
+      const row = await load(upstream.snapshot.id, upstream.snapshot.contentHash, upstream.provider);
+      if (upstream.sourceReference !== `dataset-snapshot:${row.id}` || upstream.retrievedAt !== row.retrievedAt.toISOString()
+        || row.availableAt.getTime() > Date.parse(snapshot.capturedAt)) throw new Error("Factor upstream reference/timing does not match the immutable source available to the original capture.");
+      if (row.dataClass === "factor_risk") throw new Error("Factor upstream dependency cannot substitute another derived factor capture.");
+      const expected = row.dataClass === "economic_series" || row.dataClass === "yield_curve"
+        ? economicSnapshotContentHash(row.payload, row.lineage)
+        : hashLedgerValue({ payload: row.payload, provider: row.provider, lineage: row.lineage });
+      if (expected !== row.contentHash) throw new Error("Factor upstream source does not match its immutable content hash.");
+    }
+  }
+  return [...new Set(refs)];
+}
 
 export async function validateTerminalArtifactTarget(ctx: TenantContext, chatId: number, binding: { artifactId: string; version: number; contentHash: string }, signal: AbortSignal) {
   assertNotAborted(signal);
@@ -64,7 +132,10 @@ export async function validateTerminalExecutionTarget(ctx: TenantContext, raw: T
 /** Admit actual immutable source values, never source IDs supplied only as declarations. */
 export async function admitTerminalExecutionSources(ctx: TenantContext, provenance: ResolvedAdvancedQuantInputProvenance, parameters: Record<string, unknown>, db: Pick<DrizzleDb, "select"> = getDb(), lock = false, requiredUses: readonly string[] = ["display", "model_input", "derived_output"], modelPath?: string): Promise<string[]> {
   if (provenance.dataClassification === "manual" || provenance.dataClassification === "synthetic") return [];
-  if (provenance.dataClassification === "model_derived") throw new Error("A model-derived native run requires an admitted persisted upstream model adapter.");
+  if (provenance.dataClassification === "model_derived") {
+    if (modelPath !== "/api/factor-risk/decompose") throw new Error("A model-derived native run requires an admitted persisted upstream model adapter.");
+    return admitOriginalFactorSources(ctx, provenance, parameters, db, lock, requiredUses);
+  }
   if (!modelPath) throw new Error("Source-bound native runs require the selected engine input contract.");
   if (!lock && requiredUses.includes("model_input")) await requirePythonInputFields(`/advanced/${modelPath}`, (provenance.sourceBindings ?? []).flatMap(binding => binding.field === "manual-import" ? Object.keys(parameters) : [binding.field.split(".")[0]]));
   const refs: string[] = [];

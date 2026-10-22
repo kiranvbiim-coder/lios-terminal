@@ -78,7 +78,7 @@ const REGION_COLORS: Record<string, string> = {
 
 export default function EarningsPanel({ onSymbol }: { onSymbol?: (sym: string) => void }) {
   const [regionFilter, setRegionFilter] = useTerminalArtifactState<"ALL" | "US" | "IN" | "JP" | "HK">("EarningsPanel.regionFilter", "ALL");
-  const [showReported, setShowReported] = useState(false);
+  const [showReported, setShowReported] = useTerminalArtifactState("EarningsPanel.showReported", false);
 
   const { data: events, isLoading } = useQuery<EarningsEvent[]>({
     queryKey: ["/api/finance/earnings"],

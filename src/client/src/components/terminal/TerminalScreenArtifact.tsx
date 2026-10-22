@@ -8,6 +8,8 @@ import MacroTickerTape from "./MacroTickerTape";
 import { ReadableValueTable } from "./ReadableValueTable";
 import { apiRequest } from "@/lib/queryClient";
 import type { ArtifactDetail } from "@/lib/useArtifacts";
+import { stableSerialize } from "@/lib/analyticalCore";
+import { reconcileTerminalDraft } from "@/lib/terminalDraftReconciliation";
 
 type Screen = Extract<ArtifactContent, { kind: "screen" }>;
 export default function TerminalScreenArtifact({ content, revision, onSave, onDirtyChange, onAsk, target, onNativeVersion, disabled = false, ephemeral = false }: {
@@ -21,7 +23,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
   useEffect(() => { mountedTarget.current.active = true; return () => { mountedTarget.current.active = false; }; }, []);
   const [draft, setDraft] = useState(content);
   const draftRef = useRef(draft); draftRef.current = draft;
-  const [baseline, setBaseline] = useState(JSON.stringify(content));
+  const [baseline, setBaseline] = useState(stableSerialize(content));
   const [saving, setSaving] = useState(false);
   const [activeEditors, setActiveEditors] = useState<Set<string>>(() => new Set());
   const editorKeys = useRef(new Set<string>());
@@ -35,22 +37,34 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
   const savedHash = useRef<string | null>(null);
   const current = useRef(content); current.current = content;
   const saveCallback = useRef(onSave); saveCallback.current = onSave;
-  const dirty = JSON.stringify(draft) !== baseline;
+  const dirty = stableSerialize(draft) !== baseline;
   const pending = useRef(false);
   const terminal = readTerminalScreenState(draft.state);
   useEffect(() => {
-    const incoming = JSON.stringify(content);
-    if ((savedHash.current !== null && JSON.stringify(draftRef.current) === savedHash.current) || JSON.stringify(draftRef.current) === baseline) {
-      setDraft(content); setBaseline(incoming); savedHash.current = null;
-    } else if (incoming !== baseline) setError("This terminal Artifact changed elsewhere. Your unsaved analytical inputs remain here; reset or reopen before saving.");
+    const transition = reconcileTerminalDraft(content, draftRef.current, baseline, savedHash.current);
+    if (transition.replaceDraft) setDraft(content);
+    setBaseline(transition.baseline);
+    if (transition.acknowledged || transition.replaceDraft) savedHash.current = null;
+    if (transition.conflict) setError("This terminal Artifact changed elsewhere. Your unsaved analytical inputs remain here; reset or reopen before saving.");
   }, [content, revision]);
   useEffect(() => { onDirtyChange?.(!ephemeral && (dirty || saving || activeEditors.size > 0)); return () => onDirtyChange?.(false); }, [dirty, saving, ephemeral, activeEditors.size, onDirtyChange]);
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (![...editorKeys.current].some(key => key.startsWith("json-draft:") || key === "statement-extraction-review")) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, []);
   const change = useCallback((update: (state: TerminalScreenState) => TerminalScreenState, view?: string) => {
-    if (disabled || pending.current || [...editorKeys.current].some(key => key.startsWith("native-quant:"))) return;
+    const editors = [...editorKeys.current];
+    if (disabled || pending.current || editors.some(key => key.startsWith("native-quant:") || key === "statement-extraction-review")) return;
+    if (editors.some(key => key.startsWith("json-draft:")) && !editors.some(key => key.startsWith("json-write:"))) return;
     setDraft(previous => {
       const state = readTerminalScreenState(previous.state) ?? initialTerminalScreenState(previous.symbol);
       const next = update(state);
-      if ((!view || previous.view === view) && JSON.stringify(next) === JSON.stringify(state)) return previous;
+      if ((!view || previous.view === view) && stableSerialize(next) === stableSerialize(state)) return previous;
       return { ...previous, ...(view ? { view } : {}), symbol: next.subject.symbol, state: { ...previous.state, terminal: next } };
     });
   }, [disabled]);
@@ -61,16 +75,16 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
     if (pending.current || disabled || ephemeral || !dirty || editorKeys.current.size > 0) return;
     pending.current = true; setSaving(true); setError(null);
     const snapshot = draftRef.current;
-    try { savedHash.current = JSON.stringify(snapshot); await saveCallback.current(snapshot); setBaseline(JSON.stringify(snapshot)); }
+    try { savedHash.current = stableSerialize(snapshot); await saveCallback.current(snapshot); setBaseline(stableSerialize(snapshot)); }
     catch (cause) { savedHash.current = null; setError(cause instanceof Error ? cause.message : "Terminal Artifact could not be saved. Authored inputs remain available."); }
     finally { pending.current = false; setSaving(false); }
   }, [disabled, ephemeral, dirty, activeEditors.size]);
   useEffect(() => {
     if (ephemeral && dirty) {
       const snapshot = draftRef.current;
-      savedHash.current = JSON.stringify(snapshot);
+      savedHash.current = stableSerialize(snapshot);
       void saveCallback.current(snapshot);
-      setBaseline(JSON.stringify(snapshot));
+      setBaseline(stableSerialize(snapshot));
       return;
     }
     if (!dirty || disabled || ephemeral || error || activeEditors.size > 0) return;
@@ -92,16 +106,23 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
     if (!mountedTarget.current.active || mountedTarget.current.id !== submitted.artifactId || mountedTarget.current.version !== submitted.baseVersion || mountedTarget.current.contentHash !== submitted.baseHash) return;
     if (detail.artifact.id !== version.artifactId || detail.version.version !== version.version || detail.version.contentHash !== version.contentHash || detail.version.content.kind !== "screen") throw new Error("Retained native result revision could not be verified.");
     const canonical = detail.version.content;
-    const unchanged = JSON.stringify(readTerminalScreenState(draftRef.current.state)) === JSON.stringify(submitted.authoredState);
+    const unchanged = stableSerialize(readTerminalScreenState(draftRef.current.state)) === stableSerialize(submitted.authoredState);
     const next = unchanged ? canonical : { ...draftRef.current, state: { ...canonical.state, terminal: draftRef.current.state.terminal } };
     draftRef.current = next;
-    setDraft(next); setBaseline(JSON.stringify(canonical));
-    savedHash.current = unchanged ? JSON.stringify(next) : null;
+    setDraft(next); setBaseline(stableSerialize(canonical));
+    savedHash.current = unchanged ? stableSerialize(next) : null;
     if (!unchanged) setError("Native result was retained; newer authored inputs remain unsaved against that exact result revision.");
     onNativeVersion?.(version.version);
   }, [target, onNativeVersion]);
   const executions = draft.state.terminalExecutions && typeof draft.state.terminalExecutions === "object" && !Array.isArray(draft.state.terminalExecutions) ? draft.state.terminalExecutions as Record<string, unknown> : undefined;
-  const provider = useMemo(() => terminal ? ({ symbol: terminal.subject.symbol, setSymbol, sourceScope: terminal.sourceScope, readOnly: disabled || saving || nativePending, state: terminal.panelState, initialize, update, setEditing, target, executions,
+  const provider = useMemo(() => terminal ? ({ symbol: terminal.subject.symbol, setSymbol, sourceScope: terminal.sourceScope,
+    // Completion may release its lock and write a reference in the same turn; a rendered busy boolean would still reject that legitimate write.
+    get readOnly() {
+      if (disabled || pending.current) return true;
+      for (const key of editorKeys.current) if (key.startsWith("native-quant:")) return true;
+      return false;
+    },
+    state: terminal.panelState, initialize, update, setEditing, target, executions,
     ...(target && !ephemeral ? { captureExecution, completeExecution } : {}), ...(onAsk ? { onAsk: ask } : {}) }) : null, [terminal, setSymbol, disabled, saving, nativePending, initialize, update, setEditing, target, executions, ephemeral, captureExecution, completeExecution, onAsk, ask]);
   const capability = chatTerminalCapabilities(audience).find(item => item.view === draft.view);
   const liveAllowed = terminal?.sourceScope === "auto" || terminal?.sourceScope === "web";
@@ -111,7 +132,7 @@ export default function TerminalScreenArtifact({ content, revision, onSave, onDi
       <strong>{capability.label}{draft.symbol ? ` · ${draft.symbol}` : ""}</strong>
       <span role="status">{ephemeral ? "Temporary · not retained" : saving ? "Saving analytical state…" : dirty ? "Unsaved analytical state" : `Saved analytical state · v${revision}`}</span>
       {!disabled && !ephemeral && <button type="button" disabled={!dirty || saving} onClick={() => void save()} className="rounded border p-1">Save state</button>}
-      <button type="button" disabled={saving} onClick={() => { setDraft(current.current); setBaseline(JSON.stringify(current.current)); setError(null); }}>Reset local edits</button>
+      <button type="button" disabled={saving} onClick={() => { setDraft(current.current); setBaseline(stableSerialize(current.current)); setError(null); }}>Reset local edits</button>
       <label><input type="checkbox" checked={terminal.stockTape} disabled={disabled} onChange={event => change(state => ({ ...state, stockTape: event.target.checked }))}/> Stock ticker tape</label>
       <label><input type="checkbox" checked={terminal.macroTape} disabled={disabled} onChange={event => change(state => ({ ...state, macroTape: event.target.checked }))}/> Macro ticker tape</label>
     </div>

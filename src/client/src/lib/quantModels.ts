@@ -4,7 +4,7 @@
 // blindly. Companion to statistics.ts (descriptive stats / histograms).
 
 import { stdNormCDF } from "./optionsModels";
-import { computeDescriptiveStats } from "./statistics";
+import { computeDescriptiveStats, resamplingRandom } from "./statistics";
 
 // ── Matrix helpers (small N -- OLS regression, PCA covariance) ─────────────
 
@@ -186,15 +186,16 @@ export function cornishFisherVaR(positionValue: number, returnsPct: number[], co
 // Monte Carlo VaR: simulate terminal P&L via GBM (Box-Muller normal draws)
 // and take the empirical percentile -- cross-check against parametric VaR,
 // which assumes normality outright.
-export function monteCarloVaR(positionValue: number, dailyVolPct: number, dailyDriftPct: number, confidence: number, horizonDays: number, paths = 5000): number {
+export function monteCarloVaR(positionValue: number, dailyVolPct: number, dailyDriftPct: number, confidence: number, horizonDays: number, paths = 5000, seed = 42): number {
+  const random = resamplingRandom(seed);
   const results: number[] = [];
   const vol = dailyVolPct / 100;
   const drift = dailyDriftPct / 100;
   for (let p = 0; p < paths; p++) {
     let value = positionValue;
     for (let d = 0; d < horizonDays; d++) {
-      const u1 = Math.random() || 1e-9;
-      const u2 = Math.random();
+      const u1 = random() || 1e-9;
+      const u2 = random();
       const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
       value *= Math.exp((drift - 0.5 * vol * vol) + vol * z);
     }

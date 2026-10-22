@@ -81,7 +81,7 @@ test("existing terminal work is a Chat-owned immutable Artifact, not a shadow se
   assert.deepEqual(restored.content, clientScreen.version.content, "Restoring an owned chart is not internal numerical execution.");
   const decisionScreen = await openTerminalArtifact(tenant, chat.id, { requestId: crypto.randomUUID(), view: "decisionengine", symbol: null, title: "Original decision calculation", state: initialTerminalScreenState(null) });
   if (decisionScreen.version.content.kind !== "screen") throw new Error("Expected original decision screen.");
-  const { executeOriginalDecisionReverseDcf } = await import("./advancedQuantExecution");
+  const { executeOriginalDecisionReverseDcf, executeOriginalResampling, executeOriginalManualRisk } = await import("./advancedQuantExecution");
   const native = await executeOriginalDecisionReverseDcf({ enterpriseValue: 1500, currentFreeCashFlow: 100, forecastYears: 5, discountRate: 0.1, terminalGrowthRate: 0.03 }, owner.id);
   const decisionState = readTerminalScreenState(decisionScreen.version.content.state);
   assert.ok(decisionState);
@@ -100,8 +100,29 @@ test("existing terminal work is a Chat-owned immutable Artifact, not a shadow se
   assert.equal(restoredDecision.version, 3);
   const restoredNative = await undoArtifactHead(tenant, decisionScreen.artifact.id);
   assert.deepEqual(restoredNative.content, nativeVersion.content, "Historical original numerical output can be restored without recalculation or a new receipt.");
+  const resampling = executeOriginalResampling({ method: "bootstrap", data: [7, 7, 7], iterations: 2000, confidence: 95, seed: 17 }, owner.id);
+  assert.throws(() => executeOriginalResampling({ method: "bootstrap", data: Array(5000).fill(1), iterations: 20000, confidence: 95, seed: 17 }, owner.id), /sample-draw bound/);
+  assert.throws(() => executeOriginalResampling({ method: "bootstrap", data: [1e308, 1e308], iterations: 100, confidence: 95, seed: 17 }, owner.id), /non-finite output/);
+  const resampled = await createTerminalArtifactEngineVersion(tenant, { ...target, baseVersion: restoredNative.version, baseHash: restoredNative.contentHash, slot: "qwb.stats.bootstrap" }, resampling);
+  if (resampled.content.kind !== "screen") throw new Error("Expected original resampling screen.");
+  const sampleRecord = (resampled.content.state.terminalExecutions as Record<string, { estimate: number; ciLow: number; ciHigh: number; receipt: { seed: number; modelVersion: string } }>)["qwb.stats.bootstrap"];
+  assert.equal(sampleRecord.estimate, 7);
+  assert.equal(sampleRecord.ciLow, 7);
+  assert.equal(sampleRecord.ciHigh, 7);
+  assert.equal(sampleRecord.receipt.seed, 17);
+  assert.equal(sampleRecord.receipt.modelVersion, "1.0.1");
+  assert.throws(() => executeOriginalManualRisk({ method: "cva", exposureProfile: [100, 100], pdCurvePct: [10], lgdPct: 60, discountFactors: [1, 1] }, owner.id), /never dropped/);
+  assert.throws(() => executeOriginalManualRisk({ method: "liquidity-cost", bidAskSpreadPct: [1], positionSizes: [100, 100] }, owner.id), /never dropped/);
+  const cva = executeOriginalManualRisk({ method: "cva", exposureProfile: [100, 200], pdCurvePct: [10, 20], lgdPct: 60, discountFactors: [1, 0.5] }, owner.id);
+  const cvaVersion = await createTerminalArtifactEngineVersion(tenant, { ...target, baseVersion: resampled.version, baseHash: resampled.contentHash, slot: "qwb.credit.cva" }, cva);
+  if (cvaVersion.content.kind !== "screen") throw new Error("Expected original CVA screen.");
+  assert.equal((cvaVersion.content.state.terminalExecutions as Record<string, { cva: number }>)["qwb.credit.cva"].cva, 18);
+  const liquidity = executeOriginalManualRisk({ method: "liquidity-cost", bidAskSpreadPct: [1, 2], positionSizes: [100, 200] }, owner.id);
+  assert.equal(liquidity.response.estimatedCost, 2.5);
+  await assert.rejects(createTerminalArtifactEngineVersion(clientTenant, { ...target, baseVersion: cvaVersion.version, baseHash: cvaVersion.contentHash, slot: "qwb.credit.cva" }, cva), /author|actor|access|permission|unavailable/i);
   await closeDb(); await initDb();
   assert.deepEqual((await getArtifactVersion(tenant, retained.artifact.id, 2)).content, current.content);
+  assert.deepEqual((await getArtifactVersion(tenant, cvaVersion.artifactId, cvaVersion.version)).content, cvaVersion.content, "Original manual CVA output survives reopening without recomputing edited controls.");
 });
 
 test("typed terminal operations cannot fabricate snapshots, target other tools or accept injected fields", () => {

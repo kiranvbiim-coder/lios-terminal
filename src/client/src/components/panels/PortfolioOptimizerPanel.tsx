@@ -1,13 +1,13 @@
 import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { boundedTerminalExecutionSlot } from "@shared/terminalArtifact";
-import { useState, useMemo, useEffect, memo } from "react";
-import { useQueries, useMutation, useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
+import { useQueries, useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { ResponsiveContainer, ScatterChart, Scatter, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot } from "recharts";
 import { Award, Compass, RefreshCw, BarChart3, Sliders, CheckCircle, Activity, Layers, X, Plus, Shuffle } from "lucide-react";
 import type { OHLCVSeries } from "@/lib/finance";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPrice } from "@/lib/finance";
-import { useFamaFrench3 } from "@/lib/useFamaFrench";
+import { useFamaFrench3, type FactorRow3 } from "@/lib/useFamaFrench";
 import { blackLitterman, olsRegression, type BlackLittermanView } from "@/lib/quantModels";
 import { ConceptExplainer } from "./ConceptExplainer";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,6 +21,7 @@ import { runFactorPortfolioJson } from "@/lib/FactorPortfolioAdapter";
 import { evaluateMandatePreTrade, type MandatePreTradeInput, type MandatePreTradeSourceMetadata } from "@shared/mandatePreTradeEngine";
 import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import type { AdvancedQuantRunReceipt } from "@shared/quantModelRegistry";
 
 // Standard He-Litterman defaults -- kept independent of the execution-cost
 // risk-aversion slider elsewhere in this panel, which tunes a different
@@ -64,6 +65,12 @@ const ADVANCED_PORTFOLIO_MODELS: Array<{ id: AdvancedPortfolioModel; label: stri
   { id: "mandate-pre-trade", label: "MANDATE PRE-TRADE", source: "basket+manual" },
 ];
 
+const EMPTY_FACTORS: FactorRow3[] = [];
+// TanStack structurally shares combine output; unrelated editor/mutation renders must not rerun the original random search.
+function combinePortfolioObservations(queries: UseQueryResult<OHLCVSeries>[]) {
+  return { series: queries.map(query => query.data), isLoading: queries.some(query => query.isLoading), hasError: queries.some(query => query.isError) };
+}
+
 type PortfolioWeightsResult = { weights: Record<string, number> };
 type RiskBudgetResult = { weights: Record<string, number>; riskContributions: Record<string, number>; budgetError: number };
 type FactorRiskResult = { weights: Record<string, number>; factorExposures: number[]; expectedReturnPct: number; volatilityPct: number };
@@ -96,6 +103,8 @@ type ProviderFactorRiskDecomposeResponse = {
   snapshotId: string;
   contentHash: string;
   provenance?: ProviderFactorRiskSnapshot["sources"];
+  portfolioWeights: Record<string, number>;
+  receipt?: AdvancedQuantRunReceipt;
   result: {
     expectedReturn: number;
     totalExpectedReturn: number;
@@ -504,10 +513,10 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
       },
       staleTime: 60000,
     })),
+    combine: combinePortfolioObservations,
   });
 
-  const isLoading = results.some((r) => r.isLoading);
-  const hasError = results.some((r) => r.isError);
+  const { isLoading, hasError } = results;
 
   // Real Fama-French 3-factor data (replaces the old AAPL/BTC OLS proxy).
   const ff3StartDate = useMemo(() => {
@@ -516,7 +525,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
     return d.toISOString().slice(0, 10);
   }, []);
   const ff3EndDate = new Date().toISOString().slice(0, 10);
-  const { data: ff3Factors = [] } = useFamaFrench3(ff3StartDate, ff3EndDate);
+  const { data: ff3Factors = EMPTY_FACTORS } = useFamaFrench3(ff3StartDate, ff3EndDate);
 
   const executionTrajectory = useMemo(() => {
     const X0 = sharesToLiquidate;
@@ -593,9 +602,9 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
 
     // Find common dates
     const commonDatesSet = new Set<string>();
-    const assetReturnsMap = results.map((r) => {
+    const assetReturnsMap = results.series.map(series => {
       const map = new Map<string, number>();
-      const bars = r.data?.bars || [];
+      const bars = series?.bars || [];
       for (let i = 1; i < bars.length; i++) {
         const prev = bars[i - 1].close;
         const curr = bars[i].close;
@@ -977,27 +986,52 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
   });
   const factorAttributionReset = factorAttributionRun.reset;
   useEffect(() => { factorAttributionReset(); }, [assets, factorAttributionReset]);
-  const [providerSnapshotId, setProviderSnapshotId] = useTerminalArtifactState<string | null>(`PortfolioOptimizerPanel.providerSnapshot.${assets.join(",")}`, null);
+  const [providerReference, setProviderReference] = useTerminalArtifactState<{ snapshotId: string; contentHash: string } | string | null>(`PortfolioOptimizerPanel.providerSnapshot.${assets.join(",")}`, null);
+  // A legacy immutable screen may retain only its ID; fresh authorized detail is still required.
+  const providerSnapshotId = typeof providerReference === "string" ? providerReference : providerReference?.snapshotId ?? null;
+  const captureOwnerKey = JSON.stringify([terminal?.target ?? null, assets, providerFactorRange, providerReference, optimizationData?.maxSharpe.weights ?? null]);
+  const captureOwner = useRef({ key: captureOwnerKey, mounted: true });
+  captureOwner.current.key = captureOwnerKey;
+  useEffect(() => { captureOwner.current.mounted = true; return () => { captureOwner.current.mounted = false; }; }, []);
+  const captureGeneration = useRef(0);
   const restoredProviderSnapshot = useQuery<ProviderFactorRiskCaptureResponse>({
-    queryKey: ["/api/factor-risk/snapshots", providerSnapshotId],
+    queryKey: ["/api/factor-risk/snapshots", providerSnapshotId, captureOwnerKey],
     enabled: providerSnapshotId !== null,
     staleTime: 0,
-    queryFn: async () => (await apiRequest("GET", `/api/factor-risk/snapshots/${encodeURIComponent(providerSnapshotId!)}`)).json(),
+    queryFn: async () => {
+      const snapshot = await (await apiRequest("GET", `/api/factor-risk/snapshots/${encodeURIComponent(providerSnapshotId!)}`)).json() as ProviderFactorRiskCaptureResponse;
+      if (snapshot.snapshotId !== providerSnapshotId || typeof providerReference === "object" && providerReference !== null && snapshot.contentHash !== providerReference.contentHash) throw new Error("Saved provider capture identity/hash changed; no replacement was selected.");
+      return snapshot;
+    },
   });
   const providerFactorCapture = useMutation({
-    mutationFn: async (payload: { symbols: string[]; benchmarkSymbol: string; range: "1Y" | "2Y" | "3Y" | "5Y" }) => (
-      await apiRequest("POST", "/api/factor-risk/snapshots", payload)
-    ).json() as Promise<ProviderFactorRiskCaptureResponse>,
-    onSuccess: snapshot => setProviderSnapshotId(snapshot.snapshotId),
+    mutationFn: async (payload: { symbols: string[]; benchmarkSymbol: string; range: "1Y" | "2Y" | "3Y" | "5Y" }) => {
+      const owner = terminal;
+      if (owner?.readOnly) throw new Error("Open the current writable Artifact before capturing a provider model.");
+      if (owner?.target) owner.captureExecution?.("portfolio.provider-capture");
+      const submittedKey = captureOwnerKey;
+      const generation = ++captureGeneration.current;
+      const lock = "native-quant:portfolio-provider-capture";
+      owner?.setEditing(lock, true);
+      let snapshot: ProviderFactorRiskCaptureResponse;
+      try {
+        snapshot = await (await apiRequest("POST", "/api/factor-risk/snapshots", payload)).json() as ProviderFactorRiskCaptureResponse;
+        if (!captureOwner.current.mounted || captureOwner.current.key !== submittedKey || captureGeneration.current !== generation) throw new Error("Provider capture completed for a changed screen; its reference was not attached.");
+      } finally { owner?.setEditing(lock, false); }
+      setProviderReference({ snapshotId: snapshot.snapshotId, contentHash: snapshot.contentHash });
+      return snapshot;
+    },
   });
-  const providerSnapshot = providerFactorCapture.data ?? (!restoredProviderSnapshot.isError && restoredProviderSnapshot.isFetchedAfterMount ? restoredProviderSnapshot.data : undefined);
+  const providerSnapshot = !restoredProviderSnapshot.isError && !restoredProviderSnapshot.isFetching && restoredProviderSnapshot.isFetchedAfterMount ? restoredProviderSnapshot.data : undefined;
   const providerFactorDecompose = useMutation({
     mutationFn: async () => {
       const snapshot = providerSnapshot;
       if (!snapshot) throw new Error("Capture a provider factor model before decomposition.");
+      const owner = terminal;
+      if (owner?.readOnly) throw new Error("Open the current writable Artifact before decomposition.");
+      const submittedKey = captureOwnerKey;
       const securityIds = snapshot.securities.map((security) => security.securityId);
-      const missingAssets = assets.filter((symbol) => !securityIds.includes(symbol));
-      if (missingAssets.length > 0) throw new Error("DECOMPOSE BLOCKED: snapshot exclusions require a complete portfolio universe");
+      if (assets.some(symbol => !securityIds.includes(symbol))) throw new Error("DECOMPOSE BLOCKED: snapshot exclusions require a complete portfolio universe");
       const portfolioWeights: Record<string, number> = {};
       for (const securityId of securityIds) {
         const assetIndex = assets.indexOf(securityId);
@@ -1005,25 +1039,25 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
         if (assetIndex < 0 || !Number.isFinite(weight)) throw new Error("DECOMPOSE BLOCKED: exact basket weights are unavailable");
         portfolioWeights[securityId] = weight as number;
       }
-      return (
-        await apiRequest("POST", "/api/factor-risk/decompose", {
-          snapshotId: snapshot.snapshotId,
-          portfolioWeights,
-        })
-      ).json() as Promise<ProviderFactorRiskDecomposeResponse>;
+      const response = await quant.run<ProviderFactorRiskDecomposeResponse>(
+        "factor-risk/decompose",
+        { snapshotId: snapshot.snapshotId, expectedSnapshotHash: snapshot.contentHash, portfolioWeights },
+        boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.provider-decomposition`),
+        "/api/factor-risk/decompose",
+      );
+      if (!owner?.target && (!captureOwner.current.mounted || captureOwner.current.key !== submittedKey || response.snapshotId !== snapshot.snapshotId || response.contentHash !== snapshot.contentHash)) throw new Error("Provider decomposition completed for changed inputs or source identity; no result was attached.");
+      return { ...response, submittedKey };
     },
   });
+  const providerDecompositionRecord = terminal?.target
+    ? terminal.executions?.[boundedTerminalExecutionSlot(`portfolio.${assets.join(",")}.provider-decomposition`)] as ProviderFactorRiskDecomposeResponse | undefined
+    : providerFactorDecompose.data?.submittedKey === captureOwnerKey ? providerFactorDecompose.data : undefined;
   const providerFactorCaptureReset = providerFactorCapture.reset;
   const providerFactorDecomposeReset = providerFactorDecompose.reset;
   useEffect(() => {
     providerFactorCaptureReset();
     providerFactorDecomposeReset();
-  }, [assets, providerFactorCaptureReset, providerFactorDecomposeReset]);
-  const setCaptureEditing = terminal?.setEditing;
-  useEffect(() => {
-    setCaptureEditing?.("portfolio-provider-capture", providerFactorCapture.isPending || providerFactorDecompose.isPending);
-    return () => setCaptureEditing?.("portfolio-provider-capture", false);
-  }, [setCaptureEditing, providerFactorCapture.isPending, providerFactorDecompose.isPending]);
+  }, [captureOwnerKey, providerSnapshotId, providerFactorCaptureReset, providerFactorDecomposeReset]);
 
 
   if (isLoading || !optimizationData) {
@@ -1071,7 +1105,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
   const providerStatus = providerSnapshot
     ? providerHasInsufficientData ? "PROVIDER MODEL: INSUFFICIENT DATA" : "PROVIDER MODEL: SOURCE-BOUND"
     : null;
-  const providerDecomposeOutput = providerFactorDecompose.data?.result;
+  const providerDecomposeOutput = providerDecompositionRecord?.result;
 
 
   const factorRunOutput = factorAttributionRun.data && "attribution" in factorAttributionRun.data
@@ -1753,14 +1787,15 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
                   <button
                     data-testid="provider-factor-capture"
                     onClick={() => { providerFactorDecompose.reset(); providerFactorCapture.mutate({ symbols: assets, benchmarkSymbol: "^GSPC", range: providerFactorRange }); }}
-                    disabled={providerFactorCapture.isPending}
+                    disabled={terminal?.readOnly || providerFactorCapture.isPending || providerFactorDecompose.isPending}
                     className="border border-amber-400/50 px-2 py-1 font-terminal text-[8px] text-amber-200 disabled:opacity-40"
                   >
                     {providerFactorCapture.isPending ? "CAPTURING…" : "CAPTURE PROVIDER FACTOR MODEL"}
                   </button>
                   <button
                     data-testid="provider-factor-decompose"
-                    disabled={!providerSnapshot || !providerHasCompleteUniverse || !providerHasExactWeights || providerHasInsufficientData || providerFactorDecompose.isPending}
+                    onClick={() => providerFactorDecompose.mutate()}
+                    disabled={terminal?.readOnly || !providerSnapshot || !providerHasCompleteUniverse || !providerHasExactWeights || providerHasInsufficientData || providerFactorCapture.isPending || providerFactorDecompose.isPending}
                     className="border border-emerald-400/50 px-2 py-1 font-terminal text-[8px] text-emerald-200 disabled:opacity-40"
                   >
                     {providerFactorDecompose.isPending ? "DECOMPOSING…" : "DECOMPOSE PROVIDER MODEL"}
@@ -1771,7 +1806,7 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
                 {providerSnapshot && (
                   <div data-testid="provider-factor-capture-summary" className="border border-border/50 bg-[#050505] p-2 space-y-1 font-terminal text-[7px]">
                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                      <span className="text-muted-foreground">CACHE</span><span className="text-foreground">{providerSnapshot.cache.toUpperCase()}</span>
+                      <span className="text-muted-foreground">ORIGINAL CAPTURE CACHE</span><span className="text-foreground">{providerSnapshot.cache.toUpperCase()} · restored authorized snapshot, not a new fetch</span>
                       <span className="text-muted-foreground">SNAPSHOT ID</span><span className="text-foreground break-all">{providerSnapshot.snapshotId}</span>
                       <span className="text-muted-foreground">CONTENT HASH</span><span className="text-foreground break-all">{providerSnapshot.contentHash}</span>
                       <span className="text-muted-foreground">INCLUDED / EXCLUDED</span><span className="text-foreground">{providerSnapshot.securities.length} / {providerExcluded.length}</span>
@@ -1810,13 +1845,15 @@ function PortfolioOptimizerPanel({ onSymbol, externalRiskMod }: { onSymbol: (sym
                 )}
                 {providerFactorDecompose.error && <div data-testid="provider-factor-decompose-error" className="font-terminal text-[7px] text-rose-300">{(providerFactorDecompose.error as Error).message}</div>}
               </div>
-              {providerDecomposeOutput && providerFactorDecompose.data && (
+              {providerDecomposeOutput && providerDecompositionRecord && (
                 <div data-testid="provider-factor-decomposition" className="border border-emerald-500/30 bg-emerald-500/5 p-2 space-y-2 font-terminal text-[8px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-emerald-300 font-bold">DERIVED · PROVIDER MODEL DECOMPOSITION</span>
-                    <span className="text-muted-foreground">SOURCE SNAPSHOT: {providerFactorDecompose.data.snapshotId}</span>
+                    <span className="text-emerald-300 font-bold">DERIVED · PROVIDER MODEL DECOMPOSITION · {terminal?.target ? "RETAINED ORIGINAL RESULT" : "SESSION PREVIEW, NOT RETAINED"}</span>
+                    <span className="text-muted-foreground">SOURCE SNAPSHOT: {providerDecompositionRecord.snapshotId}</span>
                   </div>
-                  <div className="text-muted-foreground break-all">SOURCE HASH: <span className="text-foreground">{providerFactorDecompose.data.contentHash}</span></div>
+                  <div className="text-muted-foreground break-all">SOURCE HASH: <span className="text-foreground">{providerDecompositionRecord.contentHash}</span></div>
+                  <div className="text-muted-foreground">EXACT RUN WEIGHTS: {Object.entries(providerDecompositionRecord.portfolioWeights).map(([symbol, weight]) => `${symbol}: ${weight}`).join(" · ")} · Recorded output, not recomputed from current basket observations.</div>
+                  {providerDecompositionRecord.receipt && <AdvancedPortfolioRiskReceipt receipt={providerDecompositionRecord.receipt} />}
                   <div className="grid grid-cols-2 gap-1">
                     <div className="border border-border/40 p-1.5"><div className="text-muted-foreground">EXPECTED RETURN</div><div className="text-amber-300 font-bold">{providerDecomposeOutput.expectedReturn.toFixed(6)} [decimal return]</div></div>
                     <div className="border border-border/40 p-1.5"><div className="text-muted-foreground">TOTAL EXPECTED RETURN</div><div className="text-foreground font-bold">{providerDecomposeOutput.totalExpectedReturn.toFixed(6)} [decimal return]</div></div>

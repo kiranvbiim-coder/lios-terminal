@@ -48,8 +48,8 @@ export default function GlobalIndicatorExplorerPanel() {
   const [query, setQuery] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.query", "");
   const [country, setCountry] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.country", "");
   const [category, setCategory] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.category", "");
-  const [dataset, setDataset] = useState<DatasetKind>("economics");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [dataset, setDataset] = useTerminalArtifactState<DatasetKind>("GlobalIndicatorExplorerPanel.dataset", "economics");
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("GlobalIndicatorExplorerPanel.selected", null);
   const [browserPage, setBrowserPage] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.browserPage", 1);
   const [browserLimit, setBrowserLimit] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.browserLimit", 50);
   const [start, setStart] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.start", "");

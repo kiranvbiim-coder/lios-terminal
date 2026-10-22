@@ -250,7 +250,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
 
   const [showSensitivity, setShowSensitivity] = useState(false);
   const [sensMode, setSensMode] = useTerminalArtifactState<"one" | "two" | "tornado">("SpreadsheetStudioPanel.sensMode", "one");
-  const [sensOutputRef, setSensOutputRef] = useState("");
+  const [sensOutputRef, setSensOutputRef] = useTerminalArtifactState("SpreadsheetStudioPanel.sensOutputRef", "");
   const [sensInputRef, setSensInputRef] = useTerminalArtifactState("SpreadsheetStudioPanel.sensInputRef", "");
   const [sensMin, setSensMin] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMin", "");
   const [sensMax, setSensMax] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMax", "");
@@ -1312,7 +1312,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
             {charts.length > 0 && <span className="ml-0.5 px-1 bg-[hsl(38,95%,50%)]/20 text-[hsl(38,95%,55%)] rounded-sm">{charts.length}</span>}
           </button>
           <button
-            onClick={() => { setSensOutputRef(selected); setShowSensitivity(true); }}
+            onClick={() => { if (!sensOutputRef) setSensOutputRef(selected); setShowSensitivity(true); }}
             title="Sensitivity / Data Table -- sweep one or two input cells across a range of values and see how an output cell responds, or rank several inputs by their impact on an output (tornado)"
             className="flex items-center gap-1 font-terminal text-[8px] tracking-widest px-2 py-1 border border-border/60 text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/50%]"
           >

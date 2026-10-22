@@ -55,8 +55,7 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
   const { data: status } = useLseStatus();
   const queryClient = useQueryClient();
   const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol ?? "AAPL");
-  const [symbolDraft, setSymbolDraft] = useState(symbol);
-  useEffect(() => setSymbolDraft(symbol), [symbol]);
+  const [symbolDraft, setSymbolDraft] = useTerminalArtifactState(`FinancialStatementsPanel.symbolDraft.${symbol}`, symbol);
   const commitSymbol = () => {
     const next = symbolDraft.trim().toUpperCase();
     if (/^[A-Z^][A-Z0-9.^=_-]{0,24}$/.test(next) && next !== symbol) setSymbol(next);
@@ -348,10 +347,10 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
         </span>
       </div>
 
-      {!configured ? (
+      {!configured && !years.length && !analysisPeriods.length ? (
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md text-center font-terminal text-[10px] text-muted-foreground border border-border px-4 py-3">
-            NO LSE_API_KEY CONFIGURED — GET A FREE KEY AT LONDONSTRATEGICEDGE.COM/DATA. VALUES BELOW WILL POPULATE ONCE ONE IS SET. HONEST STATE, NOT A BUG.
+            Provider observations and imported statements are unavailable for this selection. Connect an authorized source or explicitly import and review a statement; missing figures are not filled.
           </div>
         </div>
       ) : activeLoading ? (
@@ -396,6 +395,7 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
           ) : (
             <>
               <CustomLineItemBuilder
+                stateKey={`FinancialStatementsPanel.builder.${symbol}.${statement}.${period}`}
                 availableRefs={availableRefs}
                 periodLabels={years.map(periodLabel)}
                 onAddManual={customState.addManual}
@@ -474,7 +474,7 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
 
       <div className="px-4 py-1.5 border-t border-border bg-[#060606] shrink-0">
         <span className="font-terminal text-[7.5px] text-muted-foreground/70">
-          Real filed figures via London Strategic Edge (SEC-sourced). VALUES shows figures as reported; % view is vertical common-size analysis; YoY GROWTH is horizontal analysis vs. the prior fiscal year.
+          Figures follow their recorded per-field source and status. Imported statements and manual corrections are not provider observations. VALUES shows retained figures; % view is common-size analysis; YoY GROWTH compares the prior fiscal year.
         </span>
       </div>
     </div>

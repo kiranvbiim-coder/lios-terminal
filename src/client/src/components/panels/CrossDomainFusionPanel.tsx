@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect, useMemo } from "react";
 import { Sparkles, Download } from "lucide-react";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
@@ -51,7 +52,7 @@ function fmtDate(iso: string) {
 export default function CrossDomainFusionPanel() {
   const [portfolios, setPortfolios] = useState<PortfolioResponse[]>([]);
   const [exposure, setExposure] = useState<Record<string, number> | null>(null);
-  const [selectedSector, setSelectedSector] = useState<string | null>(null);
+  const [selectedSector, setSelectedSector] = useTerminalArtifactState<string | null>("CrossDomainFusionPanel.selectedSector", null);
   const [impact, setImpact] = useState<RateCycleImpactResult | null>(null);
   const [loadingImpact, setLoadingImpact] = useState(false);
 
@@ -79,9 +80,9 @@ export default function CrossDomainFusionPanel() {
         const topSector = Object.entries(pct)
           .filter(([sector]) => SECTOR_ETF_LABEL[sector])
           .sort((a, b) => b[1] - a[1])[0]?.[0];
-        setSelectedSector(topSector ?? "Technology");
+        setSelectedSector(current => current ?? topSector ?? "Technology");
       })
-      .catch(() => { setExposure({}); setSelectedSector("Technology"); });
+      .catch(() => { setExposure({}); setSelectedSector(current => current ?? "Technology"); });
   }, []);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -140,8 +140,9 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
   const [researchQuery, setResearchQuery] = useTerminalArtifactState("ResearchIntelligencePanel.researchQuery", starterQuestion?.trim() || "");
   const [sourceClasses, setSourceClasses] = useTerminalArtifactState("ResearchIntelligencePanel.sourceClasses", ["filing", "news", "official_data", "published_content", "private_data"]);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
-  const [annotationId, setAnnotationId] = useState<number | null>(null);
-  const [annotation, setAnnotation] = useTerminalArtifactState("ResearchIntelligencePanel.annotation", "");
+  const [annotationId, setAnnotationId] = useTerminalArtifactState<number | null>(`ResearchInvestigationPanel.annotationId.${selectedId}`, null);
+  const [annotation, setAnnotation] = useTerminalArtifactState(`ResearchInvestigationPanel.annotation.${selectedId}`, "");
+  const previousDraft = useTerminalArtifactContext()?.state["ResearchIntelligencePanel.annotation"];
   const [fromEvidenceId, setFromEvidenceId] = useTerminalArtifactState("ResearchIntelligencePanel.fromEvidenceId", "");
   const [toEvidenceId, setToEvidenceId] = useTerminalArtifactState("ResearchIntelligencePanel.toEvidenceId", "");
   const [relationshipType, setRelationshipType] = useTerminalArtifactState<Relationship["relationshipType"]>("ResearchIntelligencePanel.relationshipType", "supports");
@@ -297,7 +298,7 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
 
   const updateAnnotation = useMutation({
     mutationFn: async () => {
-      if (!annotationId) throw new Error("Select evidence to annotate.");
+      if (!annotationId || !detail?.evidence.some(item => item.id === annotationId)) throw new Error("Select currently authorized evidence in this investigation to annotate.");
       await apiRequest("PATCH", `/api/research/evidence/${annotationId}`, { annotation: annotation.trim() || null });
     },
     onSuccess: async () => { setAnnotationId(null); setAnnotation(""); await refreshResearch(); setFeedback("Evidence annotation updated."); },
@@ -488,6 +489,7 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
                           {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="text-amber-300 flex items-center gap-1 hover:underline">Open source <ExternalLink className="w-3 h-3" /></a>}
                           {canAuthor && <button onClick={() => { setAnnotationId(item.id); setAnnotation(item.annotation || ""); }} className="text-amber-300 hover:underline">Annotate</button>}
                         </div>
+                        {annotationId === item.id && typeof previousDraft === "string" && previousDraft && <details className="text-xs"><summary>Earlier shared annotation draft · evidence assignment was not recorded</summary><pre className="whitespace-pre-wrap">{previousDraft}</pre><button type="button" onClick={() => setAnnotation(previousDraft)}>Use this reviewed draft for this evidence</button></details>}
                         {annotationId === item.id && <form onSubmit={(event) => { event.preventDefault(); updateAnnotation.mutate(); }} className="mt-2 flex gap-2">
                           <input autoFocus value={annotation} onChange={(event) => setAnnotation(event.target.value)} maxLength={10000} placeholder="ANALYST ANNOTATION" className="h-8 min-w-0 flex-1 bg-black border border-border px-2 text-[10px] outline-none focus:border-amber-400/50" />
                           <button disabled={updateAnnotation.isPending} title="Save annotation" className="w-8 h-8 border border-amber-400/40 text-amber-300 flex items-center justify-center"><Save className="w-3.5 h-3.5" /></button>

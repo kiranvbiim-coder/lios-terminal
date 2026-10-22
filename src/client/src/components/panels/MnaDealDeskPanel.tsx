@@ -34,7 +34,7 @@ function MnaDealDeskPanel() {
   // pulled from somewhere, when it wasn't. Deal-team analysts know their own
   // precedent set; "+ ADD DEAL" builds the real table from what they know,
   // same manual-entry-first pattern as the Comps tab's peer table.
-  const [deals, setDeals] = useState<PrecedentDeal[]>([]);
+  const [deals, setDeals] = useTerminalArtifactState<PrecedentDeal[]>("MnaDealDeskPanel.deals", []);
   const addDeal = () => setDeals(prev => [...prev, {
     id: prev.length ? Math.max(...prev.map(d => d.id)) + 1 : 1,
     target: "", acquirer: "", value: 0, premium: 0, evEbitda: 0, evSales: 0,
@@ -56,7 +56,7 @@ function MnaDealDeskPanel() {
   const [accretionError, setAccretionError] = useState<string | null>(null);
   const [accretionRunning, setAccretionRunning] = useState(false);
   // Defense / Poison Pill Inputs
-  const [triggerPct, setTriggerPct] = useState(15);
+  const [triggerPct, setTriggerPct] = useTerminalArtifactState("MnaDealDeskPanel.triggerPct", 15);
   const [insiderControl, setInsiderControl] = useTerminalArtifactState("MnaDealDeskPanel.insiderControl", 12);
 
   // LBO Modeler Inputs

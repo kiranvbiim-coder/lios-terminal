@@ -1,4 +1,4 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BrainCircuit, Check, CirclePause, CirclePlay, GitBranch, ListRestart, Pencil, Play, RefreshCw, ShieldCheck, X } from "lucide-react";
@@ -52,9 +52,12 @@ export default function LimuriaBrainPanel({ symbol, role }: { symbol: string; ro
   const [question, setQuestion] = useTerminalArtifactState("LimuriaBrainPanel.question", `Should we invest in ${symbol || "AAPL"} over the next 12 months?`);
   const [primaryEntity, setPrimaryEntity] = useTerminalArtifactState("LimuriaBrainPanel.primaryEntity", (symbol || "AAPL").toUpperCase());
   const [message, setMessage] = useState("");
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [editCriteria, setEditCriteria] = useTerminalArtifactState("LimuriaBrainPanel.editCriteria", "");
-  const [editInput, setEditInput] = useTerminalArtifactState("LimuriaBrainPanel.editInput", "");
+  const [editingTaskId, setEditingTaskId] = useTerminalArtifactState<number | null>(`LimuriaBrainPanel.editingTaskId.${selectedId}`, null);
+  const [editCriteria, setEditCriteria] = useTerminalArtifactState(`LimuriaBrainPanel.editCriteria.${selectedId}`, "");
+  const [editInput, setEditInput] = useTerminalArtifactState(`LimuriaBrainPanel.editInput.${selectedId}`, "");
+  const previousDraft = useTerminalArtifactContext()?.state;
+  const earlierCriteria = typeof previousDraft?.["LimuriaBrainPanel.editCriteria"] === "string" ? previousDraft["LimuriaBrainPanel.editCriteria"] as string : "";
+  const earlierInput = typeof previousDraft?.["LimuriaBrainPanel.editInput"] === "string" ? previousDraft["LimuriaBrainPanel.editInput"] as string : "";
 
   const { data: runs = [] } = useQuery<BrainRunSummary[]>({ queryKey: ["/api/brain/runs"] });
   useEffect(() => { if (!selectedId && runs[0]) setSelectedId(runs[0].id); }, [runs, selectedId]);
@@ -81,6 +84,7 @@ export default function LimuriaBrainPanel({ symbol, role }: { symbol: string; ro
   });
   const editTask = useMutation({
     mutationFn: async (task: BrainTask) => {
+      if (!run || run.id !== selectedId || !run.tasks.some(current => current.id === task.id) || task.id !== editingTaskId) throw new Error("The selected task is no longer available in this authorized run.");
       let input: Record<string, unknown>;
       try { input = JSON.parse(editInput); } catch { throw new Error("Task input must be valid JSON."); }
       return (await apiRequest("PATCH", `/api/brain/runs/${run!.id}/tasks/${task.id}`, { completionCriteria: editCriteria, input })).json() as Promise<BrainRun>;
@@ -137,6 +141,7 @@ export default function LimuriaBrainPanel({ symbol, role }: { symbol: string; ro
               <div className={`w-7 h-7 border flex items-center justify-center font-mono text-[8px] ${STATUS_STYLE[task.status]}`}>{index + 1}</div>
               <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[9px]">{task.label}</span><span className="font-terminal text-[7px] text-amber-300">{statusLabel(task.agentRole)}</span>{task.toolId && <span className="font-mono text-[7px] text-muted-foreground">{task.toolId}</span>}</div><div className="font-mono text-[7px] text-muted-foreground mt-1">DEPENDS: {task.dependencies.join(", ") || "ROOT"}</div><div className="text-[10px] text-muted-foreground mt-2">{task.completionCriteria}</div><div className="font-mono text-[8px] mt-2">{outputSummary(task)}</div><div className="font-mono text-[7px] text-muted-foreground mt-1">{task.provenance.length} source refs / {task.deterministicRefs.length} deterministic refs / {task.attemptCount} attempt(s)</div>
                 {editingTaskId === task.id && <div className="mt-3 space-y-2"><input value={editCriteria} onChange={(event) => setEditCriteria(event.target.value)} className="w-full h-8 bg-black border border-border px-2 font-mono text-[8px]" /><textarea value={editInput} onChange={(event) => setEditInput(event.target.value)} className="w-full min-h-20 bg-black border border-border p-2 font-mono text-[8px]" /><button onClick={() => editTask.mutate(task)} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[8px]">SAVE TASK EDIT</button></div>}
+                {editingTaskId === task.id && (earlierCriteria || earlierInput) && <details className="mt-2 text-xs"><summary>Earlier shared task draft · run/task assignment was not recorded</summary><pre className="whitespace-pre-wrap">{earlierCriteria}{"\n"}{earlierInput}</pre><button type="button" onClick={() => { setEditCriteria(earlierCriteria); setEditInput(earlierInput); }}>Use this reviewed draft for the selected task</button></details>}
               </div>
               <div className="flex gap-1"><span className={`border px-1.5 py-1 font-terminal text-[6px] ${STATUS_STYLE[task.status]}`}>{statusLabel(task.status)}</span>{canAuthor && ["pending", "incomplete", "failed", "blocked"].includes(task.status) && <button title="Edit task" onClick={() => { setEditingTaskId(task.id); setEditCriteria(task.completionCriteria); setEditInput(JSON.stringify(task.input, null, 2)); }} className="w-7 h-7 border border-border flex items-center justify-center"><Pencil className="w-3 h-3" /></button>}{canAuthor && ["incomplete", "failed", "blocked"].includes(task.status) && <button title="Retry task" onClick={() => action.mutate({ endpoint: `/api/brain/runs/${run.id}/tasks/${task.id}/retry` })} className="w-7 h-7 border border-border flex items-center justify-center"><ListRestart className="w-3 h-3" /></button>}</div>
             </article>)}</div>}

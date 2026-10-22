@@ -11,6 +11,12 @@ import { callPythonService } from "./pythonService";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 import { QUANT_MODEL_REGISTRY } from "./quantModelRegistry";
 import { runModelTournament, stressThesis, findDecisionBoundary, calculateReverseDcf } from "./decisionEngine";
+import { bootstrapMeanCI, permutationTestMeanDiff } from "../client/src/lib/statistics";
+import { counterpartyCVA, liquidityCostEstimate, monteCarloVaR } from "../client/src/lib/quantModels";
+import { calculateFactorAttribution } from "@shared/factorAttribution";
+import { buildFactorAttributionInput, type FactorRiskDecomposeRequest, type FactorRiskSnapshot } from "./factorRiskModel";
+import type { TenantContext } from "./tenantContext";
+import { admitTerminalExecutionSources } from "./terminalArtifactTool";
 
 export const ADVANCED_QUANT_PATHS = [
   "fixed-income/bootstrap-par-curve", "fixed-income/spread-analytics", "fixed-income/key-rate-risk", "fixed-income/immunize-duration",
@@ -254,21 +260,95 @@ type DecisionAnalysisInput = Parameters<typeof stressThesis>[0] & {
   models: Parameters<typeof runModelTournament>[0];
   boundary?: { points: Parameters<typeof findDecisionBoundary>[0]; threshold: number };
 };
-function ownedDecisionExecution(modelId: string, parameters: Record<string, unknown>, result: unknown, userId: number): AdvancedQuantExecution {
+function ownedTypeScriptExecution(modelId: string, parameters: Record<string, unknown>, result: unknown, userId: number): AdvancedQuantExecution {
   const registryEntry = QUANT_MODEL_REGISTRY.find(entry => entry.id === modelId && entry.engine === "typescript");
-  if (!registryEntry) throw new Error("Original decision calculation is not registered.");
+  if (!registryEntry) throw new Error("Original TypeScript calculation is not registered.");
   const provenance = resolveAdvancedQuantInputProvenance(parameters, { dataClassification: "manual", manualInputs: parameters });
-  if (!provenance.success) throw new Error("Original decision inputs are not valid manual parameters.");
+  if (!provenance.success) throw new Error("Original TypeScript inputs are invalid.");
   const receipt = buildAdvancedQuantRunReceipt({ path: registryEntry.apiEndpoint!, registryEntry, parameters, inputProvenance: provenance.data, result });
   const execution = { result, receipt, response: advancedQuantRunResponse(result, receipt), headers: advancedQuantReceiptHeaders(receipt) };
   nativeExecutionOwners.set(execution, userId);
   return execution;
 }
+
+/** Original provider estimator/attribution only; P4 is the sole retained-result owner. */
+export async function executeOriginalFactorDecomposition(snapshot: FactorRiskSnapshot, request: FactorRiskDecomposeRequest, ctx: TenantContext): Promise<AdvancedQuantExecution> {
+  if (request.expectedSnapshotHash !== snapshot.contentHash || request.snapshotId !== snapshot.snapshotId) throw new Error("Selected factor snapshot hash changed; no replacement or recomputation was selected.");
+  const modelInput = buildFactorAttributionInput(snapshot, request);
+  const parameters = {
+    snapshotId: snapshot.snapshotId, contentHash: snapshot.contentHash,
+    portfolioWeights: request.portfolioWeights,
+    ...(request.benchmarkWeights ? { benchmarkWeights: request.benchmarkWeights } : {}),
+    ...(request.scenario ? { scenario: request.scenario } : {}),
+    modelInput, sourceProvenance: snapshot.sources,
+    factorReturnSelection: "arithmetic-average-of-estimated-period-returns",
+  };
+  const provenance = resolveAdvancedQuantInputProvenance(parameters, {
+    dataClassification: "model_derived",
+    derivedFrom: { modelId: "factor-risk-model", modelVersion: "1.0.0", outputSnapshotHash: snapshot.contentHash },
+    sourceBindings: [{
+      contractFamily: "factor-risk-model", field: "modelInput", connectorId: "factor-risk-model", provider: "factor_risk_model",
+      priority: "primary", sourceReference: `dataset-snapshot:${snapshot.snapshotId}`,
+      asOf: `${snapshot.request.asOf}T00:00:00.000Z`, retrievedAt: snapshot.capturedAt, freshness: "cached-derived-model",
+      snapshot: { id: snapshot.snapshotId, contentHash: snapshot.contentHash },
+      transformations: ["factor-risk:arithmetic-average-of-estimated-period-returns"],
+    }],
+    transformations: [],
+  });
+  if (!provenance.success) throw new Error("Original factor source provenance is invalid.");
+  await admitTerminalExecutionSources(ctx, provenance.data, parameters, undefined, false, undefined, "/api/factor-risk/decompose");
+  const result = JSON.parse(JSON.stringify({
+    snapshotId: snapshot.snapshotId, contentHash: snapshot.contentHash, provenance: snapshot.sources,
+    factorReturnSelection: parameters.factorReturnSelection, portfolioWeights: request.portfolioWeights,
+    result: calculateFactorAttribution(modelInput),
+  })) as Record<string, unknown>;
+  const registryEntry = QUANT_MODEL_REGISTRY.find(entry => entry.id === "factor-risk-model");
+  if (!registryEntry) throw new Error("Original factor model is not registered.");
+  const receipt = buildAdvancedQuantRunReceipt({ path: "/api/factor-risk/decompose", registryEntry, parameters, inputProvenance: provenance.data, result });
+  const execution = { result, receipt, response: advancedQuantRunResponse(result, receipt), headers: advancedQuantReceiptHeaders(receipt) };
+  nativeExecutionOwners.set(execution, ctx.userId);
+  return execution;
+}
 export async function executeOriginalDecisionAnalysis(input: DecisionAnalysisInput, userId: number): Promise<AdvancedQuantExecution> {
   const result = { tournament: runModelTournament(input.models), thesisStress: stressThesis(input),
     decisionBoundary: input.boundary ? findDecisionBoundary(input.boundary.points, input.boundary.threshold) : null };
-  return ownedDecisionExecution("typescript.decision-analysis", { ...input }, result, userId);
+  return ownedTypeScriptExecution("typescript.decision-analysis", { ...input }, result, userId);
 }
 export async function executeOriginalDecisionReverseDcf(input: Parameters<typeof calculateReverseDcf>[0], userId: number): Promise<AdvancedQuantExecution> {
-  return ownedDecisionExecution("typescript.decision-reverse-dcf", { ...input }, calculateReverseDcf(input), userId);
+  return ownedTypeScriptExecution("typescript.decision-reverse-dcf", { ...input }, calculateReverseDcf(input), userId);
+}
+
+export const originalResamplingRequestSchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("bootstrap"), data: z.array(z.number().finite()).min(1).max(5000), iterations: z.number().int().min(100).max(20000), confidence: z.number().gt(0).lt(100), seed: z.number().int().min(0).max(2_147_483_647) }).strict(),
+  z.object({ method: z.literal("permutation"), group1: z.array(z.number().finite()).min(1).max(5000), group2: z.array(z.number().finite()).min(1).max(5000), iterations: z.number().int().min(100).max(20000), seed: z.number().int().min(0).max(2_147_483_647) }).strict(),
+]);
+export function executeOriginalResampling(raw: unknown, userId: number): AdvancedQuantExecution {
+  const input = originalResamplingRequestSchema.parse(raw);
+  const observations = input.method === "bootstrap" ? input.data.length : input.group1.length + input.group2.length;
+  if (observations * input.iterations > 10_000_000) throw new Error("Original resampling exceeds the ten-million sample-draw bound.");
+  const result = input.method === "bootstrap" ? bootstrapMeanCI(input.data, input.iterations, input.confidence, input.seed) : permutationTestMeanDiff(input.group1, input.group2, input.iterations, input.seed);
+  if (!Object.values(result).every(Number.isFinite)) throw new Error("Original resampling produced non-finite output; input magnitude overflowed the supported numeric range.");
+  return ownedTypeScriptExecution("typescript.descriptive-resampling", input, result, userId);
+}
+
+export const originalManualRiskRequestSchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("cva"), exposureProfile: z.array(z.number().finite().nonnegative()).min(1).max(5000), pdCurvePct: z.array(z.number().finite().min(0).max(100)).min(1).max(5000), lgdPct: z.number().finite().min(0).max(100), discountFactors: z.array(z.number().finite().positive()).min(1).max(5000) }).strict(),
+  z.object({ method: z.literal("liquidity-cost"), bidAskSpreadPct: z.array(z.number().finite().nonnegative()).min(1).max(5000), positionSizes: z.array(z.number().finite().nonnegative()).min(1).max(5000) }).strict(),
+  z.object({ method: z.literal("monte-carlo-var"), positionValue: z.number().finite().positive(), dailyVolPct: z.number().finite().nonnegative(), dailyDriftPct: z.number().finite(), confidence: z.enum(["90", "95", "97.5", "99"]), horizonDays: z.number().int().min(1).max(365), paths: z.number().int().min(100).max(20000), seed: z.number().int().min(0).max(2_147_483_647) }).strict(),
+]);
+export function executeOriginalManualRisk(raw: unknown, userId: number): AdvancedQuantExecution {
+  const input = originalManualRiskRequestSchema.parse(raw);
+  let result: Record<string, number>;
+  if (input.method === "cva") {
+    if (input.exposureProfile.length !== input.pdCurvePct.length || input.exposureProfile.length !== input.discountFactors.length) throw new Error("Every CVA period requires one exposure, PD and discount factor; observations are never dropped.");
+    result = { cva: counterpartyCVA(input.exposureProfile, input.pdCurvePct, input.lgdPct, input.discountFactors).cva };
+  } else if (input.method === "liquidity-cost") {
+    if (input.bidAskSpreadPct.length !== input.positionSizes.length) throw new Error("Every liquidity position requires one spread and size; observations are never dropped.");
+    result = { estimatedCost: liquidityCostEstimate(input.bidAskSpreadPct, input.positionSizes) };
+  } else {
+    if (input.horizonDays * input.paths > 1_000_000) throw new Error("Original Monte Carlo VaR exceeds the million path-step bound.");
+    result = { valueAtRisk: monteCarloVaR(input.positionValue, input.dailyVolPct, input.dailyDriftPct, Number(input.confidence), input.horizonDays, input.paths, input.seed) };
+  }
+  if (!Object.values(result).every(Number.isFinite)) throw new Error("Original manual risk output overflowed the supported finite numeric range.");
+  return ownedTypeScriptExecution("typescript.asset-pricing-risk", input, result, userId);
 }

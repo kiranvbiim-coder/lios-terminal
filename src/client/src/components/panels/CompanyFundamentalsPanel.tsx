@@ -1,5 +1,5 @@
-import { useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
-import { useState, useMemo, useEffect } from "react";
+import { useTerminalArtifactSymbol, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useState, useMemo } from "react";
 import { Building2 } from "lucide-react";
 import { useLseStatus, useLseCompany, useLseFinancials, useLseDividends, useLseSplits } from "@/lib/useLse";
 import { getCurrencySymbol } from "@/lib/finance";
@@ -45,8 +45,7 @@ export default function CompanyFundamentalsPanel({ symbol: initialSymbol }: Prop
   const isClient = useAudience() === "client";
   const { data: status } = useLseStatus();
   const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol ?? "AAPL");
-  const [symbolDraft, setSymbolDraft] = useState(symbol);
-  useEffect(() => setSymbolDraft(symbol), [symbol]);
+  const [symbolDraft, setSymbolDraft] = useTerminalArtifactState(`CompanyFundamentalsPanel.symbolDraft.${symbol}`, symbol);
   const commitSymbol = () => { const next = symbolDraft.trim().toUpperCase(); if (/^[A-Z^][A-Z0-9.^=_-]{0,24}$/.test(next) && next !== symbol) setSymbol(next); };
   const configured = status?.configured ?? false;
   const curr = getCurrencySymbol(symbol);

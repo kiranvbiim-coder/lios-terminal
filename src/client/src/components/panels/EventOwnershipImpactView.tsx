@@ -1,4 +1,4 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { ArrowRight, CalendarDays, ExternalLink, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -88,7 +88,7 @@ function EventRow({ row }: { row: EventOwnershipRecord }) {
 }
 
 export default function EventOwnershipImpactView({ symbol, onSymbol, onNav, compact = false }: Props) {
-  const [ticker, setTicker] = useState((symbol || "").toUpperCase());
+  const [ticker, setTicker] = useTerminalArtifactSymbol((symbol || "").toUpperCase());
   const [input, setInput] = useTerminalArtifactState("EventOwnershipImpactView.input", (symbol || "").toUpperCase());
   const [from, setFrom] = useTerminalArtifactState("EventOwnershipImpactView.from", "");
   const [to, setTo] = useTerminalArtifactState("EventOwnershipImpactView.to", "");

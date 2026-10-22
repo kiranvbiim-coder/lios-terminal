@@ -405,6 +405,7 @@ export default function RatiosTab({ symbol, curr, balCurrent, balPrior, incCurre
             })}
           </div>
           <CustomLineItemBuilder
+            stateKey={`RatiosTab.ratioBuilder.${symbol}`}
             availableRefs={ratioRefs}
             periodLabels={["Value"]}
             manualInMillions={false}
@@ -598,6 +599,7 @@ export default function RatiosTab({ symbol, curr, balCurrent, balPrior, incCurre
           ))}
         </div>
         <CustomLineItemBuilder
+          stateKey={`RatiosTab.particularBuilder.${symbol}`}
           availableRefs={particularRefs}
           periodLabels={["Value"]}
           onAddManual={(label, values) => customParticulars.addManual(label, values)}

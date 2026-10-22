@@ -209,7 +209,7 @@ export default function InstitutionalValuationPanel({ symbol }: Props) {
   const [terminalGrowthPct, setTerminalGrowthPct] = useTerminalArtifactState("InstitutionalValuationPanel.terminalGrowthPct", 2.5);
   const [exitMultiple, setExitMultiple] = useTerminalArtifactState("InstitutionalValuationPanel.exitMultiple", 10);
   const [terminalFadeYears, setTerminalFadeYears] = useTerminalArtifactState("InstitutionalValuationPanel.terminalFadeYears", 5);
-  const [activeScenario, setActiveScenario] = useState<DcfScenarioKey>("base");
+  const [activeScenario, setActiveScenario] = useTerminalArtifactState<DcfScenarioKey>("InstitutionalValuationPanel.activeScenario", "base");
   const [costCapitalMethod, setCostCapitalMethod] = useTerminalArtifactState<CostCapitalMethod>("InstitutionalValuationPanel.costCapitalMethod", "long-treasury-capm");
   const [manualRiskFreePct, setManualRiskFreePct] = useTerminalArtifactState("InstitutionalValuationPanel.manualRiskFreePct", 4.5);
   const [erpPct, setErpPct] = useTerminalArtifactState("InstitutionalValuationPanel.erpPct", 5.0);

@@ -117,7 +117,7 @@ export default function EconomicsPolicyQuantPanel() {
   const [outputGap, setOutputGap] = useTerminalArtifactState("EconomicsPolicyQuantPanel.outputGap", "0.0");
   const [neutralRate, setNeutralRate] = useTerminalArtifactState("EconomicsPolicyQuantPanel.neutralRate", "2.0");
   const [inflationWeight, setInflationWeight] = useTerminalArtifactState("EconomicsPolicyQuantPanel.inflationWeight", "0.5");
-  const [outputGapWeight, setOutputGapWeight] = useState("0.5");
+  const [outputGapWeight, setOutputGapWeight] = useTerminalArtifactState("EconomicsPolicyQuantPanel.outputGapWeight", "0.5");
 
   // ── Phillips Curve ──
   const [usePhillipsLiveData, setUsePhillipsLiveData] = useTerminalArtifactState("EconomicsPolicyQuantPanel.usePhillipsLiveData", true);
@@ -145,8 +145,8 @@ export default function EconomicsPolicyQuantPanel() {
   const [popSize, setPopSize] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popSize", "5000");
   const [popMeanLog, setPopMeanLog] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popMeanLog", "11.0");
   const [popSigmaLog, setPopSigmaLog] = useTerminalArtifactState("EconomicsPolicyQuantPanel.popSigmaLog", "0.7");
-  const [uploadedIncomes, setUploadedIncomes] = useState<number[] | null>(null);
-  const [uploadedEnergy, setUploadedEnergy] = useState<number[] | null>(null);
+  const [uploadedIncomes, setUploadedIncomes] = useTerminalArtifactState<number[] | null>("EconomicsPolicyQuantPanel.uploadedIncomes", null);
+  const [uploadedEnergy, setUploadedEnergy] = useTerminalArtifactState<number[] | null>("EconomicsPolicyQuantPanel.uploadedEnergy", null);
   const generatedIncomes = useMemo(() => sampleLognormal(Number(popSize) || 0, Number(popMeanLog), Number(popSigmaLog)), [popSize, popMeanLog, popSigmaLog]);
   const incomes = uploadedIncomes ?? generatedIncomes;
 

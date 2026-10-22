@@ -24,7 +24,7 @@ export default function GlobalDevelopmentPanel() {
   const { data: catalog } = useWbCatalog(domain);
   const [catalogMode, setCatalogMode] = useTerminalArtifactState<"curated" | "provider">("GlobalDevelopmentPanel.catalogMode", "curated");
   const [catalogPage, setCatalogPage] = useTerminalArtifactState("GlobalDevelopmentPanel.catalogPage", 1);
-  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogSearch, setCatalogSearch] = useTerminalArtifactState("GlobalDevelopmentPanel.catalogSearch", "");
   const providerCatalog = useWbProviderCatalog(catalogPage, 50, catalogSearch, catalogMode === "provider");
   const [code, setCode] = useTerminalArtifactState<string>("GlobalDevelopmentPanel.code", "");
   const [focusCountry, setFocusCountry] = useTerminalArtifactState("GlobalDevelopmentPanel.focusCountry", "US");

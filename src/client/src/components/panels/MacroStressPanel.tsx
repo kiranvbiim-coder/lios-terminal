@@ -158,7 +158,7 @@ function NumericInput({
 
 export default function MacroStressPanel({ onSymbol, onNav }: Props) {
   const [params, setParams] = useTerminalArtifactState<MacroParams>("MacroStressPanel.params", DEFAULTS);
-  const [activeScenario, setActiveScenario] = useState<string | null>(null);
+  const [activeScenario, setActiveScenario] = useTerminalArtifactState<string | null>("MacroStressPanel.activeScenario", null);
   const fedFunds = useIndicatorDetail("FEDFUNDS");
   const cpi = useIndicatorDetail("CPIAUCSL");
   const gdp = useIndicatorDetail("GDPC1");

@@ -17,6 +17,10 @@ import { requireRole } from "./auth";
 import { QUANT_MODEL_REGISTRY, summarizeQuantRegistry } from "./quantModelRegistry";
 import { tenantContext } from "./tenantContext";
 import { executeOriginalTerminalQuant, TerminalQuantTargetError } from "./terminalRegisteredQuant";
+import { executeOriginalResampling, originalResamplingRequestSchema, executeOriginalManualRisk, originalManualRiskRequestSchema } from "./advancedQuantExecution";
+import { terminalExecutionTargetSchema } from "@shared/terminalArtifact";
+import { validateTerminalExecutionTarget } from "./terminalArtifactTool";
+import { createTerminalArtifactEngineVersion } from "./artifactStore";
 
 const consensusRequestSchema = z.object({
   question: z.string().min(1).max(300),
@@ -550,6 +554,34 @@ const OPTIMIZATION_ROUTES = [
 ] as const;
 
 export function registerQuantRoutes(app: Express): void {
+  app.post("/api/quant/risk/manual-original", requireRole("internal_admin", "internal_analyst"), async (req, res) => {
+    const { terminalArtifact, ...parameters } = req.body ?? {};
+    const parsed = originalManualRiskRequestSchema.safeParse(parameters);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid original manual risk inputs.", issues: parsed.error.issues }); return; }
+    try {
+      const ctx = tenantContext(req.user!);
+      const target = terminalArtifact === undefined ? null : terminalExecutionTargetSchema.parse(terminalArtifact);
+      if (target) await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+      const execution = executeOriginalManualRisk(parsed.data, ctx.userId);
+      if (!target) { res.json(execution.response); return; }
+      const saved = await createTerminalArtifactEngineVersion(ctx, target, execution);
+      res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: target.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original manual risk result was not retained." }); }
+  });
+  app.post("/api/quant/statistics/resampling", requireRole("internal_admin", "internal_analyst"), async (req, res) => {
+    const { terminalArtifact, ...parameters } = req.body ?? {};
+    const parsed = originalResamplingRequestSchema.safeParse(parameters);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid original resampling inputs.", issues: parsed.error.issues }); return; }
+    try {
+      const ctx = tenantContext(req.user!);
+      const target = terminalArtifact === undefined ? null : terminalExecutionTargetSchema.parse(terminalArtifact);
+      if (target) await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+      const execution = executeOriginalResampling(parsed.data, ctx.userId);
+      if (!target) { res.json(execution.response); return; }
+      const saved = await createTerminalArtifactEngineVersion(ctx, target, execution);
+      res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: target.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original resampling result was not retained." }); }
+  });
   app.get("/api/quant/registry", requireRole("internal_admin", "internal_analyst", "internal_compliance"), (req, res) => {
     const query = z.object({
       category: z.string().optional(),

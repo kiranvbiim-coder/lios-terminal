@@ -155,6 +155,7 @@ export function formatReadableScalar(key: string, value: unknown, options: Reada
   if (typeof value === "boolean") return { text: value ? "Yes" : "No", exact: null };
   if (typeof value === "bigint") return { text: String(value), exact: null };
   if (typeof value === "string") {
+    if (options.showExact) return { text: value, exact: null };
     if (HASH.test(value)) return { text: `${value.slice(0, 10)}…${value.slice(-6)}`, exact: value };
     // Numeric text is an exact stored decimal; never coerce it through a float.
     if (NUMERIC_TEXT.test(value)) return { text: value, exact: null };

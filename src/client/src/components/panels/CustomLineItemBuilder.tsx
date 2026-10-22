@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { Plus, X } from "lucide-react";
 import type { FormulaOp, FormulaTerm } from "@/lib/customLineItems";
 
 export interface RefOption { ref: string; label: string }
 
 interface Props {
+  stateKey: string;
   availableRefs: RefOption[];
   periodLabels: string[];
   onAddManual: (label: string, values: Record<number, number>) => void;
@@ -30,12 +32,12 @@ function newTerm(availableRefs: RefOption[], op: FormulaOp = "+"): TermDraft {
 // own line item, either a typed-in value per period or a formula chaining
 // any other particular (built-in or previously-added custom one), or a bare
 // number, with +, -, x, /. See client/src/lib/customLineItems.ts.
-export function CustomLineItemBuilder({ availableRefs, periodLabels, onAddManual, onAddFormula, manualInMillions = true }: Props) {
+export function CustomLineItemBuilder({ stateKey, availableRefs, periodLabels, onAddManual, onAddFormula, manualInMillions = true }: Props) {
   const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState("");
-  const [kind, setKind] = useState<"manual" | "formula">("formula");
-  const [terms, setTerms] = useState<TermDraft[]>([newTerm(availableRefs)]);
-  const [manualValues, setManualValues] = useState<Record<number, string>>({});
+  const [label, setLabel] = useTerminalArtifactState(`${stateKey}.label`, "");
+  const [kind, setKind] = useTerminalArtifactState<"manual" | "formula">(`${stateKey}.kind`, "formula");
+  const [terms, setTerms] = useTerminalArtifactState<TermDraft[]>(`${stateKey}.terms`, () => [newTerm(availableRefs)]);
+  const [manualValues, setManualValues] = useTerminalArtifactState<Record<number, string>>(`${stateKey}.manualValues`, {});
 
   const reset = () => {
     setLabel("");

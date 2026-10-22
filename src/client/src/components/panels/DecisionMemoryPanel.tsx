@@ -58,7 +58,9 @@ export default function DecisionMemoryPanel() {
   const [records, setRecords] = useState<DecisionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLogModal, setShowLogModal] = useState(false);
-  const [resolveTarget, setResolveTarget] = useState<DecisionRecord | null>(null);
+  const [resolveTargetId, setResolveTargetId] = useTerminalArtifactState<number | null>("DecisionMemoryPanel.resolveTargetId", null);
+  const resolveTarget = records.find(record => record.id === resolveTargetId && record.status === "open") ?? null;
+  const setResolveTarget = (record: DecisionRecord | null) => setResolveTargetId(record?.id ?? null);
   const [submitting, setSubmitting] = useState(false);
 
   const [question, setQuestion] = useTerminalArtifactState("DecisionMemoryPanel.question", "");

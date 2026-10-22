@@ -1,4 +1,4 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useState, useMemo, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { Sigma, Download, ArrowUpDown } from "lucide-react";
@@ -98,7 +98,7 @@ function CompareMode() {
 export default function DataStatsExplorerPanel({ symbol: initialSymbol }: { symbol?: string }) {
   const [mode, setMode] = useTerminalArtifactState<"single" | "compare">("DataStatsExplorerPanel.mode", "single");
   const [input, setInput] = useTerminalArtifactState("DataStatsExplorerPanel.input", initialSymbol || "AAPL");
-  const [symbol, setSymbol] = useState(initialSymbol || "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol || "AAPL");
   const [range, setRange] = useTerminalArtifactState("DataStatsExplorerPanel.range", "1Y");
   const [dateFilter, setDateFilter] = useTerminalArtifactState("DataStatsExplorerPanel.dateFilter", "");
   const [minAbsReturn, setMinAbsReturn] = useTerminalArtifactState("DataStatsExplorerPanel.minAbsReturn", "");

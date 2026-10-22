@@ -6,8 +6,8 @@ import { FlaskConical, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ScatterChart, Scatter, CartesianGrid, LineChart, Line, Legend, ComposedChart, BarChart, Bar } from "recharts";
 import type { OHLCVSeries } from "@/lib/finance";
 import { inferCurrencyFromSymbol } from "@/lib/finance";
-import { computeDailyReturns, bootstrapMeanCI, permutationTestMeanDiff } from "@/lib/statistics";
-import { pca, engleGrangerTest, kalmanDynamicBeta, olsRegression, rollingVolatility, rollingBeta, rollingCorrelation, fitTCopula, type CopulaFit, fitHoltWinters, forecastHoltWinters, autoARIMA, forecastARIMA, fitGARCH11, computeCovarianceMatrix, riskDecomposition, counterpartyCVA, liquidityCostEstimate, maxDrawdownPct, detectHiddenRelationships, type HiddenRelationshipPair } from "@/lib/quantModels";
+import { computeDailyReturns } from "@/lib/statistics";
+import { pca, engleGrangerTest, kalmanDynamicBeta, olsRegression, rollingVolatility, rollingBeta, rollingCorrelation, fitTCopula, type CopulaFit, fitHoltWinters, forecastHoltWinters, autoARIMA, forecastARIMA, fitGARCH11, computeCovarianceMatrix, riskDecomposition, maxDrawdownPct, detectHiddenRelationships, type HiddenRelationshipPair } from "@/lib/quantModels";
 import { blackScholesMerton } from "@/lib/optionsModels";
 import { useIndicators, useIndicatorDetail } from "@/lib/useEconomics";
 import { AdvancedManualWorkflow, ReceiptSummary, type AdvancedReceipt } from "./advancedMacroForecastResearch";
@@ -1044,6 +1044,12 @@ function parseNumList(input: string): number[] {
   return input.split(",").map((s) => s.trim()).filter((s) => s.length > 0).map(Number).filter((n) => Number.isFinite(n));
 }
 
+function requiredManualNumbers(input: string): number[] {
+  const fields = input.split(",").map(value => value.trim());
+  if (fields.some(value => !value || !Number.isFinite(Number(value)))) throw new Error("Each submitted manual observation must be a finite number; blank or invalid rows are not dropped.");
+  return fields.map(Number);
+}
+
 // Real-scale data entry, not a toy 5-row demo: a consultant with a client-
 // provided debt schedule/loan tape pastes or uploads the actual CSV
 // (name,pd_pct,lgd_pct,ead columns, header optional) instead of hand-typing
@@ -1085,11 +1091,7 @@ interface CreditVarResult {
   worstObligorContributionPct: number;
 }
 
-// Third Python-sidecar-backed tab: Monte Carlo credit VaR (single-factor
-// Gaussian copula, python-service/credit_operational_risk.py) plus
-// Counterparty CVA, which is a closed-form dot product and stays native TS
-// (see quantModels.ts's counterpartyCVA()) -- no reason to round-trip the
-// sidecar for a formula with no randomness in it.
+// Original Python credit VaR and original TypeScript CVA share canonical run custody.
 function CreditRiskTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
 
@@ -1157,15 +1159,19 @@ function CreditRiskTab() {
   const [lgdPctInput, setLgdPctInput] = useTerminalArtifactState("CreditRiskTab.lgdPctInput", "60");
   const [discountRateInput, setDiscountRateInput] = useTerminalArtifactState("CreditRiskTab.discountRateInput", "5");
 
-  const cvaResult = useMemo(() => {
-    const exposure = parseNumList(exposureInput);
-    const pdCurve = parseNumList(pdCurveInput);
-    const n = Math.min(exposure.length, pdCurve.length);
-    if (n === 0) return null;
-    const rate = Number(discountRateInput) / 100;
-    const discountFactors = Array.from({ length: n }, (_, t) => 1 / Math.pow(1 + rate, t + 1));
-    return counterpartyCVA(exposure, pdCurve, Number(lgdPctInput), discountFactors);
-  }, [exposureInput, pdCurveInput, lgdPctInput, discountRateInput]);
+  const [cvaResult, , postCva] = useOriginalQuantResult<{ cva: number; receipt?: AdvancedReceipt }>("qwb.credit.cva");
+  const [cvaRunning, setCvaRunning] = useState(false);
+  const [cvaError, setCvaError] = useState<string | null>(null);
+  async function runCva() {
+    setCvaRunning(true); setCvaError(null);
+    try {
+      const exposureProfile = requiredManualNumbers(exposureInput);
+      const rate = Number(discountRateInput) / 100;
+      if (!discountRateInput.trim() || !lgdPctInput.trim()) throw new Error("Enter the stated discount rate and LGD; blank values are not zero.");
+      await postCva("/api/quant/risk/manual-original", { method: "cva", exposureProfile, pdCurvePct: requiredManualNumbers(pdCurveInput), lgdPct: Number(lgdPctInput), discountFactors: exposureProfile.map((_, t) => 1 / Math.pow(1 + rate, t + 1)) });
+    } catch (error) { setCvaError(error instanceof Error ? error.message : "Original CVA unavailable."); }
+    finally { setCvaRunning(false); }
+  }
 
   return (
     <div className="space-y-6">
@@ -1256,6 +1262,9 @@ function CreditRiskTab() {
             </label>
           </div>
         </div>
+        <button disabled={cvaRunning} onClick={runCva} className="border border-border px-3 py-2 mt-2 text-xs">{cvaRunning ? "Running original CVA…" : "Run original CVA"}</button>
+        {cvaError && <div role="alert" className="text-destructive text-xs">{cvaError}</div>}
+        {cvaResult && <RecordedOriginalRun result={cvaResult}/>}
         {cvaResult && (
           <div className="border border-border p-2.5 mt-3 w-fit">
             <div className="font-terminal text-[7px] tracking-widest text-muted-foreground">CVA (VALUATION REDUCTION)</div>
@@ -1274,10 +1283,7 @@ interface OperationalRiskResult {
   unexpectedLoss: number;
 }
 
-// Fourth Python-sidecar-backed tool: operational risk LDA (Poisson x
-// lognormal Monte Carlo, python-service/credit_operational_risk.py). Paired
-// with liquidity cost estimate, which is closed-form and stays native TS
-// (see quantModels.ts's liquidityCostEstimate()).
+// Original Python operational LDA and original TypeScript liquidation-cost formula.
 function OpRiskLiquidityTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
 
@@ -1309,12 +1315,16 @@ function OpRiskLiquidityTab() {
   // ── Liquidity cost estimate (closed-form, native TS) ──
   const [spreadInput, setSpreadInput] = useTerminalArtifactState("OpRiskLiquidityTab.spreadInput", "0.05,0.10,0.25,0.40");
   const [positionInput, setPositionInput] = useTerminalArtifactState("OpRiskLiquidityTab.positionInput", "2000000,1500000,800000,300000");
-  const liquidityCost = useMemo(() => {
-    const spreads = parseNumList(spreadInput);
-    const positions = parseNumList(positionInput);
-    if (!spreads.length || !positions.length) return null;
-    return liquidityCostEstimate(spreads, positions);
-  }, [spreadInput, positionInput]);
+  const [liquidityResult, , postLiquidity] = useOriginalQuantResult<{ estimatedCost: number; receipt?: AdvancedReceipt }>("qwb.credit.liquidity-cost");
+  const [liquidityRunning, setLiquidityRunning] = useState(false);
+  const [liquidityError, setLiquidityError] = useState<string | null>(null);
+  const liquidityCost = liquidityResult?.estimatedCost ?? null;
+  async function runLiquidity() {
+    setLiquidityRunning(true); setLiquidityError(null);
+    try { await postLiquidity("/api/quant/risk/manual-original", { method: "liquidity-cost", bidAskSpreadPct: requiredManualNumbers(spreadInput), positionSizes: requiredManualNumbers(positionInput) }); }
+    catch (error) { setLiquidityError(error instanceof Error ? error.message : "Original liquidity estimate unavailable."); }
+    finally { setLiquidityRunning(false); }
+  }
 
   return (
     <div className="space-y-6">
@@ -1371,6 +1381,9 @@ function OpRiskLiquidityTab() {
             <input value={positionInput} onChange={(e) => setPositionInput(e.target.value)} className={inputCls} />
           </label>
         </div>
+        <button disabled={liquidityRunning} onClick={runLiquidity} className="border border-border px-3 py-2 mt-2 text-xs">{liquidityRunning ? "Running original estimate…" : "Run original liquidity estimate"}</button>
+        {liquidityError && <div role="alert" className="text-destructive text-xs">{liquidityError}</div>}
+        {liquidityResult && <RecordedOriginalRun result={liquidityResult}/>}
         {liquidityCost !== null && (
           <div className="border border-border p-2.5 mt-3 w-fit">
             <div className="font-terminal text-[7px] tracking-widest text-muted-foreground">ESTIMATED LIQUIDATION COST</div>
@@ -1424,6 +1437,7 @@ function StatisticsSuiteTab() {
   const [weightsInput, setWeightsInput] = useTerminalArtifactState("StatisticsSuiteTab.weightsInput", "1,1,1,1,1,1,1,1,1,1");
   const [yBinInput, setYBinInput] = useTerminalArtifactState("StatisticsSuiteTab.yBinInput", "0,0,0,1,0,0,1,1,1,0");
   const [bootConfidence, setBootConfidence] = useTerminalArtifactState("StatisticsSuiteTab.bootConfidence", "95");
+  const [resamplingSeed, setResamplingSeed] = useTerminalArtifactState("StatisticsSuiteTab.resamplingSeed", "42");
   const [covType, setCovType] = useTerminalArtifactState<"nonrobust" | "HC1" | "HC3" | "HAC" | "cluster">("StatisticsSuiteTab.covType", "nonrobust");
   const [clusterVarInput, setClusterVarInput] = useTerminalArtifactState("StatisticsSuiteTab.clusterVarInput", "");
   const [maxLagsInput, setMaxLagsInput] = useTerminalArtifactState("StatisticsSuiteTab.maxLagsInput", "");
@@ -1433,7 +1447,7 @@ function StatisticsSuiteTab() {
   const native = useTerminalQuantRun();
   const [localResult, setResult] = useState<unknown>(null);
   const storedResult = native.stored?.[`qwb.stats.${method}`];
-  const result = terminal?.target && !["bootstrap", "permutation"].includes(method) ? storedResult ?? null : localResult;
+  const result = terminal?.target ? storedResult ?? null : localResult;
   function readDiagnostic<T>(name: string, local: T): T {
     if (!terminal?.target) return local;
     const stored = storedResult as { diagnostics?: Record<string, unknown> } | undefined;
@@ -1531,12 +1545,12 @@ function StatisticsSuiteTab() {
     setResetResult(null);
     setAutocorrResult(null);
     try {
-      if (method === "bootstrap") {
-        setResult(bootstrapMeanCI(parseNumList(dataInput), 2000, Number(bootConfidence)));
-        return;
-      }
-      if (method === "permutation") {
-        setResult(permutationTestMeanDiff(parseNumList(group1Input), parseNumList(group2Input), 5000));
+      if (method === "bootstrap" || method === "permutation") {
+        const parameters = method === "bootstrap"
+          ? { method, data: parseNumList(dataInput), iterations: 2000, confidence: Number(bootConfidence), seed: Number(resamplingSeed) }
+          : { method, group1: parseNumList(group1Input), group2: parseNumList(group2Input), iterations: 5000, seed: Number(resamplingSeed) };
+        const output = await native.run<Record<string, unknown>>("statistics/resampling", parameters, `qwb.stats.${method}`, "/api/quant/statistics/resampling");
+        if (!terminal?.target) setResult(output);
         return;
       }
       const covOptions: Record<string, unknown> = covType === "nonrobust" ? {} : {
@@ -1623,6 +1637,7 @@ function StatisticsSuiteTab() {
         <button onClick={runStats} disabled={loading} className="px-3 py-1.5 border border-border hover:border-[hsl(38,95%,50%)]/60 hover:text-[hsl(38,95%,55%)] font-terminal text-[8px] text-muted-foreground disabled:opacity-50">
           {loading ? "RUNNING..." : "RUN"}
         </button>
+        {["bootstrap", "permutation"].includes(method) && <label className="text-xs">Recorded seed <input aria-label="Resampling seed" type="number" min="0" max="2147483647" value={resamplingSeed} onChange={event => setResamplingSeed(event.target.value)} className={inputCls}/></label>}
       </div>
 
       {tickersNeeded > 0 && (
@@ -2858,7 +2873,9 @@ function OptionsVolatilityTab() {
     if (method !== "heston-price" || !result) return null;
     const r = result as { impliedVolPct: number | null };
     if (r.impliedVolPct == null) return null;
-    const greeks = blackScholesMerton(Number(priceSpot), Number(priceStrike), Number(priceExpiryYears), Number(riskFreeRatePct) / 100, Number(dividendYieldPct) / 100, r.impliedVolPct / 100, priceIsCall);
+    const recorded = originalRunParameters(result);
+    const terms = recorded ?? { spot: Number(priceSpot), strike: Number(priceStrike), expiryYears: Number(priceExpiryYears), riskFreeRatePct: Number(riskFreeRatePct), dividendYieldPct: Number(dividendYieldPct), isCall: priceIsCall };
+    const greeks = blackScholesMerton(Number(terms.spot), Number(terms.strike), Number(terms.expiryYears), Number(terms.riskFreeRatePct) / 100, Number(terms.dividendYieldPct) / 100, r.impliedVolPct / 100, terms.isCall === true);
     return greeks.price;
   }, [method, result, priceSpot, priceStrike, priceExpiryYears, riskFreeRatePct, dividendYieldPct, priceIsCall]);
 
@@ -3115,9 +3132,11 @@ function ForecastingUpgradeTab() {
   const [garchVol, setGarchVol] = useTerminalArtifactState<"GARCH" | "EGARCH">("ForecastingUpgradeTab.garchVol", "GARCH");
   const [garchDist, setGarchDist] = useTerminalArtifactState<"normal" | "t" | "skewt">("ForecastingUpgradeTab.garchDist", "normal");
   const tsGarchFit = useMemo(() => {
-    if (method !== "garch" || !returnsPct || returnsPct.length < 50) return null;
-    try { return fitGARCH11(returnsPct); } catch { return null; }
-  }, [method, returnsPct]);
+    const originalReturns = originalRunParameters(result)?.returnsPct as number[] | undefined;
+    const values = originalReturns ?? returnsPct;
+    if (method !== "garch" || !values || values.length < 50) return null;
+    try { return fitGARCH11(values); } catch { return null; }
+  }, [method, result, returnsPct]);
 
   async function run() {
     if (!levelSeries) { setError("Load real data first."); return; }

@@ -23,7 +23,7 @@ function pctClass(n: number | null) {
 
 export default function IndicatorExplorerPanel() {
   const { data: indicators, isLoading: listLoading } = useIndicators();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("IndicatorExplorerPanel.selected", null);
   const [points, setPoints] = useTerminalArtifactState("IndicatorExplorerPanel.points", 240);
   const activeSeriesId = selected ?? indicators?.[0]?.seriesId ?? "";
   const { data: detail, isLoading: detailLoading } = useIndicatorDetail(activeSeriesId, { points });

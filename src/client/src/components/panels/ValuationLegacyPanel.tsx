@@ -1421,6 +1421,7 @@ function ValuationPanel({ symbol }: Props) {
 
               <div className="px-3 py-2 border-b border-border/50">
                 <CustomLineItemBuilder
+                  stateKey={`ValuationLegacyPanel.dcfBuilder.${symbol}`}
                   availableRefs={dcfAvailableRefs}
                   periodLabels={Array.from({ length: YEARS }, (_, i) => `Y${i + 1}`)}
                   onAddManual={(label, values) => dcfCustomItems.addManual(label, values)}

@@ -17,7 +17,7 @@ function fmt(v: number | null, digits = 1, suffix = ""): string {
 export default function GlobalClimatePanel() {
   const [tag, setTag] = useTerminalArtifactState<LocationTag | "all">("GlobalClimatePanel.tag", "all");
   const { data: snapshots, isLoading } = useClimateAll(tag === "all" ? undefined : tag);
-  const [focusCode, setFocusCode] = useState<string | null>(null);
+  const [focusCode, setFocusCode] = useTerminalArtifactState<string | null>("GlobalClimatePanel.focusCode", null);
 
   const activeCode = focusCode ?? snapshots?.[0]?.location.code ?? "";
   const { data: focus, isLoading: focusLoading } = useClimateSnapshot(activeCode, 10);

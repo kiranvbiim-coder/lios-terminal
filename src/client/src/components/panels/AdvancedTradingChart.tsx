@@ -29,19 +29,19 @@ export default function AdvancedTradingChart({ data, symbol, chartType, overlays
   const chartRef = useRef<IChartApi | null>(null);
   const priceRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const drawStartRef = useRef<ChartDrawingPoint | null>(null);
-  const [drawMode, setDrawMode] = useState<"cursor" | "horizontal" | "trendline" | "rectangle">("cursor");
-  const [drawColor, setDrawColor] = useState(DRAW_COLORS[0]);
+  const [drawMode, setDrawMode] = useTerminalArtifactState<"cursor" | "horizontal" | "trendline" | "rectangle">(`chart.drawMode.${symbol}`, "cursor");
+  const [drawColor, setDrawColor] = useTerminalArtifactState(`chart.drawColor.${symbol}`, DRAW_COLORS[0]);
   const [drawings, setDrawings] = useTerminalArtifactState<ChartDrawing[]>(`chart.drawings.${symbol}`, () => terminal ? [] : loadDrawings(symbol));
   const [renderVersion, setRenderVersion] = useState(0);
-  const [replayMode, setReplayMode] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(data.length);
+  const [replayMode, setReplayMode] = useTerminalArtifactState(`chart.replayMode.${symbol}`, false);
+  const [replayIndex, setReplayIndex] = useTerminalArtifactState(`chart.replayIndex.${symbol}`, data.length);
   const [crosshair, setCrosshair] = useState<{ time: string; open: number; high: number; low: number; close: number; volume: number } | null>(null);
   const visibleData = replayMode ? data.slice(0, Math.max(2, Math.min(replayIndex, data.length))) : data;
   const visibleDataRef = useRef(visibleData);
   visibleDataRef.current = visibleData;
   useEffect(() => { onDrawingsChange?.(drawings); }, [drawings, onDrawingsChange]);
 
-  useEffect(() => { if (!terminal) setDrawings(loadDrawings(symbol)); setReplayIndex(data.length); setReplayMode(false); }, [data.length, symbol]);
+  useEffect(() => { if (!terminal) { setDrawings(loadDrawings(symbol)); setReplayIndex(data.length); setReplayMode(false); } }, [data.length, symbol]);
   useEffect(() => { if (!terminal) localStorage.setItem(`${DRAWING_KEY}${symbol}`, JSON.stringify(drawings)); }, [drawings, symbol]);
 
   const seriesPoints = useMemo(() => visibleData.map(point => ({ time: asTime(point.date), open: point.open, high: point.high, low: point.low, close: point.close })), [visibleData]);
