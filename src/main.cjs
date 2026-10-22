@@ -19,6 +19,7 @@ const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
 const { assertTrustedIpcSender } = require("./desktopIpcSecurity.cjs");
+const { verifyNativeDraftGrant } = require("./nativeDraftGrant.cjs");
 const { redactDesktopLogText } = require("./desktopLogRedaction.cjs");
 const {
   createRestoreWorkerLaunchPlan,
@@ -494,14 +495,17 @@ ipcMain.handle("limuria:artifact-draft-recovery-available", (event) => {
 });
 ipcMain.handle("limuria:artifact-draft-recovery-read", (event, identity) => {
   assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, identity?.grant, identity);
   return readProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
 });
 ipcMain.handle("limuria:artifact-draft-recovery-write", (event, input) => {
   assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, input?.grant, input);
   return storeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input });
 });
 ipcMain.handle("limuria:artifact-draft-recovery-clear", (event, identity) => {
   assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, identity?.grant, identity);
   return removeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
 });
 
