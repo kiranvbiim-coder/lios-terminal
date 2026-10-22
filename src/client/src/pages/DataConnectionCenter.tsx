@@ -1158,13 +1158,13 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Plug className="w-4 h-4 text-[hsl(38,95%,55%)]" />
-              <span className="font-terminal text-[12px] tracking-[0.2em] text-foreground uppercase">Data Connection Center</span>
+              <span className="font-ui text-xl font-semibold tracking-tight text-foreground">Connections</span>
             </div>
-            <p className="font-ui text-[10px] text-muted-foreground">
-              Add the sources you trust when you need them. LiOS can open and start useful work without any connection.
+            <p className="mt-1 font-ui text-sm leading-6 text-muted-foreground">
+              Connect sources only when you need them. You can start using LiOS without any connection.
             </p>
           </div>
-          <span className="font-terminal text-[7px] px-2 py-0.5 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+          <span className="hidden sm:flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 font-ui text-xs text-emerald-300">
             <Shield className="w-2.5 h-2.5" /> Local-First
           </span>
         </div>
@@ -1173,11 +1173,11 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <div>
               <div className="flex items-center gap-2">
                 {connectionSummary.canEnterTerminal ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <KeyRound className="h-4 w-4 text-[hsl(38,95%,55%)]" />}
-                <h1 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{connectionSummary.statusLabel}</h1>
+                <h1 className="font-ui text-base font-semibold text-foreground">{connectionSummary.statusLabel}</h1>
               </div>
-              <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
-              {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
-              <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
+              <p className="mt-2 max-w-xl font-ui text-sm leading-6 text-muted-foreground">{connectionSummary.statusDetail}</p>
+              {saveNotice && <p role="alert" className="mt-2 max-w-xl rounded-md border border-rose-500/40 bg-rose-500/[0.05] px-3 py-2 font-ui text-sm leading-5 text-rose-200">{saveNotice}</p>}
+              <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground">
                 <span>{connectedCount} connected · {availableCount} provider{availableCount === 1 ? "" : "s"} available</span>
                 {connectedCount === 0 ? <span className="text-cyan-200/75">Optional · start without setup</span> : null}
               </div>
@@ -1196,8 +1196,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         <section className="border border-[hsl(38,95%,50%)]/25 bg-[hsl(38,95%,50%)]/[0.025] p-4 space-y-4" aria-label="Connect AI" data-testid="connect-ai">
           <div className="flex items-center gap-2 border-b border-border/60 pb-2">
             <Bot className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
-            <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">AI</h2>
-            <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Your provider · your key · your permission</span>
+            <h2 className="font-ui text-base font-semibold text-foreground">AI</h2>
+            <span className="font-ui text-xs text-muted-foreground">Your provider · your key · your permission</span>
           </div>
           {aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
@@ -1206,15 +1206,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">No AI provider connected. AI is optional: deterministic analytics work without it.</p>
+            <p className="font-ui text-sm leading-6 text-muted-foreground">No AI provider connected. AI is optional: deterministic analytics still work without it.</p>
           )}
           {aiConnectorsToAdd.length > 0 && (
             <div>
-              <span className="mb-1 block font-terminal text-[8px] uppercase text-muted-foreground">Add an AI provider</span>
+              <h3 className="mb-2 font-ui text-sm font-medium text-foreground">Add an AI provider</h3>
               <div className="flex flex-wrap gap-2">
                 {aiConnectorsToAdd.map((connector) => (
                   <button key={connector.id} type="button" onClick={() => { setEditingConnection(null); setSelectedProvider(connector); setModal("provider"); }}
-                    className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 font-terminal text-[8px] uppercase text-muted-foreground hover:border-[hsl(38,95%,50%)]/50 hover:text-foreground">
+                    className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                     <Plus className="h-3 w-3" /> {connector.name}
                   </button>
                 ))}
@@ -1224,7 +1224,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="space-y-3" data-testid="connect-ai-selection">
       <div>
-        <span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Use this provider</span>
+        <label htmlFor="ai-provider-select" className="mb-2 block font-ui text-sm font-medium text-foreground">Use this provider</label>
         <select id="ai-provider-select" value={aiProviderId} onChange={(e) => { aiChoiceMadeRef.current = true; setAiProviderId(e.target.value); setAiModelId(""); }} className={inputCls}>
           <option value="">AI disabled — deterministic engines only</option>
           {selectableAiProviders.map((provider) => (
@@ -1235,7 +1235,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         </select>
         {aiProviderId && (
           <div className="mt-3">
-            <label htmlFor="ai-model-select" className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Model</label>
+            <label htmlFor="ai-model-select" className="mb-2 block font-ui text-sm font-medium text-foreground">Model</label>
             {selectedAiProvider?.allowCustomModel && !modelDiscoveryComplete ? (
               <>
                 <input
@@ -1310,8 +1310,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         <section className="border border-border bg-[#070707] p-4 space-y-4" aria-label="Connect data" data-testid="connect-data">
           <div className="flex items-center gap-2 border-b border-border/60 pb-2">
             <Database className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
-            <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">Data</h2>
-            <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Connect what you bring · optional</span>
+            <h2 className="font-ui text-base font-semibold text-foreground">Data</h2>
+            <span className="font-ui text-xs text-muted-foreground">Connect what you bring · optional</span>
           </div>
           {dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
@@ -1320,15 +1320,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">No data source connected yet. Add market, filings or macro data, or import your own files, whenever a request needs it.</p>
+            <p className="font-ui text-sm leading-6 text-muted-foreground">No data source connected yet. Add market, filings or macro data, or import your own files when a request needs it.</p>
           )}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setSelectedProvider(null); setModal("provider"); }}
-              className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20">
+              className="flex min-h-11 items-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-3 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
               <Plus className="h-3 w-3" /> Connect a data source
             </button>
             <button type="button" onClick={() => setModal("import")}
-              className="flex items-center gap-1.5 border border-border px-3 py-2 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground">
+              className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
               <Upload className="h-3 w-3" /> Import files
             </button>
           </div>
@@ -1530,7 +1530,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={refresh}
-            className="flex items-center gap-1.5 border border-border px-3 py-2 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground">
+            className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             <RefreshCw className="w-3 h-3" /> Refresh status
           </button>
         </div>
