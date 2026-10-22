@@ -348,7 +348,7 @@ export async function resolveQuickChatConversationAttachments(
             });
           })()
         : await resolveConversationAttachmentContent(stored, bytes);
-      result = { reference: stored, ...resolved };
+      result = resolved; // shared parser returns the same validated canonical reference
       if (resolved.imageBase64) imageBytes += bytes.byteLength;
     }
     output.push(result);
