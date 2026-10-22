@@ -175,3 +175,23 @@ test("delayed historical fetch cannot replace a selected latest-head revision du
   assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff,
     { ...context, version: resolved.displayedVersion }, false)?.context.version, 4);
 });
+
+
+test("out-of-order Artifact callbacks are rejected by exact requested-version identity, including Latest", () => {
+  const viewedV1 = { requestedVersion: 1, displayedVersion: 1, loading: false };
+  const pendingHead = advanceArtifactWorkbenchRevision(viewedV1, { type: "select", version: null });
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHead,
+    { type: "loaded", version: 1, requestedVersion: 1 }), pendingHead,
+    "an old historical fetch cannot falsely complete the current Latest selection");
+  const headV4 = advanceArtifactWorkbenchRevision(pendingHead,
+    { type: "loaded", version: 4, requestedVersion: null });
+  assert.deepEqual(headV4, { requestedVersion: null, displayedVersion: 4, loading: false });
+  const pendingHistorical = advanceArtifactWorkbenchRevision(headV4, { type: "select", version: 2 });
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 4, requestedVersion: null }), pendingHistorical);
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 1, requestedVersion: 1 }), pendingHistorical);
+  assert.deepEqual(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 2, requestedVersion: 2 }),
+    { requestedVersion: 2, displayedVersion: 2, loading: false });
+});
