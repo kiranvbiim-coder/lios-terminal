@@ -89,3 +89,38 @@ export async function deleteProjectAttachmentResourceBlob(resource: {
   if (typeof attachmentId !== "string" || !UUID_RE.test(attachmentId)) return;
   await deleteProjectAttachmentBlob(resource.ownerUserId, resource.projectId, attachmentId);
 }
+
+
+/** Same StorageProvider as Project attachments, but canonically scoped to an owned Quick Chat id. */
+function quickChatAttachmentKey(userId: number, chatId: number, attachmentId: string): string {
+  if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(chatId) || chatId <= 0 || !UUID_RE.test(attachmentId)) {
+    throw new Error("Invalid Quick Chat attachment owner, chat or id.");
+  }
+  return userId + "/quick-chat/" + chatId + "/" + attachmentId + ".blob";
+}
+
+export async function writeQuickChatAttachmentBlob(
+  userId: number, chatId: number, attachmentId: string, bytes: Uint8Array,
+): Promise<void> {
+  if (!bytes.byteLength || bytes.byteLength > PROJECT_ATTACHMENT_MAX_FILE_BYTES) throw new Error("Quick Chat attachment exceeds the supported file-size limit.");
+  try {
+    await (await attachmentStorage()).put(quickChatAttachmentKey(userId, chatId, attachmentId), bytes);
+  } catch (error) {
+    if (error instanceof StorageUnavailableError) throw new ProjectAttachmentStorageUnavailableError();
+    throw error;
+  }
+}
+
+export async function readQuickChatAttachmentBlob(userId: number, chatId: number, attachmentId: string): Promise<Buffer> {
+  try {
+    return await (await attachmentStorage()).get(quickChatAttachmentKey(userId, chatId, attachmentId), { maxBytes: PROJECT_ATTACHMENT_MAX_FILE_BYTES });
+  } catch (error) {
+    if (error instanceof StorageUnavailableError || error instanceof StorageNotFoundError) throw new ProjectAttachmentStorageUnavailableError();
+    if (error instanceof StorageIntegrityError) throw new Error("Stored Quick Chat attachment is unavailable or invalid.");
+    throw error;
+  }
+}
+
+export async function deleteQuickChatAttachmentBlob(userId: number, chatId: number, attachmentId: string): Promise<void> {
+  await (await attachmentStorage()).delete(quickChatAttachmentKey(userId, chatId, attachmentId));
+}
