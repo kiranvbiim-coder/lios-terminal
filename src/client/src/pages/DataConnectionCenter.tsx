@@ -334,32 +334,32 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
     <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={onClose}>
       {/* Description */}
       {connector.description && (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.description}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.description}</p>
       )}
       {connector.sourceType === "public_api" ? (
-        <p className="font-terminal text-[9px] text-teal-400/90 mb-3">
+        <p className="mb-3 font-ui text-sm leading-6 text-emerald-300">
           PUBLIC / NO KEY — no credential is required. The Open API URL below is documentation only, not a credential.
         </p>
       ) : (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.setupGuide}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.setupGuide}</p>
       )}
 
       {/* Website link */}
       {connector.websiteUrl && (
         <a href={connector.websiteUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-terminal text-[8px] text-[hsl(38,95%,55%)] hover:underline mb-3">
+          className="mb-3 inline-flex min-h-10 items-center gap-2 rounded-md font-ui text-sm font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ExternalLink className="w-3 h-3" /> {connector.sourceType === "public_api" ? "Open API documentation" : "Register / Get API Key"}
         </a>
       )}
 
       {/* Rate limits */}
       {connector.rateLimits && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-3">
+        <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
           <span className="text-amber-400/70">Rate limits:</span> {connector.rateLimits}
         </p>
       )}
       {connector.id === "lse" && (
-        <p className="font-terminal text-[8px] text-cyan-400/90 mb-3 leading-relaxed">
+        <p className="mb-3 font-ui text-sm leading-6 text-cyan-200">
           Paste the <strong className="font-normal text-cyan-300">Vault API key</strong> from londonstrategicedge.com/data after you create an account. Site login passwords are not API keys.
         </p>
       )}
@@ -367,16 +367,16 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
       <div className="space-y-3">
         {needsKey && (
           <label className="block">
-            <span className="font-terminal text-[8px] text-muted-foreground uppercase">API Key</span>
+            <span className="block font-ui text-sm font-medium text-foreground">API key</span>
             <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your API key here"
-              className="w-full mt-1 bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60" autoComplete="off" />
+              className="mt-1.5 min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" autoComplete="off" />
           </label>
         )}
         <div className="flex gap-2">
-          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {testing ? "Testing..." : "Test Connection"}
           </button>
-          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="min-h-11 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {saving ? "Saving..." : "Save & Connect"}
           </button>
         </div>
@@ -645,12 +645,12 @@ function ProviderCard({
   return (
     <div className="border border-border bg-[#070707] p-4 hover:border-[hsl(38,95%,50%)]/30 transition-colors group">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="font-terminal text-[10px] font-bold uppercase text-foreground leading-tight">{connector.name}</span>
+        <span className="font-ui text-sm font-semibold leading-5 text-foreground">{connector.name}</span>
         {isConnected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
       </div>
 
       {connector.description && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-2 leading-relaxed line-clamp-2">{connector.description}</p>
+        <p className="mb-2 line-clamp-2 font-ui text-sm leading-5 text-muted-foreground">{connector.description}</p>
       )}
 
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -676,7 +676,7 @@ function ProviderCard({
         </span>
       ) : canConnect ? (
         <button onClick={onConnect}
-          className="font-terminal text-[8px] uppercase px-3 py-1.5 border border-[hsl(38,95%,50%)]/50 text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/10 transition-colors">
+          className="min-h-10 rounded-md border border-primary/50 px-3 py-2 font-ui text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           Connect
         </button>
       ) : (
@@ -1582,7 +1582,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search providers..."
-              className="w-full bg-[#0d0d0d] border border-border pl-9 pr-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60"
+              className="min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] py-2 pl-9 pr-3 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             />
           </div>
 
@@ -1822,7 +1822,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <input
               aria-label="Search providers"
               placeholder="Search providers..."
-              className="w-full bg-[#0d0d0d] border border-border pl-9 pr-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60"
+              className="min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] py-2 pl-9 pr-3 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               onChange={(e) => setSearchQuery(e.target.value)}
               value={searchQuery}
             />
@@ -1832,12 +1832,12 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               .filter((c) => !searchQuery.trim() || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.description ?? "").toLowerCase().includes(searchQuery.toLowerCase()))
               .map((c) => (
                 <button key={c.id} onClick={() => setSelectedProvider(c)}
-                  className="text-left border border-border hover:border-[hsl(38,95%,50%)]/40 p-3 transition-colors">
+                  className="min-h-11 rounded-md border border-border p-3 text-left transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                   <div className="flex items-center gap-2">
-                    <span className="font-terminal text-[9px] font-bold uppercase text-foreground">{c.name}</span>
+                    <span className="font-ui text-sm font-semibold text-foreground">{c.name}</span>
                     {configuredProviderIds.has(c.id) && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
                   </div>
-                  {c.description && <p className="font-terminal text-[8px] text-muted-foreground mt-1">{c.description}</p>}
+                  {c.description && <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{c.description}</p>}
                   <div className="flex items-center gap-1.5 mt-1">
                     <CategoryBadge category={c.category} />
                   </div>
