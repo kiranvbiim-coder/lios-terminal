@@ -115,10 +115,12 @@ export function assertArtifactRefsSafe(refs: readonly string[], label = "sourceR
 }
 
 /**
- * A provenance string is not source authority. A Quick Chat Artifact cannot claim
- * files belonging to another Chat (even another Chat of the same user). This is
- * checked on BOTH initial retention and subsequent edits, not merely in the UI.
- * All other source kinds retain their existing separate governance/entitlements.
+ * An authored source string is not evidence of file custody. In a Quick Chat,
+ * only that exact Chat's saved manifest can back a quick-attachment reference.
+ * Following explicit promotion, the Project owns the Artifact but the original
+ * Chat still holds its file manifest; admit only files from Chats actually in
+ * that same owned Project. Never accept a file from another Quick Chat/Project.
+ * This is provenance validation, NOT permission to transmit bytes to an AI.
  */
 async function assertQuickChatAttachmentProvenance(
   ctx: TenantContext,
@@ -126,22 +128,39 @@ async function assertQuickChatAttachmentProvenance(
   projectId: number | null,
   refs: readonly string[],
 ): Promise<void> {
-  if (projectId !== null || chatId === null) return;
   const attachmentRefs = [...new Set(refs.filter(ref => /^(?:quick|project)-attachment:/i.test(ref)))];
   if (!attachmentRefs.length) return;
-  if (attachmentRefs.some(ref => !/^quick-attachment:[0-9a-f-]{36}$/i.test(ref))) {
-    throw new Error("File provenance not owned by the Artifact Chat.");
+  const deny = () => { throw new Error("File provenance not owned by the Artifact context."); };
+  if (projectId === null && chatId !== null && attachmentRefs.some(ref => /^project-attachment:/i.test(ref))) deny();
+  const quickRefs = attachmentRefs.filter(ref => /^quick-attachment:/i.test(ref));
+  if (!quickRefs.length) return; // Project attachments retain their existing separate rights checks.
+  if (quickRefs.some(ref => !/^quick-attachment:[0-9a-f-]{36}$/i.test(ref))) deny();
+
+  let manifests: unknown[];
+  if (projectId === null) {
+    if (chatId === null) deny();
+    const { getProjectChat } = await import("./projectChatStore");
+    const chat = await getProjectChat(ctx, chatId!);
+    if (chat.scope !== "quick" || chat.projectId !== null) deny();
+    manifests = [chat.attachmentManifest];
+  } else {
+    // Promotion transfers Artifact lifecycle ownership, not the original file
+    // blobs. A same-owner file still needs a current, same-Project Chat manifest.
+    const rows = await getDb().select({ attachmentManifest: projectChats.attachmentManifest })
+      .from(projectChats).where(and(
+        eq(projectChats.ownerUserId, ctx.userId),
+        tenantOrgClause(projectChats.organizationId, ctx),
+        eq(projectChats.projectId, projectId),
+        eq(projectChats.scope, "project"),
+        isNull(projectChats.trashedAt),
+      ));
+    manifests = rows.map(row => row.attachmentManifest);
   }
-  const { getProjectChat } = await import("./projectChatStore");
-  const chat = await getProjectChat(ctx, chatId);
-  if (chat.scope !== "quick" || chat.projectId !== null) throw new Error("File provenance not owned by the Artifact Chat.");
-  const manifest = conversationAttachmentRefSchema.array().safeParse(chat.attachmentManifest);
-  if (!manifest.success) throw new Error("File provenance not owned by the Artifact Chat.");
-  for (const ref of attachmentRefs) {
-    if (!manifest.data.some(item => item.sourceRef === ref && ref === "quick-attachment:" + item.id)) {
-      throw new Error("File provenance not owned by the Artifact Chat.");
-    }
-  }
+  const ownedRefs = manifests.flatMap(manifest => {
+    const parsed = conversationAttachmentRefSchema.array().safeParse(manifest);
+    return parsed.success ? parsed.data.filter(ref => ref.sourceRef === "quick-attachment:" + ref.id) : [];
+  });
+  if (quickRefs.some(ref => !ownedRefs.some(item => item.sourceRef === ref))) deny();
 }
 
 export function artifactTrustSourceRefs(manifest: TrustManifest | null | undefined): string[] {
