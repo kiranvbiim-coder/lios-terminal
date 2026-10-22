@@ -13,7 +13,7 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users } = await import("@shared/schema");
 const { createProject, trashProject, permanentlyDeleteProject } = await import("./projectStore");
 const { createProjectChat, getProjectChat, promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat, permanentlyDeleteProjectChat } = await import("./projectChatStore");
-const { createProjectResource, permanentlyDeleteProjectResource, setProjectResourceContextMode, trashProjectResource } = await import("./projectResourceStore");
+const { createProjectResource, listProjectResources, permanentlyDeleteProjectResource, setProjectResourceContextMode, trashProjectResource } = await import("./projectResourceStore");
 const {
   ProjectAttachmentContextExcludedError,
   loadProjectAttachment,
