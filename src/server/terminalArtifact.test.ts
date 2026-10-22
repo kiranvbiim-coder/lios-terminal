@@ -15,7 +15,7 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, projects } = await import("@shared/schema");
 const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { openTerminalArtifact } = await import("./terminalArtifact");
-const { updateTerminalArtifact } = await import("./terminalArtifactTool");
+const { updateTerminalArtifact, requireTerminalPortfolioOrganization } = await import("./terminalArtifactTool");
 const { getArtifact, getArtifactVersion, createArtifactVersion, createArtifactProposal } = await import("./artifactStore");
 
 test("existing terminal work is a Chat-owned immutable Artifact, not a shadow session", { timeout: 90_000 }, async t => {
@@ -85,4 +85,13 @@ test("calculated technical work reopens the original chart without relabeling re
   assert.equal(terminal.marketMode, "live");
   assert.equal(terminal.asOf, null, "a recorded result is not automatically an authorized historical market snapshot");
   assert.equal(terminal.sourceScope, "web");
+});
+
+test("portfolio terminal operations need a verified organization and the existing internal role", () => {
+  const requireOrg = requireTerminalPortfolioOrganization;
+  const scopedInternal = { userId: 7, organizationId: 11, role: "internal_analyst" as const };
+  assert.equal(requireOrg(scopedInternal), 11);
+  assert.throws(() => requireOrg({ ...scopedInternal, organizationId: null }), /authorized organization/);
+  assert.throws(() => requireOrg({ ...scopedInternal, role: "client_user" }), /authorized organization/);
+  assert.throws(() => requireOrg({ ...scopedInternal, role: "client_admin" }), /authorized organization/);
 });
