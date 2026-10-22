@@ -25,11 +25,11 @@ export function resolveScopedWorkbenchSymbol(input: ChatWorkbenchSelection): str
   // even before its response arrives. Otherwise a general Chat can open an
   // unrelated finance/security tab by borrowing a stale prior-turn ticker.
   // Tool/system messages do not themselves establish a new user-facing turn.
-  const latestTurn = input.mode === "temporary"
-    ? null
-    : [...input.messages].reverse().find(message => message.role === "assistant" || message.role === "user");
+  const latestTurn = [...input.messages].reverse().find(message => message.role === "assistant" || message.role === "user");
   const raw = input.mode === "temporary"
-    ? input.temporaryContext
+    // Temporary messages stay in local memory; while a newer user turn is
+    // unanswered, its previous in-memory entity is not a current navigation hint.
+    ? latestTurn?.role === "user" ? null : input.temporaryContext
     : latestTurn?.role === "assistant" ? latestTurn.metadata?.workingContext : null;
   const snapshot = restoreWorkingContext(raw, owner);
   if (!snapshot || snapshot.entities.length !== 1) return null;
