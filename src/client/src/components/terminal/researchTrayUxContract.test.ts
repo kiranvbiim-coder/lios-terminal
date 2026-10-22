@@ -6,7 +6,7 @@ import {
   pinResearchContext,
   removeResearchTrayItem,
   updateResearchTrayItem,
-} from "@/lib/terminalResearchTray";
+} from "../../lib/terminalResearchTray";
 
 const source = readFileSync(new URL("./ResearchTray.tsx", import.meta.url), "utf8");
 
