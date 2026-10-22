@@ -21,12 +21,16 @@ export function resolveScopedWorkbenchSymbol(input: ChatWorkbenchSelection): str
     projectId: input.mode === "project" ? input.projectId : null,
     chatId: input.mode === "temporary" ? null : input.chatId,
   };
-  const latestAssistant = input.mode === "temporary"
+  // A new user question supersedes the older assistant's entity selection
+  // even before its response arrives. Otherwise a general Chat can open an
+  // unrelated finance/security tab by borrowing a stale prior-turn ticker.
+  // Tool/system messages do not themselves establish a new user-facing turn.
+  const latestTurn = input.mode === "temporary"
     ? null
-    : [...input.messages].reverse().find(message => message.role === "assistant");
+    : [...input.messages].reverse().find(message => message.role === "assistant" || message.role === "user");
   const raw = input.mode === "temporary"
     ? input.temporaryContext
-    : latestAssistant?.metadata?.workingContext;
+    : latestTurn?.role === "assistant" ? latestTurn.metadata?.workingContext : null;
   const snapshot = restoreWorkingContext(raw, owner);
   if (!snapshot || snapshot.entities.length !== 1) return null;
   const entity = snapshot.entities[0]!;
