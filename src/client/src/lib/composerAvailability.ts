@@ -56,7 +56,7 @@ export function voiceAvailability(input: {
 export function voiceFailureCopy(status: number | "network" | "microphone" | "invalid"): string {
   if (status === "microphone") return "Microphone access was denied or unavailable. Check browser and operating-system permissions.";
   if (status === "invalid") return "Transcription returned an invalid response. The audio was not submitted as a Chat message.";
-  if (status === "network" || status >= 500) return "Voice service unavailable. Check the Connection Center and retry recording.";
+  if (status === "network" || (typeof status === "number" && status >= 500)) return "Voice service unavailable. Check the Connection Center and retry recording.";
   if (status === 401) return "Your session may have expired. Sign in again before using voice.";
   if (status === 403) return "Voice transcription is not permitted for this account.";
   if (status === 413) return "The recording is too large. Try a shorter clip.";
