@@ -243,7 +243,7 @@ function App() {
               <DataConnectionCenter session={session} onComplete={() => setEnvironmentSetupOpen(false)} onLogout={handleLogout} />
             )}
             {session && domainPickerOpen && !environmentSetupOpen && (
-              <DomainPicker session={session} onChoose={handleChooseDomain} onLogout={handleLogout} />
+              <DomainPicker session={session} onChoose={handleChooseDomain} onCancel={() => setDomainPickerOpen(false)} onLogout={handleLogout} />
             )}
           </>
         ) : (

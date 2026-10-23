@@ -21,7 +21,6 @@ const { startProjectChatRun, resumeInterruptedConversationRun, reviewGovernedToo
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("./exec/execution-scope");
 const { registerConversationTool } = await import("./conversationRuntime");
-const { getPersonaPreferences, upsertPersonaPreferences } = await import("./personaPreferenceService");
 const { assertAgentEventChain } = await import("./exec/agent-run-events");
 
 const anyInput = z.object({}).passthrough();
@@ -138,8 +137,7 @@ test("Stop parks a checkpointed agent run as interrupted; an explicit requestId-
   const journal = await getConversationExecutionJournal();
   const conversationUser = { id: user.id, email: user.email, role: user.role, organizationId: null };
   const personaUser = { id: user.id, email: user.email, role: user.role as "internal_analyst", organizationId: null };
-  const current = await getPersonaPreferences(personaUser);
-  await upsertPersonaPreferences(personaUser, { preferences: { ...current.preferences.preferences, waveCMasterAi: { state: "on", mode: "ai_assist", updatedAt: new Date().toISOString() } } });
+  await (await import("./fixtures/injectedAiAuthorization")).authorizeInjectedAiForTest(personaUser, t);
 
   const startAgent = (requestId: string, script: Array<string | "wait_for_stop">, message = "Compare the quote for TEST") =>
     startProjectChatRun(conversationUser, chat.id, { requestId, message, executionMode: "ai_assisted", agent: true, sourceScope: "my_data" }, { aiCompletion: stubModel(script).aiCompletion });

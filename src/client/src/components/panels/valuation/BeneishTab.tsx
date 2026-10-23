@@ -42,8 +42,8 @@ function resolve(ov: Overridable<BKey>, d: BeneishYearInputs): BeneishYearInputs
 }
 
 export default function BeneishTab({ symbol, curr, balCurrent, balPrior, incCurrent, incPrior, cfCurrent, cfPrior }: AnalysisTabProps) {
-  const curOv = useOverridable<BKey>();
-  const priorOv = useOverridable<BKey>();
+  const curOv = useOverridable<BKey>("BeneishTab.curOv");
+  const priorOv = useOverridable<BKey>("BeneishTab.priorOv");
   const curInputs = resolve(curOv, buildDefaults(balCurrent, incCurrent, cfCurrent));
   const priorInputs = resolve(priorOv, buildDefaults(balPrior, incPrior, cfPrior));
   const result = useMemo(() => beneishMScore(curInputs, priorInputs), [curInputs, priorInputs]);

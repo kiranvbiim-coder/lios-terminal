@@ -18,7 +18,7 @@ const { createProjectChat } = await import("./projectChatStore");
 const { startProjectChatRun, ConversationStartError } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("./exec/execution-scope");
-const { getPersonaPreferences, upsertPersonaPreferences } = await import("./personaPreferenceService");
+const { authorizeInjectedAiForTest } = await import("./fixtures/injectedAiAuthorization");
 
 async function seedUser() {
   const [user] = await getDb().insert(users).values({
@@ -56,8 +56,7 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
   const journal = await getConversationExecutionJournal();
   const conversationUser = { id: user.id, email: user.email, role: user.role, organizationId: null };
   const personaUser = { id: user.id, email: user.email, role: user.role as "internal_analyst", organizationId: null };
-  const current = await getPersonaPreferences(personaUser);
-  await upsertPersonaPreferences(personaUser, { preferences: { ...current.preferences.preferences, waveCMasterAi: { state: "on", mode: "ai_assist", updatedAt: new Date().toISOString() } } });
+  await authorizeInjectedAiForTest(personaUser, t);
 
   await t.test("a deterministic-first request cannot be an agent run", async () => {
     const requestId = crypto.randomUUID();

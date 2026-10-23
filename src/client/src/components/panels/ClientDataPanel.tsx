@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Upload, FileSpreadsheet, ChevronDown, ChevronRight, Trash2, ShieldCheck } from "lucide-react";
 
@@ -113,9 +114,9 @@ export default function ClientDataPanel() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useTerminalArtifactState<number | null>("ClientDataPanel.expandedId", null);
   const [detail, setDetail] = useState<DatasetDetail | null>(null);
-  const [activeSheet, setActiveSheet] = useState(0);
+  const [activeSheet, setActiveSheet] = useTerminalArtifactState(`ClientDataPanel.activeSheet.${expandedId}`, 0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
@@ -127,6 +128,18 @@ export default function ClientDataPanel() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    setDetail(null);
+    if (expandedId !== null) {
+      fetch(`/api/client/datasets/${expandedId}`, { signal: abort.signal })
+        .then(async response => { if (!response.ok) throw new Error("Saved dataset is unavailable under current access."); return response.json() as Promise<DatasetDetail>; })
+        .then(value => { if (!abort.signal.aborted && value.id === expandedId) setDetail(value); })
+        .catch(error => { if (!abort.signal.aborted) setUploadError(error instanceof Error ? error.message : "Dataset detail unavailable."); });
+    }
+    return () => abort.abort();
+  }, [expandedId]);
 
   const handleFile = useCallback(async (file: File) => {
     setUploading(true);
@@ -148,16 +161,8 @@ export default function ClientDataPanel() {
     }
   }, []);
 
-  const toggleExpand = async (item: DatasetListItem) => {
-    if (expandedId === item.id) {
-      setExpandedId(null);
-      setDetail(null);
-      return;
-    }
-    setExpandedId(item.id);
-    setActiveSheet(0);
-    const res = await fetch(`/api/client/datasets/${item.id}`);
-    if (res.ok) setDetail(await res.json());
+  const toggleExpand = (item: DatasetListItem) => {
+    setExpandedId(expandedId === item.id ? null : item.id);
   };
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
@@ -230,7 +235,7 @@ export default function ClientDataPanel() {
                         ))}
                       </div>
                     )}
-                    <SheetView sheet={detail.profile.sheets[activeSheet]} />
+                    {detail.profile.sheets[activeSheet] ? <SheetView sheet={detail.profile.sheets[activeSheet]} /> : <p role="status">Saved sheet selection is unavailable in this dataset; select a sheet explicitly.</p>}
                   </div>
                 )}
               </div>

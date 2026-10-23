@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Database, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { MarketDatasetRevisionReport, PointInTimeMarketSnapshot } from "@shared/pointInTimeData";
@@ -19,7 +20,7 @@ export default function MarketDataFabricPanel({ symbol }: { symbol: string }) {
   const [revision, setRevision] = useState<MarketDatasetRevisionReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"bars" | "actions" | "lineage">("bars");
+  const [tab, setTab] = useTerminalArtifactState<"bars" | "actions" | "lineage">("MarketDataFabricPanel.tab", "bars");
   const current = snapshots[0] ?? null;
 
   const load = useCallback(async () => {

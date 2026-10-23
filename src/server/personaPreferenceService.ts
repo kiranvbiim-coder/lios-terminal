@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   CLIENT_ROLES,
@@ -236,12 +236,33 @@ export async function upsertPersonaPreferences(
   user: PersonaPreferenceUser,
   patch: PersonaPreferencePatch,
 ): Promise<PersonaPreferencesResponse> {
+  return writePersonaPreferences(user, patch);
+}
+
+/** Only the checked Master AI authority may change this reserved preference. */
+export async function setMasterAiPreference(
+  user: PersonaPreferenceUser,
+  state: { state: "on" | "off"; mode: "manual" | "ai_assist" | "ai_build" | "ai_scenario"; updatedAt: string; authorization: { generation: string; revision: number; verificationAttemptId?: number } },
+): Promise<PersonaPreferencesResponse> {
+  return writePersonaPreferences(user, {}, state);
+}
+
+async function writePersonaPreferences(
+  user: PersonaPreferenceUser,
+  patch: PersonaPreferencePatch,
+  masterAiState?: Parameters<typeof setMasterAiPreference>[1],
+): Promise<PersonaPreferencesResponse> {
   validatePreferenceUser(user);
   const profiles = allowedProfiles(user.role);
   if (!profiles.length) throw new PersonaPreferenceError("No persona profile is available for this security role.", "invalid_user");
   const activeDomains = await activeDomainsForUser(user);
   const existing = await loadUserRow(user);
   const current = normalizePreferences(existing, user, profiles, activeDomains);
+  const { waveCMasterAi: _untrustedMasterAi, ...publicPreferences } = patch.preferences ?? current.preferences.preferences;
+  const preferences = {
+    ...publicPreferences,
+    ...(masterAiState ? { waveCMasterAi: masterAiState } : {}),
+  };
 
   const primaryPersona = patch.primaryPersona ?? current.preferences.primaryPersona;
   const selectedProfile = profiles.find((profile) => profile.id === primaryPersona);
@@ -272,7 +293,7 @@ export async function upsertPersonaPreferences(
       secondaryPersonas: selection.secondaryPersonas,
       activeDomainSlug,
       activeContext: patch.activeContext ?? current.preferences.activeContext,
-      preferences: patch.preferences ?? current.preferences.preferences,
+      preferences,
       onboardingCompletedAt,
       updatedAt: now,
     }).onConflictDoUpdate({
@@ -283,7 +304,14 @@ export async function upsertPersonaPreferences(
         secondaryPersonas: selection.secondaryPersonas,
         activeDomainSlug,
         activeContext: patch.activeContext ?? current.preferences.activeContext,
-        preferences: patch.preferences ?? current.preferences.preferences,
+        // Preserve the reserved field from the row at commit time, not a stale
+        // read before a concurrent OFF/configuration change.
+        preferences: masterAiState
+          ? sql`case when ${userPersonaPreferences.preferences}->'waveCMasterAi'->'authorization'->>'generation' is distinct from ${masterAiState.authorization.generation}
+              or coalesce((${userPersonaPreferences.preferences}->'waveCMasterAi'->'authorization'->>'revision')::bigint, -1) <= ${masterAiState.authorization.revision}
+            then coalesce(${userPersonaPreferences.preferences}, '{}'::jsonb) || ${JSON.stringify({ waveCMasterAi: masterAiState })}::jsonb
+            else ${userPersonaPreferences.preferences} end`
+          : sql`${JSON.stringify(preferences)}::jsonb || jsonb_strip_nulls(jsonb_build_object('waveCMasterAi', ${userPersonaPreferences.preferences}->'waveCMasterAi'))`,
         onboardingCompletedAt,
         updatedAt: now,
       },

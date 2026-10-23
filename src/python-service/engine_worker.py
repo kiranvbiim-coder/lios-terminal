@@ -11,7 +11,7 @@ import os
 import stat
 import sys
 
-from engine_routes import EngineInputError, EngineUnavailableError, dispatch, runtime_inventory
+from engine_routes import EngineInputError, EngineUnavailableError, dispatch, runtime_inventory, input_contract
 
 MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_ERROR_CHARS = 4000
@@ -73,6 +73,8 @@ def run(request_path, result_path):
             if request["body"] != {}:
                 raise EngineInputError("Runtime inventory requires an empty object body.")
             result = runtime_inventory()
+        elif request["route"] == "/input-contract":
+            result = input_contract(request["body"])
         else:
             result = dispatch(request["route"], request["body"]).model_dump(mode="python")
         envelope = {"ok": True, "result": result}

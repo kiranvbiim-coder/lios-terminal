@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -54,10 +55,10 @@ export default function AlertsPanel({ onSymbol, role }: Props) {
   const audience = useAudience();
   const isClient = audience === "client";
   const ALERTS_URL = alertsUrlFor(audience);
-  const [sym, setSym] = useState("");
-  const [condition, setCondition] = useState<"above" | "below">("above");
-  const [metric, setMetric] = useState<AlertMetric>("price");
-  const [price, setPrice] = useState("");
+  const [sym, setSym] = useTerminalArtifactState("AlertsPanel.sym", "");
+  const [condition, setCondition] = useTerminalArtifactState<"above" | "below">("AlertsPanel.condition", "above");
+  const [metric, setMetric] = useTerminalArtifactState<AlertMetric>("AlertsPanel.metric", "price");
+  const [price, setPrice] = useTerminalArtifactState("AlertsPanel.price", "");
   const [toastAlerts, setToastAlerts] = useState<Alert[]>([]);
   const prevTriggeredIds = useRef<Set<number>>(new Set());
   const qc = useQueryClient();

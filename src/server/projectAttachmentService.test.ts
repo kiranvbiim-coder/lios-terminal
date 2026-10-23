@@ -11,18 +11,21 @@ process.env.LIOS_ATTACHMENT_STORAGE_DIR = blobDir;
 
 const { initDb, closeDb, getDb } = await import("./db");
 const { users } = await import("@shared/schema");
-const { createProject, trashProject } = await import("./projectStore");
-const { createProjectChat, trashProjectChat } = await import("./projectChatStore");
-const { createProjectResource, permanentlyDeleteProjectResource, setProjectResourceContextMode, trashProjectResource } = await import("./projectResourceStore");
+const { createProject, trashProject, permanentlyDeleteProject } = await import("./projectStore");
+const { createProjectChat, getProjectChat, promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat, permanentlyDeleteProjectChat } = await import("./projectChatStore");
+const { createProjectResource, listProjectResources, permanentlyDeleteProjectResource, setProjectResourceContextMode, trashProjectResource } = await import("./projectResourceStore");
 const {
   ProjectAttachmentContextExcludedError,
   loadProjectAttachment,
+  loadQuickChatAttachment,
+  resolveQuickChatConversationAttachments,
+  uploadQuickChatAttachment,
   ProjectAttachmentLimitError,
   ProjectAttachmentNotFoundError,
   resolveProjectConversationAttachments,
   uploadProjectChatAttachment,
 } = await import("./projectAttachmentService");
-const { PROJECT_ATTACHMENT_MAX_TEXT_CHARS, ProjectAttachmentStorageUnavailableError, readProjectAttachmentBlob } = await import("./projectAttachmentStore");
+const { PROJECT_ATTACHMENT_MAX_TEXT_CHARS, ProjectAttachmentStorageUnavailableError, readProjectAttachmentBlob, readQuickChatAttachmentBlob } = await import("./projectAttachmentStore");
 
 test("Project attachments are Project/chat scoped, persist content references, and clean up on resource purge", async (t) => {
   await initDb();
@@ -148,6 +151,61 @@ test("Project attachments are Project/chat scoped, persist content references, a
   const storedQuotaBlobs = fs.readdirSync(path.join(blobDir, String(owner.id), String(quotaProject.id)))
     .filter((fileName) => fileName.endsWith(".blob"));
   assert.equal(storedQuotaBlobs.length, 1, "the quota-rejected upload must not leave an orphaned blob");
+
+
+  // Quick Chat is a real durable owner, not a synthetic Project. Bytes use the existing blob provider.
+  const quick = await createProjectChat(ownerContext, { scope: "quick" });
+  const quickSibling = await createProjectChat(ownerContext, { scope: "quick" });
+  const quickOwnedByOther = await createProjectChat(otherContext, { scope: "quick" });
+  const quickText = Buffer.from("Quick Chat private research evidence.", "utf8");
+  const quickRef = await uploadQuickChatAttachment(ownerContext, quick.id, { bytes: quickText, originalName: "../notes.txt" });
+  assert.equal(quickRef.sourceRef, "quick-attachment:" + quickRef.id);
+  assert.equal(quickRef.fileName, "notes.txt");
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  // A real embedded DB close/reopen proves that this is a persisted Chat manifest,
+  // not a renderer variable or a process-local mock.
+  await closeDb();
+  await initDb();
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1);
+  const originalFiles = await listProjectResources(ownerContext, project.id);
+  assert.equal(originalFiles.some(resource => (resource.metadata as { attachmentId?: string }).attachmentId === quickRef.id), false);
+  assert.deepEqual((await loadQuickChatAttachment(ownerContext, quick.id, quickRef.id)).bytes, quickText);
+  assert.match((await resolveQuickChatConversationAttachments(ownerContext, quick.id, [quickRef], true))[0]?.textContent ?? "", /Quick Chat private/);
+  assert.equal((await resolveQuickChatConversationAttachments(ownerContext, quick.id, [quickRef], false))[0]?.textContent, undefined);
+  await assert.rejects(() => loadQuickChatAttachment(otherContext, quick.id, quickRef.id), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => loadQuickChatAttachment(ownerContext, quickSibling.id, quickRef.id), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => resolveQuickChatConversationAttachments(ownerContext, quickSibling.id, [quickRef], true), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => resolveQuickChatConversationAttachments(ownerContext, quick.id, [{ ...quickRef, sha256: "0".repeat(64) }], true), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => resolveQuickChatConversationAttachments(ownerContext, quick.id, [quickRef, quickRef], true), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => uploadQuickChatAttachment(otherContext, quick.id, { bytes: quickText, originalName: "theft.txt" }), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => uploadQuickChatAttachment(ownerContext, quickOwnedByOther.id, { bytes: quickText, originalName: "theft.txt" }), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => uploadQuickChatAttachment(ownerContext, quick.id, { bytes: Buffer.from("bad"), originalName: "executable.exe" }), /Unsupported file type/);
+
+  // Explicit promotion retains the chat-owned refs and does not turn them into ambient Project resources.
+  const promoted = await promoteQuickChatToProject(ownerContext, quick.id, project.id);
+  assert.equal(promoted.scope, "project");
+  assert.equal(promoted.projectId, project.id);
+  assert.deepEqual((await loadQuickChatAttachment(ownerContext, quick.id, quickRef.id)).bytes, quickText);
+  assert.equal((await listProjectResources(ownerContext, project.id)).some(resource => resource.resourceRef === quickRef.sourceRef), false);
+  await clearProjectChatMessages(ownerContext, quick.id);
+  await assert.rejects(() => loadQuickChatAttachment(ownerContext, quick.id, quickRef.id), ProjectAttachmentNotFoundError);
+  await assert.rejects(() => readQuickChatAttachmentBlob(owner.id, quick.id, quickRef.id), ProjectAttachmentStorageUnavailableError);
+
+  const deleteRef = await uploadQuickChatAttachment(ownerContext, quickSibling.id, { bytes: quickText, originalName: "delete-me.txt" });
+  await trashProjectChat(ownerContext, quickSibling.id);
+  await permanentlyDeleteProjectChat(ownerContext, quickSibling.id);
+  await assert.rejects(() => readQuickChatAttachmentBlob(owner.id, quickSibling.id, deleteRef.id), ProjectAttachmentStorageUnavailableError);
+
+  const purgeProject = await createProject(ownerContext, { name: "Quick attachment promotion purge" });
+  const purgeChat = await createProjectChat(ownerContext, { scope: "quick" });
+  const purgeRef = await uploadQuickChatAttachment(ownerContext, purgeChat.id, { bytes: quickText, originalName: "purge.txt" });
+  await promoteQuickChatToProject(ownerContext, purgeChat.id, purgeProject.id);
+  await trashProjectChat(ownerContext, purgeChat.id);
+  await trashProject(ownerContext, purgeProject.id);
+  await permanentlyDeleteProject(ownerContext, purgeProject.id);
+  await assert.rejects(() => readQuickChatAttachmentBlob(owner.id, purgeChat.id, purgeRef.id), ProjectAttachmentStorageUnavailableError,
+    "permanently deleting a Project must also clean files owned by a promoted Quick Chat");
 
   await trashProjectResource(ownerContext, restoredText.id);
   await permanentlyDeleteProjectResource(ownerContext, restoredText.id);

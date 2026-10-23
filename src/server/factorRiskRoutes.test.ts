@@ -16,16 +16,14 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-factor-risk-routes-"
 process.env.LIMURIA_DATA_DIR = dataDir;
 
 const {
-  buildFactorAttributionInput,
-  factorRiskDecomposeRequestSchema,
   factorRiskSnapshotRequestSchema,
   factorRiskRouteHandlers,
   createFactorRiskRouteHandlers,
   normalizeCaptureResult,
   registerFactorRiskRoutes,
   registerFactorRiskSnapshotListingRoutes,
-  validateDecomposeWeights,
 } = await import("./factorRiskRoutes");
+const { buildFactorAttributionInput, factorRiskDecomposeRequestSchema, validateDecomposeWeights } = await import("./factorRiskModel");
 const { runWithRequestIdentity } = await import("./requestContext");
 const { initDb, closeDb } = await import("./db");
 

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQuotes, usePeers, useFundamentalsMany } from "@/lib/useFinance";
 import { formatPrice, getCurrencySymbol } from "@/lib/finance";
@@ -79,11 +80,11 @@ const DYNAMIC_PEER_BINDINGS: Record<string, string> = {
 const DYNAMIC_COMPARISON_FIELDS = buildDynamicAnalyticsCatalog().filter((field) => field.numeric && (field.id.startsWith("metric.") || field.id.startsWith("market_data.")));
 
 export default function PeerCompPanel({ symbol, onSymbol, onNav }: Props) {
-  const [tickers, setTickers] = useState<string[]>([symbol, ...DEFAULT_PEERS.filter(s => s !== symbol).slice(0, 4)]);
-  const [input, setInput] = useState("");
-  const [activeMetric, setActiveMetric] = useState("pe");
-  const [dynamicMetricId, setDynamicMetricId] = useState(DYNAMIC_COMPARISON_FIELDS[0]?.id ?? "metric.pe");
-  const [dynamicMetricIds, setDynamicMetricIds] = useState<string[]>([]);
+  const [tickers, setTickers] = useTerminalArtifactState<string[]>("PeerCompPanel.tickers", [symbol, ...DEFAULT_PEERS.filter(s => s !== symbol).slice(0, 4)]);
+  const [input, setInput] = useTerminalArtifactState("PeerCompPanel.input", "");
+  const [activeMetric, setActiveMetric] = useTerminalArtifactState("PeerCompPanel.activeMetric", "pe");
+  const [dynamicMetricId, setDynamicMetricId] = useTerminalArtifactState("PeerCompPanel.dynamicMetricId", DYNAMIC_COMPARISON_FIELDS[0]?.id ?? "metric.pe");
+  const [dynamicMetricIds, setDynamicMetricIds] = useTerminalArtifactState<string[]>("PeerCompPanel.dynamicMetricIds", []);
 
   const { data: peerData = [] } = usePeers(symbol);
   const { data: quotes = [] } = useQuotes(tickers);

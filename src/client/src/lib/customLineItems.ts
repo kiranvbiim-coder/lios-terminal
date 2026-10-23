@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { useTerminalArtifactState } from "./terminalArtifactState";
 
 // Generic "user-extensible line item" engine -- every financial statement
 // panel in this app ships with a fixed schema (a hardcoded list of line
@@ -128,11 +129,9 @@ export function evaluateCustomItem(
   return evaluateFormula(item.terms, periodIdx, getBuiltinValue, customItems, new Set([customRef(item.id)]));
 }
 
-/** Per-panel custom-particular state -- in-session (React state) for now;
- * promoting this to backend-persisted storage later only requires swapping
- * this hook's internals, not the panels that call it. */
-export function useCustomLineItems() {
-  const [items, setItems] = useState<CustomItem[]>([]);
+/** Authored particulars stay in the owning terminal Artifact; standalone panels retain in-session behavior. */
+export function useCustomLineItems(artifactKey = "worksheet.customItems") {
+  const [items, setItems] = useTerminalArtifactState<CustomItem[]>(artifactKey, []);
 
   const addManual = useCallback((label: string, values: Record<number, number>) => {
     setItems(prev => [...prev, { id: newCustomItemId(), label, kind: "manual", values }]);

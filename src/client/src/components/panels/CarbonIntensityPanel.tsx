@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Thermometer } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -13,7 +14,7 @@ function fmt(v: number | null | undefined, digits = 2, suffix = ""): string {
 
 export default function CarbonIntensityPanel() {
   const { data: countries, isLoading: countriesLoading } = useOwidCountries();
-  const [iso3, setIso3] = useState("USA");
+  const [iso3, setIso3] = useTerminalArtifactState("CarbonIntensityPanel.iso3", "USA");
   const { data: series, isLoading } = useOwidCountrySeries(iso3);
 
   // Only years with real (non-null) CO2 figures.

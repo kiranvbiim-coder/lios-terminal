@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { Activity, Compass, FolderKanban, Globe2, Keyboard, Library, LayoutDashboard, Radio, ShieldCheck, Sparkles, X } from "lucide-react";
 import {
   EXPERIENCE_SHELL_SURFACES,
@@ -43,7 +46,11 @@ interface Props {
   onAskLios?: () => void;
 }
 
-const AI_STATE_KEY = "lios.waveC.masterAi";
+const masterAiResponseSchema = z.object({
+  state: z.custom<MasterAiState>(value => value === "on" || value === "off"),
+  mode: z.custom<MasterAiMode>(value => MASTER_AI_MODES.some(mode => mode.id === value)),
+  updatedAt: z.string().nullable().optional(),
+});
 const MARKET_PACK_KEY = "lios.waveC.marketPack";
 const SURFACE_ICONS = { projects: FolderKanban, pulse: Activity, explore: Compass, workbench: LayoutDashboard, signals: Radio, library: Library } as const;
 
@@ -72,9 +79,22 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     if (!controlledSurface) setUncontrolledSurface(next);
     onSurfaceChange?.(next);
   };
-  const [aiState, setAiState] = useState<MasterAiState>(() => window.localStorage.getItem(AI_STATE_KEY) === "on" ? "on" : "off");
-  const [aiMode, setAiMode] = useState<MasterAiMode>("ai_assist");
-  const aiStateHydrated = useRef(false);
+  const queryClient = useQueryClient();
+  const aiQuery = useQuery({
+    queryKey: ["/api/wave-c/ai/state"],
+    enabled: !isClient,
+    queryFn: async () => masterAiResponseSchema.parse(await (await apiRequest("GET", "/api/wave-c/ai/state")).json()),
+    staleTime: 5_000,
+  });
+  const aiState = aiQuery.data?.state ?? "off";
+  const aiMode = aiQuery.data?.mode ?? "manual";
+  const aiWrite = useMutation({
+    mutationFn: async (choice: { state: MasterAiState; mode: MasterAiMode }) => masterAiResponseSchema.parse(await (await apiRequest("PUT", "/api/wave-c/ai/state", choice)).json()),
+    onSuccess: async saved => {
+      queryClient.setQueryData(["/api/wave-c/ai/state"], saved);
+      await queryClient.invalidateQueries({ queryKey: ["/api/setup/status"] });
+    },
+  });
   const [packId, setPackId] = useState(() => window.localStorage.getItem(MARKET_PACK_KEY) ?? "india");
   const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>(() => {
     try {
@@ -94,28 +114,6 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const catalog = useMemo(() => buildDynamicAnalyticsCatalog(), []);
   const sections = useMemo(() => buildAdaptiveCompanySections(catalog.map((field) => field.id)), [catalog]);
   const pack = findMarketPack(packId) ?? MARKET_PACKS[0];
-
-  useEffect(() => {
-    if (isClient) {
-      aiStateHydrated.current = true;
-      return;
-    }
-    let cancelled = false;
-    void fetch("/api/wave-c/ai/state").then(async (response) => {
-      if (!response.ok || cancelled) return;
-      const state = await response.json() as { state?: MasterAiState; mode?: MasterAiMode };
-      if (cancelled) return;
-      if (state.state === "on" || state.state === "off") setAiState(state.state);
-      if (MASTER_AI_MODES.some((item) => item.id === state.mode)) setAiMode(state.mode!);
-      aiStateHydrated.current = true;
-    }).catch(() => { aiStateHydrated.current = true; });
-    return () => { cancelled = true; };
-  }, []);
-  useEffect(() => {
-    window.localStorage.setItem(AI_STATE_KEY, aiState);
-    if (isClient || !aiStateHydrated.current) return;
-    void fetch("/api/wave-c/ai/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: aiState, mode: aiMode }) }).catch(() => undefined);
-  }, [aiMode, aiState]);
   useEffect(() => { window.localStorage.setItem(MARKET_PACK_KEY, pack.id); }, [pack.id]);
   useEffect(() => { window.localStorage.setItem(EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY, JSON.stringify(selectedFieldIds)); }, [selectedFieldIds]);
   useEffect(() => {
@@ -177,10 +175,11 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/[0.06] text-cyan-200"><Sparkles className="h-4 w-4" /></div>
           <div className="min-w-0 flex-1"><div className="font-ui text-[11px] font-semibold tracking-tight text-foreground">LiOS Intelligence Terminal</div>{!isClient && <div className="mt-1 font-ui text-[8px] text-muted-foreground">Pulse, Explore, Workbench, Signals and Library — Ask LiOS stays available.</div>}</div>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent" data-testid="ask-lios"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
-          {!isClient && <div className="flex items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5"><span className="font-terminal text-[7px] text-muted-foreground">MASTER AI</span><button onClick={() => setAiState((current) => current === "on" ? "off" : "on")} className={`rounded-md border px-2 py-1 font-terminal text-[7px] ${aiState === "on" ? "border-emerald-400/40 text-emerald-300" : "border-border text-muted-foreground"}`} aria-pressed={aiState === "on"}>{aiState.toUpperCase()}</button></div>}
-          {!isClient && <select value={aiMode} onChange={(event) => setAiMode(event.target.value as MasterAiMode)} className="rounded-lg border border-border/60 bg-transparent px-2 py-1.5 font-terminal text-[7px] text-muted-foreground" aria-label="Master AI mode">{MASTER_AI_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select>}
+          {!isClient && <div className="flex items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5"><span className="font-terminal text-[7px] text-muted-foreground">MASTER AI</span><button disabled={!aiQuery.data || aiQuery.isError || aiWrite.isPending} onClick={() => aiWrite.mutate({ state: aiState === "on" ? "off" : "on", mode: aiMode })} className={`rounded-md border px-2 py-1 font-terminal text-[7px] ${aiState === "on" ? "border-emerald-400/40 text-emerald-300" : "border-border text-muted-foreground"}`} aria-pressed={aiState === "on"}>{aiQuery.isPending ? "CHECKING" : aiQuery.isError ? "UNAVAILABLE" : aiWrite.isPending ? "SAVING" : aiState.toUpperCase()}</button></div>}
+          {!isClient && <select value={aiMode} disabled={!aiQuery.data || aiQuery.isError || aiWrite.isPending} onChange={(event) => aiWrite.mutate({ state: aiState, mode: event.target.value as MasterAiMode })} className="rounded-lg border border-border/60 bg-transparent px-2 py-1.5 font-terminal text-[7px] text-muted-foreground" aria-label="Master AI mode">{MASTER_AI_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select>}
           {!embedded && onClose && <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close experience shell"><X className="h-4 w-4" /></button>}
         </header>
+        {!isClient && (aiQuery.isError || aiWrite.isError) && <p role="alert" className="border-b border-border px-4 py-2 text-xs text-red-300">{aiWrite.error?.message ?? aiQuery.error?.message ?? "Master AI settings are unavailable."} Open Connection Center to verify the selected provider and model. No failed change is shown as enabled.</p>}
 
         {!embedded && <nav className="flex gap-1 overflow-x-auto border-b border-border/60 px-3 py-2" aria-label="Experience surfaces">
           {EXPERIENCE_SHELL_SURFACES.map((item) => { const Icon = SURFACE_ICONS[item.id]; return <button key={item.id} onClick={() => setSurface(item.id)} className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 font-terminal text-[8px] tracking-wider ${surface === item.id ? "bg-cyan-400/[0.09] text-cyan-200" : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"}`} aria-current={surface === item.id ? "page" : undefined}><Icon className="h-3 w-3" />{item.label.toUpperCase()}</button>; })}

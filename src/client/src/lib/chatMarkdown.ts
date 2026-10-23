@@ -626,6 +626,7 @@ export function resolveCitation(cite: Extract<Inline, { t: "cite" }>, sources: r
 export function collectCitationSources(events: readonly ConversationRuntimeEvent[]): ChatCitationSource[] {
   const sources: ChatCitationSource[] = [];
   const add = (id: string, providerLabel: string | null) => {
+    if (/^(?:ai-provider|ai-output|engine|execution-receipt):/i.test(id)) return;
     if (sources.length >= 50) return;
     const href = /^https?:\/\//i.test(id.trim()) ? safeHref(id) : null;
     const label = providerLabel || (href ? new URL(href).hostname.replace(/^www\./, "") : humanizeSourceRef(id));
@@ -652,6 +653,7 @@ export function savedMessageCitationSources(metadata: unknown): ChatCitationSour
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
     const item = row as Record<string, unknown>;
     if (typeof item.id !== "string" || item.id.length > 2000 || typeof item.label !== "string" || item.label.length > 2000) continue;
+    if (/^(?:ai-provider|ai-output|engine|execution-receipt):/i.test(item.id)) continue;
     if (!sources.has(item.id)) sources.set(item.id, { id: item.id, label: item.label, href: /^https?:\/\//i.test(item.id) ? safeHref(item.id) : null });
   }
   return [...sources.values()];

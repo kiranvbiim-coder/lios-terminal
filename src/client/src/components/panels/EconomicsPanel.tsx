@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { loadTerminalViewState, patchTerminalViewState } from "@/lib/terminalViewState";
@@ -24,16 +25,17 @@ function initialSection(): Section {
 }
 
 export default function EconomicsPanel({ onNav, onSymbol }: Props = {}) {
+  const terminal = useTerminalArtifactContext();
   // Operational economics opens on observable macro conditions. The internal
   // section is persisted so a saved analytical workspace returns to the same
   // macro/signals/policy/calendar mode instead of resetting to a landing page.
-  const [section, setSection] = useState<Section>(initialSection);
+  const [section, setSection] = useTerminalArtifactState<Section>("EconomicsPanel.section", () => terminal ? "macro" : initialSection());
   const definition = WORKSTATION_DEFINITIONS.economics;
   const navigate = onNav ?? (() => undefined);
   const selectSymbol = onSymbol ?? (() => undefined);
 
   useEffect(() => {
-    patchTerminalViewState("economics", undefined, { section });
+    if (!terminal) patchTerminalViewState("economics", undefined, { section });
   }, [section]);
 
   let body: ReactNode;

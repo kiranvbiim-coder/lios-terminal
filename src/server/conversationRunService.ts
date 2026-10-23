@@ -8,7 +8,7 @@ import {
   listProjectChatMessages,
 } from "./projectChatStore";
 import { getProject } from "./projectStore";
-import { getArtifact, persistConversationDraft } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { listProjectResources } from "./projectResourceStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { requireMasterAiOn } from "./masterAiGate";
@@ -52,10 +52,11 @@ import {
   ProjectAttachmentNotFoundError,
   publicAttachmentRefsFromResources,
   resolveProjectConversationAttachments,
+  resolveQuickChatConversationAttachments,
 } from "./projectAttachmentService";
 import { ProjectAttachmentContentError } from "./projectAttachmentContent";
 import type { ResolvedConversationAttachment } from "./projectAttachmentContent";
-import { ProjectAttachmentStorageUnavailableError } from "./projectAttachmentStore";
+import { PROJECT_ATTACHMENT_MAX_PER_MESSAGE, ProjectAttachmentStorageUnavailableError } from "./projectAttachmentStore";
 import { ConversationRunConflictError, conversationRuns } from "./conversationRunRegistry";
 import {
   AgentCheckpointBindingMismatchError,
@@ -479,8 +480,8 @@ async function runProjectChat(
   try {
     const context = tenantContext(user);
     const chat = early?.chat ?? await getProjectChat(context, chatId);
-    if (request.attachments.length && (chat.scope !== "project" || !chat.projectId)) {
-      throw new ConversationStartError(400, { error: "File attachments are currently supported in Project chats only. Move this chat into a Project to use saved attachments." });
+    if (request.attachments.length > PROJECT_ATTACHMENT_MAX_PER_MESSAGE) {
+      throw new ProjectAttachmentLimitError("A message can include at most five attachments.");
     }
 
     let projectName: string | null = null;
@@ -508,16 +509,18 @@ async function runProjectChat(
         contextMode: resource.contextMode,
       }));
       const sourceScopedAttachments = request.sourceScope === "web" ? [] : request.attachments;
+      const projectScopedAttachments = sourceScopedAttachments.filter((attachment) => !attachment.sourceRef.startsWith("quick-attachment:"));
+      const quickScopedAttachments = sourceScopedAttachments.filter((attachment) => attachment.sourceRef.startsWith("quick-attachment:"));
       const selectedResources = includedResourceRefs(
         projectRuntimeResources,
         request.message,
-        sourceScopedAttachments,
+        projectScopedAttachments,
         request.sourceScope,
       ).filter((resource) => resource.kind === "chat_attachment");
       const selectedResourceIds = new Set(selectedResources.map((resource) => resource.id));
       const selectedProjectResources = resources.filter((resource) => selectedResourceIds.has(resource.id));
       const canonicalById = new Map([
-        ...sourceScopedAttachments.map((attachment) => [attachment.id, attachment] as const),
+        ...projectScopedAttachments.map((attachment) => [attachment.id, attachment] as const),
         ...publicAttachmentRefsFromResources(selectedProjectResources).map((attachment) => [attachment.id, attachment] as const),
       ]);
       resolvedAttachments = await resolveProjectConversationAttachments(
@@ -527,8 +530,22 @@ async function runProjectChat(
         Array.from(canonicalById.values()),
         request.transmissionPolicy.allowResourceReferences,
       );
-      runtimeRequest = conversationRequestSchema.parse({ ...approvedRequest, attachments: resolvedAttachments.map((item) => item.reference) });
+      if (quickScopedAttachments.length) {
+        // An explicitly promoted Quick Chat retains the original chat-owned files; no Project resource is fabricated.
+        resolvedAttachments.push(...await resolveQuickChatConversationAttachments(
+          context, chatId, quickScopedAttachments, request.transmissionPolicy.allowResourceReferences,
+        ));
+      }
+    } else if (chat.scope === "quick") {
+      resolvedAttachments = await resolveQuickChatConversationAttachments(
+        context, chatId, request.sourceScope === "web" ? [] : request.attachments,
+        request.transmissionPolicy.allowResourceReferences,
+      );
     }
+    if (resolvedAttachments.length > PROJECT_ATTACHMENT_MAX_PER_MESSAGE || new Set(resolvedAttachments.map((item) => item.reference.id)).size !== resolvedAttachments.length) {
+      throw new ProjectAttachmentLimitError("A message contains too many or duplicate attachment references.");
+    }
+    runtimeRequest = conversationRequestSchema.parse({ ...approvedRequest, attachments: resolvedAttachments.map((item) => item.reference) });
     if (restart) assertRestartAttachmentsUnchanged(restart.source.attachments, runtimeRequest.attachments, request.requestId);
 
     const priorHistory = early?.history ?? await listProjectChatMessages(context, chatId);
@@ -759,6 +776,14 @@ async function runProjectChat(
             const event = runtimeEvent;
             if (event.type === "artifact") {
               pendingArtifacts.push(event);
+              if (event.persistedArtifact) {
+                const artifact = await getArtifact(context, event.persistedArtifact.id);
+                const version = await getArtifactVersion(context, artifact.id, event.persistedArtifact.version);
+                if (artifact.projectId !== chat.projectId || (artifact.projectId === null && artifact.owningChatId !== chatId)) throw new Error("Updated Artifact is outside this conversation owner.");
+                persistedArtifacts.push(retainedArtifactMessageRef({ artifact, version }));
+                pendingArtifacts.pop();
+                await ledger.recordRuntimeEvent(event); await transcript.recordEvent(event); emit(event);
+              }
               return;
             }
             await ledger.recordRuntimeEvent(event);
@@ -791,7 +816,7 @@ async function runProjectChat(
           for (const event of pendingArtifacts) {
             const savedArtifact = await persistConversationDraft(context, {
               projectId: chat.projectId,
-              owningChatId: chat.projectId === null ? chatId : null,
+              owningChatId: chatId,
               requestId: request.requestId,
               draft: event.artifact,
               trustManifest: result.trustManifest ?? null,

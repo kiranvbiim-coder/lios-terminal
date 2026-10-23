@@ -92,31 +92,31 @@ function SourceCard({
         <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${config.className.split(" ")[0]}`} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-terminal text-[10px] font-bold uppercase tracking-wider text-foreground">{item.name}</h3>
-            <span className={`border px-1 py-0.5 font-terminal text-[7px] uppercase tracking-widest ${config.className}`}>{config.label}</span>
-            <span className="border border-border px-1 py-0.5 font-terminal text-[7px] uppercase tracking-widest text-muted-foreground">{item.kind}</span>
+            <h3 className="font-ui text-sm font-semibold text-foreground">{item.name}</h3>
+            <span className={`rounded border px-1.5 py-0.5 font-ui text-xs ${config.className}`}>{config.label}</span>
+            <span className="rounded border border-border px-1.5 py-0.5 font-ui text-xs text-muted-foreground">{item.kind}</span>
           </div>
-          <p className="mt-1 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground">{item.sourceType} · {item.category}</p>
+          <p className="mt-1 font-ui text-xs text-muted-foreground">{item.sourceType.replaceAll("_", " ")} · {item.category.replaceAll("_", " ")}</p>
         </div>
       </div>
-      <p className="mt-2 font-terminal text-[9px] leading-relaxed text-muted-foreground">{item.detail}</p>
-      {checkedAt && <p className="mt-1 font-terminal text-[8px] text-muted-foreground">{checkedAt}</p>}
-      {item.licenseCaveat && <p className="mt-2 font-terminal text-[8px] text-amber-400">{item.licenseCaveat}</p>}
+      <p className="mt-2 font-ui text-sm leading-6 text-muted-foreground">{item.detail}</p>
+      {checkedAt && <p className="mt-1 font-ui text-xs text-muted-foreground">{checkedAt}</p>}
+      {item.licenseCaveat && <p className="mt-2 font-ui text-xs leading-5 text-amber-300">{item.licenseCaveat}</p>}
       <div className="mt-2 flex flex-wrap gap-1">
         {item.capabilities.map((capability) => (
-          <span key={capability.contractFamily} className="border border-border px-1 py-0.5 font-terminal text-[7px] text-muted-foreground">{capability.contractFamily}</span>
+          <span key={capability.contractFamily} className="rounded border border-border px-1.5 py-0.5 font-ui text-xs text-muted-foreground">{capability.contractFamily}</span>
         ))}
       </div>
       <div className="mt-3 flex flex-wrap gap-1">
         {item.kind === "catalog" && (
-          <button type="button" className="border border-[hsl(38,95%,55%)]/40 px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-[hsl(38,95%,55%)]" onClick={() => onConnectProvider(item.connectorId)}>Configure</button>
+          <button type="button" className="min-h-10 rounded-md border border-primary/40 px-3 py-2 font-ui text-sm font-medium text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onConnectProvider(item.connectorId)}>Configure</button>
         )}
         {item.kind === "connection" && item.connectionId !== null && (
           <>
-            {item.sourceType === "database" && onDiscoverDatabase && <button type="button" className="inline-flex items-center gap-1 border border-[hsl(38,95%,55%)]/40 px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-[hsl(38,95%,55%)]" onClick={() => onDiscoverDatabase(item.connectionId!, item.name)}><Search className="h-3 w-3" /> Discover</button>}
-            {onTestConnection && <button type="button" className="border border-border px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground" onClick={() => onTestConnection(item.connectionId!)}>Test</button>}
-            {onEditConnection && <button type="button" className="border border-border px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground" onClick={() => onEditConnection(item.connectionId!)}>Edit</button>}
-            {onDeleteConnection && <button type="button" className="border border-red-500/30 px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-red-400" onClick={() => onDeleteConnection(item.connectionId!)}>Remove</button>}
+            {item.sourceType === "database" && onDiscoverDatabase && <button type="button" className="inline-flex min-h-10 items-center gap-1 rounded-md border border-primary/40 px-3 py-2 font-ui text-sm text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onDiscoverDatabase(item.connectionId!, item.name)}><Search className="h-3 w-3" /> Discover</button>}
+            {onTestConnection && <button type="button" className="min-h-10 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onTestConnection(item.connectionId!)}>Test</button>}
+            {onEditConnection && <button type="button" className="min-h-10 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onEditConnection(item.connectionId!)}>Edit</button>}
+            {onDeleteConnection && <button type="button" aria-label={`Remove saved connection ${item.name}`} className="min-h-10 rounded-md border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onDeleteConnection(item.connectionId!)}>Remove</button>}
           </>
         )}
       </div>

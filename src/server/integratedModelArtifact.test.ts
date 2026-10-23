@@ -28,7 +28,7 @@ const { createEntitlementPolicy } = await import("./dataEntitlementStore");
 const { saveFinancialModelRun } = await import("./financialModelRunStore");
 const { stableSnapshotHash } = await import("./pointInTimeDatasetStore");
 const { getArtifactVersion, createArtifact, createArtifactVersion, createArtifactProposal, decideArtifactProposal, persistConversationDraft } = await import("./artifactStore");
-const { retainIntegratedModelArtifact, projectIntegratedModelWorkbook } = await import("./integratedModelArtifact");
+const { retainIntegratedModelArtifact, projectIntegratedModelWorkbook, readIntegratedModelRun } = await import("./integratedModelArtifact");
 const { registerDataFabricRoutes } = await import("./dataFabricRoutes");
 
 const payload = financialDatasetPayloadSchema.parse({ symbol: "TEST", periods: [{
@@ -70,11 +70,31 @@ test("SI-04.16 persisted engine run becomes one tenant-owned canonical P4 workbo
   const { policy } = await createEntitlementPolicy({ provider: "user_supplied", dataClass: "financial_statements", licenseType: "user_supplied", accessScope: "internal_only", redistribution: "restricted", permittedUses: ["display", "model_input", "derived_output", "export"], attribution: "Owner-supplied fixture", termsUrl: null, effectiveFrom: "1970-01-01T00:00:00.000Z", effectiveTo: null, reviewedAt: null, notes: "No source decimal evidence is asserted." }, owner.id);
   const lineage = { sourceRefs: ["https://example.test/fixture/2023"], normalization: "Fixture contains canonical parsed numbers" };
   const contentHash = stableSnapshotHash({ payload, provider: "user_supplied", lineage });
-  const [snapshot] = await getDb().insert(datasetSnapshots).values({ id: crypto.randomUUID(), datasetKey: `financials:TEST:FY:${crypto.randomUUID()}`, entityKey: "TEST", dataClass: "financial_statements", schemaVersion: "1.0.0", source: "user_import", provider: "user_supplied", frequency: "annual", currency: "USD", retrievedAt: new Date("2024-02-15T00:00:00.000Z"), availableAt: new Date("2024-02-15T00:00:00.000Z"), contentHash, quality: { warnings: [] }, lineage, payload, organizationId: null, createdByUserId: owner.id, entitlementPolicyId: policy.id }).returning();
+  const [snapshot] = await getDb().insert(datasetSnapshots).values({ id: crypto.randomUUID(), datasetKey: `financials:TEST:FY:${crypto.randomUUID()}`, entityKey: "TEST", dataClass: "financial_statements", schemaVersion: "1.0.0", source: "user_import", provider: "user_supplied", frequency: "annual", currency: "USD", retrievedAt: new Date("2024-02-15T00:00:00.000Z"), availableAt: new Date("2024-02-15T00:00:00.000Z"), contentHash, quality: { score: 1, statementCoverage: { income: 1, balance: 1, cashflow: 1 }, criticalFieldsPresent: 1, criticalFieldsExpected: 1, missingCriticalFields: [], warnings: [] }, lineage, payload, organizationId: null, createdByUserId: owner.id, entitlementPolicyId: policy.id }).returning();
   const result = runIntegratedFinancialModel({ datasetSnapshotId: snapshot.id, payload, assumptions: { projectionYears: 2, revenueGrowth: 0.1234567890123456 } });
   const run = await saveFinancialModelRun({ result, resultHash: hashResult(result, snapshot.contentHash), createdByUserId: owner.id });
   assert.ok(run);
   let retained: CreatedArtifact;
+
+  await t.test("reopening an owned run restores exact engine values and source inputs but rejects foreign, revoked and tampered runs", async () => {
+    const reopened = await readIntegratedModelRun(ctx, run.id);
+    assert.deepEqual(reopened.result, result);
+    assert.deepEqual(reopened.snapshot.payload, payload);
+    assert.equal(reopened.receipt.resultHash, run.resultHash);
+    await assert.rejects(readIntegratedModelRun(otherCtx, run.id), /Owned integrated model run not found/);
+    await getDb().update(datasetSnapshots).set({ entitlementPolicyId: null }).where(eq(datasetSnapshots.id, snapshot.id));
+    await assert.rejects(readIntegratedModelRun(ctx, run.id), /linked source entitlement policy/);
+    await getDb().update(datasetSnapshots).set({ entitlementPolicyId: policy.id }).where(eq(datasetSnapshots.id, snapshot.id));
+    await getDb().update(financialModelRuns).set({ resultHash: "0".repeat(64) }).where(eq(financialModelRuns.id, run.id));
+    await assert.rejects(readIntegratedModelRun(ctx, run.id), /result hash/);
+    await getDb().update(financialModelRuns).set({ resultHash: run.resultHash }).where(eq(financialModelRuns.id, run.id));
+    assert.deepEqual((await readIntegratedModelRun(ctx, run.id)).result, result);
+    const { policy: readOnlyPolicy } = await createEntitlementPolicy({ provider: "user_supplied", dataClass: "financial_statements", licenseType: "user_supplied", accessScope: "internal_only", redistribution: "restricted", permittedUses: ["display", "model_input", "derived_output"], attribution: null, termsUrl: null, effectiveFrom: "1970-01-01T00:00:00.000Z", effectiveTo: null, reviewedAt: null, notes: "Reading a model does not grant export" }, owner.id);
+    await getDb().update(datasetSnapshots).set({ entitlementPolicyId: readOnlyPolicy.id }).where(eq(datasetSnapshots.id, snapshot.id));
+    assert.deepEqual((await readIntegratedModelRun(ctx, run.id)).result, result);
+    await assert.rejects(retainIntegratedModelArtifact(ctx, run.id, project.id), /does not currently permit/);
+    await getDb().update(datasetSnapshots).set({ entitlementPolicyId: policy.id }).where(eq(datasetSnapshots.id, snapshot.id));
+  });
 
   await t.test("actual engine outputs, history, schedules, assumptions and checks retain native values without formulas or fabricated receipts", async () => {
     retained = await retainIntegratedModelArtifact(ctx, run.id, project.id);
@@ -308,6 +328,17 @@ test("SI-04.16 persisted engine run becomes one tenant-owned canonical P4 workbo
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const url = `http://127.0.0.1:${address.port}/api/financial-models/integrated/runs/${run.id}/artifact`;
+      const readUrl = url.replace(/\/artifact$/, "");
+      for (const [actor, status] of [[owner, 200], [stranger, 404], [compliance, 403], [client, 403]] as const) {
+        const read = await fetch(readUrl, { headers: { "x-test-user": String(actor.id) } });
+        assert.equal(read.status, status);
+        if (read.ok) {
+          const body = await read.json() as { result: IntegratedFinancialModelResult; receipt: { runId: string; resultHash: string } };
+          assert.deepEqual(body.result, result);
+          assert.equal(body.receipt.runId, run.id);
+          assert.equal(body.receipt.resultHash, run.resultHash);
+        }
+      }
       for (const [actor, body, status] of [
         [owner, {}, 400], [owner, { projectId: project.id, result: {} }, 400], [stranger, { projectId: otherProject.id }, 404],
         [owner, { projectId: otherProject.id }, 404], [compliance, { projectId: project.id }, 403], [client, { projectId: project.id }, 403],
@@ -322,6 +353,17 @@ test("SI-04.16 persisted engine run becomes one tenant-owned canonical P4 workbo
       assert.equal(saved.version.id, retained.version.id);
       const unauthorized = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId: project.id }) });
       assert.equal(unauthorized.status, 403);
+      const policyUrl = `http://127.0.0.1:${address.port}/api/data-snapshots/${snapshot.id}/entitlement`;
+      await getDb().update(datasetSnapshots).set({ organizationId: orgA.id }).where(eq(datasetSnapshots.id, snapshot.id));
+      try {
+        for (const [actor, suppliedHash, status] of [[owner, snapshot.contentHash, 403], [client, snapshot.contentHash, 403], [compliance, "0".repeat(64), 409], [compliance, snapshot.contentHash, 200]] as const) {
+          const linked = await fetch(policyUrl, { method: "POST", headers: { "content-type": "application/json", "x-test-user": String(actor.id) }, body: JSON.stringify({ contentHash: suppliedHash, policyId: policy.id }) });
+          assert.equal(linked.status, status);
+        }
+        const [unchanged] = await getDb().select().from(datasetSnapshots).where(eq(datasetSnapshots.id, snapshot.id));
+        assert.equal(unchanged.contentHash, snapshot.contentHash, "Explicit rights linkage must never rewrite historical source hashes.");
+        assert.equal(unchanged.entitlementPolicyId, policy.id);
+      } finally { await getDb().update(datasetSnapshots).set({ organizationId: null }).where(eq(datasetSnapshots.id, snapshot.id)); }
     } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 });

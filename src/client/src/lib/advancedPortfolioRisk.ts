@@ -1,5 +1,3 @@
-import { apiRequest } from "@/lib/queryClient";
-
 export type AdvancedRiskReceipt = {
   dataClassification: string;
   modelPath: string;
@@ -20,20 +18,15 @@ export type AdvancedRiskReceipt = {
 
 export type AdvancedRiskResponse<T> = T & { receipt: AdvancedRiskReceipt };
 
-export function withManualProvenance<T extends Record<string, unknown>>(parameters: T) {
+export function withManualProvenance<T extends Record<string, unknown>>(parameters: T, transformations: readonly string[] = []) {
   return {
     ...parameters,
     inputProvenance: {
       dataClassification: "manual" as const,
       manualInputs: parameters,
-      transformations: [],
+      transformations: [...transformations],
     },
   };
-}
-
-export async function runAdvancedPortfolioRisk<T extends Record<string, unknown>>(path: string, parameters: Record<string, unknown>): Promise<AdvancedRiskResponse<T>> {
-  const response = await apiRequest("POST", `/api/quant/advanced/${path}`, withManualProvenance(parameters));
-  return response.json() as Promise<AdvancedRiskResponse<T>>;
 }
 
 export function parseNumberList(value: string, label: string, minimum = 1): number[] {

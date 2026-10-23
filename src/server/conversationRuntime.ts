@@ -1,3 +1,4 @@
+import { terminalArtifactTool } from "./terminalArtifactTool";
 import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
 import { deadlineSignal } from "./deadlineSignal";
@@ -142,6 +143,7 @@ import {
   GovernedToolDeniedError,
   GovernedToolRegistry,
   decidePermission,
+  governedToolPlanningSchema,
   type GovernedToolCall,
   type GovernedToolDescriptor,
   type ToolSideEffect,
@@ -435,7 +437,9 @@ const instrumentToolInputSchema = z.object({
   symbol: z.string().trim().max(120).optional(),
   name: z.string().trim().max(300).optional(),
   query: z.string().trim().max(300).optional(),
-}).strict().refine((input) => Boolean(input.symbol || input.name || input.query));
+}).strict().refine((input) => Boolean(input.symbol || input.name || input.query), {
+  message: "Provide at least one non-empty symbol, name or query copied from the user's explicit identity request; do not invent an instrument.",
+});
 const marketDataToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const companyToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const technicalToolInputSchema = z.object({
@@ -490,6 +494,7 @@ export function createConversationToolCall(
     sourceScope: input.request.sourceScope ?? "auto",
     resourceTransmissionAllowed: input.request.transmissionPolicy.allowResourceReferences,
     activeArtifactRefs: (input.request.context?.activeObjectRefs ?? []).filter(ref => /^artifact:[0-9a-f-]{36}$/i.test(ref)).slice(0, 20),
+    terminalArtifact: input.request.context?.terminalArtifact,
     tenant: input.tenant,
     nodeFinanceGateway: input.nodeFinanceGateway,
   };
@@ -752,6 +757,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool({
     id: "lios.instrument-master",
     label: "Global Instrument Master",
+    planningHint: "Resolve an explicitly requested instrument identity. Input requires at least one non-empty field: symbol, name, or query. For an explicit MSFT request use {\"symbol\":\"MSFT\"}; for a company name use name or query. Empty input is invalid. Do not guess a ticker from unrelated prose.",
     kind: "resolve",
     permissionClass: "safe_auto",
     access: "read",
@@ -1124,6 +1130,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(projectEvidenceArtifactTool);
   registerConversationTool(artifactInspectTool);
   registerConversationTool(artifactMaintenanceTool);
+  registerConversationTool(terminalArtifactTool);
   registerConversationTool(webResearchArtifactTool);
   registerConversationTool(entityIntelligenceTool);
   registerConversationTool(privateEntityResearchTool);
@@ -2316,7 +2323,7 @@ async function executeNodeFinanceSnapshot(input: ConversationRuntimeInput, plan:
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [draft], cancelled: false, awaitingApproval: false };
 }
 function evidenceKindForSourceRef(sourceRef: string): EvidenceObservation["kind"] {
-  if (sourceRef.startsWith("ai-provider:")) return "ai";
+  if (sourceRef.startsWith("ai-provider:") || sourceRef.startsWith("ai-output:")) return "ai";
   if (sourceRef.startsWith("provider:") || sourceRef.startsWith("dataset:")) return "provider";
   if (sourceRef.startsWith("project-attachment:") || sourceRef.startsWith("file:")) return "file";
   if (sourceRef.startsWith("project:") || sourceRef.startsWith("artifact:")) return "project";
@@ -2764,6 +2771,7 @@ async function executeP2CapabilityBundle(
       sourceRefs,
       executionReceiptIds: [technicalReceipt.id],
       data: {
+        sourceScope: input.request.sourceScope,
         symbol,
         name: match.name ?? quote.name ?? null,
         identity: match,
@@ -3290,6 +3298,7 @@ async function executeTechnical(
     sourceRefs,
     executionReceiptIds: [receipt.id],
     data: {
+      sourceScope: input.request.sourceScope,
       symbol,
       quote: { price: quote.price, changePercent: quote.changePercent, currency: quote.currency, provider: quote.quoteSource },
       snapshot,
@@ -4193,6 +4202,7 @@ interface AgentLoopCatalogue {
     id: string;
     label: string;
     planningHint?: string;
+    inputJsonSchema: string;
     kind: string;
     permissionClass: GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["permissionClass"];
     sideEffect: NonNullable<GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["sideEffect"]>;
@@ -4209,6 +4219,7 @@ function offeredAgentLoopCatalogue(role: string): AgentLoopCatalogue {
     id: tool.id,
     label: tool.label,
     ...(tool.planningHint ? { planningHint: tool.planningHint } : {}),
+    inputJsonSchema: governedToolPlanningSchema(tool.inputSchema),
     kind: tool.kind,
     permissionClass: tool.permissionClass,
     sideEffect: tool.sideEffect ?? "none",
@@ -4236,7 +4247,7 @@ function agentLoopFactsFor(
   const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => a.id.localeCompare(b.id));
   const toolSetSha256 = sha256Json({
     version: 1,
-    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
+    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, inputJsonSchema: tool.inputJsonSchema, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
     skills: byId(skills).map((skill) => ({ id: skill.id, toolIds: [...skill.toolIds].sort() })),
   });
   const policySha256 = sha256Json({
@@ -4492,7 +4503,14 @@ async function executeAgentLoop(
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
   const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
-  const maintenancePrompt = input.scope === "project" && request.transmissionPolicy.allowResourceReferences && /\b(update|maintain|revise|edit|improve|append)\b/i.test(request.message)
+  const terminalBinding = request.context?.terminalArtifact;
+  let terminalPrompt: string | null = null;
+  if (terminalBinding && input.chatId !== null && request.transmissionPolicy.allowResourceReferences && request.transmissionPolicy.allowToolCalling) {
+    const { validateTerminalArtifactTarget } = await import("./terminalArtifactTool");
+    await validateTerminalArtifactTarget(input.tenant, input.chatId, terminalBinding, signal);
+    terminalPrompt = `Selected existing financial terminal Artifact (identity only, no source-data disclosure): ${JSON.stringify(terminalBinding)}. Use lios.artifact.terminal_update with artifactId, baseVersion=version, baseHash=contentHash and typed operations. State changes are not numerical calculations. Rejection/conflict requires reinspection; never guess another head.`;
+  }
+  const maintenancePrompt = !terminalPrompt && input.scope === "project" && request.transmissionPolicy.allowResourceReferences && /\b(update|maintain|revise|edit|improve|append)\b/i.test(request.message)
     ? await buildArtifactMaintenancePrompt(createConversationToolCall(input, "agent", await activeResearchSourcePolicy(input)), signal)
     : null;
   const providers = new Set<string>();
@@ -4530,7 +4548,7 @@ async function executeAgentLoop(
       let answered: AICompletionResult;
       try {
         answered = await invokeGovernedAi(input, plan, invokeAI, {
-          system: `${system}\n\n${aiSystemPrompt(input, context)}${maintenancePrompt ? `\n\n${maintenancePrompt}` : ""}`,
+          system: `${system}\n\n${aiSystemPrompt(input, context)}${maintenancePrompt ? `\n\n${maintenancePrompt}` : ""}${terminalPrompt ? `\n\n${terminalPrompt}` : ""}`,
           messages: [{ role: "user", content: user }],
           maxTokens: 1800,
           preferredProvider: input.preferredProvider,
@@ -4675,6 +4693,16 @@ async function executeAgentLoop(
             : {}),
         });
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);
+        if (step.toolId === terminalArtifactTool.id && result.output && typeof result.output === "object") {
+          const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string() }).passthrough().parse(result.output);
+          const artifact = await getArtifact(input.tenant, updated.artifactId);
+          const version = await getArtifactVersion(input.tenant, updated.artifactId, updated.version);
+          if (version.contentHash !== updated.contentHash) throw new Error("Updated terminal revision changed before publication.");
+          await emit(input, { ...eventBase(request.requestId), type: "artifact",
+            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: "screen", title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
+            persistedArtifact: { id: artifact.id, version: version.version },
+          });
+        }
         return { kind: "ok", summary: result.summary, deterministic: result.deterministic, sourceRefs: result.sourceRefs };
       } catch (error) {
         if (dispatchIntentPersisted && !dispatchNoEffectPersisted) return { kind: "outcome_unknown" };

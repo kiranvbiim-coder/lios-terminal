@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FormulaTooltip } from "@/components/panels/FormulaTooltip";
 import { computeEva } from "@/lib/valuationEngines";
 import { evToEquityBridge, type EvToEquityBridgeInputs } from "@/lib/valuationModels";
-import { AdvancedReceiptFooter, runAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
+import { AdvancedReceiptFooter, useAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
 
 // Economic Value Added (EVA) tab: EV = invested capital + PV(future EVA),
 // EVA = NOPAT − (WACC × beginning invested capital). Current-period
@@ -37,7 +37,8 @@ export default function EvaTab({
   const hasRealCurrentData = currentNopat != null && currentInvestedCapital != null && currentInvestedCapital > 0;
   const nopat0 = currentNopat ?? 0;
   const ic0 = currentInvestedCapital ?? 0;
-  const [advanced, setAdvanced] = useState<{ enterpriseValue: number; evaPv: number; terminalEvaPv: number; receipt: AdvancedReceipt } | null>(null);
+  const nativeModel = useAdvancedModel<{ enterpriseValue: number; evaPv: number; terminalEvaPv: number; receipt: AdvancedReceipt }>("valuation/eva");
+  const advanced = nativeModel.result;
   const [advancedError, setAdvancedError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -58,7 +59,7 @@ export default function EvaTab({
   async function runCanonicalEva() {
     const parameters = { investedCapital: ic0, nopat: forecastNopat, waccPct: computedWACC, capitalGrowthPct, terminalEvaGrowthPct: termGrowth };
     setRunning(true); setAdvancedError(null);
-    try { setAdvanced(await runAdvancedModel("valuation/eva", parameters)); }
+    try { await nativeModel.run(parameters); }
     catch (error) { setAdvancedError(error instanceof Error ? error.message : "EVA run failed."); }
     finally { setRunning(false); }
   }
@@ -72,12 +73,11 @@ export default function EvaTab({
     terminalGrowth: termGrowth / 100,
   }), [ic0, nopat0, computedWACC, forecastNopat, forecastInvestedCapital, termGrowth]);
 
-  const canonicalEnterpriseValue = advanced?.enterpriseValue ?? result.intrinsicEnterpriseValue;
   const bridge = useMemo(() => evToEquityBridge({
-    enterpriseValue: canonicalEnterpriseValue,
+    enterpriseValue: result.intrinsicEnterpriseValue,
     netDebt,
     ...bridgeInputs,
-  }), [canonicalEnterpriseValue, netDebt, bridgeInputs]);
+  }), [result.intrinsicEnterpriseValue, netDebt, bridgeInputs]);
 
   const valuePerShare = sharesOut > 0 ? bridge.equityValue / sharesOut : 0;
   const upside = price > 0 ? ((valuePerShare - price) / price) * 100 : NaN;
@@ -124,7 +124,7 @@ export default function EvaTab({
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-[hsl(38,95%,55%)]">CANONICAL ADVANCED EVA</span><button type="button" disabled={running || !hasRealCurrentData || forecastNopat.length === 0} onClick={runCanonicalEva} className="border border-[hsl(38,95%,50%)] px-2 py-1 font-terminal text-[8px] text-[hsl(38,95%,55%)] disabled:opacity-40">{running ? "RUNNING…" : "RUN RECEIPTED MODEL"}</button></div>
         <div className="font-terminal text-[7px] text-muted-foreground">Formal units: money (invested capital, NOPAT, EV); percent (WACC, capital growth, terminal EVA growth). This manual run uses the exact NOPAT path and a constant capital-growth input derived from the worksheet’s Y1 capital roll-forward; the reconciliation identifies that changed simplifying assumption.</div>
         {advancedError ? <div className="font-terminal text-[8px] text-red-400">{advancedError}</div> : null}
-        {advanced ? <><div className="font-terminal text-[8px] text-muted-foreground">Canonical EV <b className="text-foreground">{curr}{(advanced.enterpriseValue / 1e9).toFixed(2)}B</b>; prior worksheet EV {curr}{(result.intrinsicEnterpriseValue / 1e9).toFixed(2)}B; delta {curr}{((advanced.enterpriseValue - result.intrinsicEnterpriseValue) / 1e6).toFixed(1)}M; constant capital growth {capitalGrowthPct.toFixed(2)}%.</div><AdvancedReceiptFooter receipt={advanced.receipt} /></> : null}
+        {advanced ? <><div className="font-terminal text-[8px] text-muted-foreground">Recorded native EV <b className="text-foreground">{curr}{(advanced.enterpriseValue / 1e9).toFixed(2)}B</b>. Current worksheet EV {curr}{(result.intrinsicEnterpriseValue / 1e9).toFixed(2)}B is a separate calculation using current authored inputs; the headline bridge does not relabel the saved native EV as a new equity result. Run explicitly after changing assumptions.</div><AdvancedReceiptFooter receipt={advanced.receipt} /></> : null}
       </div>
 
       <div className="bg-[#080808] border border-border p-4">

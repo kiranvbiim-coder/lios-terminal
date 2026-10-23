@@ -1,9 +1,11 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Leaf } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
 import { InputSourceSelector, ModelInputEditor, ProvenanceReceipt, advancedInputProvenance, type InputSourceMode } from "./advancedOperationsClimate";
 import type { JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import { useAdvancedWorkflow } from "./advancedMacroForecastResearch";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 
 // Environment & Sustainability domain's own real quant engine
 // (LIMURIA_ENGINES port plan Phase 9) -- built directly inside the actual
@@ -129,27 +131,32 @@ type AdvancedReceipt = {
 
 export default function EnvironmentQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<EnvironmentMethod>("climate");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<EnvironmentMethod>("EnvironmentQuantPanel.method", "climate");
+  const [localResult, setResult] = useState<{ method: string; output: unknown } | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const legacyResult = terminal?.target ? native.stored?.[`environment.${method}`] : localResult?.method === method ? localResult.output : null;
+  const nativeWorkflow = useAdvancedWorkflow("climate", method);
+  const result = method === "climate" || method === "carbon" ? legacyResult : nativeWorkflow.result;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ── Climate transition risk ──
-  const [scope1, setScope1] = useState("50000");
-  const [scope2, setScope2] = useState("20000");
-  const [scope3, setScope3] = useState("30000");
-  const [ebitdaUsd, setEbitdaUsd] = useState("50000000");
-  const [carbonPrice, setCarbonPrice] = useState("100");
+  const [scope1, setScope1] = useTerminalArtifactState("EnvironmentQuantPanel.scope1", "50000");
+  const [scope2, setScope2] = useTerminalArtifactState("EnvironmentQuantPanel.scope2", "20000");
+  const [scope3, setScope3] = useTerminalArtifactState("EnvironmentQuantPanel.scope3", "30000");
+  const [ebitdaUsd, setEbitdaUsd] = useTerminalArtifactState("EnvironmentQuantPanel.ebitdaUsd", "50000000");
+  const [carbonPrice, setCarbonPrice] = useTerminalArtifactState("EnvironmentQuantPanel.carbonPrice", "100");
 
   // ── Carbon credit MRV ──
-  const [grossOffset, setGrossOffset] = useState("100000");
-  const [permanenceRisk, setPermanenceRisk] = useState("10");
-  const [additionality, setAdditionality] = useState("0.9");
-  const [marketPrice, setMarketPrice] = useState("25");
+  const [grossOffset, setGrossOffset] = useTerminalArtifactState("EnvironmentQuantPanel.grossOffset", "100000");
+  const [permanenceRisk, setPermanenceRisk] = useTerminalArtifactState("EnvironmentQuantPanel.permanenceRisk", "10");
+  const [additionality, setAdditionality] = useTerminalArtifactState("EnvironmentQuantPanel.additionality", "0.9");
+  const [marketPrice, setMarketPrice] = useTerminalArtifactState("EnvironmentQuantPanel.marketPrice", "25");
 
   // ── Dark advanced climate routes (financed emissions / climate VaR / abatement curve / transition pathway) ──
-  const [advancedSourceMode, setAdvancedSourceMode] = useState<InputSourceMode>("manual");
-  const [advancedInputs, setAdvancedInputs] = useState<Record<AdvancedClimateMethod, string>>({
+  const [advancedSourceMode, setAdvancedSourceMode] = useTerminalArtifactState<InputSourceMode>("EnvironmentQuantPanel.advancedSourceMode", "manual");
+  const [advancedInputs, setAdvancedInputs] = useTerminalArtifactState<Record<AdvancedClimateMethod, string>>("EnvironmentQuantPanel.advancedInputs", {
     "financed-emissions": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["financed-emissions"], null, 2),
     "climate-var": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["climate-var"], null, 2),
     "abatement-curve": JSON.stringify(ADVANCED_CLIMATE_EXAMPLES["abatement-curve"], null, 2),
@@ -176,18 +183,11 @@ export default function EnvironmentQuantPanel() {
         const parsed: unknown = JSON.parse(advancedInputs[method]);
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Model input must be a JSON object.");
         const parameters = parsed as Record<string, unknown>;
-        const advancedRes = await apiRequest("POST", `/api/quant/advanced/climate/${method}`, {
-          ...parameters, inputProvenance: advancedInputProvenance(parameters, advancedSourceMode),
-        });
-        setResult(await advancedRes.json());
+        await nativeWorkflow.run(parameters, advancedInputProvenance(parameters, advancedSourceMode));
         return;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Environment engine unavailable right now.");
-      }
-      setResult(await res.json());
+      const output = await native.run<Record<string, unknown>>(method, body as Record<string, unknown>, `environment.${method}`, path);
+      if (!terminal?.target) setResult({ method, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Environment engine unavailable right now.");
     } finally {
@@ -297,6 +297,7 @@ export default function EnvironmentQuantPanel() {
             </>
           );
         })()}
+        {result != null && !isAdvancedClimateMethod(method) && <><p className="text-xs text-muted-foreground">Recorded original environment-engine result · explicit Run recalculates edited manual inputs on this same terminal Artifact.</p><ProvenanceReceipt receipt={(result as { receipt?: AdvancedReceipt }).receipt}/></>}
       </div>
     </div>
   );

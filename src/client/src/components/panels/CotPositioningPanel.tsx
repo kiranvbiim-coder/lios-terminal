@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Scale } from "lucide-react";
 import { useCftcCot } from "@/lib/useOfficialSources";
@@ -22,7 +23,7 @@ function fmtCell(v: unknown): string {
 }
 
 export default function CotPositioningPanel() {
-  const [symbol, setSymbol] = useState("GC");
+  const [symbol, setSymbol] = useTerminalArtifactState("CotPositioningPanel.symbol", "GC");
   const { data: rows, isLoading } = useCftcCot(symbol);
 
   const columns = useMemo(() => {

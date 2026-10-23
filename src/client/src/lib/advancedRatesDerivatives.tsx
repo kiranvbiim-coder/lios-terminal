@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { useTerminalQuantRun } from "./useTerminalQuantRun";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "./terminalArtifactState";
 
 export type AdvancedRatesModel = {
   path: string;
@@ -83,33 +84,35 @@ export function ReceiptSummary({ receipt }: { receipt?: Receipt }) {
 
 export function AdvancedRatesDerivativesRunner({ modelPaths, title = "ADVANCED ANALYTICS" }: { modelPaths: string[]; title?: string }) {
   const models = useMemo(() => modelPaths.map((path) => ADVANCED_RATES_DERIVATIVES[path]).filter((model): model is AdvancedRatesModel => Boolean(model)), [modelPaths]);
-  const [path, setPath] = useState(models[0]?.path ?? "");
+  const terminal = useTerminalArtifactContext();
+  const [path, setPath] = useTerminalArtifactState(`advancedRates.${title}.path`, models[0]?.path ?? "");
   const selected = models.find((model) => model.path === path) ?? models[0];
-  const [text, setText] = useState(() => selected ? JSON.stringify(selected.parameters, null, 2) : "{}");
-  const [result, setResult] = useState<AdvancedResponse | null>(null);
+  const [text, setText] = useTerminalArtifactState(`advancedRates.${title}.${path}.parameters`, () => selected ? JSON.stringify(selected.parameters, null, 2) : "{}");
+  const quant = useTerminalQuantRun();
+  const slot = `advancedRates.${title}.${path}`;
+  const [localResult, setResult] = useState<AdvancedResponse | null>(null);
+  const result = terminal?.target ? quant.stored?.[slot] as AdvancedResponse | undefined : localResult;
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const running = quant.running;
 
-  useEffect(() => { if (selected) { setText(JSON.stringify(selected.parameters, null, 2)); setResult(null); setError(null); } }, [selected?.path]);
+  useEffect(() => { if (selected) { if (!terminal) setText(JSON.stringify(selected.parameters, null, 2)); setResult(null); setError(null); } }, [selected?.path]);
   if (!selected) return null;
   const run = async () => {
     setError(null); setResult(null);
     let parameters: Record<string, unknown>;
     try { parameters = parseAdvancedManualParameters(text); validateAdvancedManualParameters(selected.path, parameters); } catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid manual parameters."); return; }
-    setRunning(true);
     try {
-      const response = await apiRequest("POST", `/api/quant/advanced/${selected.path}`, manualAdvancedRequest(parameters));
-      setResult(await response.json() as AdvancedResponse);
+      setResult(await quant.run<AdvancedResponse>(selected.path, manualAdvancedRequest(parameters), slot));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Analysis request failed."); }
-    finally { setRunning(false); }
   };
   return <section className="border-t border-border pt-4 space-y-2">
     <div className="flex items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-muted-foreground">{title}</span><span className="font-terminal text-[7px] text-amber-400">MANUAL INPUTS · NO LIVE SOURCE BINDING</span></div>
-    {models.length > 1 && <select aria-label="Advanced analytics model" value={selected.path} onChange={(event) => setPath(event.target.value)} className="w-full bg-[#090909] border border-border px-2 py-1 font-terminal text-[9px] text-foreground">{models.map((model) => <option key={model.path} value={model.path}>{model.label}</option>)}</select>}
+    {models.length > 1 && <select aria-label="Advanced analytics model" value={selected.path} disabled={running} onChange={(event) => setPath(event.target.value)} className="w-full bg-[#090909] border border-border px-2 py-1 font-terminal text-[9px] text-foreground">{models.map((model) => <option key={model.path} value={model.path}>{model.label}</option>)}</select>}
     <div className="font-terminal text-[8px] text-muted-foreground">{selected.description} Pre-filled values are illustrative manual terms, never live market data. Replace them with terms/curves/quotes you can support; no FRED/LSE quote is claimed as live without an immutable source snapshot.</div>
-    <label className="block font-terminal text-[8px] text-muted-foreground">MANUAL PARAMETERS (EXACT SUBMITTED JSON · REQUIRED FIELDS VALIDATED)<textarea aria-label={`${selected.label} manual parameters`} value={text} onChange={(event) => setText(event.target.value)} spellCheck={false} className="mt-1 h-36 w-full resize-y bg-black border border-border p-2 font-mono text-[9px] text-foreground outline-none focus:border-amber-500/60" /></label>
+    <label className="block font-terminal text-[8px] text-muted-foreground">MANUAL PARAMETERS (EXACT SUBMITTED JSON · REQUIRED FIELDS VALIDATED)<textarea aria-label={`${selected.label} manual parameters`} value={text} disabled={running} onChange={(event) => setText(event.target.value)} spellCheck={false} className="mt-1 h-36 w-full resize-y bg-black border border-border p-2 font-mono text-[9px] text-foreground outline-none focus:border-amber-500/60" /></label>
     <div className="flex items-center justify-between gap-2"><span className="font-terminal text-[8px] text-muted-foreground">SOURCE CLASSIFICATION: MANUAL · CONNECTOR/KEY REQUIRED FOR LIVE QUOTES; IMPORT AN IMMUTABLE SNAPSHOT TO BIND ONE.</span><button type="button" disabled={running} onClick={run} className="shrink-0 border border-amber-500/50 px-2 py-1 font-terminal text-[8px] text-amber-400 disabled:opacity-50">{running ? "RUNNING…" : "RUN ANALYTIC"}</button></div>
     {error && <div role="alert" className="font-terminal text-[8px] text-red-400">{error}</div>}
+    {result && <p className="text-xs text-muted-foreground">Recorded native result and receipt · editing inputs does not recalculate this run. Run Analytic explicitly to retain a new result on this same terminal Artifact.</p>}
     {result && <><pre className="max-h-48 overflow-auto border border-border bg-black/30 p-2 font-mono text-[8px] text-foreground">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={result.receipt} /></>}
   </section>;
 }

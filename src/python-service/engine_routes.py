@@ -263,6 +263,19 @@ def resolve_route(route: EngineRoute):
         ) from exc
 
 
+def input_contract(body):
+    """Resolve only the canonical allowlisted request model; never execute it."""
+    if not isinstance(body, dict) or set(body) != {"route"}:
+        raise EngineInputError("Input contract requires exactly a canonical route.")
+    route = ROUTES_BY_PATH.get(body["route"]) if isinstance(body["route"], str) else None
+    if route is None:
+        raise EngineInputError("Unknown numerical route.")
+    request_model, _, _ = resolve_route(route)
+    schema = request_model.model_json_schema()
+    return {"route": body["route"], "fields": list(schema.get("properties", {})),
+            "required": schema.get("required", [])}
+
+
 def _require_finite(value):
     if isinstance(value, float) and not math.isfinite(value):
         raise EngineInputError("Numerical request values must be finite.")

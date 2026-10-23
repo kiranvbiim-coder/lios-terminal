@@ -339,3 +339,31 @@
     min-width: 0;
   }
 }
+
+/* The same Decision Engine renders in a narrow Chat pane and full Dockview. */
+.lios-decision-panel {
+  container-name: lios-decision;
+  container-type: inline-size;
+}
+.lios-decision-layout {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.lios-decision-queue {
+  max-height: 10rem;
+  border-bottom-width: 1px;
+}
+@container lios-decision (min-width: 900px) {
+  .lios-decision-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .lios-decision-queue {
+    max-height: none;
+    border-bottom-width: 0;
+    border-right-width: 1px;
+  }
+  .lios-decision-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}

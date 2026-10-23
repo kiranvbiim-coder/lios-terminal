@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { Network, Plus, X } from "lucide-react";
@@ -62,10 +63,10 @@ function correlationLabel(value: number | null) {
 }
 
 export default function CrossAssetPanel({ onSymbol }: Props) {
-  const [assets, setAssets] = useState<AssetEntry[]>(DEFAULT_ASSETS);
-  const [assetInput, setAssetInput] = useState("");
-  const [pairA, setPairA] = useState(0);
-  const [pairB, setPairB] = useState(1);
+  const [assets, setAssets] = useTerminalArtifactState<AssetEntry[]>("CrossAssetPanel.assets", DEFAULT_ASSETS);
+  const [assetInput, setAssetInput] = useTerminalArtifactState("CrossAssetPanel.assetInput", "");
+  const [pairA, setPairA] = useTerminalArtifactState("CrossAssetPanel.pairA", 0);
+  const [pairB, setPairB] = useTerminalArtifactState("CrossAssetPanel.pairB", 1);
 
   const symbols = useMemo(() => assets.map((asset) => asset.sym), [assets]);
   const { data: quotes = [], dataUpdatedAt: quoteUpdatedAt } = useQuotes(symbols);

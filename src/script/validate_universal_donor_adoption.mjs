@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -30,6 +30,43 @@ export function loadUniversalDonorAdoptionSources(){
   locks:loadJson("third_party/upstream-lock.json"),
   controls:loadJson("third_party/donor-harvesting-controls.json"),
  };
+}
+/** Source/lock presence only; neither runtime, licensing nor shipping evidence. */
+export function verifyBundledDonorDestinations(components, options = {}) {
+ const checkoutRoot = path.resolve(options.root ?? root);
+ const npmPackages = options.npmPackages ?? JSON.parse(readFileSync(path.join(checkoutRoot,"src/package-lock.json"),"utf8")).packages;
+ let sourcePaths = 0, npmReferences = 0;
+ for (const component of components.components) {
+  if (!component.bundled) continue;
+  for (const destination of component.destinationPaths ?? []) {
+   assert.equal(typeof destination,"string",component.id+" has invalid bundled path");
+   if (destination.startsWith("npm:")) {
+    const spec = destination.slice(4), at = spec.lastIndexOf("@");
+    assert.ok(at > 0,component.id+" has invalid npm destination reference");
+    const name = spec.slice(0,at), version = spec.slice(at+1);
+    assert.match(name,/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i);
+    assert.ok(!name.includes("..") && version.length > 0 && !version.includes("/"));
+    assert.equal(npmPackages["node_modules/"+name]?.version,version,component.id+" npm dependency no longer matches the locked bundled reference "+destination);
+    npmReferences++;
+    continue;
+   }
+   const base = component.destinationPathBase ?? "src/";
+   const relative = destination.startsWith("src/") ? destination : base+destination;
+   const segments = relative.split("/");
+   assert.ok(relative.startsWith("src/") && !relative.includes("\\") && !segments.some(part => part === ".." || part === "." || part === ""),
+    component.id+" has unsafe bundled destination "+destination);
+   let current = checkoutRoot;
+   for (let index = 0; index < segments.length; index++) {
+    current = path.join(current,segments[index]);
+    let stat;
+    try { stat = lstatSync(current); } catch {}
+    assert.ok(stat && !stat.isSymbolicLink() && (index === segments.length-1 ? stat.isFile() : stat.isDirectory()),
+     component.id+" bundled source destination is missing, linked or not a regular file: "+relative);
+   }
+   sourcePaths++;
+  }
+ }
+ return { sourcePaths, npmReferences };
 }
 function assertUniqueIds(rows,field,label){
  const ids=rows.map(x=>x[field]);
@@ -64,6 +101,7 @@ export function validateUniversalDonorAdoption({ledger,baseline,forks,components
  for(const [key,value] of Object.entries(ledger.releaseClaims)) {
   assert.equal(value,false,"Universal donor ledger cannot claim shipped/full integration: "+key);
  }
+ const bundledDestinations=verifyBundledDonorDestinations(components);
  const cmp=new Map(components.components.map(x=>[x.id,x]));
  const pins=new Map(locks.locks.map(x=>[x.id,x]));
  const realForks=new Map(forks.mirrors.map(x=>[x.id,x]));
@@ -218,6 +256,7 @@ export function validateUniversalDonorAdoption({ledger,baseline,forks,components
   bySourceAuditStatus:Object.fromEntries([...auditStatuses].sort((a,b)=>a[0].localeCompare(b[0]))),
   donorsFullyExhausted:exhaustedDonors,
   harvestingControlSchema:controls.schemaVersion,
+  bundledDestinations,
   newProductFeaturesShippedByAudit:0,
  };
 }

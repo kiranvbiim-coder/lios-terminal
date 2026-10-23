@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { Briefcase, Plus, Trash2 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
@@ -37,11 +38,11 @@ function isFiniteNumber(value: number | null | undefined): value is number {
 }
 
 export default function PortfolioPanel({ onSymbol }: Props) {
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [addSym, setAddSym] = useState("");
-  const [addShares, setAddShares] = useState("");
-  const [addCost, setAddCost] = useState("");
-  const [nextId, setNextId] = useState(1);
+  const [positions, setPositions] = useTerminalArtifactState<Position[]>("PortfolioHoldingsPanel.positions", []);
+  const [addSym, setAddSym] = useTerminalArtifactState("PortfolioPanel.addSym", "");
+  const [addShares, setAddShares] = useTerminalArtifactState("PortfolioPanel.addShares", "");
+  const [addCost, setAddCost] = useTerminalArtifactState("PortfolioPanel.addCost", "");
+  const [nextId, setNextId] = useTerminalArtifactState("PortfolioHoldingsPanel.nextId", 1);
 
   const analyticsPositions = useMemo<PortfolioPositionInput[]>(() => {
     return positions.map(({ symbol, shares, avgCost }) => ({ symbol, shares, avgCost }));

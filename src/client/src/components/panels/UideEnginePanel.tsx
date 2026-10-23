@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Sparkles, UploadCloud, Loader2, FileWarning, Database, Clock, Compass,
@@ -115,9 +116,18 @@ const MODEL_TYPE_LABEL: Record<string, string> = {
 };
 
 export default function UideEnginePanel() {
-  const [fixtureId, setFixtureId] = useState<string | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const owner = useRef({ terminal, mounted: true });
+  owner.current.terminal = terminal;
+  useEffect(() => { owner.current.mounted = true; return () => { owner.current.mounted = false; }; }, []);
+  const [fixtureId, setFixtureId] = useTerminalArtifactState<string | null>("UideEnginePanel.fixtureId", null);
+  const classifyOnOpen = useRef<string | null>(null);
+  const currentFixtureId = useRef(fixtureId);
+  currentFixtureId.current = fixtureId;
+  const classificationEpoch = useRef(0);
+  const classificationOwnerId = useRef<string | null>(null);
   const [profile, setProfile] = useState<WorkbookProfile | null>(null);
-  const [activeSheet, setActiveSheet] = useState(0);
+  const [activeSheet, setActiveSheet] = useTerminalArtifactState(`UideEnginePanel.activeSheet.${fixtureId}`, 0);
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [fixtures, setFixtures] = useState<FixtureMeta[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -140,12 +150,40 @@ export default function UideEnginePanel() {
     loadFixtures();
   }, [loadFixtures]);
 
+  useEffect(() => {
+    const abort = new AbortController();
+    const classificationAtRead = classificationEpoch.current;
+    setProfile(null);
+    if (classificationOwnerId.current !== fixtureId) setClassification(null);
+    if (fixtureId) {
+      fetch(`/api/uide/fixtures/${encodeURIComponent(fixtureId)}`, { signal: abort.signal })
+        .then(async response => { if (!response.ok) throw new Error("Saved workbook is unavailable under current access."); return response.json() as Promise<FixtureRecord>; })
+        .then(record => {
+          if (abort.signal.aborted || record.id !== fixtureId) return;
+          setProfile(record.profile);
+          if (classificationEpoch.current === classificationAtRead) {
+            classificationOwnerId.current = record.id;
+            setClassification(record.classification ?? null);
+          }
+          if (!record.classification && classifyOnOpen.current === record.id) {
+            classifyOnOpen.current = null;
+            void classifyFixture(record.id);
+          }
+        })
+        .catch(error => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : "Saved workbook unavailable."); });
+    }
+    return () => abort.abort();
+  }, [fixtureId]);
+
   const classifyFixture = useCallback(async (id: string) => {
     setIsClassifying(true);
+    const generation = ++classificationEpoch.current;
     try {
       const res = await fetch(`/api/uide/fixtures/${id}/classify`, { method: "POST" });
       const json = await res.json();
-      if (res.ok) {
+      if (res.ok && currentFixtureId.current === id && classificationEpoch.current === generation) {
+        classificationEpoch.current++;
+        classificationOwnerId.current = id;
         setClassification(json.classification);
         loadFixtures();
       }
@@ -159,11 +197,18 @@ export default function UideEnginePanel() {
   }, [loadFixtures]);
 
   const uploadFile = useCallback(async (file: File) => {
+    const submittedOwner = owner.current.terminal;
+    const submittedTarget = JSON.stringify(submittedOwner?.target ?? null);
+    const lock = "native-quant:uide-upload";
     setIsUploading(true);
     setError(null);
     setClassification(null);
-    setActiveSheet(0);
+    const input = document.activeElement;
+    if (input instanceof HTMLInputElement && input.type === "file") input.blur();
     try {
+      if (submittedOwner?.readOnly) throw new Error("Open the current writable Artifact before uploading.");
+      if (submittedOwner?.target) submittedOwner.captureExecution?.("uide.upload");
+      submittedOwner?.setEditing(lock, true);
       const body = new FormData();
       body.append("file", file);
       const res = await fetch("/api/uide/upload", { method: "POST", body });
@@ -172,16 +217,19 @@ export default function UideEnginePanel() {
         setError(json.error || "Upload failed.");
         return;
       }
+      if (!owner.current.mounted || JSON.stringify(owner.current.terminal?.target ?? null) !== submittedTarget) throw new Error("Workbook upload completed for a changed screen; its reference was not attached.");
+      submittedOwner?.setEditing(lock, false);
       setProfile(json.profile);
       setFixtureId(json.fixtureId);
       loadFixtures();
       classifyFixture(json.fixtureId);
-    } catch {
-      setError("Could not reach the server. Is it running?");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not reach the server. Is it running?");
     } finally {
+      submittedOwner?.setEditing(lock, false);
       setIsUploading(false);
     }
-  }, [loadFixtures, classifyFixture]);
+  }, [loadFixtures, classifyFixture, setFixtureId]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -190,22 +238,11 @@ export default function UideEnginePanel() {
     if (file) uploadFile(file);
   }, [uploadFile]);
 
-  const openFixture = useCallback(async (id: string) => {
+  const openFixture = useCallback((id: string) => {
     setError(null);
-    setActiveSheet(0);
-    try {
-      const res = await fetch(`/api/uide/fixtures/${id}`);
-      const json: FixtureRecord = await res.json();
-      if (res.ok) {
-        setProfile(json.profile);
-        setFixtureId(json.id);
-        setClassification(json.classification ?? null);
-        if (!json.classification) classifyFixture(json.id);
-      }
-    } catch {
-      setError("Could not load that fixture.");
-    }
-  }, [classifyFixture]);
+    classifyOnOpen.current = id;
+    setFixtureId(id);
+  }, [setFixtureId]);
 
   const currentSheet = profile?.sheets[activeSheet] ?? null;
 

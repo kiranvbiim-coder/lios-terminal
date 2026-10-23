@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactSymbol, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useState, type ReactNode } from "react";
 import CompanyFundamentalsPanel from "./CompanyFundamentalsPanel";
 import ConsensusIntelligencePanel from "./ConsensusIntelligencePanel";
@@ -17,11 +18,13 @@ interface Props {
 }
 
 export default function ResearchIntelligencePanel({ symbol, role, starterQuestion, starterSymbol }: Props) {
-  const [section, setSection] = useState<Section>("investigation");
-  const [researchSymbol, setResearchSymbol] = useState((starterSymbol || symbol || "AAPL").trim().toUpperCase());
+  const [section, setSection] = useTerminalArtifactState<Section>("ResearchIntelligencePanel.section", "investigation");
+  const terminal = useTerminalArtifactContext();
+  const [researchSymbol, setResearchSymbol] = useTerminalArtifactSymbol((terminal ? symbol : starterSymbol || symbol || "AAPL").trim().toUpperCase());
   const definition = WORKSTATION_DEFINITIONS.research;
 
   useEffect(() => {
+    if (terminal) return;
     const next = (starterSymbol || symbol || "").trim().toUpperCase();
     if (next) setResearchSymbol(next);
   }, [starterSymbol, symbol]);

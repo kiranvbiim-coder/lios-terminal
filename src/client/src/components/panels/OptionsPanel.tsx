@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useState } from "react";
 import { Activity, BookOpen, Gauge, Layers, Target } from "lucide-react";
 import { loadTerminalViewState, patchTerminalViewState } from "@/lib/terminalViewState";
@@ -35,10 +36,11 @@ function initialWorkspace(symbol: string): Workspace {
 }
 
 export default function OptionsPanel({ symbol }: Props) {
-  const [workspace, setWorkspace] = useState<Workspace>(() => initialWorkspace(symbol));
+  const terminal = useTerminalArtifactContext();
+  const [workspace, setWorkspace] = useTerminalArtifactState<Workspace>("OptionsPanel.workspace", () => terminal ? "chain" : initialWorkspace(symbol));
 
   useEffect(() => {
-    patchTerminalViewState("options", symbol, { workspace });
+    if (!terminal) patchTerminalViewState("options", symbol, { workspace });
   }, [symbol, workspace]);
 
   return (

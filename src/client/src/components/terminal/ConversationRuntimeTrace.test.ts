@@ -156,6 +156,24 @@ test("source limitations from the trust manifest are visible by default; the ful
   assert.match(opened, /data-p3-trust-manifest/);
 });
 
+test("source-free interpretation does not invent a supporting-data warning or hide actual missing evidence", () => {
+  const generated = manifest({
+    summary: { freshness: "ai_generated", quality: "low", confidence: "low", conflictState: "not_evaluated_single_source", evidenceCoveragePct: 0, sourceCount: 0, receiptCount: 1, missingCount: 0 },
+    evidence: [{ sourceRef: `ai-output:${REQUEST_ID}`, providerLabel: "Configured BYOAI", kind: "ai" }] as TrustManifest["evidence"],
+    warnings: ["Generated interpretation has not been verified as an observed fact."],
+  });
+  assert.deepEqual(trustCaveats(generated), { lines: generated.warnings, recoveryActions: [] });
+  const rendered = render([event({ type: "trust", manifest: generated })]);
+  assert.doesNotMatch(rendered, /Supporting evidence is marked low quality|Review.*figures/i);
+  assert.match(rendered, /Generated interpretation has not been verified/);
+  const incomplete = { ...generated, missing: [{ field: "source_document", reason: "The selected file was revoked.", recoveryActions: ["Select a permitted file"] }] };
+  const caveats = trustCaveats(incomplete);
+  assert.deepEqual(caveats?.recoveryActions, ["Select a permitted file"]);
+  assert.ok(caveats?.lines.some(line => line.includes("The selected file was revoked.")));
+  const revokedMarkup = render([event({ type: "trust", manifest: incomplete })]);
+  assert.match(revokedMarkup, /The selected file was revoked/);
+});
+
 test("a proposed change needing review shows readable rows, never raw JSON", () => {
   const markup = render([event({
     type: "mutation_review",

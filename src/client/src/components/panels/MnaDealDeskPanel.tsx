@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, memo } from "react";
 import { 
   Building2, Search, Percent, ShieldAlert, Scale, 
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, LineChart, Line } from "recharts";
 import { runLboModel } from "@/lib/valuationModels";
-import { AdvancedReceiptFooter, runAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
+import { AdvancedReceiptFooter, useAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
 
 interface PrecedentDeal { id: number; target: string; acquirer: string; value: number; premium: number; evEbitda: number; evSales: number; date: string; sector: string }
 
@@ -24,15 +25,16 @@ function median(nums: number[]) {
 }
 
 function MnaDealDeskPanel() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSector, setSelectedSector] = useState("All");
+  const [activeTab, setActiveTab] = useTerminalArtifactState("MnaDealDeskPanel.activeTab", "db");
+  const [searchTerm, setSearchTerm] = useTerminalArtifactState("MnaDealDeskPanel.searchTerm", "");
+  const [selectedSector, setSelectedSector] = useTerminalArtifactState("MnaDealDeskPanel.selectedSector", "All");
   // Starts empty rather than seeded with plausible-looking deals (real
   // acquirer names like "Pfizer"/"Oracle" paired with fabricated targets,
   // values, and multiples) -- that reads as real precedent-transaction data
   // pulled from somewhere, when it wasn't. Deal-team analysts know their own
   // precedent set; "+ ADD DEAL" builds the real table from what they know,
   // same manual-entry-first pattern as the Comps tab's peer table.
-  const [deals, setDeals] = useState<PrecedentDeal[]>([]);
+  const [deals, setDeals] = useTerminalArtifactState<PrecedentDeal[]>("MnaDealDeskPanel.deals", []);
   const addDeal = () => setDeals(prev => [...prev, {
     id: prev.length ? Math.max(...prev.map(d => d.id)) + 1 : 1,
     target: "", acquirer: "", value: 0, premium: 0, evEbitda: 0, evSales: 0,
@@ -43,34 +45,35 @@ function MnaDealDeskPanel() {
     setDeals(prev => prev.map(d => (d.id === id ? { ...d, [key]: val } : d)));
 
   // Accretion / Dilution Modeler Inputs
-  const [offerPrice, setOfferPrice] = useState(45); // Target share price (current spot is $35)
-  const [cashPct, setCashPct] = useState(40); // Funding: % Cash
-  const [debtPct, setDebtPct] = useState(30); // Funding: % Debt (remainder is Stock)
-  const [costSavings, setCostSavings] = useState(60); // In Millions ($)
-  const [revSynergies, setRevSynergies] = useState(25); // In Millions ($)
+  const [offerPrice, setOfferPrice] = useTerminalArtifactState("MnaDealDeskPanel.offerPrice", 45);
+  const [cashPct, setCashPct] = useTerminalArtifactState("MnaDealDeskPanel.cashPct", 40);
+  const [debtPct, setDebtPct] = useTerminalArtifactState("MnaDealDeskPanel.debtPct", 30);
+  const [costSavings, setCostSavings] = useTerminalArtifactState("MnaDealDeskPanel.costSavings", 60);
+  const [revSynergies, setRevSynergies] = useTerminalArtifactState("MnaDealDeskPanel.revSynergies", 25);
   
-  const [advancedAccretion, setAdvancedAccretion] = useState<{ proFormaEps: number; standaloneAcquirerEps: number; accretionDilutionPct: number; newSharesIssued: number; debtFinancing: number; breakEvenSynergiesAfterTax: number; receipt: AdvancedReceipt } | null>(null);
+  const nativeModel = useAdvancedModel<{ proFormaEps: number; standaloneAcquirerEps: number; accretionDilutionPct: number; newSharesIssued: number; debtFinancing: number; breakEvenSynergiesAfterTax: number; receipt: AdvancedReceipt }>("valuation/merger-accretion");
+  const advancedAccretion = nativeModel.result;
   const [accretionError, setAccretionError] = useState<string | null>(null);
   const [accretionRunning, setAccretionRunning] = useState(false);
   // Defense / Poison Pill Inputs
-  const [triggerPct, setTriggerPct] = useState(15);
-  const [insiderControl, setInsiderControl] = useState(12);
+  const [triggerPct, setTriggerPct] = useTerminalArtifactState("MnaDealDeskPanel.triggerPct", 15);
+  const [insiderControl, setInsiderControl] = useTerminalArtifactState("MnaDealDeskPanel.insiderControl", 12);
 
   // LBO Modeler Inputs
-  const [lboEntryEbitda, setLboEntryEbitda] = useState(50); // $50M EBITDA
-  const [lboEntryMultiple, setLboEntryMultiple] = useState(10.0); // 10x Entry EV
-  const [lboLeverageMultiple, setLboLeverageMultiple] = useState(6.0); // 6.0x Debt/EBITDA
-  const [lboDebtCost, setLboDebtCost] = useState(6.5); // 6.5% interest
-  const [lboEbitdaGrowth, setLboEbitdaGrowth] = useState(8.0); // 8% growth rate
-  const [lboExitMultiple, setLboExitMultiple] = useState(10.0); // 10x exit multiple
-  const [lboCapexPct, setLboCapexPct] = useState(15.0); // Capex % of EBITDA
+  const [lboEntryEbitda, setLboEntryEbitda] = useTerminalArtifactState("MnaDealDeskPanel.lboEntryEbitda", 50);
+  const [lboEntryMultiple, setLboEntryMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboEntryMultiple", 10.0);
+  const [lboLeverageMultiple, setLboLeverageMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboLeverageMultiple", 6.0);
+  const [lboDebtCost, setLboDebtCost] = useTerminalArtifactState("MnaDealDeskPanel.lboDebtCost", 6.5);
+  const [lboEbitdaGrowth, setLboEbitdaGrowth] = useTerminalArtifactState("MnaDealDeskPanel.lboEbitdaGrowth", 8.0);
+  const [lboExitMultiple, setLboExitMultiple] = useTerminalArtifactState("MnaDealDeskPanel.lboExitMultiple", 10.0);
+  const [lboCapexPct, setLboCapexPct] = useTerminalArtifactState("MnaDealDeskPanel.lboCapexPct", 15.0); // Capex % of EBITDA
 
   // VC Waterfall Inputs
-  const [vcPreMoneyVal, setVcPreMoneyVal] = useState(20); // $20M pre-money
-  const [vcRoundSize, setVcRoundSize] = useState(5); // $5M Series A
-  const [vcOptionPoolPct, setVcOptionPoolPct] = useState(10); // 10% post-round option pool
-  const [vcLiqPrefMultiplier, setVcLiqPrefMultiplier] = useState(1.0); // 1.0x Liquidation Preference
-  const [vcIsParticipating, setVcIsParticipating] = useState(false); // Participating preferred toggle
+  const [vcPreMoneyVal, setVcPreMoneyVal] = useTerminalArtifactState("MnaDealDeskPanel.vcPreMoneyVal", 20);
+  const [vcRoundSize, setVcRoundSize] = useTerminalArtifactState("MnaDealDeskPanel.vcRoundSize", 5);
+  const [vcOptionPoolPct, setVcOptionPoolPct] = useTerminalArtifactState("MnaDealDeskPanel.vcOptionPoolPct", 10);
+  const [vcLiqPrefMultiplier, setVcLiqPrefMultiplier] = useTerminalArtifactState("MnaDealDeskPanel.vcLiqPrefMultiplier", 1.0);
+  const [vcIsParticipating, setVcIsParticipating] = useTerminalArtifactState("MnaDealDeskPanel.vcIsParticipating", false);
 
   // LBO Calculations -- uses the shared LBO engine (lib/valuationModels.ts)
   // also used by the DCF panel's LBO tab, rather than a second independent
@@ -259,10 +262,6 @@ function MnaDealDeskPanel() {
   const proFormaNetIncome = acquirerNetIncome + targetNetIncome + totalSynergiesPF - newDebtCostPostTax - foregoneCashPostTax;
   const proFormaEPS = proFormaNetIncome / proFormaShares;
   const accDilPct = ((proFormaEPS - acquirerEPS) / acquirerEPS) * 100;
-  const canonicalAccDilPct = advancedAccretion?.accretionDilutionPct ?? accDilPct;
-  const canonicalProFormaEPS = advancedAccretion?.proFormaEps ?? proFormaEPS;
-  const canonicalSharesIssued = advancedAccretion?.newSharesIssued ?? sharesIssued;
-  const canonicalProFormaShares = advancedAccretion ? acquirerShares + advancedAccretion.newSharesIssued : proFormaShares;
 
   async function runCanonicalAccretion() {
     const parameters = {
@@ -272,7 +271,7 @@ function MnaDealDeskPanel() {
       taxRatePct: taxRate * 100, annualSynergiesAfterTax: totalSynergiesPF,
     };
     setAccretionRunning(true); setAccretionError(null);
-    try { setAdvancedAccretion(await runAdvancedModel("valuation/merger-accretion", parameters)); }
+    try { await nativeModel.run(parameters); }
     catch (error) { setAccretionError(error instanceof Error ? error.message : "Merger accretion run failed."); }
     finally { setAccretionRunning(false); }
   }
@@ -307,11 +306,11 @@ function MnaDealDeskPanel() {
   // 3-Year EPS Projections
   const epsProjectionData = useMemo(() => {
     return [
-      { year: "Year 1", Standalone: Number(acquirerEPS.toFixed(2)), ProForma: Number(canonicalProFormaEPS.toFixed(2)) },
-      { year: "Year 2", Standalone: Number((acquirerEPS * 1.05).toFixed(2)), ProForma: Number((canonicalProFormaEPS * 1.08).toFixed(2)) }, 
-      { year: "Year 3", Standalone: Number((acquirerEPS * 1.10).toFixed(2)), ProForma: Number((canonicalProFormaEPS * 1.16).toFixed(2)) },
+      { year: "Year 1", Standalone: Number(acquirerEPS.toFixed(2)), ProForma: Number(proFormaEPS.toFixed(2)) },
+      { year: "Year 2", Standalone: Number((acquirerEPS * 1.05).toFixed(2)), ProForma: Number((proFormaEPS * 1.08).toFixed(2)) }, 
+      { year: "Year 3", Standalone: Number((acquirerEPS * 1.10).toFixed(2)), ProForma: Number((proFormaEPS * 1.16).toFixed(2)) },
     ];
-  }, [acquirerEPS, canonicalProFormaEPS]);
+  }, [acquirerEPS, proFormaEPS]);
 
   // HHI Market share calculation
   const marketShares = [
@@ -353,7 +352,7 @@ function MnaDealDeskPanel() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <Tabs defaultValue="db" className="h-full flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <div className="border-b border-border bg-[#070707] px-4 shrink-0">
             <TabsList className="bg-transparent gap-4 p-0">
               <TabsTrigger value="db" className="border-b-2 border-transparent data-[state=active]:border-[hsl(38,95%,50%)] rounded-none py-2 text-[10px] uppercase font-semibold">Deal Database</TabsTrigger>
@@ -642,7 +641,7 @@ function MnaDealDeskPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-[hsl(38,95%,55%)]">CANONICAL ADVANCED MERGER ACCRETION</span><button type="button" disabled={accretionRunning} onClick={runCanonicalAccretion} className="border border-[hsl(38,95%,50%)] px-2 py-1 font-terminal text-[8px] text-[hsl(38,95%,55%)] disabled:opacity-40">{accretionRunning ? "RUNNING…" : "RUN RECEIPTED MODEL"}</button></div>
                 <div className="font-terminal text-[7px] text-muted-foreground">MANUAL deal inputs only. Formal units: money (net income, offer price, synergies); shares; percent (stock consideration, interest, tax). This canonical engine treats non-stock consideration as debt; the legacy worksheet’s cash funding and separate revenue-synergy margin are shown only as a reconciliation bridge.</div>
                 {accretionError ? <div className="font-terminal text-[8px] text-red-400">{accretionError}</div> : null}
-                {advancedAccretion ? <><div className="font-terminal text-[8px] text-muted-foreground">Canonical EPS {advancedAccretion.proFormaEps.toFixed(2)} vs legacy {proFormaEPS.toFixed(2)}; canonical accretion {advancedAccretion.accretionDilutionPct >= 0 ? "+" : ""}{advancedAccretion.accretionDilutionPct.toFixed(2)}%; break-even after-tax synergies {advancedAccretion.breakEvenSynergiesAfterTax.toFixed(2)}.</div><AdvancedReceiptFooter receipt={advancedAccretion.receipt} /></> : null}
+                {advancedAccretion ? <><div className="font-terminal text-[8px] text-muted-foreground">Recorded native EPS {advancedAccretion.proFormaEps.toFixed(2)}; recorded accretion {advancedAccretion.accretionDilutionPct >= 0 ? "+" : ""}{advancedAccretion.accretionDilutionPct.toFixed(2)}%; break-even after-tax synergies {advancedAccretion.breakEvenSynergiesAfterTax.toFixed(2)}. The table uses current worksheet inputs separately; run explicitly after editing to create a new native result.</div><AdvancedReceiptFooter receipt={advancedAccretion.receipt} /></> : null}
               </div>
 
                 {/* Accretion Table */}
@@ -650,27 +649,27 @@ function MnaDealDeskPanel() {
                   <CardHeader className="p-4 border-b border-border">
                     <CardTitle className="text-xs font-bold uppercase tracking-wider text-[hsl(38,95%)] flex items-center justify-between">
                       <span>Pro-Forma Output</span>
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${canonicalAccDilPct >= 0 ? "bg-emerald-950 text-emerald-400 border border-emerald-800" : "bg-rose-950 text-rose-400 border border-rose-800"}`}>
-                        {canonicalAccDilPct >= 0 ? "ACCRETIVE" : "DILUTIVE"}
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${accDilPct >= 0 ? "bg-emerald-950 text-emerald-400 border border-emerald-800" : "bg-rose-950 text-rose-400 border border-rose-800"}`}>
+                        {accDilPct >= 0 ? "ACCRETIVE" : "DILUTIVE"}
                       </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 space-y-4 text-xs">
                     <div className="text-center bg-[#0a0a0a] p-3 rounded border border-border">
                       <span className="text-[10px] text-muted-foreground uppercase">EPS Accretion / (Dilution)</span>
-                      <h4 className={`text-xl font-bold mt-1 ${canonicalAccDilPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {canonicalAccDilPct >= 0 ? "+" : ""}{canonicalAccDilPct.toFixed(2)}%
+                      <h4 className={`text-xl font-bold mt-1 ${accDilPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {accDilPct >= 0 ? "+" : ""}{accDilPct.toFixed(2)}%
                       </h4>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">New Shares Issued:</span>
-                        <span>{canonicalSharesIssued.toFixed(2)}M</span>
+                        <span>{sharesIssued.toFixed(2)}M</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Pro-Forma Shares:</span>
-                        <span>{canonicalProFormaShares.toFixed(2)}M</span>
+                        <span>{proFormaShares.toFixed(2)}M</span>
                       </div>
                       <div className="flex justify-between border-t border-border pt-1">
                         <span className="text-muted-foreground">Standalone EPS:</span>
@@ -678,7 +677,7 @@ function MnaDealDeskPanel() {
                       </div>
                       <div className="flex justify-between font-bold text-foreground">
                         <span>Pro-Forma EPS:</span>
-                        <span className={canonicalAccDilPct >= 0 ? "text-emerald-400" : "text-rose-400"}>${canonicalProFormaEPS.toFixed(2)}</span>
+                        <span className={accDilPct >= 0 ? "text-emerald-400" : "text-rose-400"}>${proFormaEPS.toFixed(2)}</span>
                       </div>
                     </div>
                   </CardContent>

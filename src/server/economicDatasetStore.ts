@@ -18,6 +18,9 @@ import { getDb } from "./db";
 import { stableSnapshotHash } from "./pointInTimeDatasetStore";
 
 const MATURITY_YEARS: Record<string, number> = { "1M": 1 / 12, "3M": 0.25, "6M": 0.5, "1Y": 1, "2Y": 2, "3Y": 3, "5Y": 5, "7Y": 7, "10Y": 10, "20Y": 20, "30Y": 30 };
+export function economicSnapshotContentHash(payload: unknown, lineage: unknown): string {
+  return stableSnapshotHash({ payload, lineage });
+}
 
 function isoStart(date: string): string { return `${date}T00:00:00.000Z`; }
 
@@ -82,7 +85,7 @@ export async function captureFredSeriesSnapshot(seriesId: string, createdByUserI
   if (!observations.length) throw new Error(`FRED returned no observations for ${id}; configure FRED_API_KEY or verify the series.`);
   const normalized = buildScalarSeriesPayload({ seriesId: id, name: profile?.name ?? id, unit: profile?.unit ?? "", category: profile?.category ?? "Unclassified", observations, retrievedAt: retrievedAt.toISOString() });
   const datasetKey = `economic:${id}`; const lineage = { selectedProvider: "fred", requestedPoints: points, publicationPrecision: "date" };
-  const contentHash = stableSnapshotHash({ payload: normalized.payload, lineage }); const db = getDb();
+  const contentHash = economicSnapshotContentHash(normalized.payload, lineage); const db = getDb();
   const [existing] = await db.select().from(datasetSnapshots).where(and(eq(datasetSnapshots.datasetKey, datasetKey), eq(datasetSnapshots.contentHash, contentHash))).limit(1);
   if (existing) return { snapshot: rowToScalar(existing), created: false };
   const [parent] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.datasetKey, datasetKey)).orderBy(desc(datasetSnapshots.createdAt)).limit(1);
@@ -99,7 +102,7 @@ export async function captureFredYieldCurveSnapshot(createdByUserId: number, cur
   const retrievedAt = new Date(); const { getYieldCurve } = await import("./fredData"); const result = await getYieldCurve(curveDate);
   const normalized = buildYieldCurvePayload(result.curve); const datasetKey = "curve:UST_NOMINAL";
   const lineage = { selectedProvider: "fred", requestedCurveDate: curveDate ?? null, publicationPrecision: "date" };
-  const contentHash = stableSnapshotHash({ payload: normalized.payload, lineage }); const db = getDb();
+  const contentHash = economicSnapshotContentHash(normalized.payload, lineage); const db = getDb();
   const [existing] = await db.select().from(datasetSnapshots).where(and(eq(datasetSnapshots.datasetKey, datasetKey), eq(datasetSnapshots.contentHash, contentHash))).limit(1);
   if (existing) return { snapshot: rowToCurve(existing), created: false };
   const [parent] = await db.select().from(datasetSnapshots).where(eq(datasetSnapshots.datasetKey, datasetKey)).orderBy(desc(datasetSnapshots.createdAt)).limit(1);

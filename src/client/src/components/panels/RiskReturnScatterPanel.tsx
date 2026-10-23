@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ChartScatter, Plus, X, Info } from "lucide-react";
@@ -99,19 +100,19 @@ function fmt(v: number, digits = 2): string {
 }
 
 export default function RiskReturnScatterPanel() {
-  const [benchmark, setBenchmark] = useState("^NSEI");
-  const [customBenchmark, setCustomBenchmark] = useState("");
-  const [timeframe, setTimeframe] = useState<Timeframe>("1Y");
-  const [riskFreeRate, setRiskFreeRate] = useState(4.0);
+  const [benchmark, setBenchmark] = useTerminalArtifactState("RiskReturnScatterPanel.benchmark", "^NSEI");
+  const [customBenchmark, setCustomBenchmark] = useTerminalArtifactState("RiskReturnScatterPanel.customBenchmark", "");
+  const [timeframe, setTimeframe] = useTerminalArtifactState<Timeframe>("RiskReturnScatterPanel.timeframe", "1Y");
+  const [riskFreeRate, setRiskFreeRate] = useTerminalArtifactState("RiskReturnScatterPanel.riskFreeRate", 4.0);
   const riskFreeRateLive = useRiskFreeRate();
-  const [dataPoints, setDataPoints] = useState<DataPointDef[]>(DEFAULT_POINTS);
+  const [dataPoints, setDataPoints] = useTerminalArtifactState<DataPointDef[]>("RiskReturnScatterPanel.dataPoints", DEFAULT_POINTS);
 
-  const [singleInput, setSingleInput] = useState("");
-  const [builderName, setBuilderName] = useState("");
-  const [builderHoldings, setBuilderHoldings] = useState<Holding[]>([]);
-  const [builderSymbol, setBuilderSymbol] = useState("");
-  const [builderWeight, setBuilderWeight] = useState("");
-  const [mode, setMode] = useState<"single" | "portfolio">("single");
+  const [singleInput, setSingleInput] = useTerminalArtifactState("RiskReturnScatterPanel.singleInput", "");
+  const [builderName, setBuilderName] = useTerminalArtifactState("RiskReturnScatterPanel.builderName", "");
+  const [builderHoldings, setBuilderHoldings] = useTerminalArtifactState<Holding[]>("RiskReturnScatterPanel.builderHoldings", []);
+  const [builderSymbol, setBuilderSymbol] = useTerminalArtifactState("RiskReturnScatterPanel.builderSymbol", "");
+  const [builderWeight, setBuilderWeight] = useTerminalArtifactState("RiskReturnScatterPanel.builderWeight", "");
+  const [mode, setMode] = useTerminalArtifactState<"single" | "portfolio">("RiskReturnScatterPanel.mode", "single");
 
   const activeBenchmark = customBenchmark.trim() ? customBenchmark.trim().toUpperCase() : benchmark;
   const benchmarkIsNone = activeBenchmark === "NONE";

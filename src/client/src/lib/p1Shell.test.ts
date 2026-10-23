@@ -6,10 +6,19 @@ import {
   isComposerFocusShortcut,
   P1_SOURCE_SCOPES,
   resolveComposerPersistenceTarget,
+  sourceScopeForChatMode,
 } from "./p1Shell";
 
 test("P1C source-scope chips are the canonical authenticated composer set", () => {
   assert.deepEqual(P1_SOURCE_SCOPES.map((scope) => scope.id), ["auto", "my_data", "web", "files"]);
+});
+
+test("Temporary scope never inherits unavailable file posture or mutates saved scope choices", () => {
+  for (const scope of ["auto", "my_data", "web", "files"] as const) {
+    assert.equal(sourceScopeForChatMode("quick", scope), scope);
+    assert.equal(sourceScopeForChatMode("project", scope), scope);
+    assert.equal(sourceScopeForChatMode("temporary", scope), scope === "my_data" || scope === "files" ? "auto" : scope);
+  }
 });
 
 test("P1C Cmd/Ctrl+K converges on the composer without hijacking Alt shortcuts", () => {

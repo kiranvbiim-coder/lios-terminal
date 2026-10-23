@@ -1,23 +1,34 @@
-import { LIOS_FIRST_USE_CONTRACT, firstUseConnectionState } from "./firstUseJourney";
+import { LIOS_FIRST_USE_CONTRACT } from "./firstUseJourney";
 export interface ConnectionCenterSummary {
   canEnterTerminal: boolean;
   statusLabel: string;
   ctaLabel: string;
   statusDetail: string;
+  state: "loading" | "unavailable" | "unconfigured" | "configured" | "verified" | "attention";
+  savedCount: number;
+  verifiedCount: number;
+  attentionCount: number;
 }
 
-export function summarizeConnectionCenter(connectedCount: number, _availableCount: number): ConnectionCenterSummary {
-  const state = firstUseConnectionState(connectedCount);
-
+export function summarizeConnectionCenter(connections: readonly { status: string }[] | undefined, failed = false): ConnectionCenterSummary {
+  const savedCount = connections?.length ?? 0;
+  const verifiedCount = connections?.filter(connection => ["healthy", "live_verified"].includes(connection.status.trim().toLowerCase())).length ?? 0;
+  const attentionCount = connections?.filter(connection => !["healthy", "live_verified", "configured", "credential_configured"].includes(connection.status.trim().toLowerCase())).length ?? 0;
+  const state = failed ? "unavailable" : connections === undefined ? "loading" : !savedCount ? "unconfigured"
+    : attentionCount ? "attention" : verifiedCount === savedCount ? "verified" : "configured";
+  const presentation = {
+    loading: ["Checking saved connections", "You can continue while LiOS loads your saved connection status."],
+    unavailable: ["Connection status unavailable", "Saved connection status could not be loaded. Retry status or continue without assuming a source is available."],
+    unconfigured: [LIOS_FIRST_USE_CONTRACT.noConnectionStatus, LIOS_FIRST_USE_CONTRACT.noConnectionDetail],
+    configured: ["Connections saved", "Saved configuration is not live verification. Verify a source when your work needs it."],
+    verified: ["Connections verified", "The saved connections have recorded successful checks. Coverage, freshness and permissions are checked for each request."],
+    attention: ["Connections need attention", "Some saved connections are unavailable, disabled or need verification. Review their status below; you can still continue."],
+  }[state];
   return {
     canEnterTerminal: !LIOS_FIRST_USE_CONTRACT.connectionsRequiredToEnter,
-    statusLabel: state === "connected"
-      ? LIOS_FIRST_USE_CONTRACT.connectedStatus
-      : LIOS_FIRST_USE_CONTRACT.noConnectionStatus,
     ctaLabel: LIOS_FIRST_USE_CONTRACT.continueAction,
-    statusDetail: state === "connected"
-      ? LIOS_FIRST_USE_CONTRACT.connectedDetail
-      : LIOS_FIRST_USE_CONTRACT.noConnectionDetail,
+    state, savedCount, verifiedCount, attentionCount,
+    statusLabel: presentation[0], statusDetail: presentation[1],
   };
 }
 

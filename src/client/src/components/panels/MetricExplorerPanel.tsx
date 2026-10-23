@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import {
   buildMetricExplorerModel,
@@ -27,13 +28,13 @@ function displayRawValue(value: unknown): string {
 
 export default function MetricExplorerPanel({ input }: { input: MetricExplorerInput }) {
   const model = useMemo(() => buildMetricExplorerModel(input), [input]);
-  const [query, setQuery] = useState("");
-  const [group, setGroup] = useState<"ALL" | MetricExplorerGroup>("ALL");
-  const [category, setCategory] = useState("ALL");
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>("ALL");
-  const [provider, setProvider] = useState("ALL");
-  const [page, setPage] = useState(0);
-  const [availableOnly, setAvailableOnly] = useState(false);
+  const [query, setQuery] = useTerminalArtifactState("MetricExplorerPanel.query", "");
+  const [group, setGroup] = useTerminalArtifactState<"ALL" | MetricExplorerGroup>("MetricExplorerPanel.group", "ALL");
+  const [category, setCategory] = useTerminalArtifactState("MetricExplorerPanel.category", "ALL");
+  const [status, setStatus] = useTerminalArtifactState<(typeof STATUSES)[number]>("MetricExplorerPanel.status", "ALL");
+  const [provider, setProvider] = useTerminalArtifactState("MetricExplorerPanel.provider", "ALL");
+  const [page, setPage] = useTerminalArtifactState("MetricExplorerPanel.page", 0);
+  const [availableOnly, setAvailableOnly] = useTerminalArtifactState("MetricExplorerPanel.availableOnly", false);
 
   const providers = useMemo(() => [...new Set([
     ...model.canonical.map(row => row.resolved.provider).filter((value): value is string => Boolean(value)),

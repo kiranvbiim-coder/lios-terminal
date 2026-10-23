@@ -30,7 +30,6 @@ const {
 } = await import("../conversationRunService");
 const { conversationRuns } = await import("../conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("../exec/execution-scope");
-const { getPersonaPreferences, upsertPersonaPreferences } = await import("../personaPreferenceService");
 const { snapshotCodingWorkspace, previewCodingPatch } = await import("./coding-workspace");
 
 function model(script: string[]) {
@@ -94,13 +93,7 @@ test("coding patch survives reconnect as the same run and fails closed when the 
   const project = await createProject(tenant, { name: "Coding restart project" });
   const chat = await createProjectChat(tenant, { projectId: project.id, scope: "project" });
   const owner = { userId: user.id, projectId: project.id, chatId: chat.id };
-  const current = await getPersonaPreferences(conversationUser);
-  await upsertPersonaPreferences(conversationUser, {
-    preferences: {
-      ...current.preferences.preferences,
-      waveCMasterAi: { state: "on", mode: "ai_assist", updatedAt: new Date().toISOString() },
-    },
-  });
+  await (await import("../fixtures/injectedAiAuthorization")).authorizeInjectedAiForTest(conversationUser, t);
 
   const before = await snapshotCodingWorkspace();
   const file = before.files.find((candidate) => candidate.path === "src/answer.ts");

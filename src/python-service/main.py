@@ -7,9 +7,9 @@ so liveness does not import every unrelated optional numerical pack.
 import platform
 from importlib.metadata import PackageNotFoundError, version
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body, HTTPException
 
-from engine_routes import BASE_ROUTES, ADVANCED_ROUTES, ROUTES_BY_PATH
+from engine_routes import BASE_ROUTES, ADVANCED_ROUTES, ROUTES_BY_PATH, input_contract, EngineInputError, EngineUnavailableError
 from lazy_http_routes import add_engine_routes, install_lazy_openapi
 from parent_watchdog import start_from_environment as start_parent_watchdog
 from sidecar_auth import SidecarTokenMiddleware, load_token
@@ -38,6 +38,16 @@ def runtime_info():
         except PackageNotFoundError:
             packages[package] = "unavailable"
     return {"ok": True, "python": platform.python_version(), "packages": packages}
+
+
+@app.post("/input-contract")
+def numerical_input_contract(body: dict = Body(...)):
+    try:
+        return input_contract(body)
+    except EngineInputError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except EngineUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 add_engine_routes(app, BASE_ROUTES)

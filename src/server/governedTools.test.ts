@@ -5,7 +5,9 @@ import {
   GovernedToolApprovalRequiredError,
   GovernedToolDeniedError,
   GovernedToolRegistry,
+  GovernedToolInputError,
   decidePermission,
+  governedToolPlanningSchema,
 } from "./governedTools";
 
 type Result = { ok: true };
@@ -35,6 +37,31 @@ function registry(permissionClass: "safe_auto" | "user_confirm" | "admin_confirm
 }
 
 const live = () => new AbortController().signal;
+
+test("planner schemas preserve required typed tool inputs while refinements remain server-enforced", async () => {
+  const schema = z.object({
+    symbol: z.string().min(1),
+    mode: z.enum(["inspect", "compare"]),
+    windows: z.array(z.number().int().positive()).min(1).max(3),
+  }).strict().superRefine((input, ctx) => {
+    if (input.mode === "compare" && input.windows.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Comparison needs two windows." });
+  });
+  const projected = JSON.parse(governedToolPlanningSchema(schema));
+  assert.deepEqual(projected.required, ["symbol", "mode", "windows"]);
+  assert.equal(projected.additionalProperties, false);
+  assert.equal(projected.properties.symbol.minLength, 1);
+  assert.deepEqual(projected.properties.mode.enum, ["inspect", "compare"]);
+  assert.equal(projected.properties.windows.items.type, "integer");
+  assert.equal(projected.properties.windows.maxItems, 3);
+  const calls: unknown[] = [];
+  const tools = new GovernedToolRegistry<"retrieve", Result>();
+  tools.register({ id: "lios.test.schema", label: "Inspect", kind: "retrieve", permissionClass: "safe_auto", access: "read", sideEffect: "none", replaySafe: true, inputSchema: schema, outputSchema: resultSchema, cancel: null, invoke: async input => { calls.push(input); return OK; } });
+  await assert.rejects(tools.invoke("lios.test.schema", { symbol: "MSFT", mode: "compare", windows: [1] }, live()), GovernedToolInputError);
+  await assert.rejects(tools.invoke("lios.test.schema", { symbol: "MSFT", mode: "inspect", windows: [1], tenantId: 9 }, live()), GovernedToolInputError);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(await tools.invoke("lios.test.schema", { symbol: "MSFT", mode: "compare", windows: [1, 2] }, live()), OK);
+  assert.deepEqual(calls, [{ symbol: "MSFT", mode: "compare", windows: [1, 2] }]);
+});
 
 test("a safe_auto tool runs without any approval, and a cancelled signal stops it before and after the call", async () => {
   const calls: string[] = [];

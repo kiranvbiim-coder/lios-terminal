@@ -3,6 +3,7 @@ import { trustManifestSchema } from "./trustContracts";
 import { conversationSourceScopeSchema } from "./sourceScope";
 import { financialEventSchema } from "./financialEventContracts";
 import { numericalEvidenceSchema } from "./numericalEvidenceContracts";
+import { terminalScreenStateSchema } from "./terminalArtifact";
 
 export const LIOS_ARTIFACT_SCHEMA_VERSION = "1" as const;
 export const LIOS_ARTIFACT_PACKAGE_VERSION = 1 as const;
@@ -569,6 +570,11 @@ const artifactContentObjectSchema = z.discriminatedUnion("kind", [
 
 export const artifactContentSchema = artifactContentObjectSchema.superRefine((value, ctx) => {
   if (value.kind === "spreadsheet") validateSpreadsheetActiveSheet(value, ctx);
+  if (value.kind === "screen" && value.state.terminal !== undefined) {
+    const terminal = terminalScreenStateSchema.safeParse(value.state.terminal);
+    if (!terminal.success) ctx.addIssue({ code: "custom", path: ["state", "terminal"], message: "Interactive terminal state is invalid." });
+    else if (terminal.data.subject.symbol !== value.symbol) ctx.addIssue({ code: "custom", path: ["symbol"], message: "Terminal subject must match the screen symbol." });
+  }
   if (value.kind === "table" && value.numericalEvidence) {
     const columns = new Set(value.columns.map(column => column.key));
     const boundTargets = new Set<string>();

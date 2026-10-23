@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Calculator } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -35,11 +36,11 @@ function alignByDate(a: { date: string; value: number }[], b: { date: string; va
 }
 
 export default function IndicatorWorkbenchPanel() {
-  const [domain, setDomain] = useState<FredDomain>("economics_policy");
+  const [domain, setDomain] = useTerminalArtifactState<FredDomain>("IndicatorWorkbenchPanel.domain", "economics_policy");
   const { data: catalog } = useDomainIndicators(domain);
 
-  const [seriesACode, setSeriesACode] = useState("");
-  const [seriesBCode, setSeriesBCode] = useState("");
+  const [seriesACode, setSeriesACode] = useTerminalArtifactState("IndicatorWorkbenchPanel.seriesACode", "");
+  const [seriesBCode, setSeriesBCode] = useTerminalArtifactState("IndicatorWorkbenchPanel.seriesBCode", "");
 
   const activeA = seriesACode || catalog?.[0]?.seriesId || "";
   const activeB = seriesBCode || catalog?.[1]?.seriesId || catalog?.[0]?.seriesId || "";

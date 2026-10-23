@@ -24,9 +24,26 @@ export interface DesktopDataFolder {
   isDefault: boolean;
 }
 
+export interface ProtectedArtifactDraftAuthorizedScope {
+  owner: string;
+  artifactId: string;
+  baseVersion: number;
+  contentHash: string;
+  grant: string;
+}
+export interface ProtectedArtifactDraftSnapshot {
+  baseVersion: number;
+  contentHash: string;
+  content: unknown;
+}
+
 interface DesktopWorkspaceBridge {
   isElectron: boolean;
   getWorkspaceInfo: () => Promise<DesktopWorkspaceInfo>;
+  artifactDraftRecoveryAvailable?: () => Promise<boolean>;
+  readArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope) => Promise<ProtectedArtifactDraftSnapshot | null>;
+  writeArtifactDraftRecovery?: (input: ProtectedArtifactDraftAuthorizedScope & { content: unknown }) => Promise<{ protected: boolean }>;
+  clearArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope & { expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> }) => Promise<{ removed: boolean }>;
   chooseFolder?: (purpose: DesktopFolderPurpose) => Promise<string | null>;
   getDataFolder?: () => Promise<DesktopDataFolder>;
   moveDataFolder?: (target: string) => Promise<{ relaunching: boolean } | void>;

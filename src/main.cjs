@@ -14,6 +14,8 @@ const { DATA_ROOT_EXIT_CODE, DataRootUnavailableError, foldLegacyWorkspace, prep
 const { migrateDataRootSafely } = require("./governedDataMigration.cjs");
 const { imgSrcDirective } = require("./desktopCsp.cjs");
 const { loadOrCreateProtectedSecret } = require("./desktopSecretCustody.cjs");
+const { protectedDraftsAvailable, storeProtectedArtifactDraft, readProtectedArtifactDraft, removeProtectedArtifactDraft } = require("./desktopArtifactDraftRecovery.cjs");
+const { authorizeNativeDraftGrant } = require("./nativeDraftGrant.cjs");
 const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
@@ -483,6 +485,39 @@ ipcMain.handle("limuria:open-external", async (event, rawUrl) => {
   if (parsed.protocol !== "https:") throw new Error("Only HTTPS external URLs are allowed.");
   await shell.openExternal(parsed.toString());
   return { opened: true };
+});
+
+async function requireCurrentNativeDraftGrant(input) {
+  return authorizeNativeDraftGrant(localTrustToken, input, async scope => {
+    const origin = `http://localhost:${serverPort}`;
+    const response = await session.defaultSession.fetch(`${origin}/api/artifacts/${encodeURIComponent(scope.artifactId)}/native-draft-grant`, {
+      method: "POST", credentials: "include", redirect: "error", cache: "no-store",
+      headers: { "content-type": "application/json", "x-lios-local-token": localTrustToken, Origin: origin },
+      body: JSON.stringify({ baseVersion: scope.baseVersion, contentHash: scope.contentHash }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) throw new Error("Native draft recovery requires the current authenticated Artifact owner.");
+    return response.json();
+  });
+}
+ipcMain.handle("limuria:artifact-draft-recovery-available", event => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  return protectedDraftsAvailable(safeStorage);
+});
+ipcMain.handle("limuria:artifact-draft-recovery-read", async (event, identity) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  await requireCurrentNativeDraftGrant(identity);
+  return readProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
+});
+ipcMain.handle("limuria:artifact-draft-recovery-write", async (event, input) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  await requireCurrentNativeDraftGrant(input);
+  return storeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input });
+});
+ipcMain.handle("limuria:artifact-draft-recovery-clear", async (event, identity) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  await requireCurrentNativeDraftGrant(identity);
+  return removeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
 });
 
 ipcMain.handle("limuria:workspace-info", (event) => {

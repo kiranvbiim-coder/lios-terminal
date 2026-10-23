@@ -6,7 +6,6 @@ import {
   getEnvironmentSetupStatus,
   getEnvironmentSetupForUser,
   normalizeSetupAiProviderId,
-  requiresInitialAiVerification,
   updateEnvironmentSetup,
 } from "./environmentSetupService";
 import {
@@ -16,8 +15,11 @@ import {
   type PythonRuntimeId,
 } from "./pythonRuntime";
 import { BUILT_IN_CONNECTORS } from "@shared/connectorRegistry";
-import { AIProviderError, AI_PROVIDERS, getProviderSetupOptions } from "./byoaiRouter";
+import { AIProviderError, AI_PROVIDERS, getProviderSetupOptions, normalizeProviderId } from "./byoaiRouter";
 import { verifyAIProviderConnection } from "./aiProviderVerification";
+import { discoverLocalAIModels, resolveLocalProviderChatEndpoint } from "./byoaiTransport";
+import { beginAIChatVerification, invalidateAIChatVerification, recordConnectorVerification } from "./connectorVerification";
+import { personaUserFromRequest, turnMasterAiOff } from "./masterAiGate";
 import { communityDataConsentSchema, updateEnvironmentSetupSchema } from "@shared/schema";
 import { listCommunityConsents, setCommunityConsent } from "./communityDataConsent";
 import { deleteVaultCredential, listVaultCredentials, setVaultCredential } from "./credentialVault";
@@ -49,6 +51,7 @@ const credentialSchema = z.object({
 const aiVerificationSchema = z.object({
   provider: z.string().trim().min(1).max(100),
   model: z.string().trim().min(1).max(200).nullable().optional(),
+  endpoint: z.string().trim().min(1).max(2_000).optional(),
 }).strict();
 
 function aiVerificationStatus(error: AIProviderError): number {
@@ -131,52 +134,43 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
     }
     try {
       const existing = await getEnvironmentSetupForUser(req.user!.id);
-      if (requiresInitialAiVerification(existing, parsed.data)) {
-        const provider = normalizeSetupAiProviderId(parsed.data.aiProviderId);
-        if (!provider) {
-          res.status(400).json({ error: { code: "invalid_request", message: "Choose a valid AI provider before completing setup." } });
-          return;
-        }
-        try {
-          const verification = await verifyAIProviderConnection({
-            provider,
-            model: parsed.data.aiModelId ?? null,
-          });
-          await recordAuditEvent(req.user!.id, "ai_provider_live_verified", {
-            provider: verification.provider,
-            model: verification.model,
-            latencyMs: verification.latencyMs,
-            reason: "initial_environment_setup_completion",
-            ...auditActor(req.user!),
-          });
-        } catch (error) {
-          const providerError = error instanceof AIProviderError
-            ? error
-            : new AIProviderError("unavailable", error instanceof Error ? error.message : "AI provider verification failed.");
-          await recordAuditEvent(req.user!.id, "ai_provider_live_verification_failed", {
-            provider,
-            model: parsed.data.aiModelId ?? null,
-            code: providerError.code,
-            reason: "initial_environment_setup_completion",
-            ...auditActor(req.user!),
-          });
-          res.status(aiVerificationStatus(providerError)).json({
-            ok: false,
-            error: providerError.toJSON(),
-          });
-          return;
-        }
+      const provider = normalizeSetupAiProviderId(parsed.data.aiProviderId);
+      const selectionChanged = (existing?.aiProviderId ?? null) !== provider || (existing?.aiModelId ?? null) !== (parsed.data.aiModelId ?? null);
+      if (selectionChanged) {
+        if (existing?.aiProviderId) invalidateAIChatVerification(existing.aiProviderId, req.user!.organizationId ?? null, req.user!.id);
+        if (provider) invalidateAIChatVerification(provider, req.user!.organizationId ?? null, req.user!.id);
+        await turnMasterAiOff(personaUserFromRequest(req));
+        if (existing?.aiProviderId) recordConnectorVerification(existing.aiProviderId, false, "The selected AI identity changed; explicit chat verification is required.");
+        if (provider) recordConnectorVerification(provider, false, "The selected AI identity changed; explicit chat verification is required.");
       }
-
       const setup = await updateEnvironmentSetup(
         req.user!.id,
         req.user!.organizationId ?? null,
         parsed.data,
         req.user!,
       );
+      if (selectionChanged) {
+        if (existing?.aiProviderId) invalidateAIChatVerification(existing.aiProviderId, req.user!.organizationId ?? null, req.user!.id);
+        if (provider) invalidateAIChatVerification(provider, req.user!.organizationId ?? null, req.user!.id);
+      }
       res.json({ setup, setupNeeded: !setup.completedAt });
     } catch (error) {
       next(error);
+    }
+  });
+  app.post("/api/setup/ai/models", requireAuth, async (req, res) => {
+    const parsed = aiVerificationSchema.pick({ provider: true }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Choose a local AI provider." });
+      return;
+    }
+    try {
+      res.json(await discoverLocalAIModels(parsed.data.provider));
+    } catch (error) {
+      const providerError = error instanceof AIProviderError
+        ? error
+        : new AIProviderError("unavailable", "The selected local model server could not list its models.");
+      res.status(aiVerificationStatus(providerError)).json({ ok: false, error: providerError.toJSON() });
     }
   });
   app.post("/api/setup/ai/test", requireAuth, async (req, res) => {
@@ -187,7 +181,11 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
     }
 
     try {
-      const result = await verifyAIProviderConnection(parsed.data);
+      const provider = normalizeProviderId(parsed.data.provider);
+      const attempt = provider ? beginAIChatVerification({ provider, credentialName: AI_PROVIDERS.find(item => item.id === provider)?.vaultKey, userId: req.user!.id, organizationId: req.user!.organizationId ?? null }) : undefined;
+      if (provider) recordConnectorVerification(provider, false, "Explicit chat verification is in progress.");
+      await turnMasterAiOff(personaUserFromRequest(req));
+      const result = await verifyAIProviderConnection(parsed.data, undefined, { userId: req.user!.id, attempt });
       await recordAuditEvent(req.user!.id, "ai_provider_live_verified", {
         provider: result.provider,
         model: result.model,
@@ -196,6 +194,8 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
       });
       res.json(result);
     } catch (error) {
+      const provider = normalizeProviderId(parsed.data.provider);
+      if (provider) recordConnectorVerification(provider, false, "The explicit chat probe failed; chat remains unverified.");
       const providerError = error instanceof AIProviderError
         ? error
         : new AIProviderError("unavailable", error instanceof Error ? error.message : "AI provider verification failed.");
@@ -301,12 +301,22 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
       return;
     }
     try {
+      const configuredAiProvider = AI_PROVIDERS.find((provider) => provider.vaultKey === name);
+      if (configuredAiProvider) {
+        invalidateAIChatVerification(configuredAiProvider.id, organizationCredentialStoreEnabled() ? req.user!.organizationId ?? null : undefined);
+        await turnMasterAiOff(personaUserFromRequest(req));
+      }
       const deleted = organizationCredentialStoreEnabled() && req.user!.organizationId != null
         ? await deleteOrganizationCredential(req.user!.organizationId, name)
         : deleteVaultCredential(name);
       if (!deleted) {
         res.status(404).json({ error: "Credential not found." });
         return;
+      }
+      const aiProvider = AI_PROVIDERS.find((provider) => provider.vaultKey === name);
+      if (aiProvider) {
+        invalidateAIChatVerification(aiProvider.id, organizationCredentialStoreEnabled() ? req.user!.organizationId ?? null : undefined);
+        recordConnectorVerification(aiProvider.id, false, "Provider configuration was revoked; chat verification is no longer valid.");
       }
       await recordAuditEvent(req.user!.id, "setup_credential_deleted", {
         credentialName: name,
@@ -332,6 +342,20 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
       return;
     }
     try {
+      const localProvider = AI_PROVIDERS.find((provider) => provider.isLocal && provider.vaultKey === name);
+      if (localProvider?.id === "ollama" || localProvider?.id === "lm_studio") {
+        const chosen = resolveLocalProviderChatEndpoint(localProvider.id, parsed.data.value);
+        const managed = process.env[localProvider.envKey]?.trim();
+        if (managed && resolveLocalProviderChatEndpoint(localProvider.id, managed) !== chosen) {
+          res.status(409).json({ error: "An operator-managed environment endpoint overrides this provider. Remove or change that environment setting before choosing a different endpoint." });
+          return;
+        }
+      }
+      const configuredAiProvider = AI_PROVIDERS.find((provider) => provider.vaultKey === name);
+      if (configuredAiProvider) {
+        invalidateAIChatVerification(configuredAiProvider.id, organizationCredentialStoreEnabled() ? req.user!.organizationId ?? null : undefined);
+        await turnMasterAiOff(personaUserFromRequest(req));
+      }
       if (organizationCredentialStoreEnabled() && req.user!.organizationId !== null && req.user!.organizationId !== undefined) {
         await setOrganizationCredential(
           req.user!.organizationId,
@@ -342,6 +366,11 @@ export function registerEnvironmentSetupRoutes(app: Express, lifecycleDependenci
         );
       } else {
         setVaultCredential(name, parsed.data.value, parsed.data.label);
+      }
+      const aiProvider = AI_PROVIDERS.find((provider) => provider.vaultKey === name);
+      if (aiProvider) {
+        invalidateAIChatVerification(aiProvider.id, organizationCredentialStoreEnabled() ? req.user!.organizationId ?? null : undefined);
+        recordConnectorVerification(aiProvider.id, false, "Provider configuration changed; explicit chat verification is required.");
       }
       await recordAuditEvent(req.user!.id, "setup_credential_saved", {
         credentialName: name,

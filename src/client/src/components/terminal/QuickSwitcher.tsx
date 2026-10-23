@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock3, Layers3, Search, Star, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Clock3, Layers3, Search, Star } from "lucide-react";
 import type { TerminalTab } from "@/lib/terminalTabs";
 import type { ViewMode } from "@/lib/terminalTypes";
 import type { RecentAnalyticalContext } from "@/lib/terminalPersonalization";
 import { getTerminalCapability, type TerminalCapability } from "@/lib/terminalCatalog";
 import { GuidedCapabilityExplainer } from "./GuidedExplainer";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 interface Props {
   tabs: readonly TerminalTab[];
@@ -30,6 +31,8 @@ export default function QuickSwitcher({ tabs, activeTabId, favorites, recents, o
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
 
   useEffect(() => inputRef.current?.focus(), []);
 
@@ -72,39 +75,44 @@ export default function QuickSwitcher({ tabs, activeTabId, favorites, recents, o
   }, [activeTabId, favorites, onActivateTab, onOpenRecent, onOpenView, query, recents, tabs]);
 
   useEffect(() => setSelected((value) => Math.max(0, Math.min(value, Math.max(0, items.length - 1)))), [items.length]);
+  const selectedKey = items[selected]?.key;
+  useEffect(() => {
+    if (selectedKey) document.getElementById(`${listId}-${selected}`)?.scrollIntoView({ block: "nearest" });
+  }, [listId, selected, selectedKey]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, items.length - 1))); }
     if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
     if (event.key === "Enter" && items[selected]) { event.preventDefault(); items[selected].run(); onClose(); }
-    if (event.key === "Escape") onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/45 px-3 pt-[12vh] backdrop-blur-[1px]" onMouseDown={onClose}>
-      <section className="w-full max-w-xl overflow-hidden border border-cyan-500/35 bg-[#090909] shadow-2xl" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Quick switcher">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-xl flex-col gap-0 overflow-hidden border-cyan-500/35 bg-[#090909] p-0"
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}>
+        <DialogTitle className="sr-only">Quick switcher</DialogTitle>
+        <DialogDescription className="sr-only">Search open tabs, favorites and recent analysis. Use arrow keys and Enter to open a result.</DialogDescription>
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <Search className="h-3.5 w-3.5 text-cyan-300" />
-          <input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} onKeyDown={onKeyDown} placeholder="Switch tab, favorite, or recent analysis..." className="min-w-0 flex-1 bg-transparent font-terminal text-[10px] text-foreground outline-none placeholder:text-muted-foreground/50" />
-          <span className="hidden border border-border px-1.5 py-0.5 font-terminal text-[6px] text-muted-foreground sm:inline">⌘P</span>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close quick switcher"><X className="h-3.5 w-3.5" /></button>
+          <input ref={inputRef} aria-label="Search tabs, favorites and recent analysis" role="combobox" aria-expanded={true} aria-controls={listId} aria-activedescendant={items[selected] ? `${listId}-${selected}` : undefined} aria-autocomplete="list" value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} onKeyDown={onKeyDown} placeholder="Switch tab, favorite, or recent analysis..." className="min-h-11 min-w-0 flex-1 bg-transparent pr-8 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
+          <span className="sr-only" role="status">{items.length} results</span>
         </div>
-        <div className="max-h-[420px] overflow-y-auto scrollbar-thin">
+        <div id={listId} role="listbox" aria-label="Available destinations" className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin">
           {items.length ? items.map((item, index) => {
             const active = selected === index;
             const Icon = item.kind === "tab" ? Layers3 : item.kind === "favorite" ? Star : Clock3;
             return (
-              <button key={item.key} onMouseEnter={() => setSelected(index)} onClick={() => { item.run(); onClose(); }} className={`flex w-full items-center gap-3 border-b border-border/60 px-3 py-2.5 text-left ${active ? "bg-cyan-500/[0.07]" : "hover:bg-white/[0.025]"}`}>
+              <button key={item.key} id={`${listId}-${index}`} role="option" aria-selected={active} tabIndex={-1} onMouseEnter={() => setSelected(index)} onClick={() => { item.run(); onClose(); }} className={`flex min-h-11 w-full items-center gap-3 border-b border-border/60 px-3 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-cyan-500/[0.07]" : "hover:bg-white/[0.025]"}`}>
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${item.kind === "favorite" ? "text-amber-300" : item.kind === "tab" ? "text-cyan-300" : "text-muted-foreground"}`} />
-                <span className="min-w-0 flex-1 truncate font-terminal text-[9px] text-foreground">
+                <span className="min-w-0 flex-1 truncate font-ui text-sm text-foreground">
                   {item.capability ? <GuidedCapabilityExplainer capability={item.capability}>{item.label}</GuidedCapabilityExplainer> : item.label}
                 </span>
-                <span className="shrink-0 font-terminal text-[6.5px] tracking-widest text-muted-foreground">{item.meta}</span>
+                <span className="shrink-0 font-terminal text-xs text-muted-foreground">{item.meta}</span>
               </button>
             );
-          }) : <div className="p-8 text-center font-terminal text-[8px] text-muted-foreground">NO MATCHING OPEN OR RECENT ANALYSIS</div>}
+          }) : <div role="status" className="p-8 text-center font-ui text-sm text-muted-foreground">No matching open or recent analysis.</div>}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

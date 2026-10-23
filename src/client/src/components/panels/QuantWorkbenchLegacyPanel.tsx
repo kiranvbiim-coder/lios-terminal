@@ -1,15 +1,46 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { useState, useMemo, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { FlaskConical, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ScatterChart, Scatter, CartesianGrid, LineChart, Line, Legend, ComposedChart, BarChart, Bar } from "recharts";
 import type { OHLCVSeries } from "@/lib/finance";
 import { inferCurrencyFromSymbol } from "@/lib/finance";
-import { computeDailyReturns, bootstrapMeanCI, permutationTestMeanDiff } from "@/lib/statistics";
-import { pca, engleGrangerTest, kalmanDynamicBeta, olsRegression, rollingVolatility, rollingBeta, rollingCorrelation, fitTCopula, type CopulaFit, fitHoltWinters, forecastHoltWinters, autoARIMA, forecastARIMA, fitGARCH11, computeCovarianceMatrix, riskDecomposition, counterpartyCVA, liquidityCostEstimate, maxDrawdownPct, detectHiddenRelationships, type HiddenRelationshipPair } from "@/lib/quantModels";
+import { computeDailyReturns } from "@/lib/statistics";
+import { pca, engleGrangerTest, kalmanDynamicBeta, olsRegression, rollingVolatility, rollingBeta, rollingCorrelation, fitTCopula, type CopulaFit, fitHoltWinters, forecastHoltWinters, autoARIMA, forecastARIMA, fitGARCH11, computeCovarianceMatrix, riskDecomposition, maxDrawdownPct, detectHiddenRelationships, type HiddenRelationshipPair } from "@/lib/quantModels";
 import { blackScholesMerton } from "@/lib/optionsModels";
 import { useIndicators, useIndicatorDetail } from "@/lib/useEconomics";
-import { AdvancedManualWorkflow } from "./advancedMacroForecastResearch";
+import { AdvancedManualWorkflow, ReceiptSummary, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReadableValueTable } from "@/components/terminal/ReadableValueTable";
 
+/** Original base models keep their URLs and numerical bodies; P4 alone retains results. */
+function useOriginalQuantResult<T>(slot: string) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const [local, setLocal] = useState<T | null>(null);
+  const result = terminal?.target ? quant.stored?.[slot] as T ?? null : local;
+  const post = async (route: string, parameters: unknown): Promise<T> => {
+    if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) throw new Error("Original model parameters must be an object.");
+    const output = await quant.run<Record<string, unknown>>(route, parameters as Record<string, unknown>, slot, route);
+    if (!terminal?.target) setLocal(output as T);
+    return output as T;
+  };
+  return [result, setLocal, post] as const;
+}
+
+function originalRunParameters(result: unknown): Record<string, unknown> | null {
+  if (!result || typeof result !== "object" || !("receipt" in result)) return null;
+  const receipt = result.receipt;
+  if (!receipt || typeof receipt !== "object" || !("parameters" in receipt)) return null;
+  return receipt.parameters && typeof receipt.parameters === "object" && !Array.isArray(receipt.parameters) ? receipt.parameters as Record<string, unknown> : null;
+}
+
+function RecordedOriginalRun({ result }: { result: unknown }) {
+  const parameters = originalRunParameters(result);
+  if (!parameters) return null;
+  const run = result as { receipt?: AdvancedReceipt };
+  return <details className="border border-border p-2 text-xs"><summary>Recorded original run · edited controls and refreshed observations do not recalculate it</summary><ReceiptSummary receipt={run.receipt}/><ReadableValueTable title="Exact submitted engine inputs" values={parameters} options={{ showExact: true }}/></details>;
+}
 type Tab = "pca" | "hidden" | "pairs" | "beta" | "rolling" | "copula" | "forecast" | "forecastupgrade" | "advancedforecast" | "bond" | "portfolio" | "creditrisk" | "oprisk" | "stats" | "panelcausal" | "tsecon" | "optionsvol" | "mlcluster";
 const TABS: { key: Tab; label: string }[] = [
   { key: "pca", label: "PCA / FACTOR DECOMPOSITION" },
@@ -45,6 +76,8 @@ interface BondPriceResult {
   dv01Amount: number;
   maturityDate: string;
   dayCountUsed: string;
+  settlementDateUsed?: string;
+  receipt?: AdvancedReceipt;
 }
 
 function useSymbolOHLCV(symbols: string[], range = "1Y") {
@@ -89,8 +122,8 @@ function fmt(v: number | null | undefined, digits = 3): string {
 }
 
 function PcaTab() {
-  const [tickerInput, setTickerInput] = useState("AAPL,MSFT,GOOGL,AMZN,META,NVDA");
-  const [symbols, setSymbols] = useState(tickerInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("PcaTab.tickerInput", "AAPL,MSFT,GOOGL,AMZN,META,NVDA");
+  const [symbols, setSymbols] = useTerminalArtifactState("PcaTab.symbols", tickerInput.split(",").map((s) => s.trim().toUpperCase()));
   const results = useSymbolOHLCV(symbols);
   const isLoading = results.some((r) => r.isLoading);
 
@@ -159,8 +192,8 @@ function PcaTab() {
 }
 
 function HiddenRelationshipsTab() {
-  const [tickerInput, setTickerInput] = useState("AAPL,MSFT,GOOGL,AMZN,META,NVDA");
-  const [symbols, setSymbols] = useState(tickerInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("HiddenRelationshipsTab.tickerInput", "AAPL,MSFT,GOOGL,AMZN,META,NVDA");
+  const [symbols, setSymbols] = useTerminalArtifactState("HiddenRelationshipsTab.symbols", tickerInput.split(",").map((s) => s.trim().toUpperCase()));
   const results = useSymbolOHLCV(symbols);
   const isLoading = results.some((r) => r.isLoading);
 
@@ -241,10 +274,10 @@ function HiddenRelationshipsTab() {
 }
 
 function PairsTab() {
-  const [inputA, setInputA] = useState("AAPL");
-  const [inputB, setInputB] = useState("MSFT");
-  const [symA, setSymA] = useState("AAPL");
-  const [symB, setSymB] = useState("MSFT");
+  const [inputA, setInputA] = useTerminalArtifactState("PairsTab.inputA", "AAPL");
+  const [inputB, setInputB] = useTerminalArtifactState("PairsTab.inputB", "MSFT");
+  const [symA, setSymA] = useTerminalArtifactState("PairsTab.symA", "AAPL");
+  const [symB, setSymB] = useTerminalArtifactState("PairsTab.symB", "MSFT");
   const [a, b] = useSymbolOHLCV([symA, symB]);
 
   // Cointegration/spread only means something when both legs are priced in
@@ -325,10 +358,10 @@ function PairsTab() {
 }
 
 function BetaTab() {
-  const [inputSym, setInputSym] = useState("AAPL");
-  const [inputBench, setInputBench] = useState("^GSPC");
-  const [symbol, setSymbol] = useState("AAPL");
-  const [bench, setBench] = useState("^GSPC");
+  const [inputSym, setInputSym] = useTerminalArtifactState("BetaTab.inputSym", "AAPL");
+  const [inputBench, setInputBench] = useTerminalArtifactState("BetaTab.inputBench", "^GSPC");
+  const [symbol, setSymbol] = useTerminalArtifactState("BetaTab.symbol", "AAPL");
+  const [bench, setBench] = useTerminalArtifactState("BetaTab.bench", "^GSPC");
   const [asset, market] = useSymbolOHLCV([symbol, bench]);
 
   const result = useMemo(() => {
@@ -390,11 +423,11 @@ function BetaTab() {
 }
 
 function RollingTab() {
-  const [inputSym, setInputSym] = useState("AAPL");
-  const [inputBench, setInputBench] = useState("^GSPC");
-  const [symbol, setSymbol] = useState("AAPL");
-  const [bench, setBench] = useState("^GSPC");
-  const [window, setWindowSize] = useState(30);
+  const [inputSym, setInputSym] = useTerminalArtifactState("RollingTab.inputSym", "AAPL");
+  const [inputBench, setInputBench] = useTerminalArtifactState("RollingTab.inputBench", "^GSPC");
+  const [symbol, setSymbol] = useTerminalArtifactState("RollingTab.symbol", "AAPL");
+  const [bench, setBench] = useTerminalArtifactState("RollingTab.bench", "^GSPC");
+  const [window, setWindowSize] = useTerminalArtifactState("RollingTab.window", 30);
   const [asset, market] = useSymbolOHLCV([symbol, bench]);
 
   const result = useMemo(() => {
@@ -457,10 +490,10 @@ function RollingTab() {
 }
 
 function CopulaTab() {
-  const [inputA, setInputA] = useState("AAPL");
-  const [inputB, setInputB] = useState("MSFT");
-  const [symA, setSymA] = useState("AAPL");
-  const [symB, setSymB] = useState("MSFT");
+  const [inputA, setInputA] = useTerminalArtifactState("CopulaTab.inputA", "AAPL");
+  const [inputB, setInputB] = useTerminalArtifactState("CopulaTab.inputB", "MSFT");
+  const [symA, setSymA] = useTerminalArtifactState("CopulaTab.symA", "AAPL");
+  const [symB, setSymB] = useTerminalArtifactState("CopulaTab.symB", "MSFT");
   const [a, b] = useSymbolOHLCV([symA, symB]);
 
   const result = useMemo((): CopulaFit | null => {
@@ -532,10 +565,10 @@ function CopulaTab() {
 }
 
 function ForecastTab() {
-  const [inputSym, setInputSym] = useState("AAPL");
-  const [symbol, setSymbol] = useState("AAPL");
-  const [model, setModel] = useState<"holtwinters" | "arima">("holtwinters");
-  const [horizon, setHorizon] = useState(30);
+  const [inputSym, setInputSym] = useTerminalArtifactState("ForecastTab.inputSym", "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactState("ForecastTab.symbol", "AAPL");
+  const [model, setModel] = useTerminalArtifactState<"holtwinters" | "arima">("ForecastTab.model", "holtwinters");
+  const [horizon, setHorizon] = useTerminalArtifactState("ForecastTab.horizon", 30);
   const [asset] = useSymbolOHLCV([symbol], "2Y");
 
   const result = useMemo(() => {
@@ -660,13 +693,13 @@ function ForecastTab() {
 // rather than a hand-reimplemented TS formula -- real QuantLib bond math
 // (day-count conventions, duration, convexity), not an approximation.
 function BondPricingTab() {
-  const [faceValue, setFaceValue] = useState("1000");
-  const [couponRatePct, setCouponRatePct] = useState("5");
-  const [frequency, setFrequency] = useState<"1" | "2" | "4" | "12">("2");
-  const [yearsToMaturity, setYearsToMaturity] = useState("10");
-  const [marketYieldPct, setMarketYieldPct] = useState("4.5");
-  const [dayCount, setDayCount] = useState<"30/360" | "ACT/ACT" | "ACT/360" | "ACT/365">("30/360");
-  const [result, setResult] = useState<BondPriceResult | null>(null);
+  const [faceValue, setFaceValue] = useTerminalArtifactState("BondPricingTab.faceValue", "1000");
+  const [couponRatePct, setCouponRatePct] = useTerminalArtifactState("BondPricingTab.couponRatePct", "5");
+  const [frequency, setFrequency] = useTerminalArtifactState<"1" | "2" | "4" | "12">("BondPricingTab.frequency", "2");
+  const [yearsToMaturity, setYearsToMaturity] = useTerminalArtifactState("BondPricingTab.yearsToMaturity", "10");
+  const [marketYieldPct, setMarketYieldPct] = useTerminalArtifactState("BondPricingTab.marketYieldPct", "4.5");
+  const [dayCount, setDayCount] = useTerminalArtifactState<"30/360" | "ACT/ACT" | "ACT/360" | "ACT/365">("BondPricingTab.dayCount", "30/360");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<BondPriceResult>("qwb.bond");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -675,23 +708,10 @@ function BondPricingTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/quant/fixed-income/bond-price", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          faceValue: Number(faceValue),
-          couponRatePct: Number(couponRatePct),
-          frequency: Number(frequency),
-          yearsToMaturity: Number(yearsToMaturity),
-          marketYieldPct: Number(marketYieldPct),
-          dayCount,
-        }),
+      await postOriginal("/api/quant/fixed-income/bond-price", {
+        faceValue: Number(faceValue), couponRatePct: Number(couponRatePct), frequency: Number(frequency),
+        yearsToMaturity: Number(yearsToMaturity), marketYieldPct: Number(marketYieldPct), dayCount,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Bond pricing engine unavailable right now.");
-      }
-      setResult(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bond pricing engine unavailable right now.");
       setResult(null);
@@ -766,8 +786,9 @@ function BondPricingTab() {
             ))}
           </div>
           <div className="font-terminal text-[7.5px] text-muted-foreground/70">
-            Priced with real QuantLib bond math (settlement today, {result.dayCountUsed} day-count convention) — clean/dirty price shown both as % of par (the market convention) and rescaled to the face value entered. Modified duration and convexity are the standard first- and second-order approximations for how this bond's price moves with yield, not a prediction of where yields go next.
+            Recorded QuantLib bond calculation (settlement {result.settlementDateUsed ?? "not recorded"}, {result.dayCountUsed} day-count convention) — clean/dirty price shown both as % of par and in the submitted face-value units. Modified duration and convexity describe the recorded run, not edited terms or a prediction of future yields. Explicit Price Bond creates a new run.
           </div>
+          <ReceiptSummary receipt={result.receipt}/>
         </>
       )}
     </div>
@@ -806,12 +827,12 @@ interface FrontierResult {
 // a literal mock there -- rebuilt properly here via the real Rockafellar-
 // Uryasev LP formulation, see python-service/portfolio_optimization.py).
 function PortfolioOptimizerTab() {
-  const [tickerInput, setTickerInput] = useState("AAPL,MSFT,GOOGL,AMZN,META");
-  const [symbols, setSymbols] = useState(tickerInput.split(",").map((s) => s.trim().toUpperCase()));
-  const [method, setMethod] = useState<PortfolioMethod>("max-sharpe");
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState("4");
-  const [confidence, setConfidence] = useState("95");
-  const [result, setResult] = useState<WeightsResult | FrontierResult | null>(null);
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("PortfolioOptimizerTab.tickerInput", "AAPL,MSFT,GOOGL,AMZN,META");
+  const [symbols, setSymbols] = useTerminalArtifactState("PortfolioOptimizerTab.symbols", tickerInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [method, setMethod] = useTerminalArtifactState<PortfolioMethod>("PortfolioOptimizerTab.method", "max-sharpe");
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("PortfolioOptimizerTab.riskFreeRatePct", "4");
+  const [confidence, setConfidence] = useTerminalArtifactState("PortfolioOptimizerTab.confidence", "95");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<WeightsResult | FrontierResult>(`qwb.portfolio.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -839,10 +860,13 @@ function PortfolioOptimizerTab() {
   // riskDecomposition()), not a sidecar hop -- it's a closed-form matrix
   // computation, not a simulation.
   const decomposition = useMemo(() => {
-    if (!result || method === "efficient-frontier" || !inputs) return null;
+    if (!result || method === "efficient-frontier") return null;
+    const recorded = originalRunParameters(result);
+    const calculation = recorded ? { assets: recorded.assets as string[], covMatrix: recorded.covMatrix as number[][] } : inputs;
+    if (!calculation?.covMatrix) return null;
     const weightsResult = result as WeightsResult;
-    const weights = inputs.assets.map((a) => weightsResult.weights[a] ?? 0);
-    return riskDecomposition(inputs.assets, weights, inputs.covMatrix);
+    const weights = calculation.assets.map(asset => weightsResult.weights[asset] ?? 0);
+    return riskDecomposition(calculation.assets, weights, calculation.covMatrix);
   }, [result, method, inputs]);
 
   async function runOptimize() {
@@ -873,12 +897,7 @@ function PortfolioOptimizerTab() {
         break;
     }
     try {
-      const res = await fetch(methodDef.path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Portfolio optimizer unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(methodDef.path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Portfolio optimizer unavailable right now.");
     } finally {
@@ -925,6 +944,7 @@ function PortfolioOptimizerTab() {
       ) : null}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result && !isFrontier && (
         <>
@@ -1024,6 +1044,12 @@ function parseNumList(input: string): number[] {
   return input.split(",").map((s) => s.trim()).filter((s) => s.length > 0).map(Number).filter((n) => Number.isFinite(n));
 }
 
+function requiredManualNumbers(input: string): number[] {
+  const fields = input.split(",").map(value => value.trim());
+  if (fields.some(value => !value || !Number.isFinite(Number(value)))) throw new Error("Each submitted manual observation must be a finite number; blank or invalid rows are not dropped.");
+  return fields.map(Number);
+}
+
 // Real-scale data entry, not a toy 5-row demo: a consultant with a client-
 // provided debt schedule/loan tape pastes or uploads the actual CSV
 // (name,pd_pct,lgd_pct,ead columns, header optional) instead of hand-typing
@@ -1065,22 +1091,18 @@ interface CreditVarResult {
   worstObligorContributionPct: number;
 }
 
-// Third Python-sidecar-backed tab: Monte Carlo credit VaR (single-factor
-// Gaussian copula, python-service/credit_operational_risk.py) plus
-// Counterparty CVA, which is a closed-form dot product and stays native TS
-// (see quantModels.ts's counterpartyCVA()) -- no reason to round-trip the
-// sidecar for a formula with no randomness in it.
+// Original Python credit VaR and original TypeScript CVA share canonical run custody.
 function CreditRiskTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
 
   // ── Credit VaR (Monte Carlo, Python sidecar) ──
-  const [obligorsInput, setObligorsInput] = useState("BorrowerA,BorrowerB,BorrowerC,BorrowerD,BorrowerE");
-  const [pdInput, setPdInput] = useState("2.0,1.5,3.0,1.0,5.0");
-  const [lgdInput, setLgdInput] = useState("45,45,45,45,45");
-  const [eadInput, setEadInput] = useState("10000000,2000000,1500000,3000000,1000000");
-  const [assetCorr, setAssetCorr] = useState("20");
-  const [cvConfidence, setCvConfidence] = useState("99");
-  const [cvResult, setCvResult] = useState<CreditVarResult | null>(null);
+  const [obligorsInput, setObligorsInput] = useTerminalArtifactState("CreditRiskTab.obligorsInput", "BorrowerA,BorrowerB,BorrowerC,BorrowerD,BorrowerE");
+  const [pdInput, setPdInput] = useTerminalArtifactState("CreditRiskTab.pdInput", "2.0,1.5,3.0,1.0,5.0");
+  const [lgdInput, setLgdInput] = useTerminalArtifactState("CreditRiskTab.lgdInput", "45,45,45,45,45");
+  const [eadInput, setEadInput] = useTerminalArtifactState("CreditRiskTab.eadInput", "10000000,2000000,1500000,3000000,1000000");
+  const [assetCorr, setAssetCorr] = useTerminalArtifactState("CreditRiskTab.assetCorr", "20");
+  const [cvConfidence, setCvConfidence] = useTerminalArtifactState("CreditRiskTab.cvConfidence", "99");
+  const [cvResult, setCvResult, postOriginal] = useOriginalQuantResult<CreditVarResult>("qwb.credit.credit-var");
   const [cvLoading, setCvLoading] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
   const [cvUploadCount, setCvUploadCount] = useState<number | null>(null);
@@ -1120,20 +1142,10 @@ function CreditRiskTab() {
     setCvError(null);
     setCvResult(null);
     try {
-      const res = await fetch("/api/quant/credit/credit-var", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          obligors, pdPct, lgdPct, ead,
-          assetCorrelation: Number(assetCorr) / 100,
-          confidence: Number(cvConfidence),
-          nSims: 50000, seed: 42,
-        }),
+      await postOriginal("/api/quant/credit/credit-var", {
+        obligors, pdPct, lgdPct, ead, assetCorrelation: Number(assetCorr) / 100,
+        confidence: Number(cvConfidence), nSims: 50000, seed: 42,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Credit risk engine unavailable right now.");
-      }
-      setCvResult(await res.json());
     } catch (err) {
       setCvError(err instanceof Error ? err.message : "Credit risk engine unavailable right now.");
     } finally {
@@ -1142,20 +1154,24 @@ function CreditRiskTab() {
   }
 
   // ── Counterparty CVA (closed-form, native TS) ──
-  const [exposureInput, setExposureInput] = useState("5000000,4500000,4000000,3200000,2500000");
-  const [pdCurveInput, setPdCurveInput] = useState("0.5,0.6,0.7,0.8,0.9");
-  const [lgdPctInput, setLgdPctInput] = useState("60");
-  const [discountRateInput, setDiscountRateInput] = useState("5");
+  const [exposureInput, setExposureInput] = useTerminalArtifactState("CreditRiskTab.exposureInput", "5000000,4500000,4000000,3200000,2500000");
+  const [pdCurveInput, setPdCurveInput] = useTerminalArtifactState("CreditRiskTab.pdCurveInput", "0.5,0.6,0.7,0.8,0.9");
+  const [lgdPctInput, setLgdPctInput] = useTerminalArtifactState("CreditRiskTab.lgdPctInput", "60");
+  const [discountRateInput, setDiscountRateInput] = useTerminalArtifactState("CreditRiskTab.discountRateInput", "5");
 
-  const cvaResult = useMemo(() => {
-    const exposure = parseNumList(exposureInput);
-    const pdCurve = parseNumList(pdCurveInput);
-    const n = Math.min(exposure.length, pdCurve.length);
-    if (n === 0) return null;
-    const rate = Number(discountRateInput) / 100;
-    const discountFactors = Array.from({ length: n }, (_, t) => 1 / Math.pow(1 + rate, t + 1));
-    return counterpartyCVA(exposure, pdCurve, Number(lgdPctInput), discountFactors);
-  }, [exposureInput, pdCurveInput, lgdPctInput, discountRateInput]);
+  const [cvaResult, , postCva] = useOriginalQuantResult<{ cva: number; receipt?: AdvancedReceipt }>("qwb.credit.cva");
+  const [cvaRunning, setCvaRunning] = useState(false);
+  const [cvaError, setCvaError] = useState<string | null>(null);
+  async function runCva() {
+    setCvaRunning(true); setCvaError(null);
+    try {
+      const exposureProfile = requiredManualNumbers(exposureInput);
+      const rate = Number(discountRateInput) / 100;
+      if (!discountRateInput.trim() || !lgdPctInput.trim()) throw new Error("Enter the stated discount rate and LGD; blank values are not zero.");
+      await postCva("/api/quant/risk/manual-original", { method: "cva", exposureProfile, pdCurvePct: requiredManualNumbers(pdCurveInput), lgdPct: Number(lgdPctInput), discountFactors: exposureProfile.map((_, t) => 1 / Math.pow(1 + rate, t + 1)) });
+    } catch (error) { setCvaError(error instanceof Error ? error.message : "Original CVA unavailable."); }
+    finally { setCvaRunning(false); }
+  }
 
   return (
     <div className="space-y-6">
@@ -1206,6 +1222,7 @@ function CreditRiskTab() {
           </button>
         </div>
         {cvError && <div className="mt-2 font-terminal text-[9px] text-red-400">{cvError}</div>}
+        <RecordedOriginalRun result={cvResult}/>
         {cvResult && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-3">
             {[
@@ -1245,6 +1262,9 @@ function CreditRiskTab() {
             </label>
           </div>
         </div>
+        <button disabled={cvaRunning} onClick={runCva} className="border border-border px-3 py-2 mt-2 text-xs">{cvaRunning ? "Running original CVA…" : "Run original CVA"}</button>
+        {cvaError && <div role="alert" className="text-destructive text-xs">{cvaError}</div>}
+        {cvaResult && <RecordedOriginalRun result={cvaResult}/>}
         {cvaResult && (
           <div className="border border-border p-2.5 mt-3 w-fit">
             <div className="font-terminal text-[7px] tracking-widest text-muted-foreground">CVA (VALUATION REDUCTION)</div>
@@ -1263,19 +1283,16 @@ interface OperationalRiskResult {
   unexpectedLoss: number;
 }
 
-// Fourth Python-sidecar-backed tool: operational risk LDA (Poisson x
-// lognormal Monte Carlo, python-service/credit_operational_risk.py). Paired
-// with liquidity cost estimate, which is closed-form and stays native TS
-// (see quantModels.ts's liquidityCostEstimate()).
+// Original Python operational LDA and original TypeScript liquidation-cost formula.
 function OpRiskLiquidityTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
 
   // ── Operational Risk LDA (Monte Carlo, Python sidecar) ──
-  const [annualFreq, setAnnualFreq] = useState("12");
-  const [severityMu, setSeverityMu] = useState("9.0");
-  const [severitySigma, setSeveritySigma] = useState("1.5");
-  const [opConfidence, setOpConfidence] = useState("99");
-  const [opResult, setOpResult] = useState<OperationalRiskResult | null>(null);
+  const [annualFreq, setAnnualFreq] = useTerminalArtifactState("OpRiskLiquidityTab.annualFreq", "12");
+  const [severityMu, setSeverityMu] = useTerminalArtifactState("OpRiskLiquidityTab.severityMu", "9.0");
+  const [severitySigma, setSeveritySigma] = useTerminalArtifactState("OpRiskLiquidityTab.severitySigma", "1.5");
+  const [opConfidence, setOpConfidence] = useTerminalArtifactState("OpRiskLiquidityTab.opConfidence", "99");
+  const [opResult, setOpResult, postOriginal] = useOriginalQuantResult<OperationalRiskResult>("qwb.credit.operational-risk-lda");
   const [opLoading, setOpLoading] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
@@ -1284,21 +1301,10 @@ function OpRiskLiquidityTab() {
     setOpError(null);
     setOpResult(null);
     try {
-      const res = await fetch("/api/quant/credit/operational-risk-lda", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          annualFrequency: Number(annualFreq),
-          severityMu: Number(severityMu),
-          severitySigma: Number(severitySigma),
-          confidence: Number(opConfidence),
-          nSims: 20000, seed: 42,
-        }),
+      await postOriginal("/api/quant/credit/operational-risk-lda", {
+        annualFrequency: Number(annualFreq), severityMu: Number(severityMu), severitySigma: Number(severitySigma),
+        confidence: Number(opConfidence), nSims: 20000, seed: 42,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Operational risk engine unavailable right now.");
-      }
-      setOpResult(await res.json());
     } catch (err) {
       setOpError(err instanceof Error ? err.message : "Operational risk engine unavailable right now.");
     } finally {
@@ -1307,14 +1313,18 @@ function OpRiskLiquidityTab() {
   }
 
   // ── Liquidity cost estimate (closed-form, native TS) ──
-  const [spreadInput, setSpreadInput] = useState("0.05,0.10,0.25,0.40");
-  const [positionInput, setPositionInput] = useState("2000000,1500000,800000,300000");
-  const liquidityCost = useMemo(() => {
-    const spreads = parseNumList(spreadInput);
-    const positions = parseNumList(positionInput);
-    if (!spreads.length || !positions.length) return null;
-    return liquidityCostEstimate(spreads, positions);
-  }, [spreadInput, positionInput]);
+  const [spreadInput, setSpreadInput] = useTerminalArtifactState("OpRiskLiquidityTab.spreadInput", "0.05,0.10,0.25,0.40");
+  const [positionInput, setPositionInput] = useTerminalArtifactState("OpRiskLiquidityTab.positionInput", "2000000,1500000,800000,300000");
+  const [liquidityResult, , postLiquidity] = useOriginalQuantResult<{ estimatedCost: number; receipt?: AdvancedReceipt }>("qwb.credit.liquidity-cost");
+  const [liquidityRunning, setLiquidityRunning] = useState(false);
+  const [liquidityError, setLiquidityError] = useState<string | null>(null);
+  const liquidityCost = liquidityResult?.estimatedCost ?? null;
+  async function runLiquidity() {
+    setLiquidityRunning(true); setLiquidityError(null);
+    try { await postLiquidity("/api/quant/risk/manual-original", { method: "liquidity-cost", bidAskSpreadPct: requiredManualNumbers(spreadInput), positionSizes: requiredManualNumbers(positionInput) }); }
+    catch (error) { setLiquidityError(error instanceof Error ? error.message : "Original liquidity estimate unavailable."); }
+    finally { setLiquidityRunning(false); }
+  }
 
   return (
     <div className="space-y-6">
@@ -1342,6 +1352,7 @@ function OpRiskLiquidityTab() {
           {opLoading ? "SIMULATING (20,000 YEARS)..." : "RUN LDA SIMULATION"}
         </button>
         {opError && <div className="mt-2 font-terminal text-[9px] text-red-400">{opError}</div>}
+        <RecordedOriginalRun result={opResult}/>
         {opResult && (
           <div className="grid grid-cols-3 gap-1.5 mt-3">
             {[
@@ -1370,6 +1381,9 @@ function OpRiskLiquidityTab() {
             <input value={positionInput} onChange={(e) => setPositionInput(e.target.value)} className={inputCls} />
           </label>
         </div>
+        <button disabled={liquidityRunning} onClick={runLiquidity} className="border border-border px-3 py-2 mt-2 text-xs">{liquidityRunning ? "Running original estimate…" : "Run original liquidity estimate"}</button>
+        {liquidityError && <div role="alert" className="text-destructive text-xs">{liquidityError}</div>}
+        {liquidityResult && <RecordedOriginalRun result={liquidityResult}/>}
         {liquidityCost !== null && (
           <div className="border border-border p-2.5 mt-3 w-fit">
             <div className="font-terminal text-[7px] tracking-widest text-muted-foreground">ESTIMATED LIQUIDATION COST</div>
@@ -1409,26 +1423,37 @@ const STATS_METHODS: { key: StatsMethod; label: string }[] = [
 // later tab.
 function StatisticsSuiteTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<StatsMethod>("normality");
+  const [method, setMethod] = useTerminalArtifactState<StatsMethod>("StatisticsSuiteTab.method", "normality");
 
-  const [dataInput, setDataInput] = useState("2.1,1.9,2.4,2.0,1.8,2.2,2.5,1.7,2.3,2.0,1.9,2.1,2.6,1.8,2.2,2.0,1.9,2.4,2.1,1.8");
-  const [group1Input, setGroup1Input] = useState("2.1,1.9,2.4,2.0,1.8,2.2,2.5,1.7,2.3,2.0");
-  const [group2Input, setGroup2Input] = useState("3.0,2.8,3.2,2.9,3.1,2.7,3.3,2.9,3.0,3.1");
-  const [xInput, setXInput] = useState("1.2,2.1,0.8,3.4,2.6,1.9,2.2,3.1,0.5,1.8");
-  const [yCorrInput, setYCorrInput] = useState("1.5,2.4,1.0,3.1,2.9,2.0,2.5,3.4,0.9,2.0");
-  const [zInput, setZInput] = useState("1.0,2.0,0.7,3.0,2.5,1.8,2.1,3.0,0.6,1.7");
-  const [yRegInput, setYRegInput] = useState("5.1,7.3,3.2,9.5,8.0,6.1,7.4,9.0,2.9,5.8");
-  const [x1Input, setX1Input] = useState("1.2,2.1,0.8,3.4,2.6,1.9,2.2,3.1,0.5,1.8");
-  const [x2Input, setX2Input] = useState("0.5,0.3,0.9,0.2,0.4,0.6,0.3,0.2,0.8,0.5");
-  const [weightsInput, setWeightsInput] = useState("1,1,1,1,1,1,1,1,1,1");
-  const [yBinInput, setYBinInput] = useState("0,0,0,1,0,0,1,1,1,0");
-  const [bootConfidence, setBootConfidence] = useState("95");
-  const [covType, setCovType] = useState<"nonrobust" | "HC1" | "HC3" | "HAC" | "cluster">("nonrobust");
-  const [clusterVarInput, setClusterVarInput] = useState("");
-  const [maxLagsInput, setMaxLagsInput] = useState("");
-  const [normType, setNormType] = useState<"huber" | "bisquare" | "tukey">("huber");
+  const [dataInput, setDataInput] = useTerminalArtifactState("StatisticsSuiteTab.dataInput", "2.1,1.9,2.4,2.0,1.8,2.2,2.5,1.7,2.3,2.0,1.9,2.1,2.6,1.8,2.2,2.0,1.9,2.4,2.1,1.8");
+  const [group1Input, setGroup1Input] = useTerminalArtifactState("StatisticsSuiteTab.group1Input", "2.1,1.9,2.4,2.0,1.8,2.2,2.5,1.7,2.3,2.0");
+  const [group2Input, setGroup2Input] = useTerminalArtifactState("StatisticsSuiteTab.group2Input", "3.0,2.8,3.2,2.9,3.1,2.7,3.3,2.9,3.0,3.1");
+  const [xInput, setXInput] = useTerminalArtifactState("StatisticsSuiteTab.xInput", "1.2,2.1,0.8,3.4,2.6,1.9,2.2,3.1,0.5,1.8");
+  const [yCorrInput, setYCorrInput] = useTerminalArtifactState("StatisticsSuiteTab.yCorrInput", "1.5,2.4,1.0,3.1,2.9,2.0,2.5,3.4,0.9,2.0");
+  const [zInput, setZInput] = useTerminalArtifactState("StatisticsSuiteTab.zInput", "1.0,2.0,0.7,3.0,2.5,1.8,2.1,3.0,0.6,1.7");
+  const [yRegInput, setYRegInput] = useTerminalArtifactState("StatisticsSuiteTab.yRegInput", "5.1,7.3,3.2,9.5,8.0,6.1,7.4,9.0,2.9,5.8");
+  const [x1Input, setX1Input] = useTerminalArtifactState("StatisticsSuiteTab.x1Input", "1.2,2.1,0.8,3.4,2.6,1.9,2.2,3.1,0.5,1.8");
+  const [x2Input, setX2Input] = useTerminalArtifactState("StatisticsSuiteTab.x2Input", "0.5,0.3,0.9,0.2,0.4,0.6,0.3,0.2,0.8,0.5");
+  const [weightsInput, setWeightsInput] = useTerminalArtifactState("StatisticsSuiteTab.weightsInput", "1,1,1,1,1,1,1,1,1,1");
+  const [yBinInput, setYBinInput] = useTerminalArtifactState("StatisticsSuiteTab.yBinInput", "0,0,0,1,0,0,1,1,1,0");
+  const [bootConfidence, setBootConfidence] = useTerminalArtifactState("StatisticsSuiteTab.bootConfidence", "95");
+  const [resamplingSeed, setResamplingSeed] = useTerminalArtifactState("StatisticsSuiteTab.resamplingSeed", "42");
+  const [covType, setCovType] = useTerminalArtifactState<"nonrobust" | "HC1" | "HC3" | "HAC" | "cluster">("StatisticsSuiteTab.covType", "nonrobust");
+  const [clusterVarInput, setClusterVarInput] = useTerminalArtifactState("StatisticsSuiteTab.clusterVarInput", "");
+  const [maxLagsInput, setMaxLagsInput] = useTerminalArtifactState("StatisticsSuiteTab.maxLagsInput", "");
+  const [normType, setNormType] = useTerminalArtifactState<"huber" | "bisquare" | "tukey">("StatisticsSuiteTab.normType", "huber");
 
-  const [result, setResult] = useState<unknown>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const [localResult, setResult] = useState<unknown>(null);
+  const storedResult = native.stored?.[`qwb.stats.${method}`];
+  const result = terminal?.target ? storedResult ?? null : localResult;
+  function readDiagnostic<T>(name: string, local: T): T {
+    if (!terminal?.target) return local;
+    const stored = storedResult as { diagnostics?: Record<string, unknown> } | undefined;
+    const output = stored?.diagnostics?.[name];
+    return (output && typeof output === "object" && !("error" in output) ? output : null) as T;
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1439,8 +1464,8 @@ function StatisticsSuiteTab() {
     ols: 2, gls: 2, robust: 2,
   };
   const tickersNeeded = TICKERS_NEEDED[method] ?? 0;
-  const [tickerInput, setTickerInput] = useState("AAPL,MSFT,SPY");
-  const [tickerSymbols, setTickerSymbols] = useState<string[]>([]);
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("StatisticsSuiteTab.tickerInput", "AAPL,MSFT,SPY");
+  const [tickerSymbols, setTickerSymbols] = useTerminalArtifactState<string[]>("StatisticsSuiteTab.tickerSymbols", []);
   const tickerResults = useSymbolOHLCV(tickerSymbols);
   const tickerLoading = tickerSymbols.length > 0 && tickerResults.some((r) => r.isLoading);
 
@@ -1499,11 +1524,16 @@ function StatisticsSuiteTab() {
     return cols;
   }
 
-  const [heteroResult, setHeteroResult] = useState<{ breuschPaganStatistic: number; breuschPaganPValue: number; conclusion: string } | null>(null);
-  const [influenceResult, setInfluenceResult] = useState<{ cooksDistance: number[]; leverage: number[]; dffits: number[]; influenceThreshold: number; flaggedObservations: number[] } | null>(null);
-  const [vifResult, setVifResult] = useState<{ predictorIndex: number[]; vif: number[] } | null>(null);
-  const [resetResult, setResetResult] = useState<{ statistic: number; pValue: number; conclusion: string } | null>(null);
-  const [autocorrResult, setAutocorrResult] = useState<{ breuschGodfreyLmStatistic: number; breuschGodfreyLmPValue: number; ljungBoxPValues: number[]; durbinWatson: number; conclusion: string } | null>(null);
+  const [localHetero, setHeteroResult] = useState<{ breuschPaganStatistic: number; breuschPaganPValue: number; conclusion: string } | null>(null);
+  const heteroResult = readDiagnostic("heteroskedasticity", localHetero);
+  const [localInfluence, setInfluenceResult] = useState<{ cooksDistance: number[]; leverage: number[]; dffits: number[]; influenceThreshold: number; flaggedObservations: number[] } | null>(null);
+  const influenceResult = readDiagnostic("influence", localInfluence);
+  const [localVif, setVifResult] = useState<{ predictorIndex: number[]; vif: number[] } | null>(null);
+  const vifResult = readDiagnostic("vif", localVif);
+  const [localReset, setResetResult] = useState<{ statistic: number; pValue: number; conclusion: string } | null>(null);
+  const resetResult = readDiagnostic("reset", localReset);
+  const [localAutocorr, setAutocorrResult] = useState<{ breuschGodfreyLmStatistic: number; breuschGodfreyLmPValue: number; ljungBoxPValues: number[]; durbinWatson: number; conclusion: string } | null>(null);
+  const autocorrResult = readDiagnostic("autocorrelation", localAutocorr);
 
   async function runStats() {
     setLoading(true);
@@ -1515,12 +1545,12 @@ function StatisticsSuiteTab() {
     setResetResult(null);
     setAutocorrResult(null);
     try {
-      if (method === "bootstrap") {
-        setResult(bootstrapMeanCI(parseNumList(dataInput), 2000, Number(bootConfidence)));
-        return;
-      }
-      if (method === "permutation") {
-        setResult(permutationTestMeanDiff(parseNumList(group1Input), parseNumList(group2Input), 5000));
+      if (method === "bootstrap" || method === "permutation") {
+        const parameters = method === "bootstrap"
+          ? { method, data: parseNumList(dataInput), iterations: 2000, confidence: Number(bootConfidence), seed: Number(resamplingSeed) }
+          : { method, group1: parseNumList(group1Input), group2: parseNumList(group2Input), iterations: 5000, seed: Number(resamplingSeed) };
+        const output = await native.run<Record<string, unknown>>("statistics/resampling", parameters, `qwb.stats.${method}`, "/api/quant/statistics/resampling");
+        if (!terminal?.target) setResult(output);
         return;
       }
       const covOptions: Record<string, unknown> = covType === "nonrobust" ? {} : {
@@ -1549,6 +1579,10 @@ function StatisticsSuiteTab() {
           path = "/api/quant/stats/probit"; body = { y: parseNumList(yBinInput), x: buildRegressionX() }; break;
         case "robust":
           path = "/api/quant/stats/robust-regression"; body = { y: parseNumList(yRegInput), x: buildRegressionX(), normType }; break;
+      }
+      if (terminal?.target) {
+        await native.run(path, body as Record<string, unknown>, `qwb.stats.${method}`, path);
+        return;
       }
       const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) {
@@ -1603,6 +1637,7 @@ function StatisticsSuiteTab() {
         <button onClick={runStats} disabled={loading} className="px-3 py-1.5 border border-border hover:border-[hsl(38,95%,50%)]/60 hover:text-[hsl(38,95%,55%)] font-terminal text-[8px] text-muted-foreground disabled:opacity-50">
           {loading ? "RUNNING..." : "RUN"}
         </button>
+        {["bootstrap", "permutation"].includes(method) && <label className="text-xs">Recorded seed <input aria-label="Resampling seed" type="number" min="0" max="2147483647" value={resamplingSeed} onChange={event => setResamplingSeed(event.target.value)} className={inputCls}/></label>}
       </div>
 
       {tickersNeeded > 0 && (
@@ -1727,6 +1762,7 @@ function StatisticsSuiteTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && (
         <StatsResultView method={method} result={result} />
@@ -1945,20 +1981,20 @@ const TS_ECON_DEFAULT_SERIES_TYPE: Record<TsEconMethod, "returns" | "levels"> = 
 // LIMURIA_ENGINES port plan Phase 2b.
 function TimeSeriesEconometricsTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<TsEconMethod>("var");
-  const [tickerInput, setTickerInput] = useState("SPY,QQQ,TLT");
-  const [seriesType, setSeriesType] = useState<"returns" | "levels">(TS_ECON_DEFAULT_SERIES_TYPE.var);
-  const [tickerSymbols, setTickerSymbols] = useState<string[]>([]);
+  const [method, setMethod] = useTerminalArtifactState<TsEconMethod>("TimeSeriesEconometricsTab.method", "var");
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("TimeSeriesEconometricsTab.tickerInput", "SPY,QQQ,TLT");
+  const [seriesType, setSeriesType] = useTerminalArtifactState<"returns" | "levels">("TimeSeriesEconometricsTab.seriesType", TS_ECON_DEFAULT_SERIES_TYPE.var);
+  const [tickerSymbols, setTickerSymbols] = useTerminalArtifactState<string[]>("TimeSeriesEconometricsTab.tickerSymbols", []);
   const [loadedNames, setLoadedNames] = useState<string[]>([]);
   const [loadedSeries, setLoadedSeries] = useState<string[]>([]); // one comma-joined string per series, editable after load
 
-  const [lags, setLags] = useState("2");
-  const [irfHorizon, setIrfHorizon] = useState("10");
-  const [cointRank, setCointRank] = useState("1");
-  const [maxLags, setMaxLags] = useState("4");
-  const [detOrder, setDetOrder] = useState("0");
+  const [lags, setLags] = useTerminalArtifactState("TimeSeriesEconometricsTab.lags", "2");
+  const [irfHorizon, setIrfHorizon] = useTerminalArtifactState("TimeSeriesEconometricsTab.irfHorizon", "10");
+  const [cointRank, setCointRank] = useTerminalArtifactState("TimeSeriesEconometricsTab.cointRank", "1");
+  const [maxLags, setMaxLags] = useTerminalArtifactState("TimeSeriesEconometricsTab.maxLags", "4");
+  const [detOrder, setDetOrder] = useTerminalArtifactState("TimeSeriesEconometricsTab.detOrder", "0");
 
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.tsecon.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2026,12 +2062,7 @@ function TimeSeriesEconometricsTab() {
           body = { series: seriesArrays[0] };
           break;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Econometrics engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Econometrics engine unavailable right now.");
     } finally {
@@ -2108,7 +2139,8 @@ function TimeSeriesEconometricsTab() {
       </div>
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
-      {result != null && <TsEconResultView method={method} result={result} seriesNames={loadedNames} />}
+      <RecordedOriginalRun result={result}/>
+      {result != null && <TsEconResultView method={method} result={result} seriesNames={originalRunParameters(result)?.seriesNames as string[] ?? loadedNames} />}
     </div>
   );
 }
@@ -2252,18 +2284,18 @@ const PANEL_CAUSAL_METHODS: { key: PanelCausalMethod; label: string }[] = [
 // to recover it correctly in the econometrics known-answer tests.
 function PanelCausalTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<PanelCausalMethod>("panelols");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<PanelCausalMethod>("PanelCausalTab.method", "panelols");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.panelcausal.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [panelCovType, setPanelCovType] = useState<"unadjusted" | "robust" | "clustered" | "kernel">("unadjusted");
-  const [panelKernelMaxLagsInput, setPanelKernelMaxLagsInput] = useState("");
-  const [randomSlopeEnabled, setRandomSlopeEnabled] = useState(false);
+  const [panelCovType, setPanelCovType] = useTerminalArtifactState<"unadjusted" | "robust" | "clustered" | "kernel">("PanelCausalTab.panelCovType", "unadjusted");
+  const [panelKernelMaxLagsInput, setPanelKernelMaxLagsInput] = useTerminalArtifactState("PanelCausalTab.panelKernelMaxLagsInput", "");
+  const [randomSlopeEnabled, setRandomSlopeEnabled] = useTerminalArtifactState("PanelCausalTab.randomSlopeEnabled", false);
 
   // ── Panel OLS: real panel = N tickers x trading days, y=stock return, x1=market return ──
-  const [panelTickersInput, setPanelTickersInput] = useState("AAPL,MSFT,GOOGL,AMZN");
-  const [marketTickerInput, setMarketTickerInput] = useState("SPY");
-  const [panelSymbols, setPanelSymbols] = useState<string[]>([]);
+  const [panelTickersInput, setPanelTickersInput] = useTerminalArtifactState("PanelCausalTab.panelTickersInput", "AAPL,MSFT,GOOGL,AMZN");
+  const [marketTickerInput, setMarketTickerInput] = useTerminalArtifactState("PanelCausalTab.marketTickerInput", "SPY");
+  const [panelSymbols, setPanelSymbols] = useTerminalArtifactState<string[]>("PanelCausalTab.panelSymbols", []);
   const [panelData, setPanelData] = useState<{ y: number[]; x: number[]; entity: string[]; time: string[] } | null>(null);
   const panelAllSymbols = panelSymbols;
   const panelResults = useSymbolOHLCV(panelAllSymbols);
@@ -2303,20 +2335,20 @@ function PanelCausalTab() {
   }, [panelDataReady]);
 
   // ── 2SLS IV: manual entry, real n=80 example (see file header comment) ──
-  const [ivY, setIvY] = useState("4.743,1.401,4.206,0.885,1.188,1.517,1.937,0.458,4.421,2.427,0.940,2.372,2.660,2.296,0.426,0.001,5.411,2.873,1.312,-0.213,4.179,3.248,1.046,4.822,3.193,-1.978,1.633,-0.963,4.942,1.888,0.678,4.272,1.238,2.564,-3.458,2.809,-1.360,4.125,3.650,3.684,1.683,0.444,1.783,-0.012,-0.677,0.258,3.506,5.925,2.425,1.762,4.069,1.831,2.661,1.955,0.826,-0.091,0.323,1.557,0.695,4.345,0.992,0.345,0.403,3.669,0.027,0.004,0.178,-0.239,0.589,-1.704,4.037,-1.090,3.247,5.212,5.290,3.697,3.161,3.406,2.149,0.384");
-  const [ivEndog, setIvEndog] = useState("1.073,0.642,1.282,-1.243,-0.392,0.085,-0.589,0.276,1.299,0.490,-0.345,0.535,0.248,0.260,-1.155,-0.982,2.621,1.050,-0.771,-0.961,0.060,0.585,0.231,0.673,0.420,-2.253,0.213,-0.882,1.875,-0.047,-0.539,0.509,0.395,0.370,-3.252,0.781,-1.660,0.852,1.011,1.274,-0.650,-0.277,0.130,-1.019,-1.266,-0.063,0.771,2.044,0.711,-0.174,0.085,-0.306,-0.059,0.169,-0.704,-1.938,-1.087,-0.749,-1.716,1.311,-0.701,0.123,-0.594,0.009,-1.745,-0.934,-0.593,-1.659,-0.430,-1.578,0.847,-1.864,0.397,1.469,1.974,1.830,-0.473,0.874,0.587,-0.140");
-  const [ivInstr, setIvInstr] = useState("0.655,0.894,0.416,-0.924,-0.196,-0.591,-0.300,1.297,1.530,0.669,0.549,0.677,-0.012,-0.076,-0.674,-0.056,2.260,0.869,-0.342,-0.472,-0.864,0.374,0.392,-1.443,0.486,-0.569,1.427,0.157,1.718,-0.458,-0.288,0.300,1.056,0.566,-1.234,0.183,0.022,-0.429,-0.648,1.748,-0.390,-0.846,0.637,0.131,-0.076,0.781,0.489,0.362,0.964,0.284,-0.617,-0.362,-0.521,0.210,-1.078,-1.832,0.088,-1.337,-1.952,0.373,-0.711,0.496,-0.531,-1.122,-1.244,-0.515,-0.273,-0.823,-0.281,-1.536,0.014,-1.794,-0.194,0.697,1.092,1.714,-1.556,0.759,1.206,0.981");
-  const [ivInstr2, setIvInstr2] = useState("");
+  const [ivY, setIvY] = useTerminalArtifactState("PanelCausalTab.ivY", "4.743,1.401,4.206,0.885,1.188,1.517,1.937,0.458,4.421,2.427,0.940,2.372,2.660,2.296,0.426,0.001,5.411,2.873,1.312,-0.213,4.179,3.248,1.046,4.822,3.193,-1.978,1.633,-0.963,4.942,1.888,0.678,4.272,1.238,2.564,-3.458,2.809,-1.360,4.125,3.650,3.684,1.683,0.444,1.783,-0.012,-0.677,0.258,3.506,5.925,2.425,1.762,4.069,1.831,2.661,1.955,0.826,-0.091,0.323,1.557,0.695,4.345,0.992,0.345,0.403,3.669,0.027,0.004,0.178,-0.239,0.589,-1.704,4.037,-1.090,3.247,5.212,5.290,3.697,3.161,3.406,2.149,0.384");
+  const [ivEndog, setIvEndog] = useTerminalArtifactState("PanelCausalTab.ivEndog", "1.073,0.642,1.282,-1.243,-0.392,0.085,-0.589,0.276,1.299,0.490,-0.345,0.535,0.248,0.260,-1.155,-0.982,2.621,1.050,-0.771,-0.961,0.060,0.585,0.231,0.673,0.420,-2.253,0.213,-0.882,1.875,-0.047,-0.539,0.509,0.395,0.370,-3.252,0.781,-1.660,0.852,1.011,1.274,-0.650,-0.277,0.130,-1.019,-1.266,-0.063,0.771,2.044,0.711,-0.174,0.085,-0.306,-0.059,0.169,-0.704,-1.938,-1.087,-0.749,-1.716,1.311,-0.701,0.123,-0.594,0.009,-1.745,-0.934,-0.593,-1.659,-0.430,-1.578,0.847,-1.864,0.397,1.469,1.974,1.830,-0.473,0.874,0.587,-0.140");
+  const [ivInstr, setIvInstr] = useTerminalArtifactState("PanelCausalTab.ivInstr", "0.655,0.894,0.416,-0.924,-0.196,-0.591,-0.300,1.297,1.530,0.669,0.549,0.677,-0.012,-0.076,-0.674,-0.056,2.260,0.869,-0.342,-0.472,-0.864,0.374,0.392,-1.443,0.486,-0.569,1.427,0.157,1.718,-0.458,-0.288,0.300,1.056,0.566,-1.234,0.183,0.022,-0.429,-0.648,1.748,-0.390,-0.846,0.637,0.131,-0.076,0.781,0.489,0.362,0.964,0.284,-0.617,-0.362,-0.521,0.210,-1.078,-1.832,0.088,-1.337,-1.952,0.373,-0.711,0.496,-0.531,-1.122,-1.244,-0.515,-0.273,-0.823,-0.281,-1.536,0.014,-1.794,-0.194,0.697,1.092,1.714,-1.556,0.759,1.206,0.981");
+  const [ivInstr2, setIvInstr2] = useTerminalArtifactState("PanelCausalTab.ivInstr2", "");
 
   // ── DiD: manual entry, real n=80 example ──
-  const [didY, setDidY] = useState("22.157,19.171,12.471,13.562,10.920,19.568,20.516,13.455,12.594,20.371,11.345,11.016,20.595,9.317,9.286,10.092,10.687,10.177,10.879,21.846,11.938,12.316,12.524,12.830,12.137,11.869,11.477,19.749,11.291,11.036,12.072,10.272,13.859,18.736,13.115,10.435,20.874,10.072,11.361,9.353,20.818,12.037,9.951,13.792,14.202,9.963,21.933,18.006,10.951,12.867,11.738,13.579,12.517,9.911,12.682,20.151,18.468,13.219,10.186,11.833,10.871,10.017,19.576,19.867,21.659,20.379,12.535,20.154,12.766,11.006,9.736,21.542,10.856,19.955,19.523,9.846,8.449,13.943,13.341,13.138");
-  const [didTreated, setDidTreated] = useState("1,1,0,1,1,1,1,0,1,1,0,0,1,0,0,1,0,1,0,1,0,0,0,1,0,1,1,1,0,1,1,0,0,1,1,0,1,0,0,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0,1,1,1,0,0,0,1,0,1,1,1,1,0,1,1,1,0,1,0,1,1,0,0,0,0,0");
-  const [didPost, setDidPost] = useState("1,1,1,0,0,1,1,1,0,1,0,0,1,0,0,0,0,0,0,1,1,1,1,0,1,0,0,1,0,0,0,0,1,1,0,0,1,0,1,0,1,0,0,0,0,0,1,1,1,0,0,1,0,0,0,1,1,1,0,0,0,0,1,1,1,1,1,1,0,0,0,1,0,1,1,0,0,1,1,1");
+  const [didY, setDidY] = useTerminalArtifactState("PanelCausalTab.didY", "22.157,19.171,12.471,13.562,10.920,19.568,20.516,13.455,12.594,20.371,11.345,11.016,20.595,9.317,9.286,10.092,10.687,10.177,10.879,21.846,11.938,12.316,12.524,12.830,12.137,11.869,11.477,19.749,11.291,11.036,12.072,10.272,13.859,18.736,13.115,10.435,20.874,10.072,11.361,9.353,20.818,12.037,9.951,13.792,14.202,9.963,21.933,18.006,10.951,12.867,11.738,13.579,12.517,9.911,12.682,20.151,18.468,13.219,10.186,11.833,10.871,10.017,19.576,19.867,21.659,20.379,12.535,20.154,12.766,11.006,9.736,21.542,10.856,19.955,19.523,9.846,8.449,13.943,13.341,13.138");
+  const [didTreated, setDidTreated] = useTerminalArtifactState("PanelCausalTab.didTreated", "1,1,0,1,1,1,1,0,1,1,0,0,1,0,0,1,0,1,0,1,0,0,0,1,0,1,1,1,0,1,1,0,0,1,1,0,1,0,0,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0,1,1,1,0,0,0,1,0,1,1,1,1,0,1,1,1,0,1,0,1,1,0,0,0,0,0");
+  const [didPost, setDidPost] = useTerminalArtifactState("PanelCausalTab.didPost", "1,1,1,0,0,1,1,1,0,1,0,0,1,0,0,0,0,0,0,1,1,1,1,0,1,0,0,1,0,0,0,0,1,1,0,0,1,0,1,0,1,0,0,0,0,0,1,1,1,0,0,1,0,0,0,1,1,1,0,0,0,0,1,1,1,1,1,1,0,0,0,1,0,1,1,0,0,1,1,1");
 
   // ── RD: real ticker -- y=next-day return, x=price level, cutoff=round number ──
-  const [rdTickerInput, setRdTickerInput] = useState("AAPL");
-  const [rdCutoff, setRdCutoff] = useState("200");
-  const [rdSymbols, setRdSymbols] = useState<string[]>([]);
+  const [rdTickerInput, setRdTickerInput] = useTerminalArtifactState("PanelCausalTab.rdTickerInput", "AAPL");
+  const [rdCutoff, setRdCutoff] = useTerminalArtifactState("PanelCausalTab.rdCutoff", "200");
+  const [rdSymbols, setRdSymbols] = useTerminalArtifactState<string[]>("PanelCausalTab.rdSymbols", []);
   const [rdData, setRdData] = useState<{ y: number[]; x: number[] } | null>(null);
   const rdResults = useSymbolOHLCV(rdSymbols);
   const rdLoading = rdSymbols.length > 0 && rdResults.some((r) => r.isLoading);
@@ -2339,9 +2371,9 @@ function PanelCausalTab() {
   }, [rdDataReady]);
 
   // ── Quantile regression: 2 real tickers, y regressed on x ──
-  const [qrTickerInput, setQrTickerInput] = useState("AAPL,SPY");
-  const [qrQuantile, setQrQuantile] = useState("0.5");
-  const [qrSymbols, setQrSymbols] = useState<string[]>([]);
+  const [qrTickerInput, setQrTickerInput] = useTerminalArtifactState("PanelCausalTab.qrTickerInput", "AAPL,SPY");
+  const [qrQuantile, setQrQuantile] = useTerminalArtifactState("PanelCausalTab.qrQuantile", "0.5");
+  const [qrSymbols, setQrSymbols] = useTerminalArtifactState<string[]>("PanelCausalTab.qrSymbols", []);
   const [qrData, setQrData] = useState<{ y: number[]; x: number[] } | null>(null);
   const qrResults = useSymbolOHLCV(qrSymbols);
   const qrLoading = qrSymbols.length > 0 && qrResults.some((r) => r.isLoading);
@@ -2364,9 +2396,9 @@ function PanelCausalTab() {
   }, [qrDataReady]);
 
   // ── SUR: up to 4 real tickers, each regressed on a shared market ticker ──
-  const [surTickersInput, setSurTickersInput] = useState("AAPL,MSFT,GOOGL");
-  const [surMarketInput, setSurMarketInput] = useState("SPY");
-  const [surSymbols, setSurSymbols] = useState<string[]>([]);
+  const [surTickersInput, setSurTickersInput] = useTerminalArtifactState("PanelCausalTab.surTickersInput", "AAPL,MSFT,GOOGL");
+  const [surMarketInput, setSurMarketInput] = useTerminalArtifactState("PanelCausalTab.surMarketInput", "SPY");
+  const [surSymbols, setSurSymbols] = useTerminalArtifactState<string[]>("PanelCausalTab.surSymbols", []);
   const [surEquations, setSurEquations] = useState<{ name: string; y: number[]; x: number[] }[] | null>(null);
   const surResults = useSymbolOHLCV(surSymbols);
   const surLoading = surSymbols.length > 0 && surResults.some((r) => r.isLoading);
@@ -2442,12 +2474,7 @@ function PanelCausalTab() {
           body = { equations: surEquations.map((eq) => ({ name: eq.name, y: eq.y, x: [eq.x] })) };
           break;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Econometrics engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Econometrics engine unavailable right now.");
     } finally {
@@ -2568,6 +2595,7 @@ function PanelCausalTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
       {result != null && <PanelCausalResultView method={method} result={result} />}
     </div>
   );
@@ -2742,17 +2770,17 @@ const OPTIONS_VOL_METHODS: { key: OptionsVolMethod; label: string }[] = [
 
 function OptionsVolatilityTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<OptionsVolMethod>("sabr");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<OptionsVolMethod>("OptionsVolatilityTab.method", "sabr");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.optionsvol.${method}`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { chain, spot, loading: chainLoading, error: chainError, loadChain } = useOptionsChain();
-  const [tickerInput, setTickerInput] = useState("AAPL");
-  const [moneynessLow, setMoneynessLow] = useState("80");
-  const [moneynessHigh, setMoneynessHigh] = useState("120");
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState("4.5");
-  const [dividendYieldPct, setDividendYieldPct] = useState("0.5");
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("OptionsVolatilityTab.tickerInput", "AAPL");
+  const [moneynessLow, setMoneynessLow] = useTerminalArtifactState("OptionsVolatilityTab.moneynessLow", "80");
+  const [moneynessHigh, setMoneynessHigh] = useTerminalArtifactState("OptionsVolatilityTab.moneynessHigh", "120");
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("OptionsVolatilityTab.riskFreeRatePct", "4.5");
+  const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsVolatilityTab.dividendYieldPct", "0.5");
 
   const availableExpiries = useMemo(() => {
     if (!chain) return [];
@@ -2760,12 +2788,12 @@ function OptionsVolatilityTab() {
   }, [chain]);
 
   // ── SABR ──
-  const [sabrExpiry, setSabrExpiry] = useState("");
-  const [sabrBeta, setSabrBeta] = useState("0.5");
-  const [manualStrikes, setManualStrikes] = useState("90,95,100,105,110");
-  const [manualVols, setManualVols] = useState("28,24,22,23,26");
-  const [manualForward, setManualForward] = useState("100");
-  const [manualExpiryYears, setManualExpiryYears] = useState("0.25");
+  const [sabrExpiry, setSabrExpiry] = useTerminalArtifactState("OptionsVolatilityTab.sabrExpiry", "");
+  const [sabrBeta, setSabrBeta] = useTerminalArtifactState("OptionsVolatilityTab.sabrBeta", "0.5");
+  const [manualStrikes, setManualStrikes] = useTerminalArtifactState("OptionsVolatilityTab.manualStrikes", "90,95,100,105,110");
+  const [manualVols, setManualVols] = useTerminalArtifactState("OptionsVolatilityTab.manualVols", "28,24,22,23,26");
+  const [manualForward, setManualForward] = useTerminalArtifactState("OptionsVolatilityTab.manualForward", "100");
+  const [manualExpiryYears, setManualExpiryYears] = useTerminalArtifactState("OptionsVolatilityTab.manualExpiryYears", "0.25");
 
   const sabrChainQuotes = useMemo(() => {
     if (!chain || !sabrExpiry || !spot) return null;
@@ -2776,12 +2804,12 @@ function OptionsVolatilityTab() {
   }, [chain, sabrExpiry, spot, moneynessLow, moneynessHigh]);
 
   // ── Heston calibrate ──
-  const [hestonNumExpiries, setHestonNumExpiries] = useState("5");
-  const [hV0, setHV0] = useState("0.04");
-  const [hKappa, setHKappa] = useState("2.0");
-  const [hTheta, setHTheta] = useState("0.04");
-  const [hSigma, setHSigma] = useState("0.5");
-  const [hRho, setHRho] = useState("-0.5");
+  const [hestonNumExpiries, setHestonNumExpiries] = useTerminalArtifactState("OptionsVolatilityTab.hestonNumExpiries", "5");
+  const [hV0, setHV0] = useTerminalArtifactState("OptionsVolatilityTab.hV0", "0.04");
+  const [hKappa, setHKappa] = useTerminalArtifactState("OptionsVolatilityTab.hKappa", "2.0");
+  const [hTheta, setHTheta] = useTerminalArtifactState("OptionsVolatilityTab.hTheta", "0.04");
+  const [hSigma, setHSigma] = useTerminalArtifactState("OptionsVolatilityTab.hSigma", "0.5");
+  const [hRho, setHRho] = useTerminalArtifactState("OptionsVolatilityTab.hRho", "-0.5");
 
   const hestonChainQuotes = useMemo(() => {
     if (!chain || !spot) return null;
@@ -2795,10 +2823,10 @@ function OptionsVolatilityTab() {
   }, [chain, spot, moneynessLow, moneynessHigh, hestonNumExpiries]);
 
   // ── Heston price vs BSM ──
-  const [priceSpot, setPriceSpot] = useState("100");
-  const [priceStrike, setPriceStrike] = useState("100");
-  const [priceExpiryYears, setPriceExpiryYears] = useState("0.25");
-  const [priceIsCall, setPriceIsCall] = useState(true);
+  const [priceSpot, setPriceSpot] = useTerminalArtifactState("OptionsVolatilityTab.priceSpot", "100");
+  const [priceStrike, setPriceStrike] = useTerminalArtifactState("OptionsVolatilityTab.priceStrike", "100");
+  const [priceExpiryYears, setPriceExpiryYears] = useTerminalArtifactState("OptionsVolatilityTab.priceExpiryYears", "0.25");
+  const [priceIsCall, setPriceIsCall] = useTerminalArtifactState("OptionsVolatilityTab.priceIsCall", true);
 
   async function runOptionsVol() {
     setLoading(true);
@@ -2831,12 +2859,7 @@ function OptionsVolatilityTab() {
           v0: Number(hV0), kappa: Number(hKappa), theta: Number(hTheta), sigma: Number(hSigma), rho: Number(hRho),
         };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Options volatility engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Options volatility engine unavailable right now.");
     } finally {
@@ -2850,7 +2873,9 @@ function OptionsVolatilityTab() {
     if (method !== "heston-price" || !result) return null;
     const r = result as { impliedVolPct: number | null };
     if (r.impliedVolPct == null) return null;
-    const greeks = blackScholesMerton(Number(priceSpot), Number(priceStrike), Number(priceExpiryYears), Number(riskFreeRatePct) / 100, Number(dividendYieldPct) / 100, r.impliedVolPct / 100, priceIsCall);
+    const recorded = originalRunParameters(result);
+    const terms = recorded ?? { spot: Number(priceSpot), strike: Number(priceStrike), expiryYears: Number(priceExpiryYears), riskFreeRatePct: Number(riskFreeRatePct), dividendYieldPct: Number(dividendYieldPct), isCall: priceIsCall };
+    const greeks = blackScholesMerton(Number(terms.spot), Number(terms.strike), Number(terms.expiryYears), Number(terms.riskFreeRatePct) / 100, Number(terms.dividendYieldPct) / 100, r.impliedVolPct / 100, terms.isCall === true);
     return greeks.price;
   }, [method, result, priceSpot, priceStrike, priceExpiryYears, riskFreeRatePct, dividendYieldPct, priceIsCall]);
 
@@ -2961,11 +2986,13 @@ function OptionsVolatilityTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "sabr" && (() => {
         const r = result as { alpha: number; rho: number; nu: number; beta: number; calibrationRmseVolPts: number; fitQuality: string; fittedVolsPct: number[]; strikesUsed: number };
-        const strikes = sabrChainQuotes ? sabrChainQuotes.map((c) => c.strike) : parseNumList(manualStrikes);
-        const marketVols = sabrChainQuotes ? sabrChainQuotes.map((c) => (c.iv as number) * 100) : parseNumList(manualVols);
+        const recorded = originalRunParameters(result);
+        const strikes = recorded ? recorded.strikes as number[] : sabrChainQuotes ? sabrChainQuotes.map(quote => quote.strike) : parseNumList(manualStrikes);
+        const marketVols = recorded ? recorded.marketVolsPct as number[] : sabrChainQuotes ? sabrChainQuotes.map(quote => (quote.iv as number) * 100) : parseNumList(manualVols);
         const chartData = strikes.map((k, i) => ({ strike: k, market: marketVols[i], fitted: r.fittedVolsPct[i] }));
         return (
           <>
@@ -3053,18 +3080,18 @@ type UpgradeDataSource = "fred" | "ticker";
 
 function ForecastingUpgradeTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<ForecastUpgradeMethod>("sarimax");
-  const [source, setSource] = useState<UpgradeDataSource>("fred");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<ForecastUpgradeMethod>("ForecastingUpgradeTab.method", "sarimax");
+  const [source, setSource] = useTerminalArtifactState<UpgradeDataSource>("ForecastingUpgradeTab.source", "fred");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: catalog } = useIndicators();
-  const [fredSeriesId, setFredSeriesId] = useState("RSAFS");
+  const [fredSeriesId, setFredSeriesId] = useTerminalArtifactState("ForecastingUpgradeTab.fredSeriesId", "RSAFS");
   const { data: fredDetail, isLoading: fredLoading } = useIndicatorDetail(fredSeriesId);
 
-  const [tickerInput, setTickerInput] = useState("AAPL");
-  const [tickerSymbol, setTickerSymbol] = useState("AAPL");
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("ForecastingUpgradeTab.tickerInput", "AAPL");
+  const [tickerSymbol, setTickerSymbol] = useTerminalArtifactState("ForecastingUpgradeTab.tickerSymbol", "AAPL");
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.forecast.${source}.${source === "fred" ? fredSeriesId : tickerSymbol}.${method}`);
   const [tickerResult] = useSymbolOHLCV(source === "ticker" ? [tickerSymbol] : [], "2Y");
 
   const levelSeries = useMemo((): { dates: string[]; values: number[] } | null => {
@@ -3081,33 +3108,35 @@ function ForecastingUpgradeTab() {
   const seriesReady = !!levelSeries && levelSeries.values.length >= 20;
 
   // SARIMAX params
-  const [ordP, setOrdP] = useState("1");
-  const [ordD, setOrdD] = useState("1");
-  const [ordQ, setOrdQ] = useState("1");
-  const [useSeasonal, setUseSeasonal] = useState(true);
-  const [seasP, setSeasP] = useState("1");
-  const [seasD, setSeasD] = useState("1");
-  const [seasQ, setSeasQ] = useState("0");
-  const [seasS, setSeasS] = useState("12");
-  const [horizon, setHorizon] = useState("12");
+  const [ordP, setOrdP] = useTerminalArtifactState("ForecastingUpgradeTab.ordP", "1");
+  const [ordD, setOrdD] = useTerminalArtifactState("ForecastingUpgradeTab.ordD", "1");
+  const [ordQ, setOrdQ] = useTerminalArtifactState("ForecastingUpgradeTab.ordQ", "1");
+  const [useSeasonal, setUseSeasonal] = useTerminalArtifactState("ForecastingUpgradeTab.useSeasonal", true);
+  const [seasP, setSeasP] = useTerminalArtifactState("ForecastingUpgradeTab.seasP", "1");
+  const [seasD, setSeasD] = useTerminalArtifactState("ForecastingUpgradeTab.seasD", "1");
+  const [seasQ, setSeasQ] = useTerminalArtifactState("ForecastingUpgradeTab.seasQ", "0");
+  const [seasS, setSeasS] = useTerminalArtifactState("ForecastingUpgradeTab.seasS", "12");
+  const [horizon, setHorizon] = useTerminalArtifactState("ForecastingUpgradeTab.horizon", "12");
 
   // STL params
-  const [stlPeriod, setStlPeriod] = useState("12");
-  const [stlRobust, setStlRobust] = useState(true);
+  const [stlPeriod, setStlPeriod] = useTerminalArtifactState("ForecastingUpgradeTab.stlPeriod", "12");
+  const [stlRobust, setStlRobust] = useTerminalArtifactState("ForecastingUpgradeTab.stlRobust", true);
 
   // Changepoint params
-  const [cpMethod, setCpMethod] = useState<"cusum" | "pelt">("pelt");
-  const [cpConfidence, setCpConfidence] = useState("0.95");
+  const [cpMethod, setCpMethod] = useTerminalArtifactState<"cusum" | "pelt">("ForecastingUpgradeTab.cpMethod", "pelt");
+  const [cpConfidence, setCpConfidence] = useTerminalArtifactState("ForecastingUpgradeTab.cpConfidence", "0.95");
 
   // GARCH params
-  const [garchP, setGarchP] = useState("1");
-  const [garchQ, setGarchQ] = useState("1");
-  const [garchVol, setGarchVol] = useState<"GARCH" | "EGARCH">("GARCH");
-  const [garchDist, setGarchDist] = useState<"normal" | "t" | "skewt">("normal");
+  const [garchP, setGarchP] = useTerminalArtifactState("ForecastingUpgradeTab.garchP", "1");
+  const [garchQ, setGarchQ] = useTerminalArtifactState("ForecastingUpgradeTab.garchQ", "1");
+  const [garchVol, setGarchVol] = useTerminalArtifactState<"GARCH" | "EGARCH">("ForecastingUpgradeTab.garchVol", "GARCH");
+  const [garchDist, setGarchDist] = useTerminalArtifactState<"normal" | "t" | "skewt">("ForecastingUpgradeTab.garchDist", "normal");
   const tsGarchFit = useMemo(() => {
-    if (method !== "garch" || !returnsPct || returnsPct.length < 50) return null;
-    try { return fitGARCH11(returnsPct); } catch { return null; }
-  }, [method, returnsPct]);
+    const originalReturns = originalRunParameters(result)?.returnsPct as number[] | undefined;
+    const values = originalReturns ?? returnsPct;
+    if (method !== "garch" || !values || values.length < 50) return null;
+    try { return fitGARCH11(values); } catch { return null; }
+  }, [method, result, returnsPct]);
 
   async function run() {
     if (!levelSeries) { setError("Load real data first."); return; }
@@ -3133,12 +3162,7 @@ function ForecastingUpgradeTab() {
         path = "/api/quant/forecasting/garch";
         body = { returnsPct, p: Number(garchP), q: Number(garchQ), vol: garchVol, dist: garchDist };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Forecasting engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Forecasting engine unavailable right now.");
     } finally {
@@ -3259,10 +3283,12 @@ function ForecastingUpgradeTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "sarimax" && (() => {
         const r = result as { forecast: number[]; lowerCI: number[]; upperCI: number[]; fittedValues: number[]; aic: number; bic: number; logLikelihood: number };
-        const histTail = levelSeries!.values.slice(-40).map((v, i) => ({ idx: i, actual: v, forecast: null as number | null }));
+        const originalSeries = originalRunParameters(result)?.series as number[] | undefined;
+        const histTail = (originalSeries ?? levelSeries?.values ?? []).slice(-40).map((v, i) => ({ idx: i, actual: v, forecast: null as number | null }));
         const fcRows = r.forecast.map((v, i) => ({ idx: histTail.length + i, actual: null as number | null, forecast: v, lower: r.lowerCI[i], upper: r.upperCI[i] }));
         const chartData = [...histTail, ...fcRows];
         return (
@@ -3339,10 +3365,11 @@ function ForecastingUpgradeTab() {
 
       {result != null && method === "changepoint" && (() => {
         const r = result as { method: string; changepoints: { index: number; confidence: number | null; meanBefore: number; meanAfter: number }[] };
-        const dates = levelSeries!.dates;
+        const dates = originalRunParameters(result) ? [] : levelSeries?.dates ?? [];
         return (
           <>
             <div className="font-terminal text-[8px] text-muted-foreground">{r.changepoints.length} changepoint(s) detected via {r.method.toUpperCase()}.</div>
+            {originalRunParameters(result) && <p className="text-xs text-muted-foreground">Recorded input indices; source date labels were not retained. Refreshed observations are not substituted.</p>}
             <div className="border border-border overflow-x-auto scrollbar-thin">
               <table className="w-full font-terminal text-[8px]">
                 <thead><tr className="border-b border-border text-muted-foreground">
@@ -3466,27 +3493,27 @@ function buildTickerSummaryFeatures(perTicker: { symbol: string; returns: number
 
 function MachineLearningTab() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<MlMethod>("classification");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<MlMethod>("MachineLearningTab.method", "classification");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ── Single-ticker methods (classification / regression / anomaly) ──
-  const [tickerInput, setTickerInput] = useState("AAPL");
-  const [tickerSymbol, setTickerSymbol] = useState("AAPL");
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("MachineLearningTab.tickerInput", "AAPL");
+  const [tickerSymbol, setTickerSymbol] = useTerminalArtifactState("MachineLearningTab.tickerSymbol", "AAPL");
   const [singleTicker] = useSymbolOHLCV(method !== "clustering" ? [tickerSymbol] : [], "2Y");
   const bars = singleTicker?.data?.bars;
 
   // ── Multi-ticker clustering ──
-  const [clusterTickersInput, setClusterTickersInput] = useState("AAPL,MSFT,GOOGL,AMZN,META,NVDA,TSLA,JPM,XOM,KO");
-  const [clusterSymbols, setClusterSymbols] = useState(clusterTickersInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [clusterTickersInput, setClusterTickersInput] = useTerminalArtifactState("MachineLearningTab.clusterTickersInput", "AAPL,MSFT,GOOGL,AMZN,META,NVDA,TSLA,JPM,XOM,KO");
+  const [clusterSymbols, setClusterSymbols] = useTerminalArtifactState("MachineLearningTab.clusterSymbols", clusterTickersInput.split(",").map((s) => s.trim().toUpperCase()));
+  const [result, setResult, postOriginal] = useOriginalQuantResult<unknown>(`qwb.ml.${method}`);
   const clusterResults = useSymbolOHLCV(method === "clustering" ? clusterSymbols : []);
-  const clusterDataReady = method === "clustering" && clusterSymbols.length >= 6 && clusterResults.every((r) => !!r.data);
-  const [nClusters, setNClusters] = useState("3");
+  const clusterDataReady = method === "clustering" && clusterSymbols.length >= 6 && clusterResults.length === clusterSymbols.length && clusterResults.every(query => (query.data?.bars?.length ?? 0) >= 40);
+  const [nClusters, setNClusters] = useTerminalArtifactState("MachineLearningTab.nClusters", "3");
 
-  const [modelType, setModelType] = useState<"random_forest" | "gradient_boosting" | "logistic" | "linear">("random_forest");
-  const [testSizeFraction, setTestSizeFraction] = useState("0.25");
-  const [contamination, setContamination] = useState("0.05");
+  const [modelType, setModelType] = useTerminalArtifactState<"random_forest" | "gradient_boosting" | "logistic" | "linear">("MachineLearningTab.modelType", "random_forest");
+  const [testSizeFraction, setTestSizeFraction] = useTerminalArtifactState("MachineLearningTab.testSizeFraction", "0.25");
+  const [contamination, setContamination] = useTerminalArtifactState("MachineLearningTab.contamination", "0.05");
 
   async function run() {
     setLoading(true); setError(null); setResult(null);
@@ -3515,12 +3542,7 @@ function MachineLearningTab() {
         path = "/api/quant/ml/anomaly-detection";
         body = { features, contamination: Number(contamination) };
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "ML engine unavailable right now.");
-      }
-      setResult(await res.json());
+      await postOriginal(path, body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ML engine unavailable right now.");
     } finally {
@@ -3580,6 +3602,7 @@ function MachineLearningTab() {
       )}
 
       {error && <div className="font-terminal text-[9px] text-red-400">{error}</div>}
+      <RecordedOriginalRun result={result}/>
 
       {result != null && method === "classification" && (() => {
         const r = result as { testAccuracy: number; trainAccuracy: number; precisionMacro: number; recallMacro: number; f1Macro: number; confusionMatrix: number[][]; featureImportances: Record<string, number> | null; nTrain: number; nTest: number };
@@ -3633,8 +3656,9 @@ function MachineLearningTab() {
 
       {result != null && method === "clustering" && (() => {
         const r = result as { clusterLabels: number[]; silhouetteScore: number; clusterCenters: number[][]; clusterSizes: number[] };
-        const perTicker = clusterResults.map((res, i) => ({ symbol: clusterSymbols[i], returns: computeDailyReturns((res.data!.bars ?? []).map((b) => b.close)) }));
-        const { features } = buildTickerSummaryFeatures(perTicker);
+        const recorded = originalRunParameters(result);
+        const features = recorded ? recorded.features as number[][] : buildTickerSummaryFeatures(clusterResults.map((res, i) => ({ symbol: clusterSymbols[i], returns: computeDailyReturns((res.data?.bars ?? []).map(bar => bar.close)) }))).features;
+        const labels = recorded ? features.map((_, index) => `Input row ${index + 1}`) : clusterSymbols;
         return (
           <>
             <div className="grid grid-cols-2 gap-1.5">
@@ -3644,12 +3668,12 @@ function MachineLearningTab() {
             <div className="border border-border overflow-x-auto scrollbar-thin">
               <table className="w-full font-terminal text-[8px]">
                 <thead><tr className="border-b border-border text-muted-foreground">
-                  <th className="text-left p-1.5">TICKER</th><th className="text-right p-1.5">CLUSTER</th>
+                  <th className="text-left p-1.5">{recorded ? "INPUT ROW · TICKER LABEL NOT RETAINED" : "TICKER"}</th><th className="text-right p-1.5">CLUSTER</th>
                   <th className="text-right p-1.5">MEAN RET %</th><th className="text-right p-1.5">VOL %</th>
                   <th className="text-right p-1.5">SKEW</th><th className="text-right p-1.5">MAX DD %</th>
                 </tr></thead>
                 <tbody>
-                  {clusterSymbols.map((sym, i) => (
+                  {labels.map((sym, i) => (
                     <tr key={sym} className="border-b border-border/30">
                       <td className="p-1.5">{sym}</td>
                       <td className="text-right p-1.5 tabular-nums">{r.clusterLabels[i]}</td>
@@ -3666,13 +3690,15 @@ function MachineLearningTab() {
         );
       })()}
 
-      {result != null && method === "anomaly" && bars && (() => {
+      {result != null && method === "anomaly" && (() => {
         const r = result as { isAnomaly: boolean[]; anomalyScore: number[]; anomalyCount: number };
-        const { dates, returns } = buildAnomalyFeatures(bars);
-        const chartData = dates.map((d, i) => ({ date: d, return: returns[i], anomalyReturn: r.isAnomaly[i] ? returns[i] : null }));
+        const recorded = originalRunParameters(result);
+        const originalFeatures = recorded?.features as number[][] | undefined;
+        const observations = originalFeatures ? { dates: originalFeatures.map((_, index) => `Input ${index + 1}`), returns: originalFeatures.map(row => row[0]) } : bars ? buildAnomalyFeatures(bars) : { dates: [], returns: [] };
+        const chartData = observations.dates.map((date, index) => ({ date, return: observations.returns[index], anomalyReturn: r.isAnomaly[index] ? observations.returns[index] : null }));
         return (
           <>
-            {statCard("ANOMALOUS DAYS FLAGGED", `${r.anomalyCount} / ${dates.length}`)}
+            {statCard("ANOMALOUS DAYS FLAGGED", `${r.anomalyCount} / ${observations.dates.length}`)}
             <div className="h-56 border border-border p-2">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
@@ -3707,8 +3733,10 @@ function AdvancedForecastingTab() {
   </div>;
 }
 
-export default function QuantWorkbenchPanel() {
-  const [tab, setTab] = useState<Tab>("pca");
+export default function QuantWorkbenchPanel({ selectedModel, onModelChange }: { selectedModel?: Tab; onModelChange?: (model: Tab) => void } = {}) {
+  const [storedTab, setStoredTab] = useTerminalArtifactState<Tab>("QuantWorkbenchLegacyPanel.tab", "pca");
+  const tab = selectedModel ?? storedTab;
+  const setTab = (next: Tab) => { setStoredTab(next); onModelChange?.(next); };
 
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden">

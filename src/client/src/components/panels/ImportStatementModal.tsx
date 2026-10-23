@@ -1,4 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { stableSerialize } from "@/lib/analyticalCore";
 import { X, Upload, FileText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useActiveWorkspaceId, useWorkspace } from "@/lib/useWorkspaces";
 
@@ -42,22 +46,49 @@ const STATEMENT_LABEL: Record<StatementType, string> = {
   income: "INCOME STATEMENT",
   cashflow: "CASH FLOW STATEMENT",
 };
+interface StatementReviewDraft {
+  symbol: string;
+  documentHash: string;
+  extractionHash: string;
+  extraction: ExtractionResult;
+  activeStatement: StatementType;
+  edits: Record<string, number | null>;
+}
+
 
 export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const setEditing = terminal?.setEditing;
+  const ownerRef = useRef(terminal);
+  ownerRef.current = terminal;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; setEditing?.("statement-extraction-review", false); }; }, [setEditing]);
+  const [review, setReview] = useTerminalArtifactState<StatementReviewDraft | null>(`FinancialStatementsPanel.statementReview.${symbol}`, null);
+  const result = review?.symbol === symbol ? review.extraction : null;
+  const activeStatement = review?.activeStatement ?? "balance";
+  const edits = review?.edits ?? {};
+  const setActiveStatement = (value: StatementType) => setReview(previous => previous ? { ...previous, activeStatement: value } : previous);
+  const setEdits = (change: (previous: Record<string, number | null>) => Record<string, number | null>) => setReview(previous => previous ? { ...previous, edits: change(previous.edits) } : previous);
+  const discardAndClose = () => {
+    if (result && !window.confirm("Discard this uncommitted extraction and analyst corrections? They have not been saved as a filed statement.")) return;
+    setEditing?.("statement-extraction-review", false);
+    setReview(null);
+    onClose();
+  };
+  const keepAndClose = () => {
+    if (!terminal) { discardAndClose(); return; }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    onClose();
+  };
   const [activeWorkspaceId] = useActiveWorkspaceId();
   const { data: activeWorkspace } = useWorkspace(activeWorkspaceId);
-  const [phase, setPhase] = useState<"pick" | "extracting" | "review" | "committing" | "error">("pick");
+  const [phase, setPhase] = useState<"pick" | "extracting" | "review" | "committing" | "error">(result ? "review" : "pick");
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ExtractionResult | null>(null);
-  const [activeStatement, setActiveStatement] = useState<StatementType>("balance");
-  // Local edits keyed by "reportType:fiscalYear:fieldKey" -- overlays the
-  // server's extracted value without mutating `result`, so RESET (re-render
-  // from `result`) is just "don't apply an override", same pattern as
-  // EditableValue's override model elsewhere in this app.
-  const [edits, setEdits] = useState<Record<string, number | null>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileSelected(file: File) {
+    setEditing?.("statement-extraction-review", true);
+    const submittedOwner = terminal?.target?.artifactId ?? null;
     setPhase("extracting");
     setError(null);
     try {
@@ -69,13 +100,17 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
         throw new Error(body.error || `Extraction failed (${res.status}).`);
       }
       const data: ExtractionResult = await res.json();
-      setResult(data);
-      const firstType = (["balance", "income", "cashflow"] as StatementType[]).find((t) => data.reports.some((r) => r.reportType === t));
-      if (firstType) setActiveStatement(firstType);
+      const documentHash = bytesToHex(sha256(new Uint8Array(await file.arrayBuffer())));
+      const extractionHash = bytesToHex(sha256(utf8ToBytes(stableSerialize(data))));
+      if (!mounted.current || (ownerRef.current?.target?.artifactId ?? null) !== submittedOwner) throw new Error("Extraction completed for a changed or closed Artifact; the draft was not attached.");
+      const firstType = (["balance", "income", "cashflow"] as StatementType[]).find(t => data.reports.some(report => report.reportType === t)) ?? "balance";
+      setEditing?.("statement-extraction-review", false);
+      setReview({ symbol, documentHash, extractionHash, extraction: data, activeStatement: firstType, edits: {} });
       setPhase("review");
     } catch (e: any) {
       setError(e?.message || "Failed to extract statements from PDF.");
       setPhase("error");
+      setEditing?.("statement-extraction-review", false);
     }
   }
 
@@ -90,6 +125,9 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
 
   async function handleCommit() {
     if (!result) return;
+    const submittedOwner = terminal?.target?.artifactId ?? null;
+    if (!review || bytesToHex(sha256(utf8ToBytes(stableSerialize(result)))) !== review.extractionHash) { setError("The original extraction draft no longer matches its recorded content. Extract again; corrections were not committed."); return; }
+    setEditing?.("statement-extraction-review", true);
     setPhase("committing");
     setError(null);
     try {
@@ -106,11 +144,15 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Import failed (${res.status}).`);
       }
+      if (!mounted.current || (ownerRef.current?.target?.artifactId ?? null) !== submittedOwner) throw new Error("Import completed for its submitted symbol, but the originating Artifact is no longer open. No other review draft was cleared.");
+      setEditing?.("statement-extraction-review", false);
+      setReview(null);
       onImported();
       onClose();
     } catch (e: any) {
       setError(e?.message || "Failed to save imported statements.");
       setPhase("review");
+      setEditing?.("statement-extraction-review", false);
     }
   }
 
@@ -129,7 +171,7 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
               → {activeWorkspace.name.toUpperCase()}
             </span>
           )}
-          <button onClick={onClose} className="ml-auto text-muted-foreground hover:text-foreground">
+          <button onClick={keepAndClose} disabled={phase === "extracting" || phase === "committing"} aria-label="Close statement extraction review" className="ml-auto text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -150,7 +192,7 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
               <div className="font-terminal text-[10px] text-muted-foreground text-center">
                 DROP A PDF ANNUAL REPORT / STATEMENT FILE HERE, OR CLICK TO BROWSE.
                 <br />
-                Values are extracted locally and shown for review — nothing is saved until you confirm.
+                {terminal ? "Extraction and analyst corrections are kept only as an uncommitted draft in this Artifact. Filed figures change only after explicit import." : "Values are extracted locally and shown for review — nothing is saved until you confirm."}
               </div>
               <input
                 ref={fileInputRef}
@@ -183,6 +225,7 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
 
           {phase !== "pick" && phase !== "extracting" && result && (
             <div className="space-y-3">
+              <p role="status" className="font-terminal text-[8px] text-amber-200">UNCOMMITTED REVIEW DRAFT · {terminal ? "Original extraction and separate analyst corrections are retained in this Artifact; the PDF itself is not retained here." : "This standalone review is not retained until import."} This is not an authoritative filed statement until the explicit import succeeds.</p>
               <div className="font-terminal text-[8px] text-muted-foreground/70">
                 {result.fileName} · {result.pageCount} pages · extraction: {result.extractionMethod}
               </div>
@@ -280,11 +323,13 @@ export function ImportStatementModal({ symbol, onClose, onImported }: Props) {
         {phase !== "pick" && phase !== "extracting" && result && (
           <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border shrink-0">
             {error && <span className="font-terminal text-[8px] text-red-400 mr-auto">{error}</span>}
+            {terminal && <button type="button" disabled={phase === "committing"} onClick={keepAndClose} className="font-terminal text-[8px] px-3 py-1.5 border border-border">KEEP REVIEW DRAFT / CLOSE</button>}
             <button
-              onClick={onClose}
+              onClick={discardAndClose}
+              disabled={phase === "committing"}
               className="font-terminal text-[8px] tracking-widest px-3 py-1.5 border border-border text-muted-foreground hover:text-foreground"
             >
-              CANCEL
+              DISCARD REVIEW DRAFT
             </button>
             <button
               onClick={handleCommit}

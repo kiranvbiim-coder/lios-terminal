@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BUILT_IN_CONNECTORS } from "@shared/connectorRegistry";
 import { updateEnvironmentSetupSchema } from "@shared/schema";
-import { normalizeSetupAiProviderId, requiresInitialAiVerification, validateConnectorIds } from "./environmentSetupService";
+import { normalizeSetupAiProviderId, validateConnectorIds } from "./environmentSetupService";
 import { PYTHON_ENGINE_PACKS, PYTHON_RUNTIME_PROFILES } from "./pythonRuntime";
 
 test("environment setup filters unknown and duplicate connector ids", () => {
@@ -48,31 +48,6 @@ test("environment setup canonicalizes supported AI provider aliases", () => {
   assert.throws(() => normalizeSetupAiProviderId("not-a-real-provider"), /Unsupported AI provider/);
 });
 
-test("first-time setup completion requires live verification only when AI is selected", () => {
-  const neverCompleted = { completedAt: null };
-  const alreadyCompleted = { completedAt: new Date("2026-09-24T00:00:00Z") };
-
-  assert.equal(requiresInitialAiVerification(neverCompleted as never, {
-    complete: true,
-    aiProviderId: "openai",
-  }), true);
-  assert.equal(requiresInitialAiVerification(null, {
-    complete: true,
-    aiProviderId: "google",
-  }), true, "provider aliases must still require verification");
-  assert.equal(requiresInitialAiVerification(neverCompleted as never, {
-    complete: true,
-    aiProviderId: null,
-  }), false, "AI remains optional");
-  assert.equal(requiresInitialAiVerification(neverCompleted as never, {
-    complete: false,
-    aiProviderId: "openai",
-  }), false, "saving an incomplete setup must not require a live call");
-  assert.equal(requiresInitialAiVerification(alreadyCompleted as never, {
-    complete: true,
-    aiProviderId: "openai",
-  }), false, "reopening a completed setup must not be blocked by a temporary provider outage");
-});
 
 test("environment setup schema accepts disabling AI without a model", () => {
   const parsed = updateEnvironmentSetupSchema.parse({

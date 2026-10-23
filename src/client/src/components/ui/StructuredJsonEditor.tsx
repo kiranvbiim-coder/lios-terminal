@@ -1,5 +1,23 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { cn } from "@/lib/utils";
+
+/** Incomplete JSON is not an engine input; guard navigation until explicitly fixed/discarded. */
+function useInvalidJsonDraftGuard() {
+  const owner = useTerminalArtifactContext();
+  const id = useId();
+  const key = `json-draft:${id}`;
+  const setEditing = owner?.setEditing;
+  useEffect(() => () => setEditing?.(key, false), [setEditing, key, owner?.target?.artifactId]);
+  return (invalid: boolean, writeValidValue?: () => void) => {
+    setEditing?.(key, invalid);
+    if (writeValidValue) {
+      const writeKey = `json-write:${id}`;
+      setEditing?.(writeKey, true);
+      try { writeValidValue(); } finally { setEditing?.(writeKey, false); }
+    }
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Schema contract
@@ -456,21 +474,27 @@ function ObjectArrayField({ field, container, onContainerChange }: { field: Obje
 
 function JsonValueEditor({ value, onChange }: { value: unknown; onChange: (next: unknown) => void }) {
   const [text, setText] = useState(() => JSON.stringify(value ?? null, null, 2));
+  const [invalid, setInvalid] = useState(false);
+  const guardDraft = useInvalidJsonDraftGuard();
   useEffect(() => setText(JSON.stringify(value ?? null, null, 2)), [value]);
-  return (
+  return <div className="min-w-0 flex-1">
+    {invalid && <p role="alert">Complete this JSON or <button type="button" onClick={() => { setText(JSON.stringify(value ?? null, null, 2)); setInvalid(false); guardDraft(false); }}>discard the incomplete draft</button> before leaving this Artifact.</p>}
     <textarea
       value={text}
       onChange={(event) => {
         setText(event.target.value);
         try {
-          onChange(JSON.parse(event.target.value));
+          const parsed = JSON.parse(event.target.value);
+          setInvalid(false);
+          guardDraft(false, () => onChange(parsed));
         } catch {
           // Preserve a valid controlled value while the user types JSON.
+          setInvalid(true); guardDraft(true);
         }
       }}
       className="min-h-8 min-w-24 flex-1 border border-border bg-transparent px-1 py-0.5 font-mono text-[7px] text-foreground focus:outline-none focus:border-amber-400/50"
     />
-  );
+  </div>;
 }
 
 type RecordSchema = Extract<JsonFieldSchema, { kind: "record" }>;
@@ -652,6 +676,7 @@ export function StructuredJsonEditor({ schema, value, onChange, allowRawJsonTogg
   const [rawMode, setRawMode] = useState(false);
   const [rawText, setRawText] = useState("");
   const [rawError, setRawError] = useState<string | null>(null);
+  const guardDraft = useInvalidJsonDraftGuard();
 
   const enterRawMode = () => {
     setRawText(JSON.stringify(displayValue, null, 2));
@@ -665,20 +690,22 @@ export function StructuredJsonEditor({ schema, value, onChange, allowRawJsonTogg
       const parsed = JSON.parse(text);
       if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
         setRawError(null);
-        onChange(parsed as Record<string, unknown>);
+        guardDraft(false, () => onChange(parsed as Record<string, unknown>));
       } else {
         setRawError("Top-level JSON must be an object");
+        guardDraft(true);
       }
     } catch (e) {
       setRawError(e instanceof Error ? e.message : "Invalid JSON");
+      guardDraft(true);
     }
   };
 
   return (
     <div className={cn("space-y-2 font-terminal", className)}>
       {allowRawJsonToggle && (
-        <button type="button" onClick={() => (rawMode ? setRawMode(false) : enterRawMode())} className={ADD_BTN_CLS}>
-          {rawMode ? "BACK TO FORM" : "ADVANCED: EDIT AS JSON"}
+        <button type="button" onClick={() => { if (rawMode) { setRawMode(false); setRawError(null); guardDraft(false); } else enterRawMode(); }} className={ADD_BTN_CLS}>
+          {rawMode ? rawError ? "DISCARD INCOMPLETE JSON / BACK TO FORM" : "BACK TO FORM" : "ADVANCED: EDIT AS JSON"}
         </button>
       )}
       {rawMode ? (
@@ -688,7 +715,7 @@ export function StructuredJsonEditor({ schema, value, onChange, allowRawJsonTogg
             onChange={(e) => handleRawChange(e.target.value)}
             className="h-40 w-full resize-y border border-border bg-transparent p-1 font-mono text-[7px] text-foreground focus:outline-none focus:border-amber-400/50"
           />
-          {rawError && <div className="font-terminal text-[7px] text-red-300">{rawError}</div>}
+          {rawError && <div role="alert" className="font-terminal text-[7px] text-red-300">{rawError} · Complete or explicitly discard this draft before leaving the Artifact.</div>}
         </div>
       ) : (
         <FieldList schema={schema} value={displayValue} onChange={onChange} />

@@ -15,6 +15,12 @@ import { callPythonService, PythonServiceDataError } from "./pythonService";
 import { getDamodaranIndustryBenchmarks, getDamodaranIndustryBenchmark } from "./damodaranData";
 import { requireRole } from "./auth";
 import { QUANT_MODEL_REGISTRY, summarizeQuantRegistry } from "./quantModelRegistry";
+import { tenantContext } from "./tenantContext";
+import { executeOriginalTerminalQuant, TerminalQuantTargetError } from "./terminalRegisteredQuant";
+import { executeOriginalResampling, originalResamplingRequestSchema, executeOriginalManualRisk, originalManualRiskRequestSchema } from "./advancedQuantExecution";
+import { terminalExecutionTargetSchema } from "@shared/terminalArtifact";
+import { validateTerminalExecutionTarget } from "./terminalArtifactTool";
+import { createTerminalArtifactEngineVersion } from "./artifactStore";
 
 const consensusRequestSchema = z.object({
   question: z.string().min(1).max(300),
@@ -548,6 +554,34 @@ const OPTIMIZATION_ROUTES = [
 ] as const;
 
 export function registerQuantRoutes(app: Express): void {
+  app.post("/api/quant/risk/manual-original", requireRole("internal_admin", "internal_analyst"), async (req, res) => {
+    const { terminalArtifact, ...parameters } = req.body ?? {};
+    const parsed = originalManualRiskRequestSchema.safeParse(parameters);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid original manual risk inputs.", issues: parsed.error.issues }); return; }
+    try {
+      const ctx = tenantContext(req.user!);
+      const target = terminalArtifact === undefined ? null : terminalExecutionTargetSchema.parse(terminalArtifact);
+      if (target) await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+      const execution = executeOriginalManualRisk(parsed.data, ctx.userId);
+      if (!target) { res.json(execution.response); return; }
+      const saved = await createTerminalArtifactEngineVersion(ctx, target, execution);
+      res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: target.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original manual risk result was not retained." }); }
+  });
+  app.post("/api/quant/statistics/resampling", requireRole("internal_admin", "internal_analyst"), async (req, res) => {
+    const { terminalArtifact, ...parameters } = req.body ?? {};
+    const parsed = originalResamplingRequestSchema.safeParse(parameters);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid original resampling inputs.", issues: parsed.error.issues }); return; }
+    try {
+      const ctx = tenantContext(req.user!);
+      const target = terminalArtifact === undefined ? null : terminalExecutionTargetSchema.parse(terminalArtifact);
+      if (target) await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+      const execution = executeOriginalResampling(parsed.data, ctx.userId);
+      if (!target) { res.json(execution.response); return; }
+      const saved = await createTerminalArtifactEngineVersion(ctx, target, execution);
+      res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: target.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original resampling result was not retained." }); }
+  });
   app.get("/api/quant/registry", requireRole("internal_admin", "internal_analyst", "internal_compliance"), (req, res) => {
     const query = z.object({
       category: z.string().optional(),
@@ -617,9 +651,13 @@ export function registerQuantRoutes(app: Express): void {
       return;
     }
     try {
+      if (req.body.terminalArtifact !== undefined) {
+        res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, "/fixed-income/bond-price", "/api/quant/fixed-income/bond-price", parsed.data)); return;
+      }
       const result = await callPythonService("/fixed-income/bond-price", parsed.data);
       res.json(result);
     } catch (err) {
+      if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
       console.error("Bond pricing (Python sidecar) failed:", err);
       res.status(502).json({ error: "Bond pricing engine unavailable right now." });
     }
@@ -640,9 +678,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/portfolio/${path}`, `/api/quant/portfolio/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/portfolio/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         console.error(`Portfolio optimization (${path}, Python sidecar) failed:`, err);
         res.status(502).json({ error: "Portfolio optimizer unavailable right now." });
       }
@@ -662,9 +704,13 @@ export function registerQuantRoutes(app: Express): void {
       return;
     }
     try {
+      if (req.body.terminalArtifact !== undefined) {
+        res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, "/credit/credit-var", "/api/quant/credit/credit-var", parsed.data)); return;
+      }
       const result = await callPythonService("/credit/credit-var", parsed.data);
       res.json(result);
     } catch (err) {
+      if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
       console.error("Credit VaR (Python sidecar) failed:", err);
       res.status(502).json({ error: "Credit risk engine unavailable right now." });
     }
@@ -677,9 +723,13 @@ export function registerQuantRoutes(app: Express): void {
       return;
     }
     try {
+      if (req.body.terminalArtifact !== undefined) {
+        res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, "/credit/operational-risk-lda", "/api/quant/credit/operational-risk-lda", parsed.data)); return;
+      }
       const result = await callPythonService("/credit/operational-risk-lda", parsed.data);
       res.json(result);
     } catch (err) {
+      if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
       console.error("Operational risk LDA (Python sidecar) failed:", err);
       res.status(502).json({ error: "Operational risk engine unavailable right now." });
     }
@@ -699,9 +749,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/stats/${path}`, `/api/quant/stats/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/stats/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           // A real, useful reason (e.g. "Singular matrix" on separated/
           // degenerate input) -- surface it rather than a blanket
@@ -727,9 +781,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/econometrics/${path}`, `/api/quant/econometrics/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/econometrics/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -751,9 +809,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/options/${path}`, `/api/quant/options/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/options/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -778,9 +840,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/forecasting/${path}`, `/api/quant/forecasting/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/forecasting/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -805,9 +871,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/economics/${path}`, `/api/quant/economics/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/economics/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -831,9 +901,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/ml/${path}`, `/api/quant/ml/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/ml/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -857,9 +931,14 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body?.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/supplychain/${path}`, `/api/quant/supplychain/${path}`, parsed.data));
+          return;
+        }
         const result = await callPythonService(`/supplychain/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -882,9 +961,14 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body?.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/environment/${path}`, `/api/quant/environment/${path}`, parsed.data));
+          return;
+        }
         const result = await callPythonService(`/environment/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;
@@ -907,9 +991,13 @@ export function registerQuantRoutes(app: Express): void {
         return;
       }
       try {
+        if (req.body.terminalArtifact !== undefined) {
+          res.json(await executeOriginalTerminalQuant(tenantContext(req.user!), req.body.terminalArtifact, `/optimization/${path}`, `/api/quant/optimization/${path}`, parsed.data)); return;
+        }
         const result = await callPythonService(`/optimization/${path}`, parsed.data);
         res.json(result);
       } catch (err) {
+        if (err instanceof TerminalQuantTargetError) { res.status(err.status).json({ error: err.message }); return; }
         if (err instanceof PythonServiceDataError) {
           res.status(400).json({ error: err.detail });
           return;

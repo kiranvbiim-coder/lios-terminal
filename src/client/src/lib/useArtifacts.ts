@@ -117,6 +117,7 @@ export function useArtifact(artifactId: string | null, version?: number | null) 
     queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
     queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error("Failed to load Artifact."); return res.json(); },
     enabled: Boolean(artifactId),
+    placeholderData: previous => previous?.artifact.id === artifactId ? previous : undefined,
   });
 }
 export function useArtifactVersions(artifactId: string | null) {
@@ -168,8 +169,8 @@ export async function createArtifact(projectId: number, input: {
   return (await apiRequest("POST", `/api/projects/${projectId}/artifacts`, input)).json() as Promise<ArtifactDetail>;
 }
 
-export async function saveIntegratedModelRunArtifact(runId: string, projectId: number): Promise<ArtifactDetail> {
-  return (await apiRequest("POST", `/api/financial-models/integrated/runs/${encodeURIComponent(runId)}/artifact`, { projectId })).json();
+export async function saveIntegratedModelRunArtifact(runId: string, destination: { projectId: number | null; owningChatId?: number }): Promise<ArtifactDetail> {
+  return (await apiRequest("POST", `/api/financial-models/integrated/runs/${encodeURIComponent(runId)}/artifact`, destination)).json();
 }
 
 export interface IntegratedModelInputReview {

@@ -26,7 +26,7 @@ const DEFAULTS: Record<DDMKey, number> = {
 };
 
 export default function DDMTab({ symbol, curr, price, onResult }: AnalysisTabProps & { onResult?: (result: DDMResultSummary | null) => void }) {
-  const ov = useOverridable<DDMKey>();
+  const ov = useOverridable<DDMKey>("DDMTab.ov");
   const { data: dividends } = useLseDividends(symbol);
 
   // Real trailing-12-month dividend/share: sum of every real declared

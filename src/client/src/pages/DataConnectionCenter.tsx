@@ -12,11 +12,12 @@ import {
   Search, ExternalLink, Shield, Bot,
 } from "lucide-react";
 import DataImportWizard from "@/components/DataImportWizard";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ProviderConflictPanel from "@/components/panels/ProviderConflictPanel";
 import DataSourcesPanel from "@/components/panels/DataSourcesPanel";
 import { getDesktopWorkspaceBridge, type DesktopWorkspaceInfo } from "@/lib/desktopWorkspace";
 import LocalVoiceRuntimeSettings from "@/components/settings/LocalVoiceRuntimeSettings";
-import MasterAiSettings from "@/components/settings/MasterAiSettings";
+import MasterAiSettings, { type MasterAiSessionState } from "@/components/settings/MasterAiSettings";
 import LicenseSettings from "@/components/settings/LicenseSettings";
 import BackupSettings from "@/components/settings/BackupSettings";
 import DevicesSettings from "@/components/settings/DevicesSettings";
@@ -47,6 +48,9 @@ interface AiProviderOption {
   models: string[];
   defaultModel?: string;
   allowCustomModel?: boolean;
+  credentialName: string;
+  defaultEndpoint?: string;
+  endpointEnvironmentManaged?: boolean;
 }
 interface SetupResponse {
   setupNeeded: boolean;
@@ -61,6 +65,15 @@ interface SetupResponse {
   } | null;
   connectors: { connectors: ConnectorDef[]; health: ConnectorHealth[] };
   aiProviders: AiProviderOption[];
+}
+interface ChatVerification {
+  ok: true;
+  provider: string;
+  model: string;
+  endpoint?: string;
+  verifiedAt: string;
+  detail: string;
+  verifiedCapabilities: ["chat"];
 }
 interface SavedConnection {
   id: number; connectorId: string; name: string; sourceType: string;
@@ -206,19 +219,19 @@ const META_CONNECTOR_IDS = new Set(["database", "private_api", "file_upload"]);
 
 // ── Shared UI pieces ───────────────────────────────────────────────────────
 
-const inputCls = "w-full bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60";
+const inputCls = "min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">{label}</span>{children}</label>;
+  return <label className="block"><span className="mb-1 block font-ui text-sm font-medium text-muted-foreground">{label}</span>{children}</label>;
 }
 
 function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { testing: boolean; saving: boolean; canAct: boolean; onTest: () => void; onSave: () => void; saveLabel?: string }) {
   return (
-    <div className="flex gap-2 pt-1">
-      <button onClick={onTest} disabled={!canAct || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+    <div className="flex flex-wrap gap-2 pt-1">
+      <button onClick={onTest} disabled={!canAct || testing || saving} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {testing ? "Testing..." : "Test Connection"}
       </button>
-      <button onClick={onSave} disabled={!canAct || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+      <button onClick={onSave} disabled={!canAct || saving || testing} className="min-h-11 rounded-md border border-primary bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {saving ? "Saving..." : saveLabel ?? "Save Connection"}
       </button>
     </div>
@@ -227,23 +240,34 @@ function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { tes
 
 function ResultBanner({ ok, detail }: { ok: boolean; detail: string }) {
   return (
-    <div className={`border px-3 py-2 font-terminal text-[9px] ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
+    <div role={ok ? "status" : "alert"} className={`rounded border px-3 py-2 font-ui text-sm ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
       {ok ? "✓ " : "✗ "}{detail}
     </div>
   );
 }
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
-      <div className="bg-[#0a0a0a] border border-border w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{title}</h3>
-          <button onClick={onClose} className="font-terminal text-[9px] text-muted-foreground hover:text-foreground">✕</button>
-        </div>
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        className="max-h-[min(90dvh,760px)] w-[calc(100vw-24px)] max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-xl border-border bg-[#0a0a0a] p-4 text-foreground shadow-2xl sm:p-6"
+        onCloseAutoFocus={event => {
+          event.preventDefault();
+          if (opener?.isConnected && !opener.matches(":disabled,[aria-disabled=true]")) {
+            opener.focus();
+          } else {
+            document.querySelector<HTMLElement>('[data-testid="connection-primary-actions"] button:not(:disabled), #ai-provider-select:not(:disabled)')?.focus();
+          }
+        }}
+      >
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="font-ui text-lg font-semibold tracking-tight">{title}</DialogTitle>
+          <DialogDescription className="sr-only">Configure this connection using the existing LiOS credential and source controls.</DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -328,32 +352,32 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
     <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={onClose}>
       {/* Description */}
       {connector.description && (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.description}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.description}</p>
       )}
       {connector.sourceType === "public_api" ? (
-        <p className="font-terminal text-[9px] text-teal-400/90 mb-3">
+        <p className="mb-3 font-ui text-sm leading-6 text-teal-400/90">
           PUBLIC / NO KEY — no credential is required. The Open API URL below is documentation only, not a credential.
         </p>
       ) : (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.setupGuide}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.setupGuide}</p>
       )}
 
       {/* Website link */}
       {connector.websiteUrl && (
         <a href={connector.websiteUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-terminal text-[8px] text-[hsl(38,95%,55%)] hover:underline mb-3">
+          className="mb-3 inline-flex min-h-10 items-center gap-1.5 font-ui text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ExternalLink className="w-3 h-3" /> {connector.sourceType === "public_api" ? "Open API documentation" : "Register / Get API Key"}
         </a>
       )}
 
       {/* Rate limits */}
       {connector.rateLimits && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-3">
+        <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
           <span className="text-amber-400/70">Rate limits:</span> {connector.rateLimits}
         </p>
       )}
       {connector.id === "lse" && (
-        <p className="font-terminal text-[8px] text-cyan-400/90 mb-3 leading-relaxed">
+        <p className="mb-3 font-ui text-sm leading-6 text-cyan-400/90">
           Paste the <strong className="font-normal text-cyan-300">Vault API key</strong> from londonstrategicedge.com/data after you create an account. Site login passwords are not API keys.
         </p>
       )}
@@ -361,22 +385,22 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
       <div className="space-y-3">
         {needsKey && (
           <label className="block">
-            <span className="font-terminal text-[8px] text-muted-foreground uppercase">API Key</span>
+            <span className="font-ui text-sm font-medium text-muted-foreground">API Key</span>
             <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your API key here"
-              className="w-full mt-1 bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60" autoComplete="off" />
+              className={`${inputCls} mt-1`} autoComplete="off" />
           </label>
         )}
-        <div className="flex gap-2">
-          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing || saving} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {testing ? "Testing..." : "Test Connection"}
           </button>
-          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving || testing} className="min-h-11 rounded-md border border-primary bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {saving ? "Saving..." : "Save & Connect"}
           </button>
         </div>
         {testResult && <ResultBanner ok={testResult.ok} detail={testResult.detail} />}
         {testResult?.availableModels && (
-          <div className="border border-border bg-[#0d0d0d] px-3 py-2 font-terminal text-[8px] text-muted-foreground" role="status" data-testid="gemini-model-discovery-result">
+          <div className="rounded border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm leading-6 text-muted-foreground" role="status" data-testid="gemini-model-discovery-result">
             {testResult.availableModels.length > 0
               ? `${testResult.availableModels.length} Gemini chat models were returned${testResult.availableModelsComplete ? "" : " on the first page; more pages exist"}. The list is read-only; no prompt was sent.`
               : testResult.availableModelsComplete
@@ -385,7 +409,7 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
           </div>
         )}
         {!canVerify && (
-          <p className="font-terminal text-[8px] text-amber-400/90 mt-2">
+          <p className="mt-2 font-ui text-sm leading-6 text-amber-400/90">
             This provider is listed for planning only. Live API verification is not available until its adapter ships in a future build.
           </p>
         )}
@@ -640,7 +664,7 @@ function ProviderCard({
     <div className="border border-border bg-[#070707] p-4 hover:border-[hsl(38,95%,50%)]/30 transition-colors group">
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="font-terminal text-[10px] font-bold uppercase text-foreground leading-tight">{connector.name}</span>
-        {isConnected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
+        {isConnected && <KeyRound className="w-3.5 h-3.5 text-cyan-300 shrink-0 mt-0.5" />}
       </div>
 
       {connector.description && (
@@ -665,8 +689,8 @@ function ProviderCard({
       </div>
 
       {isConnected ? (
-        <span className="inline-flex items-center gap-1.5 font-terminal text-[8px] uppercase text-emerald-400">
-          <CheckCircle2 className="w-3 h-3" /> Connected
+        <span className="inline-flex items-center gap-1.5 font-terminal text-[8px] uppercase text-cyan-300">
+          <KeyRound className="w-3 h-3" /> Saved configuration
         </span>
       ) : canConnect ? (
         <button onClick={onConnect}
@@ -753,17 +777,17 @@ function ConnectionCard({
     <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
       <div className="flex items-center gap-2">
         <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
-        <span className="font-terminal text-[9px] font-bold uppercase text-foreground truncate">{conn.name}</span>
-        <span className={`ml-auto font-terminal text-[8px] uppercase ${color} shrink-0`}>{conn.status}</span>
+        <span className="truncate font-ui text-sm font-semibold text-foreground">{conn.name}</span>
+        <span className={`ml-auto shrink-0 font-ui text-xs ${color}`}>{conn.status}</span>
       </div>
-      <div className="font-terminal text-[8px] text-muted-foreground mt-1">
+      <div className="mt-1 font-ui text-xs text-muted-foreground">
         {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
       </div>
-      {conn.statusDetail && <div className="font-terminal text-[8px] text-muted-foreground mt-1 truncate">{conn.statusDetail}</div>}
-      <div className="flex gap-3 mt-2">
-        <button onClick={onTest} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
-        <button onClick={onEdit} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
-        <button onClick={onRemove} className="font-terminal text-[8px] text-muted-foreground hover:text-rose-400 uppercase">Remove</button>
+      {conn.statusDetail && <div className="mt-1 break-words font-ui text-sm text-muted-foreground">{conn.statusDetail}</div>}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button onClick={onTest} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button onClick={onEdit} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
+        <button onClick={onRemove} aria-label={`Remove saved connection ${conn.name}`} className="min-h-10 rounded border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Remove</button>
       </div>
     </div>
   );
@@ -774,12 +798,22 @@ function ConnectionCard({
 export default function DataConnectionCenter({ session, onComplete, onLogout }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
+  const [removalTarget, setRemovalTarget] = useState<number | null>(null);
+  const [removingConnection, setRemovingConnection] = useState(false);
+  const [removalError, setRemovalError] = useState<string | null>(null);
+  const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiProviderId, setAiProviderId] = useState("");
   const [aiModelId, setAiModelId] = useState("");
-  const [verifiedModelsByProvider, setVerifiedModelsByProvider] = useState<Record<string, { models: string[]; complete: boolean }>>({});
+  const [verifiedModelsByProvider, setVerifiedModelsByProvider] = useState<Record<string, { models: string[]; complete: boolean; endpoint?: string }>>({});
+  const [localEndpoints, setLocalEndpoints] = useState<Record<string, string>>({});
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [chatVerification, setChatVerification] = useState<ChatVerification | null>(null);
+  const [masterBusy, setMasterBusy] = useState(false);
+  const setupHydratedRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [pythonRuntimeId, setPythonRuntimeId] = useState("lios-managed");
   const [pythonEnvironmentPath, setPythonEnvironmentPath] = useState("");
@@ -811,20 +845,20 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     staleTime: 15_000,
   });
   const aiProviders = setupQuery.data?.aiProviders ?? [];
-  // Only connected providers are choosable; adding one is done with the chips above the picker.
-  // A saved selection whose provider is no longer connected stays visible (as not connected) so it can be changed.
-  const selectableAiProviders = aiProviders.filter((provider) => provider.available || provider.id === aiProviderId);
-  const aiChoiceMadeRef = useRef(false);
+  // Local providers remain selectable before connection so setup never requires an environment variable.
+  const selectableAiProviders = aiProviders.filter((provider) => provider.isLocal || provider.available || provider.id === aiProviderId);
   const selectedAiProvider = aiProviders.find((provider) => provider.id === aiProviderId);
   const modelDiscovery = verifiedModelsByProvider[aiProviderId];
   const modelDiscoveryComplete = modelDiscovery?.complete === true;
   const modelDiscoveryPartial = Boolean(modelDiscovery && !modelDiscovery.complete);
   const verifiedAiModels = modelDiscovery?.models ?? null;
-  const aiModels = modelDiscoveryComplete
+  const aiModels = selectedAiProvider?.isLocal
     ? verifiedAiModels ?? []
-    : verifiedAiModels?.length
-      ? verifiedAiModels
-      : selectedAiProvider?.models ?? [];
+    : modelDiscoveryComplete
+      ? verifiedAiModels ?? []
+      : verifiedAiModels?.length
+        ? verifiedAiModels
+        : selectedAiProvider?.models ?? [];
   const selectedModelWasReturned = !modelDiscoveryComplete || !aiModelId || Boolean(verifiedAiModels?.includes(aiModelId));
   const aiModelAccess = resolveAiModelAccess({
     modelId: aiModelId,
@@ -832,6 +866,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     discoveryComplete: modelDiscoveryComplete,
   });
   const aiModelBlocked = aiModelAccess === "blocked";
+  const continueWithoutAi = Boolean(aiProviderId && (aiModelBlocked || !aiModelId.trim() || aiModelId.trim().length > 200));
+  const chatVerified = Boolean(selectedAiProvider?.available && chatVerification?.provider === aiProviderId
+    && chatVerification.model === aiModelId.trim()
+    && (!selectedAiProvider.isLocal || (modelDiscovery?.endpoint && chatVerification.endpoint === modelDiscovery.endpoint)));
   const connectionsQuery = useQuery<SavedConnection[]>({ queryKey: ["/api/setup/source-connections"], queryFn: async () => (await apiRequest("GET", "/api/setup/source-connections")).json(), staleTime: 15_000 });
   const runtimeQuery = useQuery<RuntimeResponse>({ queryKey: ["/api/setup/python-runtime"], queryFn: async () => (await apiRequest("GET", "/api/setup/python-runtime")).json(), staleTime: 30_000 });
   const sandboxImageQuery = useQuery<SandboxImageReadiness>({
@@ -949,12 +987,13 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     return items;
   }, [catalogConnectors, activeTab, searchQuery]);
 
-  const connectedCount = savedConnections.length;
   const availableCount = Math.max(0, catalogConnectors.filter((connector) => isConnectorConnectable(connector) && !configuredProviderIds.has(connector.id)).length);
-  const connectionSummary = summarizeConnectionCenter(connectedCount, availableCount);
+  const connectionSummary = summarizeConnectionCenter(connectionsQuery.data, connectionsQuery.isError);
 
   useEffect(() => {
-    const setup = setupQuery.data?.setup;
+    if (setupHydratedRef.current || !setupQuery.data) return;
+    setupHydratedRef.current = true;
+    const setup = setupQuery.data.setup;
     if (!setup) return;
     setAiProviderId(setup.aiProviderId ?? "");
     setAiModelId(setup.aiModelId ?? "");
@@ -967,16 +1006,6 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     }
   }, [setupQuery.data]);
 
-  // First connected AI provider is preselected once, when nothing has been chosen. This only sets the
-  // routing preference: Master AI stays off until the user turns it on, and nothing is sent before that.
-  useEffect(() => {
-    if (aiChoiceMadeRef.current || aiProviderId || !setupQuery.data) return;
-    const firstConnected = (setupQuery.data.aiProviders ?? []).find((provider) => provider.available);
-    if (firstConnected) {
-      aiChoiceMadeRef.current = true;
-      setAiProviderId(firstConnected.id);
-    }
-  }, [setupQuery.data, aiProviderId]);
 
   useEffect(() => {
     const consents = consentQuery.data?.consents ?? [];
@@ -1029,13 +1058,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["/api/setup/status"] });
+    qc.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] });
     qc.invalidateQueries({ queryKey: ["/api/setup/source-connections"] });
     qc.invalidateQueries({ queryKey: ["/api/setup/source-registry"] });
   }, [qc]);
 
   const handleModalSaved = useCallback(() => {
+    if (selectedProvider?.category === "ai") setChatVerification(null);
     setModal(null); setSelectedProvider(null); setCatalogSeed(null); setEditingConnection(null); refresh();
-  }, [refresh]);
+  }, [refresh, selectedProvider]);
   const handleImported = useCallback(async () => {
     await apiRequest("PUT", "/api/setup/source-connections", {
       connectorId: "file_upload",
@@ -1055,11 +1086,21 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     } catch { refresh(); }
   }
 
-  async function handleDeleteConnection(connectionId: number) {
+  function handleDeleteConnection(connectionId: number) {
+    if (removalInFlight.current) return;
+    setRemovalError(null); setRemovalTarget(connectionId);
+  }
+  async function confirmDeleteConnection() {
+    if (removalTarget === null || removalInFlight.current) return;
+    removalInFlight.current = true; setRemovingConnection(true); setRemovalError(null);
     try {
-      await apiRequest("DELETE", `/api/setup/source-connections/${connectionId}`);
-      refresh();
-    } catch { /* silent */ }
+      await apiRequest("DELETE", `/api/setup/source-connections/${removalTarget}`);
+      setRemovalTarget(null); refresh();
+    } catch {
+      setRemovalError("This connection could not be removed. It remains listed; retry or cancel.");
+    } finally {
+      removalInFlight.current = false; setRemovingConnection(false);
+    }
   }
 
   function handleEditConnection(conn: SavedConnection) {
@@ -1103,38 +1144,167 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     );
   }
 
+  async function turnMasterAiOff(): Promise<void> {
+    const current = qc.getQueryData<MasterAiSessionState>(["/api/wave-c/ai/state"]);
+    if (current?.state === "off") return;
+    const response = await apiRequest("PUT", "/api/wave-c/ai/state", { state: "off", mode: current?.mode ?? "manual" });
+    const saved = await response.json() as MasterAiSessionState;
+    qc.setQueryData(["/api/wave-c/ai/state"], saved);
+  }
+
+  async function changeAiSelection(provider: string, model: string): Promise<void> {
+    if (aiBusy || saving || masterBusy) return;
+    setAiBusy(true);
+    setAiNotice(null);
+    try {
+      await turnMasterAiOff();
+      setChatVerification(null);
+      setAiProviderId(provider);
+      setAiModelId(model);
+    } catch (error) {
+      setAiNotice(`The selection was not changed because Master AI could not be turned off. ${error instanceof Error ? error.message : ""}`);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function persistSetup(complete: boolean, withoutAi = false): Promise<void> {
+    const response = await apiRequest("PUT", "/api/setup/status", {
+      selectedConnectorIds: connectionsQuery.data
+        ? Array.from(new Set(connectionsQuery.data.map(connection => connection.connectorId)))
+        : setupQuery.data?.setup?.selectedConnectorIds ?? [],
+      providerStackOrder: connectionsQuery.data
+        ? stackEntries.map(entry => entry.connectorId)
+        : setupQuery.data?.setup?.providerStackOrder ?? [],
+      pythonRuntimeId,
+      pythonEnvironmentPath: pythonEnvironmentPath || null,
+      pythonPackIds: runtimeQuery.data?.status.installedPacks ?? setupQuery.data?.setup?.pythonPackIds ?? ["core"],
+      aiProviderId: withoutAi ? null : aiProviderId || null,
+      aiModelId: !withoutAi && aiProviderId ? aiModelId.trim() || null : null,
+      complete,
+    });
+    const saved = await response.json() as Pick<SetupResponse, "setup" | "setupNeeded">;
+    qc.setQueryData<SetupResponse>(["/api/setup/status"], (current) => current ? { ...current, ...saved } : current);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["/api/setup/status"] }),
+      qc.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] }),
+    ]);
+  }
+
+  async function handleConnectLocal(): Promise<void> {
+    const provider = selectedAiProvider;
+    if (!provider?.isLocal || !provider.defaultEndpoint || aiBusy || saving || masterBusy) return;
+    const saveEndpoint = localEndpoints[provider.id] !== undefined || !provider.available;
+    const endpoint = (localEndpoints[provider.id] ?? provider.defaultEndpoint).trim();
+    if (saveEndpoint && !endpoint) {
+      setAiNotice("Enter the local server endpoint you want to connect. Nothing was saved or contacted.");
+      return;
+    }
+    setAiBusy(true);
+    setAiNotice(null);
+    setChatVerification(null);
+    setVerifiedModelsByProvider((current) => {
+      const next = { ...current };
+      delete next[provider.id];
+      return next;
+    });
+    if (saveEndpoint) setAiModelId("");
+    let endpointSaved = false;
+    try {
+      if (saveEndpoint) {
+        await turnMasterAiOff();
+        await apiRequest("PUT", `/api/setup/credentials/${encodeURIComponent(provider.credentialName)}`, {
+          value: endpoint,
+          label: `${provider.name} endpoint`,
+        });
+        endpointSaved = true;
+      }
+      const response = await apiRequest("POST", "/api/setup/ai/models", { provider: provider.id });
+      const discovery = await response.json() as { provider: string; endpoint: string; models: string[]; complete: boolean; detail: string };
+      setVerifiedModelsByProvider((current) => ({ ...current, [provider.id]: { models: discovery.models, complete: discovery.complete, endpoint: discovery.endpoint } }));
+      setLocalEndpoints(current => {
+        const next = { ...current };
+        delete next[provider.id];
+        return next;
+      });
+      setAiNotice(discovery.detail);
+    } catch (error) {
+      setAiNotice(`${endpointSaved ? "The endpoint was saved, but models could not be listed. Chat remains unverified." : saveEndpoint ? "The endpoint was not saved." : "The saved endpoint was not changed; models could not be listed."} ${error instanceof Error ? error.message : "Retry when the local server is running."}`);
+    } finally {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/setup/status"] }),
+        qc.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] }),
+      ]);
+      setAiBusy(false);
+    }
+  }
+
+  async function handleVerifyAi(): Promise<void> {
+    if (!selectedAiProvider?.available || !aiModelId.trim() || aiModelBlocked || aiBusy || saving || masterBusy) return;
+    if (selectedAiProvider.isLocal && (!modelDiscovery?.endpoint || !verifiedAiModels?.includes(aiModelId.trim()))) return;
+    setAiBusy(true);
+    setAiNotice(null);
+    setChatVerification(null);
+    let permissionOff = false;
+    try {
+      await turnMasterAiOff();
+      permissionOff = true;
+      await persistSetup(!setupQuery.data?.setupNeeded);
+      const response = await apiRequest("POST", "/api/setup/ai/test", {
+        provider: aiProviderId, model: aiModelId.trim(),
+        ...(selectedAiProvider.isLocal ? { endpoint: modelDiscovery?.endpoint } : {}),
+      });
+      const result = await response.json() as ChatVerification;
+      setChatVerification(result);
+      setAiNotice(result.detail);
+    } catch (error) {
+      setAiNotice(`Chat remains unverified. ${permissionOff ? "Master AI is OFF." : "Master AI could not be confirmed OFF; its previous permission may remain."} ${error instanceof Error ? error.message : "Verification failed."}`);
+    } finally {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/setup/status"] }),
+        qc.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] }),
+      ]);
+      setAiBusy(false);
+    }
+  }
+
+  async function handleDisconnectLocal(): Promise<void> {
+    const provider = selectedAiProvider;
+    if (!provider?.isLocal || provider.endpointEnvironmentManaged || aiBusy || saving || masterBusy) return;
+    setAiBusy(true);
+    setAiNotice(null);
+    try {
+      await turnMasterAiOff();
+      await apiRequest("DELETE", `/api/setup/credentials/${encodeURIComponent(provider.credentialName)}`);
+      setChatVerification(null);
+      setAiModelId("");
+      setVerifiedModelsByProvider((current) => {
+        const next = { ...current };
+        delete next[provider.id];
+        return next;
+      });
+      setAiNotice("Local endpoint disconnected. Master AI is OFF; deterministic tools and your original chat draft remain available.");
+    } catch (error) {
+      setAiNotice(`Could not disconnect the endpoint. ${error instanceof Error ? error.message : "Retry."}`);
+    } finally {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/setup/status"] }),
+        qc.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] }),
+      ]);
+      setAiBusy(false);
+    }
+  }
+
   async function handleEnterTerminal() {
+    if (aiBusy || masterBusy || saving) return;
     setSaveNotice(null);
-    if (aiProviderId && aiModelBlocked) {
-      const message = aiModelAccessMessage(aiModelAccess);
-      setWorkspaceNotice(message);
-      setSaveNotice(message ?? "The selected AI model is not available to this key. Choose another model or disable the AI provider.");
-      return;
-    }
-    if (aiProviderId && !aiModelId.trim()) {
-      setSaveNotice(`Choose an AI model for ${selectedAiProvider?.name ?? "the selected provider"} before continuing, or set the AI provider to “disabled”. Your provider choice has not been saved.`);
-      return;
-    }
-    if (aiProviderId && aiModelId.trim().length > 200) {
-      setSaveNotice("AI model identifiers must be at most 200 characters.");
-      return;
-    }
     setSaving(true);
     try {
-      const selectedConnectorIds = savedConnections.map((c) => c.connectorId);
-      await apiRequest("PUT", "/api/setup/status", {
-        selectedConnectorIds: Array.from(new Set(selectedConnectorIds)),
-        providerStackOrder: stackEntries.map((entry) => entry.connectorId),
-        pythonRuntimeId,
-        pythonEnvironmentPath: pythonEnvironmentPath || null,
-        pythonPackIds: runtimeQuery.data?.status.installedPacks ?? ["core"],
-        aiProviderId: aiProviderId || null,
-        aiModelId: aiModelId.trim() || null,
-        complete: true,
-      });
+      if (continueWithoutAi) await turnMasterAiOff();
+      await persistSetup(true, continueWithoutAi);
       onComplete();
     } catch (error) {
-      setSaveNotice(`Your setup could not be saved. Nothing was changed. ${error instanceof Error ? error.message.slice(0, 160) : "Try again."}`);
+      setSaveNotice(`Your setup could not be saved. ${error instanceof Error ? error.message.slice(0, 160) : "Try again."}`);
     } finally {
       setSaving(false);
     }
@@ -1166,21 +1336,25 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                {connectionSummary.canEnterTerminal ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <KeyRound className="h-4 w-4 text-[hsl(38,95%,55%)]" />}
+                {connectionSummary.state === "attention" || connectionSummary.state === "unavailable"
+                  ? <AlertTriangle className="h-4 w-4 text-amber-300" />
+                  : connectionSummary.state === "verified" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    : <KeyRound className="h-4 w-4 text-muted-foreground" />}
                 <h1 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{connectionSummary.statusLabel}</h1>
               </div>
               <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
               {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
               <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
-                <span>{connectedCount} connected · {availableCount} provider{availableCount === 1 ? "" : "s"} available</span>
-                {connectedCount === 0 ? <span className="text-cyan-200/75">Optional · start without setup</span> : null}
+                {connectionsQuery.data && !connectionsQuery.isError && <span>{connectionSummary.savedCount} saved · {connectionSummary.verifiedCount} verified · {connectionSummary.attentionCount} need attention</span>}
+                <span>{availableCount} catalog options · availability and rights checked when used</span>
+                {connectionSummary.state === "unconfigured" ? <span className="text-cyan-200/75">Optional · start without setup</span> : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
-              <button type="button" onClick={handleEnterTerminal} disabled={saving || (Boolean(aiProviderId) && aiModelBlocked)}
-                title={aiProviderId && aiModelBlocked ? aiModelAccessMessage(aiModelAccess) ?? undefined : undefined}
+              <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
+                title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
                 className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
-                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : connectionSummary.ctaLabel}
+                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
               </button>
             </div>
           </div>
@@ -1200,9 +1374,9 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">No AI provider connected. AI is optional: deterministic analytics work without it.</p>
+            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">AI is optional: deterministic analytics work without it. Connect a provider below; existing local servers do not require an API key.</p>
           )}
-          {aiConnectorsToAdd.length > 0 && (
+          {(aiConnectorsToAdd.length > 0 || aiProviders.some((provider) => provider.isLocal)) && (
             <div>
               <span className="mb-1 block font-terminal text-[8px] uppercase text-muted-foreground">Add an AI provider</span>
               <div className="flex flex-wrap gap-2">
@@ -1212,31 +1386,82 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                     <Plus className="h-3 w-3" /> {connector.name}
                   </button>
                 ))}
+                {aiProviders.filter((provider) => provider.isLocal).map((provider) => (
+                  <button key={provider.id} type="button" onClick={() => void changeAiSelection(provider.id, "")}
+                    disabled={aiBusy || saving || masterBusy}
+                    data-testid={`connect-ai-${provider.id}`}
+                    className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 font-terminal text-[8px] uppercase text-muted-foreground hover:border-[hsl(38,95%,50%)]/50 hover:text-foreground disabled:opacity-40">
+                    <Plus className="h-3 w-3" /> {provider.name}
+                  </button>
+                ))}
               </div>
             </div>
           )}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="space-y-3" data-testid="connect-ai-selection">
       <div>
-        <span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Use this provider</span>
-        <select id="ai-provider-select" value={aiProviderId} onChange={(e) => { aiChoiceMadeRef.current = true; setAiProviderId(e.target.value); setAiModelId(""); }} className={inputCls}>
+        <label htmlFor="ai-provider-select" className="mb-1 block font-ui text-sm font-medium text-muted-foreground">Use this provider</label>
+        <select id="ai-provider-select" value={aiProviderId} onChange={(event) => void changeAiSelection(event.target.value, "")} disabled={aiBusy || saving || masterBusy} className={inputCls}>
           <option value="">AI disabled — deterministic engines only</option>
           {selectableAiProviders.map((provider) => (
-            <option key={provider.id} value={provider.id} disabled={!provider.available}>
+            <option key={provider.id} value={provider.id} disabled={!provider.available && !provider.isLocal}>
               {provider.name}{provider.isLocal ? " (local)" : ""}{provider.available ? "" : " (not connected)"}
             </option>
           ))}
         </select>
+        {selectedAiProvider?.isLocal && (
+          <div className="mt-3 space-y-2 border border-border/60 p-3" data-testid="connection-local-ai">
+            <Row label="Local model server endpoint (on the LiOS Home machine)">
+              <input id="local-ai-endpoint" aria-label="Local model server endpoint" type="url"
+                value={localEndpoints[aiProviderId] ?? modelDiscovery?.endpoint ?? (selectedAiProvider.available ? "" : selectedAiProvider.defaultEndpoint ?? "")}
+                placeholder={selectedAiProvider.available ? "Saved endpoint — list models to inspect" : selectedAiProvider.defaultEndpoint}
+                disabled={aiBusy || saving || masterBusy}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setLocalEndpoints((current) => ({ ...current, [aiProviderId]: value }));
+                  setChatVerification(null);
+                  setVerifiedModelsByProvider((current) => {
+                    const next = { ...current };
+                    delete next[aiProviderId];
+                    return next;
+                  });
+                }}
+                maxLength={2_000} className={inputCls} />
+            </Row>
+            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">
+              List models uses your saved endpoint without changing it. Editing the address and choosing Save endpoint &amp; list models explicitly replaces it. Start your local model server first; no scanning, model download or inference is performed.
+              {selectedAiProvider.endpointEnvironmentManaged ? " An operator-managed environment endpoint takes precedence; a different endpoint cannot be selected until that setting is removed." : ""}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void handleConnectLocal()} disabled={aiBusy || saving || masterBusy || (localEndpoints[aiProviderId] !== undefined && !localEndpoints[aiProviderId].trim())}
+                data-testid="local-ai-list-models" className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase disabled:opacity-40">
+                {aiBusy ? "Working…" : localEndpoints[aiProviderId] !== undefined || !selectedAiProvider.available ? "Save endpoint & list models" : "List saved endpoint models"}
+              </button>
+              {selectedAiProvider.available && !selectedAiProvider.endpointEnvironmentManaged && (
+                <button type="button" onClick={() => void handleDisconnectLocal()} disabled={aiBusy || saving || masterBusy}
+                  data-testid="local-ai-disconnect" className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-rose-300 disabled:opacity-40">
+                  Disconnect local endpoint
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {aiProviderId && (
           <div className="mt-3">
-            <label htmlFor="ai-model-select" className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Model</label>
-            {selectedAiProvider?.allowCustomModel && !modelDiscoveryComplete ? (
+            <label htmlFor="ai-model-select" className="mb-1 block font-ui text-sm font-medium text-muted-foreground">Model</label>
+            {selectedAiProvider?.allowCustomModel && !selectedAiProvider.isLocal && !modelDiscoveryComplete ? (
               <>
                 <input
                   id="ai-model-select"
                   data-testid="connection-ai-custom-model"
                   value={aiModelId}
-                  onChange={(event) => setAiModelId(event.target.value)}
+                  onChange={(event) => {
+                    setChatVerification(null);
+                    setAiModelId(event.target.value);
+                    setAiNotice(null);
+                    void turnMasterAiOff().catch(() => setAiNotice("The model draft changed, but Master AI could not be confirmed OFF. Resolve the permission error before continuing."));
+                  }}
+                  disabled={aiBusy || saving || masterBusy}
                   list={`ai-models-${selectedAiProvider.id}`}
                   placeholder={selectedAiProvider.defaultModel ?? "Enter a model available on your provider"}
                   maxLength={200}
@@ -1250,7 +1475,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 </p>
               </>
             ) : (
-              <select id="ai-model-select" value={aiModelId} onChange={(e) => setAiModelId(e.target.value)} className={inputCls} disabled={aiModels.length === 0}>
+              <select id="ai-model-select" value={aiModelId} onChange={(event) => void changeAiSelection(aiProviderId, event.target.value)} className={inputCls} disabled={aiModels.length === 0 || aiBusy || saving || masterBusy}>
                 <option value="">{aiModels.length > 0 ? "Select a model" : "No models available"}</option>
                 {aiModelId && !aiModels.includes(aiModelId) && (
                   <option value={aiModelId}>{aiModelId} · {modelDiscoveryComplete ? "not returned by this key" : modelDiscoveryPartial ? "not on first page" : "current selection"}</option>
@@ -1264,8 +1489,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             )}
             {modelDiscoveryComplete ? (
               <p className="mt-2 font-terminal text-[8px] text-emerald-300/80" role="status" data-testid="gemini-model-discovery-status">
-                Read-only provider discovery returned {verifiedAiModels?.length ?? 0} chat-capable models. No prompt was sent.
-                {verifiedAiModels?.length ? "" : " No chat-capable model was returned, so curated suggestions are not selectable."}
+                Read-only provider discovery returned {verifiedAiModels?.length ?? 0} {selectedAiProvider?.isLocal ? "model identifiers" : "chat-capable models"}. No prompt was sent; chat, native tools and vision are not verified by this list.
+                {verifiedAiModels?.length ? "" : " No model was returned, so curated suggestions are not selectable."}
               </p>
             ) : modelDiscoveryPartial ? (
               <p className="mt-2 border border-amber-500/30 bg-amber-500/[0.04] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-amber-200" role="status" data-testid="gemini-model-discovery-partial">
@@ -1286,6 +1511,22 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 Google currently limits Gemini 2.5 access for some new projects. If this model returns HTTP 404, select Gemini 3.5 Flash-Lite or Gemini 3.8 Flash and save your setup.
               </p>
             )}
+            <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="connection-chat-verification">
+              <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">
+                Verify chat sends only the fixed public message “Reply exactly with LIOS_AI_OK.” and a short connectivity instruction to {selectedAiProvider?.name ?? "the selected provider"} using {aiModelId || "your selected model"}, with a 16-token output limit. No original prompt, project context, files or tool calls are included.
+                {selectedAiProvider?.isLocal
+                  ? " Loopback alone is not proof of local execution. LiOS checks runtime-reported installed local model metadata before inference and blocks reported remote/cloud or unknown models. You control and must trust that local daemon; its behavior is not cryptographically attested. This chat probe does not verify native tools, vision or provider pricing."
+                  : " This is a real provider inference request and may consume quota or incur charges under your provider plan."}
+              </p>
+              <button type="button" onClick={() => void handleVerifyAi()}
+                disabled={!selectedAiProvider?.available || !aiModelId.trim() || aiModelBlocked || aiBusy || saving || masterBusy || Boolean(selectedAiProvider?.isLocal && !modelDiscovery?.endpoint)}
+                data-testid="connection-ai-verify-chat" className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase disabled:opacity-40">
+                {aiBusy ? "Working…" : "Verify chat (send test request)"}
+              </button>
+              <p className={`font-terminal text-[8px] ${chatVerified ? "text-emerald-300" : "text-muted-foreground"}`} role="status" data-testid="connection-ai-chat-status">
+                {chatVerified ? `Chat verified for ${chatVerification?.model} at ${formatHealthTime(chatVerification?.verifiedAt)}.` : "Chat unverified for this selection."} Native tool calling and vision remain unverified.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -1295,9 +1536,14 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               providerAvailable={selectedAiProvider?.available === true}
               modelId={aiModelId}
               modelAccess={aiModelAccess}
+              chatVerified={chatVerified}
+              selectionBusy={aiBusy || saving}
+              onBeforeEnable={() => persistSetup(!setupQuery.data?.setupNeeded)}
+              onSavingChange={setMasterBusy}
               onChangeProvider={focusAiProviderSelector}
             />
           </div>
+          {aiNotice && <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground" role="status" data-testid="connection-ai-notice">{aiNotice}</p>}
         </section>
 
         {/* ── 4. Connect data ───────────────────────────────────────── */}
@@ -1751,10 +1997,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         )}
         <div className="flex items-center justify-between pb-4 pt-2">
           <span className="font-terminal text-[8px] text-muted-foreground">{connectionSummary.statusDetail}</span>
-          <button type="button" onClick={handleEnterTerminal} disabled={saving || (Boolean(aiProviderId) && aiModelBlocked)}
-            title={aiProviderId && aiModelBlocked ? aiModelAccessMessage(aiModelAccess) ?? undefined : undefined}
+          <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
+            title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
             className="flex items-center gap-2 border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-5 py-2.5 font-terminal text-[10px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
-            <Terminal className="w-4 h-4" /> {saving ? "Saving..." : connectionSummary.ctaLabel}
+            <Terminal className="w-4 h-4" /> {saving ? "Saving..." : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
           </button>
         </div>
       </div>
@@ -1811,6 +2057,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
       {modal === "import" && <DataImportWizard onClose={() => setModal(null)} onImported={handleImported} />}
       {modal === "api" && <AddApiModal seed={catalogSeed} editing={editingConnection} onClose={() => { setModal(null); setCatalogSeed(null); setEditingConnection(null); }} onSaved={handleModalSaved} />}
       {modal === "storage" && <AddStorageModal seed={catalogSeed} editing={editingConnection} onClose={() => { setModal(null); setCatalogSeed(null); setEditingConnection(null); }} onSaved={handleModalSaved} />}
+      {removalTarget !== null && <ModalShell title="Remove saved connection" onClose={() => { if (!removalInFlight.current) setRemovalTarget(null); }}>
+        <p className="font-ui text-sm leading-6 text-muted-foreground">Remove {savedConnections.find(connection => connection.id === removalTarget)?.name ?? `saved connection ${removalTarget}`} from LiOS? This does not delete the external source or grant access to another provider.</p>
+        {removalError && <p role="alert" className="font-ui text-sm text-rose-300">{removalError}</p>}
+        {removingConnection && <p role="status" className="font-ui text-sm text-muted-foreground">Removing connection…</p>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" disabled={removingConnection} onClick={() => setRemovalTarget(null)} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button>
+          <button type="button" disabled={removingConnection} onClick={() => void confirmDeleteConnection()} className="min-h-11 rounded border border-rose-400/50 px-4 py-2 font-ui text-sm font-semibold text-rose-200 disabled:opacity-50">{removingConnection ? "Removing…" : "Remove connection"}</button>
+        </div>
+      </ModalShell>}
     </Shell>
   );
 }

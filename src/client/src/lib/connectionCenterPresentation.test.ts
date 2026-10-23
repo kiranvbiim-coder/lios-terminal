@@ -2,21 +2,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { connectionRecoveryPresentation, isConnectorConnectable, summarizeConnectionCenter } from "./connectionCenterPresentation";
 
-test("allows entering the terminal before any connection is saved", () => {
-  const summary = summarizeConnectionCenter(0, 12);
-
-  assert.equal(summary.canEnterTerminal, true);
-  assert.equal(summary.statusLabel, "Ready without setup");
-  assert.equal(summary.ctaLabel, "Continue to LiOS");
-  assert.match(summary.statusDetail, /Connect data or AI only when a task needs it/);
-});
-
-test("marks a connected environment as ready for the terminal", () => {
-  const summary = summarizeConnectionCenter(2, 10);
-
-  assert.equal(summary.canEnterTerminal, true);
-  assert.equal(summary.statusLabel, "Sources ready");
-  assert.equal(summary.ctaLabel, "Continue to LiOS");
+test("first entry remains available for empty, loading, failed and unusable connections without promoting configuration to verification", () => {
+  const empty = summarizeConnectionCenter([]);
+  assert.equal(empty.state, "unconfigured");
+  assert.equal(empty.canEnterTerminal, true);
+  for (const status of ["configured", "credential_configured"]) {
+    const saved = summarizeConnectionCenter([{ status }]);
+    assert.equal(saved.state, "configured");
+    assert.equal(saved.verifiedCount, 0);
+    assert.equal(saved.canEnterTerminal, true);
+  }
+  const failed = summarizeConnectionCenter(undefined, true);
+  assert.equal(failed.state, "unavailable");
+  assert.equal(failed.canEnterTerminal, true);
+  assert.equal(summarizeConnectionCenter(undefined).state, "loading");
+  const mixed = summarizeConnectionCenter([{ status: "healthy" }, { status: "configured" }, { status: "unreachable" }, { status: "disabled" }]);
+  assert.equal(mixed.state, "attention");
+  assert.equal(mixed.savedCount, 4);
+  assert.equal(mixed.verifiedCount, 1);
+  assert.equal(mixed.attentionCount, 2);
+  assert.equal(mixed.canEnterTerminal, true);
+  assert.equal(summarizeConnectionCenter([{ status: "live_verified" }, { status: "healthy" }]).state, "verified");
 });
 
 

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuotes, useMarketGainers, useMostActive } from "@/lib/useFinance";
 import { Scan, Check, X, Minus } from "lucide-react";
@@ -38,7 +39,7 @@ function ConditionState({ pass }: { pass: boolean | null }) {
 }
 
 export default function ScannerPanel({ onSymbol }: Props) {
-  const [activeScan, setActiveScan] = useState<ScanType>("breakout_52w");
+  const [activeScan, setActiveScan] = useTerminalArtifactState<ScanType>("ScannerPanel.activeScan", "breakout_52w");
   const { data: quotes = [], dataUpdatedAt } = useQuotes(SCAN_UNIVERSE);
   const { data: gainers = [] } = useMarketGainers("US");
   const { data: active = [] } = useMostActive("US");

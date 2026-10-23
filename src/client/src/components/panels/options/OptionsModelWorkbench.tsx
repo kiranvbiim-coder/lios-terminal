@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -52,6 +53,8 @@ const SPOT_SHOCKS = [-0.1, -0.05, 0, 0.05, 0.1];
 const VOL_SHIFTS = [-0.05, 0, 0.05];
 
 export default function OptionsModelWorkbench({ symbol, view }: Props) {
+  const terminal = useTerminalArtifactContext();
+  const initializedSymbol = useRef(symbol);
   const { data: quote, isLoading } = useQuote(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
@@ -61,21 +64,21 @@ export default function OptionsModelWorkbench({ symbol, view }: Props) {
   const currencyCode = quote?.currency || inferCurrencyFromSymbol(symbol);
   const currencySymbol = getCurrencyInfo(currencyCode).symbol;
 
-  const [strike, setStrike] = useState<number | null>(null);
-  const [strikeTouched, setStrikeTouched] = useState(false);
-  const [expiryDays, setExpiryDays] = useState(30);
-  const [volatilityPct, setVolatilityPct] = useState<number | null>(null);
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState<number | null>(null);
-  const [dividendYieldPct, setDividendYieldPct] = useState(0);
-  const [exerciseStyle, setExerciseStyle] = useState<ExerciseStyle>("european");
-  const [side, setSide] = useState<OptionSide>("call");
-  const [dividendMode, setDividendMode] = useState<DividendMode>("continuous");
-  const [discreteDividends, setDiscreteDividends] = useState<DiscreteDividend[]>([]);
-  const [cashDividendAmount, setCashDividendAmount] = useState(0);
-  const [cashDividendDays, setCashDividendDays] = useState(15);
-  const [volTouched, setVolTouched] = useState(false);
-  const [rateTouched, setRateTouched] = useState(false);
-  const [qTouched, setQTouched] = useState(false);
+  const [strike, setStrike] = useTerminalArtifactState<number | null>("OptionsModelWorkbench.strike", null);
+  const [strikeTouched, setStrikeTouched] = useTerminalArtifactState("OptionsModelWorkbench.strikeTouched", false);
+  const [expiryDays, setExpiryDays] = useTerminalArtifactState("OptionsModelWorkbench.expiryDays", 30);
+  const [volatilityPct, setVolatilityPct] = useTerminalArtifactState<number | null>("OptionsModelWorkbench.volatilityPct", null);
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState<number | null>("OptionsModelWorkbench.riskFreeRatePct", null);
+  const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsModelWorkbench.dividendYieldPct", 0);
+  const [exerciseStyle, setExerciseStyle] = useTerminalArtifactState<ExerciseStyle>("OptionsModelWorkbench.exerciseStyle", "european");
+  const [side, setSide] = useTerminalArtifactState<OptionSide>("OptionsModelWorkbench.side", "call");
+  const [dividendMode, setDividendMode] = useTerminalArtifactState<DividendMode>("OptionsModelWorkbench.dividendMode", "continuous");
+  const [discreteDividends, setDiscreteDividends] = useTerminalArtifactState<DiscreteDividend[]>("OptionsModelWorkbench.discreteDividends", []);
+  const [cashDividendAmount, setCashDividendAmount] = useTerminalArtifactState("OptionsModelWorkbench.cashDividendAmount", 0);
+  const [cashDividendDays, setCashDividendDays] = useTerminalArtifactState("OptionsModelWorkbench.cashDividendDays", 15);
+  const [volTouched, setVolTouched] = useTerminalArtifactState("OptionsModelWorkbench.volTouched", false);
+  const [rateTouched, setRateTouched] = useTerminalArtifactState("OptionsModelWorkbench.rateTouched", false);
+  const [qTouched, setQTouched] = useTerminalArtifactState("OptionsModelWorkbench.qTouched", false);
 
   const realizedVolPct = useMemo(() => {
     const closes = history?.bars?.map((bar) => bar.close) ?? [];
@@ -88,6 +91,8 @@ export default function OptionsModelWorkbench({ symbol, view }: Props) {
   }, [currencyCode, expiryDays, yieldCurveData]);
 
   useEffect(() => {
+    if (terminal && initializedSymbol.current === symbol) return;
+    initializedSymbol.current = symbol;
     setStrike(null);
     setStrikeTouched(false);
     setExpiryDays(30);

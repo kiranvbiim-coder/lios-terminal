@@ -8,7 +8,7 @@ import { getDb, type DrizzleDb } from "./db";
 import { getProject, ProjectAccessDeniedError } from "./projectStore";
 import { canAccessDatasetSnapshot } from "./columnarArtifactStore";
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
-import { stableSnapshotHash } from "./pointInTimeDatasetStore";
+import { stableSnapshotHash, getDatasetSnapshot } from "./pointInTimeDatasetStore";
 import { getArtifact, getArtifactVersion, persistConversationDraft, retainedConversationArtifactId } from "./artifactStore";
 import type { TenantContext } from "./tenantContext";
 
@@ -79,8 +79,7 @@ function requireBounded(value: unknown): void {
   if (Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_BYTES) throw new IntegratedModelArtifactError(422, "Model projection exceeds the 2 MiB content limit.");
 }
 
-/** Projects existing persisted engine values only; it does not call the engine or a provider. */
-export function projectIntegratedModelWorkbook(run: FinancialModelRun, snapshot: DatasetSnapshot, policy: DataEntitlementPolicy): { content: Extract<ArtifactContent, { kind: "spreadsheet" }>; sourceRefs: string[]; inputHash: string } {
+function validateIntegratedModelRun(run: FinancialModelRun, snapshot: DatasetSnapshot) {
   requireBounded({ result: run.result, payload: snapshot.payload, lineage: snapshot.lineage, quality: snapshot.quality });
   const result = resultSchema.parse(run.result);
   const payload: FinancialDatasetPayload = financialDatasetPayloadSchema.parse(snapshot.payload);
@@ -93,6 +92,32 @@ export function projectIntegratedModelWorkbook(run: FinancialModelRun, snapshot:
   const expectedHash = stableSnapshotHash({ modelVersion: result.modelVersion, datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules, forecast: result.forecast });
   if (expectedHash !== run.resultHash) throw new IntegratedModelArtifactError(422, "Persisted model result hash does not match its native outputs.");
   const inputHash = stableSnapshotHash({ datasetContentHash: snapshot.contentHash, assumptions: result.assumptions, specializedSchedules: result.specializedSchedules });
+  return { result, payload, inputHash, latestHistorical };
+}
+
+/** Read an existing owned run only after current actor/source admission; never rerun on reopening. */
+export async function readIntegratedModelRun(ctx: TenantContext, runId: string) {
+  z.string().uuid().parse(runId);
+  await requireCurrentModelActor(ctx, getDb(), false);
+  const [identity] = await getDb().select({ datasetSnapshotId: financialModelRuns.datasetSnapshotId }).from(financialModelRuns)
+    .where(and(eq(financialModelRuns.id, runId), eq(financialModelRuns.createdByUserId, ctx.userId))).limit(1);
+  if (!identity) throw new IntegratedModelArtifactError(404, "Owned integrated model run not found.");
+  const requiredUses = ["display", "derived_output", "model_input"];
+  const { snapshot, revision } = await loadIntegratedModelDatasetSource(ctx, identity.datasetSnapshotId, requiredUses);
+  const [run] = await getDb().select().from(financialModelRuns)
+    .where(and(eq(financialModelRuns.id, runId), eq(financialModelRuns.createdByUserId, ctx.userId))).limit(1);
+  if (!run || run.datasetSnapshotId !== snapshot.id) throw new IntegratedModelArtifactError(404, "Owned model source changed during reopening.");
+  const { result, inputHash } = validateIntegratedModelRun(run, snapshot);
+  const restoredSnapshot = await getDatasetSnapshot(snapshot.id);
+  if (!restoredSnapshot || restoredSnapshot.contentHash !== snapshot.contentHash) throw new IntegratedModelArtifactError(409, "Saved model snapshot changed during reopening.");
+  await assertIntegratedModelDatasetSourceCurrent(ctx, snapshot.id, revision, requiredUses);
+  return { result, snapshot: restoredSnapshot, receipt: { runId: run.id, resultHash: run.resultHash, datasetSnapshotId: snapshot.id,
+    datasetContentHash: snapshot.contentHash, inputHash, calculatedAt: run.createdAt.toISOString(), deterministic: true } };
+}
+
+/** Projects existing persisted engine values only; it does not call the engine or a provider. */
+export function projectIntegratedModelWorkbook(run: FinancialModelRun, snapshot: DatasetSnapshot, policy: DataEntitlementPolicy): { content: Extract<ArtifactContent, { kind: "spreadsheet" }>; sourceRefs: string[]; inputHash: string } {
+  const { result, payload, inputHash, latestHistorical } = validateIntegratedModelRun(run, snapshot);
   const runRef = `financial-model-run:${run.id}`;
   const datasetRef = `dataset-snapshot:${snapshot.id}`;
   const sourceRefs = [runRef, `financial-model-result-sha256:${run.resultHash}`, `financial-model-payload-sha256:${stableSnapshotHash(run.result)}`, datasetRef, `dataset-content-sha256:${snapshot.contentHash}`, `dataset-payload-sha256:${stableSnapshotHash(snapshot.payload)}`, `provider:${snapshot.provider}`, `entitlement-policy:${policy.id}`, `entitlement-policy-sha256:${policy.contentHash}`];

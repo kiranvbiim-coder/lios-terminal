@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuotes } from "@/lib/useFinance";
 import { useScreener } from "@/lib/useFinance";
@@ -39,8 +40,8 @@ const EX_DIV_CALENDAR: Record<string, { exDate: string; amount: number; freq: st
 function daysUntil(d: string) { return Math.round((new Date(d).getTime() - Date.now()) / 86400000); }
 
 export default function DividendPanel({ onSymbol }: Props) {
-  const [DIV_STOCKS, setDivStocks] = useState<string[]>(DEFAULT_DIV_STOCKS);
-  const [tickerInput, setTickerInput] = useState("");
+  const [DIV_STOCKS, setDivStocks] = useTerminalArtifactState<string[]>("DividendPanel.DIV_STOCKS", DEFAULT_DIV_STOCKS);
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("DividendPanel.tickerInput", "");
   const addStock = () => {
     const t = tickerInput.trim().toUpperCase();
     if (t && !DIV_STOCKS.includes(t) && DIV_STOCKS.length < MAX_DIV_STOCKS) {

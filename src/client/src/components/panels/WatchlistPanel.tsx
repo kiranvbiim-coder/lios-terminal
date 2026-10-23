@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuotes } from "@/lib/useFinance";
@@ -71,12 +72,13 @@ function loadCustomColumns(): WatchlistColumn[] {
 // for a client_user rather than letting them click controls that 403.
 
 export default function WatchlistPanel({ activeSymbol, onSymbol, role }: Props) {
+  const terminal = useTerminalArtifactContext();
   const isClient = useAudience() === "client";
   const WATCHLIST_URL = isClient ? "/api/client/dashboard/watchlist" : "/api/watchlist";
-  const [addSym, setAddSym] = useState("");
-  const [addName, setAddName] = useState("");
-  const [preset, setPreset] = useState<WatchlistPreset>(loadPreset);
-  const [customColumns, setCustomColumns] = useState<WatchlistColumn[]>(loadCustomColumns);
+  const [addSym, setAddSym] = useTerminalArtifactState("WatchlistPanel.addSym", "");
+  const [addName, setAddName] = useTerminalArtifactState("WatchlistPanel.addName", "");
+  const [preset, setPreset] = useTerminalArtifactState<WatchlistPreset>("WatchlistPanel.preset", () => terminal ? "trading" : loadPreset());
+  const [customColumns, setCustomColumns] = useTerminalArtifactState<WatchlistColumn[]>("WatchlistPanel.customColumns", () => terminal ? [...ALL_COLUMNS] : loadCustomColumns());
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const qc = useQueryClient();
   const canEdit = !isClient || role === "client_admin";
@@ -124,7 +126,7 @@ export default function WatchlistPanel({ activeSymbol, onSymbol, role }: Props) 
   const selectPreset = (next: Exclude<WatchlistPreset, "custom">) => {
     setPreset(next);
     setCustomizeOpen(false);
-    if (typeof window !== "undefined") window.localStorage.setItem(PRESET_STORAGE_KEY, next);
+    if (!terminal && typeof window !== "undefined") window.localStorage.setItem(PRESET_STORAGE_KEY, next);
   };
 
   const toggleCustomColumn = (column: WatchlistColumn) => {
@@ -134,7 +136,7 @@ export default function WatchlistPanel({ activeSymbol, onSymbol, role }: Props) 
       : ALL_COLUMNS.filter((item) => item === "symbol" || customColumns.includes(item) || item === column);
     setCustomColumns(next);
     setPreset("custom");
-    if (typeof window !== "undefined") {
+    if (!terminal && typeof window !== "undefined") {
       window.localStorage.setItem(CUSTOM_COLUMNS_STORAGE_KEY, JSON.stringify(next));
       window.localStorage.setItem(PRESET_STORAGE_KEY, "custom");
     }

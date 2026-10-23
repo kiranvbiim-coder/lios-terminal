@@ -9,6 +9,9 @@ import { createProjectResource, createProjectResourceInTransaction, listProjectR
 import { normalizeMultimodalAttachment } from "./p12Multimodal";
 import {
   deleteProjectAttachmentBlob,
+  deleteQuickChatAttachmentBlob,
+  readQuickChatAttachmentBlob,
+  writeQuickChatAttachmentBlob,
   PROJECT_ATTACHMENT_MAX_FILE_BYTES,
   PROJECT_ATTACHMENT_MAX_IMAGE_BYTES,
   PROJECT_ATTACHMENT_MAX_PER_MESSAGE,
@@ -163,15 +166,10 @@ async function assertProjectQuota(
   }
 }
 
-export async function uploadProjectChatAttachment(
-  ctx: TenantContext,
-  projectId: number,
-  chatId: number,
-  input: { bytes: Buffer; originalName: string },
-): Promise<ConversationAttachmentRef> {
-  await assertProjectChatAccess(ctx, projectId, chatId);
+/** One canonical parser and file-type gate shared by Project and Quick Chat uploads. */
+function buildAttachmentReference(input: { bytes: Buffer; originalName: string }, prefix: "project-attachment" | "quick-attachment"): ConversationAttachmentRef {
   if (input.bytes.byteLength <= 0 || input.bytes.byteLength > PROJECT_ATTACHMENT_MAX_FILE_BYTES) {
-    throw new ProjectAttachmentLimitError("Each Project attachment must be between 1 byte and 20 MiB.");
+    throw new ProjectAttachmentLimitError("Each attachment must be between 1 byte and 20 MiB.");
   }
 
   const base = input.originalName.replace(/\\/g, "/").split("/").pop() ?? "attachment";
@@ -199,13 +197,24 @@ export async function uploadProjectChatAttachment(
   const reference = conversationAttachmentRefSchema.parse({
     id: normalized.id,
     kind: normalized.kind,
-    sourceRef: `project-attachment:${normalized.id}`,
+    sourceRef: `${prefix}:${normalized.id}`,
     fileName: normalized.fileName,
     mimeType: normalized.mimeType,
     sha256: normalized.sha256,
     byteLength: normalized.byteLength,
     textPreview: null,
   });
+  return reference;
+}
+
+export async function uploadProjectChatAttachment(
+  ctx: TenantContext,
+  projectId: number,
+  chatId: number,
+  input: { bytes: Buffer; originalName: string },
+): Promise<ConversationAttachmentRef> {
+  await assertProjectChatAccess(ctx, projectId, chatId);
+  const reference = buildAttachmentReference(input, "project-attachment");
 
   await writeProjectAttachmentBlob(ctx.userId, projectId, reference.id, input.bytes);
   try {
@@ -251,6 +260,111 @@ export async function uploadProjectChatAttachment(
     throw error;
   }
   return reference;
+}
+
+
+/** Quick attachments belong to the exact regular Chat. No Project or second resource catalogue is created. */
+export async function uploadQuickChatAttachment(
+  ctx: TenantContext,
+  chatId: number,
+  input: { bytes: Buffer; originalName: string },
+): Promise<ConversationAttachmentRef> {
+  const chat = await getProjectChat(ctx, chatId).catch((error) => {
+    if (error instanceof ProjectChatAccessDeniedError) throw new ProjectAttachmentNotFoundError();
+    throw error;
+  });
+  if (chat.scope !== "quick" || chat.projectId !== null || chat.status !== "active") throw new ProjectAttachmentNotFoundError();
+  const reference = buildAttachmentReference(input, "quick-attachment");
+  await writeQuickChatAttachmentBlob(ctx.userId, chatId, reference.id, input.bytes);
+  try {
+    await getDb().transaction(async (tx) => {
+      const chatOwner = ctx.organizationId === null
+        ? and(eq(projectChats.id, chatId), eq(projectChats.ownerUserId, ctx.userId), isNull(projectChats.organizationId))
+        : and(eq(projectChats.id, chatId), eq(projectChats.ownerUserId, ctx.userId), eq(projectChats.organizationId, ctx.organizationId));
+      const [locked] = await tx.select({
+        scope: projectChats.scope, projectId: projectChats.projectId, status: projectChats.status,
+        trashedAt: projectChats.trashedAt, attachmentManifest: projectChats.attachmentManifest,
+      }).from(projectChats).where(chatOwner).limit(1).for("update");
+      if (!locked || locked.scope !== "quick" || locked.projectId !== null || locked.status !== "active" || locked.trashedAt) throw new ProjectAttachmentNotFoundError();
+      const manifest = conversationAttachmentRefSchema.array().safeParse(locked.attachmentManifest);
+      if (!manifest.success) throw new ProjectAttachmentNotFoundError();
+      if (manifest.data.length >= 250) throw new ProjectAttachmentLimitError("A Quick Chat can retain at most 250 attachments.");
+      const usedBytes = manifest.data.reduce((sum, entry) => sum + entry.byteLength, 0);
+      if (usedBytes + reference.byteLength > PROJECT_ATTACHMENT_MAX_PROJECT_BYTES) {
+        throw new ProjectAttachmentLimitError("This Quick Chat has reached its 100 MiB file limit. Remove an older file or choose a smaller one.");
+      }
+      await tx.update(projectChats).set({ attachmentManifest: [...manifest.data, reference] }).where(chatOwner);
+    });
+  } catch (error) {
+    await deleteQuickChatAttachmentBlob(ctx.userId, chatId, reference.id).catch(() => undefined);
+    throw error;
+  }
+  return reference;
+}
+
+export async function loadQuickChatAttachment(
+  ctx: TenantContext, chatId: number, attachmentId: string,
+): Promise<{ reference: ConversationAttachmentRef; bytes: Buffer }> {
+  const chat = await getProjectChat(ctx, chatId).catch((error) => {
+    if (error instanceof ProjectChatAccessDeniedError) throw new ProjectAttachmentNotFoundError();
+    throw error;
+  });
+  // The original chat's attachment ownership survives an explicit move into a Project.
+  const manifest = conversationAttachmentRefSchema.array().safeParse(chat.attachmentManifest);
+  if (!manifest.success) throw new ProjectAttachmentNotFoundError();
+  const reference = manifest.data.find((item) => item.id === attachmentId && item.sourceRef === "quick-attachment:" + item.id);
+  if (!reference) throw new ProjectAttachmentNotFoundError();
+  return { reference, bytes: await readQuickChatAttachmentBlob(ctx.userId, chatId, reference.id) };
+}
+
+export async function resolveQuickChatConversationAttachments(
+  ctx: TenantContext, chatId: number, requested: readonly ConversationAttachmentRef[], includeContents: boolean,
+): Promise<ResolvedConversationAttachment[]> {
+  if (requested.length > PROJECT_ATTACHMENT_MAX_PER_MESSAGE) throw new ProjectAttachmentLimitError("A message can include at most five attachments.");
+  const chat = await getProjectChat(ctx, chatId).catch((error) => {
+    if (error instanceof ProjectChatAccessDeniedError) throw new ProjectAttachmentNotFoundError();
+    throw error;
+  });
+  const manifest = conversationAttachmentRefSchema.array().safeParse(chat.attachmentManifest);
+  if (!manifest.success) throw new ProjectAttachmentNotFoundError();
+  const output: ResolvedConversationAttachment[] = [];
+  const used = new Set<string>();
+  let imageBytes = 0;
+  for (const supplied of requested) {
+    if (used.has(supplied.id)) throw new ProjectAttachmentNotFoundError();
+    used.add(supplied.id);
+    const stored = manifest.data.find((item) => item.id === supplied.id && item.sourceRef === "quick-attachment:" + item.id);
+    if (!stored) throw new ProjectAttachmentNotFoundError();
+    assertMatchingReference(supplied, stored);
+    let result: ResolvedConversationAttachment = { reference: stored };
+    if (includeContents) {
+      const bytes = await readQuickChatAttachmentBlob(ctx.userId, chatId, stored.id);
+      const isolated = sandboxIsolationMode() === "strict" && attachmentUsesIsolatedDocumentParser(stored.fileName);
+      const resolved = isolated
+        ? await (async () => {
+            const sandbox = resolveSandboxRuntimeProfile();
+            return resolveConversationAttachmentContentIsolated(stored, bytes, {
+              backend: sandbox.backend!, sandboxPythonPath: sandbox.tools.python!,
+            });
+          })()
+        : await resolveConversationAttachmentContent(stored, bytes);
+      result = resolved; // shared parser returns the same validated canonical reference
+      if (resolved.imageBase64) imageBytes += bytes.byteLength;
+    }
+    output.push(result);
+  }
+  if (imageBytes > PROJECT_ATTACHMENT_MAX_TOTAL_IMAGE_BYTES) throw new ProjectAttachmentLimitError("Images in one AI request must total 12 MiB or less.");
+  return output;
+}
+
+/** After a permanently deleted Chat is inaccessible, remove the retained private blobs. */
+export async function cleanupQuickChatAttachmentBlobs(ctx: TenantContext, chatId: number, manifest: unknown): Promise<void> {
+  const parsed = conversationAttachmentRefSchema.array().safeParse(manifest);
+  if (!parsed.success) return;
+  for (const item of parsed.data) {
+    if (item.sourceRef !== "quick-attachment:" + item.id) continue;
+    await deleteQuickChatAttachmentBlob(ctx.userId, chatId, item.id);
+  }
 }
 
 export async function findProjectAttachmentResource(

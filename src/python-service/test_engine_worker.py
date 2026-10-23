@@ -55,6 +55,16 @@ class EngineRouteDeclarationTests(unittest.TestCase):
                     engine_routes.dispatch(route, {})
                 import_module.assert_not_called()
 
+    def test_source_bindings_use_the_actual_selected_request_contract_without_execution(self):
+        import advanced_valuation
+        with patch.object(advanced_valuation, "reverse_dcf", side_effect=AssertionError("metadata must not execute")):
+            contract = engine_routes.input_contract({"route": REVERSE_ROUTE})
+        self.assertIn("currentRevenue", contract["fields"])
+        self.assertNotIn("symbol", contract["fields"])
+        for body in ({"route": "../../os"}, {"route": REVERSE_ROUTE, "module": "os"}):
+            with self.assertRaises(engine_routes.EngineInputError):
+                engine_routes.input_contract(body)
+
     def test_schema_errors_do_not_echo_customer_values_in_worker_message(self):
         with self.assertRaises(engine_routes.EngineInputError) as caught:
             engine_routes.dispatch(REVERSE_ROUTE, {**REVERSE_BODY, "currentRevenue": "private-customer-value"})

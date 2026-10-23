@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ResponsiveContainer, ComposedChart, Scatter, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -73,10 +74,10 @@ function calculateRegression(x: number[], y: number[]) {
 }
 
 export default function CorrelationPanel({ onSymbol }: Props) {
-  const [assets, setAssets] = useState<string[]>(DEFAULT_CORRELATION_ASSETS);
-  const [assetInput, setAssetInput] = useState("");
-  const [selectedA, setSelectedA] = useState("AAPL");
-  const [selectedB, setSelectedB] = useState("^GSPC");
+  const [assets, setAssets] = useTerminalArtifactState<string[]>("CorrelationPanel.assets", DEFAULT_CORRELATION_ASSETS);
+  const [assetInput, setAssetInput] = useTerminalArtifactState("CorrelationPanel.assetInput", "");
+  const [selectedA, setSelectedA] = useTerminalArtifactState("CorrelationPanel.selectedA", "AAPL");
+  const [selectedB, setSelectedB] = useTerminalArtifactState("CorrelationPanel.selectedB", "^GSPC");
 
   const addAsset = () => {
     const t = assetInput.trim().toUpperCase();

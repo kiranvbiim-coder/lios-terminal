@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { LineChart as LCIcon } from "lucide-react";
 import { useOHLCV } from "@/lib/useFinance";
@@ -20,10 +21,10 @@ function fmt(v: number, digits = 3): string {
 }
 
 export default function AssetPricingPanel({ symbol: initialSymbol }: { symbol?: string }) {
-  const [input, setInput] = useState(initialSymbol || "AAPL");
-  const [symbol, setSymbol] = useState(initialSymbol || "AAPL");
-  const [range, setRange] = useState("1Y");
-  const [model, setModel] = useState<ModelKey>("capm");
+  const [input, setInput] = useTerminalArtifactState("AssetPricingPanel.input", initialSymbol || "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol || "AAPL");
+  const [range, setRange] = useTerminalArtifactState("AssetPricingPanel.range", "1Y");
+  const [model, setModel] = useTerminalArtifactState<ModelKey>("AssetPricingPanel.model", "capm");
 
   const { data: ffStatus } = useFamaFrenchStatus();
   const { data: series, isLoading: ohlcvLoading } = useOHLCV(symbol, range, "1d");

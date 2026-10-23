@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useQuotes } from "@/lib/useFinance";
@@ -85,8 +86,8 @@ function periodReturn(bars: { date: string; close: number }[], frame: Frame): nu
 }
 
 export default function SectorRotationPanel({ onSymbol, onNav }: Props) {
-  const [activeFrame, setActiveFrame] = useState<Frame>("1M");
-  const [activeCycle, setActiveCycle] = useState(0);
+  const [activeFrame, setActiveFrame] = useTerminalArtifactState<Frame>("SectorRotationPanel.activeFrame", "1M");
+  const [activeCycle, setActiveCycle] = useTerminalArtifactState("SectorRotationPanel.activeCycle", 0);
 
   const syms = SECTORS.map(s => s.sym);
   const { data: quotes = [], isLoading } = useQuotes(syms);

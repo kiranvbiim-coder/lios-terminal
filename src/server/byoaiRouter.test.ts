@@ -78,6 +78,8 @@ test("BYOAI: setup metadata exposes safe credential slots without secrets", () =
   }
   assert.equal(options.find((provider) => provider.id === "openai_compatible")?.requiresExternalConfig, true);
   assert.equal(options.find((provider) => provider.id === "openai")?.requiresExternalConfig, false);
+  assert.equal(options.find((provider) => provider.id === "ollama")?.defaultEndpoint, "http://127.0.0.1:11434");
+  assert.equal(options.find((provider) => provider.id === "lm_studio")?.defaultEndpoint, "http://127.0.0.1:1234/v1");
 });
 
 test("BYOAI: compatible endpoint requires both key and base URL", () => {

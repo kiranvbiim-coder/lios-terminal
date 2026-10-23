@@ -1,9 +1,11 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useState, useMemo, type ChangeEvent } from "react";
 import { Network } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
 import { InputSourceSelector, ModelInputEditor, ProvenanceReceipt, advancedInputProvenance, type InputSourceMode } from "./advancedOperationsClimate";
 import type { JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
+import { useAdvancedWorkflow } from "./advancedMacroForecastResearch";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 
 // Supply Chain domain's own real quant engine (LIMURIA_ENGINES port plan
 // Phase 8) -- lives here, under the actual `supply_chain` domain's own
@@ -196,18 +198,23 @@ const SUPPLY_CHAIN_METHODS: { key: SupplyChainMethod; label: string }[] = [
 
 export default function SupplyChainQuantPanel() {
   const inputCls = "bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40";
-  const [method, setMethod] = useState<SupplyChainMethod>("route");
-  const [result, setResult] = useState<unknown>(null);
+  const [method, setMethod] = useTerminalArtifactState<SupplyChainMethod>("SupplyChainQuantPanel.method", "route");
+  const [localResult, setResult] = useState<{ method: string; output: unknown } | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const native = useTerminalQuantRun();
+  const legacyResult = terminal?.target ? native.stored?.[`supplychain.${method}`] : localResult?.method === method ? localResult.output : null;
+  const nativeWorkflow = useAdvancedWorkflow("supply-chain", method);
+  const result = ["route", "safetystock", "bullwhip", "network", "resilience"].includes(method) ? legacyResult : nativeWorkflow.result;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [ports, setPorts] = useState(DEFAULT_PORTS);
+  const [ports, setPorts] = useTerminalArtifactState("SupplyChainQuantPanel.ports", DEFAULT_PORTS);
 
-  const [serviceLevelPct, setServiceLevelPct] = useState("95");
-  const [demandStdDev, setDemandStdDev] = useState("250");
-  const [echelonLTs, setEchelonLTs] = useState("7,14,30");
-  const [echelonNames, setEchelonNames] = useState("Retailer,Regional Depot,Central Factory");
-  const [uploadedDemandForStdDev, setUploadedDemandForStdDev] = useState<number[] | null>(null);
+  const [serviceLevelPct, setServiceLevelPct] = useTerminalArtifactState("SupplyChainQuantPanel.serviceLevelPct", "95");
+  const [demandStdDev, setDemandStdDev] = useTerminalArtifactState("SupplyChainQuantPanel.demandStdDev", "250");
+  const [echelonLTs, setEchelonLTs] = useTerminalArtifactState("SupplyChainQuantPanel.echelonLTs", "7,14,30");
+  const [echelonNames, setEchelonNames] = useTerminalArtifactState("SupplyChainQuantPanel.echelonNames", "Retailer,Regional Depot,Central Factory");
+  const [uploadedDemandForStdDev, setUploadedDemandForStdDev] = useTerminalArtifactState<number[] | null>("SupplyChainQuantPanel.uploadedDemandForStdDev", null);
 
   function handleDemandCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -226,7 +233,7 @@ export default function SupplyChainQuantPanel() {
     e.target.value = "";
   }
 
-  const [uploadedBullwhip, setUploadedBullwhip] = useState<{ demand: number[]; orders: number[] } | null>(null);
+  const [uploadedBullwhip, setUploadedBullwhip] = useTerminalArtifactState<{ demand: number[]; orders: number[] } | null>("SupplyChainQuantPanel.uploadedBullwhip", null);
   const syntheticBullwhip = useMemo(() => {
     const demand = sampleLognormal(200, Math.log(1000), 0.05, 7).map((v) => Math.round(v));
     const orders = demand.map((d, i) => Math.round(d + (sampleLognormal(1, 0, 0.15, 900 + i)[0] - 1) * 400));
@@ -248,23 +255,23 @@ export default function SupplyChainQuantPanel() {
     e.target.value = "";
   }
 
-  const [networkNodesInput, setNetworkNodesInput] = useState("Supplier_Taiwan,Assembly_Shenzhen,Port_Shanghai,Port_LA,Distribution_Center");
-  const [networkEdges, setNetworkEdges] = useState([
+  const [networkNodesInput, setNetworkNodesInput] = useTerminalArtifactState("SupplyChainQuantPanel.networkNodesInput", "Supplier_Taiwan,Assembly_Shenzhen,Port_Shanghai,Port_LA,Distribution_Center");
+  const [networkEdges, setNetworkEdges] = useTerminalArtifactState("SupplyChainQuantPanel.networkEdges", [
     { source: "Supplier_Taiwan", target: "Assembly_Shenzhen", weight: "80" },
     { source: "Assembly_Shenzhen", target: "Port_Shanghai", weight: "90" },
     { source: "Port_Shanghai", target: "Port_LA", weight: "70" },
     { source: "Port_LA", target: "Distribution_Center", weight: "100" },
   ]);
-  const [sourceNode, setSourceNode] = useState("Supplier_Taiwan");
-  const [sinkNode, setSinkNode] = useState("Distribution_Center");
+  const [sourceNode, setSourceNode] = useTerminalArtifactState("SupplyChainQuantPanel.sourceNode", "Supplier_Taiwan");
+  const [sinkNode, setSinkNode] = useTerminalArtifactState("SupplyChainQuantPanel.sinkNode", "Distribution_Center");
 
-  const [supplierCount, setSupplierCount] = useState("20");
-  const [singleSourceCount, setSingleSourceCount] = useState("4");
-  const [bufferDays, setBufferDays] = useState("30");
+  const [supplierCount, setSupplierCount] = useTerminalArtifactState("SupplyChainQuantPanel.supplierCount", "20");
+  const [singleSourceCount, setSingleSourceCount] = useTerminalArtifactState("SupplyChainQuantPanel.singleSourceCount", "4");
+  const [bufferDays, setBufferDays] = useTerminalArtifactState("SupplyChainQuantPanel.bufferDays", "30");
 
   // ── Dark advanced supply-chain routes (facility location / stochastic inventory / supplier portfolio / disruption sim / resilience frontier) ──
-  const [advancedSourceMode, setAdvancedSourceMode] = useState<InputSourceMode>("manual");
-  const [advancedInputs, setAdvancedInputs] = useState<Record<AdvancedSupplyChainMethod, string>>({
+  const [advancedSourceMode, setAdvancedSourceMode] = useTerminalArtifactState<InputSourceMode>("SupplyChainQuantPanel.advancedSourceMode", "manual");
+  const [advancedInputs, setAdvancedInputs] = useTerminalArtifactState<Record<AdvancedSupplyChainMethod, string>>("SupplyChainQuantPanel.advancedInputs", {
     "facility-location": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["facility-location"], null, 2),
     "stochastic-inventory": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["stochastic-inventory"], null, 2),
     "supplier-portfolio": JSON.stringify(ADVANCED_SUPPLY_CHAIN_EXAMPLES["supplier-portfolio"], null, 2),
@@ -304,18 +311,11 @@ export default function SupplyChainQuantPanel() {
         const parsed: unknown = JSON.parse(advancedInputs[method]);
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Model input must be a JSON object.");
         const parameters = parsed as Record<string, unknown>;
-        const advancedRes = await apiRequest("POST", `/api/quant/advanced/supply-chain/${method}`, {
-          ...parameters, inputProvenance: advancedInputProvenance(parameters, advancedSourceMode),
-        });
-        setResult(await advancedRes.json());
+        await nativeWorkflow.run(parameters, advancedInputProvenance(parameters, advancedSourceMode));
         return;
       }
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Supply Chain engine unavailable right now.");
-      }
-      setResult(await res.json());
+      const output = await native.run<Record<string, unknown>>(method, body as Record<string, unknown>, `supplychain.${method}`, path);
+      if (!terminal?.target) setResult({ method, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Supply Chain engine unavailable right now.");
     } finally {
@@ -529,6 +529,7 @@ export default function SupplyChainQuantPanel() {
             </>
           );
         })()}
+        {result != null && !isAdvancedSupplyChainMethod(method) && <><p className="text-xs text-muted-foreground">Recorded original supply-chain engine result · explicit Run recalculates edited inputs on this same terminal Artifact.</p><ProvenanceReceipt receipt={(result as { receipt?: AdvancedReceipt }).receipt}/></>}
       </div>
     </div>
   );

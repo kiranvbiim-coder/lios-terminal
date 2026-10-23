@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Play, Pause, RefreshCw, Sliders, Info } from "lucide-react";
@@ -10,11 +11,11 @@ const PRICE_MAX = 140;
 
 export default function QuantumFinancePanel({ symbol, externalBarrierMod }: { symbol: string; externalBarrierMod?: number }) {
   const [isPlaying, setIsPlaying] = useState(true);
-  const [barrierPos, setBarrierPos] = useState(115.0); // Resistance price level
-  const [barrierHeight, setBarrierHeight] = useState(12.0); // Strength of level
-  const [barrierWidth, setBarrierWidth] = useState(3.0); // Width of wall
-  const [momentum, setMomentum] = useState(1.5); // Price drift speed (wave velocity)
-  const [uncertainty, setUncertainty] = useState(4.0); // Width of wave packet (volatility)
+  const [barrierPos, setBarrierPos] = useTerminalArtifactState("QuantumFinancePanel.barrierPos", 115.0);
+  const [barrierHeight, setBarrierHeight] = useTerminalArtifactState("QuantumFinancePanel.barrierHeight", 12.0);
+  const [barrierWidth, setBarrierWidth] = useTerminalArtifactState("QuantumFinancePanel.barrierWidth", 3.0); // Width of wall
+  const [momentum, setMomentum] = useTerminalArtifactState("QuantumFinancePanel.momentum", 1.5);
+  const [uncertainty, setUncertainty] = useTerminalArtifactState("QuantumFinancePanel.uncertainty", 4.0);
 
   const activeBarrierHeight = externalBarrierMod !== undefined
     ? Math.max(0.5, barrierHeight * (1 - Math.abs(externalBarrierMod) * 0.8))

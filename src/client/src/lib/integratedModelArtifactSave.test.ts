@@ -10,7 +10,7 @@ import {
 } from "./integratedModelArtifactSave";
 import type { ModelArtifactSaveRequest } from "./integratedModelArtifactSave";
 
-const request: ModelArtifactSaveRequest = { id: 1, runId: "completed-run-a", projectId: 7, projectName: "Valuation research" };
+const request: ModelArtifactSaveRequest = { id: 1, runId: "completed-run-a", projectId: 7, destinationLabel: "Valuation research" };
 const detail: ArtifactDetail = {
   artifact: {
     id: "canonical-workbook-a", projectId: 7, ownerUserId: 11, organizationId: null,
@@ -72,7 +72,7 @@ test("late successful retention of an earlier run remains openable without claim
 });
 
 test("a stale response cannot replace a newer pending save or its canonical target", () => {
-  const next = { ...request, id: 2, runId: "completed-run-b", projectId: 8, projectName: "Risk review" };
+  const next = { ...request, id: 2, runId: "completed-run-b", projectId: 8, destinationLabel: "Risk review" };
   const saving = modelArtifactSaveReducer(initialModelArtifactSaveState, { type: "started", request: next });
   assert.equal(modelArtifactSaveReducer(saving, { type: "saved", request, detail }), saving);
   assert.equal(modelArtifactSaveReducer(saving, { type: "failed", request, message: "old failure" }), saving);
@@ -107,4 +107,14 @@ test("retrying the same run clears the visible failure and ignores late first-at
   assert.equal(modelArtifactSaveReducer(retrying, { type: "failed", request, message: "late error" }), retrying);
   const saved = modelArtifactSaveReducer(retrying, { type: "saved", request: retry, detail });
   assert.equal(isDisplayedModelSaved(saved.saved, retry.runId, retry.projectId), true);
+});
+
+test("Chat-owned model outputs cannot claim another Chat's saved result or a Project destination", () => {
+  const chatRequest: ModelArtifactSaveRequest = { id: 2, runId: request.runId, projectId: null, owningChatId: 31, destinationLabel: "this Chat" };
+  const chatDetail: ArtifactDetail = { ...detail, artifact: { ...detail.artifact, projectId: null, owningChatId: 31 } };
+  const state = modelArtifactSaveReducer(modelArtifactSaveReducer(initialModelArtifactSaveState, { type: "started", request: chatRequest }), { type: "saved", request: chatRequest, detail: chatDetail });
+  assert.equal(isDisplayedModelSaved(state.saved, request.runId, null, 31), true);
+  assert.equal(isDisplayedModelSaved(state.saved, request.runId, null, 32), false);
+  assert.equal(isDisplayedModelSaved(state.saved, request.runId, null), false);
+  assert.equal(isDisplayedModelSaved(state.saved, request.runId, 7), false);
 });
