@@ -754,20 +754,26 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const leavingActiveChat = action === "archive" && selection.chatId === chat.id;
+        if (leavingActiveChat && !(await confirmConversationSwitch(true))) return;
         await updateProjectChat(chat.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.chatId === chat.id) {
+        if (leavingActiveChat) {
+          discardConversationDraft();
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(remainingChatMode(chat.projectId));
         }
         invalidate(chat.projectId, chat.id);
         return;
       }
       if (action === "delete") {
+        const leavingActiveChat = selection.chatId === chat.id;
+        if (leavingActiveChat && !(await confirmConversationSwitch(true))) return;
         if (!(await requestLifecycle({ title: "Move chat to Trash?", detail: `“${chat.title}” can be restored from Trash & archive.`, confirmLabel: "Move to Trash" }))) return;
         await trashProjectChat(chat.id);
-        if (selection.chatId === chat.id) {
+        if (leavingActiveChat) {
+          discardConversationDraft();
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(remainingChatMode(chat.projectId));
         }
         invalidate(chat.projectId, chat.id);
         return;
@@ -798,10 +804,14 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const leavingActiveProject = action === "archive" && selection.projectId === project.id;
+        if (leavingActiveProject && !(await confirmConversationSwitch(true))) return;
         await updateProject(project.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.projectId === project.id) {
+        if (leavingActiveProject) {
+          discardConversationDraft();
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
         return;
@@ -809,11 +819,15 @@ export default function ProjectExperienceShell({
       if (action === "delete") {
         const dependencies = await getProjectDependencySummary(project.id);
         const detail = dependencies.total ? ` This moves ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} to Trash.` : "";
+        const leavingActiveProject = selection.projectId === project.id;
+        if (leavingActiveProject && !(await confirmConversationSwitch(true))) return;
         if (!(await requestLifecycle({ title: "Move Project to Trash?", detail: `“${project.name}” can be restored from Trash & archive.${detail}`, confirmLabel: "Move to Trash" }))) return;
         await trashProject(project.id);
-        if (selection.projectId === project.id) {
+        if (leavingActiveProject) {
+          discardConversationDraft();
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
       }
