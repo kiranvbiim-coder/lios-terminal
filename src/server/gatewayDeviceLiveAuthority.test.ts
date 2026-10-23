@@ -19,7 +19,7 @@ delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
 const { users } = await import("@shared/schema");
 const { pairedDevices } = await import("@shared/schemaDevices");
-const { gatewayHub } = await import("./gatewayRuntime");
+const { gatewayHub, publishQuoteUpdate } = await import("./gatewayRuntime");
 
 test("D5 production Gateway revocation, account restrictions and device scopes are live for any RPC", { timeout: 70_000 }, async (t) => {
   await initDb();
@@ -92,5 +92,14 @@ test("D5 production Gateway revocation, account restrictions and device scopes a
   await getDb().update(users).set({ active: true, role: "internal_analyst" }).where(eq(users.id, user.id));
   assert.equal((await call("ping5", "gateway.ping", {})).error?.code, "FORBIDDEN",
     "role changes require reconnecting under the new authority");
+  const closed = once(client, "close");
+  // The socket has a previous subscription and remains connected after
+  // refusal. Outbound broadcasts must still revalidate current device
+  // authority, deliver no quote, and drop the stale connection.
+  publishQuoteUpdate([{ symbol: "TEST", price: 3, change: 0, changePercent: 0 }]);
+  const [closeCode] = await closed;
+  assert.equal(closeCode, 4001);
+  assert.equal(frames.some(frame => frame.type === "event" && frame.event === "quotes.update"), false,
+    "an old paired quote subscription cannot leak data after role/device revocation");
   client.terminate();
 });

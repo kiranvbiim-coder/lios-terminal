@@ -207,12 +207,31 @@ export class GatewayHub {
     this.closeListeners.push(listener);
   }
 
-  /** Delivers an event to every ready connection for which `select` returns a payload. */
+  /**
+   * Outbound delivery also needs current authority: revocation must prevent
+   * an already-connected paired device from receiving quote / automation /
+   * decision invalidations. Existing session sockets retain synchronous
+   * delivery; paired devices are checked against Home state before emit.
+   */
   publish<E extends GatewayEventName>(event: E, select: (connection: GatewayConnection) => z.input<(typeof GATEWAY_EVENTS)[E]> | null): void {
     for (const connection of this.connections) {
       if (!connection.ready) continue;
-      const payload = select(connection);
-      if (payload !== null) connection.emit(event, payload);
+      const deliver = () => {
+        if (!this.isReadyConnection(connection)) return;
+        const payload = select(connection);
+        if (payload !== null) connection.emit(event, payload);
+      };
+      if (!connection.identity.deviceId || !this.options.authorizeRequest) {
+        deliver();
+        continue;
+      }
+      // A downgraded paired device must reconnect and obtain fresh scopes,
+      // not silently retain a broader connection's event stream.
+      const scope: GatewayScope = connection.scopes.includes("admin") ? "admin"
+        : connection.scopes.includes("write") ? "write" : "read";
+      void this.assertCurrentRequestAuthority(connection, scope).then(deliver).catch(() => {
+        if (this.isReadyConnection(connection)) connection.socket.close(4001, "Current device authorization revoked");
+      });
     }
   }
 
