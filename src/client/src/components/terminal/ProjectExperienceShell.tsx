@@ -112,6 +112,7 @@ import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, res
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
 import { canonicalRecentChats, hasUnsentConversationDraft, remainingChatMode } from "@/lib/conversationSwitchPolicy";
+import { contextForChatMode, savedChatIdForMode, selectionForTemporaryChat, sourceScopeForChatMode } from "@/lib/chatPersistenceBoundary";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -349,8 +350,8 @@ export default function ProjectExperienceShell({
   const archivedQuickChatsQuery = useQuickChats("archived");
   const archivedProjectChatsQuery = useProjectChats(selection.projectId, "archived");
   const projectHomeQuery = useProjectHome(selection.projectId);
-  const messagesQuery = useProjectChatMessages(selection.chatId);
   const [chatMode, setChatMode] = useState<ChatMode>(() => (selection.chatId && !selection.projectId ? "quick" : resolveInitialChatMode(selection)));
+  const messagesQuery = useProjectChatMessages(savedChatIdForMode(chatMode, selection.chatId));
   const [projectHomeRequested, setProjectHomeRequested] = useState(false);
   const [temporaryMessages, setTemporaryMessages] = useState<LocalMessage[]>([]);
   const temporaryWorkingContextRef = useRef<WorkingContextSnapshot | null>(null);
@@ -579,7 +580,7 @@ export default function ProjectExperienceShell({
 
   useEffect(() => {
     const scopedProjectId = chatMode === "project" ? selection.projectId : null;
-    setSourceScope(loadComposerSourceScope(scopedProjectId));
+    setSourceScope(chatMode === "temporary" ? "auto" : loadComposerSourceScope(scopedProjectId));
   }, [chatMode, selection.projectId]);
 
   useEffect(() => {
@@ -880,12 +881,21 @@ export default function ProjectExperienceShell({
   };
 
   const startTemporary = async () => {
-    if (!(await confirmConversationSwitch())) return;
+    // WS-16 handles draft consent. Never carry a selected Project/Chat bookmark,
+    // saved Artifact, source scope or previous Temporary history into a new one.
+    if (!(await confirmConversationSwitch(true))) return;
+    const ephemeral = selectionForTemporaryChat();
+    discardConversationDraft();
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false);
-    selection.setChatId(null);
+    selection.setChatId(ephemeral.chatId);
+    selection.setProjectId(ephemeral.projectId);
+    setProjectHomeRequested(false);
     setChatMode("temporary");
+    setSourceScope("auto");
     setTemporaryMessages([]);
     temporaryWorkingContextRef.current = null;
+    setLastWorkflowRequest(null);
+    setLastSubmittedMessage("");
     setStreaming("");
     setRuntimeEvents([]);
     setRuntimeRequestId(null);
@@ -1084,11 +1094,12 @@ export default function ProjectExperienceShell({
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
-    if (sourceScope === "files" && !hasStagedAttachments) {
+    const effectiveSourceScope = sourceScopeForChatMode(chatMode, sourceScope);
+    if (effectiveSourceScope === "files" && !hasStagedAttachments) {
       setLifecycleNotice("Files scope requires at least one explicitly attached Project file.");
       return;
     }
-    if (sourceScope === "web" && hasStagedAttachments) {
+    if (effectiveSourceScope === "web" && hasStagedAttachments) {
       setLifecycleNotice("Web scope excludes Project file contents. Switch to Auto, My Data or Files to analyze the staged attachment(s).");
       return;
     }
@@ -1149,13 +1160,13 @@ export default function ProjectExperienceShell({
       requestId,
       continuationOf: override?.continuationOf ?? null,
       message,
-      sourceScope,
+      sourceScope: effectiveSourceScope,
       executionMode,
       aiDirectApproved,
       approvals,
       transmissionPolicy: policy,
       attachments: attachmentsForRequest,
-      context,
+      context: contextForChatMode(chatMode, context),
     };
     const voiceReview = voiceTranscripts.length
       ? { transcripts: voiceTranscripts, transcriptReviewed: voiceTranscriptReviewed }
@@ -1412,7 +1423,7 @@ export default function ProjectExperienceShell({
 
   const updateSourceScope = (next: ConversationSourceScope) => {
     setSourceScope(next);
-    saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
+    if (chatMode !== "temporary") saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
     recordP1ShellEvent("source_scope_change", next);
   };
 
