@@ -265,3 +265,30 @@ test("GM20 the governed Project path executes through the real official MCP v2 S
     globalThis.fetch = originalFetch;
   }
 });
+
+test("MCP tool observation callback is never invoked without two explicit current source rights", async () => {
+  const allowed = {
+    ...connection,
+    config: { ...connection.config, aiTransmission: "allow", aiUsageRights: "cleared" },
+  } as SourceConnection;
+  let captured = 0;
+  const dependencies = {
+    listConnections: async () => [allowed],
+    configForConnection: () => config(),
+    callTool: async () => ({ isError: false, content: [{ type: "text", text: "safe observation" }] }),
+  };
+  await invokeGovernedExternalMcpTool(
+    { connectionId: 41, toolId: "quotes.read", arguments: {} },
+    { userId: 7, organizationId: 9, projectId: 77 }, new AbortController().signal,
+    dependencies, () => { captured += 1; },
+  );
+  assert.equal(captured, 1);
+
+  allowed.config = { ...allowed.config, aiTransmission: "deny" };
+  await invokeGovernedExternalMcpTool(
+    { connectionId: 41, toolId: "quotes.read", arguments: {} },
+    { userId: 7, organizationId: 9, projectId: 77 }, new AbortController().signal,
+    dependencies, () => { captured += 1; },
+  );
+  assert.equal(captured, 1);
+});
