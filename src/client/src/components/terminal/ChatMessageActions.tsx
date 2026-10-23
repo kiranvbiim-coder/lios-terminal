@@ -20,7 +20,7 @@ export default function ChatMessageActions({ content, role, messageId, onQuote }
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const copyInFlightRef = useRef<string | null>(null);
-  useEffect(() => { setCopyState("idle"); }, [content, role]);
+  useEffect(() => { setCopyState("idle"); }, [content, role, messageId]);
 
   const visible = visibleChatMessageText(content, role);
   if (!visible.trim()) return null;
