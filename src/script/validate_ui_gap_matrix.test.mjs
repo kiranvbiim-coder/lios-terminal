@@ -14,7 +14,7 @@ test("duplicate or missing workstream IDs cannot pass the audit gate",()=>{
   assert.throws(()=>validateUiGapMatrix(matrix.replace(/^\| WS-65 \|.*$/m,""),plan),/every canonical UX workstream/);
 });
 test("a fabricated main source path or unsupported status cannot pass",()=>{
-  assert.throws(()=>validateUiGapMatrix(matrix.replace("src/client/src/App.tsx","src/client/src/NotARealPage.tsx"),plan),/Unverifiable main source path/);
+  assert.throws(()=>validateUiGapMatrix(matrix.replace("| WS-01 | P0 | audit-complete | `src/client/src/App.tsx`", "| WS-01 | P0 | audit-complete | `src/client/src/NotARealPage.tsx`"),plan),/Unverifiable main source path/);
   assert.throws(()=>validateUiGapMatrix(matrix.replace("| WS-28 | P0 | gap-confirmed |","| WS-28 | P0 | shipped |"),plan),/Unknown evidence status/);
 });
 test("historical UX fixes cannot disappear from reconciliation",()=>{

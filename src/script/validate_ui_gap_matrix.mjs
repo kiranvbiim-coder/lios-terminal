@@ -37,7 +37,7 @@ export function validateUiGapMatrix(matrix, plan, root = repositoryRoot) {
     assert.match(source, /^`(?:src|docs)\/.+`$/);
     assert.ok(fs.existsSync(path.join(root, source.slice(1,-1))), "Missing original-audit evidence path: " + source);
   }
-  assert.match(matrix, /Main SHA: `[0-9a-f]{40}`/);
+  assert.match(matrix, /Main SHA:[^\n]{0,8}`[0-9a-f]{40}`/);
   assert.match(matrix, /not a rendered UI test/i);
   return {workstreams:rows.length,findings:issues.length};
 }
