@@ -657,7 +657,8 @@ export default function ProjectExperienceShell({
   };
   // Mutations that can fail must ask for consent *before* the request but
   // discard only after server acknowledgement and successful navigation.
-  const confirmConversationSwitch = async (deferDiscard = false) => {
+  const confirmConversationSwitch = async (deferDiscard = false, allowPendingCreation = false) => {
+    if (chatCreationInFlightRef.current && !allowPendingCreation) { setLifecycleNotice("Finish creating the new Chat before switching saved work."); return false; }
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
     if (!hasUnsentConversationDraft({ text: input, attachmentFiles: pendingAttachmentFiles.length, attachmentRefs: pendingAttachmentRefs.length, voiceTranscripts: voiceTranscripts.length })) return true;
@@ -838,7 +839,7 @@ export default function ProjectExperienceShell({
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
-      if (!(await confirmConversationSwitch(true))) {
+      if (!(await confirmConversationSwitch(true, true))) {
         pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null);
         return;
       }
@@ -865,7 +866,7 @@ export default function ProjectExperienceShell({
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
-      if (!(await confirmConversationSwitch(true))) return;
+      if (!(await confirmConversationSwitch(true, true))) return;
       const chat = await createQuickChat();
       discardConversationDraft();
       invalidate(null, chat.id);
