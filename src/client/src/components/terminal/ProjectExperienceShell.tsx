@@ -35,6 +35,7 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { keepConversationDraft, keepConversationDraftVersion, useInvalidateArtifacts } from "@/lib/useArtifacts";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { speakText, useVoiceProviders, useVoiceRecorder } from "@/lib/useVoiceInput";
+import { voiceAvailability } from "@/lib/composerAvailability";
 import {
   dispatchVisualContext,
   inferVisualSemanticContext,
@@ -369,10 +370,16 @@ export default function ProjectExperienceShell({
   });
   const voiceProvidersQuery = useVoiceProviders();
   const voiceRuntimeStatus = voiceProvidersQuery.data?.runtime;
-  const hasNonWhisperTranscription = Boolean(voiceProvidersQuery.data?.transcription.some((provider) => provider.id !== "lios.voice.whisper-cpp"));
-  const hasLocalWhisper = Boolean(voiceProvidersQuery.data?.transcription.some((provider) => provider.id === "lios.voice.whisper-cpp"));
-  const voiceInputAvailable = hasNonWhisperTranscription || (hasLocalWhisper && Boolean(voiceRuntimeStatus?.browserRecordingReady));
-  const voiceOutputAvailable = Boolean(voiceProvidersQuery.data?.speech.some((provider) => provider.id));
+  const voiceStatus = voiceAvailability({
+    loading: voiceProvidersQuery.isLoading,
+    error: voiceProvidersQuery.isError,
+    transcription: voiceProvidersQuery.data?.transcription,
+    speech: voiceProvidersQuery.data?.speech,
+    browserRecordingReady: voiceRuntimeStatus?.browserRecordingReady,
+    ffmpegFound: voiceRuntimeStatus?.ffmpegFound,
+  });
+  const voiceInputAvailable = voiceStatus.transcriptionReady;
+  const voiceOutputAvailable = voiceStatus.speechReady;
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -463,11 +470,11 @@ export default function ProjectExperienceShell({
     setInput((current) => (current.trim() ? `${current.trim()} ${result.text}` : result.text));
     requestAnimationFrame(() => composerRef.current?.focus());
   });
-  const voiceInputHint = voiceProvidersQuery.isLoading
-    ? "Checking voice readiness…"
+  const voiceInputHint = voiceRecorder.isRecording
+    ? "Stop recording. Your clip is then uploaded to LiOS Home for transcription, not auto-sent to Chat."
     : voiceInputAvailable
-      ? (voiceRecorder.isRecording ? "Stop recording" : "Speak to LiOS")
-      : voiceRuntimeStatus?.guidance ?? "Set up a transcription runtime to use voice input.";
+      ? "Record speech; after stopping, LiOS Home transcribes it for review before sending."
+      : voiceStatus.label;
   const voiceActionLabel = voiceProvidersQuery.isLoading
     ? "Checking…"
     : voiceInputAvailable
@@ -2263,6 +2270,7 @@ export default function ProjectExperienceShell({
                     title={voiceInputHint}
                     aria-label={voiceInputAvailable ? (voiceRecorder.isRecording ? "Stop voice recording" : "Speak to LiOS") : "Set up voice input"}
                     aria-pressed={voiceRecorder.isRecording}
+                    aria-describedby="lios-voice-consent"
                   >
                     <Mic className="h-4 w-4" />
                   </button>
@@ -2276,6 +2284,12 @@ export default function ProjectExperienceShell({
                     <Send className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                <p id="lios-voice-consent" className="px-4 pb-1 font-ui text-[11px] leading-4 text-muted-foreground">
+                  {voiceRecorder.isTranscribing ? "Transcribing the recorded clip in LiOS Home…" : voiceRecorder.isRecording ? "Recording locally; press Stop to upload the clip for transcription." : voiceStatus.label}
+                  {" "}Audio is uploaded to LiOS Home only after recording stops. Review/edit the transcript before Send; provider pricing and quotas are not verified here.
+                </p>
+                {voiceProvidersQuery.isError && <button type="button" className="mx-4 mb-2 min-h-10 rounded px-2 font-ui text-xs text-amber-200 underline focus-visible:outline focus-visible:outline-2"
+                  onClick={() => void voiceProvidersQuery.refetch()}>Retry voice provider status</button>}
                 {voiceRecorder.error && (
                   <div className="border-t border-red-500/20 bg-red-500/[0.04] px-3 py-1.5 font-ui text-[12px] text-red-300">
                     {voiceRecorder.error}
