@@ -27,6 +27,7 @@ import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 import { requireP9ModelRefreshReview } from "./p9ModelRefresh";
 import { requireP9PortfolioMateriality } from "./p9PortfolioMateriality";
+import { notifyDataChanged } from "./gatewayRuntime";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
 const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+\/-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*\S{8,})/i;
@@ -505,7 +506,10 @@ export async function createP9Notification(
   },
 ): Promise<ProjectAutomationNotification | null> {
   await getProject(ctx, workflow.projectId);
-  return getDb().transaction(async (tx) => {
+  // The Home invalidation is an ephemeral hint, NEVER the notification
+  // record. Publish only after a committed, newly delivered notification.
+  // A retry that finds the same run receipt must not rebroadcast it.
+  const outcome = await getDb().transaction(async (tx) => {
     // The current policy read, cooldown check and insert share one workflow lock.
     // Run-start snapshots cannot override a later mute or race another completion.
     const [current] = await tx.select().from(projectAutomationWorkflows).where(and(
@@ -518,7 +522,7 @@ export async function createP9Notification(
       eq(projectAutomationNotifications.workflowId, current.id),
       eq(projectAutomationNotifications.runId, runId),
     )).limit(1);
-    if (existing) return existing;
+    if (existing) return { row: existing, created: false };
     const [last] = await tx.select().from(projectAutomationNotifications).where(and(
       notificationTenantFilter(ctx),
       eq(projectAutomationNotifications.workflowId, current.id),
@@ -561,8 +565,12 @@ export async function createP9Notification(
       relevanceScore: input.result?.relevanceScore ?? 1,
       createdAt: now,
     }).returning();
-    return row;
+    return { row, created: true };
   });
+  if (outcome.created && outcome.row.status === "delivered") {
+    notifyDataChanged("notifications", { userId: ctx.userId });
+  }
+  return outcome.row;
 }
 
 export async function listP9Notifications(
