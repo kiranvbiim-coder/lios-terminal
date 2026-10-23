@@ -81,6 +81,9 @@ Do **not** let model output inject JSX, HTML, executable props, arbitrary URLs, 
 
 ## 4. Outside-catalog donor research — source compatibility gates
 
+**Current final source selection:** [Consolidated LIOS UI/UX Open-Source Shortlist](../technical/LIOS_UI_UX_REUSE_FINAL_SHORTLIST_2026-10-23.md) covers 26 external reuse candidates, including the user-submitted **Uiverse, MUI, Chakra UI and HeroUI** and actual Opensource UI adaptation PR #122. The prior Innovation Lab is research context, not another competing choice register. Keep shadcn/Radix primary; Uiverse/Opensource UI for carefully audited local interactions; MUI/Chakra as conditional specialist comparisons; HeroUI v3 React19/Tailwind4 **not drop-in** to LIOS React18/Tailwind3.
+
+
 See the discovery annex for the 16 researched UI sources and license cautions. Three preferred donor experiments (new OSS **candidate**, not approved packaged payload):
 - **Kibo Dropzone**: coherent MIT source in `shadcnblocks/kibo` `packages/dropzone/index.tsx`; actual upstream tree `3d63cdb15b79d972e3dc38a10997987672f9b263`. It uses `react-dropzone`; upstream package targets React19 for development, LiOS React18. **Adapt/port only after dependency, keyboard, native/Electron and exact source license tests**; preserve #100's 5-file, ≤20 MiB file, ≤6 MiB image, types, permissions and Temporary refusal.
 - **Tremor**: Apache-2.0 copy/paste source patterns for comparison data views (Radix/Tailwind) only where they beat existing P4/ECharts; bind values to P4, source provenance and Unknown state, never bundled example market values.
