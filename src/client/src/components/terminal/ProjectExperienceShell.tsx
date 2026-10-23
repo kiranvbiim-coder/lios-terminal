@@ -110,7 +110,7 @@ import { parseProjectWorkspaceDirectives } from "@/lib/projectWorkspaceDirective
 import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatMarkdown";
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
-import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { FIRST_USE_UNIVERSAL_STARTERS, firstUseRecoveryDestination, LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -1827,13 +1827,13 @@ export default function ProjectExperienceShell({
                     <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                     </div>
-                    <div className="lios-chat-empty-state__eyebrow mt-5 font-terminal text-[12px] uppercase tracking-[0.2em] text-amber-200/80">LiOS · Financial intelligence</div>
+                    <div className="lios-chat-empty-state__eyebrow mt-5 font-terminal text-[12px] uppercase tracking-[0.2em] text-amber-200/80">LiOS · Ask anything</div>
                     <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-white">What do you want to understand, test or build?</h1>
                     <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
                       Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
                     </p>
-                    <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Example prompts">
-                      {PROJECT_STARTER_PROMPTS.map((starter) => (
+                    <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="General and specialist example prompts">
+                      {[...FIRST_USE_UNIVERSAL_STARTERS, ...PROJECT_STARTER_PROMPTS].map((starter, index) => (
                         <button
                           key={starter.id}
                           type="button"
@@ -1850,13 +1850,17 @@ export default function ProjectExperienceShell({
                             });
                           }}
                         >
+                          <span className="mb-1 block font-terminal text-[10px] uppercase tracking-wider text-muted-foreground">{index < FIRST_USE_UNIVERSAL_STARTERS.length ? "General" : "Finance specialist"}</span>
                           <span className="block font-ui text-[13px] font-semibold text-foreground">{starter.label}</span>
                           <span className="mt-1 block font-ui text-[12px] leading-4 text-muted-foreground">{starter.description}</span>
                         </button>
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
-                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-[12px] font-semibold text-black transition-colors hover:bg-amber-300">
+                      <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-[12px] font-semibold text-black transition-colors hover:bg-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">
+                        <Sparkles className="h-3.5 w-3.5" /> Ask LiOS
+                      </button>
+                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-[12px] font-medium text-muted-foreground hover:text-foreground">
                         <Plus className="h-3.5 w-3.5" /> Create a Project
                       </button>
                       <button
@@ -1962,7 +1966,7 @@ export default function ProjectExperienceShell({
                 onMutationApply={(action) => void approveRuntimeAction(action, "once")}
                 onMutationCancel={(action) => denyRuntimeAction(action)}
                 onRecoveryAction={(action) => {
-                  if (/^(connect\b|open connection center$)/i.test(action)) {
+                  if (firstUseRecoveryDestination(action) === "connections") {
                     if (lastSubmittedMessage.trim()) {
                       setInput(lastSubmittedMessage);
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
