@@ -173,7 +173,12 @@ async function main() {
     await run(csrf);
     await new Promise(resolve => setTimeout(resolve, 350));
     assert.equal(recoveredHints, hintCount, "revoked device must not receive follow-up notifications");
-    checks.push("live-device-revocation");
+    const deniedReconnect = makeClient(created.identity);
+    deniedReconnect.start();
+    await wait(() => deniedReconnect.state === "failed", "revoked signed identity refused on a fresh challenge");
+    assert.equal(deniedReconnect.hello, null,
+      "the revoked device must not receive a new authenticated Home session");
+    checks.push("live-device-revocation-and-fresh-auth-denial");
   } finally {
     for (const c of clients) c.stop();
     if (deviceId) await api("/api/devices/" + deviceId, "DELETE", undefined, csrf).catch(() => {});
