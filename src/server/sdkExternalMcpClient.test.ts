@@ -98,7 +98,9 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
     const raw = await new Response(options?.body).text();
     const request = JSON.parse(raw) as { jsonrpc?: string; id?: string | number; method?: string; params?: { cursor?: string; name?: string } };
     methods.push(request.method ?? "unknown");
-    if (!request.id || request.method === "notifications/initialized") {
+    // JSON-RPC request ID 0 is valid and must receive a correlated response.
+    // Treating it as a notification stalls the official SDK until timeout.
+    if (request.id === undefined || request.method === "notifications/initialized") {
       return new Response(null, { status: 202 });
     }
     let result: unknown;
