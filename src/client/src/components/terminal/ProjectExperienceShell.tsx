@@ -663,6 +663,7 @@ export default function ProjectExperienceShell({
   // Mutations that can fail must ask for consent *before* the request but
   // discard only after server acknowledgement and successful navigation.
   const confirmConversationSwitch = async (deferDiscard = false, allowPendingCreation = false) => {
+    if (sendInFlightRef.current) { setLifecycleNotice("Finish sending the current request before switching conversations."); return false; }
     if (chatCreationInFlightRef.current && !allowPendingCreation) { setLifecycleNotice("Finish creating the new Chat before switching saved work."); return false; }
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
@@ -840,7 +841,7 @@ export default function ProjectExperienceShell({
   };
 
   const newProjectChat = async (starterPrompt?: string) => {
-    if (busy || !selection.projectId || chatCreationInFlightRef.current) return;
+    if (busy || sendInFlightRef.current || !selection.projectId || chatCreationInFlightRef.current) return;
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
@@ -867,7 +868,7 @@ export default function ProjectExperienceShell({
   };
 
   const newQuickChat = async () => {
-    if (busy || chatCreationInFlightRef.current) return;
+    if (busy || sendInFlightRef.current || chatCreationInFlightRef.current) return;
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
@@ -1085,7 +1086,7 @@ export default function ProjectExperienceShell({
     const hasStagedAttachments = Boolean(override?.attachments?.length || pendingAttachmentRefs.length || pendingAttachmentFiles.length);
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached Project file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
-    if (!message || busy || busyRef.current || creatingChat || sendInFlightRef.current) return;
+    if (!message || busy || busyRef.current || creatingChat || chatCreationInFlightRef.current || sendInFlightRef.current) return;
     // A ref blocks the second Enter/click synchronously, before React rerenders.
     sendInFlightRef.current = true;
     const originalComposerDraft = input;
