@@ -95,6 +95,10 @@ export async function withOfficialMcpClient<T>(
   const client = new Client({ name: "LiOS", version: "1.0.0" }, {
     listMaxPages: 16,
     enforceStrictCapabilities: true,
+    // SDK v2 defaults to the legacy protocol unless opted in. Probe modern
+    // server/discover, falling back to the official legacy initialize path
+    // only when the server explicitly demonstrates legacy behavior.
+    versionNegotiation: { mode: "auto", probe: { timeoutMs: 5_000 } },
   });
   const transport = new StreamableHTTPClientTransport(new URL(policy.normalizedEndpoint), {
     redirectPolicy: "same-origin",
@@ -103,7 +107,10 @@ export async function withOfficialMcpClient<T>(
   });
   try {
     if (controller.signal.aborted) throw new Error("MCP request cancelled.");
-    await client.connect(transport);
+    await client.connect(transport, {
+      signal: controller.signal,
+      timeout: Math.min(30_000, Math.max(1_000, config.policy.healthTimeoutMs)),
+    });
     if (controller.signal.aborted) throw new Error("MCP request cancelled.");
     return await operation(client, controller.signal);
   } catch (error) {
