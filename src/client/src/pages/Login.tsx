@@ -1,8 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Shield, KeyRound, AlertTriangle, Lock, UserPlus, Building2, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { authEntryErrorMessage, authEntryFetch, safeSsoVerificationUrl, verifiedEntrySession } from "@/lib/authEntryState";
 import type { SessionData } from "@/App";
 import FirstRunAdminSetup from "./FirstRunAdminSetup";
 import ReferenceBrand from "@/components/terminal/ReferenceBrand";
@@ -28,28 +28,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-// A licence-blocked organisation gets a 403 from /api/auth/login whose
-// `reason` names the state that blocks login outright. Distinguishing them
-// matters -- "grace period expired" and "your account was suspended" call
-// for a different next step than a generic "access denied".
-// "license_billing_hold" never reaches here (it does not block login, only
-// feature access -- see LicenseStatusBanner.tsx, which handles that state
-// post-login instead).
-function licenseBlockedMessage(reason: string | undefined): string | null {
-  switch (reason) {
-    case "license_grace_expired":
-      return "Your organization's billing grace period has ended. Contact your account administrator to restore access.";
-    case "license_suspended":
-      return "This organization's access has been suspended. Contact your account administrator.";
-    case "license_security_locked":
-      return "This organization's access has been locked for security reasons. Contact your account administrator.";
-    case "license_terminated":
-      return "This organization's license has been terminated. Contact your account administrator.";
-    default:
-      return null;
-  }
-}
-
 export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginProps) {
   const formId = useId();
   const [email, setEmail] = useState("");
@@ -61,7 +39,11 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
-  const [progressVal, setProgressVal] = useState(0);
+  const authPending = useRef(false);
+  const screenMounted = useRef(true);
+  useEffect(() => { screenMounted.current = true; return () => { screenMounted.current = false; }; }, []);
+  const [bootstrapRetry, setBootstrapRetry] = useState(0);
+  const [bootstrapError, setBootstrapError] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<{
     setupRequired: boolean;
     setupAllowed: boolean;
@@ -70,12 +52,17 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/bootstrap/status", { cache: "no-store" })
+    setBootstrapError(false);
+    setBootstrapStatus(null);
+    authEntryFetch("/api/auth/bootstrap/status", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("bootstrap status unavailable");
         return response.json() as Promise<{ setupRequired?: boolean; setupAllowed?: boolean; mode?: string | null }>;
       })
       .then((data) => {
+        if (typeof data?.setupRequired !== "boolean" || typeof data?.setupAllowed !== "boolean") {
+          throw new Error("Invalid bootstrap policy.");
+        }
         if (!cancelled) {
           setBootstrapStatus({
             setupRequired: data.setupRequired === true,
@@ -86,23 +73,14 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       })
       .catch(() => {
         if (!cancelled) {
-          setBootstrapStatus({ setupRequired: false, setupAllowed: false, mode: null });
-          setErrorMsg("Unable to verify first-run administrator status. Restart LiOS if this is a new installation.");
+          setBootstrapError(true);
         }
       });
     return () => { cancelled = true; };
-  }, []);
-
-  const simulateHandshake = (targetText: string, delay: number): Promise<void> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        setStatusText((prev) => [...prev, targetText]);
-        resolve();
-      }, delay);
-    });
-  };
+  }, [bootstrapRetry]);
 
   const handleLogin = async () => {
+    if (authPending.current) return;
     if (!email || !email.includes("@")) {
       setErrorMsg("A valid email address is required.");
       return;
@@ -111,151 +89,117 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       setErrorMsg("Password is required.");
       return;
     }
-
+    authPending.current = true;
     setErrorMsg("");
     setLoading(true);
-    setProgressVal(10);
-    setStatusText(["Connecting securely…"]);
-
+    setStatusText(["Contacting the secure sign-in service…"]);
     try {
-      await simulateHandshake("Preparing secure sign-in…", 300);
-      setProgressVal(30);
-
-      const response = await fetch("/api/auth/login", {
+      const response = await authEntryFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-
-      setProgressVal(60);
-      await simulateHandshake("Verifying your credentials…", 400);
-
-      const data = await response.json();
-      setProgressVal(90);
-
       if (!response.ok) {
-        await simulateHandshake("Sign-in could not be completed.", 300);
-        setErrorMsg(licenseBlockedMessage(data.reason) ?? data.error ?? "System access denied.");
-        setLoading(false);
+        const body = await response.json().catch(() => null) as { reason?: unknown } | null;
+        setErrorMsg(authEntryErrorMessage("signin", response.status, body?.reason));
         return;
       }
-
-      await simulateHandshake("Restoring your LiOS workspace…", 400);
-      setProgressVal(100);
-
-      // The login response omits lifecycleStage and licence facts; App.tsx
-      // needs the full session shape, so read it from /api/auth/me.
-      const sessionResponse = await fetch("/api/auth/me", { cache: "no-store" });
-      const session: SessionData = await sessionResponse.json();
-      if (!sessionResponse.ok) throw new Error("Your session could not be verified.");
-
-      setTimeout(() => {
-        onLoginSuccess(session);
-      }, 500);
-
-    } catch (err) {
-      setErrorMsg("LiOS could not reach the secure sign-in service. Check your connection and try again.");
+      setStatusText(["Credentials accepted. Verifying your saved session…"]);
+      const session = await verifiedEntrySession<SessionData>();
+      if (screenMounted.current) onLoginSuccess(session);
+    } catch {
+      setErrorMsg("LiOS could not verify your sign-in. Check your connection and retry.");
+    } finally {
+      authPending.current = false;
       setLoading(false);
     }
   };
 
-
   const handleEnterpriseSso = async () => {
+    if (authPending.current) return;
     if (!email || !email.includes("@")) {
       setErrorMsg("Enter your work email before starting enterprise SSO.");
       return;
     }
-
+    authPending.current = true;
     setErrorMsg("");
     setLoading(true);
-    setProgressVal(15);
-    setStatusText(["Finding your organization sign-in…"]);
-
+    setStatusText(["Requesting organization sign-in approval…"]);
     try {
-      const startResponse = await fetch("/api/client/auth/sso/device/start", {
+      const startResponse = await authEntryFetch("/api/client/auth/sso/device/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
-      const authorization = await startResponse.json() as {
+      const authorization = await startResponse.json().catch(() => null) as {
         requestId?: string;
         verifier?: string;
         verificationUrl?: string;
         expiresAt?: string;
-        error?: string;
-      };
-      if (!startResponse.ok || !authorization.requestId || !authorization.verifier || !authorization.verificationUrl || !authorization.expiresAt) {
-        throw new Error(authorization.error ?? "Enterprise SSO is not available for this work email.");
+        reason?: string;
+      } | null;
+      if (!startResponse.ok) {
+        setErrorMsg(authEntryErrorMessage("sso", startResponse.status, authorization?.reason));
+        return;
       }
-
-      setProgressVal(35);
-      setStatusText((prev) => [...prev, "Opening your organization identity provider…"]);
-      await openExternalUrl(authorization.verificationUrl);
-
+      const verificationUrl = safeSsoVerificationUrl(authorization?.verificationUrl);
+      if (!authorization?.requestId || !authorization.verifier || !verificationUrl || !authorization.expiresAt) {
+        setErrorMsg("Organization SSO could not provide a valid approval request. Try again.");
+        return;
+      }
+      setStatusText(["Opening your organization's secure approval page…"]);
+      await openExternalUrl(verificationUrl);
+      if (!screenMounted.current) return;
       const expiresAt = Date.parse(authorization.expiresAt);
-      if (!Number.isFinite(expiresAt)) throw new Error("Enterprise SSO authorization expiry is invalid.");
-      setProgressVal(55);
-      setStatusText((prev) => [...prev, "Waiting for secure browser approval…"]);
-
-      while (Date.now() < expiresAt) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        setErrorMsg("Organization approval expired. Start sign-in again.");
+        return;
+      }
+      setStatusText(["Waiting for approval in the organization sign-in page…"]);
+      while (screenMounted.current && Date.now() < expiresAt) {
         await delay(1_500);
-        const pollResponse = await fetch("/api/client/auth/sso/device/poll", {
+        if (!screenMounted.current) return;
+        const pollResponse = await authEntryFetch("/api/client/auth/sso/device/poll", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ requestId: authorization.requestId, verifier: authorization.verifier }),
         });
-        const poll = await pollResponse.json() as { status?: string; error?: string };
-        if (pollResponse.status === 202 && poll.status === "pending") continue;
-        if (!pollResponse.ok || poll.status !== "authenticated") {
-          throw new Error(poll.error ?? "Enterprise SSO authorization could not be completed.");
+        const poll = await pollResponse.json().catch(() => null) as { status?: string; reason?: string } | null;
+        if (pollResponse.status === 202 && poll?.status === "pending") continue;
+        if (!pollResponse.ok) {
+          setErrorMsg(authEntryErrorMessage("sso", pollResponse.status, poll?.reason));
+          return;
         }
-
-        setProgressVal(90);
-        setStatusText((prev) => [...prev, "Approval received. Restoring your LiOS workspace…"]);
-        const sessionResponse = await fetch("/api/auth/me", { cache: "no-store" });
-        const sessionData = await sessionResponse.json();
-        if (!sessionResponse.ok) throw new Error(sessionData.error ?? "Enterprise session could not be verified.");
-        setProgressVal(100);
-        setStatusText((prev) => [...prev, "Organization sign-in complete."]);
-        onLoginSuccess(sessionData as SessionData);
+        if (poll?.status !== "authenticated") {
+          setErrorMsg("Your organization did not confirm the approval. Start sign-in again.");
+          return;
+        }
+        setStatusText(["Organization approval confirmed. Verifying your session…"]);
+        const session = await verifiedEntrySession<SessionData>();
+        if (screenMounted.current) onLoginSuccess(session);
         return;
       }
-      throw new Error("Enterprise SSO authorization expired. Start the sign-in again.");
-    } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Enterprise SSO could not be completed.");
+      if (screenMounted.current) setErrorMsg("Organization sign-in approval expired. Start sign-in again.");
+    } catch {
+      setErrorMsg("LiOS could not complete organization SSO. Check your connection and retry.");
+    } finally {
+      authPending.current = false;
       setLoading(false);
-      setProgressVal(0);
     }
   };
 
-
   const handleRegister = async () => {
-    if (name.trim().length < 2) {
-      setErrorMsg("Your name is required.");
-      return;
-    }
-    if (!email || !email.includes("@")) {
-      setErrorMsg("A valid email address is required.");
-      return;
-    }
-    if (password.length < 8) {
-      setErrorMsg("Choose a stronger password with at least 8 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMsg("Passwords do not match.");
-      return;
-    }
-
+    if (authPending.current) return;
+    if (name.trim().length < 2) { setErrorMsg("Your name is required."); return; }
+    if (!email || !email.includes("@")) { setErrorMsg("A valid email address is required."); return; }
+    if (password.length < 8) { setErrorMsg("Choose a stronger password with at least 8 characters."); return; }
+    if (password !== confirmPassword) { setErrorMsg("Passwords do not match."); return; }
+    authPending.current = true;
     setErrorMsg("");
     setLoading(true);
-    setProgressVal(15);
-    setStatusText(["Creating your LiOS account…"]);
-
+    setStatusText(["Requesting an account from the LiOS service…"]);
     try {
-      await simulateHandshake("Creating your secure workspace…", 250);
-      setProgressVal(45);
-      const response = await fetch("/api/auth/register", {
+      const response = await authEntryFetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -265,36 +209,30 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
           ...(organizationName.trim() ? { organizationName: organizationName.trim() } : {}),
         }),
       });
-      const data = await response.json();
       if (!response.ok) {
-        setErrorMsg(data.error ?? "Trial account could not be created.");
-        setLoading(false);
+        const body = await response.json().catch(() => null) as { reason?: unknown } | null;
+        setErrorMsg(authEntryErrorMessage("register", response.status, body?.reason));
         return;
       }
-
-      setProgressVal(75);
-      await simulateHandshake("Activating your 7-day Pro trial…", 300);
-      const sessionResponse = await fetch("/api/auth/me", { cache: "no-store" });
-      const sessionData = await sessionResponse.json();
-      if (!sessionResponse.ok) throw new Error(sessionData.error ?? "Trial session could not be verified.");
-
-      setProgressVal(100);
-      await simulateHandshake("Your trial is ready. Opening LiOS…", 250);
-      onLoginSuccess(sessionData as SessionData);
-    } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "LiOS control plane is currently unreachable.");
+      setStatusText(["Account request accepted. Verifying your session…"]);
+      const session = await verifiedEntrySession<SessionData>();
+      if (screenMounted.current) onLoginSuccess(session);
+    } catch {
+      setErrorMsg("LiOS could not verify your new account session. Check your connection and retry.");
+    } finally {
+      authPending.current = false;
       setLoading(false);
     }
   };
 
   if (bootstrapStatus === null) {
-    return (
-      <div className="min-h-screen w-screen bg-[#030303] flex items-center justify-center">
-        <span className="font-terminal text-[10px] tracking-widest text-muted-foreground animate-pulse">
-          VERIFYING FIRST-RUN SECURITY...
-        </span>
-      </div>
-    );
+    return <main className="min-h-screen w-screen bg-[#030303] flex items-center justify-center p-5">
+      {bootstrapError ? <section className="w-full max-w-md rounded-lg border border-border bg-background p-6 text-foreground">
+        <h1 className="text-lg font-semibold">Sign-in service unavailable</h1>
+        <p role="alert" className="mt-3 text-sm text-muted-foreground">LiOS could not verify whether this installation requires administrator setup. Your account and settings have not been changed.</p>
+        <button type="button" onClick={() => setBootstrapRetry((value) => value + 1)} className="mt-5 min-h-10 rounded-md border border-primary/40 px-4 py-2 text-sm text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry connection</button>
+      </section> : <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Verifying this installation's sign-in requirements…</p>}
+    </main>;
   }
 
   if (bootstrapStatus?.setupRequired) {
@@ -442,7 +380,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                 className="w-full flex min-h-11 items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 text-black text-sm font-semibold rounded-md transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 {clientMode === "register" ? <UserPlus className="w-3.5 h-3.5" /> : <KeyRound className="w-3.5 h-3.5" />}
-                {clientMode === "register" ? "Start 7-Day Pro Trial" : "Sign In"}
+                {clientMode === "register" ? "Create account" : "Sign In"}
               </button>
 
               {clientMode === "signin" && (
@@ -464,17 +402,17 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                 }}
                 className="w-full min-h-11 rounded-md border border-border px-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/40%] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
-                {clientMode === "signin" ? "New to LiOS? Start your 7-day Pro trial" : "Already have LiOS? Sign in"}
+                {clientMode === "signin" ? "New to LiOS? Create an account" : "Already have LiOS? Sign in"}
               </button>
 
               <div className="text-xs leading-5 text-muted-foreground text-center space-y-1 mt-4">
-                <p>• Your 7-day Pro trial is controlled by the secure LiOS service, not your device clock.</p>
+                <p>• Your plan and trial eligibility are controlled by the secure LiOS service, not your device clock.</p>
                 <p>• Your connected data and BYOAI credentials remain on this desktop.</p>
               </div>
             </div>
           ) : (
             <div className="space-y-5 py-4">
-              <Progress value={progressVal} className="h-1 bg-muted rounded-full [&>div]:bg-primary" />
+              <div role="status" aria-live="polite" className="text-sm text-amber-200">Verifying your request with LiOS…</div>
 
               <div className="min-h-28 rounded-lg border border-white/[0.07] bg-black/20 p-4">
                 <div className="font-terminal text-[7px] uppercase tracking-[0.18em] text-amber-200/70">Secure sign-in</div>
@@ -489,7 +427,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
               </div>
 
               <div className="text-center font-ui text-[10px] text-amber-200/80">
-                Protecting your session and restoring your workspace…
+                Your session opens only after LiOS verifies your account.
               </div>
             </div>
           )}
