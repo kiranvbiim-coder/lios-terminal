@@ -567,9 +567,30 @@
         "point-in-time-patterns",
         "backtest-patterns"
       ],
-      "importedPaths": ["tradingagents/agents/researchers/bear_researcher.py","tradingagents/agents/researchers/bull_researcher.py","tradingagents/agents/risk_mgmt/aggressive_debator.py","tradingagents/agents/risk_mgmt/conservative_debator.py","tradingagents/agents/risk_mgmt/neutral_debator.py","tradingagents/agents/utils/agent_utils.py","tradingagents/agents/utils/rating.py","tradingagents/graph/conditional_logic.py","tradingagents/graph/signal_processing.py"],
-      "destinationPaths": ["server/tradingAgentsResearchGate.mjs","server/tradingAgentsResearchGate.d.mts","server/tradingAgentsResearchTool.ts","server/tradingAgentsResearchTool.test.ts","server/tradingAgentsResearchGate.test.mjs","server/conversationRuntime.ts"],
-      "modifications": ["Adapted 9 approved upstream rating, signal, bull/bear and risk-debate source paths into bounded fail-closed parser/state logic, not the Python LangGraph agent runtime.","Registered read-only Project and tenant-scoped governed conversation tool; invalid/contradictory rating requires human review, no brokerage, provider or unverified source citations.","Replaced upstream model, checkpoint, market data and trading authority with canonical LiOS GM-12, P5/P7, P11 and P4 seams; remaining upstream source paths are audited but not imported."],
+      "importedPaths": [
+        "tradingagents/agents/researchers/bear_researcher.py",
+        "tradingagents/agents/researchers/bull_researcher.py",
+        "tradingagents/agents/risk_mgmt/aggressive_debator.py",
+        "tradingagents/agents/risk_mgmt/conservative_debator.py",
+        "tradingagents/agents/risk_mgmt/neutral_debator.py",
+        "tradingagents/agents/utils/agent_utils.py",
+        "tradingagents/agents/utils/rating.py",
+        "tradingagents/graph/conditional_logic.py",
+        "tradingagents/graph/signal_processing.py"
+      ],
+      "destinationPaths": [
+        "server/tradingAgentsResearchGate.mjs",
+        "server/tradingAgentsResearchGate.d.mts",
+        "server/tradingAgentsResearchTool.ts",
+        "server/tradingAgentsResearchTool.test.ts",
+        "server/tradingAgentsResearchGate.test.mjs",
+        "server/conversationRuntime.ts"
+      ],
+      "modifications": [
+        "Adapted 9 approved upstream rating, signal, bull/bear and risk-debate source paths into bounded fail-closed parser/state logic, not the Python LangGraph agent runtime.",
+        "Registered read-only Project and tenant-scoped governed conversation tool; invalid/contradictory rating requires human review, no brokerage, provider or unverified source citations.",
+        "Replaced upstream model, checkpoint, market data and trading authority with canonical LiOS GM-12, P5/P7, P11 and P4 seams; remaining upstream source paths are audited but not imported."
+      ],
       "notes": "Only the 9-path bounded source mechanics for merged PR #633 are adapted behind GM-12, with native V1 38150791824. Original 75-path audit and full Apache license on disk; full TradingAgents Python runtime, market/provider models, trading and packaged SP-05 are NOT adopted or approved.",
       "subsystems": [
         {
@@ -2445,7 +2466,7 @@
         "Donor Python network relation selection/sorting and bounded source-context mechanics adapted into typed TS; no random shuffling, pandas/tokenizers, or donor prompt assembly.",
         "Canonical researchSourceCompositionTool retrieves only entitled Project source documents before derived links; no imported GraphRAG index, cache, model or provider.",
         "Native macOS V1 golden, malformed/bounded and P7 restricted-source isolation regressions passed run 38139645612; merged PR #591 at 23c22c1a3ef1cd28a0bbb3938c36074734459bf7.",
-      "GraphRAG relationship candidate/in-network ranking and source_context incidence adapted into deterministic P7 permitted evidence neighborhoods with direct and two-hop co-mention navigation; not a causal/finance fact or full graph runtime."
+        "GraphRAG relationship candidate/in-network ranking and source_context incidence adapted into deterministic P7 permitted evidence neighborhoods with direct and two-hop co-mention navigation; not a causal/finance fact or full graph runtime."
       ],
       "notes": "Two exact MIT-approved GraphRAG source paths power bounded P7 read-only co-mention links and source neighborhoods, behind AI-use rights and canonical P5 entity identity. Full GraphRAG Python/vector/community/model runtime, model/data assets and SP-03/05 packaging remain unaccepted. Original license: third_party/licenses/graphrag-MIT.txt; provenance: docs/technical/CA_GRAPHRAG_P7_ADOPTION.md."
     },
@@ -2745,11 +2766,53 @@
       "bundled": false,
       "noticeRequiredOnImport": true,
       "externalRights": "separate_review_required",
-      "roles": ["native-runtime-distribution", "p10-copy-only-provisioning"],
-      "destinationPaths": ["script/build_native_runtime_bundle.py", "server/nativeRuntimeBundle.ts"],
+      "roles": [
+        "native-runtime-distribution",
+        "p10-copy-only-provisioning"
+      ],
+      "destinationPaths": [
+        "script/build_native_runtime_bundle.py",
+        "server/nativeRuntimeBundle.ts"
+      ],
       "importedPaths": [],
-      "modifications": ["No upstream build-system source imported. Release tooling materializes internal links, removes unused absolute-path console wrappers/bytecode, installs the locked native core closure, preserves full component grants, and signs final Mach-O bytes before manifest hashing."],
+      "modifications": [
+        "No upstream build-system source imported. Release tooling materializes internal links, removes unused absolute-path console wrappers/bytecode, installs the locked native core closure, preserves full component grants, and signs final Mach-O bytes before manifest hashing."
+      ],
       "notes": "Release-build-only local candidate CPython 3.13.16 macOS arm64, install-only archive SHA256 ca0e6a70fb75a0984751bd75493e3de77680aef7fbd0fea9b903c299537b3423. Full-component legal metadata from companion archive SHA256 3497822d8bf4884bc79258f62668f985654d03d40ec74da4ca9ae7a5667c4362 is retained and hash-verified. Upstream build-system source is MPL-2.0 and is not imported; CPython/native library grants remain separate. Generated binary is ignored, not included in source distribution or approved public release; existing P10 activation/rollback remains authoritative. Minimum selected native-wheel OS is macOS14. No Windows or signed/notarized acceptance."
+    },
+    {
+      "id": "openclaw-gm22-byoai-failover",
+      "name": "OpenClaw transient-vs-permanent AI provider failure classifier (bounded adaptation)",
+      "repository": "openclaw/openclaw",
+      "releaseTag": "v2026.9.7",
+      "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "license": "MIT",
+      "posture": "pinned_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "OpenClaw (MIT)",
+      "externalRights": "separate_review_required",
+      "baselineDonorId": "openclaw",
+      "roles": [
+        "GM-22-BYOAI-safe-fallback",
+        "GM-12-provider-routing-security"
+      ],
+      "importedPaths": [
+        "src/agents/failover-policy.ts"
+      ],
+      "destinationPaths": [
+        "server/openclawByoaiFailover.ts",
+        "server/byoaiTransport.ts",
+        "server/openclawByoaiFailover.test.ts"
+      ],
+      "modifications": [
+        "Adapts OpenClaw transient vs auth/model/format failure-policy classification to canonical LiOS AIProviderErrorCode with a deliberately strict fail-closed mapping.",
+        "Blocks cross-provider user data transmission after policy_denied, not_configured, invalid_request, 401/403, unknown upstream failures and unavailable model.",
+        "Keeps already-permitted transient outage fallback, pre-existing LiOS credential vault, enterprise policy, project source permissions, user-owned AI selection and provider routing.",
+        "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported."
+      ],
+      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies."
     }
   ]
 }
