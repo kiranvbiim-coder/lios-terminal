@@ -1399,3 +1399,79 @@ body,
 .lios-reference-titlebar-brand .font-display { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:400; }
 
 .lios-reference-navigation-rail, .lios-reference-expand-sidebar { box-sizing:border-box; }
+
+/* WS-07: readable hierarchy without replacing the canonical shell or growing chart glyphs.
+ * Preserve financial chart/data density; apply minimum type ONLY to user-facing chrome.
+ * rem grows with browser/OS text zoom. No fixed-height overrides or new font imports.
+ */
+.terminal-root {
+  --lios-ux-control-type: .75rem;  /* 12 CSS px at default root size */
+  --lios-ux-caption-type: .6875rem; /* 11 CSS px at default root size */
+}
+
+/* Chat's existing 5–10px utilities are overridden only when attached to an
+ * interactive control; leave passive evidence tables and numerical glyphs alone.
+ * The established project-shell 12–14px passive hierarchy remains authoritative.
+ */
+.terminal-root .lios-project-experience-shell
+  :is(button, a, label, input, textarea, select, [role='button'])
+  :is(
+    [class~="text-[5px]"],
+    [class~="text-[6px]"],
+    [class~="text-[6.5px]"],
+    [class~="text-[7px]"],
+    [class~="text-[7.5px]"],
+    [class~="text-[8px]"],
+    [class~="text-[8.5px]"],
+    [class~="text-[9px]"],
+    [class~="text-[10px]"]
+  ) {
+  font-size: max(var(--lios-ux-control-type), calc(var(--lios-ux-control-type) * var(--lios-type-scale))) !important;
+  line-height: 1.4;
+}
+
+/* Chat navigation and Artifact actions have separate legacy reference rules. */
+.terminal-root .lios-reference-navigation-projects :is(.lios-primary-navigation button, .lios-account-trigger, .lios-account-trigger small),
+.terminal-root .lios-reference-artifact-tabs button,
+.terminal-root .lios-reference-titlebar button {
+  font-size: var(--lios-ux-control-type) !important;
+}
+.terminal-root .lios-reference-navigation-brand,
+.terminal-root .lios-reference-titlebar-brand .lios-reference-brand {
+  font-size: var(--lios-ux-caption-type) !important;
+}
+
+/* The original Dockview panel chrome is readable; analytical plot labels,
+ * numerical table cells, and finance direction colors are left untouched.
+ */
+.terminal-root .lios-dockview-workspace.dockview-theme-dark,
+.terminal-root .lios-dockview-workspace .dockview-theme-dark {
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tab-font-size: 12px;
+}
+.terminal-root [data-testid^='workspace-pane-'] > .lios-pane-header .lios-pane-title {
+  font-size: var(--lios-ux-control-type) !important;
+}
+.terminal-root [data-testid^='workspace-pane-'] > .lios-pane-header :is(.lios-pane-code, .lios-symbol) {
+  font-size: var(--lios-ux-caption-type) !important;
+}
+.terminal-root [data-testid^='workspace-pane-'] > .lios-pane-header
+  :is(button, [role='button']):is([class~="text-[6px]"], [class~="text-[7px]"], [class~="text-[8px]"], [class~="text-[9px]"], [class~="text-[10px]"]) {
+  font-size: var(--lios-ux-caption-type) !important;
+}
+
+/* Connections is a separate full-page route (outside .terminal-root).
+ * Scope microtype to its EXISTING data panel marker so login, demos, other
+ * routes and Radix portals do not inherit unrelated changes. PR #105 owns
+ * dialog semantics, focus and credential flow; this rule changes none of them.
+ */
+body:has([data-testid='connect-data']) :is(
+  [class~="text-[6px]"],
+  [class~="text-[7px]"],
+  [class~="text-[8px]"],
+  [class~="text-[9px]"],
+  [class~="text-[10px]"]
+) {
+  font-size: .75rem !important;
+  line-height: 1.4;
+}
