@@ -38,6 +38,36 @@ test("D1 transport blocks redirecting SDK calls to unapproved hosts or paths bef
 });
 
 
+test("GM20 SDK connects to user-owned desktop loopback MCP with zero redirects, but never in hosted mode", async () => {
+  const previousHost = process.env.HOST;
+  const previousDatabase = process.env.DATABASE_URL;
+  const endpoint = "http://127.0.0.1:4318/mcp";
+  const requests: Array<{ url: string; allowLocalhost: boolean | undefined; redirects: number | undefined }> = [];
+  const fakeFetch = async (url: string, _options?: Omit<RequestInit, "redirect">,
+    allowLocalhost?: boolean, redirects?: number) => {
+    requests.push({ url, allowLocalhost, redirects });
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: "test", result: {} }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  try {
+    delete process.env.HOST;
+    process.env.DATABASE_URL = "postgres://user-desktop-local-db";
+    const desktopFetch = scopedMcpFetch(endpoint, fakeFetch);
+    const response = await desktopFetch(endpoint, { method: "POST" });
+    assert.equal(response.ok, true);
+    assert.deepEqual(requests, [{ url: endpoint, allowLocalhost: true, redirects: 0 }]);
+    process.env.HOST = "0.0.0.0";
+    await assert.rejects(() => desktopFetch(endpoint, { method: "POST" }), /source policy/i);
+    assert.equal(requests.length, 1, "hosted mode must reject loopback before any network call");
+  } finally {
+    if (previousHost === undefined) delete process.env.HOST;
+    else process.env.HOST = previousHost;
+    if (previousDatabase === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabase;
+  }
+});
+
 test("D1 actual official SDK initializes, aggregates tool pages and invokes a tool through LiOS-scoped HTTP without network", async () => {
   const endpoint = "https://8.8.8.8/mcp";
   const methods: string[] = [];
