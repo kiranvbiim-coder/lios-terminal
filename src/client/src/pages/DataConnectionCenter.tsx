@@ -1143,7 +1143,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
   }
 
   const setupReadState = resolveAsyncSurfaceState({
-    hasData: Boolean(setupQuery.data),
+    hasData: Boolean(setupQuery.data) && !setupQuery.isError,
     isPending: setupQuery.isPending,
     isError: setupQuery.isError,
     error: setupQuery.error,
