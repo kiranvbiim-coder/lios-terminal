@@ -27,8 +27,9 @@ test("WS-25 Project Chat retains explicitly selected Project context", () => {
 });
 
 test("WS-25 Temporary Chat starts Auto rather than inheriting Project private-data source scope", () => {
-  for (const scope of ["auto","my_data","web","files"] as const)
+  for (const scope of ["auto","my_data","files"] as const)
     assert.equal(sourceScopeForChatMode("temporary", scope), "auto");
+  assert.equal(sourceScopeForChatMode("temporary", "web"), "web");
 });
 
 test("WS-25 Quick and Project Chat source scopes are unchanged", () => {
