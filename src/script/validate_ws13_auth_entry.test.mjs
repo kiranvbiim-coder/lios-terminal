@@ -62,7 +62,8 @@ test("WS-13 never renders unsanitized auth backend error or unverified license p
   assert.match(login, /authEntryErrorMessage\("signin", response\.status, body\?\.reason\)/);
   assert.match(login, /authEntryErrorMessage\("register", response\.status, body\?\.reason\)/);
   assert.match(login, /safeSsoVerificationUrl\(authorization\?\.verificationUrl\)/);
-  assert.match(login, /Start free trial/);
+  assert.match(login, /Create account/);
+  assert.doesNotMatch(login, /Start free trial|Start 7-Day Pro Trial/);
 });
 
 test("WS-13 each auth network stage is a real bounded request, no new credential store", () => {
