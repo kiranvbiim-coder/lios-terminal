@@ -112,6 +112,7 @@ import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, res
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
 import { canonicalRecentChats, hasUnsentConversationDraft, remainingChatMode } from "@/lib/conversationSwitchPolicy";
+import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -374,6 +375,10 @@ export default function ProjectExperienceShell({
   const voiceOutputAvailable = Boolean(voiceProvidersQuery.data?.speech.some((provider) => provider.id));
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
+  const sendInFlightRef = useRef(false);
+  const stopInFlightRef = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const chatCreationInFlightRef = useRef(false);
