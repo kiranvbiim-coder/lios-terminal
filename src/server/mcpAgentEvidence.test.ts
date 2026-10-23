@@ -24,8 +24,7 @@ const output = { isError: false, content: [{ type: "text", text: "AAPL price 127
 
 test("MCP evidence is never released on tool approval alone or missing source-rights declaration", () => {
   for (const field of ["aiTransmission", "aiUsageRights"]) {
-    const config = { aiTransmission: "allow", aiUsageRights: "cleared" };
-    delete (config as Record<string, string>)[field];
+    const config = { [field]: null };
     assert.equal(captureMcpAgentEvidence(connection({}, config), 77, "quotes.read", output), null);
   }
   assert.equal(captureMcpAgentEvidence(connection({}, { aiTransmission: "deny" }), 77, "quotes.read", output), null);
