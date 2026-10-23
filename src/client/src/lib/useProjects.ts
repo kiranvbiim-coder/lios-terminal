@@ -1,5 +1,6 @@
 import { addressForSelection, formatLiosAddress, parseLiosAddress } from "@shared/liosAddress";
 import { resolveInitialSelection } from "./projectEntry";
+import { shouldClearSavedChatAddress } from "./chatPersistenceBoundary";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
@@ -162,9 +163,17 @@ export function useProjectSelection(): {
 
   // Keep the address in step with the selection without adding a history entry per click.
   useEffect(() => {
-    const address = addressForSelection({ projectId, chatId });
+    const selection = { projectId, chatId };
+    const address = addressForSelection(selection);
     const next = address ? formatLiosAddress(address) : null;
-    if (next && window.location.hash !== next) window.history.replaceState(null, "", next);
+    if (next && window.location.hash !== next) {
+      window.history.replaceState(window.history.state, "", next);
+    } else if (shouldClearSavedChatAddress(selection, Boolean(parseLiosAddress(window.location.hash)))) {
+      // A fresh Temporary Chat has no saved route. Never leave an old Project
+      // deep-link in the address bar after clearing the selected Project.
+      // Preserve an unrelated hash fragment and the original search query.
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    }
   }, [projectId, chatId]);
 
   useEffect(() => {
