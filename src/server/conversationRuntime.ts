@@ -125,6 +125,7 @@ import type {
   UniversalDataPlan,
 } from "@shared/trustContracts";
 import { universalDataPlanSchema } from "@shared/trustContracts";
+import { ambiguousMentionTokens } from "@shared/mentionContext";
 import {
   assertNotAborted,
   eventBase,
@@ -1178,6 +1179,9 @@ export function includedResourceRefs(
 ): ProjectRuntimeResource[] {
   if (sourceScope === "web") return [];
   const mentions = userMentionTokens(message);
+  // A normalized @label may otherwise resolve multiple on-demand records.
+  // A typed mention is never authority to include an ambiguous resource.
+  const ambiguous = new Set(ambiguousMentionTokens(resources, message));
   const selectedAttachments = new Set(attachments.map((attachment) => attachment.sourceRef));
   return resources.filter((resource) => {
     if (resource.contextMode === "excluded") return false;
@@ -1185,7 +1189,8 @@ export function includedResourceRefs(
     if (sourceScope === "files") return explicitlyAttached;
     if (explicitlyAttached) return true;
     if (resource.contextMode === "project") return true;
-    return mentions.has(normalizedMentionToken(resource.label));
+    const token = normalizedMentionToken(resource.label);
+    return !ambiguous.has(token) && mentions.has(token);
   }).slice(0, 30);
 }
 
