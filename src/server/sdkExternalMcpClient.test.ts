@@ -45,7 +45,10 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
     const verb = options?.method ?? "GET";
     if (verb === "GET") return new Response(null, { status: 405 });
     if (verb === "DELETE") return new Response(null, { status: 202 });
-    const raw = typeof options?.body === "string" ? options.body : "{}";
+    // SDK v2 may send a streamed BodyInit, not just a plain string.
+    // Reading the real body is essential: otherwise the mock silently
+    // returns HTTP 202 and the official client waits for a reply forever.
+    const raw = await new Response(options?.body).text();
     const request = JSON.parse(raw) as { jsonrpc?: string; id?: string | number; method?: string; params?: { cursor?: string; name?: string } };
     methods.push(request.method ?? "unknown");
     if (!request.id || request.method === "notifications/initialized") {
@@ -53,7 +56,7 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
     }
     let result: unknown;
     if (request.method === "initialize") {
-      result = { protocolVersion: "2026-07-28", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "offline-test", version: "1" } };
+      result = { protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "offline-test", version: "1" } };
     } else if (request.method === "tools/list") {
       result = request.params?.cursor
         ? { tools: [{ name: "quotes.read", inputSchema: { type: "object", properties: {} } }] }
@@ -76,7 +79,7 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
     fetch: scopedMcpFetch(endpoint, fakeFetch),
   });
   try {
-    await client.connect(transport);
+    await client.connect(transport, { timeout: 2500 });
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map(tool => tool.name).sort(), ["filings.read", "quotes.read"]);
     const observation = await client.callTool({ name: "quotes.read", arguments: { symbol: "ABC" } });
