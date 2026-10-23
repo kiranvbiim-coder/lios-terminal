@@ -749,6 +749,8 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
     const { conversationRequestSchema } = await import("@shared/conversationRuntime");
     const { executeConversationRuntime, getConversationTool, currentConversationToolApprovalPolicy } = await import("./conversationRuntime");
     const { createAttribution } = await import("./byoaiRouter");
+    const { createExecutionJournal } = await import("./exec/execution-journal");
+    type PersistedLedger = Awaited<ReturnType<typeof createExecutionJournal>>;
     const wireCalls: string[] = [];
     let cancelAfterRemoteToolEntered: (() => void) | null = null;
     const server = createServer(async (request, response) => {
@@ -802,7 +804,8 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       const reply = JSON.stringify({ decision: "complete", answer: "The connected source supplied a test observation." });
       const run = (requestId: string, controller: AbortController, answers: string[], resume?: {
         state: import("./agentLoop").AgentLoopResumeState; authorization: unknown;
-      }, onLedger?: (event: import("./exec/agent-run-events").AgentEventInput) => void | Promise<void>) => {
+      }, onLedger?: (event: import("./exec/agent-run-events").AgentEventInput) => void | Promise<void>,
+      persisted?: PersistedLedger) => {
         const ledger: import("./exec/agent-run-events").AgentEventInput[] = [];
         const events: ConversationRuntimeEvent[] = [];
         const prompts: string[] = [];
@@ -816,7 +819,11 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
           tenant: ownerCtx, scope: "project", chatId: chatA.id,
           projectId: projectA.id, resources: [], history: [], request,
           signal: controller.signal,
-          agentLoop: { ledger: async event => { ledger.push(event); await onLedger?.(event); }, ...(resume ? { resume } : {}) },
+          agentLoop: { ledger: async event => {
+            ledger.push(event);
+            await persisted?.appendAgentEvent(requestId, event);
+            await onLedger?.(event);
+          }, ...(resume ? { resume } : {}) },
           aiCompletion: async completion => {
             const prompt = completion.messages.map(msg => msg.content).join("\n");
             prompts.push(prompt);
@@ -869,15 +876,28 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
 
       const approvedId = crypto.randomUUID();
       const approvedController = new AbortController();
-      const pending = await run(approvedId, approvedController, [plan]).promise;
+      const savedOwner = { userId: owner.id, projectId: projectA.id, chatId: chatA.id };
+      const journalOptions = {
+        directory: path.join(dataDir, "gm20-mcp-journal"),
+        keyDirectory: path.join(dataDir, "gm20-mcp-keys"),
+      };
+      const persisted = await createExecutionJournal(journalOptions);
+      await persisted.begin({ id: approvedId, owner: savedOwner, label: "Approved MCP", agentRun: true });
+      const pending = await run(approvedId, approvedController, [plan], undefined, undefined, persisted).promise;
       assert.equal(pending.awaitingApproval, true);
       assert.ok(pending.agentPause);
       assert.deepEqual(wireCalls, []);
+      await persisted.markWaitingApproval(approvedId);
+      assert.equal((await persisted.read(approvedId, savedOwner))?.status, "waiting_approval");
       const authorization = await reviewOwner(approvedId, approvedController, pending.agentPause, true);
+      await persisted.resumeAfterApproval(
+        approvedId, savedOwner, pending.agentPause.resume.paused.toolCallId,
+        "owner-approved:" + crypto.createHash("sha256").update(approvedId).digest("hex"),
+      );
       assert.ok(authorization);
       const resumed = run(approvedId, approvedController, [reply], {
         state: pending.agentPause.resume, authorization,
-      });
+      }, undefined, persisted);
       const outcome = await resumed.promise;
       assert.equal(outcome.awaitingApproval, false);
       assert.equal(outcome.cancelled, false);
@@ -890,6 +910,29 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
       assert.ok(resumed.events.some(event => event.type === "receipt"));
       assert.equal(JSON.stringify(resumed.ledger).includes("OWNER_APPROVED_MCP_QUOTE_127"), false, "L2 stores refs, not raw MCP passages");
+      await persisted.finish(approvedId, "completed", 0);
+      // Reinstantiate storage to force a real encrypted-disk read instead
+      // of inspecting only live JS objects or callback-local event arrays.
+      const coldJournal = await createExecutionJournal(journalOptions);
+      const durable = await coldJournal.read(approvedId, savedOwner);
+      assert.ok(durable);
+      assert.equal(durable.version, 2);
+      assert.equal(durable.status, "completed");
+      assert.deepEqual(durable.events?.map(event => event.kind), [
+        "step_started", "tool_call_started", "tool_call_waiting_approval",
+        "tool_call_resumed", "tool_call_dispatch_intent", "tool_call_dispatch_committed",
+        "tool_call_finished", "step_finished",
+      ]);
+      assert.equal(durable.events?.filter(event => event.kind === "tool_call_dispatch_committed").length, 1);
+      assert.equal(await coldJournal.read(approvedId, { ...savedOwner, userId: stranger.id }), null,
+        "unrelated signed-in users cannot read an execution record");
+      const encryptedBytes = fs.readFileSync(path.join(journalOptions.directory, approvedId));
+      for (const forbidden of ["OWNER_APPROVED_MCP_QUOTE_127", "quotes.read", "aiUsageRights", "cleared", "read_mcp"]) {
+        assert.equal(encryptedBytes.includes(Buffer.from(forbidden)), false,
+          "encrypted journal must not contain plaintext input, content or release consent");
+      }
+      assert.equal(JSON.stringify(durable.events).includes("OWNER_APPROVED_MCP_QUOTE_127"), false,
+        "decrypted durable dispatch events contain hashes and refs, never the MCP excerpt");
 
       const revokedId = crypto.randomUUID();
       const revokedController = new AbortController();
