@@ -8,7 +8,7 @@ import {
   type McpServerExposureContract,
 } from "@shared/universalDataFabric";
 import { resolveCredential } from "./credentialVault";
-import { fetchWithEndpointPolicy, readBoundedText, validateSourceEndpoint } from "./sourceConnectionPolicy";
+import { fetchWithEndpointPolicy, isDesktopMcpLoopbackEndpoint, readBoundedText, validateMcpSourceEndpoint } from "./sourceConnectionPolicy";
 import { sanitizeLedgerPayload } from "./ledgerStore";
 import { withOfficialMcpClient } from "./sdkExternalMcpClient";
 
@@ -46,7 +46,7 @@ async function defaultTransport(
   bearer: string | null,
   signal?: AbortSignal,
 ): Promise<McpJsonRpcResponse> {
-  const policy = await validateSourceEndpoint(endpoint, false);
+  const policy = await validateMcpSourceEndpoint(endpoint);
   if (!policy.valid || !policy.normalizedEndpoint) throw new Error(`MCP endpoint rejected: ${policy.reason}.`);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -59,7 +59,7 @@ async function defaultTransport(
     headers,
     body: JSON.stringify(request),
     signal,
-  }, false);
+  }, isDesktopMcpLoopbackEndpoint(policy.normalizedEndpoint), 0);
   const text = await readBoundedText(response, 10 * 1024 * 1024);
   if (!response.ok) throw new Error(`MCP server returned HTTP ${response.status}.`);
   // A response is untrusted until rpc() validates its JSON-RPC envelope
