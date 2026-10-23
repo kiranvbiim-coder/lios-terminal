@@ -125,7 +125,10 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     const denied = await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, workflows[0]!.workflow.id));
     assert.equal(denied.length, 0);
     const eligible = await getDb().select().from(projectAutomationRuns).where(eq(projectAutomationRuns.workflowId, workflows[1]!.workflow.id));
-    assert.deepEqual(eligible.map(run => run.status), ["succeeded"], "the eligible owner runs a real deterministic diagnostic without AI");
+    assert.deepEqual(eligible.filter(run => run.triggerType === "schedule").map(run => run.status), ["succeeded"],
+      "only the due scheduled run counts for scheduler admission; the earlier deliberately failed manual authority probe retains its audit receipt");
+    assert.equal(eligible.filter(run => run.triggerType === "manual" && run.status === "failed").length, 1,
+      "the legacy-approval rejection must remain an actual failed P9 run in the durable history");
   });
   await t.test("filing observation refuses disabled owners before source access and carries the eligible owner's identity", async () => {
     for (const { workflow, ctx } of workflows) {
