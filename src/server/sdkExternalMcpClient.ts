@@ -92,6 +92,13 @@ export async function withOfficialMcpClient<T>(
     linkAbortSignal(signal, controller),
   ];
   const bearer = config.policy.credentialRef ? resolveCredential("", config.policy.credentialRef) : null;
+  if (config.policy.credentialRef && !bearer) {
+    unlink.forEach(release => release());
+    // A source configured to use an owner credential must NEVER silently
+    // fall through as an anonymous connection when that credential is absent
+    // or has been revoked. No network call or prompt may leave the machine.
+    throw new Error("MCP source credential is unavailable or revoked.");
+  }
   const client = new Client({ name: "LiOS", version: "1.0.0" }, {
     listMaxPages: 16,
     enforceStrictCapabilities: true,
