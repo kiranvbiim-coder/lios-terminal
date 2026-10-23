@@ -413,9 +413,10 @@ test("BYOAI transport routes Ollama base URLs to the local chat endpoint without
   let capturedAuthorization: string | null = null;
   process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434/";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (inputUrl(input).endsWith("/api/tags")) return new Response(JSON.stringify({ models: [{ name: "llama3.1", size: 2_000_000, digest: "a".repeat(64), details: { format: "gguf" } }] }));
     capturedUrl = inputUrl(input);
     capturedAuthorization = new Headers(init?.headers).get("authorization");
-    return new Response(JSON.stringify({ message: { content: "Local response" } }), { status: 200 });
+    return new Response(JSON.stringify({ model: "llama3.1", message: { content: "Local response" } }), { status: 200 });
   }) as typeof fetch;
 
   try {
@@ -726,7 +727,8 @@ test("BYOAI Ollama requests bound output and context through native options inst
   const previousFetch = globalThis.fetch;
   process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434";
   let requestBody: Record<string, unknown> | null = null;
-  globalThis.fetch = (async (_input, init) => {
+  globalThis.fetch = (async (input, init) => {
+    if (inputUrl(input).endsWith("/api/tags")) return new Response(JSON.stringify({ models: [{ name: "llama3.2:3b", size: 2_000_000, digest: "a".repeat(64), details: { format: "gguf" } }] }));
     requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response(JSON.stringify({ model: "llama3.2:3b", message: { content: "ok" } }), { status: 200 });
   }) as typeof fetch;

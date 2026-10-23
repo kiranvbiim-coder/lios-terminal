@@ -264,6 +264,22 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(quickDownloaded.headers.get("x-content-type-options"), "nosniff");
   assert.equal(await quickDownloaded.text(), privatePayload);
 
+  await t.test("Artifact file provenance cannot borrow a sibling Chat's uploaded source or dependency reference", async () => {
+    const { createArtifact, createArtifactVersion } = await import("./artifactStore");
+    const content = { kind: "report" as const, blocks: [{ id: "summary", type: "paragraph" as const, text: "Owned uploaded note." }], sections: [] };
+    const owned = await createArtifact(ownerContext, { projectId: null, owningChatId: quick.id, title: "Owned note report", content, sourceRefs: [quickRef.sourceRef] });
+    assert.deepEqual(owned.version.sourceRefs, [quickRef.sourceRef]);
+    const revision = await createArtifactVersion(ownerContext, { artifactId: owned.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "summary", type: "paragraph", text: "Revised owned note report." }] } });
+    assert.equal(revision.version, 2);
+    assert.deepEqual(revision.sourceRefs, [quickRef.sourceRef]);
+    for (const references of [{ sourceRefs: [quickRef.sourceRef] }, { dependencyRefs: [quickRef.sourceRef] }]) {
+      await assert.rejects(createArtifact(ownerContext, { projectId: null, owningChatId: otherQuick.id, title: "Forged sibling report", content, ...references }), /provenance/);
+    }
+    const sibling = await createArtifact(ownerContext, { projectId: null, owningChatId: otherQuick.id, title: "Unrelated report", content });
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: sibling.artifact.id, baseVersion: 1, content, dependencyRefs: [quickRef.sourceRef] }), /provenance/);
+    await assert.rejects(createArtifact(ownerContext, { projectId: project.id, owningChatId: chat.id, title: "Borrowed into Project", content, sourceRefs: [quickRef.sourceRef] }), /provenance/);
+  });
+
   // A legitimate owner can use this exact file in the same Quick Chat, with a normal governed action path.
   const ownerQuickRun = await fetch(conversationUrlFor(address.port, quick.id), {
     method: "POST",
@@ -308,6 +324,24 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   const reviewedTemporaryVoiceStream = await reviewedTemporaryVoice.text();
   assert.equal(reviewedTemporaryVoice.status, 200, reviewedTemporaryVoiceStream);
   assert.match(reviewedTemporaryVoiceStream, /approval_required/, "Temporary chat must keep the normal action approval gate");
+
+  await t.test("Project-adopted file provenance survives origin Chat clear and trash but never admits a sibling reference", async () => {
+    const { createArtifact, createArtifactVersion, getArtifact } = await import("./artifactStore");
+    const { promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat } = await import("./projectChatStore");
+    const content = { kind: "report" as const, blocks: [{ id: "p", type: "paragraph" as const, text: "Adopted owned note." }], sections: [] };
+    const retained = await createArtifact(ownerContext, { projectId: null, owningChatId: quick.id, title: "Adopted report", content, sourceRefs: [quickRef.sourceRef] });
+    await promoteQuickChatToProject(ownerContext, quick.id, project.id);
+    assert.equal((await getArtifact(ownerContext, retained.artifact.id)).owningChatId, null);
+    await clearProjectChatMessages(ownerContext, quick.id);
+    const afterClear = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited after clearing origin Chat." }] } });
+    assert.equal(afterClear.version, 2);
+    assert.deepEqual(afterClear.sourceRefs, [quickRef.sourceRef]);
+    await trashProjectChat(ownerContext, quick.id);
+    const afterTrash = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content });
+    assert.equal(afterTrash.version, 3);
+    assert.deepEqual(afterTrash.sourceRefs, [quickRef.sourceRef]);
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 3, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
+  });
 });
 
 function attachmentForm(fileName: string, text: string): FormData {

@@ -11,6 +11,11 @@ export const P1_SOURCE_SCOPES: ReadonlyArray<{
   { id: "files", label: "Files", description: "Use only files explicitly attached to this Chat." },
 ]);
 
+/** PR #102: Temporary posture is live-only; never overwrite saved Chat preferences. */
+export function sourceScopeForChatMode(mode: "quick" | "project" | "temporary", preferred: ConversationSourceScope): ConversationSourceScope {
+  return mode === "temporary" && (preferred === "files" || preferred === "my_data") ? "auto" : preferred;
+}
+
 const SOURCE_SCOPE_KEY = "lios.p1.composer-source-scope.v1";
 const TELEMETRY_KEY = "lios.p1.shell-telemetry.v1";
 

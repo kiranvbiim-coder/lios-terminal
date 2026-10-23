@@ -5,8 +5,12 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "./auth";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
-import { getPersonaPreferences, upsertPersonaPreferences, type PersonaPreferenceUser } from "./personaPreferenceService";
+import { verifiedAIChatSelectionAttempt } from "./aiProviderVerification";
+import { getPersonaPreferences, setMasterAiPreference, type PersonaPreferenceUser } from "./personaPreferenceService";
+import { advanceMasterAiAuthorizationRevision, masterAiAuthorizationGeneration, masterAiAuthorizationRevision, requireMasterAiOn, turnMasterAiOff } from "./masterAiGate";
 import { getMarketDatasetAsOf } from "./marketDatasetStore";
+import { getProviderConfig } from "./byoaiRouter";
+import { assertCurrentCredentialSnapshot } from "./credentialVault";
 import { getEconomicDatasetAsOf } from "./economicDatasetStore";
 import { getFinancialDatasetAsOf } from "./pointInTimeDatasetStore";
 import {
@@ -245,7 +249,11 @@ export function registerWaveCRoutes(app: Express): void {
     try {
       const current = await getPersonaPreferences(personaUser(req));
       const raw = current.preferences.preferences.waveCMasterAi;
-      res.json(normalizeMasterAiSessionState(raw && typeof raw === "object" ? raw as { state?: "on" | "off"; mode?: "manual" | "ai_assist" | "ai_build" | "ai_scenario"; updatedAt?: string | null } : undefined));
+      const state = normalizeMasterAiSessionState(raw && typeof raw === "object" ? raw as { state?: "on" | "off"; mode?: "manual" | "ai_assist" | "ai_build" | "ai_scenario"; updatedAt?: string | null } : undefined);
+      if (state.state === "on" && !(await requireMasterAiOn(personaUser(req))).ok) {
+        state.state = "off";
+      }
+      res.json(state);
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to load Master AI state." });
     }
@@ -256,11 +264,30 @@ export function registerWaveCRoutes(app: Express): void {
     if (!parsed.success) return res.status(400).json({ error: "Invalid Master AI state.", issues: parsed.error.issues });
     try {
       const user = personaUser(req);
-      const current = await getPersonaPreferences(user);
-      const updatedAt = new Date().toISOString();
-      const preferences = { ...current.preferences.preferences, waveCMasterAi: { ...parsed.data, updatedAt } };
-      await upsertPersonaPreferences(user, { preferences });
-      res.json(normalizeMasterAiSessionState(preferences.waveCMasterAi));
+      const revision = parsed.data.state === "on" ? advanceMasterAiAuthorizationRevision(user.id) : masterAiAuthorizationRevision(user.id);
+      const verifiedSelection = async () => {
+        const setup = await getEnvironmentSetupForUser(user.id);
+        const config = setup?.aiProviderId ? getProviderConfig(setup.aiProviderId) : undefined;
+        if (config) (await assertCurrentCredentialSnapshot(config.envKey, config.vaultKey))();
+        return revision === masterAiAuthorizationRevision(user.id)
+          ? verifiedAIChatSelectionAttempt(user.id, setup?.aiProviderId ?? null, setup?.aiModelId ?? null, user.organizationId)
+          : null;
+      };
+      if (parsed.data.state === "off") {
+        await turnMasterAiOff(user, parsed.data.mode);
+        const current = await getPersonaPreferences(user);
+        return res.json(normalizeMasterAiSessionState(current.preferences.preferences.waveCMasterAi as Parameters<typeof normalizeMasterAiSessionState>[0]));
+      }
+      const verificationAttemptId = await verifiedSelection();
+      if (verificationAttemptId === null) {
+        return res.status(409).json({ error: "Save the selected provider and model, then explicitly verify chat in Connection Center before enabling Master AI. Endpoint, credential or model changes require a new probe." });
+      }
+      const state = { ...parsed.data, updatedAt: new Date().toISOString(), authorization: { generation: masterAiAuthorizationGeneration, revision, verificationAttemptId } };
+      await setMasterAiPreference(user, state);
+      if ((await verifiedSelection()) !== verificationAttemptId) {
+        return res.status(409).json({ error: "AI configuration or permission changed while enabling. Verify the current selection again." });
+      }
+      res.json(normalizeMasterAiSessionState(state));
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to persist Master AI state." });
     }

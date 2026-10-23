@@ -21,6 +21,8 @@ export interface AgentLoopTool {
   label: string;
   /** Non-secret input construction guidance copied from the governed descriptor. */
   planningHint?: string;
+  /** JSON Schema projected from the server-owned input validator; refinements remain enforced at execution. */
+  inputJsonSchema?: string;
   kind: string;
   permissionClass: RuntimePermissionClass;
   sideEffect: ToolSideEffect;
@@ -348,6 +350,7 @@ function planningSystem(
     "You plan work for LiOS, a financial intelligence system. Respond with JSON only.",
     `Plan at most ${budget.maxSteps} steps. ${PLAN_SHAPE_GUIDANCE}`,
     "Use only the tools listed. Never put credentials, tenant or Project identifiers in input; LiOS supplies those.",
+    "Construct each input from that tool's JSON Schema. Respect required fields, enums and bounds; LiOS additionally validates refinements. Never substitute empty input when required facts are missing.",
     "Installed skills are declarative procedures. If a skill fits, set skillId on the relevant steps and use only tool ids that skill declares.",
     "Do not compute numbers yourself: deterministic tools produce them. Tools marked confirm need user approval and will pause the run.",
     ...(skills.length ? [
@@ -358,6 +361,7 @@ function planningSystem(
     ...tools.map((tool) => [
       `- ${tool.id}: ${tool.label} [${tool.kind}, side effect: ${tool.sideEffect}, ${tool.decision === "allow" ? "ready" : "needs approval"}]`,
       ...(tool.planningHint ? [`  Input guidance: ${tool.planningHint}`] : []),
+      ...(tool.inputJsonSchema ? [`  Input JSON Schema: ${tool.inputJsonSchema}`] : []),
     ].join("\n")),
   ].join("\n");
 }

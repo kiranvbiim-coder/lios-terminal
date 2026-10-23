@@ -118,7 +118,9 @@ import {
 } from "@/lib/livingWorkspaceAdapter";
 import { parseProjectWorkspaceDirectives } from "@/lib/projectWorkspaceDirectives";
 import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatMarkdown";
-import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
+import { fillStarterPrompt, findStarterPlaceholder, starterPromptsForChatMode, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
+import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
+import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/lib/chatSelectionActions";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
@@ -161,6 +163,7 @@ import {
 import {
   deriveP1ShellLoadState,
   loadComposerSourceScope,
+  sourceScopeForChatMode,
   recordP1ShellEvent,
   resolveComposerPersistenceTarget,
   saveComposerSourceScope,
@@ -241,15 +244,6 @@ function formatAttachmentSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const SELECTION_AI_ACTIONS = [
-  { id: "explain", label: "Explain", prompt: (text: string) => `Explain this selection in the current Project context:\n\n“${text}”` },
-  { id: "compare", label: "Compare", prompt: (text: string) => `Compare this selection with the most relevant peer, prior period, benchmark or scenario:\n\n“${text}”` },
-  { id: "model", label: "Model", prompt: (text: string) => `Model the financial implications of this selection using governed Project data and show assumptions:\n\n“${text}”` },
-  { id: "source", label: "Show source", prompt: (text: string) => `Show the source, provenance, observation/as-of dates and calculation path for this selection:\n\n“${text}”` },
-  { id: "alert", label: "Create alert", prompt: (text: string) => `Create a monitor or alert for the condition implied by this selection. Ask before any external action:\n\n“${text}”` },
-  { id: "report", label: "Add to report", prompt: (text: string) => `Add this selection and the relevant analysis to the current Project report or memo:\n\n“${text}”` },
-  { id: "ask", label: "Ask about this", prompt: (text: string) => `What should I know about this selection in the current Project context?\n\n“${text}”` },
-] as const;
 
 const QUICK_COMMANDS: Array<{ command: string; label: string; view?: ViewMode }> = [
   { command: "/chart", label: "Open Chart", view: "chart" },
@@ -656,7 +650,7 @@ export default function ProjectExperienceShell({
 
   useEffect(() => {
     const scopedProjectId = chatMode === "project" ? selection.projectId : null;
-    setSourceScope(selectedTerminalScope ?? loadComposerSourceScope(scopedProjectId));
+    setSourceScope(sourceScopeForChatMode(chatMode, selectedTerminalScope ?? loadComposerSourceScope(scopedProjectId)));
   }, [chatMode, selection.projectId, conversationArtifactRef, selectedTerminalScope]);
 
   useEffect(() => {
@@ -769,8 +763,14 @@ export default function ProjectExperienceShell({
       if (!exact.ok) throw new Error("This exact Artifact is no longer available.");
       const detail = await exact.json();
       if (chat.scope !== "quick" || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
-      pendingArtifactOpenRef.current = result.artifactId;
-      pendingArtifactFocusRef.current = false;
+      if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening this search result."); return; }
+      if (selection.chatId === chat.id) {
+        pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
+        setConversationArtifactRef(result.artifactId); setArtifactFocusMode(false);
+      } else {
+        pendingArtifactOpenRef.current = result.artifactId; pendingArtifactFocusRef.current = false;
+      }
+      setArtifactViewVersion(detail.version.version);
       await openChat(chat, true);
       return;
     }
@@ -1475,6 +1475,7 @@ export default function ProjectExperienceShell({
   };
 
   const updateSourceScope = async (next: ConversationSourceScope) => {
+    next = sourceScopeForChatMode(chatMode, next);
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Wait for analytical state to save before changing its source posture."); return; }
     if (retainedScreen && terminalDetail.data) {
       const state = readTerminalScreenState(retainedScreen.state);
@@ -1557,12 +1558,7 @@ export default function ProjectExperienceShell({
   };
 
   const askActiveObject = () => {
-    if (selectedTextContext) {
-      applySelectionAiAction(`Analyze this selection in the current Project context:\n\n“${selectedTextContext}”`);
-      return;
-    }
-    const target = activeSymbol ? `security ${activeSymbol}` : `active ${activeView} view`;
-    applySelectionAiAction(`Analyze this ${target}. Use the current Project context and any focused analytical object.`);
+    applySelectionAiAction(activeObjectPromptForChatMode(chatMode, selectedTextContext, activeSymbol, activeView));
   };
 
   const selectMention = (resource: ProjectResource) => {
@@ -1952,13 +1948,12 @@ export default function ProjectExperienceShell({
                     <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                     </div>
-                    <div className="lios-chat-empty-state__eyebrow mt-5 font-terminal text-[12px] uppercase tracking-[0.2em] text-amber-200/80">LiOS · Financial intelligence</div>
                     <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-white">What do you want to understand, test or build?</h1>
                     <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
                       Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
                     </p>
                     <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Example prompts">
-                      {PROJECT_STARTER_PROMPTS.map((starter) => (
+                      {starterPromptsForChatMode(chatMode).map((starter) => (
                         <button
                           key={starter.id}
                           type="button"
@@ -2030,6 +2025,21 @@ export default function ProjectExperienceShell({
                               <span className="shrink-0 font-terminal text-[11px] text-muted-foreground">{formatAttachmentSize(attachment.byteLength)}</span>
                               <span className="shrink-0 font-terminal text-[11px] text-amber-200/80">DOWNLOAD</span>
                             </a>
+                          ))}
+                          {"metadata" in message && savedChatAttachmentRefs(message.metadata).map(attachment => (
+                            <button key={`reuse-${attachment.id}`} type="button"
+                              disabled={busy || sourceScope === "web"}
+                              onClick={() => {
+                                const staged = stageSavedAttachmentForFollowUp(pendingAttachmentRefs, attachment, pendingAttachmentFiles.length);
+                                if (staged.status === "added") {
+                                  setPendingAttachmentRefs(staged.refs);
+                                  setLifecycleNotice(`${attachment.fileName} staged for your next message. Nothing has been sent.`);
+                                  requestAnimationFrame(() => composerRef.current?.focus());
+                                } else setLifecycleNotice(staged.status === "already_staged" ? "This file is already staged." : staged.status === "limit_reached" ? "A message can include at most five files." : "This saved file reference cannot be reused.");
+                              }}
+                              className="min-h-8 rounded-md border border-border/60 px-3 py-1.5 font-ui text-[12px] disabled:opacity-40">
+                              Use {attachment.fileName} in next message
+                            </button>
                           ))}
                         </div>
                       )}
@@ -2178,7 +2188,7 @@ export default function ProjectExperienceShell({
                       </button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {SELECTION_AI_ACTIONS.map((action) => (
+                      {selectionActionsForChatMode(chatMode).map((action) => (
                         <button
                           key={action.id}
                           type="button"

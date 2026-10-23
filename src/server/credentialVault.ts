@@ -22,9 +22,10 @@ import path from "path";
 import os from "node:os";
 import { dataPath, dataRoot } from "./dataRoot";
 import { getRequestIdentity } from "./requestContext";
-import { organizationCredentialStoreEnabled } from "./organizationCredentialVault";
+import { assertOrganizationCredentialSnapshotCurrent, organizationCredentialStoreEnabled } from "./organizationCredentialVault";
 import { parseSecretRef, type SecretRef } from "@shared/secretRef";
 import { PrivateSecretFileError, readPrivateSecretFile } from "./privateSecretFile";
+import { invalidateAIChatCredential } from "./connectorVerification";
 
 const ALGORITHM = "aes-256-gcm" as const;
 const KEY_LENGTH = 32;
@@ -362,6 +363,7 @@ export function invalidateVaultCache(): void {
  * `label` is a human-readable description shown in admin UIs.
  */
 export function setVaultCredential(name: string, value: string, label?: string): void {
+  invalidateAIChatCredential(name, organizationCredentialStoreEnabled() ? null : undefined);
   const store = { ...readVaultStore() };
   store[name] = { encrypted: encrypt(value), label: label ?? name, updatedAt: new Date().toISOString() };
   writeVaultStore(store);
@@ -386,6 +388,7 @@ export function getVaultCredential(name: string): string | null {
 
 /** Delete a credential from the vault. */
 export function deleteVaultCredential(name: string): boolean {
+  invalidateAIChatCredential(name, organizationCredentialStoreEnabled() ? null : undefined);
   const store = { ...readVaultStore() };
   if (!(name in store)) return false;
   delete store[name];
@@ -524,6 +527,18 @@ export function resolveCredential(envName: string, vaultName: string): string | 
   const ref = parseSecretRef(vaultName);
   if (ref && ref.source !== "vault") return resolveExternalSecretRef(ref);
   return getVaultCredential(ref?.id ?? vaultName);
+}
+
+/** Revalidate an organization request snapshot against the current encrypted vault version. */
+export async function assertCurrentCredentialSnapshot(envName: string, vaultName: string): Promise<() => void> {
+  const identity = getRequestIdentity();
+  if (!process.env[envName]?.trim() && organizationCredentialStoreEnabled() && identity?.organizationId != null) {
+    return assertOrganizationCredentialSnapshotCurrent(identity.organizationId, identity.credentials, vaultName);
+  }
+  const credential = resolveCredential(envName, vaultName);
+  return () => {
+    if (resolveCredential(envName, vaultName) !== credential) throw new Error("The provider credential changed before dispatch.");
+  };
 }
 
 /** Check if a credential is available from any source. */

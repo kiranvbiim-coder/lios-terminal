@@ -816,7 +816,7 @@ async function runProjectChat(
           for (const event of pendingArtifacts) {
             const savedArtifact = await persistConversationDraft(context, {
               projectId: chat.projectId,
-              owningChatId: chat.projectId === null ? chatId : null,
+              owningChatId: chatId,
               requestId: request.requestId,
               draft: event.artifact,
               trustManifest: result.trustManifest ?? null,

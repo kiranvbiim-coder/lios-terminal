@@ -19,7 +19,7 @@ const { users, domains, conversationActionGrants } = await import("@shared/schem
 const store = await import("./conversationGrantStore");
 const { createProject } = await import("./projectStore");
 const { createProjectChat } = await import("./projectChatStore");
-const { upsertPersonaPreferences } = await import("./personaPreferenceService");
+const { authorizeInjectedAiForTest } = await import("./fixtures/injectedAiAuthorization");
 const { startTemporaryRun } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { proposeSandboxTerminalSession, reviewSandboxTerminalSession } = await import("./governedSandboxSession");
@@ -638,10 +638,10 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
     await assert.rejects(() => store.recordConversationGrant({ user: owner, action: "RunBacktest", scope: "once" }), store.ConversationGrantError);
   });
 
-  await t.test("a request that merely claims approval is refused; a server-recorded approval is honoured once", async () => {
+  await t.test("a request that merely claims approval is refused; a server-recorded approval is honoured once", async (t) => {
     store.clearOnceApprovals();
     await getDb().insert(domains).values({ slug: "finance", name: "Finance", active: true }).onConflictDoNothing();
-    await upsertPersonaPreferences(owner, { preferences: { waveCMasterAi: { state: "on", mode: "manual" } } });
+    await authorizeInjectedAiForTest(owner, t);
     const ask = { message: "What might higher rates do to bank margins?", executionMode: "ai_direct", sourceScope: "my_data", history: [] } as const;
     const claimed = crypto.randomUUID();
     await startTemporaryRun(owner, {

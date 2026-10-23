@@ -263,6 +263,11 @@ export default function EnvironmentSetup({ session, onComplete, onLogout }: Prop
       value: aiCredential,
       label: selectedAiProvider.name,
     });
+    setKeyValues(current => {
+      const next = { ...current };
+      delete next[selectedAiProvider.credentialName];
+      return next;
+    });
   }
 
   async function testAiProvider(): Promise<void> {
@@ -272,9 +277,13 @@ export default function EnvironmentSetup({ session, onComplete, onLogout }: Prop
     setError(null);
     try {
       await saveSelectedAiCredential();
+      await apiRequest("PUT", "/api/setup/status", {
+        aiProviderId: selectedAiProvider.id,
+        aiModelId: aiModelId.trim() || selectedAiProvider.defaultModel,
+      });
       const response = await apiRequest("POST", "/api/setup/ai/test", {
         provider: selectedAiProvider.id,
-        model: aiModelId.trim() || null,
+        model: aiModelId.trim() || selectedAiProvider.defaultModel,
       });
       const result = await response.json() as AIVerificationResult;
       setAiVerification(result);

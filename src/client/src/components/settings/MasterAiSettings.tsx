@@ -4,22 +4,26 @@ import { Bot, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { AiModelAccessState } from "@/lib/aiModelAccess";
 
-interface MasterAiSessionState {
+export interface MasterAiSessionState {
   state: "on" | "off";
   mode: "manual" | "ai_assist" | "ai_build" | "ai_scenario";
   updatedAt?: string | null;
 }
 
 interface MasterAiSettingsProps {
-  /** Jumps to the AI provider/model selector, which lives in the Advanced setup section. */
+  /** Jumps to the primary AI provider/model selector. */
   onChangeProvider?: () => void;
   providerName?: string;
   providerAvailable: boolean;
   modelId: string;
   modelAccess: AiModelAccessState;
+  chatVerified: boolean;
+  selectionBusy?: boolean;
+  onBeforeEnable: () => Promise<void>;
+  onSavingChange: (pending: boolean) => void;
 }
 
-export default function MasterAiSettings({ providerName, providerAvailable, modelId, modelAccess, onChangeProvider }: MasterAiSettingsProps) {
+export default function MasterAiSettings({ providerName, providerAvailable, modelId, modelAccess, chatVerified, selectionBusy = false, onBeforeEnable, onSavingChange, onChangeProvider }: MasterAiSettingsProps) {
   const queryClient = useQueryClient();
   const forcedOffAttemptRef = useRef<string | null>(null);
   const stateQuery = useQuery<MasterAiSessionState>({
@@ -28,16 +32,25 @@ export default function MasterAiSettings({ providerName, providerAvailable, mode
     staleTime: 5_000,
   });
   const saveMutation = useMutation({
+    onMutate: () => onSavingChange(true),
     mutationFn: async (state: MasterAiSessionState["state"]) => {
+      if (state === "on") await onBeforeEnable();
       const mode = stateQuery.data?.mode ?? "manual";
       return (await apiRequest("PUT", "/api/wave-c/ai/state", { state, mode })).json() as Promise<MasterAiSessionState>;
     },
-    onSuccess: (saved) => queryClient.setQueryData(["/api/wave-c/ai/state"], saved),
+    onSuccess: async (saved) => {
+      queryClient.setQueryData(["/api/wave-c/ai/state"], saved);
+      await queryClient.invalidateQueries({ queryKey: ["/api/setup/status"] });
+    },
+    onSettled: async () => {
+      onSavingChange(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/wave-c/ai/state"] });
+    },
   });
 
   const enabled = stateQuery.data?.state === "on";
   const modelBlocked = modelAccess === "blocked";
-  const providerReady = providerAvailable && Boolean(modelId.trim()) && !modelBlocked;
+  const providerReady = providerAvailable && Boolean(modelId.trim()) && !modelBlocked && chatVerified && !selectionBusy;
   const cannotEnable = !enabled && !providerReady;
 
   useEffect(() => {
@@ -94,7 +107,7 @@ export default function MasterAiSettings({ providerName, providerAvailable, mode
           ? `Selected: ${providerName ?? "Connected provider"} · ${modelId}`
           : modelBlocked
             ? "Master AI is blocked because complete provider discovery did not return the selected model."
-            : "Select and configure an AI provider and model above to enable Master AI."}
+            : "Select a provider and model, then explicitly verify chat above before enabling Master AI. Configuration and model discovery alone are not verification."}
         {onChangeProvider && (
           <button type="button" onClick={onChangeProvider} data-testid="master-ai-change-provider" className="ml-2 underline underline-offset-2 text-[hsl(38,95%,55%)] hover:text-[hsl(38,95%,70%)]">
             Change provider or model
@@ -107,7 +120,7 @@ export default function MasterAiSettings({ providerName, providerAvailable, mode
         </p>
       )}
       {stateQuery.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Master AI state could not be loaded. It remains unavailable until the authenticated preference service responds.</p>}
-      {saveMutation.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Could not save your Master AI setting. The previously saved setting is unchanged; retry when the service is available.</p>}
+      {saveMutation.isError && <p className="font-terminal text-[7px] text-rose-300" role="alert">Could not confirm your Master AI setting. LiOS is refreshing the current permission; review the state above and retry.</p>}
       {saveMutation.isPending && <p className="font-terminal text-[7px] text-muted-foreground" role="status">Saving your account-scoped preference…</p>}
     </section>
   );

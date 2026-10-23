@@ -40,6 +40,10 @@ import ValuationArtifactView from "./ValuationArtifactView";
 import ArtifactViewerFallback from "./ArtifactViewerFallback";
 import type { ArtifactProvenanceFacts } from "./ArtifactTrustSummary";
 import TerminalScreenArtifact from "./TerminalScreenArtifact";
+import { clearNativeArtifactDraft, useNativeArtifactDraftOwner, useNativeArtifactDraftRecovery, useNativeDraftLifetime, type NativeArtifactDraftContext } from "@/lib/nativeArtifactDraftRecovery";
+import NativeDraftRecoveryNotice from "./NativeDraftRecoveryNotice";
+import { stableSerialize } from "@/lib/analyticalCore";
+import { reconcileTerminalDraft } from "@/lib/terminalDraftReconciliation";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
@@ -70,13 +74,13 @@ class ArtifactChartBoundary extends Component<{ children: ReactNode }, { failed:
 }
 const shortHash = (value: string) => `${value.slice(0, 10)}…${value.slice(-6)}`;
 
-function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean }) {
+function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false, recoveryContext }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean; recoveryContext?: NativeArtifactDraftContext | null }) {
   const [content, setContent] = useState(incomingContent);
   const [question, setQuestion] = useState(incomingContent.kind === "research" ? incomingContent.question : "");
   const [sourceMode, setSourceMode] = useState<"connected_sources" | "only_refs">(incomingContent.kind === "research" ? incomingContent.sourcePolicy.mode : "connected_sources");
   const [allowedRefs, setAllowedRefs] = useState(incomingContent.kind === "research" ? incomingContent.sourcePolicy.allowedSourceRefs.join("\n") : "");
   const [baseRevision, setBaseRevision] = useState(revision);
-  const [baseline, setBaseline] = useState(() => JSON.stringify(incomingContent));
+  const [baseline, setBaseline] = useState(() => stableSerialize(incomingContent));
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pending, setPending] = useState(false);
@@ -88,32 +92,50 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
   const draftRef = useRef(content);
   const baselineRef = useRef(baseline);
   const pendingContent = useRef<string | null>(null);
+  const baselineRecovery = useRef(recoveryContext ?? null);
+  if (!baselineRecovery.current && revision === baseRevision) baselineRecovery.current = recoveryContext ?? null;
   const draftContent = useMemo(() => content.kind === "research" ? { ...content, question, sourcePolicy: { ...content.sourcePolicy, mode: sourceMode, allowedSourceRefs: [...new Set(allowedRefs.split(/\n+/).map(value => value.trim()).filter(Boolean))] } } : content, [content, question, sourceMode, allowedRefs]);
   draftRef.current = draftContent;
   baselineRef.current = baseline;
-  const dirty = advancedDirty || JSON.stringify(draftContent) !== baseline;
+  const dirty = advancedDirty || stableSerialize(draftContent) !== baseline;
+  const recovery = useNativeArtifactDraftRecovery(baselineRecovery.current, draftContent, dirty && !advancedDirty, draftContent, saved => {
+    setContent(saved);
+    if (saved.kind === "research") {
+      setQuestion(saved.question); setSourceMode(saved.sourcePolicy.mode);
+      setAllowedRefs(saved.sourcePolicy.allowedSourceRefs.join("\n"));
+    }
+    setAdvancedDirty(false);
+  });
   useEffect(() => { onDirtyChange?.(dirty || saving || pending); }, [dirty, saving, pending, onDirtyChange]);
   useEffect(() => { if (dirty && notice?.startsWith("Document revision saved.")) setNotice(null); }, [dirty, notice]);
   useEffect(() => {
-    const incoming = JSON.stringify(incomingContent);
+    const incoming = stableSerialize(incomingContent);
     if (revision === baseRevision && incoming === baselineRef.current) return;
-    if (incoming === pendingContent.current || (!advancedDirty && JSON.stringify(draftRef.current) === baselineRef.current && pendingContent.current === null)) {
-      setContent(incomingContent); setBaseline(incoming); setBaseRevision(revision);
-      if (incomingContent.kind === "research") { setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode); setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n")); }
-      saveRef.current = onSave; pendingContent.current = null;
-      setPending(false); setConflict(false);
-    } else {
-      setConflict(true);
+    const transition = reconcileTerminalDraft(incomingContent, draftRef.current, baselineRef.current, pendingContent.current);
+    if (transition.conflict || (advancedDirty && !transition.acknowledged)) { setConflict(true); return; }
+    if (transition.replaceDraft) {
+      setContent(incomingContent);
+      if (incomingContent.kind === "research") {
+        setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode);
+        setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));
+      }
     }
+    setBaseline(transition.baseline); setBaseRevision(revision);
+    baselineRecovery.current = recoveryContext ?? null;
+    saveRef.current = onSave; pendingContent.current = null;
+    setPending(false); setConflict(false);
   }, [incomingContent, revision, baseRevision, onSave, advancedDirty]);
   const saveDocument = async (next = draftRef.current) => {
     if (saving || pending || conflict || pendingContent.current !== null) throw new Error("Document saving is unavailable while saving, refreshing, or resolving a revision conflict.");
     setSaving(true); setNotice(null);
-    const submitted = JSON.stringify(next);
+    const submitted = stableSerialize(next);
     pendingContent.current = submitted;
     try {
       await saveRef.current(next);
-      setContent(next); setBaseline(submitted); setPending(pendingContent.current !== null);
+      // The canonical response can arrive before native cleanup finishes.
+      // Do not overwrite a baseline/draft already reconciled by that response.
+      if (pendingContent.current !== null) setBaseline(submitted);
+      setPending(pendingContent.current !== null);
       setNotice("Document revision saved. Canonical revision refresh requested.");
     } catch (cause) {
       pendingContent.current = null;
@@ -121,13 +143,30 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       throw cause;
     } finally { setSaving(false); }
   };
+  const reloadDocument = async () => {
+    setSaving(true);
+    let cleanupNotice: string | null = null;
+    try { await recovery.clear(); }
+    catch { cleanupNotice = "Saved revision reloaded, but encrypted checkpoint cleanup needs review."; }
+    baselineRecovery.current = recoveryContext ?? null;
+    setContent(incomingContent);
+    if (incomingContent.kind === "research") {
+      setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode);
+      setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));
+    }
+    setBaseline(stableSerialize(incomingContent)); setBaseRevision(revision); saveRef.current = onSave;
+    pendingContent.current = null; setConflict(false); setPending(false); setNotice(cleanupNotice);
+    setRichError(null); setAdvancedDirty(false); setSaving(false);
+  };
   const fallback = <div data-testid="builtin-artifact-document">
     <p role="alert" className="mb-2 text-sm text-amber-200">{richError ?? "Built-in text editor active. Recorded blocks and metadata, including unsaved rich edits, are retained."}</p>
     <div className="space-y-3">{content.blocks.map((block,index)=><label key={block.id} className="block"><span className="mb-1 block font-terminal text-[12px] text-muted-foreground">{block.type} · {block.id}</span><textarea aria-label={`Document block ${index+1}`} disabled={saving || pending} value={block.text} onChange={(event)=>{const text=event.target.value;setContent(current=>({...current,blocks:current.blocks.map((item,i)=>i===index?{...item,text}:item)}));}} className="min-h-[100px] w-full rounded-lg border border-border/50 bg-black/15 p-4 font-ui text-[14px] leading-6 text-foreground outline-none disabled:opacity-50"/></label>)}</div>
   </div>;
   return <div>
-    {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={()=>{setContent(incomingContent);if(incomingContent.kind==="research"){setQuestion(incomingContent.question);setSourceMode(incomingContent.sourcePolicy.mode);setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));}setBaseline(JSON.stringify(incomingContent));setBaseRevision(revision);saveRef.current=onSave;pendingContent.current=null;setConflict(false);setPending(false);setNotice(null);setRichError(null);setAdvancedDirty(false);}}>Discard local changes and reload revision</button></div>}
-    <fieldset disabled={advancedDirty} className="min-w-0">
+    <NativeDraftRecoveryNotice recovery={recovery} dirty={dirty}/>
+    {advancedDirty && <p role="status" className="mb-2 text-sm text-amber-200">Advanced JSON edits are not included in local crash checkpoints. Save or reset them before leaving.</p>}
+    {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={() => void reloadDocument()}>Discard local changes and reload revision</button></div>}
+    <fieldset disabled={advancedDirty || recovery.blocked} className="min-w-0">
     {content.kind==="research"&&<div className="mb-3 space-y-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.015] p-3">
       <div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-cyan-200">RESEARCH PLAN · {content.plan.status.toUpperCase()}</span><span className="font-terminal text-[12px] text-muted-foreground">{content.plan.steps.length} STEPS · {content.evidence.length} EVIDENCE · {content.contradictions.filter((x)=>x.status==="open").length} OPEN CONTRADICTIONS · {content.executionTrail.length} TRAIL EVENTS</span></div>
       <input aria-label="Research question" disabled={saving || pending} value={question} onChange={(e)=>setQuestion(e.target.value)} placeholder="Research question" className="w-full rounded border border-border/50 bg-black/20 px-2 py-1.5 font-ui text-[14px] outline-none"/>
@@ -140,27 +179,34 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       {!!content.contradictions.filter((item)=>item.status==="open").length&&<div className="space-y-1">{content.contradictions.filter((item)=>item.status==="open").slice(0,5).map((item)=><div key={item.id} className="rounded border border-red-300/15 px-2 py-1.5 font-ui text-[13px] text-red-200">Contradiction · {item.summary}</div>)}</div>}
     </div>}
     <div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-muted-foreground">LIVE DOCUMENT · BASE V{baseRevision}</span><button type="button" disabled={saving || pending} onClick={()=>{setRichError(null);setBuiltin(current=>!current);}} className="ml-auto rounded border border-border/50 px-2 py-1 text-[13px]">{builtin ? "Open rich document editor" : "Use built-in text editor"}</button></div>
-    {builtin || richError ? fallback : <RichDocumentBoundary key={baseRevision} fallback={<div><p role="alert" className="mb-2 text-sm text-amber-200">Rich renderer unavailable. Your canonical draft is retained in the built-in editor.</p>{fallback}</div>}><Suspense fallback={<div><p role="status">Loading rich editor. The built-in editor remains available.</p><button type="button" onClick={()=>setBuiltin(true)} className="underline">Use built-in text editor</button></div>}><RichArtifactDocumentEditor content={content} disabled={disabled || saving || pending || advancedDirty} onChange={setContent} onError={setRichError}/></Suspense></RichDocumentBoundary>}
-    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={!dirty || saving || pending || conflict || advancedDirty} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
+    {builtin || richError ? fallback : <RichDocumentBoundary key={baseRevision} fallback={<div><p role="alert" className="mb-2 text-sm text-amber-200">Rich renderer unavailable. Your canonical draft is retained in the built-in editor.</p>{fallback}</div>}><Suspense fallback={<div><p role="status">Loading rich editor. The built-in editor remains available.</p><button type="button" onClick={()=>setBuiltin(true)} className="underline">Use built-in text editor</button></div>}><RichArtifactDocumentEditor content={content} disabled={disabled || saving || pending || advancedDirty || recovery.blocked} onChange={setContent} onError={setRichError}/></Suspense></RichDocumentBoundary>}
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={!dirty || saving || pending || conflict || advancedDirty || recovery.blocked} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
     </fieldset>
-    {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={saving || pending || conflict} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
+    {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={saving || pending || conflict || recovery.blocked} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
   </div>;
 }
-function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   if (props.content.rendererPreference === "univer") return <Suspense fallback={<p role="status">Loading spreadsheet editor…</p>}><UniverSpreadsheetEditor {...props} /></Suspense>;
   return <BuiltinSpreadsheetEditor {...props}/>;
 }
-function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey,recoveryContext}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   const [grid, setGrid] = useState(() => artifactSheetToGrid(content));
   const [draftContent, setDraftContent] = useState(content);
   const [tick, setTick] = useState(0);
   const [selectedRef, setSelectedRef] = useState("B4");
   const [ref, setRef] = useState("B4");
   const [value, setValue] = useState("");
-  const baseline = useRef({ content, revisionKey });
+  const baseline = useRef({ content, revisionKey, recoveryContext });
   const draft = useRef({ content: draftContent, grid });
   draft.current = { content: draftContent, grid };
   const [conflict, setConflict] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState<string | null>(null);
+  const checkpoint = gridToArtifactSheet(draftContent, grid);
+  const isDirty = spreadsheetDraftHasChanges(baseline.current.content, checkpoint);
+  const recovery = useNativeArtifactDraftRecovery(baseline.current.recoveryContext ?? null, checkpoint, isDirty, tick, saved => {
+    setDraftContent(saved); setGrid(artifactSheetToGrid(saved)); setConflict(false);
+    onDirtyChange?.(true); setTick(current => current + 1);
+  });
   useEffect(() => {
     const local = gridToArtifactSheet(draft.current.content, draft.current.grid);
     const dirty = spreadsheetDraftHasChanges(baseline.current.content, local);
@@ -169,7 +215,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     if (dirty && spreadsheetDraftHasChanges(content, local)) {
       setConflict(true); onDirtyChange?.(true); return;
     }
-    baseline.current = { content, revisionKey };
+    baseline.current = { content, revisionKey, recoveryContext };
     setDraftContent(content); setGrid(artifactSheetToGrid(content)); setTick(v => v + 1);
     setConflict(false); onDirtyChange?.(false);
   }, [content, revisionKey, onDirtyChange]);
@@ -193,8 +239,15 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   const selectedInBounds = selectedCoordinates && selectedCoordinates.row < sheet.rowCount && selectedCoordinates.col < sheet.columnCount;
   const selectedCell = { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) };
   return <div>
-    {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => { baseline.current = { content, revisionKey }; setDraftContent(content); setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1); }} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
-    <fieldset disabled={disabled || conflict} className="min-w-0">
+    <NativeDraftRecoveryNotice recovery={recovery} dirty={isDirty}/>
+    {cleanupNotice && <p role="status" className="mb-2 text-sm text-amber-200">{cleanupNotice}</p>}
+    {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => void (async () => {
+      try { await recovery.clear(); }
+      catch { setCleanupNotice("Saved revision reloaded, but encrypted checkpoint cleanup needs review."); }
+      baseline.current = { content, revisionKey, recoveryContext }; setDraftContent(content);
+      setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1);
+    })()} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
+    <fieldset disabled={disabled || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <span className="font-terminal text-[12px] text-muted-foreground">SPREADSHEET · BASIC EDITOR</span>
       <label className="text-[13px] text-muted-foreground">Worksheet <select aria-label="Spreadsheet worksheet" value={sheet.id} onChange={e => selectSheet(e.target.value)} className="ml-1 rounded border border-border/50 bg-[#090909] px-2 py-1">{draftContent.sheets.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
@@ -280,9 +333,23 @@ function StrategyEditor({content,onSave}:{content:Extract<ArtifactContent,{kind:
   return <div><div className="mb-2 font-terminal text-[12px] text-muted-foreground">STRATEGY STUDIO · {content.language.toUpperCase()} · {content.validation.status.toUpperCase()}</div><textarea value={source} onChange={(e)=>setSource(e.target.value)} className="min-h-[320px] w-full rounded-lg border border-border/50 bg-black/20 p-3 font-terminal text-[14px] leading-5 text-foreground outline-none"/><div className="mt-2 flex justify-end"><button onClick={()=>void onSave({...content,source,validation:{status:"unvalidated",errors:[]}})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save strategy revision</button></div></div>;
 }
 function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,onOpenExport,onAsk,owner,onNativeVersion}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;onOpenExport?:()=>void;onAsk:(id:string,title:string,stagedPrompt?:string)=>void;owner:{projectId:number|null;owningChatId:number|null};onNativeVersion:(version:number)=>void}) {
+  const recoveryOwner = useNativeArtifactDraftOwner();
+  const recoveryLifetime = useNativeDraftLifetime(`${recoveryOwner ?? ""}\0${artifactId}`);
+  const [recoveryCleanupWarning, setRecoveryCleanupWarning] = useState<string | null>(null);
+  const recoveryContext = recoveryOwner ? { owner: recoveryOwner, artifactId, baseVersion: revision, contentHash } : null;
+  const saveWithRecovery = async (next: ArtifactContent) => {
+    const lease = recoveryLifetime.current;
+    await onSave(next);
+    try { if (recoveryContext) await clearNativeArtifactDraft(recoveryContext, lease); }
+    catch { if (lease.active) setRecoveryCleanupWarning("Revision saved. Encrypted draft cleanup failed; review the checkpoint when reopening."); }
+  };
   if(content.kind==="screen" && content.state.terminal) return <TerminalScreenArtifact content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onAsk={onAsk} target={{artifactId,version:revision,contentHash,...owner}} onNativeVersion={onNativeVersion}/>;
-  if(content.kind==="spreadsheet") return <SpreadsheetEditor content={content} revisionKey={`${revision}:${contentHash}`} onSave={onSave} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="spreadsheet" || content.kind==="research" || content.kind==="report") return <>
+    {recoveryCleanupWarning && <p role="status" className="mb-2 text-sm text-amber-200">{recoveryCleanupWarning}</p>}
+    {content.kind==="spreadsheet"
+      ? <SpreadsheetEditor content={content} recoveryContext={recoveryContext} revisionKey={`${revision}:${contentHash}`} onSave={saveWithRecovery} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>
+      : <DocumentEditor content={content} recoveryContext={recoveryContext} revision={revision} onSave={saveWithRecovery} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>}
+  </>;
   if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;

@@ -81,7 +81,7 @@ export function trustCaveats(manifest: TrustManifest, shownGap?: { field: string
   for (const warning of manifest.warnings) {
     if (!shownGap || !warning.includes(shownGap.message)) lines.push(warning);
   }
-  if (manifest.summary.quality === "low") lines.push("The supporting data is low quality. Treat the figures with caution.");
+  if (manifest.summary.quality === "low" && manifest.evidence.some(item => item.kind !== "ai")) lines.push("Supporting evidence is marked low quality. Review its sources and limitations before relying on it.");
   return lines.length ? { lines, recoveryActions } : null;
 }
 

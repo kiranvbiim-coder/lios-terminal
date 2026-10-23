@@ -13,6 +13,7 @@ import type { ProcessSupervisor } from "./exec/types";
  * - The canonical grant authority consumes authorization atomically before invocation.
  */
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ConversationSourceScope } from "@shared/sourceScope";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
 import type { ArtifactContent } from "@shared/artifactContracts";
@@ -25,6 +26,17 @@ import type { ConsumedGovernedToolAuthorization } from "./conversationGrantStore
 
 export type ToolAccessClass = "read" | "write";
 export type ToolSideEffect = "none" | "internal_write" | "external";
+
+const planningSchemas = new WeakMap<z.ZodTypeAny, string>();
+
+/** Project the existing validator, never a separately maintained planner schema. */
+export function governedToolPlanningSchema(schema: z.ZodTypeAny): string {
+  const cached = planningSchemas.get(schema);
+  if (cached !== undefined) return cached;
+  const serialized = JSON.stringify(zodToJsonSchema(schema, { target: "jsonSchema7", effectStrategy: "input", pipeStrategy: "input" }));
+  planningSchemas.set(schema, serialized);
+  return serialized;
+}
 
 export interface GovernedToolCall {
   /** Origin is server-owned. Model/request content must never choose its permission path. */

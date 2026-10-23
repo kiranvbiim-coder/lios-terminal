@@ -5,6 +5,7 @@ import {
   type P5ProfessionalFamily,
 } from "@shared/p5ProfessionalContracts";
 import type { ConversationCapabilityId, ConversationRequest } from "@shared/conversationRuntime";
+import { classifyAskLiosAction } from "@shared/askLiosRouter";
 import type { ArtifactContent, ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { AdvancedQuantInputProvenance } from "@shared/quantModelRegistry";
 import {
@@ -202,6 +203,7 @@ function addIntent(
 
 export function resolveP5ProfessionalIntents(request: ConversationRequest): P5ProfessionalIntent[] {
   const message = request.message;
+  if (classifyAskLiosAction(message)?.action === "explain") return [];
   const lower = message.toLowerCase();
   const intents: P5ProfessionalIntent[] = [];
   const artifactRef = activeArtifactRef(request);
@@ -247,16 +249,13 @@ export function resolveP5ProfessionalIntents(request: ConversationRequest): P5Pr
     if (/\b(?:portfolio risk|portfolio optim|risk contribution|value at risk|\bvar\b|stress test|risk budget|black[- ]litterman)\b/i.test(message)) {
       addIntent(intents, "portfolio_risk", "The request asks for deterministic portfolio/risk analytics.", { activeArtifactRef: artifactRef });
     }
-    // "Explain how inflation affects rates" is a concept question for the AI, not a request to run an engine.
-    const conceptQuestion = /\b(?:explain|why|what(?:'s| is| are)|how (?:does|do|is|are)|describe|difference between)\b/i.test(message) && !/\d/.test(message) && !artifactRef
-      && !/\b(?:run|calculate|compute|solve|build|price|optimi[sz]e)\b/i.test(message);
-    if (!conceptQuestion && /\b(?:fixed income|bond analytics|duration|convexity|yield to maturity|yield curve|credit spread|\boas\b)\b/i.test(message)) {
+    if (/\b(?:fixed income|bond analytics|duration|convexity|yield to maturity|yield curve|credit spread|\boas\b)\b/i.test(message)) {
       addIntent(intents, "fixed_income", "The request asks for deterministic fixed-income analytics.", { activeArtifactRef: artifactRef });
     }
-    if (!conceptQuestion && /\b(?:derivatives?|options?|greeks?|implied volatility|swaption|interest[- ]rate swap)\b/i.test(message)) {
+    if (/\b(?:derivatives?|options?|greeks?|implied volatility|swaption|interest[- ]rate swap)\b/i.test(message)) {
       addIntent(intents, "derivatives", "The request asks for deterministic derivatives analytics.", { activeArtifactRef: artifactRef });
     }
-    if (!conceptQuestion && /\b(?:macro(?:economic)?|recession|inflation|financial conditions|fiscal multiplier|macro transmission|fx analysis|foreign exchange)\b/i.test(message)) {
+    if (/\b(?:macro(?:economic)?|recession|inflation|financial conditions|fiscal multiplier|macro transmission|fx analysis|foreign exchange)\b/i.test(message)) {
       addIntent(intents, "macro_fx", "The request asks for macro/FX analytics.", { activeArtifactRef: artifactRef });
     }
     if (/\b(?:investment memo|research report|risk report|portfolio review|earnings preview|company tear ?sheet)\b/i.test(message)) {

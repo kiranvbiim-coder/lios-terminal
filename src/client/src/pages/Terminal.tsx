@@ -24,6 +24,7 @@ import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifa
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import { TerminalArtifactRendererProvider } from "@/lib/terminalArtifactState";
+import { NativeArtifactDraftOwnerContext } from "@/lib/nativeArtifactDraftRecovery";
 import { returnToChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
 import type { ChatTerminalControls } from "@/lib/chatTerminalContext";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
@@ -966,6 +967,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
 
   return (
     <TerminalArtifactRendererProvider value={{ audience, render: (context, controls) => renderPaneContent("primary", { view: context.view, symbol: context.symbol ?? "" }, controls) }}>
+    <NativeArtifactDraftOwnerContext.Provider value={session.email ?? null}>
     <div
       className="terminal-root flex h-screen flex-col overflow-hidden bg-background"
       data-density={uxPreferences.density}
@@ -1128,6 +1130,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
 
       <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onApplyWorkspace={applyWorkspace} />
     </div>
+    </NativeArtifactDraftOwnerContext.Provider>
     </TerminalArtifactRendererProvider>
   );
 }

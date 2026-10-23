@@ -225,6 +225,7 @@
     "ws": "^8.21.3",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz",
     "zod": "^3.24.2",
+    "zod-to-json-schema": "3.24.6",
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
@@ -285,7 +286,9 @@
       "category": "public.app-category.finance",
       "icon": "build-resources/icon.icns",
       "hardenedRuntime": true,
-      "signIgnore": [".*/native-runtime-dist/.*"],
+      "signIgnore": [
+        ".*/native-runtime-dist/.*"
+      ],
       "gatekeeperAssess": false,
       "target": [
         "dmg",
@@ -328,6 +331,8 @@
       "desktopRequestTrust.cjs",
       "preload.cjs",
       "desktopSecretCustody.cjs",
+      "desktopArtifactDraftRecovery.cjs",
+      "nativeDraftGrant.cjs",
       "desktopIpcSecurity.cjs",
       "desktopLogRedaction.cjs",
       "desktopBackupRestore.cjs",

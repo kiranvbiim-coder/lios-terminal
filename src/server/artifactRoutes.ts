@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import crypto from "node:crypto";
 import {
   artifactContentSchema,
   artifactKindSchema,
@@ -14,6 +15,8 @@ import { conversationArtifactDraftSchema } from "@shared/conversationRuntime";
 import { trustManifestSchema } from "@shared/trustContracts";
 import { requireAuth, requireRole } from "./auth";
 import { tenantContext } from "./tenantContext";
+import { LOCAL_TRUST_HANDOFF } from "./localDesktopTrust";
+import { issueNativeDraftGrant, MAX_LIFETIME_MS } from "../nativeDraftGrant.cjs";
 import { openTerminalArtifact } from "./terminalArtifact";
 import { updateTerminalArtifact } from "./terminalArtifactTool";
 import { addProjectChatMessage } from "./projectChatStore";
@@ -170,6 +173,33 @@ export function registerArtifactRoutes(app: Express): void {
   });
 
   for (const prefix of ["/api/artifacts", "/api/artifact-proposals"]) app.use(prefix, requireAuth);
+
+  /** Authenticated P4 custody issues only an exact immutable revision capability. */
+  app.post("/api/artifacts/:artifactId/native-draft-grant", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const token = (globalThis as Record<symbol, unknown>)[LOCAL_TRUST_HANDOFF];
+    if (typeof token !== "string" || token.length < 32) {
+      res.status(404).json({ error: "Native recovery is not available in this environment." });
+      return;
+    }
+    try {
+      const { baseVersion, contentHash } = z.object({
+        baseVersion: z.number().int().positive(),
+        contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+      }).strict().parse(req.body);
+      const artifactId = pathText(req.params.artifactId);
+      const version = await getArtifactVersion(ctx(req), artifactId, baseVersion);
+      if (version.contentHash !== contentHash) {
+        res.status(409).json({ error: "The saved Artifact revision changed. Reload before recovery." });
+        return;
+      }
+      const issuedAt = Date.now();
+      if (!req.sessionID) throw new Error("Authenticated desktop session is unavailable.");
+      const sessionBinding = crypto.createHmac("sha256", token).update("lios/native-draft-session/v1\\0" + req.sessionID).digest("hex");
+      const grant = issueNativeDraftGrant(token, { owner: req.user!.email, artifactId, baseVersion, contentHash, sessionBinding }, issuedAt);
+      res.json({ grant, expiresAt: issuedAt + MAX_LIFETIME_MS });
+    } catch (error) { fail(res, error); }
+  });
 
   app.get("/api/projects/:projectId/artifacts", requireAuth, async (req, res) => {
     try {

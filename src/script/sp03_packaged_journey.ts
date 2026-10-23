@@ -498,6 +498,7 @@ async function ensureWorkspaceReady(page: Page, context: string): Promise<"direc
 }
 
 async function configureRealAI(page: Page): Promise<void> {
+  await page.requestJson("/api/setup/status", "PUT", { aiProviderId: AI_PROVIDER, aiModelId: AI_MODEL, complete: true });
   const verified = await page.requestJson<{ ok: boolean; provider: string; model: string }>("/api/setup/ai/test", "POST", {
     provider: AI_PROVIDER,
     model: AI_MODEL,
@@ -505,7 +506,6 @@ async function configureRealAI(page: Page): Promise<void> {
   if (!verified.ok || verified.provider !== AI_PROVIDER || verified.model !== AI_MODEL) {
     throw new Error("The selected real AI provider/model was not live-verified.");
   }
-  await page.requestJson("/api/setup/status", "PUT", { aiProviderId: AI_PROVIDER, aiModelId: AI_MODEL, complete: true });
   await page.requestJson("/api/wave-c/ai/state", "PUT", { state: "on", mode: "ai_assist" });
   await page.eval("location.reload();");
   await waitFor(

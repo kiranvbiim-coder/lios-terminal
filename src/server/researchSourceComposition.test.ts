@@ -1135,7 +1135,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
     await nested.test("public agent planning cannot downgrade refreshed Project research at the actual enterprise provider boundary", async () => {
       // Enterprise policy and runtime must load after this test's isolated database setup.
       const { executeConversationRuntime } = await import("./conversationRuntime");
-      const { organizations } = await import("@shared/schema");
+      const { organizations, domains } = await import("@shared/schema");
       const { DEFAULT_ENTERPRISE_POLICY } = await import("@shared/enterpriseContracts");
       const { saveEnterprisePolicy } = await import("./enterprisePolicyService");
       const { runWithRequestIdentity } = await import("./requestContext");
@@ -1165,10 +1165,27 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
       });
       const priorFetch = globalThis.fetch;
       const priorCredentialStore = process.env.LIMURIA_CREDENTIAL_STORE;
+      const priorHostedSecret = process.env.LIMURIA_HOSTED_VAULT_SECRET;
+      const { setOrganizationCredential, loadOrganizationCredentials } = await import("./organizationCredentialVault");
+      const { beginAIChatVerification, publishAIChatVerification } = await import("./connectorVerification");
+      const { updateEnvironmentSetup } = await import("./environmentSetupService");
+      const { updateEnvironmentSetupSchema } = await import("@shared/schema");
+      const { setMasterAiPreference } = await import("./personaPreferenceService");
+      const { masterAiAuthorizationGeneration, masterAiAuthorizationRevision } = await import("./masterAiGate");
       const attempted: Array<{ provider: string; body: string }> = [];
       let reviewReached = false;
       let raceHealthBaseline: unknown;
       process.env.LIMURIA_CREDENTIAL_STORE = "organization";
+      process.env.LIMURIA_HOSTED_VAULT_SECRET = "research-policy-isolated-credential-fixture-only";
+      await getDb().insert(domains).values({ slug: "finance", name: "Finance", active: true }).onConflictDoNothing();
+      await setOrganizationCredential(organization.id, "openaiApiKey", "fixture-openai-key");
+      await setOrganizationCredential(organization.id, "geminiApiKey", "fixture-gemini-key");
+      await updateEnvironmentSetup(actor.id, organization.id, updateEnvironmentSetupSchema.parse({ aiProviderId: "openai", aiModelId: "gpt-4o" }), actor);
+      const attempt = beginAIChatVerification({ userId: actor.id, organizationId: organization.id, provider: "openai", credentialName: "openaiApiKey" });
+      assert.equal(publishAIChatVerification(attempt, "gpt-4o", crypto.createHash("sha256").update("fixture-openai-key").digest("hex")), true);
+      await setMasterAiPreference(actor, { state: "on", mode: "ai_assist", updatedAt: new Date().toISOString(), authorization: {
+        generation: masterAiAuthorizationGeneration, revision: masterAiAuthorizationRevision(actor.id), verificationAttemptId: attempt.attemptId,
+      } });
       globalThis.fetch = (async (url, init) => {
         const endpoint = String(url);
         const provider = endpoint.includes("api.openai.com") ? "openai"
@@ -1201,7 +1218,7 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         }, { id: actor.id, email: actor.email });
         return runWithRequestIdentity({
           userId: actor.id, organizationId: organization.id,
-          credentials: { openaiApiKey: "fixture-openai-key", geminiApiKey: "fixture-gemini-key" },
+          credentials: await loadOrganizationCredentials(organization.id),
           selectedConnectorIds: [],
         }, () => executeConversationRuntime({
           tenant, scope: "project", chatId: null, projectId: researchProject.id,
@@ -1406,6 +1423,8 @@ test("SI-03.25 AI-facing tool emits only AI-permitted sources and aggregates blo
         }, resourcePassage);
       } finally {
         globalThis.fetch = priorFetch;
+        if (priorHostedSecret === undefined) delete process.env.LIMURIA_HOSTED_VAULT_SECRET;
+        else process.env.LIMURIA_HOSTED_VAULT_SECRET = priorHostedSecret;
         if (priorCredentialStore === undefined) delete process.env.LIMURIA_CREDENTIAL_STORE;
         else process.env.LIMURIA_CREDENTIAL_STORE = priorCredentialStore;
       }

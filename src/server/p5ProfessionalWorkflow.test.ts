@@ -38,12 +38,17 @@ test("P5 parses explicit fenced JSON inputs without inventing assumptions", () =
   });
 });
 
-test("P5 leaves conceptual questions to the model wherever the question words appear, but still runs explicit calculations", () => {
-  const intentsFor = (message: string) => resolveP5ProfessionalIntents(conversationRequestSchema.parse({ requestId: "33333333-3333-4333-8333-333333333333", message, sourceScope: "auto" }));
-  assert.equal(intentsFor("In two sentences, what is bond duration?").length, 0);
-  assert.equal(intentsFor("Briefly describe the difference between convexity and duration").length, 0);
-  assert.equal(intentsFor("What is the duration of a 10 year 5% bond").some(item => item.family === "fixed_income"), true, "Explicit figures keep engine routing.");
-  assert.equal(intentsFor("Calculate bond duration").some(item => item.family === "fixed_income"), true, "A command verb keeps engine routing.");
+test("concept actions precede model-family keywords without treating context or formatting as calculation input", () => {
+  const makeRequest = (message: string, context = {}) => conversationRequestSchema.parse({ requestId: "33333333-3333-4333-8333-333333333333", message, sourceScope: "auto", context });
+  const concept = makeRequest("In 2 sentences, what is the relationship between bond price and duration?");
+  assert.deepEqual(resolveP5ProfessionalIntents(concept), []);
+  assert.ok(resolveConversationCapabilities(concept).some(item => item.id === "ai.answer"));
+  const contextual = makeRequest("Briefly describe implied volatility", { activeObjectRefs: ["artifact:11111111-1111-4111-8111-111111111111"] });
+  assert.deepEqual(resolveP5ProfessionalIntents(contextual), [], "An active Artifact and a named pricing model do not turn explanation into execution.");
+  const mixed = makeRequest("Estimate bond convexity and explain the result");
+  assert.ok(resolveP5ProfessionalIntents(mixed).some(item => item.family === "fixed_income"));
+  assert.ok(resolveConversationCapabilities(mixed).some(item => item.requiresDeterministicCompute), "An explanation clause must not discard the requested calculation.");
+  assert.ok(resolveP5ProfessionalIntents(makeRequest("What is the duration of a 10 year 5% bond")).some(item => item.family === "fixed_income"));
 });
 
 test("P5 resolves cross-asset professional intents and preserves active Artifact context", () => {

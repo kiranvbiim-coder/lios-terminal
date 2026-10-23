@@ -143,6 +143,7 @@ import {
   GovernedToolDeniedError,
   GovernedToolRegistry,
   decidePermission,
+  governedToolPlanningSchema,
   type GovernedToolCall,
   type GovernedToolDescriptor,
   type ToolSideEffect,
@@ -436,7 +437,9 @@ const instrumentToolInputSchema = z.object({
   symbol: z.string().trim().max(120).optional(),
   name: z.string().trim().max(300).optional(),
   query: z.string().trim().max(300).optional(),
-}).strict().refine((input) => Boolean(input.symbol || input.name || input.query));
+}).strict().refine((input) => Boolean(input.symbol || input.name || input.query), {
+  message: "Provide at least one non-empty symbol, name or query copied from the user's explicit identity request; do not invent an instrument.",
+});
 const marketDataToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const companyToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const technicalToolInputSchema = z.object({
@@ -754,6 +757,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool({
     id: "lios.instrument-master",
     label: "Global Instrument Master",
+    planningHint: "Resolve an explicitly requested instrument identity. Input requires at least one non-empty field: symbol, name, or query. For an explicit MSFT request use {\"symbol\":\"MSFT\"}; for a company name use name or query. Empty input is invalid. Do not guess a ticker from unrelated prose.",
     kind: "resolve",
     permissionClass: "safe_auto",
     access: "read",
@@ -2319,7 +2323,7 @@ async function executeNodeFinanceSnapshot(input: ConversationRuntimeInput, plan:
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [draft], cancelled: false, awaitingApproval: false };
 }
 function evidenceKindForSourceRef(sourceRef: string): EvidenceObservation["kind"] {
-  if (sourceRef.startsWith("ai-provider:")) return "ai";
+  if (sourceRef.startsWith("ai-provider:") || sourceRef.startsWith("ai-output:")) return "ai";
   if (sourceRef.startsWith("provider:") || sourceRef.startsWith("dataset:")) return "provider";
   if (sourceRef.startsWith("project-attachment:") || sourceRef.startsWith("file:")) return "file";
   if (sourceRef.startsWith("project:") || sourceRef.startsWith("artifact:")) return "project";
@@ -4198,6 +4202,7 @@ interface AgentLoopCatalogue {
     id: string;
     label: string;
     planningHint?: string;
+    inputJsonSchema: string;
     kind: string;
     permissionClass: GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["permissionClass"];
     sideEffect: NonNullable<GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["sideEffect"]>;
@@ -4214,6 +4219,7 @@ function offeredAgentLoopCatalogue(role: string): AgentLoopCatalogue {
     id: tool.id,
     label: tool.label,
     ...(tool.planningHint ? { planningHint: tool.planningHint } : {}),
+    inputJsonSchema: governedToolPlanningSchema(tool.inputSchema),
     kind: tool.kind,
     permissionClass: tool.permissionClass,
     sideEffect: tool.sideEffect ?? "none",
@@ -4241,7 +4247,7 @@ function agentLoopFactsFor(
   const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => a.id.localeCompare(b.id));
   const toolSetSha256 = sha256Json({
     version: 1,
-    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
+    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, inputJsonSchema: tool.inputJsonSchema, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
     skills: byId(skills).map((skill) => ({ id: skill.id, toolIds: [...skill.toolIds].sort() })),
   });
   const policySha256 = sha256Json({

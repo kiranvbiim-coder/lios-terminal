@@ -1049,6 +1049,18 @@
   },
   {
    "method": "POST",
+   "path": "/api/artifacts/:artifactId/native-draft-grant",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/artifacts/:artifactId/office-return",
    "reachableBy": [
     "client_user",
@@ -7273,6 +7285,18 @@
    "method": "POST",
    "path": "/api/scenario-pipeline/preview",
    "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/ai/models",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
     "internal_analyst",
     "internal_compliance",
     "internal_admin"

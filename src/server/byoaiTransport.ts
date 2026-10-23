@@ -11,15 +11,20 @@ import {
   type AIProviderConfig,
   type AIProviderType,
 } from "./byoaiRouter";
-import { resolveCredential } from "./credentialVault";
+import { assertCurrentCredentialSnapshot, resolveCredential } from "./credentialVault";
 import { recordConnectorVerification } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
 import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
 import { evaluateEnterpriseAiProvider } from "@shared/enterpriseContracts";
 import { readBoundedText } from "./sourceConnectionPolicy";
+import { z } from "zod";
+
+/** Server-only capability for the fixed, user-requested connectivity probe. JSON cannot forge it. */
+export const AI_CHAT_VERIFICATION_PROBE = Symbol("LiOS fixed chat verification");
 
 export interface AICompletionRequest {
   provider: AIProviderType;
+  [AI_CHAT_VERIFICATION_PROBE]?: true;
   model?: string;
   system?: string;
   messages: Array<{
@@ -81,6 +86,9 @@ export interface AIFallbackAttempt {
 export interface AICompletionResult {
   provider: AIProviderType;
   model: string;
+  /** Observed local response identity, validated against the admitted instance/model mapping. */
+  servedModel?: string;
+  localModelIdentity?: string;
   text: string;
   attribution: AICallAttribution;
   /** Present only when an earlier provider failed and this provider answered instead. */
@@ -117,7 +125,7 @@ export function resolveOllamaChatEndpoint(baseUrl: string): string {
   return url.toString();
 }
 
-function localProviderEndpoint(provider: "ollama" | "lm_studio", baseUrl: string): string {
+export function resolveLocalProviderChatEndpoint(provider: "ollama" | "lm_studio", baseUrl: string): string {
   const url = resolveHttpUrl(baseUrl, provider === "ollama" ? "OLLAMA_BASE_URL" : "LM_STUDIO_BASE_URL");
   const host = url.hostname.toLowerCase();
   if (host !== "localhost" && host !== "[::1]" && !/^127(?:\.\d{1,3}){3}$/.test(host)) {
@@ -128,8 +136,108 @@ function localProviderEndpoint(provider: "ollama" | "lm_studio", baseUrl: string
   return provider === "ollama" ? resolveOllamaChatEndpoint(url.toString()) : resolveOpenAICompatibleChatEndpoint(url.toString(), "LM_STUDIO_BASE_URL");
 }
 
+export interface LocalAIModelDiscovery {
+  provider: "ollama" | "lm_studio";
+  endpoint: string;
+  models: string[];
+  modelIdentities: Record<string, { modelKey: string; signature: string }>;
+  excludedModels: Array<{ id: string; reason: string }>;
+  complete: true;
+  detail: string;
+}
+
+const localModelId = z.string().trim().min(1).max(200);
+const ollamaModelList = z.object({ models: z.array(z.object({
+  name: localModelId,
+  size: z.number().nonnegative().optional(),
+  digest: z.string().optional(),
+  details: z.object({ format: z.string().optional() }).optional(),
+  remote_model: z.string().optional(),
+  remote_host: z.string().optional(),
+})).max(2_000) });
+const studioModelList = z.object({ models: z.array(z.object({
+  key: localModelId,
+  type: z.string(),
+  format: z.string().nullable().optional(),
+  size_bytes: z.number().nonnegative().optional(),
+  loaded_instances: z.array(z.object({ id: localModelId })).max(2_000).optional(),
+  remote_model: z.string().optional(),
+  remote_host: z.string().optional(),
+})).max(2_000) });
+
+/** A loopback URL is not local execution: Ollama can forward cloud models through localhost. */
+export async function discoverLocalAIModels(providerId: string, purpose: "chat" | "embedding" = "chat"): Promise<LocalAIModelDiscovery> {
+  const provider = normalizeProviderId(providerId);
+  if (provider !== "ollama" && provider !== "lm_studio") {
+    throw new AIProviderError("invalid_provider", "Model discovery here supports only the registered local AI providers.");
+  }
+  const config = getProviderConfig(provider)!;
+  const credential = providerCredential(provider);
+  if (!credential) throw new AIProviderError("not_configured", "Save your local model server endpoint first.", { provider });
+  const endpoint = resolveLocalProviderChatEndpoint(provider, credential);
+  const url = new URL(endpoint);
+  url.pathname = provider === "ollama"
+    ? url.pathname.replace(/\/chat$/, "/tags")
+    : url.pathname.replace(/(?:\/v1)?\/chat\/completions$/, "/api/v1/models");
+  const models: string[] = [];
+  const modelIdentities: LocalAIModelDiscovery["modelIdentities"] = Object.create(null);
+  const excludedModels: LocalAIModelDiscovery["excludedModels"] = [];
+  try {
+    const response = await fetch(url, { method: "GET", redirect: "error", signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new AIProviderError("upstream_error", `${config.name} model listing returned HTTP ${response.status}.`, { provider, status: response.status });
+    const payload: unknown = JSON.parse(await readBoundedText(response, 512 * 1024));
+    if (provider === "ollama") {
+      // /api/tags exposes remote_model/remote_host as well as installed file size, digest and format.
+      for (const entry of ollamaModelList.parse(payload).models) {
+        const remote = Boolean(entry.remote_model || entry.remote_host || /(?:[-:]cloud)(?::|$)/i.test(entry.name));
+        if (remote || !entry.size || entry.details?.format !== "gguf" || !/^[a-f0-9]{64}$/i.test(entry.digest ?? "")) {
+          excludedModels.push({ id: entry.name, reason: remote ? "Remote/cloud model; not a local-only route." : "Installed local model metadata is incomplete." });
+        } else {
+          models.push(entry.name);
+          modelIdentities[entry.name] = { modelKey: entry.name, signature: JSON.stringify([entry.name, entry.digest, entry.size, entry.details?.format]) };
+        }
+      }
+    } else {
+      // LM Studio's native list proves on-disk format/size and loaded instance IDs; /v1/models alone cannot.
+      for (const entry of studioModelList.parse(payload).models) {
+        const local = !entry.remote_model && !entry.remote_host && Boolean(entry.size_bytes)
+          && (entry.format === "gguf" || entry.format === "mlx")
+          && entry.type === (purpose === "embedding" ? "embedding" : "llm");
+        if (!local || !entry.loaded_instances?.length) {
+          excludedModels.push({ id: entry.key, reason: "Model must have local file metadata, the requested model type and a loaded instance." });
+        } else {
+          for (const instance of entry.loaded_instances) {
+            models.push(instance.id);
+            modelIdentities[instance.id] = { modelKey: entry.key, signature: JSON.stringify([instance.id, entry.key, entry.type, entry.format, entry.size_bytes]) };
+          }
+        }
+      }
+    }
+    return {
+      provider, endpoint, models: [...new Set(models)], modelIdentities, excludedModels, complete: true,
+      detail: `Found ${models.length} runtime-reported installed local model(s); excluded ${excludedModels.length} remote, unknown, unloaded or incompatible model(s). No prompt, download or inference was requested; chat, tools and vision remain unverified.`,
+    };
+  } catch (error) {
+    if (error instanceof AIProviderError) throw error;
+    throw new AIProviderError("unavailable", `${config.name} could not provide installed local model metadata. Check the endpoint and server version; no inference was sent.`, { provider });
+  }
+}
+
+async function requireInstalledLocalModel(provider: "ollama" | "lm_studio", model: string, endpoint: string, purpose: "chat" | "embedding" = "chat"): Promise<{ modelKey: string; signature: string }> {
+  let discovery: LocalAIModelDiscovery;
+  try {
+    discovery = await discoverLocalAIModels(provider, purpose);
+  } catch {
+    throw new AIProviderError("policy_denied", "Installed local model metadata could not be established. No inference or cloud fallback is permitted for this local-only request.", { provider });
+  }
+  if (discovery.endpoint !== endpoint || !discovery.models.includes(model)) {
+    throw new AIProviderError("policy_denied", "Local AI requires an installed local model with matching server metadata. Remote/cloud, unknown and unloaded models cannot receive prompts through a local-only route.", { provider });
+  }
+  return discovery.modelIdentities[model];
+}
+
 function openAiEndpoint(provider: AIProviderType, credential: string): { url: string; headers: Record<string, string> } {
-  if (provider === "ollama" || provider === "lm_studio") return { url: localProviderEndpoint(provider, credential), headers: {} };
+  if (provider === "ollama" || provider === "lm_studio") return { url: resolveLocalProviderChatEndpoint(provider, credential), headers: {} };
   if (provider === "mistral") return { url: "https://api.mistral.ai/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
   if (provider === "groq") return { url: "https://api.groq.com/openai/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
   if (provider === "together") return { url: "https://api.together.xyz/v1/chat/completions", headers: { Authorization: `Bearer ${credential}` } };
@@ -353,17 +461,38 @@ export async function invokeAIProvider(request: AICompletionRequest): Promise<AI
   const resolvedModel = resolveProviderModel(config, canonicalRequest.model);
   validateImages(canonicalRequest, provider, resolvedModel);
   const enterpriseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
+  const assertCredentialCurrent = await assertCurrentCredentialSnapshot(config.envKey, config.vaultKey);
+  let localCredential: string | undefined;
+  let localModelIdentity: { modelKey: string; signature: string } | undefined;
+  if (provider === "ollama" || provider === "lm_studio") {
+    localCredential = providerCredential(provider) ?? undefined;
+    if (!localCredential) throw new AIProviderError("not_configured", "The local model endpoint is not configured.", { provider });
+    localModelIdentity = await requireInstalledLocalModel(provider, resolvedModel, resolveLocalProviderChatEndpoint(provider, localCredential));
+  }
   // A local release-policy refusal did not contact the provider and must not change connector health.
   await canonicalRequest.beforeTransmission?.();
-  if (canonicalRequest.beforeTransmission) {
+  if (canonicalRequest.beforeTransmission || localCredential !== undefined) {
     // Source-release checks await mutable state. Bind the enterprise revision and re-evaluate the complete policy last.
     const releaseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
     if (releaseRevision !== enterpriseRevision) {
       throw new AIProviderError("policy_denied", "Organization AI policy changed before dispatch; retry under the current policy.", { provider });
     }
   }
+  const identity = getRequestIdentity();
+  if (identity?.userId != null && canonicalRequest[AI_CHAT_VERIFICATION_PROBE] !== true) {
+    try {
+      const { requireMasterAiDispatchOn } = await import("./masterAiGate");
+      const assertCurrent = await requireMasterAiDispatchOn(identity.userId, identity.organizationId, provider, resolvedModel, localModelIdentity?.signature);
+      const finalEnterpriseRevision = await enforceEnterpriseAiPolicy(canonicalRequest, config, resolvedModel);
+      if (finalEnterpriseRevision !== enterpriseRevision) throw new Error("Organization policy changed.");
+      assertCurrent();
+    } catch {
+      throw new AIProviderError("policy_denied", "AI is off or its current provider/model authorization is no longer valid. Verify the selected model and enable AI again.", { provider });
+    }
+  }
+  assertCredentialCurrent();
   try {
-    const result = await invokeAIProviderUnverified({ ...canonicalRequest, model: resolvedModel });
+    const result = await invokeAIProviderUnverified({ ...canonicalRequest, model: resolvedModel }, localCredential, localModelIdentity);
     if (VERIFIABLE_CONNECTOR_PROVIDERS.has(provider)) recordConnectorVerification(provider, true, `${result.provider} responded to a live completion request.`);
     return result;
   } catch (error) {
@@ -457,7 +586,7 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
       failures.push(error);
       console.warn(`[byoai] ${provider} failed: code=${error.code}${error.status ? ` status=${error.status}` : ""}`);
       attempts.push({ provider, code: error.code, ...(error.status ? { status: error.status } : {}) });
-      if (error.code === "invalid_request" || error.code === "invalid_provider") throw error;
+      if (error.code === "invalid_request" || error.code === "invalid_provider" || error.code === "policy_denied") throw error;
     }
   }
   const lastFailure = failures[failures.length - 1];
@@ -471,15 +600,19 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
   );
 }
 
-async function invokeAIProviderUnverified(request: AICompletionRequest): Promise<AICompletionResult> {
+async function invokeAIProviderUnverified(request: AICompletionRequest, expectedLocalCredential?: string, localIdentity?: { modelKey: string; signature: string }): Promise<AICompletionResult> {
   const config = getProviderConfig(request.provider);
   if (!config) throw new AIProviderError("invalid_provider", "AI provider is not registered.");
   const credential = providerCredential(request.provider);
   if (!credential) throw new AIProviderError("not_configured", `No credential is configured for ${request.provider}.`, { provider: request.provider });
   const model = resolveProviderModel(config, request.model);
+  if (expectedLocalCredential !== undefined && credential !== expectedLocalCredential) {
+    throw new AIProviderError("policy_denied", "The local endpoint changed before dispatch. Retry under the current configuration.", { provider: request.provider });
+  }
   const signal = request.signal ?? AbortSignal.timeout(60_000);
   let response: Response;
   let text = "";
+  let servedModel: string | undefined;
   try {
     if (request.provider === "anthropic") {
       const messages = request.messages.map((message) => ({
@@ -515,7 +648,13 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
       const endpoint = openAiEndpoint(request.provider, credential);
       response = await fetch(endpoint.url, { method: "POST", headers: { "content-type": "application/json", ...endpoint.headers }, body: JSON.stringify(openAiBody(request, model, request.provider === "ollama")), signal, ...(config.isLocal ? { redirect: "error" as const } : {}) });
       if (!response.ok) throw responseError(config, request.provider, response, await readError(response));
-      const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }>; message?: { content?: string } };
+      const payload = await response.json() as { model?: string; choices?: Array<{ message?: { content?: string } }>; message?: { content?: string } };
+      if (localIdentity) {
+        servedModel = payload.model?.trim();
+        if (!servedModel || (servedModel !== model && servedModel !== localIdentity.modelKey)) {
+          throw new AIProviderError("upstream_error", "The local server did not identify the admitted model in its response. Verify the loaded model again.", { provider: request.provider });
+        }
+      }
       text = request.provider === "ollama" ? payload.message?.content ?? "" : payload.choices?.[0]?.message?.content ?? "";
     }
   } catch (error) {
@@ -530,7 +669,7 @@ async function invokeAIProviderUnverified(request: AICompletionRequest): Promise
     content: message.content,
     ...(message.images?.length ? { images: message.images.map((image) => ({ mimeType: image.mimeType, byteLength: Buffer.from(image.base64, "base64").byteLength })) } : {}),
   }));
-  return { provider: request.provider, model, text, attribution: createAttribution({ provider: request.provider, model, prompt: JSON.stringify({ system: request.system, messages: attributionMessages }), output: text }) };
+  return { provider: request.provider, model, text, ...(servedModel ? { servedModel } : {}), ...(localIdentity ? { localModelIdentity: localIdentity.signature } : {}), attribution: createAttribution({ provider: request.provider, model, prompt: JSON.stringify({ system: request.system, messages: attributionMessages }), output: text }) };
 }
 
 /** Explicit local-only embedding operation; never uses completion fallback or downloads a model. */
@@ -549,8 +688,13 @@ export async function invokeLocalEmbeddings(request: {
   }
   const credential = providerCredential(request.provider);
   if (!credential) throw new AIProviderError("not_configured", "The selected local embedding endpoint is not configured.", { provider: request.provider });
-  await enforceEnterpriseAiPolicy({ provider: request.provider, model, messages: [], dataClassification: "organization" }, config, model);
-  const endpoint = new URL(localProviderEndpoint(request.provider, credential));
+  const policyRevision = await enforceEnterpriseAiPolicy({ provider: request.provider, model, messages: [], dataClassification: "organization" }, config, model);
+  await requireInstalledLocalModel(request.provider, model, resolveLocalProviderChatEndpoint(request.provider, credential), "embedding");
+  const releaseRevision = await enforceEnterpriseAiPolicy({ provider: request.provider, model, messages: [], dataClassification: "organization" }, config, model);
+  if (releaseRevision !== policyRevision || providerCredential(request.provider) !== credential) {
+    throw new AIProviderError("policy_denied", "Local embedding policy or endpoint changed before dispatch.", { provider: request.provider });
+  }
+  const endpoint = new URL(resolveLocalProviderChatEndpoint(request.provider, credential));
   endpoint.pathname = request.provider === "ollama"
     ? endpoint.pathname.replace(/\/chat$/, "/embed")
     : endpoint.pathname.replace(/\/chat\/completions$/, "/embeddings");
