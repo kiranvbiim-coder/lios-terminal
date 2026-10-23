@@ -30,5 +30,5 @@ export function stageUniversalChatQuestion(existing: string, incoming: string | 
   const prompt = incoming?.trim();
   if (!prompt) return existing;
   if (existing.trim() === prompt || existing.endsWith(`\n\n${prompt}`)) return existing;
-  return existing.trim() ? `${existing}\n\n${prompt}` : prompt;
+  return existing.trim() ? `${existing.replace(/\n+$/, "")}\n\n${prompt}` : prompt;
 }
