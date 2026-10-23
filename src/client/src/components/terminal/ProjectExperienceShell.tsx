@@ -2036,6 +2036,7 @@ export default function ProjectExperienceShell({
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
                       {message.role !== "system" && <ChatMessageActions
+                        messageId={message.id}
                         content={message.content}
                         role={message.role}
                         onQuote={message.role === "assistant" ? () => {
