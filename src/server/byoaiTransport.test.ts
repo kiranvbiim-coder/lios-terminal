@@ -633,7 +633,7 @@ test("provider failures are classified into actionable reasons without echoing p
     await assert.rejects(
       () => invokeAIProvider({ provider: "openai", messages: [{ role: "user", content: "Question" }] }),
       (error: unknown) => {
-        const failure = assertProviderError(error, "rate_limited");
+        const failure = assertProviderError(error, "quota_exhausted");
         return /no available quota/.test(failure.message) && !/SECRET PROMPT ECHO/.test(failure.message) && failure.status === 429;
       },
     );

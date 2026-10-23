@@ -55,6 +55,7 @@ export type AIProviderErrorCode =
   | "not_configured"
   | "unavailable"
   | "rate_limited"
+  | "quota_exhausted"
   | "timeout"
   | "upstream_error"
   | "empty_completion"

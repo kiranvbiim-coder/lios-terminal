@@ -41,6 +41,7 @@ export function isTransientBYOAIFailure(failure: AIProviderFailureClassification
         && Number.isInteger(failure.status)
         && failure.status >= 500 && failure.status <= 599;
     case "policy_denied":
+    case "quota_exhausted":
     case "not_configured":
     case "invalid_provider":
     case "invalid_request":

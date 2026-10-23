@@ -258,7 +258,7 @@ export function classifyProviderFailure(body: string): "insufficient_quota" | "i
 function responseError(config: AIProviderConfig, provider: AIProviderType, response: Response, body: string): AIProviderError {
   const reason = classifyProviderFailure(body);
   if (reason === "insufficient_quota") {
-    return new AIProviderError("rate_limited", `${config.name} reports no available quota for this API key (credits or billing). Add credits or enable billing with the provider, or choose another provider.`, { provider, status: response.status });
+    return new AIProviderError("quota_exhausted", `${config.name} reports no available quota for this API key (credits or billing). Add credits or enable billing with the provider, or choose another provider.`, { provider, status: response.status });
   }
   if (reason === "invalid_api_key") {
     return new AIProviderError("upstream_error", `${config.name} rejected the API key. Re-enter it in the Connection Center.`, { provider, status: response.status });

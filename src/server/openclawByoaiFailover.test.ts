@@ -14,7 +14,7 @@ test("OpenClaw-backed GM-22 failover classification admits genuine transient err
       `HTTP ${status} is a permanent or entitlement error, not a provider outage`);
   }
   assert.equal(isTransientBYOAIFailure({ code: "upstream_error" }), false, "unknown upstream status cannot grant fallback");
-  for (const code of ["policy_denied", "not_configured", "invalid_provider", "invalid_request"] as const) {
+  for (const code of ["policy_denied", "quota_exhausted", "not_configured", "invalid_provider", "invalid_request"] as const) {
     assert.equal(isTransientBYOAIFailure({ code }), false);
   }
 });
@@ -90,4 +90,28 @@ test("D2 a transient 503 still falls back to one already-authorized provider", a
   }, url => url.includes("api.x.ai")
     ? new Response("service unavailable", { status: 503 })
     : new Response(JSON.stringify({ choices: [{ message: { content: "safe fallback result" } }] }), { status: 200 }));
+});
+
+test("D2 exhausted purchased credits stop fallback even when the provider returns HTTP 429", async () => {
+  await withTwoConnectedApiProviders(async calls => {
+    await assert.rejects(
+      () => invokeAIRoutedCompletion(route),
+      error => error instanceof AIProviderError && error.code === "quota_exhausted" && error.status === 429,
+    );
+    assert.deepEqual(calls, ["https://api.x.ai/v1/chat/completions"],
+      "quota exhaustion must not disclose user context to another paid model");
+  }, url => url.includes("api.x.ai")
+    ? new Response(JSON.stringify({ error: { code: "insufficient_quota", message: "Exhausted credits" } }), { status: 429 })
+    : new Response(JSON.stringify({ choices: [{ message: { content: "must not execute" } }] }), { status: 200 }));
+});
+
+test("D2 ordinary short-term HTTP 429 may still use an expressly permitted fallback", async () => {
+  await withTwoConnectedApiProviders(async calls => {
+    const result = await invokeAIRoutedCompletion(route);
+    assert.equal(result.provider, "openai");
+    assert.deepEqual(result.fallback?.attempts, [{ provider: "xai", code: "rate_limited", status: 429 }]);
+    assert.deepEqual(calls, ["https://api.x.ai/v1/chat/completions", "https://api.openai.com/v1/chat/completions"]);
+  }, url => url.includes("api.x.ai")
+    ? new Response("Requests per minute exceeded", { status: 429 })
+    : new Response(JSON.stringify({ choices: [{ message: { content: "allowed fallback" } }] }), { status: 200 }));
 });
