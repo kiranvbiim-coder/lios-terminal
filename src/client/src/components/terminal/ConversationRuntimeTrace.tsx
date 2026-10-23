@@ -32,6 +32,8 @@ interface Props {
   events: ConversationRuntimeEvent[];
   requestId: string | null;
   busy: boolean;
+  cancelPending?: boolean;
+  stopRequested?: boolean;
   onCancel: () => void;
   onApprove: (action: ConversationActionName, scope: ApprovalGrant["scope"]) => void;
   onDeny: (action: ConversationActionName) => void;
@@ -129,6 +131,8 @@ export default function ConversationRuntimeTrace({
   events,
   requestId,
   busy,
+  cancelPending = false,
+  stopRequested = false,
   onCancel,
   onApprove,
   onDeny,
@@ -162,6 +166,7 @@ export default function ConversationRuntimeTrace({
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
   const trust = [...events].reverse().find((event) => event.type === "trust");
   const summary = summarizeRuntimeTrace(events, busy);
+  const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -199,7 +204,7 @@ export default function ConversationRuntimeTrace({
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(approval || governedApproval);
-  const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0;
+  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || summary.sources.length > 0;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -210,7 +215,7 @@ export default function ConversationRuntimeTrace({
       {(working || canResume || canShowWork) && (
         <div
           className="flex flex-wrap items-center gap-1.5 px-1 py-0.5 font-ui text-[12px] text-muted-foreground"
-          data-testid={summary.status === "completed" ? "trace-receipt" : undefined}
+          data-testid={summary.status === "completed" && observedReceipt?.type === "receipt" ? "trace-receipt" : undefined}
           data-request-id={requestId ?? undefined}
         >
           {working && (
@@ -223,12 +228,14 @@ export default function ConversationRuntimeTrace({
             <button
               type="button"
               onClick={onCancel}
+              disabled={cancelPending || stopRequested}
+              aria-label={stopRequested ? "Stop requested for this Home run" : cancelPending ? "Stop request pending Home acknowledgement" : "Stop this exact run"}
               data-testid="agent-run-cancel"
               data-request-id={requestId ?? undefined}
               className={`${quietControlClass} hover:text-red-200`}
             >
               <Square className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-              Stop
+              {stopRequested ? "Stop requested" : cancelPending ? "Requesting Stop…" : "Stop"}
             </button>
           )}
           {canResume && (
@@ -469,13 +476,24 @@ export default function ConversationRuntimeTrace({
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
               {view.recoveries.includes("retry") && onRetry && !busy && (
-                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Try again</button>
+                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="min-h-10 rounded-full border border-border/55 px-3 py-2 font-ui text-[12px] text-foreground hover:border-red-300/30 focus-visible:outline focus-visible:outline-2">Review request</button>
               )}
               {showWork && <span className="ml-auto font-terminal text-[12px] uppercase tracking-wider text-red-200/50">{runtimeError.code}</span>}
             </div>
           </div>
         );
       })()}
+
+      {summary.status === "interrupted" && (
+        <div role="alert" data-testid="trace-interrupted" className="mb-2 rounded-lg border border-amber-300/25 bg-amber-300/[0.035] px-3 py-2.5 font-ui text-[13px]">
+          <p className="font-semibold text-amber-100">This run has no confirmed final status.</p>
+          <p className="mt-1 text-muted-foreground">The connection or observer ended before a final Home event. Partial text is not a completed answer or an execution receipt. Check the Home run before considering any retry.</p>
+          {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-10 rounded border border-amber-300/40 px-3 py-2 text-amber-100 focus-visible:outline focus-visible:outline-2">Review previous request</button>}
+        </div>
+      )}
+      {summary.status === "completed" && !observedReceipt && (
+        <p role="status" data-testid="trace-receipt-missing" className="mb-2 px-2 font-ui text-xs text-muted-foreground">Home reported completion; a separate execution receipt was not received in this view.</p>
+      )}
 
       {!runtimeError && !dataGap && !approval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (
         <div className="mb-2 rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2 font-ui text-[13px] text-muted-foreground" role="status" data-testid="trace-run-status" data-run-status={done.status}>

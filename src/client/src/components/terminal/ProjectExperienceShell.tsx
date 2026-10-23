@@ -119,6 +119,7 @@ import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
 import { useGateway } from "@/lib/gateway/GatewayProvider";
 import { attachConversationRun, cancelConversationRun, runConversation } from "@/lib/gateway/conversationRun";
+import { eventsForRun, hasObservedCompletion, stageSafeRunRetry } from "@/lib/observedRunPolicy";
 import { useInterruptedAgentRun } from "@/lib/useInterruptedAgentRun";
 import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
 import BoundedAgentComposerControl from "./BoundedAgentComposerControl";
@@ -1002,12 +1003,11 @@ export default function ProjectExperienceShell({
       if (persisted) setLastSubmittedMessage(persisted.content);
       try {
         const result = await attachConversationRun(gateway, run.requestId, applyRuntimeEvent);
-        if (result.text) {
-          const parsed = parseProjectWorkspaceDirectives(result.text);
-          for (const action of parsed.actions) {
-            recordP1ShellEvent("living_workspace_action");
-            await applyWorkspaceAction(action, "assistant");
-          }
+        // Re-attachment is an observer of an existing Home run. Never re-play
+        // workspace actions embedded in buffered answer text: those actions
+        // may already have been applied before the Home disconnected.
+        if (!hasObservedCompletion(result.events, run.requestId)) {
+          setLifecycleNotice("The previous run has no observed completion. Check its state in Home before retrying. No workspace action was replayed.");
         }
         invalidate(selection.projectId, resumeChatId);
       } finally {
@@ -1170,8 +1170,11 @@ export default function ProjectExperienceShell({
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
         }
-        const final = result.error || result.text;
-        if (final) {
+        const final = result.text;
+        if (result.error && !hasObservedCompletion(result.events, requestId)) {
+          setLifecycleNotice("The Home did not confirm this run completed. Its partial output is not a final answer; review the status before retrying.");
+        }
+        if (hasObservedCompletion(result.events, requestId) && final) {
           const parsed = parseProjectWorkspaceDirectives(final);
           for (const action of parsed.actions) {
             recordP1ShellEvent("living_workspace_action");
@@ -1227,18 +1230,12 @@ export default function ProjectExperienceShell({
           setVoiceTranscriptReviewed(false);
         }
         if (result.ok) setPendingAttachmentRefs([]);
-        if (result.error && !result.events.some((runtimeEvent) => runtimeEvent.type === "error")) {
-          const at = new Date().toISOString();
-          const syntheticError: ConversationRuntimeEvent = { type: "error", requestId, at, message: result.error!, code: "request_failed" };
-          const syntheticDone: ConversationRuntimeEvent = { type: "done", requestId, at, status: "failed" };
-          recordP2ConversationEvent(syntheticDone);
-          setRuntimeEvents((current) => [
-            ...current,
-            syntheticError,
-            syntheticDone,
-          ]);
+        if (result.error && !result.events.some(event => event.type === "error")) {
+          // Transport failures are client observations, not server execution
+          // events. Never fabricate a done/receipt that Home did not emit.
+          setLifecycleNotice("The Home did not confirm a final run status. Check this run before retrying; no automatic replay was started.");
         }
-        if (result.text) {
+        if (hasObservedCompletion(result.events, requestId) && result.text) {
           const parsed = parseProjectWorkspaceDirectives(result.text);
           for (const action of parsed.actions) {
             recordP1ShellEvent("living_workspace_action");
@@ -1297,23 +1294,36 @@ export default function ProjectExperienceShell({
     }
   };
 
-  const denyRuntimeAction = (action: ConversationActionName) => {
-    setRuntimeEvents((current) => {
-      const retained = current.filter((runtimeEvent) => {
-        if (runtimeEvent.type === "approval_required" && runtimeEvent.action === action) return false;
-        if (runtimeEvent.type === "mutation_review" && runtimeEvent.proposal.action === action) return false;
-        if (runtimeEvent.type === "done") return false;
-        return true;
-      });
-      return runtimeRequestId
-        ? [...retained, { type: "done" as const, requestId: runtimeRequestId, at: new Date().toISOString(), status: "cancelled" as const }]
-        : retained;
-    });
-  };
-
+  const cancelInFlightRef = useRef(false);
+  const cancelAcknowledgedRunRef = useRef<string | null>(null);
+  const [cancelAcknowledgedRunId, setCancelAcknowledgedRunId] = useState<string | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
   const cancelRuntime = async () => {
-    if (!runtimeRequestId) return;
-    recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
+    // Stop is a request to Home, not evidence that Home cancelled the run.
+    if (!runtimeRequestId || cancelInFlightRef.current || cancelAcknowledgedRunRef.current === runtimeRequestId) return;
+    cancelInFlightRef.current = true;
+    setCancelPending(true);
+    const targetRun = runtimeRequestId;
+    try {
+      const acknowledged = await cancelConversationRun(requireGateway(), targetRun);
+      if (acknowledged) {
+        cancelAcknowledgedRunRef.current = targetRun;
+        setCancelAcknowledgedRunId(targetRun);
+        recordP1ShellEvent("composer_cancel");
+      }
+      else setLifecycleNotice("Home did not confirm cancellation. Inspect the original run before trying again.");
+    } catch {
+      setLifecycleNotice("Could not confirm Stop with Home. The original run may still be active; retry after reconnecting.");
+    } finally {
+      cancelInFlightRef.current = false;
+      setCancelPending(false);
+    }
+  };
+  const denyRuntimeAction = (action: ConversationActionName) => {
+    // Declining an action must request cancellation from Home. Never append a
+    // counterfeit done(cancelled) event or remove observed approval evidence.
+    setLifecycleNotice(`Declined ${action}; requesting cancellation of the original run from Home.`);
+    void cancelRuntime();
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
   const proposeSandboxTerminal = async () => {
@@ -1951,9 +1961,11 @@ export default function ProjectExperienceShell({
                 />
               )}
               <ConversationRuntimeTrace
-                events={runtimeEvents}
+                events={eventsForRun(runtimeEvents, runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null)}
                 requestId={runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null}
                 busy={busy}
+                cancelPending={cancelPending}
+                stopRequested={cancelAcknowledgedRunId !== null && cancelAcknowledgedRunId === runtimeRequestId}
                 onCancel={() => void cancelRuntime()}
                 onApprove={(action, scope) => void approveRuntimeAction(action, scope)}
                 onDeny={denyRuntimeAction}
@@ -1977,7 +1989,12 @@ export default function ProjectExperienceShell({
                   setInput(action);
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
-                onRetry={() => { if (lastSubmittedMessage.trim() && !busy) void send({ message: lastSubmittedMessage }); }}
+                onRetry={() => {
+                  if (busy || !lastSubmittedMessage.trim()) return;
+                  setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
+                  setLifecycleNotice("Previous work may already have changed state. Review this request and the Home run receipt before choosing Send; nothing was automatically retried.");
+                  requestAnimationFrame(() => composerRef.current?.focus());
+                }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
                 {...interruptedRun.traceProps}
                 onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}

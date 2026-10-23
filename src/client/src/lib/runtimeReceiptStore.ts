@@ -24,7 +24,10 @@ function defaultStorage(): StorageLike | null {
 export function compactReceiptEvents(events: readonly ConversationRuntimeEvent[]): ConversationRuntimeEvent[] {
   const done = [...events].reverse().find((event) => event.type === "done");
   if (!done || done.type !== "done" || done.status === "waiting_approval") return [];
-  return events.filter((event) => KEPT_TYPES.has(event.type)).slice(-MAX_EVENTS);
+  // A mixed/replayed buffer must not persist other runs' step status as
+  // evidence for this final request. Raw text/approvals and the potentially
+  // sensitive full receipt payload still never enter localStorage.
+  return events.filter(event => event.requestId === done.requestId && KEPT_TYPES.has(event.type)).slice(-MAX_EVENTS);
 }
 
 export function saveRuntimeReceipt(chatId: number, events: readonly ConversationRuntimeEvent[], storage: StorageLike | null = defaultStorage()): void {

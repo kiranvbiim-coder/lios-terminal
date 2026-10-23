@@ -73,3 +73,15 @@ test("durations read naturally", () => {
   assert.equal(formatDuration(1500), "1.5 s");
   assert.equal(formatDuration(42_000), "42 s");
 });
+
+test("WS-22 a detached or interrupted run with no observed done is never reported as running or completed", () => {
+  assert.equal(summarizeRuntimeTrace([plan([],["fetch"])],false).status,"interrupted");
+  assert.equal(summarizeRuntimeTrace([plan([],["fetch"]), result("fetch",1)],false).status,"interrupted");
+  assert.equal(summarizeRuntimeTrace([plan([],["fetch"])],true).status,"running");
+});
+test("WS-22 only observed Home done marks completion, denial, failure or approval pause", () => {
+  assert.equal(summarizeRuntimeTrace([done("completed",2)],false).status,"completed");
+  assert.equal(summarizeRuntimeTrace([done("cancelled",2)],false).status,"cancelled");
+  assert.equal(summarizeRuntimeTrace([done("failed",2)],false).status,"failed");
+  assert.equal(summarizeRuntimeTrace([done("waiting_approval",2)],false).status,"needs_input");
+});
