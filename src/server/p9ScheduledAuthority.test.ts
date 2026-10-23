@@ -10,10 +10,11 @@ process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
 delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
-const { users, projectAutomationRuns } = await import("@shared/schema");
+const { users, projectAutomationRuns, projectAutomationWorkflows } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { createProjectChat } = await import("./projectChatStore");
-const { createP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
+const { createP9Workflow, replaceP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
+const { p9WorkflowActionSchema } = await import("@shared/p9AutomationContracts");
 const { executeP9Workflow, runDueP9Workflows, runP9FilingObserverCycle } = await import("./p9AutomationService");
 const { getRequestIdentity } = await import("./requestContext");
 
@@ -29,6 +30,50 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     const workflow = await createP9Workflow(ctx, project.id, { name: "Scheduled diagnostic", template: "custom", enabled: true, trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 5 } }, action: { kind: "conversation_rerun", chatId: chat.id, request: { message: "LiOS doctor", executionMode: "deterministic_first", sourceScope: "my_data" } }, notificationPolicy: { enabled: false } });
     workflows.push({ workflow, ctx });
   }
+  await t.test("D4 stores and scheduler reject historical approvals, including legacy rows", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const saved = p9WorkflowActionSchema.parse(workflow.action);
+    assert.equal(saved.kind, "conversation_rerun");
+    if (saved.kind !== "conversation_rerun") return;
+
+    for (const request of [
+      { ...saved.request, approvals: [{ action: "AIDirectEstimate" as const, scope: "once" as const }] },
+      { ...saved.request, aiDirectApproved: true },
+    ]) {
+      const candidate = { ...saved, request };
+      const raw = {
+        name: "Must not store approval", template: "custom", enabled: true,
+        trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 5 } },
+        action: candidate, notificationPolicy: { enabled: false },
+      };
+      await assert.rejects(createP9Workflow(ctx, workflow.projectId, raw),
+        /cannot reuse conversation approvals/);
+      await assert.rejects(replaceP9Workflow(ctx, workflow.id, raw),
+        /cannot reuse conversation approvals/);
+    }
+
+    const legacyAction = {
+      ...saved,
+      request: {
+        ...saved.request,
+        approvals: [{ action: "AIDirectEstimate" as const, scope: "once" as const }],
+      },
+    };
+    await getDb().update(projectAutomationWorkflows).set({ action: legacyAction })
+      .where(eq(projectAutomationWorkflows.id, workflow.id));
+    try {
+      const [legacy] = await getDb().select().from(projectAutomationWorkflows)
+        .where(eq(projectAutomationWorkflows.id, workflow.id));
+      assert.ok(legacy);
+      const denied = await executeP9Workflow({ workflow: legacy, triggerType: "manual" });
+      assert.equal(denied.run?.status, "failed");
+      assert.match(denied.error ?? "", /cannot reuse conversation approvals/);
+      assert.equal(denied.result, null);
+    } finally {
+      await getDb().update(projectAutomationWorkflows).set({ action: saved })
+        .where(eq(projectAutomationWorkflows.id, workflow.id));
+    }
+  });
   await t.test("pausing after a due snapshot was captured admits no scheduled run", async () => {
     const { workflow, ctx } = workflows[0]!;
     await setP9WorkflowEnabled(ctx, workflow.id, false);

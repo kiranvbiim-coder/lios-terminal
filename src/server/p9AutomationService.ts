@@ -55,6 +55,7 @@ import { getCompanyFilings } from "./secEdgarData";
 import { listSourceConnections } from "./sourceConnectionService";
 import { hashLedgerValue } from "./ledgerStore";
 import { withP10Span } from "./p10Observability";
+import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
 import {
   beginP9Run,
   claimDueP9Workflows,
@@ -540,6 +541,8 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
 
   try {
     const action = p9WorkflowActionSchema.parse(input.workflow.action);
+    // Saved rows (including restored backups) are never a grant ledger.
+    assertP9HasNoReplayedGrant(action);
     if (action.kind === "conversation_rerun" && action.sourceRequestId) {
       await requireSuccessfulP9Recipe(ctx, input.workflow.projectId, action);
     }
