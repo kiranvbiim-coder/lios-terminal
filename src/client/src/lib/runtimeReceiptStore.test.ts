@@ -39,3 +39,16 @@ test("old chats are evicted beyond the cap", () => {
   assert.deepEqual(loadRuntimeReceipt(1, storage), []);
   assert.equal(loadRuntimeReceipt(65, storage).length, 2);
 });
+
+test("WS-22 local step receipt never combines two unrelated Home requestIds", () => {
+  const otherRequestId = "99999999-9999-4999-8999-999999999999";
+  const other: ConversationRuntimeEvent = { ...result("from-other-run"), requestId: otherRequestId };
+  const retained = compactReceiptEvents([other, result("owned"), done("completed")]);
+  assert.deepEqual(retained.map(e => e.type === "tool_result" ? e.stepId : e.type), ["owned", "done"]);
+  assert.ok(retained.every(e => e.requestId === requestId));
+});
+test("WS-22 local step summary must not store full execution receipt or raw text", () => {
+  const receipt = { type:"receipt", requestId, at, receipt: { privateInput: "secret" } } as unknown as ConversationRuntimeEvent;
+  const kept = compactReceiptEvents([receipt, result("safe"), done("completed")]);
+  assert.deepEqual(kept.map(e=>e.type), ["tool_result","done"]);
+});
