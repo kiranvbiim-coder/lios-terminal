@@ -83,7 +83,7 @@ test("GM20 agent plan pauses before external MCP, then approved continuation rea
       input: { connectionId: 41, toolId: "quotes.read", arguments: { symbol: "TEST" } },
       dependsOn: [],
     }] }),
-    JSON.stringify({ decision: "complete", answer: "The verified tool returned a test observation." }),
+    JSON.stringify({ decision: "complete", answer: "The connected MCP tool completed; its observation has not been released for model review." }),
   ];
   const modelCalls: string[] = [];
   const ledger: AgentEventInput[] = [];
@@ -139,6 +139,12 @@ test("GM20 agent plan pauses before external MCP, then approved continuation rea
     assert.deepEqual(actualCalls, ["quotes.read"], "only the reviewed step may invoke the MCP tool");
     assert.deepEqual(completed.steps[0]?.sourceRefs, ["mcp-server:source:41", "mcp-tool:quotes.read"]);
     assert.equal(modelCalls.length, 2, "resume inspects result without re-planning");
+    // L4 tool execution consent is not AI-transmission consent. No raw MCP
+    // response or fabricated "verified quote" may appear in the review prompt
+    // until P7 source-specific rights and the owner's release are enforced.
+    assert.equal(modelCalls[1]?.includes("test observation"), false);
+    assert.match(modelCalls[1] ?? "", /External MCP tool quotes\.read completed/);
+    assert.equal(completed.answer.includes("test observation"), false);
     assert.equal(ledger.filter(event => event.kind === "tool_call_finished"
       && event.status === "succeeded").length, 1);
   } finally {
