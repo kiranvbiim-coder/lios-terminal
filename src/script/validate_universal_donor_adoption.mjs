@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -30,6 +30,42 @@ export function loadUniversalDonorAdoptionSources(){
   locks:loadJson("third_party/upstream-lock.json"),
   controls:loadJson("third_party/donor-harvesting-controls.json"),
  };
+}
+/**
+ * Check declared bundled donor destinations against the actual source checkout.
+ * This is source-presence evidence only: no runtime, import rights or shipping
+ * acceptance is inferred from a file or a package-lock entry.
+ */
+export function verifyBundledDonorDestinations(components, options = {}) {
+ const probe = options.probe ?? (relativePath => {
+  try { return lstatSync(path.join(root,relativePath)).isFile(); }
+  catch { return false; }
+ });
+ const npmPackages = options.npmPackages ?? loadJson("src/package-lock.json").packages;
+ let sourcePaths = 0, npmReferences = 0;
+ for (const component of components.components) {
+  if (!component.bundled) continue;
+  for (const destination of component.destinationPaths ?? []) {
+   assert.equal(typeof destination, "string",component.id+" has invalid bundled path");
+   if (destination.startsWith("npm:")) {
+    const spec = destination.slice(4);
+    const at = spec.lastIndexOf("@");
+    assert.ok(at > 0,component.id+" has invalid npm destination reference");
+    const name = spec.slice(0,at), version = spec.slice(at+1);
+    assert.ok(name.length>0 && version.length>0 && !name.includes("..") && !version.includes("/"));
+    assert.equal(npmPackages["node_modules/"+name]?.version,version,component.id+" npm dependency no longer matches the locked bundled reference "+destination);
+    npmReferences++;
+    continue;
+   }
+   const base = component.destinationPathBase ?? "src/";
+   const relative = destination.startsWith("src/") ? destination : base+destination;
+   assert.ok(relative.startsWith("src/") && !relative.includes("\\") && !relative.split("/").some(part => part === ".." || part === "." || part === ""),
+    component.id+" has unsafe bundled destination "+destination);
+   assert.ok(probe(relative),component.id+" bundled source destination is missing or not a regular file: "+relative);
+   sourcePaths++;
+  }
+ }
+ return { sourcePaths, npmReferences };
 }
 function assertUniqueIds(rows,field,label){
  const ids=rows.map(x=>x[field]);
@@ -64,6 +100,7 @@ export function validateUniversalDonorAdoption({ledger,baseline,forks,components
  for(const [key,value] of Object.entries(ledger.releaseClaims)) {
   assert.equal(value,false,"Universal donor ledger cannot claim shipped/full integration: "+key);
  }
+ const bundledDestinations=verifyBundledDonorDestinations(components);
  const cmp=new Map(components.components.map(x=>[x.id,x]));
  const pins=new Map(locks.locks.map(x=>[x.id,x]));
  const realForks=new Map(forks.mirrors.map(x=>[x.id,x]));
@@ -218,6 +255,7 @@ export function validateUniversalDonorAdoption({ledger,baseline,forks,components
   bySourceAuditStatus:Object.fromEntries([...auditStatuses].sort((a,b)=>a[0].localeCompare(b[0]))),
   donorsFullyExhausted:exhaustedDonors,
   harvestingControlSchema:controls.schemaVersion,
+  bundledDestinations,
   newProductFeaturesShippedByAudit:0,
  };
 }
