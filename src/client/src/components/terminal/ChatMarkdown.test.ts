@@ -230,3 +230,29 @@ test("saved answer citation sources never depend on another run", () => {
   assert.equal(savedMessageCitationSources(previous)[0].href, "https://example.test/old");
   assert.deepEqual(savedMessageCitationSources({}), []);
 });
+
+test("WS-23 a two-backtick code span can contain a pipe inside one table cell", () => {
+  const input = "| Expression | Result |\n|---|---|\n| ``a|b`` | 2 |";
+  const parsed = parseChatMarkdown(input);
+  assert.equal(parsed[0]?.t, "table");
+  const markup=render(input);
+  assert.equal((markup.match(/<td\\b/g) ?? []).length, 2);
+  assert.match(markup, /<code[^>]*>a\\|b<\\/code>/);
+  assert.match(markup, />2<\\/td>/);
+});
+
+test("WS-23 a backslash-escaped pipe does not create a spurious Markdown table column", () => {
+  const input = "| Name | Value |\n|---|---|\n| Gross \\| Net | 23 |";
+  const parsed = parseChatMarkdown(input);
+  assert.equal(parsed[0]?.t, "table");
+  const markup=render(input);
+  assert.equal((markup.match(/<td\\b/g) ?? []).length, 2);
+  assert.match(markup, /Gross \\| Net/);
+});
+
+test("WS-23 table scroll and copy enhancements never manufacture citations or embedded media", () => {
+  const markup=render("| Document | Evidence |\n|---|---|\n| ![tracker](https://evil.test/pixel) | [99] |");
+  assert.match(markup,/data-chat-table-block="true"/);
+  assert.doesNotMatch(markup,/<img\\b|data-citation="99"/);
+  assert.match(markup, />\\[99\\]<\\/td>/);
+});
