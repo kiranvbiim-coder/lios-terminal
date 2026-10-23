@@ -11,7 +11,7 @@ interface Props {
   onScopeChange: (scope: ConversationSourceScope) => void;
   onOpenConnections: () => void;
   disabled?: boolean;
-  projectAvailable: boolean;
+  projectAvailable: boolean; // true for a regular Quick or Project Chat; false for Temporary
 }
 
 /** A view over Connection Center's catalogue, never a separate source authority. */
@@ -32,7 +32,7 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
       <p className="my-3 text-xs text-muted-foreground">Connection state is not permission to send data to AI, export it, or use it outside its licence. Current account and source restrictions still apply.</p>
       {registry.isLoading && <p role="status">Loading your source catalogue…</p>}
       {registry.isError && <p role="alert">Source catalogue unavailable. <button type="button" className="underline" onClick={() => void registry.refetch()}>Retry</button></p>}
-      {registry.data && <><h3 className="font-medium">Connected sources</h3><ul className="my-2 space-y-2">{registry.data.groups.flatMap(group => group.items).filter(item => item.connected).map(item => <li key={item.id}><span>{item.name}</span><span className="ml-2 text-xs text-muted-foreground">{item.state.replaceAll("_", " ")}</span><p className="text-xs text-muted-foreground">{item.detail}</p>{item.licenseCaveat && <p className="text-xs text-amber-200">{item.licenseCaveat}</p>}</li>)}</ul>{registry.data.summary.connectionCount === 0 && <p className="text-xs text-muted-foreground">No sources connected. Supplied inputs remain usable; missing evidence stays explicit.</p>}</>}
+      {registry.data && <><h3 className="font-medium">Connected sources</h3><ul className="my-2 space-y-2">{registry.data.groups.flatMap(group => group.items).filter(item => item.connected).map(item => <li key={item.id}><span>{item.name}</span><span className="ml-2 text-xs text-muted-foreground">{item.state.replaceAll("_", " ")}</span><p className="text-xs text-muted-foreground">{item.detail}</p>{item.licenseCaveat && <p className="text-xs text-amber-200">{item.licenseCaveat}</p>}</li>)}</ul>{registry.data.summary.connectionCount === 0 && <p className="text-xs text-muted-foreground">No sources connected. Files explicitly attached to this Chat remain available under the selected policy; missing evidence stays explicit.</p>}</>}
       <button type="button" onClick={() => { setOpen(false); onOpenConnections(); }} className="mt-2 rounded border border-border px-2 py-1 text-xs">Manage sources in Connection Center</button>
       <button type="button" onClick={() => setOpen(false)} className="ml-2 px-2 py-1 text-xs">Close</button>
     </section>}
