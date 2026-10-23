@@ -18,8 +18,11 @@ export function quoteChatResponse(draft: string, response: string): string {
   const MAX_EXCERPT = 1200;
   const snippet = content.length > MAX_EXCERPT ? `${content.slice(0, MAX_EXCERPT).trimEnd()}…` : content;
   const quote = snippet.split("\n").map((line) => `> ${line}`).join("\n");
+  const block = `Follow up on this LiOS response:\n${quote}`;
+  // A second button click must not duplicate the exact staged answer.
+  if (draft.includes(block)) return draft;
   const prefix = draft.trim() ? `${draft.trimEnd()}\n\n` : "";
-  return `${prefix}Follow up on this LiOS response:\n${quote}\n\n`;
+  return `${prefix}${block}\n\n`;
 }
 
 /** Fail closed on clipboard denial. Never report a copy as successful before the write resolves. */
@@ -34,4 +37,16 @@ export async function copyChatMessageText(
   } catch {
     return false;
   }
+}
+
+/**
+ * Stages an explicit follow-up or recovery suggestion exactly once.
+ * Existing unsent text wins; suggestions never execute a slash command,
+ * clear the composer, send a request or replay a Home tool.
+ */
+export function stageChatFollowUp(draft: string, suggestion: string): string {
+  const text = suggestion.trim();
+  if (!text) return draft;
+  if (`\n\n${draft.trim()}\n\n`.includes(`\n\n${text}\n\n`)) return draft;
+  return `${draft.trim() ? `${draft.trimEnd()}\n\n` : ""}${text}\n\n`;
 }

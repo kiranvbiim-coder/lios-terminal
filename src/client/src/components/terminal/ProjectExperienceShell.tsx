@@ -126,7 +126,7 @@ import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import ChatMessageActions from "./ChatMessageActions";
-import { quoteChatResponse } from "@/lib/chatMessageActions";
+import { quoteChatResponse, stageChatFollowUp } from "@/lib/chatMessageActions";
 import SavedArtifactCards from "./SavedArtifactCards";
 import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
@@ -2036,6 +2036,8 @@ export default function ProjectExperienceShell({
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
                       {message.role !== "system" && <ChatMessageActions
+                        messageId={message.id}
+                        quoteDisabled={busy}
                         content={message.content}
                         role={message.role}
                         onQuote={message.role === "assistant" ? () => {
@@ -2134,23 +2136,22 @@ export default function ProjectExperienceShell({
                 onRecoveryAction={(action) => {
                   if (/^(connect\b|open connection center$)/i.test(action)) {
                     if (lastSubmittedMessage.trim()) {
-                      setInput(lastSubmittedMessage);
-                      setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
+                      setInput(current => stageChatFollowUp(current, lastSubmittedMessage));
+                      setLifecycleNotice("Connection Center opened. Your previous request is staged for review alongside any unsent draft; nothing was automatically sent.");
                     }
                     onOpenEnvironment();
                     return;
                   }
-                  if (action.startsWith("/")) {
-                    void runCommand(action);
-                    return;
-                  }
-                  setInput(action);
+                  // A suggested slash action is editable text, never a command execution.
+                  // The user must deliberately review and send it, preserving other drafts.
+                  setInput(current => stageChatFollowUp(current, action));
+                  setLifecycleNotice("Suggestion staged for review. Your existing draft is preserved; no command or model request was run.");
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
                 onRetry={() => { if (lastSubmittedMessage.trim() && !busy) void send({ message: lastSubmittedMessage }); }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
                 {...interruptedRun.traceProps}
-                onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onFollowUp={(prompt) => { setInput(current => stageChatFollowUp(current, prompt)); requestAnimationFrame(() => composerRef.current?.focus()); }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
