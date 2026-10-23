@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { discoverTests, partitionTestFiles } from "./run_project_tests.mjs";
+import { discoverTests, partitionTestFiles, splitTimingSensitiveTests } from "./run_project_tests.mjs";
 
 test("discovery includes nested project tests once, without dependencies or hidden directories", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios test discovery "));
@@ -28,4 +28,30 @@ test("argument batches preserve every spaced path and stay below Windows command
   for (const batch of batches) assert.ok(batch.reduce((size, filename) => size + filename.length * 2 + 3, 0) <= 24_000);
   assert.deepEqual(partitionTestFiles([]), []);
   assert.throws(() => partitionTestFiles(["x".repeat(24_000)]), /portable argument limit/);
+});
+
+
+test("macOS and other CI hosts isolate at most 75 test files per batch without dropping any", () => {
+  const files = Array.from({ length: 226 }, (_, index) => `client/src/example-${index}.test.ts`);
+  const batches = partitionTestFiles(files);
+  assert.deepEqual(batches.map(batch => batch.length), [75, 75, 75, 1]);
+  assert.deepEqual(batches.flat(), files);
+  assert.ok(batches.every(batch => batch.length <= 75));
+});
+
+test("timing-sensitive routing p95 runs alone without being skipped or weakening its threshold", () => {
+  const files = [
+    "client/src/first.test.ts",
+    "server/largePGlite.test.ts",
+    "server/goldenRouting.test.ts",
+    "server/other.test.ts",
+  ];
+  const { isolated, parallel } = splitTimingSensitiveTests(files);
+  assert.deepEqual(isolated, ["server/goldenRouting.test.ts"]);
+  assert.deepEqual(parallel, ["client/src/first.test.ts", "server/largePGlite.test.ts", "server/other.test.ts"]);
+  const batches = [...isolated.map(name => [name]), ...partitionTestFiles(parallel)];
+  assert.deepEqual([...batches.flat()].sort(), [...files].sort());
+  assert.deepEqual(batches[0], ["server/goldenRouting.test.ts"]);
+  const noTiming = splitTimingSensitiveTests(["client/src/demo.test.ts"]);
+  assert.deepEqual(noTiming, { isolated: [], parallel: ["client/src/demo.test.ts"] });
 });
