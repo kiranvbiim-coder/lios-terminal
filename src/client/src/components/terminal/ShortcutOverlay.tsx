@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Command, Search, X } from "lucide-react";
+import { Command, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 interface ShortcutItem {
   group: string;
@@ -30,6 +31,7 @@ const SHORTCUTS: readonly ShortcutItem[] = [
 
 export default function ShortcutOverlay({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return SHORTCUTS;
@@ -38,38 +40,38 @@ export default function ShortcutOverlay({ onClose }: { onClose: () => void }) {
   const groups = [...new Set(filtered.map((item) => item.group))];
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/75 px-3 pt-12 sm:pt-20" onMouseDown={onClose}>
-      <section className="w-full max-w-3xl border border-border bg-[#090909] shadow-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LIOS keyboard map">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-3xl flex-col gap-0 overflow-hidden border-border bg-[#090909] p-0"
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}>
         <header className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Command className="h-4 w-4 text-amber-300" />
           <div className="min-w-0 flex-1">
-            <div className="font-terminal text-[10px] font-bold tracking-widest text-foreground">KEYBOARD MAP</div>
-            <div className="mt-1 font-terminal text-[8px] text-muted-foreground">Search global and professional terminal shortcuts.</div>
+            <DialogTitle className="font-ui text-base font-semibold text-foreground">Keyboard map</DialogTitle>
+            <DialogDescription className="mt-1 font-ui text-sm text-muted-foreground">Search global and professional terminal shortcuts.</DialogDescription>
           </div>
-          <button onClick={onClose} className="border border-border p-1.5 text-muted-foreground hover:text-foreground" aria-label="Close keyboard map"><X className="h-3.5 w-3.5" /></button>
         </header>
         <div className="flex items-center gap-2 border-b border-border px-4 py-2">
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="SEARCH SHORTCUTS..." className="min-w-0 flex-1 bg-transparent font-terminal text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60" />
+          <input autoFocus aria-label="Search keyboard shortcuts" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search shortcuts..." className="min-h-11 min-w-0 flex-1 bg-transparent font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
         </div>
-        <div className="max-h-[65vh] overflow-y-auto p-4 scrollbar-thin">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 scrollbar-thin">
           {groups.map((group) => (
             <section key={group} className="mb-5 last:mb-0">
-              <div className="mb-2 font-terminal text-[8px] font-bold tracking-[0.18em] text-cyan-300">{group.toUpperCase()}</div>
+              <h3 className="mb-2 font-ui text-sm font-semibold text-cyan-300">{group}</h3>
               <div className="divide-y divide-border/60 border border-border">
                 {filtered.filter((item) => item.group === group).map((item) => (
-                  <div key={`${item.keys}-${item.label}`} className="grid grid-cols-[130px_150px_1fr] gap-3 px-3 py-2.5">
-                    <kbd className="w-fit border border-border bg-black px-2 py-1 font-terminal text-[8px] text-amber-300">{item.keys}</kbd>
-                    <span className="font-terminal text-[9px] text-foreground">{item.label}</span>
-                    <span className="font-terminal text-[8px] leading-relaxed text-muted-foreground">{item.description}</span>
+                  <div key={`${item.keys}-${item.label}`} className="grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-[130px_150px_1fr] sm:gap-3">
+                    <kbd className="w-fit border border-border bg-black px-2 py-1 font-terminal text-xs text-amber-300">{item.keys}</kbd>
+                    <span className="font-ui text-sm text-foreground">{item.label}</span>
+                    <span className="font-ui text-sm leading-relaxed text-muted-foreground">{item.description}</span>
                   </div>
                 ))}
               </div>
             </section>
           ))}
-          {filtered.length === 0 && <div className="py-10 text-center font-terminal text-[9px] text-muted-foreground">NO MATCHING SHORTCUTS</div>}
+          {filtered.length === 0 && <div role="status" className="py-10 text-center font-ui text-sm text-muted-foreground">No matching shortcuts.</div>}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

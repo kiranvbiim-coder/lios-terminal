@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Login from "./Login";
 import type { SessionData } from "@/App";
+import { DEFAULT_TRIAL_DAYS } from "@shared/commercialRuntime";
 import "@/reference-entry.css";
 
 const NAV_ITEMS = ["Product", "Capabilities", "Connectivity", "Pricing"];
@@ -113,7 +114,7 @@ const PLANS = [
     period: "",
     desc: "Full-feature evaluation. No card required.",
     items: [
-      "14-day access",
+      `${DEFAULT_TRIAL_DAYS}-day access`,
       "Community data sources",
       "5 Projects",
       "Standard artifacts",
@@ -1721,7 +1722,7 @@ export default function PublicProductPreview({
             >
               Ready to start your
               <br />
-              <span style={{ color: "#d4a017" }}>14-day free trial?</span>
+              <span style={{ color: "#d4a017" }}>{DEFAULT_TRIAL_DAYS}-day free trial?</span>
             </h2>
             <p
               style={{

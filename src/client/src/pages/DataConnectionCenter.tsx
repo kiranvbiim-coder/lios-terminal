@@ -219,19 +219,19 @@ const META_CONNECTOR_IDS = new Set(["database", "private_api", "file_upload"]);
 
 // ── Shared UI pieces ───────────────────────────────────────────────────────
 
-const inputCls = "w-full bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60";
+const inputCls = "min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">{label}</span>{children}</label>;
+  return <label className="block"><span className="mb-1 block font-ui text-sm font-medium text-muted-foreground">{label}</span>{children}</label>;
 }
 
 function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { testing: boolean; saving: boolean; canAct: boolean; onTest: () => void; onSave: () => void; saveLabel?: string }) {
   return (
-    <div className="flex gap-2 pt-1">
-      <button onClick={onTest} disabled={!canAct || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+    <div className="flex flex-wrap gap-2 pt-1">
+      <button onClick={onTest} disabled={!canAct || testing || saving} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {testing ? "Testing..." : "Test Connection"}
       </button>
-      <button onClick={onSave} disabled={!canAct || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+      <button onClick={onSave} disabled={!canAct || saving || testing} className="min-h-11 rounded-md border border-primary bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {saving ? "Saving..." : saveLabel ?? "Save Connection"}
       </button>
     </div>
@@ -240,7 +240,7 @@ function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { tes
 
 function ResultBanner({ ok, detail }: { ok: boolean; detail: string }) {
   return (
-    <div className={`border px-3 py-2 font-terminal text-[9px] ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
+    <div role={ok ? "status" : "alert"} className={`rounded border px-3 py-2 font-ui text-sm ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
       {ok ? "✓ " : "✗ "}{detail}
     </div>
   );
@@ -352,32 +352,32 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
     <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={onClose}>
       {/* Description */}
       {connector.description && (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.description}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.description}</p>
       )}
       {connector.sourceType === "public_api" ? (
-        <p className="font-terminal text-[9px] text-teal-400/90 mb-3">
+        <p className="mb-3 font-ui text-sm leading-6 text-teal-400/90">
           PUBLIC / NO KEY — no credential is required. The Open API URL below is documentation only, not a credential.
         </p>
       ) : (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.setupGuide}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.setupGuide}</p>
       )}
 
       {/* Website link */}
       {connector.websiteUrl && (
         <a href={connector.websiteUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-terminal text-[8px] text-[hsl(38,95%,55%)] hover:underline mb-3">
+          className="mb-3 inline-flex min-h-10 items-center gap-1.5 font-ui text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ExternalLink className="w-3 h-3" /> {connector.sourceType === "public_api" ? "Open API documentation" : "Register / Get API Key"}
         </a>
       )}
 
       {/* Rate limits */}
       {connector.rateLimits && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-3">
+        <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
           <span className="text-amber-400/70">Rate limits:</span> {connector.rateLimits}
         </p>
       )}
       {connector.id === "lse" && (
-        <p className="font-terminal text-[8px] text-cyan-400/90 mb-3 leading-relaxed">
+        <p className="mb-3 font-ui text-sm leading-6 text-cyan-400/90">
           Paste the <strong className="font-normal text-cyan-300">Vault API key</strong> from londonstrategicedge.com/data after you create an account. Site login passwords are not API keys.
         </p>
       )}
@@ -385,22 +385,22 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
       <div className="space-y-3">
         {needsKey && (
           <label className="block">
-            <span className="font-terminal text-[8px] text-muted-foreground uppercase">API Key</span>
+            <span className="font-ui text-sm font-medium text-muted-foreground">API Key</span>
             <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your API key here"
-              className="w-full mt-1 bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60" autoComplete="off" />
+              className={`${inputCls} mt-1`} autoComplete="off" />
           </label>
         )}
-        <div className="flex gap-2">
-          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing || saving} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {testing ? "Testing..." : "Test Connection"}
           </button>
-          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving || testing} className="min-h-11 rounded-md border border-primary bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {saving ? "Saving..." : "Save & Connect"}
           </button>
         </div>
         {testResult && <ResultBanner ok={testResult.ok} detail={testResult.detail} />}
         {testResult?.availableModels && (
-          <div className="border border-border bg-[#0d0d0d] px-3 py-2 font-terminal text-[8px] text-muted-foreground" role="status" data-testid="gemini-model-discovery-result">
+          <div className="rounded border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm leading-6 text-muted-foreground" role="status" data-testid="gemini-model-discovery-result">
             {testResult.availableModels.length > 0
               ? `${testResult.availableModels.length} Gemini chat models were returned${testResult.availableModelsComplete ? "" : " on the first page; more pages exist"}. The list is read-only; no prompt was sent.`
               : testResult.availableModelsComplete
@@ -409,7 +409,7 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
           </div>
         )}
         {!canVerify && (
-          <p className="font-terminal text-[8px] text-amber-400/90 mt-2">
+          <p className="mt-2 font-ui text-sm leading-6 text-amber-400/90">
             This provider is listed for planning only. Live API verification is not available until its adapter ships in a future build.
           </p>
         )}
@@ -777,17 +777,17 @@ function ConnectionCard({
     <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
       <div className="flex items-center gap-2">
         <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
-        <span className="font-terminal text-[9px] font-bold uppercase text-foreground truncate">{conn.name}</span>
-        <span className={`ml-auto font-terminal text-[8px] uppercase ${color} shrink-0`}>{conn.status}</span>
+        <span className="truncate font-ui text-sm font-semibold text-foreground">{conn.name}</span>
+        <span className={`ml-auto shrink-0 font-ui text-xs ${color}`}>{conn.status}</span>
       </div>
-      <div className="font-terminal text-[8px] text-muted-foreground mt-1">
+      <div className="mt-1 font-ui text-xs text-muted-foreground">
         {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
       </div>
-      {conn.statusDetail && <div className="font-terminal text-[8px] text-muted-foreground mt-1 truncate">{conn.statusDetail}</div>}
-      <div className="flex gap-3 mt-2">
-        <button onClick={onTest} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
-        <button onClick={onEdit} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
-        <button onClick={onRemove} className="font-terminal text-[8px] text-muted-foreground hover:text-rose-400 uppercase">Remove</button>
+      {conn.statusDetail && <div className="mt-1 break-words font-ui text-sm text-muted-foreground">{conn.statusDetail}</div>}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button onClick={onTest} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button onClick={onEdit} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
+        <button onClick={onRemove} aria-label={`Remove saved connection ${conn.name}`} className="min-h-10 rounded border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Remove</button>
       </div>
     </div>
   );
@@ -798,6 +798,10 @@ function ConnectionCard({
 export default function DataConnectionCenter({ session, onComplete, onLogout }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
+  const [removalTarget, setRemovalTarget] = useState<number | null>(null);
+  const [removingConnection, setRemovingConnection] = useState(false);
+  const [removalError, setRemovalError] = useState<string | null>(null);
+  const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -1082,11 +1086,21 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     } catch { refresh(); }
   }
 
-  async function handleDeleteConnection(connectionId: number) {
+  function handleDeleteConnection(connectionId: number) {
+    if (removalInFlight.current) return;
+    setRemovalError(null); setRemovalTarget(connectionId);
+  }
+  async function confirmDeleteConnection() {
+    if (removalTarget === null || removalInFlight.current) return;
+    removalInFlight.current = true; setRemovingConnection(true); setRemovalError(null);
     try {
-      await apiRequest("DELETE", `/api/setup/source-connections/${connectionId}`);
-      refresh();
-    } catch { /* silent */ }
+      await apiRequest("DELETE", `/api/setup/source-connections/${removalTarget}`);
+      setRemovalTarget(null); refresh();
+    } catch {
+      setRemovalError("This connection could not be removed. It remains listed; retry or cancel.");
+    } finally {
+      removalInFlight.current = false; setRemovingConnection(false);
+    }
   }
 
   function handleEditConnection(conn: SavedConnection) {
@@ -1386,7 +1400,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="space-y-3" data-testid="connect-ai-selection">
       <div>
-        <span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Use this provider</span>
+        <label htmlFor="ai-provider-select" className="mb-1 block font-ui text-sm font-medium text-muted-foreground">Use this provider</label>
         <select id="ai-provider-select" value={aiProviderId} onChange={(event) => void changeAiSelection(event.target.value, "")} disabled={aiBusy || saving || masterBusy} className={inputCls}>
           <option value="">AI disabled — deterministic engines only</option>
           {selectableAiProviders.map((provider) => (
@@ -1434,7 +1448,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         )}
         {aiProviderId && (
           <div className="mt-3">
-            <label htmlFor="ai-model-select" className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Model</label>
+            <label htmlFor="ai-model-select" className="mb-1 block font-ui text-sm font-medium text-muted-foreground">Model</label>
             {selectedAiProvider?.allowCustomModel && !selectedAiProvider.isLocal && !modelDiscoveryComplete ? (
               <>
                 <input
@@ -2043,6 +2057,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
       {modal === "import" && <DataImportWizard onClose={() => setModal(null)} onImported={handleImported} />}
       {modal === "api" && <AddApiModal seed={catalogSeed} editing={editingConnection} onClose={() => { setModal(null); setCatalogSeed(null); setEditingConnection(null); }} onSaved={handleModalSaved} />}
       {modal === "storage" && <AddStorageModal seed={catalogSeed} editing={editingConnection} onClose={() => { setModal(null); setCatalogSeed(null); setEditingConnection(null); }} onSaved={handleModalSaved} />}
+      {removalTarget !== null && <ModalShell title="Remove saved connection" onClose={() => { if (!removalInFlight.current) setRemovalTarget(null); }}>
+        <p className="font-ui text-sm leading-6 text-muted-foreground">Remove {savedConnections.find(connection => connection.id === removalTarget)?.name ?? `saved connection ${removalTarget}`} from LiOS? This does not delete the external source or grant access to another provider.</p>
+        {removalError && <p role="alert" className="font-ui text-sm text-rose-300">{removalError}</p>}
+        {removingConnection && <p role="status" className="font-ui text-sm text-muted-foreground">Removing connection…</p>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" disabled={removingConnection} onClick={() => setRemovalTarget(null)} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button>
+          <button type="button" disabled={removingConnection} onClick={() => void confirmDeleteConnection()} className="min-h-11 rounded border border-rose-400/50 px-4 py-2 font-ui text-sm font-semibold text-rose-200 disabled:opacity-50">{removingConnection ? "Removing…" : "Remove connection"}</button>
+        </div>
+      </ModalShell>}
     </Shell>
   );
 }
