@@ -10,7 +10,7 @@ process.env.LIOS_DATA_ROOT = root;
 process.env.LIMURIA_DATA_DIR = root;
 delete process.env.DATABASE_URL;
 const { initDb, closeDb, getDb } = await import("./db");
-const { users, projectAutomationRuns, projectAutomationWorkflows } = await import("@shared/schema");
+const { users, projectAutomationRuns, projectAutomationWorkflows, sourceConnections } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { createProjectChat } = await import("./projectChatStore");
 const { createP9Workflow, replaceP9Workflow, setP9WorkflowEnabled } = await import("./p9AutomationStore");
@@ -73,6 +73,40 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
       await getDb().update(projectAutomationWorkflows).set({ action: saved })
         .where(eq(projectAutomationWorkflows.id, workflow.id));
     }
+  });
+  await t.test("D4 P9 live MCP source rights are checked again on every attempted research rerun", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const [source] = await getDb().insert(sourceConnections).values({
+      userId: ctx.userId, organizationId: ctx.organizationId,
+      connectorId: "mcp", name: "Scheduled source authority fixture", sourceType: "mcp",
+      config: {
+        endpoint: "https://example.test/mcp", projectId: workflow.projectId,
+        aiTransmission: "allow", aiUsageRights: "cleared",
+        allowedToolIds: "quotes.read",
+      },
+      credentialRef: null, status: "configured",
+    }).returning();
+    assert.ok(source);
+    const pinned = await createP9Workflow(ctx, workflow.projectId, {
+      name: "Pinned source safe diagnostic", template: "custom", enabled: true,
+      trigger: { type: "manual" },
+      action: workflow.action,
+      sourceRefs: ["mcp-server:source:" + source.id, "mcp-tool:quotes.read"],
+      notificationPolicy: { enabled: false },
+    });
+    const accepted = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+    assert.equal(accepted.run?.status, "succeeded", "normal authorized workflow retains existing deterministic operation");
+    await getDb().update(sourceConnections).set({ status: "invalid" }).where(eq(sourceConnections.id, source.id));
+    const denied = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+    assert.equal(denied.run?.status, "failed", "revoked MCP identity must block a saved workflow");
+    assert.match(denied.error ?? "", /revoked or outside current owner authority/);
+    assert.equal(denied.result, null, "revoked connection never yields a successful P9 result");
+    await getDb().update(sourceConnections).set({ status: "configured",
+      config: { ...source.config, aiUsageRights: "unknown" },
+    }).where(eq(sourceConnections.id, source.id));
+    const rightsDenied = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+    assert.equal(rightsDenied.run?.status, "failed");
+    assert.match(rightsDenied.error ?? "", /no current owner-declared AI release rights/);
   });
   await t.test("pausing after a due snapshot was captured admits no scheduled run", async () => {
     const { workflow, ctx } = workflows[0]!;
