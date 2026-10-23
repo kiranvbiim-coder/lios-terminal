@@ -357,6 +357,7 @@ After material shared-interface changes, run the relevant V2 cross-system integr
 ## 6. Engineering rules
 
 - Inspect before rewriting.
+- **UX + DX + AX decision rule:** Always make the best defensible decision that elevates user experience (clear, accessible task completion), developer experience (simple, maintainable, testable contracts), and agent experience (clear tool contracts, predictable state, discoverable capabilities, actionable errors and safe autonomy) together. Prefer systemic fixes to cosmetic copy, one-off workarounds or duplicated authority. Do not regress existing behavior, data/state continuity, authorization, privacy, accessibility, performance, correctness or canonical architecture to improve only one dimension. Explain material trade-offs and verify affected workflows/contracts before merging.
 - Prefer reuse/adapters/incremental migration over wholesale replacement.
 - Build the real product, not a mock/demo.
 - Do not hide unavailable backend/data behind fake polished UI.
@@ -522,6 +523,17 @@ Normal UX avoids:
 - donor branding and infrastructure jargon in normal flows.
 
 Use progressive disclosure, semantic zoom, adaptive Artifact panes and compact capability/source disclosure.
+
+### Interface subtraction and disclosure carve-outs
+
+> **Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.**
+
+- Default to removing promotional taglines, decorative subtitles, repetitive descriptions, redundant helper copy and nonessential secondary labels. Make the interface understandable through layout, hierarchy, control names, grouping, affordances, clear actions and contextual state, not extra paragraphs.
+- When removing copy makes a screen confusing, repair the information architecture, interaction model, visible control/action labels or state design first. Do not compensate with tooltips, hover-only guidance, unexplained icons, hidden setup steps or a second competing UI.
+- **Disclosure carve-outs:** Preserve concise, intelligible, appropriately visible information when necessary for accessibility (including programmatic names/instructions and actionable validation), permission and informed consent, security/privacy, consequential external or irreversible actions, cost/usage/entitlement limits, material uncertainty and failure/recovery, source/provenance/as-of/freshness, assumptions and AI-derived versus deterministic output distinctions, and legally required or licensed notices. Essential labels that distinguish choices are not expendable secondary labels.
+- Show required disclosures at the point of decision or beside the relevant result, using plain language and progressive detail/inspectable receipts where suitable. Never hide material warnings, consent, blocking errors or action consequences solely in a tooltip or deep panel. Do not surface permanent debug/provider chrome to satisfy this rule.
+- Check first-use comprehension, keyboard/screen-reader accessibility, compact layouts, empty/error/offline states and protected existing journeys. Removing words is not success if understanding, safe operation or recovery regresses.
+
 
 Approved TC-13/P4 retention requirement (owner-confirmed issue #91 / PR #94): meaningful successful Project and regular/Quick Chat outputs auto-persist as versioned Artifacts without manual Keep or an invented Project; Temporary Chat remains nonpersistent. Explicit promotion into a Project still requires a destination and scope preview. Current candidate source implements Project retention and canonical Chat ownership (migration 0083), with isolated DB/HTTP/runtime evidence and a source-Electron deterministic Quick Chat retention/reopen journey recorded in `docs/PENDING_WORK.md`. This is candidate implementation evidence, not TC-13/Shipping Point/P14 or shipped-product acceptance. Final packaged journeys, permission/provenance/immutable-history qualification and the complete owner-approved convergence contract remain mandatory.
 
