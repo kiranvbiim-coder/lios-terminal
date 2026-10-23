@@ -1,4 +1,5 @@
 import { useConversationArtifactView } from "@/lib/conversationArtifactView";
+import { asyncSurfaceStatus } from "@/lib/asyncSurfaceState";
 import ChatSourcesControl from "./ChatSourcesControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
@@ -489,6 +490,7 @@ export default function ProjectExperienceShell({
     chatSelected: chatMode !== "temporary" && Boolean(selection.chatId),
   });
   const shellError = projectsQuery.error ?? projectHomeQuery.error ?? messagesQuery.error ?? quickChatsQuery.error;
+  const shellErrorStatus = asyncSurfaceStatus(shellError);
   // Quiet entry: no chat selected means the composer, never a forced Project Home. Home opens only from the Projects rail.
   const entrySurface = resolveEntrySurface({ chatMode, chatId: selection.chatId, projectHomeRequested, projectHomeAvailable: Boolean(home) });
   useEffect(() => {
@@ -1372,12 +1374,13 @@ export default function ProjectExperienceShell({
 
   const retryShell = async () => {
     recordP1ShellEvent("shell_retry");
-    await Promise.all([
+    const results = await Promise.all([
       projectsQuery.refetch(),
       quickChatsQuery.refetch(),
       chatMode === "project" && selection.projectId ? projectHomeQuery.refetch() : Promise.resolve(),
       chatMode !== "temporary" && selection.chatId ? messagesQuery.refetch() : Promise.resolve(),
     ]);
+    if (results.some((result) => result && typeof result === "object" && "isError" in result && result.isError)) return;
     recordP1ShellEvent("shell_recovered");
   };
 
@@ -1741,11 +1744,11 @@ export default function ProjectExperienceShell({
               <div className="font-terminal text-[11px] uppercase tracking-[0.18em] text-red-200">Workspace recovery</div>
               <div className="mt-3 font-ui text-[16px] font-semibold text-foreground">LiOS could not restore part of this workspace.</div>
               <div className="mt-2 font-ui text-[12px] leading-5 text-muted-foreground">
-                {shellError instanceof Error ? shellError.message : "The Project or conversation state is temporarily unavailable."}
+                {shellErrorStatus === 401 ? "Your session has expired. Sign in again before accessing saved work." : shellErrorStatus === 403 ? "Your current account cannot access this workspace. No permissions were changed." : shellErrorStatus === 404 ? "The saved Project or conversation is no longer available here. Check your selection and retry." : "The Project or conversation state is temporarily unavailable. Retry to restore your existing work."}
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button type="button" onClick={() => void retryShell()} className="rounded-md bg-amber-400 px-3 py-2 font-ui text-[12px] font-semibold text-black hover:bg-amber-300">Retry restore</button>
-                <button type="button" onClick={() => void startTemporary()} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[12px] text-muted-foreground hover:text-foreground">Open Temporary Chat</button>
+                {shellErrorStatus === 401 || shellErrorStatus === 403 ? <button type="button" onClick={onLogout} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[12px] text-muted-foreground hover:text-foreground">Sign out</button> : <button type="button" onClick={() => void startTemporary()} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[12px] text-muted-foreground hover:text-foreground">Open Temporary Chat</button>}
               </div>
               <div className="mt-3 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/70">No connector setup or data reset is required to retry.</div>
             </div>
