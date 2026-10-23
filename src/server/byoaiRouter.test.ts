@@ -80,6 +80,28 @@ test("BYOAI: setup metadata exposes safe credential slots without secrets", () =
   assert.equal(options.find((provider) => provider.id === "openai")?.requiresExternalConfig, false);
 });
 
+test("GM12 OpenClaw-derived access contract advertises only executable user-owned AI methods", () => {
+  const options = getProviderSetupOptions();
+  assert.equal(options.length, AI_PROVIDERS.length);
+  for (const option of options) {
+    assert.equal(option.access.requiresLiveVerification, true);
+    assert.equal(option.access.oauthAvailable, false, "no unimplemented OAuth login is advertised");
+    assert.equal(option.access.subscriptionCliAvailable, false, "a consumer chat subscription must not be mistaken for API access");
+    assert.ok(!("credential" in option.access), "access metadata must never contain secret values");
+    assert.ok(!("key" in option.access));
+  }
+  for (const provider of ["ollama", "lm_studio"] as const) {
+    assert.deepEqual(options.find((item) => item.id === provider)?.access.executableMethod, "local_model_endpoint");
+    assert.deepEqual(options.find((item) => item.id === provider)?.access.costExposure, "local_compute");
+  }
+  assert.equal(options.find((item) => item.id === "openai_compatible")?.access.executableMethod, "self_hosted_compatible_endpoint");
+  assert.equal(options.find((item) => item.id === "openai_compatible")?.access.costExposure, "endpoint_operator_defined");
+  for (const provider of ["anthropic", "gemini", "openai", "mistral", "groq", "together", "openrouter", "xai", "azure_openai"]) {
+    assert.equal(options.find((item) => item.id === provider)?.access.executableMethod, "provider_api_key");
+    assert.equal(options.find((item) => item.id === provider)?.access.costExposure, "external_metered_or_credits");
+  }
+});
+
 test("BYOAI: compatible endpoint requires both key and base URL", () => {
   const previousKey = process.env.OPENAI_COMPATIBLE_API_KEY;
   const previousBaseUrl = process.env.OPENAI_COMPATIBLE_BASE_URL;
