@@ -567,6 +567,7 @@ export async function createP9Notification(
     }).returning();
     return { row, created: true };
   });
+  if (!outcome) return null;
   if (outcome.created && outcome.row.status === "delivered") {
     notifyDataChanged("notifications", { userId: ctx.userId });
   }
