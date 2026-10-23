@@ -580,7 +580,7 @@ export default function ProjectExperienceShell({
 
   useEffect(() => {
     const scopedProjectId = chatMode === "project" ? selection.projectId : null;
-    setSourceScope(loadComposerSourceScope(scopedProjectId));
+    setSourceScope(chatMode === "temporary" ? "auto" : loadComposerSourceScope(scopedProjectId));
   }, [chatMode, selection.projectId]);
 
   useEffect(() => {
@@ -1423,7 +1423,7 @@ export default function ProjectExperienceShell({
 
   const updateSourceScope = (next: ConversationSourceScope) => {
     setSourceScope(next);
-    saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
+    if (chatMode !== "temporary") saveComposerSourceScope(chatMode === "project" ? selection.projectId : null, next);
     recordP1ShellEvent("source_scope_change", next);
   };
 
