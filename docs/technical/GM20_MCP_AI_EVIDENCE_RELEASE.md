@@ -8,7 +8,7 @@ This document describes the **implemented draft-branch behavior**, not an accept
 2. **AI observation transmission** is a different consent and source-use decision. It is denied by default for all existing MCP connections, even after the tool executes successfully.
 3. To opt in at source configuration level, the authenticated owner must explicitly set both `config.aiTransmission = "allow"` and `config.aiUsageRights = "cleared"`. The second field is the owner's assertion of lawful AI-use rights, **not** independent LiOS certification of licensing. No automatic migration enables either field.
 4. The conversation must also allow resource references, choose a Project-capable source scope, and pass the existing BYOAI organization/provider transmission policy. An active Research Artifact's `only_refs` policy must explicitly include `mcp-server:source:<connection id>`.
-5. The **current** source connection is checked twice, before building a model observation and again immediately before sending it to a model. Owner, org, Project, config revision, status, source rights, credential availability and active research selection all fail closed if changed.
+5. The **current** source connection is checked twice, before building a model observation and again immediately before sending it to a model. Owner, org, Project, config revision, status, source rights, credential availability and active research selection all fail closed if changed. Credential rotation under the **same vault reference** also invalidates the earlier observation through an ephemeral HMAC generation marker whose key never enters the model, journal or receipt.
 
 ## Data custody
 

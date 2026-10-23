@@ -11,6 +11,19 @@ import type { SourceConnection } from "@shared/schema";
 import { isCredentialBearingOutboundText } from "./artifactMaintenance";
 import { resolveCredential } from "./credentialVault";
 
+// A per-process secret prevents saved credential fingerprints from being
+// replayed or compared across installations. No raw key is checkpointed.
+const credentialFingerprintKey = crypto.randomBytes(32);
+export type McpCredentialResolver = (vaultRef: string) => string | null;
+const defaultCredentialResolver: McpCredentialResolver = ref => resolveCredential("", ref);
+
+function credentialGeneration(connection: SourceConnection, resolver: McpCredentialResolver): string | null {
+  if (!connection.credentialRef) return "no-credential";
+  const value = resolver(connection.credentialRef);
+  if (!value) return null;
+  return crypto.createHmac("sha256", credentialFingerprintKey).update(value).digest("hex");
+}
+
 const MAX_MCP_EVIDENCE_BYTES = 4 * 1024;
 const MAX_MCP_REVIEW_BYTES = 16 * 1024;
 
@@ -18,6 +31,8 @@ export interface McpAgentEvidenceCapture {
   connectionId: number;
   toolId: string;
   policyFingerprint: string;
+  /** Ephemeral keyed generation marker; never put in model output or L2. */
+  credentialGeneration: string;
   contentHash: string;
   text: string;
 }
@@ -53,8 +68,11 @@ function sourceAllowsMcpAiRelease(connection: SourceConnection, projectId: numbe
  */
 export function captureMcpAgentEvidence(
   connection: SourceConnection, projectId: number, toolId: string, output: unknown,
+  credentialResolver: McpCredentialResolver = defaultCredentialResolver,
 ): McpAgentEvidenceCapture | null {
   if (!sourceAllowsMcpAiRelease(connection, projectId)) return null;
+  const generation = credentialGeneration(connection, credentialResolver);
+  if (!generation) return null;
   if (!output || typeof output !== "object" || Array.isArray(output)) return null;
   const response = output as Record<string, unknown>;
   if (response.isError === true || !Array.isArray(response.content) || response.content.length !== 1) return null;
@@ -71,6 +89,7 @@ export function captureMcpAgentEvidence(
     connectionId: connection.id,
     toolId,
     policyFingerprint: mcpEvidencePolicyFingerprint(connection),
+    credentialGeneration: generation,
     contentHash: crypto.createHash("sha256").update(text, "utf8").digest("hex"),
     text,
   };
@@ -84,6 +103,7 @@ export function mcpEvidenceMatchesSelectedRefs(capture: McpAgentEvidenceCapture,
 export function isMcpEvidenceCurrent(
   capture: McpAgentEvidenceCapture, connection: SourceConnection | undefined,
   userId: number, organizationId: number | null, projectId: number,
+  credentialResolver: McpCredentialResolver = defaultCredentialResolver,
 ): boolean {
   return Boolean(connection
     && connection.id === capture.connectionId
@@ -91,9 +111,9 @@ export function isMcpEvidenceCurrent(
     && connection.organizationId === organizationId
     && sourceAllowsMcpAiRelease(connection, projectId)
     && mcpEvidencePolicyFingerprint(connection) === capture.policyFingerprint
-    // A revoked/removed vault credential invalidates the source even if its
-    // connection row has not been edited since the tool returned.
-    && (!connection.credentialRef || Boolean(resolveCredential("", connection.credentialRef))));
+    // Rechecking only a stable vault:ref misses replacement under that same
+    // key. A non-recoverable per-process keyed marker binds the generation.
+    && credentialGeneration(connection, credentialResolver) === capture.credentialGeneration);
 }
 
 export function renderMcpAgentReviewEvidence(

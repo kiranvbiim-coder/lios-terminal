@@ -69,6 +69,24 @@ test("MCP evidence snapshots fail closed after a change of source owner, Project
   assert.equal(isMcpEvidenceCurrent(capture, connection({ credentialRef: "vault:rotated" }), 7, 9, 77), false);
 });
 
+test("MCP evidence invalidates same-reference vault secret rotation without exposing the secret to the model", () => {
+  const source = connection({ credentialRef: "vault:test-mcp-rotation" });
+  let credential: string | null = "secret-generation-A";
+  const resolver = () => credential;
+  const captured = captureMcpAgentEvidence(source, 77, "quotes.read", output, resolver);
+  assert.ok(captured);
+  assert.equal(isMcpEvidenceCurrent(captured, source, 7, 9, 77, resolver), true);
+  const rendered = renderMcpAgentReviewEvidence([captured]);
+  assert.ok(rendered);
+  assert.equal(rendered.text.includes("secret-generation-A"), false);
+  assert.equal(rendered.text.includes(captured.credentialGeneration), false);
+  credential = "secret-generation-B"; // vault reference + source row stay identical
+  assert.equal(isMcpEvidenceCurrent(captured, source, 7, 9, 77, resolver), false);
+  credential = null; // explicit vault removal
+  assert.equal(isMcpEvidenceCurrent(captured, source, 7, 9, 77, resolver), false);
+  assert.equal(captureMcpAgentEvidence(source, 77, "quotes.read", output, resolver), null);
+});
+
 test("MCP evidence review deduplicates captures and cannot exceed cumulative source-reference budget", () => {
   const base = captureMcpAgentEvidence(connection(), 77, "quotes.read", output);
   assert.ok(base);
