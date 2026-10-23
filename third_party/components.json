@@ -2796,23 +2796,29 @@
       "baselineDonorId": "openclaw",
       "roles": [
         "GM-22-BYOAI-safe-fallback",
-        "GM-12-provider-routing-security"
+        "GM-12-provider-routing-security",
+        "GM-12-truthful-AI-access-methods"
       ],
       "importedPaths": [
-        "src/agents/failover-policy.ts"
+        "src/agents/failover-policy.ts",
+        "src/agents/agent-auth-credential-modes.ts"
       ],
       "destinationPaths": [
         "server/openclawByoaiFailover.ts",
         "server/byoaiTransport.ts",
-        "server/openclawByoaiFailover.test.ts"
+        "server/openclawByoaiFailover.test.ts",
+        "server/openclawAiAccessMethod.ts",
+        "server/byoaiRouter.ts",
+        "server/byoaiRouter.test.ts"
       ],
       "modifications": [
         "Adapts OpenClaw transient vs auth/model/format failure-policy classification to canonical LiOS AIProviderErrorCode with a deliberately strict fail-closed mapping.",
         "Blocks cross-provider user data transmission after policy_denied, not_configured, invalid_request, 401/403, unknown upstream failures and unavailable model.",
         "Keeps already-permitted transient outage fallback, pre-existing LiOS credential vault, enterprise policy, project source permissions, user-owned AI selection and provider routing.",
-        "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported."
+        "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported.",
+        "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
-      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies."
+      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
     }
   ]
 }
