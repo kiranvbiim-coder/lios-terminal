@@ -1378,3 +1378,45 @@
   font-size: 12px;
 }
 .rich-artifact-editor .rich-document-metadata > .rich-document-evidence-note { margin-top: 10px; }
+
+
+/*
+ * WS-11: Radix portals are attached to document.body outside .terminal-root.
+ * The existing terminal-only reduced-motion selector cannot reach them.
+ * Stop entrance/exit motion and animated focus scrolling at OS reduced-motion
+ * preference without disabling the dialog, focus trap, menu keyboard semantics,
+ * loading/status text, or any substantive state transitions.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto !important;
+  }
+
+  body :is(
+    [role="dialog"],
+    [role="menu"],
+    [role="menuitem"],
+    [data-radix-popper-content-wrapper],
+    [data-state="open"],
+    [data-state="closed"]
+  ),
+  body :is(
+    [role="dialog"],
+    [role="menu"],
+    [data-radix-popper-content-wrapper],
+    [data-state="open"],
+    [data-state="closed"]
+  )::before,
+  body :is(
+    [role="dialog"],
+    [role="menu"],
+    [data-radix-popper-content-wrapper],
+    [data-state="open"],
+    [data-state="closed"]
+  )::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
