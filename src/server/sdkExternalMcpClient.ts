@@ -62,6 +62,11 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
     // MCP is pinned to this exact URL, not merely its origin. The source
     // fetch helper must reject the first 3xx BEFORE forwarding any bearer,
     // cookie-equivalent headers, or request body to a new path or host.
+    // Official SDK v2 can use a ReadableStream POST body. Node fetch rejects
+    // streamed request bodies unless duplex:"half" is forwarded. The mocked
+    // fetch contract never surfaced this real desktop-transport failure.
+    const streamedBody = init?.body != null
+      && typeof (init.body as { getReader?: unknown }).getReader === "function";
     const response = await fetcher(actual.href, {
       method: init?.method,
       headers: init?.headers,
@@ -69,6 +74,7 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
       signal: init?.signal,
       cache: init?.cache,
       credentials: "omit",
+      ...(streamedBody ? { duplex: "half" as const } : {}),
     }, isDesktopMcpLoopbackEndpoint(actual.href), 0);
     if (response.url && response.url !== actual.href) {
       response.body?.cancel().catch(() => {});
