@@ -16,40 +16,53 @@ interface Props {
   session: { name: string };
   onChoose: (domain: DomainInfo) => void;
   onLogout: () => void;
+  onCancel: () => void;
 }
 
-export default function DomainPicker({ session, onChoose, onLogout }: Props) {
+export default function DomainPicker({ session, onChoose, onLogout, onCancel }: Props) {
   const isClient = useAudience() === "client";
   const [domains, setDomains] = useState<DomainInfo[] | null>(null);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    // The internal build lists every platform domain (including inactive
-    // "coming soon" ones); the client build lists only what this org
-    // actually subscribes to -- /api/admin/domains is internal-only and
-    // would just 403 for a client session.
-    fetch(isClient ? "/api/client/dashboard/domains" : "/api/admin/domains")
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then(setDomains)
-      .catch(() => setError(true));
-  }, []);
+    const controller = new AbortController();
+    setDomains(null); setError(false);
+    fetch(isClient ? "/api/client/dashboard/domains" : "/api/admin/domains", { signal: controller.signal })
+      .then(res => res.ok ? res.json() : Promise.reject(new Error("Workspaces unavailable")))
+      .then((result: unknown) => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(result)) throw new Error("Invalid workspace response");
+        setDomains(result as DomainInfo[]);
+      })
+      .catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, [isClient, attempt]);
 
   return (
     <div className="dark min-h-screen bg-[#030303] flex flex-col items-center justify-center px-6">
+      <button type="button" onClick={onCancel} className="mb-6 min-h-11 rounded border border-border px-4 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Back to Chat</button>
       <div className="flex items-center gap-2 mb-2">
         <TerminalIcon className="w-4 h-4 text-[hsl(38,95%,55%)]" />
         <span className="font-terminal text-[13px] tracking-[0.25em] text-foreground uppercase">Limuria Intelligence</span>
       </div>
-      <p className="font-terminal text-[10px] text-muted-foreground mb-10">
-        Welcome back, {session.name.toUpperCase()}. Choose a workspace.
+      <h1 className="mt-4 font-display text-3xl text-foreground">Specialist workspaces</h1>
+      <p className="mb-8 mt-3 max-w-xl font-ui text-sm leading-6 text-muted-foreground">
+        Welcome, {session.name}. Specialist analysis is optional. Your Chat and unsent work remain available when you return.
       </p>
 
       {error ? (
-        <div className="font-terminal text-[10px] text-[hsl(0,80%,60%)]">Couldn't load workspaces. Refresh to try again.</div>
+        <div role="alert" className="rounded border border-rose-400/30 p-5 font-ui text-sm text-rose-300">Couldn't load specialist workspaces. Your current Chat is still available.
+          <button type="button" onClick={() => setAttempt(value => value + 1)} className="ml-3 min-h-11 rounded border border-border px-4 py-2 text-foreground">Retry loading</button>
+        </div>
       ) : !domains ? (
-        <div className="font-terminal text-[10px] text-muted-foreground animate-pulse">LOADING WORKSPACES...</div>
+        <div role="status" className="font-ui text-sm text-muted-foreground">Loading specialist workspaces…</div>
+      ) : domains.length === 0 ? (
+        <div className="rounded border border-border p-5 font-ui text-sm text-muted-foreground">No specialist workspaces available.
+          <button type="button" onClick={onCancel} className="ml-3 min-h-11 rounded border border-border px-4 py-2 text-foreground">Return to Chat</button>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl w-full">
+        <div className="grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
           {domains.map((d) => {
             const Icon = DOMAIN_ICON[d.slug] ?? TerminalIcon;
             return (
@@ -58,16 +71,17 @@ export default function DomainPicker({ session, onChoose, onLogout }: Props) {
                 disabled={!d.active}
                 onClick={() => d.active && onChoose(d)}
                 data-testid={`domain-tile-${d.slug}`}
-                className={`flex flex-col items-center justify-center gap-3 aspect-square border p-6 transition-colors ${
+                aria-label={d.active ? `Open ${d.name} workspace` : `${d.name} workspace is coming soon`}
+                className={`flex min-h-36 flex-col items-center justify-center gap-3 rounded border p-6 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                   d.active
                     ? "border-border hover:border-[hsl(38,95%,50%)]/60 hover:bg-white/5 cursor-pointer"
                     : "border-border/40 opacity-40 cursor-not-allowed"
                 }`}
               >
                 <Icon className={`w-7 h-7 ${d.active ? "text-[hsl(38,95%,55%)]" : "text-muted-foreground"}`} strokeWidth={1.5} />
-                <span className="font-terminal text-[10px] tracking-widest text-center text-foreground uppercase">{d.name}</span>
+                <span className="font-ui text-base font-semibold text-center text-foreground">{d.name}</span>
                 {!d.active && (
-                  <span className="font-terminal text-[8px] tracking-widest text-muted-foreground uppercase">Coming Soon</span>
+                  <span className="font-ui text-sm text-muted-foreground">Coming soon</span>
                 )}
               </button>
             );
@@ -77,7 +91,7 @@ export default function DomainPicker({ session, onChoose, onLogout }: Props) {
 
       <button
         onClick={onLogout}
-        className="mt-12 font-terminal text-[9px] tracking-widest text-muted-foreground hover:text-[hsl(0,80%,60%)] transition-colors uppercase"
+        className="mt-10 min-h-11 rounded px-4 py-2 font-ui text-sm text-muted-foreground hover:text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
       >
         Sign out
       </button>
