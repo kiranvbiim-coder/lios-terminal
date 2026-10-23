@@ -126,7 +126,8 @@
     "acceptance:sp02-packaged": "tsx script/sp02_packaged_journey.ts",
     "test:sp02-contract": "node --import tsx --test script/sp02_packaged_contract.test.ts script/sp02_resume_reapproval_contract.test.ts",
     "test:sp03-contract": "node --import tsx --test script/sp03_packaged_contract.test.ts script/sp03_packaged_inspection.test.ts",
-    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts"
+    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts",
+    "acceptance:sp06-device-local": "tsx script/sp06_paired_device_journey.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
@@ -285,7 +286,9 @@
       "category": "public.app-category.finance",
       "icon": "build-resources/icon.icns",
       "hardenedRuntime": true,
-      "signIgnore": [".*/native-runtime-dist/.*"],
+      "signIgnore": [
+        ".*/native-runtime-dist/.*"
+      ],
       "gatekeeperAssess": false,
       "target": [
         "dmg",
