@@ -147,10 +147,10 @@ test("D6 actual P9 failure receipt -> committed notification -> owner paired Gat
   assert.equal(foreign.events.some(e => e.event === "data.invalidate" &&
     (e.payload as { topics?: string[] }).topics?.includes("notifications")), false,
     "no unrelated owner can receive the notifications signal");
-  const hints = mine.events.filter(e => e.event === "data.invalidate" &&
+  const notificationHints = () => mine.events.filter(e => e.event === "data.invalidate" &&
     (e.payload as { topics?: string[] }).topics?.includes("notifications"));
-  assert.equal(hints.length, 1);
-  assert.deepEqual(hints[0]?.payload, { topics: ["notifications"] },
+  assert.equal(notificationHints().length, 1);
+  assert.deepEqual(notificationHints()[0]?.payload, { topics: ["notifications"] },
     "outbound hints contain no run failure text, source data or credentials");
 
   const listed = await mine.call("notifications.list", { projectId: project.id });
@@ -173,7 +173,7 @@ test("D6 actual P9 failure receipt -> committed notification -> owner paired Gat
   const duplicate = await createP9Notification(ownerCtx, workflow, first.run!.id,
     { result: null, error: first.error });
   assert.equal(duplicate?.id, first.notification.id);
-  assert.equal(hints.length, 1, "idempotent retry does not re-emit an event");
+  assert.equal(notificationHints().length, 1, "idempotent retry does not re-emit an event");
 
   await getDb().update(pairedDevices).set({ revokedAt: new Date() })
     .where(eq(pairedDevices.id, deviceIds.owner));
@@ -182,7 +182,7 @@ test("D6 actual P9 failure receipt -> committed notification -> owner paired Gat
   assert.equal(second.notification?.status, "delivered");
   const [code] = await mine.closed;
   assert.equal(code, 4001, "retracted device authority disconnects the previously subscribed socket");
-  assert.equal(hints.length, 1, "no notification-change signal leaves Home for a revoked device");
+  assert.equal(notificationHints().length, 1, "no notification-change signal leaves Home for a revoked device");
   assert.equal(foreign.events.some(e => e.event === "data.invalidate" &&
     (e.payload as { topics?: string[] }).topics?.includes("notifications")), false);
   mine.socket.terminate();
