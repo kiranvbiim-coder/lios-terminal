@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import type { SourceConnection } from "@shared/schema";
 import { isCredentialBearingOutboundText } from "./artifactMaintenance";
+import { resolveCredential } from "./credentialVault";
 
 const MAX_MCP_EVIDENCE_BYTES = 4 * 1024;
 const MAX_MCP_REVIEW_BYTES = 16 * 1024;
@@ -75,6 +76,11 @@ export function captureMcpAgentEvidence(
   };
 }
 
+/** An active Research Artifact only_refs policy is a separate authority. */
+export function mcpEvidenceMatchesSelectedRefs(capture: McpAgentEvidenceCapture, onlyRefs: ReadonlySet<string> | null): boolean {
+  return !onlyRefs || onlyRefs.has(`mcp-server:source:${capture.connectionId}`);
+}
+
 export function isMcpEvidenceCurrent(
   capture: McpAgentEvidenceCapture, connection: SourceConnection | undefined,
   userId: number, organizationId: number | null, projectId: number,
@@ -84,20 +90,31 @@ export function isMcpEvidenceCurrent(
     && connection.userId === userId
     && connection.organizationId === organizationId
     && sourceAllowsMcpAiRelease(connection, projectId)
-    && mcpEvidencePolicyFingerprint(connection) === capture.policyFingerprint);
+    && mcpEvidencePolicyFingerprint(connection) === capture.policyFingerprint
+    // A revoked/removed vault credential invalidates the source even if its
+    // connection row has not been edited since the tool returned.
+    && (!connection.credentialRef || Boolean(resolveCredential("", connection.credentialRef))));
 }
 
-export function renderMcpAgentReviewEvidence(captures: readonly McpAgentEvidenceCapture[]): {
+export function renderMcpAgentReviewEvidence(
+  captures: readonly McpAgentEvidenceCapture[],
+  alreadyReviewedRefs: ReadonlySet<string> = new Set(),
+): {
   text: string;
   sourceRefs: string[];
   included: McpAgentEvidenceCapture[];
 } | null {
   const included: McpAgentEvidenceCapture[] = [];
   const sourceRefs = new Set<string>();
+  const seen = new Set<string>();
   for (const capture of captures) {
     if (included.length >= 3) break;
     const serverRef = `mcp-server:source:${capture.connectionId}`;
     const toolRef = `mcp-tool:${capture.toolId}`;
+    const key = `${capture.connectionId}:${capture.toolId}:${capture.contentHash}`;
+    if (seen.has(key)) continue;
+    const extraRefs = [serverRef, toolRef].filter(ref => !alreadyReviewedRefs.has(ref) && !sourceRefs.has(ref));
+    if (alreadyReviewedRefs.size + sourceRefs.size + extraRefs.length > 100) continue;
     const candidate = [...included, capture];
     const frame = JSON.stringify(candidate.map(value => ({
       sourceRef: `mcp-server:source:${value.connectionId}`,
@@ -108,6 +125,7 @@ export function renderMcpAgentReviewEvidence(captures: readonly McpAgentEvidence
     })));
     if (Buffer.byteLength(frame, "utf8") > MAX_MCP_REVIEW_BYTES) break;
     included.push(capture);
+    seen.add(key);
     sourceRefs.add(serverRef);
     sourceRefs.add(toolRef);
   }

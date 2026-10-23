@@ -3,7 +3,7 @@ import test from "node:test";
 import type { SourceConnection } from "@shared/schema";
 import {
   captureMcpAgentEvidence, isMcpEvidenceCurrent,
-  renderMcpAgentReviewEvidence, mcpEvidencePolicyFingerprint,
+  renderMcpAgentReviewEvidence, mcpEvidencePolicyFingerprint, mcpEvidenceMatchesSelectedRefs,
 } from "./mcpAgentEvidence";
 
 function connection(
@@ -69,13 +69,23 @@ test("MCP evidence snapshots fail closed after a change of source owner, Project
   assert.equal(isMcpEvidenceCurrent(capture, connection({ credentialRef: "vault:rotated" }), 7, 9, 77), false);
 });
 
-test("MCP evidence review is bounded to three distinct step captures and contains provenance hashes", () => {
+test("MCP evidence review deduplicates captures and cannot exceed cumulative source-reference budget", () => {
   const base = captureMcpAgentEvidence(connection(), 77, "quotes.read", output);
   assert.ok(base);
   const accepted = renderMcpAgentReviewEvidence([base, base, base, base]);
   assert.ok(accepted);
-  assert.equal(accepted.included.length, 3);
+  assert.equal(accepted.included.length, 1);
   assert.equal(accepted.sourceRefs.length, 2);
   assert.ok(accepted.text.includes(base.contentHash));
+  assert.equal(renderMcpAgentReviewEvidence([base], new Set(Array.from({ length: 100 }, (_, i) => `prior:${i}`))), null);
   assert.equal(renderMcpAgentReviewEvidence([]), null);
+});
+
+test("MCP evidence obeys active Research Artifact only_refs and remains unavailable by default", () => {
+  const capture = captureMcpAgentEvidence(connection(), 77, "quotes.read", output);
+  assert.ok(capture);
+  assert.equal(mcpEvidenceMatchesSelectedRefs(capture, null), true);
+  assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set()), false);
+  assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set(["unrelated-source"])), false);
+  assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set(["mcp-server:source:41"])), true);
 });

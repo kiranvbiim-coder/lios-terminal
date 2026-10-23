@@ -176,7 +176,7 @@ import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 import { conversationRuns } from "./conversationRunRegistry";
 import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
 import { listSourceConnections } from "./sourceConnectionService";
-import { isMcpEvidenceCurrent, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
+import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
 import { codingConversationToolDescriptors } from "./acp/coding-tools";
 import { listInstalledSkillAdapters } from "./skillRuntime";
@@ -4578,10 +4578,14 @@ async function executeAgentLoop(
         const candidates = completedSteps.map(step => mcpEvidenceByStep.get(step.id)).filter((value): value is McpAgentEvidenceCapture => value !== undefined);
         if (candidates.length) {
           const connections = await listSourceConnections(input.tenant.userId);
-          mcp = renderMcpAgentReviewEvidence(candidates.filter(candidate => isMcpEvidenceCurrent(
-            candidate, connections.find(connection => connection.id === candidate.connectionId),
-            input.tenant.userId, input.tenant.organizationId, input.projectId!,
-          )));
+          const activePolicy = await activeResearchSourcePolicy(input);
+          const selectedRefs = activePolicy.researchSourcePolicy?.mode === "only_refs"
+            ? new Set(activePolicy.researchSourcePolicy.allowedSourceRefs) : null;
+          mcp = renderMcpAgentReviewEvidence(candidates.filter(candidate =>
+            mcpEvidenceMatchesSelectedRefs(candidate, selectedRefs) && isMcpEvidenceCurrent(
+              candidate, connections.find(connection => connection.id === candidate.connectionId),
+              input.tenant.userId, input.tenant.organizationId, input.projectId!,
+            )), new Set([...reviewedSourceRefs, ...(research?.sourceRefs ?? [])]));
           if (mcp) {
             const admitted = mcp.included;
             assertMcpCurrent = async () => {
@@ -4591,8 +4595,15 @@ async function executeAgentLoop(
                 throw new AIProviderError("policy_denied", "MCP source transmission permission changed.");
               }
               const current = await listSourceConnections(input.tenant.userId);
+              const currentPolicy = await activeResearchSourcePolicy(input);
+              const currentRefs = currentPolicy.researchSourcePolicy?.mode === "only_refs"
+                ? new Set(currentPolicy.researchSourcePolicy.allowedSourceRefs) : null;
+              if (JSON.stringify(currentPolicy.researchSourcePolicyBinding ?? null)
+                !== JSON.stringify(activePolicy.researchSourcePolicyBinding ?? null)) {
+                throw new AIProviderError("policy_denied", "Active research source selection changed.");
+              }
               for (const candidate of admitted) {
-                if (!isMcpEvidenceCurrent(
+                if (!mcpEvidenceMatchesSelectedRefs(candidate, currentRefs) || !isMcpEvidenceCurrent(
                   candidate, current.find(connection => connection.id === candidate.connectionId),
                   input.tenant.userId, input.tenant.organizationId, input.projectId!,
                 )) throw new AIProviderError("policy_denied", "MCP source permission was revoked; refresh before AI review.");
