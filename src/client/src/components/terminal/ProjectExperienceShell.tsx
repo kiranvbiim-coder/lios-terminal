@@ -111,7 +111,7 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
-import { hasUnsentConversationDraft, remainingChatMode, shouldDiscardAfterSuccessfulTransition } from "@/lib/conversationSwitchPolicy";
+import { canonicalRecentChats, hasUnsentConversationDraft, remainingChatMode } from "@/lib/conversationSwitchPolicy";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -622,10 +622,7 @@ export default function ProjectExperienceShell({
   }, []);
 
   const recentChats = useMemo(
-    () => [...(allChatsQuery.data ?? []), ...quickChats]
-      .filter((chat) => chat.status === "active" && !chat.trashedAt)
-      .sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime())
-      .slice(0, 14),
+    () => canonicalRecentChats(allChatsQuery.data ?? [], quickChats),
     [allChatsQuery.data, quickChats],
   );
 
@@ -847,7 +844,7 @@ export default function ProjectExperienceShell({
       }
       const projectId = selection.projectId;
       const chat = await createProjectChat(projectId);
-      if (shouldDiscardAfterSuccessfulTransition(true, true)) discardConversationDraft();
+      discardConversationDraft();
       invalidate(projectId, chat.id);
       await openChat(chat, true);
       if (starterPrompt?.trim()) {
@@ -870,7 +867,7 @@ export default function ProjectExperienceShell({
     try {
       if (!(await confirmConversationSwitch(true))) return;
       const chat = await createQuickChat();
-      if (shouldDiscardAfterSuccessfulTransition(true, true)) discardConversationDraft();
+      discardConversationDraft();
       invalidate(null, chat.id);
       await openChat(chat, true);
     } catch (error) {
@@ -1723,7 +1720,16 @@ export default function ProjectExperienceShell({
                   />
                 </div>
               ))}
-              {!recentChats.length && (
+              {(allChatsQuery.isError || quickChatsQuery.isError) && (
+                <div role="alert" className="px-2.5 py-3 font-ui text-xs text-amber-200">
+                  Could not refresh all recent conversations. Saved chats are unchanged.
+                  <button type="button" className="ml-2 underline focus-visible:outline focus-visible:outline-2" onClick={() => { void allChatsQuery.refetch(); void quickChatsQuery.refetch(); }}>Retry</button>
+                </div>
+              )}
+              {(allChatsQuery.isLoading || quickChatsQuery.isLoading) && !recentChats.length && (
+                <p role="status" className="px-2.5 py-3 font-ui text-xs text-muted-foreground">Loading recent chats…</p>
+              )}
+              {!recentChats.length && !allChatsQuery.isLoading && !quickChatsQuery.isLoading && !allChatsQuery.isError && !quickChatsQuery.isError && (
                 <div className="px-2.5 py-3 font-ui text-[12px] text-muted-foreground">Your recent chats will appear here.</div>
               )}
             </div>
