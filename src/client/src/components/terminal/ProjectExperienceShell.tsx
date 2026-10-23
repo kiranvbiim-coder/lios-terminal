@@ -2218,11 +2218,12 @@ export default function ProjectExperienceShell({
                   rows={1}
                   aria-label="Ask LiOS"
                   placeholder={chatMode === "temporary" ? "Message LiOS privately…" : "Message LiOS…"}
-                  disabled={busy}
+                  disabled={busy || creatingChat}
                   className="max-h-40 min-h-12 w-full resize-none bg-transparent px-4 pb-2 pt-3 font-ui text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/55 disabled:opacity-50"
                 />
                 <input
                   ref={attachmentInputRef}
+                  disabled={creatingChat}
                   type="file"
                   multiple
                   accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.tsv,.json,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,application/json,image/png,image/jpeg,image/webp"
@@ -2235,10 +2236,10 @@ export default function ProjectExperienceShell({
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
                 <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
-                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy || creatingChat} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
+                      <button type="button" disabled={creatingChat} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40" aria-label="Tools">
                         <Plus className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
@@ -2304,7 +2305,7 @@ export default function ProjectExperienceShell({
                   <button
                     type="button"
                     onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : onOpenEnvironment()}
-                    disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy}
+                    disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy || creatingChat}
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${voiceRecorder.isRecording ? "bg-red-400/10 text-red-200" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"}`}
                     title={voiceInputHint}
                     aria-label={voiceInputAvailable ? (voiceRecorder.isRecording ? "Stop voice recording" : "Speak to LiOS") : "Set up voice input"}
@@ -2315,7 +2316,7 @@ export default function ProjectExperienceShell({
                   <button
                     type="button"
                     onClick={() => void send()}
-                    disabled={busy || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                    disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
                     aria-label="Send"
                   >
