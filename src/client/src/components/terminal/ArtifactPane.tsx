@@ -38,6 +38,8 @@ import BacktestArtifactView from "./BacktestArtifactView";
 import PortfolioArtifactView from "./PortfolioArtifactView";
 import ValuationArtifactView from "./ValuationArtifactView";
 import ArtifactViewerFallback from "./ArtifactViewerFallback";
+import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
+import { resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
 import type { ArtifactProvenanceFacts } from "./ArtifactTrustSummary";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
@@ -605,7 +607,15 @@ function ArtifactPaneWorkspace({
     return () => { active = false; };
   }, [artifactId, data?.version.version, data?.version.contentHash, exportOpen]);
   const run=async(fn:()=>Promise<void>)=>{setError(null);try{await fn()}catch(e){setError(e instanceof Error?e.message:"Artifact action failed.")}};
-  if(!data)return <div className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading?"Loading Artifact…":"Artifact unavailable."}</div>;
+  const loadState = resolveAsyncSurfaceState({ hasData: Boolean(data), isPending: detail.isPending, isError: detail.isError, error: detail.error });
+  if (!data) return <AsyncSurfaceNotice
+    surface="artifact"
+    state={loadState === "ready" ? "missing" : loadState}
+    onRetry={() => { void detail.refetch(); }}
+    retrying={detail.isFetching}
+    onLeave={onClose}
+    leaveLabel="Close Artifact"
+  />;
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
