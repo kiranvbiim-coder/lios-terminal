@@ -395,12 +395,20 @@ function splitTableRow(line: string): string[] {
   if (body.endsWith("|") && !body.endsWith("\\|")) body = body.slice(0, -1);
   const cells: string[] = [];
   let cell = "";
-  let inCode = false;
+  let codeDelimiter = 0;
   for (let i = 0; i < body.length; i++) {
     const ch = body[i];
     if (ch === "\\" && body[i + 1] === "|") { cell += "|"; i++; continue; }
-    if (ch === "`") inCode = !inCode;
-    if (ch === "|" && !inCode) { cells.push(cell.trim()); cell = ""; continue; }
+    if (ch === "`") {
+      let run = 1;
+      while (body[i + run] === "`") run++;
+      if (codeDelimiter === 0) codeDelimiter = run;
+      else if (codeDelimiter === run) codeDelimiter = 0;
+      cell += body.slice(i, i + run);
+      i += run - 1;
+      continue;
+    }
+    if (ch === "|" && codeDelimiter === 0) { cells.push(cell.trim()); cell = ""; continue; }
     cell += ch;
   }
   cells.push(cell.trim());
