@@ -1313,6 +1313,10 @@ export default function ProjectExperienceShell({
       setBusy(false);
       setStopRequested(false);
     }
+    } catch {
+      // A command or validation failure before conversation creation must
+      // not escape as an unhandled click/Enter rejection or discard the draft.
+      setLifecycleNotice("LiOS could not start that request. Your unsent draft is still available to retry.");
     } finally {
       sendInFlightRef.current = false;
     }
