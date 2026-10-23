@@ -2037,6 +2037,7 @@ export default function ProjectExperienceShell({
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
                       {message.role !== "system" && <ChatMessageActions
                         messageId={message.id}
+                        quoteDisabled={busy}
                         content={message.content}
                         role={message.role}
                         onQuote={message.role === "assistant" ? () => {
