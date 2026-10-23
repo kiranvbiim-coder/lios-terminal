@@ -37,6 +37,14 @@ The 2026-10-22 audit was written against older `main` `1fa37cc`; treat it as his
 - **Static contract tension:** `validate_ux_flagship_acceptance.ts` still asserts the older four-line Financial Intelligence Operating System public hero. Owner-approved universal Chat-first positioning should be reconciled with that Figma-specific contract in a deliberate spec/test change, **not bypassed** or surprised by source CI.
 - **Directly usable for the first Lens:** `SavedArtifactCards` reads saved P4 refs; `ArtifactReadableChart` already projects recorded calculation values into a chart; `visualizationIntent` defines context/diagnostic/primary policy; `conversationArtifactView` stores *only UI selection* while P4 authorizes and loads real Artifacts. Hence start with read-only typed projections, not a new generator or store.
 
+## Delivery ownership — user manages integration, agent delivers tested PRs
+
+**Owner clarification (2026-10-23):** The UI/UX delivery agent owns source research, scoped UI implementation, associated functional and accessibility tests, **creating feature PRs, repairing failed checks within those PR branches**, and documenting handoff. **The repository owner independently handles merging/integration into `main` and any resulting merge conflicts.** Do not keep the UX program blocked on unrelated `main` integration issues. Work on an independent next UX workstream while a separate PR awaits review/merge, provided it does not modify the same unstable files or duplicate functionality.
+
+**PR workflow:** audit existing code and active PR ownership → choose an independent workstream → implement the complete useful UX slice in its own draft PR or the designated owning PR → run/check exact-head tests → repair failures on that branch → hand off a reviewable PR with evidence and dependency notes → continue to the next safe non-overlapping workstream. If a failure stems from unrelated moving ancestry, record it, fix what is safely fixable within the owning PR, and proceed elsewhere instead of making the owner’s merge job the development bottleneck.
+
+**PR done vs merged:** agent completion means a reviewable, source-tested PR with known blockers transparently noted. Merge, `main` reconciliation, installed release acceptance and product-wide release sign-off remain separate owner/release steps. Never report unmerged code as shipped. Branch protections, independent review, security boundaries and donor rights still apply.
+
 ## 2. Live PR and integration audit at this checkpoint
 
 All Source checks below refer to each displayed exact PR head **as queried on 2026-10-23**, not full visual/native testing. All are unmerged at checkpoint; no review/signoff inferred.
@@ -54,9 +62,9 @@ All Source checks below refer to each displayed exact PR head **as queried on 20
 | New discovery/plan | #119 draft, 3 Source OS checks green before this plan update | This PR contains the one new proposed UX program and donor discovery annex; review documentation, no UI shipped |
 | Parallel runtime | #120 GM/P13 draft, outside dedicated UI ownership | Coordinate exact runtime events/approval path; don't modify in UX project without owner |
 
-**Merge dependency:** `#112 → #100` (file/test-runner overlap where needed); `#98 → #102 → #115`; `#116 → #117`; independent green small PRs reviewed and merged before they become stale. Always recheck moving base and Source status; no forced merge, check bypass or assumed independent review.
+**PR development dependencies:** `#112 → #100` (shared file/test-runner overlap); `#98 → #102 → #115`; `#116 → #117`. Maintain these relationships and accurate review notes. **Owner**, not the UX delivery agent, schedules and executes the final merges; unrelated UI work proceeds in separate non-colliding branches.
 
-**Rule:** Update `main` only through independently reviewed, qualified PRs. Deletion/closure of old PRs requires explicit evidence of merged/superseded work, not a green new plan.
+**Rule:** Agent must not merge or push to `main`; owner manages all integration. Agent repairs its PR CI and supplies dependency/verification evidence, and continues independent work when merge is pending. Old PR closure still requires evidence of merged/superseded work.
 
 ## 3. Recommended architecture and authoritative boundaries
 
@@ -97,16 +105,16 @@ See the discovery annex for the 16 researched UI sources and license cautions. T
 Each row states a concrete change *and* a required artifact-level outcome. A row is NOT automatically incomplete because its PR is unmerged: record separate implementation/test/merge/installed acceptance status before coding.
 
 
-### Phase 1 — Audit, consolidation, integration (WS-01–05)
+### Phase 1 — Audit, PR preparation and implementation readiness (WS-01–05)
 
-**Exit objective:** One verified inventory and a conflict-free, independently reviewed integration baseline.
+**Exit objective:** One verified inventory, clear PR ownership, and scoped implementation-ready branches. Owner's eventual integration is a separate gate.
 
 | WS | Priority | Feature / change | Canonical location / existing owner | Exit evidence |
 |---|---|---|---|---|
 | **WS-01** | P0 | Code-first surface and consumer audit | `App.tsx, pages/*, terminal/*, routes, event consumers` | Enumerated route→screen→interaction→owner map with main/PR comparison |
 | **WS-02** | P0 | Feature-gap and evidence matrix | `docs/ux/*, docs/PENDING_WORK.md, 65 IDs` | Verified main / draft / partial / missing / tested / accepted status for each |
 | **WS-03** | P0 | PR collision and dependency reconciliation | `#98–#119; shell, Artifact, Chat, Sources, CSS` | Diff-overlap graph, chosen one canonical owner, safe merge order |
-| **WS-04** | P0 | Review/merge existing UX stack | `#98–#119 under protected main` | CI exact head, independent review, staged merges, post-merge regression |
+| **WS-04** | P0 | Repair and hand off existing UI PRs | `#98–#119 owning branches; protected main owner-controlled` | Fix PR failures on branch; exact-head CI, review notes, dependency/merge instructions for owner |
 | **WS-05** | P0 | Rendered visual and journey baseline | `visual smoke harness, real Desktop target` | Screenshots+keyboard+viewport test record; source-only assumptions clearly labelled |
 
 ### Phase 2 — Design system and visual quality (WS-06–12)
@@ -232,14 +240,14 @@ Each row states a concrete change *and* a required artifact-level outcome. A row
 
 **Pilot A (only if blocking user value):** file-to-insight uses Kibo-inspired compact drop experience in existing #100 P12 attachment flow, not a separate uploader or screen. Avoid changing the base shell until #100 is reviewed and integrated.
 
-## 7. Dependency-first delivery waves (do not code before plan review)
+## 7. PR-first delivery waves (owner handles integration; do not code before plan review)
 
 | Wave | Mandatory order, no speculative deadlines | Gate to enter next wave |
 |---|---|---|
 | **0. Lock plan + rebase audit** | Review this plan and PR #119; confirm #91 ownership; classify existing #98–#118 work. | One reviewed plan and one real-code gap/backlog, no duplicate feature PR |
-| **1. Integrate foundation** | Diagnose #115 route-manifest ancestry and #111 macOS failure. Review/merge small ready green PRs (#99/#101/#106/#110/#118) and relevant independent UX fixes; sync branch heads. | Verified protected main + no unreviewed blockers |
-| **2. Chat/P4 continuity** | Reconcile #98→#102→#115 and #112→#100. Test Quick/Project/Temporary, Artifact exact version and signed-in Chat; no new donor. | Real saved Chat→Artifact→Workbench→Chat→restart pass on target |
-| **3. Evidence-led read-only Lens** | Integrate #116→#117. Add one discriminated UI schema and P4-backed comparison/evidence renderer using existing components, then source-level selected Tremor composition only if useful. | Real source-backed values or clearly Unknown; keyboard, source rights, baseline screenshots |
+| **1. Fix and hand off existing PRs** | Diagnose and repair #115 route-manifest ancestry and #111 macOS failure *inside their owning PR branches*; surface precise dependency and review notes for #99/#101/#106/#110/#118. Do not merge. | Each repaired PR has exact-head test evidence or a clearly documented external blocker; proceed with independent work |
+| **2. Chat/P4 continuity PRs** | Build/test only the remaining UX defects in the existing #98→#102→#115 and #112→#100 ownership branches or safe non-overlapping child PRs. Keep merge order instructions for owner; no new donor without a gap. | Reviewed source/test evidence and real journey where runtime available; owner handles final main integration |
+| **3. Evidence-led read-only Lens PR** | Preserve #116→#117 dependency notes for owner; independently build a bounded discriminated UI schema and P4-backed comparison/evidence renderer, importing Tremor composition only if suitable. | Read-only authorized values or explicit Unknown; keyboard, rights, baseline screenshots and exact-head PR tests |
 | **4. Controlled write Lens and import UX** | Add typed, governed WACC/scenario review via existing engines/P4; pilot Kibo upload if gain proven; compare assistant-ui Chat seam in isolated spike. | Exact revision, no duplicate stores, permissions/rollback tests, installed UX |
 | **5. Scale component catalog** | Expand to research, report, risk, portfolio, coding and task-review only when each has real canonical data/actions; systematically close 65 rows with source + target evidence. | One consistent default UI; domain-neutral flagship plus Finance depth |
 | **6. Release-quality UX** | Real Mac/Windows fresh users, narrow windows/200% zoom, VoiceOver/Narrator, failed provider/privacy/restart; performance and P14. | Recorded installed target evidence, applicable SP/P14 accepted separately |
@@ -284,4 +292,4 @@ Track per item:
 - **No:** copy entire second product shell; add a different provider/chat/Artifact store; replace Dockview or professional engines; require Projects for regular Chat; move hosted data to a new service without consent; expose raw AI reasoning as evidence; use fake terminal stats to demonstrate source-connected finance.
 - **Success test:** a first-time user completes an ordinary non-finance Chat, and an advanced user completes an actual research→source→versioned Artifact→governed edit→original Workbench→return/restart with fewer unnecessary steps and demonstrably higher UI quality.
 
-**Next user-approved engineering task after reviewing this plan:** complete Wave 1 PR integration; then one thin *read-only Evidence-led Comparison Lens* tied to existing authoritative P4/P5 data. Do not begin several independent component experiments before that first journey works.
+**Next user-approved engineering task after reviewing this plan:** repair demonstrable failures within their owning PRs as feasible, then implement **one read-only Evidence-led Comparison Lens PR** tied to existing authoritative P4/P5 data. Continue other non-overlapping UX workstreams without waiting for the owner to merge. Do not create multiple competing implementations of the same interface.
