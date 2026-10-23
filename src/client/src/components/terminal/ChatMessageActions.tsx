@@ -8,13 +8,14 @@ interface Props {
   content: string;
   role: ChatMessageRole;
   messageId?: string | number;
+  quoteDisabled?: boolean;
   /** Composer-only action. The caller must not auto-send this message. */
   onQuote?: () => void;
 }
 
 type CopyState = "idle" | "copying" | "copied" | "failed";
 
-export default function ChatMessageActions({ content, role, messageId, onQuote }: Props) {
+export default function ChatMessageActions({ content, role, messageId, quoteDisabled = false, onQuote }: Props) {
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const identity = `${role}:${messageId ?? "unsaved"}:${content}`;
   const identityRef = useRef(identity);
@@ -55,7 +56,8 @@ export default function ChatMessageActions({ content, role, messageId, onQuote }
         <button
           type="button"
           onClick={onQuote}
-          aria-label="Quote LiOS answer in your next message"
+          disabled={quoteDisabled}
+          aria-label={quoteDisabled ? "Finish the running request before quoting" : "Quote LiOS answer in your next message"}
           className={buttonClass}
           data-testid="chat-message-quote"
         >
