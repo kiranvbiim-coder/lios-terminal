@@ -823,26 +823,48 @@ export default function ProjectExperienceShell({
   };
 
   const newProjectChat = async (starterPrompt?: string) => {
-    if (busy || !selection.projectId) return;
-    if (!(await confirmConversationSwitch())) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null); return; }
-    let chat: ProjectChat;
-    try { chat = await createProjectChat(selection.projectId); }
-    catch (error) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project chat."); return; }
-    invalidate(selection.projectId, chat.id);
-    void openChat(chat, true);
-    if (starterPrompt?.trim()) {
-      setInput(starterPrompt.trim());
-      requestAnimationFrame(() => composerRef.current?.focus());
+    if (busy || !selection.projectId || chatCreationInFlightRef.current) return;
+    chatCreationInFlightRef.current = true;
+    setCreatingChat(true);
+    try {
+      if (!(await confirmConversationSwitch(true))) {
+        pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null);
+        return;
+      }
+      const projectId = selection.projectId;
+      const chat = await createProjectChat(projectId);
+      if (shouldDiscardAfterSuccessfulTransition(true, true)) discardConversationDraft();
+      invalidate(projectId, chat.id);
+      await openChat(chat, true);
+      if (starterPrompt?.trim()) {
+        setInput(starterPrompt.trim());
+        requestAnimationFrame(() => composerRef.current?.focus());
+      }
+    } catch (error) {
+      pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
+      setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project chat. The previous draft is still here.");
+    } finally {
+      chatCreationInFlightRef.current = false;
+      setCreatingChat(false);
     }
   };
 
   const newQuickChat = async () => {
-    if (!(await confirmConversationSwitch())) return;
+    if (busy || chatCreationInFlightRef.current) return;
+    chatCreationInFlightRef.current = true;
+    setCreatingChat(true);
     try {
+      if (!(await confirmConversationSwitch(true))) return;
       const chat = await createQuickChat();
+      if (shouldDiscardAfterSuccessfulTransition(true, true)) discardConversationDraft();
       invalidate(null, chat.id);
-      void openChat(chat, true);
-    } catch (error) { setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a chat."); }
+      await openChat(chat, true);
+    } catch (error) {
+      setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a chat. The previous draft is still here.");
+    } finally {
+      chatCreationInFlightRef.current = false;
+      setCreatingChat(false);
+    }
   };
 
   const startTemporary = async () => {
@@ -1473,10 +1495,11 @@ export default function ProjectExperienceShell({
   const createNewProject = async () => {
     if (creatingProject || busy) return;
     if (!newProjectName.trim()) { setProjectCreateError("Enter a Project name."); return; }
-    if (!(await confirmConversationSwitch())) return;
+    if (!(await confirmConversationSwitch(true))) return;
     setCreatingProject(true); setProjectCreateError(null);
     try {
       const project = await createProject({ name: newProjectName.trim() });
+      discardConversationDraft();
       setNewProjectName(""); setNewProjectOpen(false);
       invalidate(project.id); void openProject(project, true);
     } catch (error) { setProjectCreateError(error instanceof Error ? error.message : "Unable to create a Project. Your name is still here; try again."); }
@@ -1487,8 +1510,9 @@ export default function ProjectExperienceShell({
     setProjectDestination({
       description: `Move “${chat.title}” and its saved messages into a Project. Future requests can use that Project's context.`,
       save: async (project) => {
-        if (selection.chatId === chat.id && !(await confirmConversationSwitch())) throw new Error("Save or reset the current draft before moving this Chat.");
+        if (selection.chatId === chat.id && !(await confirmConversationSwitch(true))) throw new Error("Save or reset the current draft before moving this Chat.");
         const moved = await promoteQuickChat(chat.id, project.id);
+        if (selection.chatId === chat.id) discardConversationDraft();
         invalidate(project.id, moved.id);
         if (selection.chatId === chat.id) await openChat(moved, true);
       },
@@ -1597,7 +1621,7 @@ export default function ProjectExperienceShell({
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
       />
-      <AuthenticatedNavigation section={section} account={account} busy={busy}
+      <AuthenticatedNavigation section={section} account={account} busy={busy || creatingChat}
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
