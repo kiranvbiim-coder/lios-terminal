@@ -10,6 +10,7 @@ import {
 import { resolveCredential } from "./credentialVault";
 import { fetchWithEndpointPolicy, readBoundedText, validateSourceEndpoint } from "./sourceConnectionPolicy";
 import { sanitizeLedgerPayload } from "./ledgerStore";
+import { withOfficialMcpClient } from "./sdkExternalMcpClient";
 
 export const LIOS_MCP_PROTOCOL_VERSION = "2026-07-28";
 
@@ -188,6 +189,12 @@ export async function initializeExternalMcpClient(
   config: ExternalMcpServerConfig,
   transport: McpHttpTransport = defaultTransport,
 ) {
+  if (transport === defaultTransport) {
+    return withOfficialMcpClient(config, async client => sanitizeLedgerPayload({
+      serverInfo: client.getServerVersion(),
+      capabilities: client.getServerCapabilities(),
+    }));
+  }
   return rpc(config, "initialize", {
     protocolVersion: LIOS_MCP_PROTOCOL_VERSION,
     capabilities: { tools: {}, resources: {} },
@@ -196,8 +203,14 @@ export async function initializeExternalMcpClient(
 }
 
 export async function listExternalMcpTools(config: ExternalMcpServerConfig, transport: McpHttpTransport = defaultTransport) {
-  const result = await rpc(config, "tools/list", {}, transport) as { tools?: Array<{ name?: string }> } | null;
   const allowed = new Set(config.policy.allowedToolIds);
+  if (transport === defaultTransport) {
+    return withOfficialMcpClient(config, async (client, signal) => {
+      const result = await client.listTools(undefined, { signal });
+      return sanitizeLedgerPayload(result.tools.filter(tool => allowed.has(tool.name)));
+    });
+  }
+  const result = await rpc(config, "tools/list", {}, transport) as { tools?: Array<{ name?: string }> } | null;
   return (result?.tools ?? []).filter((tool) => tool.name && allowed.has(tool.name));
 }
 
@@ -210,6 +223,13 @@ export async function callExternalMcpTool(
 ) {
   const policy = mcpClientPolicySchema.parse(config.policy);
   assertToolAllowed(policy, toolId);
+  if (transport === defaultTransport) {
+    return withOfficialMcpClient(config, async (client, operationSignal) => {
+      const result = await client.callTool({ name: toolId, arguments: argumentsValue }, { signal: operationSignal });
+      if (result.isError) throw new Error("MCP tool returned a declared failure.");
+      return sanitizeLedgerPayload(result);
+    }, signal);
+  }
   return rpc(config, "tools/call", { name: toolId, arguments: argumentsValue }, transport, signal);
 }
 
@@ -220,6 +240,10 @@ export async function readExternalMcpResource(
 ) {
   const policy = mcpClientPolicySchema.parse(config.policy);
   assertResourceAllowed(policy, uri);
+  if (transport === defaultTransport) {
+    return withOfficialMcpClient(config, async (client, signal) =>
+      sanitizeLedgerPayload(await client.readResource({ uri }, { signal })));
+  }
   return rpc(config, "resources/read", { uri }, transport);
 }
 
