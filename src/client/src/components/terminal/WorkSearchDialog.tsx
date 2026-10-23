@@ -2,12 +2,13 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FileText, FolderKanban, MessageSquare, Search, Sparkles, X } from "lucide-react";
 import { workSearchResponseSchema, type WorkSearchResult } from "@shared/workSearch";
+import { shouldCloseSearchAfterNavigation } from "@/lib/workSearchNavigationPolicy";
 import { WORK_SEARCH_FILTERS, clampWorkSearchSelection, countWorkSearchKind, filterWorkSearchResults, workSearchEmptyMessage, type WorkSearchFilter } from "@/lib/workSearchFilters";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSelect: (result: WorkSearchResult) => void | Promise<void>;
+  onSelect: (result: WorkSearchResult) => boolean | Promise<boolean>;
 }
 
 const KIND_LABEL: Record<WorkSearchResult["kind"], string> = {
@@ -34,6 +35,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
   const [opening, setOpening] = useState(false);
   const openingRef = useRef(false);
   const listId = useId();
+  const keyboardHelpId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
 
@@ -102,11 +104,12 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
     openingRef.current = true;
     setOpening(true);
     try {
-      await onSelect(result);
-      onClose();
+      const opened = await onSelect(result);
+      if (shouldCloseSearchAfterNavigation(opened)) onClose();
+      else inputRef.current?.focus();
     } catch (openError) {
       // Keep the already-authorized results so the user can retry or pick another.
-      setError(openError instanceof Error ? openError.message : "That item is no longer available.");
+      setError("This saved item could not be opened with your current access. Check the selection and retry.");
     } finally {
       openingRef.current = false;
       setOpening(false);
@@ -115,7 +118,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus({ preventScroll: true }); } }}>
         <DialogTitle className="sr-only">Search LiOS</DialogTitle>
         <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -124,9 +127,10 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
             value={query}
             onChange={(event) => { setQuery(event.target.value); setResults([]); setSelected(0); }}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, visibleResults.length - 1))); }
               if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
-              if (event.key === "Enter" && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
+              if (event.key === "Enter" && !event.nativeEvent.isComposing && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
               if (event.key === "Escape") onClose();
             }}
             className="min-w-0 flex-1 bg-transparent font-ui text-[15px] text-foreground outline-none placeholder:text-muted-foreground/55"
@@ -136,13 +140,16 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
             aria-autocomplete="list"
             aria-expanded={!loading && visibleResults.length > 0}
             aria-controls={listId}
+            aria-describedby={keyboardHelpId}
+            aria-keyshortcuts="ArrowDown ArrowUp Enter Escape"
             aria-activedescendant={!loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
             autoComplete="off"
           />
           {query && <button type="button" onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Close search"><X className="h-4 w-4" /></button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
+        <p id={keyboardHelpId} className="sr-only">Use the up and down arrows to select, Enter to open, or Escape to close. Canceling a draft switch keeps this search open.</p>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
           {WORK_SEARCH_FILTERS.map((entry) => (
             <button
               key={entry.value}
@@ -157,7 +164,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
         </div>
         <p role={error && !visibleResults.length ? "alert" : "status"} aria-live="polite" className="px-4 py-2 font-ui text-[12px] text-muted-foreground">{status}{!loading && !error && results.length === 30 ? " Filters apply to these 30 returned matches; refine your search for different results." : ""}</p>
         {error && visibleResults.length > 0 && <p role="alert" className="mx-3 mb-2 rounded-md border border-red-400/30 p-2 font-ui text-[12px] text-red-200">{error}</p>}
-        <div id={listId} role="listbox" aria-label="Matching LiOS work" className="max-h-[52vh] overflow-y-auto p-2">
+        <div id={listId} role="listbox" aria-label="Matching LiOS work" aria-busy={loading || opening} className="max-h-[52vh] overflow-y-auto p-2">
           {!loading && visibleResults.map((result, index) => (
             <button
               key={`${result.kind}:${result.id}`}
