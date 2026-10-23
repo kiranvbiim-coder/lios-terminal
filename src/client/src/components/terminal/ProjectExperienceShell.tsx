@@ -111,6 +111,7 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { stageUniversalChatQuestion, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -171,6 +172,7 @@ interface Props {
   workspaceAdapter: WorkspaceAdapter;
   onOpenWorkbench: (context?: ArtifactWorkbenchContext) => void;
   workbenchReturn?: { context: ArtifactWorkbenchContext; request: number; prompt?: string } | null;
+  universalChatHandoff?: UniversalChatHandoff | null;
   onOpenEnvironment: () => void;
   account: { name: string; email?: string };
   onLogout: () => void;
@@ -296,7 +298,7 @@ export default function ProjectExperienceShell({
   activeView,
   activeSymbol,
   workspaceAdapter,
-  onOpenWorkbench: navigateWorkbench, workbenchReturn,
+  onOpenWorkbench: navigateWorkbench, workbenchReturn, universalChatHandoff,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
@@ -413,6 +415,7 @@ export default function ProjectExperienceShell({
   const artifactDraftDirtyRef = useRef(false);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
+  const handledUniversalChatHandoff = useRef<number | null>(null);
   const onOpenWorkbench = () => {
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
     if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
@@ -447,6 +450,20 @@ export default function ProjectExperienceShell({
   const keepingArtifactRef = useRef(false);
   const [projectDestination, setProjectDestination] = useState<{ description: string; save: (project: Project) => Promise<void> } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!universalChatHandoff || handledUniversalChatHandoff.current === universalChatHandoff.request) return;
+    handledUniversalChatHandoff.current = universalChatHandoff.request;
+    // This shell remains mounted behind Workbench. Return to its current
+    // saved/quick/temporary Chat; do not allocate a new agent or conversation.
+    setSection("conversation");
+    setShowLifecycleCenter(false);
+    setProjectHomeRequested(false);
+    if (universalChatHandoff.prompt) {
+      setInput(current => stageUniversalChatQuestion(current, universalChatHandoff.prompt));
+    }
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, [universalChatHandoff]);
+
   // The user's own most recent ticker fills the starter slot so an example is ready to send.
   const recentStarterSymbol = useMemo(() => loadRecentAnalyticalContexts().find((context) => context.symbol)?.symbol ?? null, []);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
