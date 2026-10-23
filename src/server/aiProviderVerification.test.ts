@@ -146,3 +146,42 @@ test("live AI verification rejects provider or model metadata that does not matc
     /unexpected provider\/model metadata/,
   );
 });
+
+
+test("GM12 a nonempty but incorrect AI acknowledgement is not a verified model connection", async () => {
+  const unsafeReplies = [
+    "Ready to help!", "LIOS_AI_OK followed by fabricated output",
+    "LIOS_AI_0K", "{\"status\":\"ok\"}", "Wrong model but successful completion",
+  ];
+  for (const reply of unsafeReplies) {
+    await assert.rejects(
+      () => verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async () => ({
+        provider: "openai", model: "gpt-4o-mini", text: reply,
+        attribution: {
+          id: "99999999-9999-4999-8999-999999999999",
+          provider: "openai", model: "gpt-4o-mini",
+          promptHash: "a".repeat(64), outputHash: "b".repeat(64),
+          toolsCalled: [], dataAccessed: [], timestamp: new Date().toISOString(),
+        },
+      })),
+      (error: unknown) =>
+        error instanceof Error && /did not complete the LiOS connection verification challenge/.test(error.message) && !error.message.includes(reply),
+      "failed verification should never leak the arbitrary provider response",
+    );
+  }
+});
+
+test("GM12 minor model acknowledgement punctuation does not produce a false negative", async () => {
+  for (const text of ["  LIOS_AI_OK  ", '"LIOS_AI_OK"', "LIOS_AI_OK."]) {
+    const result = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async () => ({
+      provider: "openai", model: "gpt-4o-mini", text,
+      attribution: {
+        id: "77777777-7777-4777-8777-777777777777",
+        provider: "openai", model: "gpt-4o-mini",
+        promptHash: "a".repeat(64), outputHash: "b".repeat(64),
+        toolsCalled: [], dataAccessed: [], timestamp: new Date().toISOString(),
+      },
+    }));
+    assert.equal(result.ok, true);
+  }
+});
