@@ -203,3 +203,22 @@
   filter: saturate(.72) contrast(1.01) brightness(.62);
 }
 
+
+/* WS-12 — software-rendered devices receive the same quiet graphics budget
+ * as the explicitly selected low-resource mode. The actual SVG path is
+ * selected by VisualCanvas; this only removes extra compositing layers.
+ * Focus / disabled renders no scene children at all (solid matte).
+ */
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__light,
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__grain {
+  display: none;
+}
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__image {
+  transition: none !important;
+  transform: none !important;
+  filter: saturate(.72) contrast(1.01) brightness(.62);
+}
+main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-resource"]) .lios-conversation-composer,
+main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-resource"]) .lios-project-experience-shell > aside {
+  backdrop-filter: none !important;
+}
