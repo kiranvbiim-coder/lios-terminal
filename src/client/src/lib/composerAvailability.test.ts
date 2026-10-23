@@ -40,10 +40,17 @@ test("WS-21 local Whisper provider requires observed browser recording readiness
   assert.equal(state.transcriptionIsLocal, true);
 });
 test("WS-21 another registered transcription provider remains distinct from local Whisper pack", () => {
-  const state = voiceAvailability({ loading: false, error: false, transcription: [provider("configured.service", false)], speech: [], browserRecordingReady: false });
+  const state = voiceAvailability({ loading: false, error: false, transcription: [provider("configured.service", false)], speech: [], browserRecordingReady: false, ffmpegFound: true });
   assert.equal(state.transcriptionReady, true);
   assert.equal(state.transcriptionIsLocal, false);
 });
+test("WS-21 browser-compressed audio cannot be advertised ready without ffmpeg", () => {
+  const state = voiceAvailability({ loading: false, error: false,
+    transcription: [provider("configured.service", false)], speech: [],
+    browserRecordingReady: false, ffmpegFound: false });
+  assert.equal(state.transcriptionReady, false);
+});
+
 test("WS-21 presence of speech output is not confused with transcription availability", () => {
   const state = voiceAvailability({ loading: false, error: false, transcription: [], speech: [provider("lios.voice.mac-say")], browserRecordingReady: false });
   assert.equal(state.transcriptionReady, false);
