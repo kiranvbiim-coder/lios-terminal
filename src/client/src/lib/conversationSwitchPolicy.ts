@@ -14,7 +14,24 @@ export function remainingChatMode(projectId: number | null): "project" | "quick"
   return projectId === null ? "quick" : "project";
 }
 
-/** Never clear an unsent draft when a server mutation or owner check fails. */
-export function shouldDiscardAfterSuccessfulTransition(succeeded: boolean, wasConfirmed: boolean): boolean {
-  return succeeded && wasConfirmed;
+/** Stable recent list: one row per saved conversation; no archived/trashed entries. */
+export function canonicalRecentChats<T extends { id: number; status: string; trashedAt?: string | Date | null; lastActivityAt: string | Date }>(
+  saved: readonly T[],
+  quick: readonly T[],
+  limit = 14,
+): T[] {
+  const unique = new Map<number, T>();
+  for (const chat of [...saved, ...quick]) {
+    if (chat.status !== "active" || chat.trashedAt) continue;
+    const prior = unique.get(chat.id);
+    if (!prior || safeActivityTime(chat.lastActivityAt) > safeActivityTime(prior.lastActivityAt)) unique.set(chat.id, chat);
+  }
+  return [...unique.values()]
+    .sort((a, b) => safeActivityTime(b.lastActivityAt) - safeActivityTime(a.lastActivityAt) || b.id - a.id)
+    .slice(0, Math.max(0, limit));
+}
+
+function safeActivityTime(value: string | Date): number {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
