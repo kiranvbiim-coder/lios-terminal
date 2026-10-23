@@ -61,9 +61,47 @@ async function defaultTransport(
   }, false);
   const text = await readBoundedText(response, 10 * 1024 * 1024);
   if (!response.ok) throw new Error(`MCP server returned HTTP ${response.status}.`);
-  const parsed = JSON.parse(text) as McpJsonRpcResponse;
-  if (parsed.error) throw new Error(`MCP error ${parsed.error.code ?? ""}: ${parsed.error.message ?? "unknown error"}`);
-  return parsed;
+  // A response is untrusted until rpc() validates its JSON-RPC envelope
+  // against the exact request ID. In particular, do not accept an error
+  // message from an unrelated, spoofed response.
+  return JSON.parse(text) as McpJsonRpcResponse;
+}
+
+/**
+ * External MCP transports are untrusted even when provided by an approved
+ * source connection. Reject mismatched, batched, malformed, or ambiguous
+ * responses BEFORE treating any result as a successful agent/tool observation.
+ * Correlation follows JSON-RPC 2.0 and the MCP request/response contract.
+ */
+export function validateExternalMcpRpcResponse(
+  request: McpJsonRpcRequest,
+  value: unknown,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MCP transport returned an invalid JSON-RPC response.");
+  }
+  const response = value as Record<string, unknown>;
+  if (response.jsonrpc !== "2.0" || response.id !== request.id) {
+    throw new Error("MCP transport returned a mismatched JSON-RPC response.");
+  }
+  const hasResult = Object.prototype.hasOwnProperty.call(response, "result");
+  const hasError = Object.prototype.hasOwnProperty.call(response, "error");
+  if (hasResult === hasError) {
+    throw new Error("MCP transport returned an ambiguous JSON-RPC response.");
+  }
+  if (hasError) {
+    const error = response.error;
+    if (!error || typeof error !== "object" || Array.isArray(error)
+      || typeof (error as Record<string, unknown>).code !== "number"
+      || !Number.isSafeInteger((error as { code: number }).code)
+      || typeof (error as Record<string, unknown>).message !== "string") {
+      throw new Error("MCP transport returned a malformed JSON-RPC error.");
+    }
+    // Remote messages may include server secrets or attacker-controlled text.
+    // The governed caller receives a stable, non-secret failure instead.
+    throw new Error(`MCP tool transport returned JSON-RPC error ${(error as Record<string, unknown>).code}.`);
+  }
+  return response.result;
 }
 
 function credential(policy: McpClientPolicy): string | null {
@@ -133,13 +171,14 @@ async function rpc(
     linkAbortSignal(signal, controller),
   ];
   try {
+    const request: McpJsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params };
     const response = await transport(
       config.endpoint,
-      { jsonrpc: "2.0", id: crypto.randomUUID(), method, params },
+      request,
       credential(policy),
       controller.signal,
     );
-    return sanitizeLedgerPayload(response.result ?? null);
+    return sanitizeLedgerPayload(validateExternalMcpRpcResponse(request, response) ?? null);
   } finally {
     for (const release of detach) release();
   }
