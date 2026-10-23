@@ -87,10 +87,19 @@ export async function invokeGovernedExternalMcpTool(
     .find((candidate) => candidate.id === input.connectionId);
   if (
     !connection
+    || connection.userId !== context.userId
     || connection.sourceType !== "mcp"
     || connection.organizationId !== context.organizationId
   ) {
     throw new Error("External MCP connection is unavailable in this tenant.");
+  }
+  // The recorded source may have become invalid after the model planned or
+  // the owner granted a one-time tool call. Read the current record again at
+  // dispatch instead of trusting a stale capability or approval snapshot.
+  // Degraded/unreachable are connection-health states, not an authorization
+  // bypass; the guarded transport reports their actual failure.
+  if (connection.status === "invalid") {
+    throw new Error("External MCP connection is invalid or no longer authorized.");
   }
 
   const config = dependencies.configForConnection(connection);
