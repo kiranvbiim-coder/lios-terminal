@@ -111,6 +111,8 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { planAttachmentStage, stagedFileKey } from "@/lib/fileAttachmentStaging";
+import { uploadRealChatAttachment, type UploadStage } from "@/lib/realFileAttachmentUpload";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -205,22 +207,6 @@ function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): Sa
     if (typeof item.id !== "string" || typeof item.fileName !== "string" || typeof item.mimeType !== "string" || typeof item.byteLength !== "number") return [];
     return [{ id: item.id, fileName: item.fileName, mimeType: item.mimeType, byteLength: item.byteLength, ...(typeof item.sourceRef === "string" ? { sourceRef: item.sourceRef } : {}) }];
   });
-}
-
-async function uploadProjectChatAttachment(projectId: number | null, chatId: number, file: File): Promise<ConversationAttachmentRef> {
-  const form = new FormData();
-  form.append("file", file, file.name);
-  const endpoint = projectId === null ? `/api/quick-chats/${chatId}/attachments` : `/api/projects/${projectId}/chats/${chatId}/attachments`;
-  const response = await fetch(endpoint, { method: "POST", body: form });
-  const payload = await response.json().catch(() => null) as { error?: string; attachment?: ConversationAttachmentRef } | null;
-  if (!response.ok || !payload?.attachment) {
-    const detail = payload?.error || `Attachment upload failed (${response.status}).`;
-    const retry = response.status >= 500
-      ? " Your staged file is still here—restore attachment storage and send again."
-      : "";
-    throw new Error(detail + retry);
-  }
-  return payload.attachment;
 }
 
 function formatAttachmentSize(bytes: number): string {
@@ -360,6 +346,7 @@ export default function ProjectExperienceShell({
   const [voiceTranscriptReviewed, setVoiceTranscriptReviewed] = useState(false);
   const [pendingAttachmentFiles, setPendingAttachmentFiles] = useState<File[]>([]);
   const [pendingAttachmentRefs, setPendingAttachmentRefs] = useState<ConversationAttachmentRef[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState<{ key: string; fileName: string; index: number; total: number; progress: UploadStage } | null>(null);
   const [speakRepliesEnabled, setSpeakRepliesEnabled] = useState(() => {
     try {
       return window.localStorage.getItem("lios.voice.speakReplies") === "1";
@@ -1208,7 +1195,12 @@ export default function ProjectExperienceShell({
 
         if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
-            const attachment = await uploadProjectChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file);
+            const key = stagedFileKey(file);
+            const index = pendingAttachmentFiles.findIndex(item => stagedFileKey(item) === key) + 1;
+            setUploadingAttachment({ key, fileName: file.name, index, total: pendingAttachmentFiles.length, progress: { state: "transferring", percent: null } });
+            const attachment = await uploadRealChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file, progress => {
+              setUploadingAttachment(current => current?.key === key ? { ...current, progress } : current);
+            });
             attachmentsForRequest = [...attachmentsForRequest, attachment];
             payload.attachments = attachmentsForRequest;
             setPendingAttachmentRefs(attachmentsForRequest);
@@ -1261,6 +1253,7 @@ export default function ProjectExperienceShell({
       if (!override?.continuationOf) setInput(message);
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
+      setUploadingAttachment(null);
       setStreaming("");
       setBusy(false);
     }
@@ -1405,32 +1398,18 @@ export default function ProjectExperienceShell({
       setLifecycleNotice("Temporary Chat does not retain files. Start a regular Quick Chat or Project Chat.");
       return;
     }
-    const incoming = Array.from(fileList);
-    if (pendingAttachmentFiles.length + pendingAttachmentRefs.length + incoming.length > 5) {
-      setLifecycleNotice("A message can include up to five files. Remove one before adding more.");
+    if (busy) { setLifecycleNotice("Finish the current response before attaching more files."); return; }
+    const staged = planAttachmentStage(pendingAttachmentFiles, Array.from(fileList), pendingAttachmentRefs.length);
+    if (staged.error) { setLifecycleNotice(staged.error); return; }
+    if (staged.files.length === pendingAttachmentFiles.length) {
+      setLifecycleNotice("Those files are already staged; select a different file or send the current message.");
       return;
     }
-    const accepted = new Set(["pdf", "docx", "pptx", "xlsx", "txt", "md", "csv", "tsv", "json", "png", "jpg", "jpeg", "webp"]);
-    for (const file of incoming) {
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!accepted.has(extension)) {
-        setLifecycleNotice(`${file.name}: use PDF, DOCX, PPTX, XLSX, TXT, Markdown, CSV, TSV, JSON, PNG, JPEG or WebP.`);
-        return;
-      }
-      if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
-        setLifecycleNotice(`${file.name}: each file must be between 1 byte and 20 MiB.`);
-        return;
-      }
-      if (["png", "jpg", "jpeg", "webp"].includes(extension) && file.size > 6 * 1024 * 1024) {
-        setLifecycleNotice(`${file.name}: images must be 6 MiB or smaller.`);
-        return;
-      }
-    }
     setLifecycleNotice(null);
-    setPendingAttachmentFiles((current) => [...current, ...incoming]);
+    setPendingAttachmentFiles(staged.files);
   };
-
   const removePendingAttachment = (id: string) => {
+    if (busy) return; // In-flight transport has an immutable attachment list.
     setPendingAttachmentRefs((current) => current.filter((attachment) => attachment.id !== id));
     setPendingAttachmentFiles((current) => current.filter((file) => `${file.name}:${file.size}:${file.lastModified}` !== id));
   };
@@ -2078,6 +2057,16 @@ export default function ProjectExperienceShell({
                     </div>
                   </div>
                 )}
+                {uploadingAttachment && (
+                  <div role="status" aria-live="polite" className="border-b border-cyan-300/20 bg-cyan-300/[0.04] px-3 py-2 font-ui text-xs text-cyan-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">{uploadingAttachment.progress.state === "verifying" ? "Verifying saved file" : "Uploading file"} {uploadingAttachment.index} of {uploadingAttachment.total}: {uploadingAttachment.fileName}</span>
+                      <span className="shrink-0 font-terminal">{uploadingAttachment.progress.percent === null ? "Working…" : `${uploadingAttachment.progress.percent}% transferred`}</span>
+                    </div>
+                    <progress max={100} value={uploadingAttachment.progress.percent ?? undefined} aria-label="Attachment transfer progress" className="mt-2 h-1.5 w-full" />
+                    <p className="mt-1 text-muted-foreground">Transfer progress is not confirmation of storage. The file remains staged until the server confirms it.</p>
+                  </div>
+                )}
                 {(pendingAttachmentFiles.length > 0 || pendingAttachmentRefs.length > 0) && (
                   <div className="border-b border-cyan-300/10 bg-cyan-300/[0.025] px-3 py-2" aria-label="Files staged for this message">
                     <div className="flex flex-wrap gap-1.5">
@@ -2088,7 +2077,7 @@ export default function ProjectExperienceShell({
                             <FileText className="h-3 w-3 shrink-0" />
                             <span className="max-w-[220px] truncate">{file.name}</span>
                             <span className="shrink-0 font-terminal text-muted-foreground">{formatAttachmentSize(file.size)}</span>
-                            <button type="button" onClick={() => removePendingAttachment(key)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${file.name}`}><X className="h-3 w-3" /></button>
+                            <button type="button" disabled={busy} onClick={() => removePendingAttachment(key)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${file.name}`}><X className="h-3 w-3" /></button>
                           </span>
                         );
                       })}
@@ -2097,7 +2086,7 @@ export default function ProjectExperienceShell({
                           <FileText className="h-3 w-3 shrink-0" />
                           <span className="max-w-[220px] truncate">{attachment.fileName}</span>
                           <span className="shrink-0 font-terminal text-muted-foreground">{formatAttachmentSize(attachment.byteLength)} · saved</span>
-                          <button type="button" onClick={() => removePendingAttachment(attachment.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${attachment.fileName}`}><X className="h-3 w-3" /></button>
+                          <button type="button" disabled={busy} onClick={() => removePendingAttachment(attachment.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${attachment.fileName}`}><X className="h-3 w-3" /></button>
                         </span>
                       ))}
                     </div>
