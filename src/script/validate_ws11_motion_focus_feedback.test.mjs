@@ -10,6 +10,7 @@ const projectCss = read("components/terminal/project-conversation-shell.css");
 const dialog = read("components/terminal/ProjectLifecycleDialog.tsx");
 const center = read("components/terminal/LifecycleCenter.tsx");
 const menu = read("components/terminal/ObjectActionMenu.tsx");
+const menuOptions = read("lib/objectLifecycleMenu.ts");
 
 test("WS-11 existing terminal and Chat CSS already handled local reduced motion", () => {
   assert.match(shell, /@media \(prefers-reduced-motion: reduce\)/);
@@ -83,7 +84,8 @@ test("WS-11 pending feedback is truthful and existing menu actions become disabl
   assert.match(center, /disabled=\{applying\} onClick=\{onClose\}/);
   const disabled = center.match(/<ObjectActionMenu disabled=\{disabledActions\}/g) ?? [];
   assert.equal(disabled.length, 3);
-  assert.match(menu, /disabled\?: Partial<Record<LifecycleAction, string>>/); // from imported LifecycleMenuOptions, adjust if type owned elsewhere
+  assert.match(menu, /const items = getLifecycleMenuItems\(\{ kind, status, pinned, scope \}, \{ hidden, disabled \}\)/);
+  assert.match(menuOptions, /disabled\?: Partial<Record<LifecycleAction, string>>/);
 });
 
 test("WS-11 records exact-viewport/browser/native unverified evidence honestly", () => {
