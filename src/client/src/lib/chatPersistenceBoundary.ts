@@ -24,7 +24,9 @@ export function sourceScopeForChatMode(
   mode: ChatPersistenceMode,
   scope: ConversationSourceScope,
 ): ConversationSourceScope {
-  return mode === "temporary" ? "auto" : scope;
+  // Temporary may explicitly ask for public Web lookup, but never inherit
+  // saved My Data/Files scope or file-source access from a Project.
+  return mode === "temporary" && scope !== "web" ? "auto" : scope;
 }
 
 /** A Temporary Chat never loads/saves a server Chat message history. */
