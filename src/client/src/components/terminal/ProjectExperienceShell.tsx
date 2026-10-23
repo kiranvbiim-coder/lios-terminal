@@ -1085,7 +1085,13 @@ export default function ProjectExperienceShell({
     const hasStagedAttachments = Boolean(override?.attachments?.length || pendingAttachmentRefs.length || pendingAttachmentFiles.length);
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached Project file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
-    if (!message || busy) return;
+    if (!message || busy || busyRef.current || creatingChat || sendInFlightRef.current) return;
+    // A ref blocks the second Enter/click synchronously, before React rerenders.
+    sendInFlightRef.current = true;
+    const originalComposerDraft = input;
+    const canClearDraft = mayClearComposerDraft(originalComposerDraft, message, Boolean(override?.continuationOf));
+    setStopRequested(false);
+    try {
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
@@ -1191,7 +1197,7 @@ export default function ProjectExperienceShell({
         const retrying = Boolean(override?.continuationOf);
         const userMessage: LocalMessage = { id: `u-${Date.now()}`, role: "user", content: message };
         if (!retrying) setTemporaryMessages((current) => [...current, userMessage]);
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
         const result = await runConversation(requireGateway(), {
           chatId: null,
           body: {
@@ -1211,12 +1217,12 @@ export default function ProjectExperienceShell({
           if (!retrying) {
             setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
           }
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
@@ -1259,7 +1265,7 @@ export default function ProjectExperienceShell({
             setLastWorkflowRequest((current) => current ? { ...current, attachments: attachmentsForRequest } : current);
           }
         }
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
 
         const result = await runConversation(requireGateway(), {
           chatId,
@@ -1267,12 +1273,12 @@ export default function ProjectExperienceShell({
           onEvent: applyRuntimeEvent,
         });
         if (result.status === 428) {
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
@@ -1300,11 +1306,15 @@ export default function ProjectExperienceShell({
         invalidate(selection.projectId, chatId);
       }
     } catch (error) {
-      if (!override?.continuationOf) setInput(message);
+      if (!override?.continuationOf) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
       setStreaming("");
       setBusy(false);
+      setStopRequested(false);
+    }
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
