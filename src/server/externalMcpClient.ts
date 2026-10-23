@@ -92,7 +92,8 @@ export function validateExternalMcpRpcResponse(
   if (hasError) {
     const error = response.error;
     if (!error || typeof error !== "object" || Array.isArray(error)
-      || !Number.isSafeInteger((error as Record<string, unknown>).code)
+      || typeof (error as Record<string, unknown>).code !== "number"
+      || !Number.isSafeInteger((error as { code: number }).code)
       || typeof (error as Record<string, unknown>).message !== "string") {
       throw new Error("MCP transport returned a malformed JSON-RPC error.");
     }
