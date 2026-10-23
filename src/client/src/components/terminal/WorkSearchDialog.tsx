@@ -35,6 +35,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
   const [opening, setOpening] = useState(false);
   const openingRef = useRef(false);
   const listId = useId();
+  const keyboardHelpId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
 
@@ -126,6 +127,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
             value={query}
             onChange={(event) => { setQuery(event.target.value); setResults([]); setSelected(0); }}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, visibleResults.length - 1))); }
               if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
               if (event.key === "Enter" && !event.nativeEvent.isComposing && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
@@ -138,13 +140,16 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
             aria-autocomplete="list"
             aria-expanded={!loading && visibleResults.length > 0}
             aria-controls={listId}
+            aria-describedby={keyboardHelpId}
+            aria-keyshortcuts="ArrowDown ArrowUp Enter Escape"
             aria-activedescendant={!loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
             autoComplete="off"
           />
           {query && <button type="button" onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Close search"><X className="h-4 w-4" /></button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
+        <p id={keyboardHelpId} className="sr-only">Use the up and down arrows to select, Enter to open, or Escape to close. Canceling a draft switch keeps this search open.</p>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
           {WORK_SEARCH_FILTERS.map((entry) => (
             <button
               key={entry.value}
@@ -159,7 +164,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
         </div>
         <p role={error && !visibleResults.length ? "alert" : "status"} aria-live="polite" className="px-4 py-2 font-ui text-[12px] text-muted-foreground">{status}{!loading && !error && results.length === 30 ? " Filters apply to these 30 returned matches; refine your search for different results." : ""}</p>
         {error && visibleResults.length > 0 && <p role="alert" className="mx-3 mb-2 rounded-md border border-red-400/30 p-2 font-ui text-[12px] text-red-200">{error}</p>}
-        <div id={listId} role="listbox" aria-label="Matching LiOS work" className="max-h-[52vh] overflow-y-auto p-2">
+        <div id={listId} role="listbox" aria-label="Matching LiOS work" aria-busy={loading || opening} className="max-h-[52vh] overflow-y-auto p-2">
           {!loading && visibleResults.map((result, index) => (
             <button
               key={`${result.kind}:${result.id}`}
