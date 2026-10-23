@@ -55,6 +55,14 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
       return new Response(null, { status: 202 });
     }
     let result: unknown;
+    if (request.method === "server/discover") {
+      // The modern-version probe must get a *correlated* method-not-found,
+      // so the v2 SDK can safely select its legacy fallback.
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0", id: request.id,
+        error: { code: -32601, message: "Method not found" },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
     if (request.method === "initialize") {
       result = { protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "offline-test", version: "1" } };
     } else if (request.method === "tools/list") {
@@ -74,7 +82,10 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
       headers: { "Content-Type": "application/json" },
     });
   };
-  const client = new Client({ name: "LiOS-Test", version: "1.0.0" });
+  const client = new Client({ name: "LiOS-Test", version: "1.0.0" }, {
+    versionNegotiation: { mode: "auto", probe: { timeoutMs: 1000 } },
+    listMaxPages: 16,
+  });
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
     fetch: scopedMcpFetch(endpoint, fakeFetch),
   });
@@ -87,6 +98,7 @@ test("D1 actual official SDK initializes, aggregates tool pages and invokes a to
     assert.equal(observation.content[0]?.type, "text");
     const resource = await client.readResource({ uri: "project://safe/report" });
     assert.equal(resource.contents[0]?.uri, "project://safe/report");
+    assert.equal(methods.includes("server/discover"), true, "official MCP v2 probe must be exercised before legacy fallback");
     assert.equal(methods.filter(x => x === "tools/list").length, 2, "the official SDK must aggregate cursor pages");
     assert.equal(methods.includes("tools/call"), true);
     assert.equal(methods.includes("resources/read"), true);
