@@ -7,7 +7,7 @@ export function normalizedMentionToken(value: string): string {
 
 export function userMentionTokens(message: string): Set<string> {
   const tokens = new Set<string>();
-  for (const match of message.matchAll(/@([a-zA-Z0-9_.-]+)/g)) {
+  for (const match of message.matchAll(/(?:^|\\s)@([a-zA-Z0-9_.-]+)/g)) {
     const token = normalizedMentionToken(match[1]);
     if (token) tokens.add(token);
   }
