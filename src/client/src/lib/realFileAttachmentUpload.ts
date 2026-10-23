@@ -33,6 +33,7 @@ export function uploadRealChatAttachment(
       const percent = progressPercent(event.loaded, event.total, event.lengthComputable);
       onProgress({ state: "transferring", percent });
     };
+    xhr.upload.onload = () => onProgress({ state: "verifying", percent: null });
     xhr.onerror = () => reject(new Error(attachmentUploadError(0)));
     xhr.onabort = () => reject(new Error("Upload stopped. The selected file remains staged."));
     xhr.ontimeout = () => reject(new Error("Upload timed out. The local file remains staged; retry when connected."));
