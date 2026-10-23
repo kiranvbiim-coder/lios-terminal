@@ -104,6 +104,49 @@ test("governed external MCP activation fails closed across Project or tenant sco
   assert.equal(calls, 0);
 });
 
+test("GM20 live source recheck refuses invalid or wrong-owner MCP even after a planned approval", async () => {
+  let networkCalls = 0;
+  let configReads = 0;
+  const baseInput = { connectionId: 41, toolId: "quotes.read", arguments: { symbol: "TEST" } };
+  const context = { userId: 7, organizationId: 9, projectId: 77 };
+  const signal = new AbortController().signal;
+  for (const source of [
+    { ...connection, userId: 55 },
+    { ...connection, status: "invalid" as const },
+  ]) {
+    await assert.rejects(
+      () => invokeGovernedExternalMcpTool(baseInput, context, signal, {
+        // Simulate a stale or incorrectly scoped source returned by a
+        // connector cache AFTER the model planned or the user reviewed it.
+        listConnections: async () => [source],
+        configForConnection: () => { configReads++; return config(); },
+        callTool: async () => { networkCalls++; return { result: "untrusted" }; },
+      }),
+      /unavailable in this tenant|invalid or no longer authorized/i,
+    );
+  }
+  assert.equal(configReads, 0, "invalid sources cannot materialize an executable MCP configuration");
+  assert.equal(networkCalls, 0, "revoked/misowned sources cannot reach the external tool");
+});
+
+test("GM20 source health is not confused with revoked authorization", async () => {
+  let calls = 0;
+  for (const status of ["configured", "healthy", "degraded", "unreachable"] as const) {
+    const result = await invokeGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: {} },
+      { userId: 7, organizationId: 9, projectId: 77 },
+      new AbortController().signal,
+      {
+        listConnections: async () => [{ ...connection, status }],
+        configForConnection: () => config(),
+        callTool: async () => { calls++; return { ok: true }; },
+      },
+    );
+    assert.deepEqual(result.output, { ok: true });
+  }
+  assert.equal(calls, 4, "a transient health failure is not a permanent source-right denial");
+});
+
 test("governed external MCP input is bounded and cannot carry approval-shaped top-level fields", () => {
   assert.equal(governedExternalMcpInputSchema.safeParse({
     connectionId: 41,
