@@ -21,10 +21,12 @@ test("WS-18 existing persisted/Temporary composer remains the only provider exec
 
 test("WS-18 a synchronous ref blocks duplicate Enter and click before busy UI rerenders", () => {
   assert.match(shell, /const sendInFlightRef = useRef\(false\)/);
-  assert.match(send, /if \(!message \|\| busy \|\| busyRef.current \|\| creatingChat \|\| sendInFlightRef.current\) return/);
+  assert.match(send, /if \(!message \|\| busy \|\| busyRef.current \|\| creatingChat \|\| chatCreationInFlightRef.current \|\| sendInFlightRef.current\) return/);
   assert.match(send, /sendInFlightRef.current = true/);
   assert.ok(send.indexOf("sendInFlightRef.current = true") < send.indexOf("await runCommand(message)"));
   assert.match(send, /finally \{\s*sendInFlightRef.current = false/);
+  assert.match(shell, /if \(sendInFlightRef.current\) \{ setLifecycleNotice\("Finish sending the current request before switching conversations\."\); return false; \}/);
+  assert.match(shell, /if \(busy \|\| sendInFlightRef.current \|\| chatCreationInFlightRef.current\) return/);
 });
 
 test("WS-18 only exact submitted draft can be cleared, not an unrelated draft on retry", () => {
