@@ -644,6 +644,8 @@ test("provider failures are classified into actionable reasons without echoing p
   }
 });
 
+// Ordinary 429 rate pressure can use a permitted fallback. Billing/quota
+// exhaustion is tested separately as a permanent entitlement refusal.
 async function withProviderKeys<T>(run: (contacted: string[]) => Promise<T>, geminiWorks = true): Promise<T> {
   const previous = { openai: process.env.OPENAI_API_KEY, gemini: process.env.GEMINI_API_KEY };
   const previousFetch = globalThis.fetch;
@@ -655,7 +657,7 @@ async function withProviderKeys<T>(run: (contacted: string[]) => Promise<T>, gem
     contacted.push(url.includes("googleapis") ? "gemini" : "openai");
     return url.includes("googleapis") && geminiWorks
       ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "from gemini" }] } }] }), { status: 200 })
-      : new Response(JSON.stringify({ error: { code: "insufficient_quota" } }), { status: 429 });
+      : new Response(JSON.stringify({ error: { code: "rate_limit_exceeded" } }), { status: 429 });
   }) as typeof fetch;
   try {
     return await run(contacted);
