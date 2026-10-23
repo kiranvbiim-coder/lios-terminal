@@ -5,7 +5,7 @@ import {
   governedExternalMcpInputSchema,
   invokeGovernedExternalMcpTool,
 } from "./governedExternalMcpTool";
-import type { ExternalMcpServerConfig } from "./externalMcpClient";
+import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 
 const connection = {
   id: 41,
@@ -146,4 +146,79 @@ test("pre-cancelled governed external MCP activation performs no transport call"
     /cancel/i,
   );
   assert.equal(calls, 0);
+});
+
+
+test("GM20 the governed Project path executes through the real official MCP v2 SDK and rejects unauthorized tools before transport", async () => {
+  const endpoint = "https://8.8.8.8/mcp";
+  const urls: string[] = [];
+  const verbs: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    urls.push(url);
+    const method = init?.method ?? "GET";
+    if (method === "GET") return new Response(null, { status: 405 });
+    if (method === "DELETE") return new Response(null, { status: 202 });
+    const payload = JSON.parse(await new Response(init?.body).text()) as {
+      id?: string | number; method?: string; params?: { name?: string; arguments?: Record<string, unknown> };
+    };
+    verbs.push(payload.method ?? "notification");
+    if (payload.id === undefined) return new Response(null, { status: 202 });
+    if (payload.method === "server/discover") {
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0", id: payload.id,
+        error: { code: -32601, message: "Method not found" },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    const result = payload.method === "initialize" ? {
+      protocolVersion: "2025-11-25",
+      capabilities: { tools: {} },
+      serverInfo: { name: "governed-test-mcp", version: "1" },
+    } : payload.method === "tools/list" ? {
+      tools: [{ name: "quotes.read", inputSchema: { type: "object", properties: {} } }],
+    } : payload.method === "tools/call" && payload.params?.name === "quotes.read" ? {
+      isError: false, content: [{ type: "text", text: "verified test observation" }],
+    } : null;
+    return new Response(JSON.stringify(result === null
+      ? { jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "Method not found" } }
+      : { jsonrpc: "2.0", id: payload.id, result }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const deps = {
+    listConnections: async () => [{
+      ...connection, config: { ...connection.config, endpoint },
+    }],
+    configForConnection: () => ({
+      ...config(), endpoint,
+    }),
+    callTool: (selected: ExternalMcpServerConfig, id: string, args: Record<string, unknown>, signal: AbortSignal) =>
+      callExternalMcpTool(selected, id, args, undefined, signal),
+  };
+  try {
+    const context = { userId: 7, organizationId: 9, projectId: 77 };
+    const denied = await assert.rejects(
+      () => invokeGovernedExternalMcpTool(
+        { connectionId: 41, toolId: "admin.delete", arguments: {} },
+        context, new AbortController().signal, deps,
+      ),
+      /outside Project policy/,
+    );
+    assert.equal(denied, undefined);
+    assert.equal(urls.length, 0, "unapproved tool id cannot reach any provider network endpoint");
+
+    const result = await invokeGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: { symbol: "TEST" } },
+      context, new AbortController().signal, deps,
+    );
+    assert.equal((result.output as { content: Array<{ text: string }> }).content[0]?.text, "verified test observation");
+    assert.deepEqual(result.sourceRefs, ["mcp-server:source:41", "mcp-tool:quotes.read"]);
+    assert.equal(verbs.includes("server/discover"), true);
+    assert.equal(verbs.includes("tools/call"), true);
+    assert.equal(urls.every(url => url === endpoint), true, "MCP transport never contacts another path/host");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
