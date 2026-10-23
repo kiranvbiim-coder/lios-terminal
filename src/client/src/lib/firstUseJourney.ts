@@ -47,7 +47,7 @@ export const FIRST_USE_UNIVERSAL_STARTERS = [
 /** Only known recovery actions enter optional setup. Never execute arbitrary text. */
 export function firstUseRecoveryDestination(action: string): "connections" | "compose" {
   const normalized = action.trim().toLowerCase().replace(/\s+/g, " ");
-  return /^(?:connect|connect sources|connect data|configure ai|set up ai|open connection center|open connections|open connect)$/.test(normalized)
+  return /^(?:connect\b.*|configure ai\b.*|set up ai\b.*|open connection center|open connections|open connect)$/.test(normalized)
     ? "connections"
     : "compose";
 }
