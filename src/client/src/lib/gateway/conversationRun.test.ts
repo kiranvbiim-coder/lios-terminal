@@ -241,6 +241,10 @@ test("a restarted Home ends the run with a clear message instead of hanging", as
   await accept("boot-2");
   const result = await pending;
   assert.match(result.error ?? "", /Home restarted/);
+  assert.equal(result.ok, false, "Home restart must not become successful completion");
+  assert.equal(result.status, 503);
+  assert.equal(result.errorCode, "run_interrupted");
+  assert.ok(!result.events.some(e => e.type === "done"), "never fabricate a terminal Home event");
   client.stop();
 });
 
@@ -311,5 +315,29 @@ test("a refused resume surfaces the server's typed status and code and nothing i
   assert.equal(result.ok, false);
   assert.equal(result.status, 409);
   assert.equal(result.errorCode, "agent_resume_drift");
+  client.stop();
+});
+
+test("WS-22 failed re-subscription after a started run is interrupted, not completed or automatically replayed", async () => {
+  const client = await readyClient();
+  const first = FakeWebSocket.last;
+  const seen: ConversationRuntimeEvent[] = [];
+  const pending = runConversation(client,{ chatId:9,body:{requestId:ID,message:"do not replay"},onEvent:e=>seen.push(e)});
+  await sleep(0);
+  first.serverSend({type:"res",id:lastRequest(first,"conversation.start").id,ok:true,payload:{requestId:ID}});
+  emit(first,0,status("running"));
+  first.serverClose();
+  await sleep(15);
+  const second = await accept("boot-1");
+  const subscribe = lastRequest(second,"conversation.subscribe");
+  second.serverSend({type:"res",id:subscribe.id,ok:false,error:{code:"NOT_FOUND",message:"unknown run"}});
+  const result = await pending;
+  assert.equal(result.ok,false);
+  assert.equal(result.status,503);
+  assert.equal(result.errorCode,"run_interrupted");
+  assert.equal(result.events.length,1);
+  assert.deepEqual(seen.map(e=>e.type),["status"]);
+  assert.equal(first.sent.filter(f=>f.method==="conversation.start").length,1);
+  assert.equal(second.sent.filter(f=>f.method==="conversation.start").length,0);
   client.stop();
 });
