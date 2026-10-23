@@ -125,6 +125,8 @@ import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/li
 import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
+import ChatMessageActions from "./ChatMessageActions";
+import { quoteChatResponse } from "@/lib/chatMessageActions";
 import SavedArtifactCards from "./SavedArtifactCards";
 import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
@@ -2033,6 +2035,14 @@ export default function ProjectExperienceShell({
                       {message.role === "assistant"
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
+                      {message.role !== "system" && <ChatMessageActions
+                        content={message.content}
+                        role={message.role}
+                        onQuote={message.role === "assistant" ? () => {
+                          setInput((draft) => quoteChatResponse(draft, message.content));
+                          requestAnimationFrame(() => composerRef.current?.focus());
+                        } : undefined}
+                      />}
                       {message.role === "assistant" && chatMode !== "temporary" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} chatId={selection.chatId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
                       {message.role === "user" && chatMode !== "temporary" && selection.chatId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
