@@ -1094,11 +1094,12 @@ export default function ProjectExperienceShell({
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
-    if (sourceScope === "files" && !hasStagedAttachments) {
+    const effectiveSourceScope = sourceScopeForChatMode(chatMode, sourceScope);
+    if (effectiveSourceScope === "files" && !hasStagedAttachments) {
       setLifecycleNotice("Files scope requires at least one explicitly attached Project file.");
       return;
     }
-    if (sourceScope === "web" && hasStagedAttachments) {
+    if (effectiveSourceScope === "web" && hasStagedAttachments) {
       setLifecycleNotice("Web scope excludes Project file contents. Switch to Auto, My Data or Files to analyze the staged attachment(s).");
       return;
     }
@@ -1159,7 +1160,7 @@ export default function ProjectExperienceShell({
       requestId,
       continuationOf: override?.continuationOf ?? null,
       message,
-      sourceScope: sourceScopeForChatMode(chatMode, sourceScope),
+      sourceScope: effectiveSourceScope,
       executionMode,
       aiDirectApproved,
       approvals,
