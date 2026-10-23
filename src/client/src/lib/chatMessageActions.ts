@@ -47,6 +47,6 @@ export async function copyChatMessageText(
 export function stageChatFollowUp(draft: string, suggestion: string): string {
   const text = suggestion.trim();
   if (!text) return draft;
-  if (draft.trim() === text || draft.includes(`\n\n${text}\n\n`) || draft.endsWith(`\n\n${text}`)) return draft;
+  if (`\n\n${draft.trim()}\n\n`.includes(`\n\n${text}\n\n`)) return draft;
   return `${draft.trim() ? `${draft.trimEnd()}\n\n` : ""}${text}\n\n`;
 }
