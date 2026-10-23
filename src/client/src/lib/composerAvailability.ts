@@ -34,18 +34,23 @@ export function voiceAvailability(input: {
   transcription: ReadonlyArray<{ id: string; local: boolean }> | undefined;
   speech: ReadonlyArray<{ id: string; local: boolean }> | undefined;
   browserRecordingReady: boolean | undefined;
+  ffmpegFound?: boolean;
 }): VoiceAvailability {
   const unknown = { transcriptionReady: false, speechReady: false, transcriptionIsLocal: false, speechIsLocal: false };
   if (input.loading) return { ...unknown, label: "Checking voice providers; availability not verified" };
   if (input.error || !input.transcription || !input.speech)
     return { ...unknown, label: "Could not verify voice providers. Retry or open Connection Center." };
+  // Browser MediaRecorder uploads compressed audio; the existing voice route
+  // requires ffmpeg to convert it, even for a non-Whisper provider.
   const voiceIn = input.transcription.some(provider =>
-    provider.id !== "lios.voice.whisper-cpp" || input.browserRecordingReady === true);
+    provider.id === "lios.voice.whisper-cpp"
+      ? input.browserRecordingReady === true
+      : input.ffmpegFound === true);
   const voiceOut = input.speech.length > 0;
   return {
     transcriptionReady: voiceIn,
     speechReady: voiceOut,
-    transcriptionIsLocal: voiceIn && input.transcription.filter(provider => provider.id !== "lios.voice.whisper-cpp" || input.browserRecordingReady === true).every(provider => provider.local),
+    transcriptionIsLocal: voiceIn && input.transcription.filter(provider => provider.id === "lios.voice.whisper-cpp" ? input.browserRecordingReady === true : input.ffmpegFound === true).every(provider => provider.local),
     speechIsLocal: voiceOut && input.speech.every(provider => provider.local),
     label: voiceIn ? "Transcription provider registered; browser microphone permission still required"
       : "Voice input unavailable. Configure a compatible transcription runtime.",
