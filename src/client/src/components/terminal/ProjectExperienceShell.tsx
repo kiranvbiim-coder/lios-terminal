@@ -111,6 +111,7 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { hasUnsentConversationDraft, remainingChatMode, shouldDiscardAfterSuccessfulTransition } from "@/lib/conversationSwitchPolicy";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -375,6 +376,8 @@ export default function ProjectExperienceShell({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
+  const chatCreationInFlightRef = useRef(false);
+  const [creatingChat, setCreatingChat] = useState(false);
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
   const [executionTerminalOpen, setExecutionTerminalOpen] = useState(false);
@@ -648,13 +651,22 @@ export default function ProjectExperienceShell({
     return QUICK_COMMANDS.filter((item) => item.command.startsWith(q)).slice(0, 6);
   }, [input]);
 
-  const confirmConversationSwitch = async () => {
+  const discardConversationDraft = () => {
+    setInput("");
+    setPendingAttachmentFiles([]);
+    setPendingAttachmentRefs([]);
+    setVoiceTranscripts([]);
+    setVoiceTranscriptReviewed(false);
+  };
+  // Mutations that can fail must ask for consent *before* the request but
+  // discard only after server acknowledgement and successful navigation.
+  const confirmConversationSwitch = async (deferDiscard = false) => {
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
-    if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length) return true;
-    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
+    if (!hasUnsentConversationDraft({ text: input, attachmentFiles: pendingAttachmentFiles.length, attachmentRefs: pendingAttachmentRefs.length, voiceTranscripts: voiceTranscripts.length })) return true;
+    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations will discard the unsent text, staged attachments and voice transcript only after the destination opens successfully. Saved messages are kept.", confirmLabel: "Discard on switch" });
     if (!answer) return false;
-    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]);
+    if (!deferDiscard) discardConversationDraft();
     return true;
   };
 
