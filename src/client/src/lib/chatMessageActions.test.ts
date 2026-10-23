@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ChatMessageActions from "../components/terminal/ChatMessageActions";
-import { copyChatMessageText, quoteChatResponse, visibleChatMessageText } from "./chatMessageActions";
+import { copyChatMessageText, quoteChatResponse, stageChatFollowUp, visibleChatMessageText } from "./chatMessageActions";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const shell = fs.readFileSync(path.join(here, "../components/terminal/ProjectExperienceShell.tsx"), "utf8");
@@ -74,4 +74,55 @@ test("existing signed-in shell uses actions for persisted and temporary messages
   assert.match(shell, /quoteChatResponse\(draft, message\.content\)/);
   assert.match(shell, /setInput\(\(draft\) => quoteChatResponse/);
   assert.match(shell, /composerRef\.current\?\.focus\(\)/);
+});
+
+test("WS-24 quoting an answer twice preserves exactly one staged quote", () => {
+  const first = quoteChatResponse("My unfinished draft", "Revenue increased.\n<<NAVIGATE:chart>>");
+  const second = quoteChatResponse(first, "Revenue increased.\n<<NAVIGATE:chart>>");
+  assert.equal(second, first);
+  assert.equal((second.match(/Follow up on this LiOS response:/g) ?? []).length, 1);
+  assert.doesNotMatch(second, /NAVIGATE/);
+});
+
+test("WS-24 different quoted answers append once each and preserve original draft", () => {
+  const original = "My own question";
+  const one = quoteChatResponse(original, "First answer");
+  const two = quoteChatResponse(one, "Second answer");
+  assert.match(two, /^My own question\n\n/);
+  assert.equal((two.match(/Follow up on this LiOS response:/g) ?? []).length, 2);
+  assert.equal(quoteChatResponse(two, "First answer"), two);
+});
+
+test("WS-24 an action with no visible answer must not add an empty quote", () => {
+  const current = "Unsaved text";
+  assert.equal(quoteChatResponse(current, "<<WORKSPACE_OPEN:x>>"), current);
+});
+
+test("WS-24 a suggested follow-up is staged once, not auto-sent, and retains existing typing", () => {
+  const text = stageChatFollowUp("My unsent draft", "Compare the assumptions");
+  assert.equal(text, "My unsent draft\n\nCompare the assumptions\n\n");
+  assert.equal(stageChatFollowUp(text, "Compare the assumptions"), text);
+  assert.equal(stageChatFollowUp("", "  "), "");
+});
+
+test("WS-24 a repeated suggestion already at beginning stays unchanged", () => {
+  const text = stageChatFollowUp("", "Compare portfolio weights");
+  const other = stageChatFollowUp(text, "Discuss my risk");
+  assert.equal(stageChatFollowUp(other, "Compare portfolio weights"), other);
+  assert.match(other, /^Compare portfolio weights\n\nDiscuss my risk\n\n$/);
+});
+
+test("WS-24 slash recovery suggestion is plain staged text, not invoked as a command", () => {
+  const draft = "Please compare valuations";
+  const result = stageChatFollowUp(draft, "/connect-source");
+  assert.equal(result, "Please compare valuations\n\n/connect-source\n\n");
+  assert.equal(stageChatFollowUp(result, "/connect-source"), result);
+});
+
+test("WS-24 clipboard copy is unchanged by quote and follow-up staging", async () => {
+  let sent = "";
+  const quote = quoteChatResponse("", "Net income +14%");
+  assert.equal(await copyChatMessageText(async value => { sent = value; }, quote), true);
+  assert.equal(sent, quote);
+  assert.equal(await copyChatMessageText(async () => { throw Error("denied"); }, quote), false);
 });
