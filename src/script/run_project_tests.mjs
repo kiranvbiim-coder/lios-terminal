@@ -56,11 +56,29 @@ export function partitionTestFiles(files) {
   return batches;
 }
 
+// High-load batch neighbours distort a wall-clock p95 benchmark. Keep the
+// original benchmark and strict <50 ms routing budget, but run this exact
+// test in its own child process rather than alongside PGlite/native suites.
+export const TIMING_SENSITIVE_TESTS = new Set(["server/goldenRouting.test.ts"]);
+
+export function splitTimingSensitiveTests(files) {
+  const isolated = [];
+  const parallel = [];
+  for (const filename of files) {
+    (TIMING_SENSITIVE_TESTS.has(filename) ? isolated : parallel).push(filename);
+  }
+  return { isolated, parallel };
+}
+
 export function runProjectTests(selected = []) {
   const files = discoverTests(selected);
-  const batches = partitionTestFiles(files);
+  const { isolated, parallel } = splitTimingSensitiveTests(files);
+  // A singleton is a *real* test batch with the same fail-closed checks;
+  // execution order changes, discovery/coverage/count never does.
+  const batches = [...isolated.map(filename => [filename]), ...partitionTestFiles(parallel)];
   const batchTimeoutMs = 8 * 60_000;
   console.log(`Running ${files.length} project-owned test files in ${batches.length} bounded batch(es); file concurrency 2; per-file deadline 5 minutes; per-batch deadline 8 minutes.`);
+  console.log(`Isolated timing-sensitive files: ${isolated.length}; none skipped; benchmark budgets unchanged.`);
   console.log("Scope: source regression only. Entitled real-data benchmarks and packaged SP/P14 qualification: NOT_RUN.");
   // Run every batch even after one fails, so a single hosted run reports all failures instead of one per ~20-minute run.
   // The exit code is still non-zero if any batch failed or was terminated; nothing is masked.
