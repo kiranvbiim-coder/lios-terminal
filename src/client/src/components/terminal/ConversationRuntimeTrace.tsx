@@ -33,6 +33,7 @@ interface Props {
   requestId: string | null;
   busy: boolean;
   cancelPending?: boolean;
+  stopRequested?: boolean;
   onCancel: () => void;
   onApprove: (action: ConversationActionName, scope: ApprovalGrant["scope"]) => void;
   onDeny: (action: ConversationActionName) => void;
@@ -131,6 +132,7 @@ export default function ConversationRuntimeTrace({
   requestId,
   busy,
   cancelPending = false,
+  stopRequested = false,
   onCancel,
   onApprove,
   onDeny,
@@ -226,14 +228,14 @@ export default function ConversationRuntimeTrace({
             <button
               type="button"
               onClick={onCancel}
-              disabled={cancelPending}
-              aria-label={cancelPending ? "Stop request pending Home acknowledgement" : "Stop this exact run"}
+              disabled={cancelPending || stopRequested}
+              aria-label={stopRequested ? "Stop requested for this Home run" : cancelPending ? "Stop request pending Home acknowledgement" : "Stop this exact run"}
               data-testid="agent-run-cancel"
               data-request-id={requestId ?? undefined}
               className={`${quietControlClass} hover:text-red-200`}
             >
               <Square className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-              {cancelPending ? "Requesting Stop…" : "Stop"}
+              {stopRequested ? "Stop requested" : cancelPending ? "Requesting Stop…" : "Stop"}
             </button>
           )}
           {canResume && (
