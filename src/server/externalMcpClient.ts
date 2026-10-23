@@ -207,7 +207,12 @@ export async function listExternalMcpTools(config: ExternalMcpServerConfig, tran
   if (transport === defaultTransport) {
     return withOfficialMcpClient(config, async (client, signal) => {
       const result = await client.listTools(undefined, { signal });
-      return sanitizeLedgerPayload(result.tools.filter(tool => allowed.has(tool.name)));
+      const safe = sanitizeLedgerPayload(result.tools.filter(tool => allowed.has(tool.name)));
+      // LiOS's ledger sanitizer deliberately returns unknown. Preserve a
+      // validated tool-list shape for the existing source connection adapter.
+      if (!Array.isArray(safe)) throw new Error("MCP tool catalog was not an array.");
+      return safe.filter((tool: unknown): tool is { name: string } =>
+        Boolean(tool && typeof tool === "object" && typeof (tool as { name?: unknown }).name === "string"));
     });
   }
   const result = await rpc(config, "tools/list", {}, transport) as { tools?: Array<{ name?: string }> } | null;
