@@ -16,6 +16,8 @@ export interface BoundedAgentComposerState {
   checking: boolean;
   ready: boolean;
   guidance: string;
+  configuredProvider: string | null;
+  configuredModel: string | null;
 }
 
 /** Reads the same owner-scoped preferences as Connection Center; only the Home authorizes an actual run. */
@@ -44,5 +46,8 @@ export function useBoundedAgentComposer(chatMode: string, executionMode: Convers
     : state.data?.state !== "on" ? "Turn on Master AI in Connection Center to use a multi-step agent."
     : !ready ? "Configure a connected AI provider and model in Connection Center."
     : "Plans and executes bounded steps. Consequential tools still require your review.";
-  return { selected, setSelected, supported, enabled, checking, ready, guidance };
+  return { selected, setSelected, supported, enabled, checking, ready, guidance,
+    configuredProvider: ready ? provider?.id ?? null : null,
+    configuredModel: ready ? setup.data?.setup?.aiModelId ?? null : null,
+  };
 }
