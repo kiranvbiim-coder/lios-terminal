@@ -65,6 +65,8 @@ test("WS-21 only registered voice provider and actual runtime readiness may enab
   assert.match(server, /app.get\("\/api\/voice\/providers", requireAuth/);
   assert.match(voice, /queryKey: \["\/api\/voice\/providers"\]/);
   assert.match(policy, /input.browserRecordingReady === true/);
+  assert.match(policy, /input.ffmpegFound === true/);
+  assert.match(shell, /ffmpegFound: voiceRuntimeStatus\?\.ffmpegFound/);
   assert.match(policy, /if \(input.error \|\| !input.transcription \|\| !input.speech\)/);
   assert.match(shell, /const voiceStatus = voiceAvailability/);
   assert.match(shell, /const voiceInputAvailable = voiceStatus.transcriptionReady/);
