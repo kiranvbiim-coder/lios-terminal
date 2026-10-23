@@ -376,6 +376,7 @@ export default function ProjectExperienceShell({
     transcription: voiceProvidersQuery.data?.transcription,
     speech: voiceProvidersQuery.data?.speech,
     browserRecordingReady: voiceRuntimeStatus?.browserRecordingReady,
+    ffmpegFound: voiceRuntimeStatus?.ffmpegFound,
   });
   const voiceInputAvailable = voiceStatus.transcriptionReady;
   const voiceOutputAvailable = voiceStatus.speechReady;
