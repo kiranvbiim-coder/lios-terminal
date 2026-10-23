@@ -70,7 +70,7 @@ test("WS-15 one common entry mode and deliberate Project Home, no mandatory setu
   assert.match(entry, /return input\.projectHomeRequested && input\.projectHomeAvailable \? "project-home" : "conversation"/);
   assert.match(chat, /onOpenEnvironment=\{onOpenEnvironment\}/);
   assert.match(chat, /<ChatSourcesControl scope=\{sourceScope\}/);
-  assert.match(handoff, /Only authorized sources/);
+  assert.match(handoff, /only authorized sources/);
 });
 
 test("WS-15 source tests do not substitute for real native client-side acceptance", () => {
