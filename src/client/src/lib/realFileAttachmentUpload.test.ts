@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { attachmentUploadError, uploadRealChatAttachment, type UploadStage } from "./realFileAttachmentUpload";
 
-const saved = { id:"1234",fileName:"r.pdf",byteLength:3,mimeType:"application/pdf" };
+const saved = { id:"123e4567-e89b-42d3-a456-426614174000",kind:"document",sourceRef:"project-attachment:abc",fileName:"r.pdf",byteLength:3,mimeType:"application/pdf",sha256:"a".repeat(64),textPreview:null };
 type MinimalXhr = {
   status: number; responseText: string; timeout: number; withCredentials: boolean;
   upload: { onprogress?: (event: { loaded: number; total: number; lengthComputable: boolean }) => void; onload?: () => void };
