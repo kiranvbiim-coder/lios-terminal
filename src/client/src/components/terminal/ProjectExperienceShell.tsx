@@ -1034,6 +1034,18 @@ export default function ProjectExperienceShell({
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached Project file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy) return;
+    // Project-only, owner-scoped resources are the only mention candidates.
+    // Ambiguous @labels must never silently include multiple on-demand files.
+    if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences
+      && (sourceScope === "auto" || sourceScope === "my_data")) {
+      const owned = resources.filter(item => item.projectId === selection.projectId
+        && item.status === "active" && !item.trashedAt);
+      const ambiguous = ambiguousMentionTokens(owned, message);
+      if (ambiguous.length) {
+        setLifecycleNotice(`Ambiguous Project resource mention: ${ambiguous.map(token => `@${token}`).join(", ")}. Rename the duplicate resources or remove the mention before sending; your draft has not changed.`);
+        return;
+      }
+    }
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
@@ -2006,20 +2018,21 @@ export default function ProjectExperienceShell({
                 }}
               >
                 {(mentionCandidates.length > 0 || commandCandidates.length > 0) && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
+                  <div role="group" aria-label="Stage commands and authorized Project references" className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
                     {commandCandidates.map((item) => (
-                      <button key={item.command} onClick={() => setInput(item.command)} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05]">
+                      <button type="button" key={item.command} aria-label={`Stage command ${item.command}: ${item.label}`} onClick={() => { setInput(item.command); requestAnimationFrame(() => composerRef.current?.focus()); }} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200">
                         <span className="font-terminal text-[13px] text-amber-300">{item.command}</span>
                         <span className="font-ui text-[13px] text-muted-foreground">{item.label}</span>
                       </button>
                     ))}
                     {mentionCandidates.map((resource) => (
-                      <button key={resource.id} onClick={() => selectMention(resource)} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05]">
+                      <button type="button" key={resource.id} aria-label={`Mention permitted Project resource ${resource.label}`} onClick={() => selectMention(resource)} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200">
                         <FileText className="h-3 w-3 text-cyan-300" />
                         <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-foreground">{resource.label}</span>
                         <span className="font-terminal text-[11px] text-muted-foreground">{resource.kind}</span>
                       </button>
                     ))}
+                    <p className="px-3 py-1.5 font-ui text-xs text-muted-foreground">Selecting only stages editable text. Sending uses the current Project, source scope, and server permissions.</p>
                   </div>
                 )}
                 {pendingPersonalFinance && (
