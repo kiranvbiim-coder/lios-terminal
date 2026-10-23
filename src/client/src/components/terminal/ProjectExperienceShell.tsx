@@ -1294,23 +1294,30 @@ export default function ProjectExperienceShell({
     }
   };
 
-  const denyRuntimeAction = (action: ConversationActionName) => {
-    setRuntimeEvents((current) => {
-      const retained = current.filter((runtimeEvent) => {
-        if (runtimeEvent.type === "approval_required" && runtimeEvent.action === action) return false;
-        if (runtimeEvent.type === "mutation_review" && runtimeEvent.proposal.action === action) return false;
-        if (runtimeEvent.type === "done") return false;
-        return true;
-      });
-      return runtimeRequestId
-        ? [...retained, { type: "done" as const, requestId: runtimeRequestId, at: new Date().toISOString(), status: "cancelled" as const }]
-        : retained;
-    });
-  };
-
+  const cancelInFlightRef = useRef(false);
+  const [cancelPending, setCancelPending] = useState(false);
   const cancelRuntime = async () => {
-    if (!runtimeRequestId) return;
-    recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
+    // Stop is a request to Home, not evidence that Home cancelled the run.
+    if (!runtimeRequestId || cancelInFlightRef.current) return;
+    cancelInFlightRef.current = true;
+    setCancelPending(true);
+    const targetRun = runtimeRequestId;
+    try {
+      const acknowledged = await cancelConversationRun(requireGateway(), targetRun);
+      if (acknowledged) recordP1ShellEvent("composer_cancel");
+      else setLifecycleNotice("Home did not confirm cancellation. Inspect the original run before trying again.");
+    } catch {
+      setLifecycleNotice("Could not confirm Stop with Home. The original run may still be active; retry after reconnecting.");
+    } finally {
+      cancelInFlightRef.current = false;
+      setCancelPending(false);
+    }
+  };
+  const denyRuntimeAction = (action: ConversationActionName) => {
+    // Declining an action must request cancellation from Home. Never append a
+    // counterfeit done(cancelled) event or remove observed approval evidence.
+    setLifecycleNotice(`Declined ${action}; requesting cancellation of the original run from Home.`);
+    void cancelRuntime();
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
   const proposeSandboxTerminal = async () => {
@@ -1951,6 +1958,7 @@ export default function ProjectExperienceShell({
                 events={eventsForRun(runtimeEvents, runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null)}
                 requestId={runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null}
                 busy={busy}
+                cancelPending={cancelPending}
                 onCancel={() => void cancelRuntime()}
                 onApprove={(action, scope) => void approveRuntimeAction(action, scope)}
                 onDeny={denyRuntimeAction}
