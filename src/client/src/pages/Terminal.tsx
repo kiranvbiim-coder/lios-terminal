@@ -22,6 +22,7 @@ import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
 import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
+import { workbenchQuestionDraft, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -267,6 +268,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
+  const [universalChatHandoff, setUniversalChatHandoff] = useState<UniversalChatHandoff | null>(null);
   const setTabsState = useCallback((update: TerminalTabsState | ((current: TerminalTabsState) => TerminalTabsState)) => {
     setTabsStateRaw(current => {
       const next = typeof update === "function" ? update(current) : update;
@@ -515,6 +517,18 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, [canOpenView, handleSurface, onOpenEnvironment, setWorkspace]);
 
   const handleAskLios = useCallback((initialQuestion?: string) => {
+    // Client Ask always returns to the already-mounted canonical Chat. Opening
+    // an AgentPanel would allocate a competing conversation/provider runtime.
+    // Keep any unsaved Workbench Artifact in place until its owner saves it.
+    if (isClient) {
+      if (workbenchDirtyRef.current) return;
+      const capability = getTerminalCapability(activePane.view);
+      const symbol = capability.symbolAware ? activePane.symbol : null;
+      const prompt = workbenchQuestionDraft(initialQuestion, activePane.view, symbol);
+      setUniversalChatHandoff(current => ({ request: (current?.request ?? 0) + 1, prompt }));
+      handleSurface("projects");
+      return;
+    }
     if (activePane.view === "agent") {
       if (initialQuestion?.trim()) setAskLiosPrompt(initialQuestion.trim());
       return;
@@ -529,23 +543,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     });
     setAskLiosPrompt(initialQuestion?.trim() || null);
 
-    if (isClient) {
-      handleSurface("workbench");
-      setWorkspace(
-        (current) => openViewInNewPane(current, "agent", contextSymbol || current.primary.symbol),
-        "Open Ask LiOS beside analysis",
-      );
-      prefetchPanelData("agent");
-      recordCapabilityLaunch("agent", "other");
-      return;
-    }
-
     handleNav("agent");
   }, [
     activePane.symbol,
     activePane.view,
     handleNav,
     handleSurface,
+    isClient,
     setWorkspace,
     timeContext.asOfDate,
     timeContext.enabled,
@@ -1036,6 +1040,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               workspaceAdapter={livingWorkspaceAdapter}
               onOpenWorkbench={handleOpenWorkbench}
               workbenchReturn={workbenchReturn}
+              universalChatHandoff={universalChatHandoff}
               onOpenEnvironment={onOpenEnvironment}
             />
           </div>
@@ -1051,6 +1056,10 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             />
           ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
+            {isClient && <div className="flex shrink-0 items-center gap-3 border-b border-border/70 bg-[#080808] px-3 py-2">
+              <button type="button" data-testid="workbench-return-chat" onClick={() => { if (!workbenchDirtyRef.current) handleSurface("projects"); }} disabled={workbenchDirty} className="min-h-10 rounded-md border border-amber-300/30 px-3 py-1.5 font-ui text-sm text-amber-100 hover:bg-amber-300/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Return to Chat">Return to Chat</button>
+              <span className="min-w-0 font-ui text-xs text-muted-foreground">{workbenchDirty ? "Save or reset the current Artifact before returning to Chat." : "Your original Chat and unsent draft remain available."}</span>
+            </div>}
             {workbenchDirty && <p role="status" className="shrink-0 border-b border-amber-300/30 p-2 text-sm text-amber-200">Unsaved Artifact edits · save or reset in the Artifact pane before leaving this workspace.</p>}
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               <DockviewWorkspaceGrid
