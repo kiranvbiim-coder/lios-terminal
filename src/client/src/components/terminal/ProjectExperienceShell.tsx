@@ -1373,8 +1373,21 @@ export default function ProjectExperienceShell({
   };
 
   const cancelRuntime = async () => {
-    if (!runtimeRequestId) return;
-    recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
+    if (!busy || !runtimeRequestId || stopInFlightRef.current || stopRequested) return;
+    stopInFlightRef.current = true;
+    setStopping(true);
+    try {
+      await cancelConversationRun(requireGateway(), runtimeRequestId);
+      // Acknowledging Stop does not falsely report that the server run is
+      // already settled. Keep the real busy status until runtime completion.
+      setStopRequested(true);
+      recordP1ShellEvent("composer_cancel");
+    } catch {
+      setLifecycleNotice("LiOS could not confirm Stop. Your current request may still be running. Retry when the connection is available.");
+    } finally {
+      stopInFlightRef.current = false;
+      setStopping(false);
+    }
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
   const proposeSandboxTerminal = async () => {
@@ -2329,15 +2342,27 @@ export default function ProjectExperienceShell({
                   >
                     <Mic className="h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void send()}
-                    disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
-                    aria-label="Send"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </button>
+                  {busy && runtimeRequestId ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelRuntime()}
+                      disabled={stopping || stopRequested}
+                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-amber-300/45 px-3 py-2 font-ui text-sm font-semibold text-amber-100 hover:bg-amber-300/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-45"
+                      aria-label={stopRequested ? "Stop requested" : stopping ? "Requesting Stop" : "Stop response"}
+                    >
+                      {stopRequested ? "Stopping…" : stopping ? "Requesting Stop…" : "Stop"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void send()}
+                      disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                      className="flex min-h-10 min-w-10 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-30"
+                      aria-label="Send"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 {voiceRecorder.error && (
                   <div className="border-t border-red-500/20 bg-red-500/[0.04] px-3 py-1.5 font-ui text-[12px] text-red-300">
