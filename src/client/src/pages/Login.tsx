@@ -380,7 +380,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                 className="w-full flex min-h-11 items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 text-black text-sm font-semibold rounded-md transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 {clientMode === "register" ? <UserPlus className="w-3.5 h-3.5" /> : <KeyRound className="w-3.5 h-3.5" />}
-                {clientMode === "register" ? "Start free trial" : "Sign In"}
+                {clientMode === "register" ? "Create account" : "Sign In"}
               </button>
 
               {clientMode === "signin" && (
@@ -402,7 +402,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
                 }}
                 className="w-full min-h-11 rounded-md border border-border px-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/40%] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
-                {clientMode === "signin" ? "New to LiOS? Start your trial" : "Already have LiOS? Sign in"}
+                {clientMode === "signin" ? "New to LiOS? Create an account" : "Already have LiOS? Sign in"}
               </button>
 
               <div className="text-xs leading-5 text-muted-foreground text-center space-y-1 mt-4">
