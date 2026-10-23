@@ -66,3 +66,14 @@ test("WS-06 protect readable text contrast and correct scoped token declaration"
 test("WS-06 source checks do not misreport rendered/native or screen-reader acceptance", () => {
   assert.equal(validateTokenAuthority().independentNativeVisualProof, "NOT_RUN");
 });
+
+test("WS-06 crash recovery consumes canonical tokens rather than inactive amber hardcoding", () => {
+  const bootstrap = source("main.tsx");
+  const shell = source("terminal-shell.css");
+  for (const token of ["--lios-bg-app", "--lios-bg-panel", "--lios-brand"]) {
+    assert.ok(bootstrap.includes("var(" + token + ")"), "Crash recovery is disconnected from " + token);
+  }
+  assert.doesNotMatch(bootstrap, /#[0-9a-f]{6}/i, "Crash fallback must not fork the palette");
+  assert.match(shell, /\.lios-root-recovery-action:focus-visible\s*\{\s*outline:\s*2px solid var\(--lios-brand\)/);
+  assert.match(shell, /\.lios-root-recovery-action:hover\s*\{\s*background:\s*color-mix\(/);
+});
