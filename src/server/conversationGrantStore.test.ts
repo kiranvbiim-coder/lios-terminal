@@ -899,12 +899,14 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       const revokedRun = run(revokedId, revokedController, [reply], {
         state: revokedPending.agentPause.resume, authorization: revokedGrant,
       });
-      // The L5 intent may be outcome-unknown after a revoked source is
-      // rechecked; never turn that into a successful or replayable call.
-      await revokedRun.promise.catch(() => undefined);
+      const revokedOutcome = await revokedRun.promise;
+      assert.equal(revokedOutcome.awaitingApproval, false);
       assert.deepEqual(wireCalls, ["quotes.read"], "revoked source cannot dispatch a second MCP request");
-      assert.ok(!revokedRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
+      assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_dispatch_intent"), false,
+        "refusal must precede L5 intent: no remote effect was possible");
+      assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
       assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+      assert.ok(!revokedRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
     } finally {
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));

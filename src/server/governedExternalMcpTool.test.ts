@@ -4,6 +4,7 @@ import type { SourceConnection } from "@shared/schema";
 import {
   governedExternalMcpInputSchema,
   invokeGovernedExternalMcpTool,
+  preflightGovernedExternalMcpTool,
 } from "./governedExternalMcpTool";
 import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 
@@ -291,4 +292,45 @@ test("MCP tool observation callback is never invoked without two explicit curren
     dependencies, () => { captured += 1; },
   );
   assert.equal(captured, 1);
+});
+
+
+test("GM20 pre-dispatch source-policy refusal is provably before any remote effect", async () => {
+  const payload = { connectionId: 41, toolId: "quotes.read", arguments: {} };
+  const context = { userId: 7, organizationId: 9, projectId: 77 };
+  const controller = new AbortController();
+  let networkCalls = 0;
+  let configurationReads = 0;
+  const dependencies = {
+    listConnections: async () => [connection],
+    configForConnection: () => { configurationReads++; return config(); },
+    callTool: async () => { networkCalls++; return { ok: true }; },
+  };
+  await preflightGovernedExternalMcpTool(payload, context, controller.signal, dependencies);
+  assert.equal(configurationReads, 1);
+  assert.equal(networkCalls, 0, "successful local preflight itself must not dispatch");
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, { ...context, projectId: 79 }, controller.signal, dependencies),
+    /Project/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool({ ...payload, toolId: "admin.delete" }, context, controller.signal, dependencies),
+    /outside Project policy/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, context, controller.signal, {
+      ...dependencies, listConnections: async () => [{ ...connection, status: "invalid" as const }],
+    }),
+    /invalid or no longer authorized/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, { ...context, userId: 88 }, controller.signal, dependencies),
+    /tenant/,
+  );
+  controller.abort();
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, context, controller.signal, dependencies),
+    /cancel/i,
+  );
+  assert.equal(networkCalls, 0, "all local policy denials must refuse before MCP transport");
 });

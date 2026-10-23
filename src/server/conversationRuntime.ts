@@ -174,7 +174,7 @@ import { deriveAgentToolIdempotencyKey } from "./exec/agent-idempotency";
 import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 
 import { conversationRuns } from "./conversationRunRegistry";
-import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool, preflightGovernedExternalMcpTool } from "./governedExternalMcpTool";
 import { listSourceConnections } from "./sourceConnectionService";
 import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
@@ -4653,6 +4653,20 @@ async function executeAgentLoop(
           })).digest("hex")}`;
           let dispatchAttempt = 0;
           beforeExternalDispatch = async () => {
+            // The registry only calls this hook after consuming the exact
+            // owner-issued grant and verifying the current authorization.
+            // A local refusal is PROVEN pre-entry and must not create an L5
+            // dispatch intent or an outcome-unknown record.
+            if (step.toolId === "lios.external-mcp.call") {
+              if (input.scope !== "project" || !input.projectId) {
+                throw new Error("External MCP requires an authenticated Project.");
+              }
+              await preflightGovernedExternalMcpTool(
+                step.input,
+                { userId: input.tenant.userId, organizationId: input.tenant.organizationId, projectId: input.projectId },
+                signal,
+              );
+            }
             if (dispatchAttempt > 0 && (!dispatchNoEffectPersisted || !descriptor?.replaySafe || dispatchAttempt >= 2)) {
               throw new Error("External dispatch retry needs durable no-effect proof, replay-safe policy and remaining attempt budget.");
             }
