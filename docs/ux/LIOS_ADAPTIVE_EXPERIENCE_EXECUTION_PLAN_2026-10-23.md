@@ -134,7 +134,7 @@ Each row states a concrete change *and* a required artifact-level outcome. A row
 | **WS-15** | P0 | Signed-in universal Chat shell | `ProjectExperienceShell, AuthenticatedNavigation, #99/#102` | One Chat experience, no duplicate runtime or workbench |
 | **WS-16** | P1 | Conversations and sidebar operations | `AuthenticatedNavigation, Chat stores` | New/recents/rename/archive/trash/switch preserve draft and ownership |
 | **WS-17** | P1 | Universal search and commands | `WorkSearchDialog, QuickSwitcher, #101/#114` | Permission-scoped search and keyboard open/select/escape/focus |
-| **WS-18** | P0 | Composer behavior and draft safety | `ProjectExperienceShell, WorkspaceComposer` | # user-entered text lost on failure or incidental navigation; reliable Stop/Send |
+| **WS-18** | P0 | Composer behavior and draft safety | `ProjectExperienceShell, WorkspaceComposer` | No user-entered text lost on failure or incidental navigation; reliable Stop/Send |
 | **WS-19** | P0 | Real-file import and upload UX | `ProjectExperienceShell, P12 #100; Kibo trial` | Up to five permitted real files; retry; privacy and temp refusal unchanged |
 | **WS-20** | P1 | Context references and advanced controls | `composer @mention, /commands, source registry` | Selected objects and commands resolve authorized context without silent Project |
 | **WS-21** | P1 | Model, source and voice controls | `ChatSourcesControl, voice providers, #102` | Availability, cost/privacy/consent and connect/retry truthful |
