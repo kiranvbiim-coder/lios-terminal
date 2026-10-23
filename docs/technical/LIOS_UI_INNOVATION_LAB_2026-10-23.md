@@ -26,6 +26,7 @@ Checked against the current main donor catalog, secondary watchlist and universa
 
 | Priority | Candidate / upstream | UX leverage for LiOS | Licensing evidence & posture | Recommendation |
 |---|---|---|---|---|
+| P0 | [Opensource UI](https://github.com/bidyut10/opensourceui) | 200+ copy-ready inputs, search, notifications, dialogs, dashboards and widgets, and an agent skill/catalog for targeted reuse | MIT at inspected SHA `892f486fdf0d46a44b21ddf3fa32a41a3a71173a`; source uses Next16/React19/Tailwind4; **copy specific compatible component source** not full app | **First implementation:** scoped SearchInput adaptation for canonical P1 Chat source catalog in [PR #122](https://github.com/kiranvbiim-coder/lios-terminal/pull/122); see third-party notice/rights in that PR. Future: input, table and notification compositions where code audit confirms gaps. |
 | P0 | [Kibo UI](https://github.com/shadcnblocks/kibo) / [docs](https://www.kibo-ui.com/docs) | Coherent source-level Dropzone, Tree, Kanban, Gantt, AI Input and status controls; especially WS-19, 17, 55 | Site describes MIT; verify selected paths and package extras | **Trial 1:** replace weak attachment presentation without replacing upload authority |
 | P0 | [Tremor](https://github.com/tremorlabs/tremor) | Substantial copyable analytical card/chart/filter/dashboard patterns for workbenches, not just individual CSS | Apache-2.0 per official repo | **Trial 2:** read-only evidence-led decision snapshot with existing P4 data |
 | P0 | [json-render](https://github.com/vercel-labs/json-render) | Schema-constrained catalog of predefined UIs and actions; React renderer and shadcn components | Apache-2.0 per upstream; verify each package | **Trial 3:** Safe Generative Surface prototype, read-only first |
@@ -44,6 +45,8 @@ Checked against the current main donor catalog, secondary watchlist and universa
 | Defer | [MUI Toolpad Core](https://github.com/mui/toolpad) | Finished dashboards/CRUD; potentially useful pattern study | MIT core but **not actively maintained** | Avoid core dependency; use pattern inspiration only |
 
 **Already integrated / excluded from the "new discovery" count:** shadcn/Radix, Tiptap, Dockview, ECharts, Univer; assistant-ui already in canonical donor catalog. Do not import another copy.
+
+**New concrete reuse in progress:** [#122](https://github.com/kiranvbiim-coder/lios-terminal/pull/122) stacks on #100 and copies/adapts MIT Opensource UI `components/inputs/search-input.tsx` into the existing P1 source chooser. This is a **real feature PR**, separate from this research-only plan; it is not merged or installed-accepted. Do not duplicate it via Kibo or new searchable-source registries.
 
 ## 3. Concrete combinations that create new LiOS user value
 
