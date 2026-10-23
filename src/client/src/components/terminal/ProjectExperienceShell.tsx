@@ -436,19 +436,6 @@ export default function ProjectExperienceShell({
     if (prompt) setInput(current => current ? `${current}\n\n${prompt}` : prompt);
   }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
   useEffect(() => {
-    if (!universalChatHandoff || handledUniversalChatHandoff.current === universalChatHandoff.request) return;
-    handledUniversalChatHandoff.current = universalChatHandoff.request;
-    // This shell remains mounted behind Workbench. Return to its current
-    // saved/quick/temporary Chat; do not allocate a new agent or conversation.
-    setSection("conversation");
-    setShowLifecycleCenter(false);
-    setProjectHomeRequested(false);
-    if (universalChatHandoff.prompt) {
-      setInput(current => stageUniversalChatQuestion(current, universalChatHandoff.prompt));
-    }
-    requestAnimationFrame(() => composerRef.current?.focus());
-  }, [universalChatHandoff]);
-  useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
     const width = shellRef.current?.querySelector(".lios-project-chat-surface")?.clientWidth ?? 0;
     if (width > 0 && width < 900 && !restoredArtifactView) setArtifactFocusMode(true);
@@ -463,6 +450,20 @@ export default function ProjectExperienceShell({
   const keepingArtifactRef = useRef(false);
   const [projectDestination, setProjectDestination] = useState<{ description: string; save: (project: Project) => Promise<void> } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!universalChatHandoff || handledUniversalChatHandoff.current === universalChatHandoff.request) return;
+    handledUniversalChatHandoff.current = universalChatHandoff.request;
+    // This shell remains mounted behind Workbench. Return to its current
+    // saved/quick/temporary Chat; do not allocate a new agent or conversation.
+    setSection("conversation");
+    setShowLifecycleCenter(false);
+    setProjectHomeRequested(false);
+    if (universalChatHandoff.prompt) {
+      setInput(current => stageUniversalChatQuestion(current, universalChatHandoff.prompt));
+    }
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, [universalChatHandoff]);
+
   // The user's own most recent ticker fills the starter slot so an example is ready to send.
   const recentStarterSymbol = useMemo(() => loadRecentAnalyticalContexts().find((context) => context.symbol)?.symbol ?? null, []);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
