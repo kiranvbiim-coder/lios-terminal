@@ -8,7 +8,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import type { ExternalMcpServerConfig } from "./externalMcpClient";
 import { currentConversationSignal, linkAbortSignal } from "./exec/execution-scope";
 import { resolveCredential } from "./credentialVault";
-import { fetchWithEndpointPolicy, validateSourceEndpoint } from "./sourceConnectionPolicy";
+import { fetchWithEndpointPolicy, isDesktopMcpLoopbackEndpoint, validateMcpSourceEndpoint } from "./sourceConnectionPolicy";
 
 export const LIOS_MCP_SDK_VERSION = "2.3.1";
 export const MCP_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
@@ -55,7 +55,7 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
     if (actual.href !== expected.href || actual.username || actual.password) {
       throw new Error("MCP transport refused an unapproved endpoint.");
     }
-    const policy = await validateSourceEndpoint(actual.href, false);
+    const policy = await validateMcpSourceEndpoint(actual.href);
     if (!policy.valid || policy.normalizedEndpoint !== expected.href) {
       throw new Error("MCP transport endpoint failed source policy.");
     }
@@ -69,7 +69,7 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
       signal: init?.signal,
       cache: init?.cache,
       credentials: "omit",
-    }, false, 0);
+    }, isDesktopMcpLoopbackEndpoint(actual.href), 0);
     if (response.url && response.url !== actual.href) {
       response.body?.cancel().catch(() => {});
       throw new Error("MCP transport refused a redirected endpoint.");
@@ -83,7 +83,7 @@ export async function withOfficialMcpClient<T>(
   operation: (client: Client, signal: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const policy = await validateSourceEndpoint(config.endpoint, false);
+  const policy = await validateMcpSourceEndpoint(config.endpoint);
   if (!policy.valid || !policy.normalizedEndpoint) throw new Error("MCP source endpoint is unavailable or blocked.");
   const controller = new AbortController();
   const unlink = [
