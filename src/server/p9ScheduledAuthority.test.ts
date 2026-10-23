@@ -121,6 +121,53 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     assert.match(outcome.error ?? "", /plugin dependency is not currently installed/);
     assert.equal(outcome.result, null);
   });
+  await t.test("D4 P9 revalidates the installed P13 publisher key, not cached installation trust", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const { getP13PluginRuntimeHost } = await import("./p13PluginRuntime");
+    const { computePluginPackageDigest, signPluginManifest } = await import("./p13PluginTrust");
+    const { liosPluginManifestV1Schema } = await import("@shared/pluginSdk");
+    const host = getP13PluginRuntimeHost();
+    const id = "org.lios.p9d4test";
+    const keyId = "publisher.p9.d4";
+    const pair = crypto.generateKeyPairSync("ed25519");
+    host.trustStore.trustKey(keyId, pair.publicKey);
+    const unsigned = liosPluginManifestV1Schema.parse({
+      apiVersion: "1", id, name: "P9 signed evidence dependency",
+      version: "1.0.0", publisher: "P9 test",
+      lios: { sdkVersion: "1", minVersion: "1.0.0", maxVersion: null },
+      runtime: { kind: "declarative", entrypoint: null },
+      dependencies: [], permissions: [], connectors: [], tools: [],
+      artifacts: [{ id: "chart", componentId: id + ".chart", name: "Read-only chart",
+        capabilities: [], artifactKinds: ["chart"] }],
+      agents: [], skills: [], integrity: null, signer: null,
+    });
+    const observedPackageDigest = computePluginPackageDigest(Buffer.from("D4 audited signed fixture"));
+    host.installDeclarativePlugin({
+      manifest: signPluginManifest(unsigned, keyId, pair.privateKey, observedPackageDigest),
+      observedPackageDigest,
+    });
+    try {
+      const pinned = await createP9Workflow(ctx, workflow.projectId, {
+        name: "Signed package dependency", template: "custom", enabled: true,
+        trigger: { type: "manual" }, action: workflow.action,
+        engineRefs: ["plugin:" + id], notificationPolicy: { enabled: false },
+      });
+      const first = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+      assert.equal(first.run?.status, "succeeded", "current signature and installed package satisfy dependency admission");
+      host.trustStore.revokeKey(keyId);
+      const revoked = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+      assert.equal(revoked.run?.status, "failed", "revoked publisher must block a new background run");
+      assert.match(revoked.error ?? "", /lacks current signed package trust/);
+      assert.equal(revoked.result, null);
+      assert.equal(host.plugins.remove(id), true);
+      const uninstalled = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+      assert.equal(uninstalled.run?.status, "failed", "removed package cannot satisfy a saved reference");
+      assert.match(uninstalled.error ?? "", /plugin dependency is not currently installed/);
+      assert.equal(uninstalled.result, null);
+    } finally {
+      host.plugins.remove(id);
+    }
+  });
   await t.test("pausing after a due snapshot was captured admits no scheduled run", async () => {
     const { workflow, ctx } = workflows[0]!;
     await setP9WorkflowEnabled(ctx, workflow.id, false);
