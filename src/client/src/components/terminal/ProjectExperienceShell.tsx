@@ -111,6 +111,7 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { canonicalRecentChats, hasUnsentConversationDraft, remainingChatMode } from "@/lib/conversationSwitchPolicy";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -375,6 +376,8 @@ export default function ProjectExperienceShell({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
+  const chatCreationInFlightRef = useRef(false);
+  const [creatingChat, setCreatingChat] = useState(false);
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
   const [executionTerminalOpen, setExecutionTerminalOpen] = useState(false);
@@ -619,10 +622,7 @@ export default function ProjectExperienceShell({
   }, []);
 
   const recentChats = useMemo(
-    () => [...(allChatsQuery.data ?? []), ...quickChats]
-      .filter((chat) => chat.status === "active" && !chat.trashedAt)
-      .sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime())
-      .slice(0, 14),
+    () => canonicalRecentChats(allChatsQuery.data ?? [], quickChats),
     [allChatsQuery.data, quickChats],
   );
 
@@ -648,13 +648,23 @@ export default function ProjectExperienceShell({
     return QUICK_COMMANDS.filter((item) => item.command.startsWith(q)).slice(0, 6);
   }, [input]);
 
-  const confirmConversationSwitch = async () => {
+  const discardConversationDraft = () => {
+    setInput("");
+    setPendingAttachmentFiles([]);
+    setPendingAttachmentRefs([]);
+    setVoiceTranscripts([]);
+    setVoiceTranscriptReviewed(false);
+  };
+  // Mutations that can fail must ask for consent *before* the request but
+  // discard only after server acknowledgement and successful navigation.
+  const confirmConversationSwitch = async (deferDiscard = false, allowPendingCreation = false) => {
+    if (chatCreationInFlightRef.current && !allowPendingCreation) { setLifecycleNotice("Finish creating the new Chat before switching saved work."); return false; }
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
-    if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length) return true;
-    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
+    if (!hasUnsentConversationDraft({ text: input, attachmentFiles: pendingAttachmentFiles.length, attachmentRefs: pendingAttachmentRefs.length, voiceTranscripts: voiceTranscripts.length })) return true;
+    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations will discard the unsent text, staged attachments and voice transcript only after the destination opens successfully. Saved messages are kept.", confirmLabel: "Discard on switch" });
     if (!answer) return false;
-    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]);
+    if (!deferDiscard) discardConversationDraft();
     return true;
   };
 
@@ -742,20 +752,26 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const leavingActiveChat = action === "archive" && selection.chatId === chat.id;
+        if (leavingActiveChat && !(await confirmConversationSwitch(true))) return;
         await updateProjectChat(chat.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.chatId === chat.id) {
+        if (leavingActiveChat) {
+          discardConversationDraft();
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(remainingChatMode(chat.projectId));
         }
         invalidate(chat.projectId, chat.id);
         return;
       }
       if (action === "delete") {
+        const leavingActiveChat = selection.chatId === chat.id;
+        if (leavingActiveChat && !(await confirmConversationSwitch(true))) return;
         if (!(await requestLifecycle({ title: "Move chat to Trash?", detail: `“${chat.title}” can be restored from Trash & archive.`, confirmLabel: "Move to Trash" }))) return;
         await trashProjectChat(chat.id);
-        if (selection.chatId === chat.id) {
+        if (leavingActiveChat) {
+          discardConversationDraft();
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(remainingChatMode(chat.projectId));
         }
         invalidate(chat.projectId, chat.id);
         return;
@@ -786,10 +802,14 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const leavingActiveProject = action === "archive" && selection.projectId === project.id;
+        if (leavingActiveProject && !(await confirmConversationSwitch(true))) return;
         await updateProject(project.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.projectId === project.id) {
+        if (leavingActiveProject) {
+          discardConversationDraft();
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
         return;
@@ -797,11 +817,15 @@ export default function ProjectExperienceShell({
       if (action === "delete") {
         const dependencies = await getProjectDependencySummary(project.id);
         const detail = dependencies.total ? ` This moves ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} to Trash.` : "";
+        const leavingActiveProject = selection.projectId === project.id;
+        if (leavingActiveProject && !(await confirmConversationSwitch(true))) return;
         if (!(await requestLifecycle({ title: "Move Project to Trash?", detail: `“${project.name}” can be restored from Trash & archive.${detail}`, confirmLabel: "Move to Trash" }))) return;
         await trashProject(project.id);
-        if (selection.projectId === project.id) {
+        if (leavingActiveProject) {
+          discardConversationDraft();
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
       }
@@ -811,26 +835,48 @@ export default function ProjectExperienceShell({
   };
 
   const newProjectChat = async (starterPrompt?: string) => {
-    if (busy || !selection.projectId) return;
-    if (!(await confirmConversationSwitch())) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null); return; }
-    let chat: ProjectChat;
-    try { chat = await createProjectChat(selection.projectId); }
-    catch (error) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project chat."); return; }
-    invalidate(selection.projectId, chat.id);
-    void openChat(chat, true);
-    if (starterPrompt?.trim()) {
-      setInput(starterPrompt.trim());
-      requestAnimationFrame(() => composerRef.current?.focus());
+    if (busy || !selection.projectId || chatCreationInFlightRef.current) return;
+    chatCreationInFlightRef.current = true;
+    setCreatingChat(true);
+    try {
+      if (!(await confirmConversationSwitch(true, true))) {
+        pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null);
+        return;
+      }
+      const projectId = selection.projectId;
+      const chat = await createProjectChat(projectId);
+      discardConversationDraft();
+      invalidate(projectId, chat.id);
+      await openChat(chat, true);
+      if (starterPrompt?.trim()) {
+        setInput(starterPrompt.trim());
+        requestAnimationFrame(() => composerRef.current?.focus());
+      }
+    } catch (error) {
+      pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
+      setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project chat. The previous draft is still here.");
+    } finally {
+      chatCreationInFlightRef.current = false;
+      setCreatingChat(false);
     }
   };
 
   const newQuickChat = async () => {
-    if (!(await confirmConversationSwitch())) return;
+    if (busy || chatCreationInFlightRef.current) return;
+    chatCreationInFlightRef.current = true;
+    setCreatingChat(true);
     try {
+      if (!(await confirmConversationSwitch(true, true))) return;
       const chat = await createQuickChat();
+      discardConversationDraft();
       invalidate(null, chat.id);
-      void openChat(chat, true);
-    } catch (error) { setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a chat."); }
+      await openChat(chat, true);
+    } catch (error) {
+      setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a chat. The previous draft is still here.");
+    } finally {
+      chatCreationInFlightRef.current = false;
+      setCreatingChat(false);
+    }
   };
 
   const startTemporary = async () => {
@@ -1461,10 +1507,11 @@ export default function ProjectExperienceShell({
   const createNewProject = async () => {
     if (creatingProject || busy) return;
     if (!newProjectName.trim()) { setProjectCreateError("Enter a Project name."); return; }
-    if (!(await confirmConversationSwitch())) return;
+    if (!(await confirmConversationSwitch(true))) return;
     setCreatingProject(true); setProjectCreateError(null);
     try {
       const project = await createProject({ name: newProjectName.trim() });
+      discardConversationDraft();
       setNewProjectName(""); setNewProjectOpen(false);
       invalidate(project.id); void openProject(project, true);
     } catch (error) { setProjectCreateError(error instanceof Error ? error.message : "Unable to create a Project. Your name is still here; try again."); }
@@ -1475,8 +1522,9 @@ export default function ProjectExperienceShell({
     setProjectDestination({
       description: `Move “${chat.title}” and its saved messages into a Project. Future requests can use that Project's context.`,
       save: async (project) => {
-        if (selection.chatId === chat.id && !(await confirmConversationSwitch())) throw new Error("Save or reset the current draft before moving this Chat.");
+        if (selection.chatId === chat.id && !(await confirmConversationSwitch(true))) throw new Error("Save or reset the current draft before moving this Chat.");
         const moved = await promoteQuickChat(chat.id, project.id);
+        if (selection.chatId === chat.id) discardConversationDraft();
         invalidate(project.id, moved.id);
         if (selection.chatId === chat.id) await openChat(moved, true);
       },
@@ -1585,7 +1633,7 @@ export default function ProjectExperienceShell({
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
       />
-      <AuthenticatedNavigation section={section} account={account} busy={busy}
+      <AuthenticatedNavigation section={section} account={account} busy={busy || creatingChat}
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
@@ -1673,7 +1721,16 @@ export default function ProjectExperienceShell({
                   />
                 </div>
               ))}
-              {!recentChats.length && (
+              {(allChatsQuery.isError || quickChatsQuery.isError) && (
+                <div role="alert" className="px-2.5 py-3 font-ui text-xs text-amber-200">
+                  Could not refresh all recent conversations. Saved chats are unchanged.
+                  <button type="button" className="ml-2 underline focus-visible:outline focus-visible:outline-2" onClick={() => { void allChatsQuery.refetch(); void quickChatsQuery.refetch(); }}>Retry</button>
+                </div>
+              )}
+              {(allChatsQuery.isLoading || quickChatsQuery.isLoading) && !recentChats.length && (
+                <p role="status" className="px-2.5 py-3 font-ui text-xs text-muted-foreground">Loading recent chats…</p>
+              )}
+              {!recentChats.length && !allChatsQuery.isLoading && !quickChatsQuery.isLoading && !allChatsQuery.isError && !quickChatsQuery.isError && (
                 <div className="px-2.5 py-3 font-ui text-[12px] text-muted-foreground">Your recent chats will appear here.</div>
               )}
             </div>
@@ -2162,11 +2219,12 @@ export default function ProjectExperienceShell({
                   rows={1}
                   aria-label="Ask LiOS"
                   placeholder={chatMode === "temporary" ? "Message LiOS privately…" : "Message LiOS…"}
-                  disabled={busy}
+                  disabled={busy || creatingChat}
                   className="max-h-40 min-h-12 w-full resize-none bg-transparent px-4 pb-2 pt-3 font-ui text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/55 disabled:opacity-50"
                 />
                 <input
                   ref={attachmentInputRef}
+                  disabled={creatingChat}
                   type="file"
                   multiple
                   accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.tsv,.json,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,application/json,image/png,image/jpeg,image/webp"
@@ -2179,10 +2237,10 @@ export default function ProjectExperienceShell({
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
                 <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
-                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy || creatingChat} projectAvailable={chatMode === "project" && Boolean(selection.projectId)} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
+                      <button type="button" disabled={creatingChat} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40" aria-label="Tools">
                         <Plus className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
@@ -2248,7 +2306,7 @@ export default function ProjectExperienceShell({
                   <button
                     type="button"
                     onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : onOpenEnvironment()}
-                    disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy}
+                    disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy || creatingChat}
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${voiceRecorder.isRecording ? "bg-red-400/10 text-red-200" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"}`}
                     title={voiceInputHint}
                     aria-label={voiceInputAvailable ? (voiceRecorder.isRecording ? "Stop voice recording" : "Speak to LiOS") : "Set up voice input"}
@@ -2259,7 +2317,7 @@ export default function ProjectExperienceShell({
                   <button
                     type="button"
                     onClick={() => void send()}
-                    disabled={busy || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                    disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
                     aria-label="Send"
                   >
