@@ -4,8 +4,9 @@ import type { SourceConnection } from "@shared/schema";
 import {
   governedExternalMcpInputSchema,
   invokeGovernedExternalMcpTool,
+  preflightGovernedExternalMcpTool,
 } from "./governedExternalMcpTool";
-import type { ExternalMcpServerConfig } from "./externalMcpClient";
+import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 
 const connection = {
   id: 41,
@@ -104,6 +105,49 @@ test("governed external MCP activation fails closed across Project or tenant sco
   assert.equal(calls, 0);
 });
 
+test("GM20 live source recheck refuses invalid or wrong-owner MCP even after a planned approval", async () => {
+  let networkCalls = 0;
+  let configReads = 0;
+  const baseInput = { connectionId: 41, toolId: "quotes.read", arguments: { symbol: "TEST" } };
+  const context = { userId: 7, organizationId: 9, projectId: 77 };
+  const signal = new AbortController().signal;
+  for (const source of [
+    { ...connection, userId: 55 },
+    { ...connection, status: "invalid" as const },
+  ]) {
+    await assert.rejects(
+      () => invokeGovernedExternalMcpTool(baseInput, context, signal, {
+        // Simulate a stale or incorrectly scoped source returned by a
+        // connector cache AFTER the model planned or the user reviewed it.
+        listConnections: async () => [source],
+        configForConnection: () => { configReads++; return config(); },
+        callTool: async () => { networkCalls++; return { result: "untrusted" }; },
+      }),
+      /unavailable in this tenant|invalid or no longer authorized/i,
+    );
+  }
+  assert.equal(configReads, 0, "invalid sources cannot materialize an executable MCP configuration");
+  assert.equal(networkCalls, 0, "revoked/misowned sources cannot reach the external tool");
+});
+
+test("GM20 source health is not confused with revoked authorization", async () => {
+  let calls = 0;
+  for (const status of ["configured", "healthy", "degraded", "unreachable"] as const) {
+    const result = await invokeGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: {} },
+      { userId: 7, organizationId: 9, projectId: 77 },
+      new AbortController().signal,
+      {
+        listConnections: async () => [{ ...connection, status }],
+        configForConnection: () => config(),
+        callTool: async () => { calls++; return { ok: true }; },
+      },
+    );
+    assert.deepEqual(result.output, { ok: true });
+  }
+  assert.equal(calls, 4, "a transient health failure is not a permanent source-right denial");
+});
+
 test("governed external MCP input is bounded and cannot carry approval-shaped top-level fields", () => {
   assert.equal(governedExternalMcpInputSchema.safeParse({
     connectionId: 41,
@@ -146,4 +190,169 @@ test("pre-cancelled governed external MCP activation performs no transport call"
     /cancel/i,
   );
   assert.equal(calls, 0);
+});
+
+
+test("GM20 the governed Project path executes through the real official MCP v2 SDK and rejects unauthorized tools before transport", async () => {
+  const endpoint = "https://8.8.8.8/mcp";
+  const urls: string[] = [];
+  const verbs: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    urls.push(url);
+    const method = init?.method ?? "GET";
+    if (method === "GET") return new Response(null, { status: 405 });
+    if (method === "DELETE") return new Response(null, { status: 202 });
+    const payload = JSON.parse(await new Response(init?.body).text()) as {
+      id?: string | number; method?: string; params?: { name?: string; arguments?: Record<string, unknown> };
+    };
+    verbs.push(payload.method ?? "notification");
+    if (payload.id === undefined) return new Response(null, { status: 202 });
+    if (payload.method === "server/discover") {
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0", id: payload.id,
+        error: { code: -32601, message: "Method not found" },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    const result = payload.method === "initialize" ? {
+      protocolVersion: "2025-11-25",
+      capabilities: { tools: {} },
+      serverInfo: { name: "governed-test-mcp", version: "1" },
+    } : payload.method === "tools/list" ? {
+      tools: [{ name: "quotes.read", inputSchema: { type: "object", properties: {} } }],
+    } : payload.method === "tools/call" && payload.params?.name === "quotes.read" ? {
+      isError: false, content: [{ type: "text", text: "verified test observation" }],
+    } : null;
+    return new Response(JSON.stringify(result === null
+      ? { jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "Method not found" } }
+      : { jsonrpc: "2.0", id: payload.id, result }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const deps = {
+    listConnections: async () => [{
+      ...connection, config: { ...connection.config, endpoint },
+    }],
+    configForConnection: () => ({
+      ...config(), endpoint,
+    }),
+    callTool: (selected: ExternalMcpServerConfig, id: string, args: Record<string, unknown>, signal: AbortSignal) =>
+      callExternalMcpTool(selected, id, args, undefined, signal),
+  };
+  try {
+    const context = { userId: 7, organizationId: 9, projectId: 77 };
+    const denied = await assert.rejects(
+      () => invokeGovernedExternalMcpTool(
+        { connectionId: 41, toolId: "admin.delete", arguments: {} },
+        context, new AbortController().signal, deps,
+      ),
+      /outside Project policy/,
+    );
+    assert.equal(denied, undefined);
+    assert.equal(urls.length, 0, "unapproved tool id cannot reach any provider network endpoint");
+
+    const result = await invokeGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: { symbol: "TEST" } },
+      context, new AbortController().signal, deps,
+    );
+    assert.equal((result.output as { content: Array<{ text: string }> }).content[0]?.text, "verified test observation");
+    assert.deepEqual(result.sourceRefs, ["mcp-server:source:41", "mcp-tool:quotes.read"]);
+    assert.equal(verbs.includes("server/discover"), true);
+    assert.equal(verbs.includes("tools/call"), true);
+    assert.equal(urls.every(url => url === endpoint), true, "MCP transport never contacts another path/host");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("MCP tool observation callback is never invoked without two explicit current source rights", async () => {
+  const allowed = {
+    ...connection,
+    config: { ...connection.config, aiTransmission: "allow", aiUsageRights: "cleared" },
+  } as SourceConnection;
+  let captured = 0;
+  const dependencies = {
+    listConnections: async () => [allowed],
+    configForConnection: () => config(),
+    callTool: async () => ({ isError: false, content: [{ type: "text", text: "safe observation" }] }),
+  };
+  await invokeGovernedExternalMcpTool(
+    { connectionId: 41, toolId: "quotes.read", arguments: {} },
+    { userId: 7, organizationId: 9, projectId: 77 }, new AbortController().signal,
+    dependencies, () => { captured += 1; },
+  );
+  assert.equal(captured, 1);
+
+  allowed.config = { ...allowed.config, aiTransmission: "deny" };
+  await invokeGovernedExternalMcpTool(
+    { connectionId: 41, toolId: "quotes.read", arguments: {} },
+    { userId: 7, organizationId: 9, projectId: 77 }, new AbortController().signal,
+    dependencies, () => { captured += 1; },
+  );
+  assert.equal(captured, 1);
+});
+
+
+test("GM20 pre-dispatch source-policy refusal is provably before any remote effect", async () => {
+  const payload = { connectionId: 41, toolId: "quotes.read", arguments: {} };
+  const context = { userId: 7, organizationId: 9, projectId: 77 };
+  const controller = new AbortController();
+  let networkCalls = 0;
+  let configurationReads = 0;
+  const dependencies = {
+    listConnections: async () => [connection],
+    configForConnection: () => { configurationReads++; return config(); },
+    callTool: async () => { networkCalls++; return { ok: true }; },
+  };
+  await preflightGovernedExternalMcpTool(payload, context, controller.signal, dependencies);
+  assert.equal(configurationReads, 1);
+  assert.equal(networkCalls, 0, "successful local preflight itself must not dispatch");
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, { ...context, projectId: 79 }, controller.signal, dependencies),
+    /Project/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool({ ...payload, toolId: "admin.delete" }, context, controller.signal, dependencies),
+    /outside Project policy/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, context, controller.signal, {
+      ...dependencies, listConnections: async () => [{ ...connection, status: "invalid" as const }],
+    }),
+    /invalid or no longer authorized/,
+  );
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, { ...context, userId: 88 }, controller.signal, dependencies),
+    /tenant/,
+  );
+  controller.abort();
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(payload, context, controller.signal, dependencies),
+    /cancel/i,
+  );
+  assert.equal(networkCalls, 0, "all local policy denials must refuse before MCP transport");
+});
+
+
+test("GM20 preflight denies a missing vault credential before L5 intent and transport", async () => {
+  let called = 0;
+  const deps = {
+    listConnections: async () => [connection],
+    configForConnection: () => ({
+      ...config(),
+      policy: { ...config().policy, credentialRef: "gm20-nonexistent-credential-ref-for-source-preflight" },
+    }),
+    callTool: async () => { called++; return {}; },
+  };
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: {} },
+      { userId: 7, organizationId: 9, projectId: 77 },
+      new AbortController().signal, deps,
+    ),
+    /credential is unavailable or revoked/,
+  );
+  assert.equal(called, 0, "unavailable credential cannot create an external request");
 });

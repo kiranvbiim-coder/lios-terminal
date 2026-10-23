@@ -567,9 +567,30 @@
         "point-in-time-patterns",
         "backtest-patterns"
       ],
-      "importedPaths": ["tradingagents/agents/researchers/bear_researcher.py","tradingagents/agents/researchers/bull_researcher.py","tradingagents/agents/risk_mgmt/aggressive_debator.py","tradingagents/agents/risk_mgmt/conservative_debator.py","tradingagents/agents/risk_mgmt/neutral_debator.py","tradingagents/agents/utils/agent_utils.py","tradingagents/agents/utils/rating.py","tradingagents/graph/conditional_logic.py","tradingagents/graph/signal_processing.py"],
-      "destinationPaths": ["server/tradingAgentsResearchGate.mjs","server/tradingAgentsResearchGate.d.mts","server/tradingAgentsResearchTool.ts","server/tradingAgentsResearchTool.test.ts","server/tradingAgentsResearchGate.test.mjs","server/conversationRuntime.ts"],
-      "modifications": ["Adapted 9 approved upstream rating, signal, bull/bear and risk-debate source paths into bounded fail-closed parser/state logic, not the Python LangGraph agent runtime.","Registered read-only Project and tenant-scoped governed conversation tool; invalid/contradictory rating requires human review, no brokerage, provider or unverified source citations.","Replaced upstream model, checkpoint, market data and trading authority with canonical LiOS GM-12, P5/P7, P11 and P4 seams; remaining upstream source paths are audited but not imported."],
+      "importedPaths": [
+        "tradingagents/agents/researchers/bear_researcher.py",
+        "tradingagents/agents/researchers/bull_researcher.py",
+        "tradingagents/agents/risk_mgmt/aggressive_debator.py",
+        "tradingagents/agents/risk_mgmt/conservative_debator.py",
+        "tradingagents/agents/risk_mgmt/neutral_debator.py",
+        "tradingagents/agents/utils/agent_utils.py",
+        "tradingagents/agents/utils/rating.py",
+        "tradingagents/graph/conditional_logic.py",
+        "tradingagents/graph/signal_processing.py"
+      ],
+      "destinationPaths": [
+        "server/tradingAgentsResearchGate.mjs",
+        "server/tradingAgentsResearchGate.d.mts",
+        "server/tradingAgentsResearchTool.ts",
+        "server/tradingAgentsResearchTool.test.ts",
+        "server/tradingAgentsResearchGate.test.mjs",
+        "server/conversationRuntime.ts"
+      ],
+      "modifications": [
+        "Adapted 9 approved upstream rating, signal, bull/bear and risk-debate source paths into bounded fail-closed parser/state logic, not the Python LangGraph agent runtime.",
+        "Registered read-only Project and tenant-scoped governed conversation tool; invalid/contradictory rating requires human review, no brokerage, provider or unverified source citations.",
+        "Replaced upstream model, checkpoint, market data and trading authority with canonical LiOS GM-12, P5/P7, P11 and P4 seams; remaining upstream source paths are audited but not imported."
+      ],
       "notes": "Only the 9-path bounded source mechanics for merged PR #633 are adapted behind GM-12, with native V1 38150791824. Original 75-path audit and full Apache license on disk; full TradingAgents Python runtime, market/provider models, trading and packaged SP-05 are NOT adopted or approved.",
       "subsystems": [
         {
@@ -2445,7 +2466,7 @@
         "Donor Python network relation selection/sorting and bounded source-context mechanics adapted into typed TS; no random shuffling, pandas/tokenizers, or donor prompt assembly.",
         "Canonical researchSourceCompositionTool retrieves only entitled Project source documents before derived links; no imported GraphRAG index, cache, model or provider.",
         "Native macOS V1 golden, malformed/bounded and P7 restricted-source isolation regressions passed run 38139645612; merged PR #591 at 23c22c1a3ef1cd28a0bbb3938c36074734459bf7.",
-      "GraphRAG relationship candidate/in-network ranking and source_context incidence adapted into deterministic P7 permitted evidence neighborhoods with direct and two-hop co-mention navigation; not a causal/finance fact or full graph runtime."
+        "GraphRAG relationship candidate/in-network ranking and source_context incidence adapted into deterministic P7 permitted evidence neighborhoods with direct and two-hop co-mention navigation; not a causal/finance fact or full graph runtime."
       ],
       "notes": "Two exact MIT-approved GraphRAG source paths power bounded P7 read-only co-mention links and source neighborhoods, behind AI-use rights and canonical P5 entity identity. Full GraphRAG Python/vector/community/model runtime, model/data assets and SP-03/05 packaging remain unaccepted. Original license: third_party/licenses/graphrag-MIT.txt; provenance: docs/technical/CA_GRAPHRAG_P7_ADOPTION.md."
     },
@@ -2745,11 +2766,54 @@
       "bundled": false,
       "noticeRequiredOnImport": true,
       "externalRights": "separate_review_required",
-      "roles": ["native-runtime-distribution", "p10-copy-only-provisioning"],
-      "destinationPaths": ["script/build_native_runtime_bundle.py", "server/nativeRuntimeBundle.ts"],
+      "roles": [
+        "native-runtime-distribution",
+        "p10-copy-only-provisioning"
+      ],
+      "destinationPaths": [
+        "script/build_native_runtime_bundle.py",
+        "server/nativeRuntimeBundle.ts"
+      ],
       "importedPaths": [],
-      "modifications": ["No upstream build-system source imported. Release tooling materializes internal links, removes unused absolute-path console wrappers/bytecode, installs the locked native core closure, preserves full component grants, and signs final Mach-O bytes before manifest hashing."],
+      "modifications": [
+        "No upstream build-system source imported. Release tooling materializes internal links, removes unused absolute-path console wrappers/bytecode, installs the locked native core closure, preserves full component grants, and signs final Mach-O bytes before manifest hashing."
+      ],
       "notes": "Release-build-only local candidate CPython 3.13.16 macOS arm64, install-only archive SHA256 ca0e6a70fb75a0984751bd75493e3de77680aef7fbd0fea9b903c299537b3423. Full-component legal metadata from companion archive SHA256 3497822d8bf4884bc79258f62668f985654d03d40ec74da4ca9ae7a5667c4362 is retained and hash-verified. Upstream build-system source is MPL-2.0 and is not imported; CPython/native library grants remain separate. Generated binary is ignored, not included in source distribution or approved public release; existing P10 activation/rollback remains authoritative. Minimum selected native-wheel OS is macOS14. No Windows or signed/notarized acceptance."
+    },
+    {
+      "id": "mcp-typescript-sdk-v2-client",
+      "name": "Official MCP TypeScript v2 client (npm package)",
+      "repository": "modelcontextprotocol/typescript-sdk",
+      "releaseTag": "v2.3.1",
+      "commitSha": "fcef852f6cdafea07f36cf6fae69b37c8adf85be",
+      "license": "Apache-2.0",
+      "posture": "pinned_package_integration_source_gate_pending",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "MCP TypeScript SDK v2",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "GM20-external-mcp-transport",
+        "P13-governed-tool-client",
+        "MCP-2026-07-28-negotiation-pagination"
+      ],
+      "importedPaths": [
+        "packages/client (published @modelcontextprotocol/client@2.3.1, not vendored files)"
+      ],
+      "destinationPaths": [
+        "server/sdkExternalMcpClient.ts",
+        "server/externalMcpClient.ts",
+        "server/sdkExternalMcpClient.test.ts",
+        "package.json",
+        "package-lock.json"
+      ],
+      "modifications": [
+        "Adopts upstream-published protocol, client and Streamable HTTP implementation instead of copying upstream source or creating a second tool authority.",
+        "LiOS retains source endpoint/SSRF policy, credential reference resolution, per-Project tool/resource allowlists, user cancellation, redacted remote errors and bounded response handling.",
+        "The original injected test transport remains stable; no OAuth or stdio connection is enabled in this slice."
+      ],
+      "notes": "Stacked draft PR #121 over #120. Exact-head source gate and actual isolated test MCP server/packaged authorization, permission revocation and cancellation acceptance remain unverified. The npm package contains its upstream Apache license; external service, data and credentials rights remain separate. No SP/P14 completion."
     }
   ]
 }

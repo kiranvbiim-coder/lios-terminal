@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchWithEndpointPolicy, normalizeSourceConfig, readBoundedText, sanitizeSourceConfig, validateSourceEndpoint } from "./sourceConnectionPolicy";
+import { fetchWithEndpointPolicy, isDesktopMcpLoopbackEndpoint, normalizeSourceConfig, readBoundedText, sanitizeSourceConfig, validateMcpSourceEndpoint, validateSourceEndpoint } from "./sourceConnectionPolicy";
 
 test("source endpoint policy accepts HTTPS endpoints and strips fragments", async () => {
   const publicResolver = async () => ["203.0.113.10"];
@@ -49,6 +49,65 @@ test("source endpoint policy blocks DNS names that resolve to a blocked address 
   assert.equal(allowed.valid, true);
 });
 
+
+
+test("GM20 MCP permits explicit desktop loopback but never a hosted Home loopback", async () => {
+  const publicResolver = async () => ["203.0.113.42"];
+  const loopbacks = ["http://localhost:3010/mcp", "http://127.0.0.1:3010/mcp", "http://[::1]:3010/mcp"];
+  for (const url of loopbacks) {
+    assert.equal(isDesktopMcpLoopbackEndpoint(url, "desktop_local"), true);
+    assert.equal(isDesktopMcpLoopbackEndpoint(url, "user_home_server"), false);
+    const desktop = await validateMcpSourceEndpoint(url, "desktop_local", publicResolver);
+    assert.equal(desktop.valid, true, url);
+    assert.equal(desktop.normalizedEndpoint?.includes("localhost"), false, "localhost must not be resolved via DNS");
+    const hosted = await validateMcpSourceEndpoint(url, "user_home_server", publicResolver);
+    assert.equal(hosted.valid, false);
+    assert.equal(hosted.reason, "private_host_blocked");
+  }
+});
+
+test("GM20 desktop MCP rejects private LAN, alternate loopback and DNS-to-private hosts", async () => {
+  const privateResolver = async () => ["10.0.0.4"];
+  const aliases = [
+    "http://127.0.0.2:5000/mcp",
+    "http://10.0.0.4:5000/mcp",
+    "https://192.168.1.2/mcp",
+    "https://mcp-private.example.test/mcp",
+  ];
+  for (const endpoint of aliases) {
+    const result = await validateMcpSourceEndpoint(endpoint, "desktop_local", privateResolver);
+    assert.equal(result.valid, false, endpoint);
+  }
+  assert.equal((await validateMcpSourceEndpoint(
+    "https://203.0.113.2/mcp", "desktop_local", privateResolver,
+  )).valid, true, "public HTTPS MCP remains permitted under existing source policy");
+  assert.equal((await validateMcpSourceEndpoint(
+    "http://203.0.113.2/mcp", "desktop_local", privateResolver,
+  )).valid, false, "remote HTTP never inherits local exceptions");
+});
+
+test("GM20 MCP normalization is independent of database configuration and uses canonical runtime mode", async () => {
+  const previousHost = process.env.HOST;
+  const previousDatabase = process.env.DATABASE_URL;
+  try {
+    delete process.env.HOST;
+    process.env.DATABASE_URL = "postgres://local-owner-db";
+    const result = await normalizeSourceConfig("mcp", {
+      endpoint: "http://localhost:3010/mcp",
+      label: "User-owned local MCP",
+    });
+    assert.equal(result.endpoint, "http://127.0.0.1:3010/mcp");
+    process.env.HOST = "0.0.0.0";
+    const rejected = await validateMcpSourceEndpoint("http://localhost:3010/mcp");
+    assert.equal(rejected.valid, false, "exposed Home cannot contact its own loopback through MCP");
+  } finally {
+    if (previousHost === undefined) delete process.env.HOST;
+    else process.env.HOST = previousHost;
+    if (previousDatabase === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabase;
+  }
+});
+
 test("source config sanitization removes secret-shaped fields", () => {
   const sanitized = sanitizeSourceConfig({
     endpoint: "https://example.test",
@@ -80,6 +139,35 @@ test("endpoint redirect policy refuses to forward sensitive headers across origi
       }, true),
       /credentials across origins/i,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("GM20 endpoint-pinned source requests never follow redirects even within the same origin", async () => {
+  const originalFetch = globalThis.fetch;
+  const seen: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    seen.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    return new Response(null, {
+      status: 307,
+      headers: { location: "/different-path" },
+    });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => fetchWithEndpointPolicy("https://8.8.8.8/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer test-only-secret" },
+        body: JSON.stringify({ action: "read" }),
+      }, false, 0),
+      /redirect safety limit/i,
+    );
+    assert.deepEqual(seen, ["https://8.8.8.8/mcp"],
+      "exact-endpoint MCP mode cannot transmit credentials or request body to redirect target");
+    await assert.rejects(() => fetchWithEndpointPolicy("https://8.8.8.8/mcp", {}, false, 6),
+      /Invalid source redirect limit/i);
+    assert.equal(seen.length, 1, "invalid redirect policy fails before any network request");
   } finally {
     globalThis.fetch = originalFetch;
   }
