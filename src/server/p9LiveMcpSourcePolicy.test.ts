@@ -39,7 +39,8 @@ test("P9 MCP source admission fails closed when owner, Project, rights, status o
   assert.throws(() => assertP9CurrentMcpSourceReferences(ctx, 77, refs, [source], () => false),
     /credential is revoked/);
   assert.throws(() => assertP9CurrentMcpSourceReferences(ctx, 77, refs, [], () => true),
-    /owner authority/);
+    /no longer available/,
+    "a deleted saved source cannot be silently treated as an unrelated source");
 });
 
 test("P9 MCP source references cannot be forged or orphaned", () => {
