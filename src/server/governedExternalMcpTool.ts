@@ -6,6 +6,7 @@ import {
   type ExternalMcpServerConfig,
 } from "./externalMcpClient";
 import { listSourceConnections } from "./sourceConnectionService";
+import { captureMcpAgentEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 
 const MAX_ARGUMENT_BYTES = 64 * 1024;
 
@@ -79,6 +80,7 @@ export async function invokeGovernedExternalMcpTool(
   context: GovernedExternalMcpContext,
   signal: AbortSignal,
   dependencies: GovernedExternalMcpDependencies = DEFAULT_DEPENDENCIES,
+  onEvidence?: (capture: McpAgentEvidenceCapture) => void,
 ): Promise<GovernedExternalMcpResult> {
   const input = governedExternalMcpInputSchema.parse(rawInput);
   assertNotCancelled(signal);
@@ -110,6 +112,10 @@ export async function invokeGovernedExternalMcpTool(
   assertNotCancelled(signal);
   const output = await dependencies.callTool(config, input.toolId, input.arguments, signal);
   assertNotCancelled(signal);
+  if (onEvidence) {
+    const capture = captureMcpAgentEvidence(connection, context.projectId, input.toolId, output);
+    if (capture) onEvidence(capture);
+  }
 
   return {
     output,
