@@ -67,6 +67,18 @@ export async function verifyAIProviderConnection(
   if (!result.text.trim()) {
     throw new AIProviderError("empty_completion", config.name + " returned an empty completion.", { provider });
   }
+  // Provider metadata can match while a proxy/model returns arbitrary prose,
+  // a synthetic placeholder, or a response from a different operation.
+  // Require this public, low-cost challenge to succeed before claiming a
+  // live connection. Accept harmless quoting/terminal punctuation only.
+  const acknowledgement = result.text.trim().replace(/^["'`]+|["'`.!]+$/g, "").trim();
+  if (acknowledgement !== "LIOS_AI_OK") {
+    throw new AIProviderError(
+      "upstream_error",
+      config.name + " did not complete the LiOS connection verification challenge.",
+      { provider },
+    );
+  }
 
   return {
     ok: true,
