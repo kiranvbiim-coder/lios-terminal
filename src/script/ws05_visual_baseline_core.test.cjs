@@ -62,3 +62,10 @@ test("WS05 manifest cannot confuse fixture probes with native/real journey accep
   assert.equal(result.acceptanceBoundary.authenticatedChatArtifactWorkbenchJourney, "NOT_RUN");
   assert.equal(result.acceptanceBoundary.nativeMacAndWindowsInstall, "NOT_RUN");
 });
+
+test("WS05 detects a viewport silently clamped by Electron", () => {
+  const sample = goodSample({ width: 320, zoom: 1, cssViewportWidth: 500 });
+  const result = assessSample(sample);
+  assert.equal(result.status, "gap-observed");
+  assert.ok(result.gaps.some((g) => g.includes("requested viewport width")));
+});
