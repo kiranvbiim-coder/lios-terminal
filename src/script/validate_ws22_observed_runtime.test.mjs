@@ -63,7 +63,8 @@ test("WS-22 neither transport errors nor declined approvals create counterfeit H
   const deny = shell.slice(shell.indexOf("const denyRuntimeAction = "),shell.indexOf("const interruptedRun =",shell.indexOf("const denyRuntimeAction = ")));
   assert.match(deny, /void cancelRuntime\(\)/);
   assert.doesNotMatch(deny, /type: "done"/);
-  assert.match(deny, /cancelConversationRun/); // only original RPC can cancel
+  const stop = shell.slice(shell.indexOf("const cancelRuntime = async"),shell.indexOf("const denyRuntimeAction =",shell.indexOf("const cancelRuntime = async")));
+  assert.match(stop, /cancelConversationRun\(requireGateway\(\), targetRun\)/); // only original RPC can cancel
 });
 
 test("WS-22 Stop double clicks guarded and Home acknowledgement is not final completion", () => {
