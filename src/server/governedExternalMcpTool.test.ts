@@ -334,3 +334,25 @@ test("GM20 pre-dispatch source-policy refusal is provably before any remote effe
   );
   assert.equal(networkCalls, 0, "all local policy denials must refuse before MCP transport");
 });
+
+
+test("GM20 preflight denies a missing vault credential before L5 intent and transport", async () => {
+  let called = 0;
+  const deps = {
+    listConnections: async () => [connection],
+    configForConnection: () => ({
+      ...config(),
+      policy: { ...config().policy, credentialRef: "gm20-nonexistent-credential-ref-for-source-preflight" },
+    }),
+    callTool: async () => { called++; return {}; },
+  };
+  await assert.rejects(
+    preflightGovernedExternalMcpTool(
+      { connectionId: 41, toolId: "quotes.read", arguments: {} },
+      { userId: 7, organizationId: 9, projectId: 77 },
+      new AbortController().signal, deps,
+    ),
+    /credential is unavailable or revoked/,
+  );
+  assert.equal(called, 0, "unavailable credential cannot create an external request");
+});

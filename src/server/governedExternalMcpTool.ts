@@ -7,6 +7,7 @@ import {
 } from "./externalMcpClient";
 import { listSourceConnections } from "./sourceConnectionService";
 import { captureMcpAgentEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
+import { resolveCredential } from "./credentialVault";
 
 const MAX_ARGUMENT_BYTES = 64 * 1024;
 
@@ -106,6 +107,13 @@ async function resolveGovernedExternalMcpDispatch(
   // Do not rely solely on the later SDK/transport deny for wrong tool ids.
   if (!config.policy.allowedToolIds.includes(input.toolId)) {
     throw new Error("External MCP tool is outside Project policy.");
+  }
+  // Match the official SDK's current source vault lookup locally, before
+  // creating an L5 intent. Unavailable/revoked credentials have provably not
+  // caused a tool side effect; never turn that refusal into outcome_unknown.
+  // No credential values enter the ledger, model prompt or error message.
+  if (config.policy.credentialRef && !resolveCredential("", config.policy.credentialRef)) {
+    throw new Error("External MCP source credential is unavailable or revoked.");
   }
   assertNotCancelled(signal);
   return { input, connection, config };
