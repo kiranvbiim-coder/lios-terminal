@@ -36,9 +36,14 @@ export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpa
         }}>Expand workspace</button>
       </div>
     </div>
-    <ArtifactPane {...props} onDisplayedVersionChange={(version, artifactId) => {
-        if (artifactId === props.artifactId) setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === requestedVersion && current.version === version ? current : { artifactId, requestedVersion, version });
-        props.onDisplayedVersionChange?.(version, artifactId);
+    <ArtifactPane {...props} onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
+        // A delayed historical response can arrive after the user has switched
+        // to Latest. Only the query that actually loaded may unlock Expand.
+        if (artifactId === props.artifactId && loadedRequest === requestedVersion) {
+          setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === loadedRequest && current.version === version
+            ? current : { artifactId, requestedVersion: loadedRequest, version });
+        }
+        props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);
     }} />
   </aside>;
 }

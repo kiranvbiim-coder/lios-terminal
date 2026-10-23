@@ -59,3 +59,47 @@ test("the verified symbol opens a distinct existing entity tab without changing 
   assert.equal(opened.tabs.find(tab => tab.id === opened.activeTabId)?.workspace.primary.symbol, "MSFT");
   assert.equal(captureChatWorkbenchOrigin("quick", null, 29, "invalid symbol").symbol, undefined);
 });
+
+test("a new user question supersedes any previous assistant financial symbol before its answer", () => {
+  const prior = quick();
+  const askingAnything = {
+    ...prior,
+    messages: [...prior.messages, { role: "user", metadata: {} }],
+  };
+  assert.equal(resolveScopedWorkbenchSymbol(askingAnything), null,
+    "general Workspace must not inherit an old financial entity while the user's new turn is unanswered");
+  assert.equal(resolveScopedWorkbenchSymbol({
+    ...askingAnything,
+    messages: [...askingAnything.messages, { role: "tool", metadata: { workingContext: snapshot() } }],
+  }), null, "tool events cannot restore an old symbol or mint authoritative navigation context");
+  assert.equal(resolveScopedWorkbenchSymbol({
+    ...askingAnything,
+    messages: [...askingAnything.messages, { role: "assistant", metadata: { workingContext: snapshot() } }],
+  }), "MSFT", "only a fresh assistant turn with correctly scoped Working Context may select its entity");
+});
+
+test("the latest unanswered turn in a Project never falls back to its previous assistant ticker", () => {
+  const prior = { mode: "project" as const, projectId: 15, chatId: 29,
+    messages: [{ role: "assistant", metadata: { workingContext: snapshot("project") } }] };
+  assert.equal(resolveScopedWorkbenchSymbol(prior), "MSFT");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...prior, messages: [
+    ...prior.messages, { role: "user", metadata: { workingContext: snapshot("project") } },
+  ] }), null, "user metadata cannot become navigation/source authority");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...prior, messages: [
+    ...prior.messages, { role: "user", metadata: {} }, { role: "assistant", metadata: { workingContext: null } },
+  ] }), null, "unresolved recent assistant responses must not silently fall back");
+});
+
+test("Temporary Chat uses memory-only turn order, not persisted Project or prior answer context", () => {
+  const base = { mode: "temporary" as const, projectId: 15, chatId: 29,
+    messages: [{ role: "assistant", metadata: {} }], temporaryContext: snapshot("temporary") };
+  assert.equal(resolveScopedWorkbenchSymbol(base), "MSFT");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, messages: [
+    ...base.messages, { role: "user", metadata: {} },
+  ] }), null, "an unanswered Temporary user question cannot borrow the preceding temporary ticker");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, messages: [
+    ...base.messages, { role: "user", metadata: {} }, { role: "assistant", metadata: {} },
+  ] }), "MSFT", "a new Temporary assistant answer may use its current in-memory scoped context");
+  assert.equal(resolveScopedWorkbenchSymbol({ ...base, temporaryContext: snapshot("project") }), null,
+    "Temporary navigation never silently accepts a persisted Project snapshot");
+});

@@ -816,7 +816,10 @@ async function runProjectChat(
           for (const event of pendingArtifacts) {
             const savedArtifact = await persistConversationDraft(context, {
               projectId: chat.projectId,
-              owningChatId: chat.projectId === null ? chatId : null,
+              // The server must validate a saved file against this exact Chat
+              // even after Quick→Project promotion. Artifact lifecycle ownership
+              // stays Project-scoped; this is a write-time custody proof only.
+              owningChatId: chatId,
               requestId: request.requestId,
               draft: event.artifact,
               trustManifest: result.trustManifest ?? null,

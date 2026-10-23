@@ -14,10 +14,12 @@ const { DATA_ROOT_EXIT_CODE, DataRootUnavailableError, foldLegacyWorkspace, prep
 const { migrateDataRootSafely } = require("./governedDataMigration.cjs");
 const { imgSrcDirective } = require("./desktopCsp.cjs");
 const { loadOrCreateProtectedSecret } = require("./desktopSecretCustody.cjs");
+const { protectedDraftsAvailable, storeProtectedArtifactDraft, readProtectedArtifactDraft, removeProtectedArtifactDraft } = require("./desktopArtifactDraftRecovery.cjs");
 const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
 const { assertTrustedIpcSender } = require("./desktopIpcSecurity.cjs");
+const { verifyNativeDraftGrant } = require("./nativeDraftGrant.cjs");
 const { redactDesktopLogText } = require("./desktopLogRedaction.cjs");
 const {
   createRestoreWorkerLaunchPlan,
@@ -483,6 +485,28 @@ ipcMain.handle("limuria:open-external", async (event, rawUrl) => {
   if (parsed.protocol !== "https:") throw new Error("Only HTTPS external URLs are allowed.");
   await shell.openExternal(parsed.toString());
   return { opened: true };
+});
+
+// Native encrypted draft checkpoints are separate from P4's canonical server
+// versions. Strict IPC sender verification and OS encryption are mandatory.
+ipcMain.handle("limuria:artifact-draft-recovery-available", (event) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  return protectedDraftsAvailable(safeStorage);
+});
+ipcMain.handle("limuria:artifact-draft-recovery-read", (event, identity) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, identity?.grant, identity);
+  return readProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
+});
+ipcMain.handle("limuria:artifact-draft-recovery-write", (event, input) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, input?.grant, input);
+  return storeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input });
+});
+ipcMain.handle("limuria:artifact-draft-recovery-clear", (event, identity) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  verifyNativeDraftGrant(localTrustToken, identity?.grant, identity);
+  return removeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
 });
 
 ipcMain.handle("limuria:workspace-info", (event) => {

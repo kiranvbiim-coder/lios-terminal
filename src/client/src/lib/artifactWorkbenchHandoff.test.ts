@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { advanceArtifactWorkbenchRevision, openArtifactWorkbench, returnFromArtifactWorkbench } from "./artifactWorkbenchHandoff";
+import {
+  advanceArtifactWorkbenchRevision, clearArtifactWorkbenchRecovery, loadArtifactWorkbenchRecovery,
+  openArtifactWorkbench, resolveArtifactPaneRequestedVersion, returnFromArtifactWorkbench,
+  saveArtifactWorkbenchRecovery, ARTIFACT_WORKBENCH_RECOVERY_KEY,
+} from "./artifactWorkbenchHandoff";
 import { deserializeWorkspace, isWorkspaceState, serializeWorkspace } from "./terminalWorkspace";
 import { isViewVisibleToAudience } from "./featureRegistry";
 import type { ArtifactWorkbenchContext } from "./terminalTypes";
@@ -145,4 +149,178 @@ test("Quick Chat uses the same Workbench editor and returns its exact saved revi
   const returned = returnFromArtifactWorkbench(opened.state, opened.handoff, { ...quick, version: 4 }, false)!;
   assert.deepEqual(returned.context, { ...quick, version: 4 });
   assert.deepEqual(returned.state, before);
+});
+
+
+test("shared Artifact editor can navigate from head v4 to historical v1 and back without assuming versions rise", () => {
+  const artifactId = context.artifactId;
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, null), 4);
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId, version: 1 }), 1,
+    "selecting an older revision must cause the actual Artifact query to load historical v1");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId, version: 5 }), 5,
+    "newly saved canonical versions remain addressable immediately");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, 4, { artifactId: "artifact:other", version: 1 }), 4,
+    "an Artifact change must not inherit another Artifact's local history selection");
+  assert.equal(resolveArtifactPaneRequestedVersion(artifactId, null, null), null,
+    "latest head remains an explicit nullable selection, not an invented version");
+});
+
+test("delayed historical fetch cannot replace a selected latest-head revision during Workbench return", () => {
+  const loadedV3 = { requestedVersion: 3, displayedVersion: 3, loading: false };
+  const latest = advanceArtifactWorkbenchRevision(loadedV3, { type: "select", version: null });
+  assert.deepEqual(latest, { requestedVersion: null, displayedVersion: 3, loading: true });
+  assert.equal(advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 1 }), latest);
+  assert.equal(advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 2 }), latest);
+  const resolved = advanceArtifactWorkbenchRevision(latest, { type: "loaded", version: 4 });
+  assert.deepEqual(resolved, { requestedVersion: null, displayedVersion: 4, loading: false });
+  assert.equal(advanceArtifactWorkbenchRevision(resolved, { type: "loaded", version: 3 }), resolved);
+  const before = state();
+  const opened = openArtifactWorkbench(before, { ...context, version: 3 }, null, null, false)!;
+  assert.equal(returnFromArtifactWorkbench(opened.state, opened.handoff,
+    { ...context, version: resolved.displayedVersion }, false)?.context.version, 4);
+});
+
+
+test("out-of-order Artifact callbacks are rejected by exact requested-version identity, including Latest", () => {
+  const viewedV1 = { requestedVersion: 1, displayedVersion: 1, loading: false };
+  const pendingHead = advanceArtifactWorkbenchRevision(viewedV1, { type: "select", version: null });
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHead,
+    { type: "loaded", version: 1, requestedVersion: 1 }), pendingHead,
+    "an old historical fetch cannot falsely complete the current Latest selection");
+  const headV4 = advanceArtifactWorkbenchRevision(pendingHead,
+    { type: "loaded", version: 4, requestedVersion: null });
+  assert.deepEqual(headV4, { requestedVersion: null, displayedVersion: 4, loading: false });
+  const pendingHistorical = advanceArtifactWorkbenchRevision(headV4, { type: "select", version: 2 });
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 4, requestedVersion: null }), pendingHistorical);
+  assert.equal(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 1, requestedVersion: 1 }), pendingHistorical);
+  assert.deepEqual(advanceArtifactWorkbenchRevision(pendingHistorical,
+    { type: "loaded", version: 2, requestedVersion: 2 }),
+    { requestedVersion: 2, displayedVersion: 2, loading: false });
+});
+
+
+function withRecoveryStorage(testCase: (storage: Map<string, string>) => void): void {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const storage = new Map<string, string>();
+  const fakeWindow = {
+    localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value); },
+      removeItem: (key: string) => { storage.delete(key); },
+    },
+  };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+  try { testCase(storage); }
+  finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+}
+
+test("desktop reload restores a Quick Chat Artifact return to the SAME original four-pane Dockview tab", () => {
+  withRecoveryStorage((storage) => {
+    const before = state(), quick = { ...context, projectId: null };
+    const geometry = { grid: { orientation: "HORIZONTAL", width: 1250, height: 720 }, activeGroup: "analysis" };
+    const opened = openArtifactWorkbench(before, quick, geometry, "tertiary", false)!;
+    saveArtifactWorkbenchRecovery(" OWNER@example.com ", opened.handoff);
+    assert.ok(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY));
+    // JSON roundtrip simulates the already-persisted tabs on an Electron restart.
+    const reloaded = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    // The user may have focused a different visible pane after expansion.
+    reloaded.tabs[0].workspace.focusedPane = "primary";
+    reloaded.tabs[0].workspace.secondary!.artifact!.version = 4;
+    const recovered = loadArtifactWorkbenchRecovery("owner@EXAMPLE.com", reloaded, "internal");
+    assert.ok(recovered);
+    assert.equal(recovered.context.artifactId, quick.artifactId);
+    assert.equal(recovered.context.chatId, quick.chatId);
+    assert.deepEqual(recovered.priorLayout, geometry);
+    assert.equal(recovered.priorMaximizedPane, "tertiary");
+    const returned = returnFromArtifactWorkbench(reloaded, recovered, { ...quick, version: 4 }, false)!;
+    assert.deepEqual(returned.context, { ...quick, version: 4 });
+    assert.deepEqual(returned.state, before, "return restores exact prior tab, not the temporary Artifact pane");
+    clearArtifactWorkbenchRecovery();
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+  });
+});
+
+test("recovered navigation never grants a second signed-in account the first account's tab", () => {
+  withRecoveryStorage((storage) => {
+    const opened = openArtifactWorkbench(state(), context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("one@example.com", opened.handoff);
+    assert.equal(loadArtifactWorkbenchRecovery("two@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), true,
+      "a different account cannot read this hint; it is not promoted to global state");
+    assert.ok(loadArtifactWorkbenchRecovery("one@example.com", opened.state, "internal"));
+  });
+});
+
+test("restart recovery rejects unrelated, modified, future, and corrupt layout snapshots", () => {
+  withRecoveryStorage((storage) => {
+    const before = state(), opened = openArtifactWorkbench(before, context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("owner@example.com", opened.handoff);
+    const original = storage.get(ARTIFACT_WORKBENCH_RECOVERY_KEY)!;
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", before, "internal"), null,
+      "pre-expansion tab state cannot masquerade as an active recoverable handoff");
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const otherArtifact = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    otherArtifact.tabs[0].workspace.secondary!.artifact!.artifactId = "artifact:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", otherArtifact, "internal"), null);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const crossChat = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    crossChat.tabs[0].workspace.secondary!.artifact!.chatId = 999;
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", crossChat, "internal"), null);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, original);
+    const longLived = JSON.parse(original);
+    longLived.capturedAt -= 90 * 24 * 60 * 60 * 1_000;
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(longLived));
+    assert.ok(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"),
+      "an unchanged same-Artifact professional workspace must resume after months of inactivity");
+    const future = JSON.parse(original);
+    future.capturedAt = Date.now() + 120_000;
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, JSON.stringify(future));
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+    storage.set(ARTIFACT_WORKBENCH_RECOVERY_KEY, "{corrupt-json");
+    assert.equal(loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "internal"), null);
+    assert.equal(storage.has(ARTIFACT_WORKBENCH_RECOVERY_KEY), false);
+  });
+});
+
+test("restart return navigation cannot resurrect a restricted pane for a trial account", () => {
+  withRecoveryStorage(() => {
+    const before = state();
+    const restricted = { ...before,
+      tabs: before.tabs.map((entry, i) => i === 0 ? {
+        ...entry,
+        workspace: { ...entry.workspace, secondary: { view: "clientdata" as const, symbol: "MSFT" } },
+      } : entry) };
+    const opened = openArtifactWorkbench(restricted, context, null, null, false)!;
+    saveArtifactWorkbenchRecovery("owner@example.com", opened.handoff);
+    const recovered = loadArtifactWorkbenchRecovery("owner@example.com", opened.state, "trial");
+    assert.ok(recovered);
+    assert.notEqual(recovered.priorTab.workspace.secondary?.view, "clientdata");
+    assert.deepEqual(returnFromArtifactWorkbench(opened.state, recovered, context, false)?.state.tabs[0].workspace,
+      recovered.priorTab.workspace);
+  });
+});
+
+
+test("Project Chat also recovers the original Workbench and the saved Artifact revision after desktop restart", () => {
+  withRecoveryStorage(() => {
+    const before = state();
+    const opened = openArtifactWorkbench(before, context, { grid: { id: "project-analysis" } }, null, false)!;
+    saveArtifactWorkbenchRecovery("project-owner@example.com", opened.handoff);
+    const reloaded = JSON.parse(JSON.stringify(opened.state)) as TerminalTabsState;
+    reloaded.tabs[0].workspace.secondary!.artifact!.version = 6;
+    const recovered = loadArtifactWorkbenchRecovery("project-owner@example.com", reloaded, "internal");
+    assert.ok(recovered);
+    const restored = returnFromArtifactWorkbench(reloaded, recovered, { ...context, version: 6 }, false)!;
+    assert.deepEqual(restored.context, { ...context, version: 6 });
+    assert.equal(restored.context.projectId, 17);
+    assert.equal(restored.context.chatId, 42);
+    assert.equal(restored.state.activeTabId, before.activeTabId);
+    assert.deepEqual(restored.state.tabs, before.tabs);
+  });
 });

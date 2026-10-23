@@ -20,7 +20,7 @@ import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContex
 import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
-import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
+import { clearArtifactWorkbenchRecovery, loadArtifactWorkbenchRecovery, openArtifactWorkbench, returnFromArtifactWorkbench, saveArtifactWorkbenchRecovery } from "@/lib/artifactWorkbenchHandoff";
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
 import { TerminalArtifactRendererProvider } from "@/lib/terminalArtifactState";
@@ -266,7 +266,20 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const audience: WorkspaceAudience = isInternal ? "internal" : isTrial ? "trial" : "client";
   const isMobile = useIsMobile();
   const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
-  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(null);
+  const [initialArtifactHandoff] = useState(() =>
+    loadArtifactWorkbenchRecovery(session.email, tabsState, audience));
+  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(initialArtifactHandoff);
+  const handoffAudienceRef = useRef({ email: session.email.trim().toLowerCase(), audience });
+  // An account switch or entitlement-tier change cannot keep another user's
+  // in-memory return tab alive. The server still owns all Artifact read rights.
+  useEffect(() => {
+    const next = { email: session.email.trim().toLowerCase(), audience };
+    if (next.email !== handoffAudienceRef.current.email || next.audience !== handoffAudienceRef.current.audience) {
+      handoffAudienceRef.current = next;
+      artifactHandoffRef.current = null;
+      clearArtifactWorkbenchRecovery();
+    }
+  }, [session.email, audience]);
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
@@ -466,6 +479,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       artifactHandoffRef.current = artifactHandoffRef.current?.priorTab.id === result.handoff.priorTab.id
         ? { ...result.handoff, priorTab: artifactHandoffRef.current.priorTab, priorLayout: artifactHandoffRef.current.priorLayout, priorMaximizedPane: artifactHandoffRef.current.priorMaximizedPane }
         : result.handoff;
+      // Store the small, account-bound return navigation snapshot before the
+      // Artifact pane displaces the prior saved Terminal tab.
+      if (artifactHandoffRef.current) saveArtifactWorkbenchRecovery(session.email, artifactHandoffRef.current);
       setTabsState(() => result.state);
       setMaximizedPane(null);
       chatWorkbenchOriginRef.current = null;
@@ -482,6 +498,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     const handoff = artifactHandoffRef.current;
     if (!handoff) {
       if (dirty || workbenchDirtyRef.current) return;
+      clearArtifactWorkbenchRecovery();
       setWorkbenchReturn(current => ({ context, request: (current?.request ?? 0) + 1, prompt }));
       handleSurface("projects");
       return;
@@ -493,6 +510,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
     requestDockviewLayoutRestore(handoff.priorLayout);
     artifactHandoffRef.current = null;
+    clearArtifactWorkbenchRecovery();
     handleSurface("projects");
   }, [tabsState, handleSurface, setTabsState]);
   const handleWorkbenchVersion = useCallback((paneId: PaneId, version: number) => {
@@ -757,7 +775,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "chart": content = <ChartPanel symbol={pane.symbol} onSymbol={chatControls ? onSymbol : (nextSymbol) => updatePaneSymbolAndView(paneId, nextSymbol, "chart")} />; break;
       case "news": content = <NewsPanel symbol={pane.symbol} />; break;
       case "agent": content = <AgentPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} context={askLiosContext ?? undefined} initialPrompt={askLiosPrompt ?? undefined} />; break;
-      case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
+      case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} recoveryOwner={session.email} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
       case "screener": content = <ScreenerPanel onSymbol={onSymbol} />; break;
       case "watchlist": content = <WatchlistPanel activeSymbol={pane.symbol} onSymbol={onSymbol} role={session.role} />; break;
       case "alerts": content = <AlertsPanel onSymbol={onSymbol} role={session.role} />; break;

@@ -6,6 +6,7 @@ import {
   isComposerFocusShortcut,
   P1_SOURCE_SCOPES,
   resolveComposerPersistenceTarget,
+  sourceScopeForChatMode,
 } from "./p1Shell";
 
 test("P1C source-scope chips are the canonical authenticated composer set", () => {
@@ -59,4 +60,24 @@ test("P1C clean install never requires a Project before the first authenticated 
   assert.equal(resolveComposerPersistenceTarget({ chatMode: "project", projectId: 42, chatId: null }), "project");
   assert.equal(resolveComposerPersistenceTarget({ chatMode: "project", projectId: 42, chatId: 99 }), "existing");
   assert.equal(resolveComposerPersistenceTarget({ chatMode: "temporary", projectId: null, chatId: null }), "temporary");
+});
+
+test("Temporary Chat never inherits Files or My Data from a saved Quick Chat preference", () => {
+  assert.equal(sourceScopeForChatMode("temporary", "files"), "auto");
+  assert.equal(sourceScopeForChatMode("temporary", "my_data"), "auto");
+  assert.equal(sourceScopeForChatMode("temporary", "web"), "web");
+  assert.equal(sourceScopeForChatMode("temporary", "auto"), "auto");
+  assert.equal(sourceScopeForChatMode("quick", "files"), "files");
+  assert.equal(sourceScopeForChatMode("quick", "my_data"), "my_data");
+  assert.equal(sourceScopeForChatMode("project", "files"), "files");
+  assert.equal(sourceScopeForChatMode("project", "my_data"), "my_data");
+});
+
+test("Temporary Chat normalizes active source but does not overwrite saved regular Chat scope", async () => {
+  const { readFileSync } = await import("node:fs");
+  const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
+  assert.match(shell, /setSourceScope\(sourceScopeForChatMode\(chatMode, selectedTerminalScope \?\? loadComposerSourceScope\(scopedProjectId\)\)\)/);
+  assert.match(shell, /setSourceScope\(sourceScopeForChatMode\("temporary", loadComposerSourceScope\(null\)\)\)/);
+  assert.match(shell, /if \(chatMode !== "temporary"\) saveComposerSourceScope/);
+  assert.match(shell, /Temporary Chat supports Auto or Web sources only/);
 });

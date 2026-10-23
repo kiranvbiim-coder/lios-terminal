@@ -19,6 +19,8 @@ const { createProjectChat, getProjectChat, listProjectChatMessages } = await imp
 const { listProjectResources, setProjectResourceContextMode } = await import("./projectResourceStore");
 const { registerProjectRoutes } = await import("./projectRoutes");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
+const { registerArtifactRoutes } = await import("./artifactRoutes");
+const { persistConversationDraft } = await import("./artifactStore");
 
 test("Project attachment HTTP routes enforce auth, file-only multipart, tenant scope, and safe downloads", { timeout: 60_000 }, async (t) => {
   await initDb();
@@ -60,6 +62,7 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   });
   registerProjectRoutes(app);
   registerProjectConversationRoutes(app);
+  registerArtifactRoutes(app);
   server = createServer(app);
   await new Promise<void>((resolve, reject) => {
     server!.once("error", reject);
@@ -280,6 +283,167 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(quickMessages.some(m => m.role === "user" && Array.isArray(m.metadata.attachments)
     && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)), true);
 
+  // Second turn explicitly reuses the saved reference; no second multipart upload
+  // or ambient Chat-wide file transmission occurs. Original server custody is checked again.
+  const beforeFollowUp = await listProjectChatMessages(ownerContext, quick.id);
+  const followUp = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(),
+      message: "Review the same saved note again and identify evidence gaps.",
+      sourceScope: "files",
+      attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  assert.equal(followUp.status, 200, await followUp.text());
+  const afterFollowUp = await listProjectChatMessages(ownerContext, quick.id);
+  assert.ok(afterFollowUp.length > beforeFollowUp.length, "a follow-up must retain a new Chat turn");
+  assert.equal(afterFollowUp.filter(m => m.role === "user" && Array.isArray(m.metadata.attachments)
+    && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)).length, 2,
+    "both original and follow-up user messages must retain their exact, independently authorized file reference");
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1,
+    "referencing the same saved file must not fabricate a second upload or resource");
+
+  // One canonical signed-in HTTP journey: upload once → use on two Chat turns →
+  // retain an editable P4 report linked to that exact source → revise → DB reopen → retrieve.
+  // This explicitly exercises the same endpoints used by the Chat Artifact sidecar/Workbench.
+  const reportDraft = {
+    schemaVersion: "1",
+    artifactId: crypto.randomUUID(),
+    artifactType: "report",
+    title: "Quick Chat file research report",
+    projectId: null,
+    sourceRefs: [quickRef.sourceRef],
+    executionReceiptIds: [],
+    persistence: "chat_candidate",
+    data: { kind: "report", sections: [], blocks: [{
+      id: "summary", type: "paragraph", text: "Evidence from the explicitly attached Quick Chat file.",
+      attrs: {},
+    }] },
+  };
+  // Source strings are not authorization: this second Chat is owned by the same
+  // user, but must not be able to claim the first Chat's uploaded file as evidence.
+  const spoofedOtherChat = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft, dependencyRefs: [quickRef.sourceRef] }),
+  });
+  assert.equal(spoofedOtherChat.status, 404, await spoofedOtherChat.text());
+  const spoofedDependency = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, artifactId: crypto.randomUUID(), sourceRefs: [] },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(spoofedDependency.status, 404, await spoofedDependency.text());
+
+  const artifactSave = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft, requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef] }),
+  });
+  const artifactSaveText = await artifactSave.text();
+  assert.equal(artifactSave.status, 200, artifactSaveText);
+  const retainedReport = JSON.parse(artifactSaveText) as {
+    artifact: { id: string; projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { version: number; sourceRefs: string[]; dependencyRefs: string[] };
+  };
+  assert.equal(retainedReport.artifact.projectId, null, "saving a Quick Chat Artifact must not create a Project");
+  assert.equal(retainedReport.artifact.owningChatId, quick.id);
+  assert.equal(retainedReport.version.version, 1);
+  assert.deepEqual(retainedReport.version.sourceRefs, [quickRef.sourceRef]);
+  assert.ok(retainedReport.version.dependencyRefs.includes(quickRef.sourceRef));
+
+  const artifactPath = `http://127.0.0.1:${address.port}/api/artifacts/${encodeURIComponent(retainedReport.artifact.id)}`;
+  assert.equal((await fetch(artifactPath + "?version=1", { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  const forgedArtifact = await fetch(`http://127.0.0.1:${address.port}/api/chats/${otherQuick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(other.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: reportDraft }),
+  });
+  assert.equal(forgedArtifact.status, 404, await forgedArtifact.text());
+
+  const revisionDraft = {
+    ...reportDraft,
+    artifactId: crypto.randomUUID(),
+    data: { kind: "report", sections: [], blocks: [{
+      id: "summary", type: "paragraph",
+      text: "Revised report, same original Quick Chat file and immutable source provenance.",
+      attrs: {},
+    }] },
+  };
+  // Even an owned file from ANOTHER Chat cannot be substituted into this
+  // Artifact's next version or dependency manifest.
+  const siblingUpload = await fetch(`http://127.0.0.1:${address.port}/api/quick-chats/${otherQuick.id}/attachments`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id) },
+    body: attachmentForm("sibling-private.txt", "Other Chat's private evidence."),
+  });
+  const siblingUploadBody = await siblingUpload.text();
+  assert.equal(siblingUpload.status, 201, siblingUploadBody);
+  const siblingRef = conversationAttachmentRefSchema.parse((JSON.parse(siblingUploadBody) as { attachment: unknown }).attachment);
+  const forgedRevision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: { ...revisionDraft, sourceRefs: [siblingRef.sourceRef] }, dependencyRefs: [siblingRef.sourceRef] }),
+  });
+  assert.equal(forgedRevision.status, 404, await forgedRevision.text());
+  const forgedDependencyRevision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: revisionDraft, dependencyRefs: [siblingRef.sourceRef] }),
+  });
+  assert.equal(forgedDependencyRevision.status, 404, await forgedDependencyRevision.text());
+
+  const revision = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: revisionDraft, requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef] }),
+  });
+  const revisionBody = await revision.text();
+  assert.equal(revision.status, 200, revisionBody);
+  const parsedRevision = JSON.parse(revisionBody) as {
+    artifact: { id: string; projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { version: number; sourceRefs: string[] };
+  };
+  assert.equal(parsedRevision.artifact.id, retainedReport.artifact.id);
+  assert.equal(parsedRevision.artifact.headVersion, 2);
+  assert.equal(parsedRevision.artifact.owningChatId, quick.id);
+  assert.deepEqual(parsedRevision.version.sourceRefs, [quickRef.sourceRef]);
+
+  // A real embedded-DB close/reopen is stronger than a same-process state assertion.
+  // The authenticated download uses the persisted blob; the historical report stays pinned.
+  await closeDb();
+  await initDb();
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1);
+  const originalAfterReopen = await fetch(artifactPath + "?version=1", {
+    headers: { "x-test-user-id": String(owner.id) },
+  });
+  assert.equal(originalAfterReopen.status, 200, await originalAfterReopen.text());
+  const revisedAfterReopen = await fetch(artifactPath + "?version=2", {
+    headers: { "x-test-user-id": String(owner.id) },
+  });
+  assert.equal(revisedAfterReopen.status, 200);
+  const revisedArtifactResponse = await revisedAfterReopen.json() as {
+    artifact: { id: string; headVersion: number };
+    version: { version: number; sourceRefs: string[] };
+  };
+  assert.equal(revisedArtifactResponse.artifact.id, retainedReport.artifact.id);
+  assert.equal(revisedArtifactResponse.artifact.headVersion, 2);
+  assert.equal(revisedArtifactResponse.version.version, 2);
+  assert.deepEqual(revisedArtifactResponse.version.sourceRefs, [quickRef.sourceRef]);
+  const fileAfterReopen = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(fileAfterReopen.status, 200);
+  assert.equal(await fileAfterReopen.text(), privatePayload);
+  assert.equal((await listProjectChatMessages(ownerContext, quick.id))
+    .filter((msg) => msg.role === "user" && Array.isArray(msg.metadata.attachments)).length, 2,
+    "saved Chat history and file references must survive reopening together");
+  
   // The runtime must reject another Chat's reference before saving a user message.
   const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
   const crossQuickRun = await fetch(conversationUrlFor(address.port, otherQuick.id), {
@@ -292,6 +456,157 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   });
   assert.equal(crossQuickRun.status, 404, await crossQuickRun.text());
   assert.equal((await listProjectChatMessages(ownerContext, otherQuick.id)).length, beforeQuickCrossScope.length);
+
+  // A Project cannot inherit a Quick Chat file merely because its owner can
+  // type a sourceRef. Moving the exact Chat into that Project is the custody step.
+  const sourceClaimUrl = `http://127.0.0.1:${address.port}/api/chats/${chat.id}/artifacts/keep-draft`;
+  const prePromotionClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ draft: { ...reportDraft, artifactId: crypto.randomUUID() }, dependencyRefs: [quickRef.sourceRef] }),
+  });
+  assert.equal(prePromotionClaim.status, 404, await prePromotionClaim.text());
+
+  const promote = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${quick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: project.id }),
+  });
+  assert.equal(promote.status, 200, await promote.text());
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, project.id);
+  const promotedArtifact = await fetch(artifactPath, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedArtifact.status, 200);
+  const promotedRecord = await promotedArtifact.json() as {
+    artifact: { projectId: number | null; owningChatId: number | null; headVersion: number };
+    version: { sourceRefs: string[] };
+  };
+  assert.equal(promotedRecord.artifact.projectId, project.id, "the same original Artifact becomes Project-owned");
+  assert.equal(promotedRecord.artifact.owningChatId, null, "no duplicate Chat/Project Artifact authority");
+  assert.equal(promotedRecord.artifact.headVersion, 2);
+  assert.deepEqual(promotedRecord.version.sourceRefs, [quickRef.sourceRef]);
+  const promotedFile = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedFile.status, 200, "the original Quick file download must survive promotion");
+  assert.equal(await promotedFile.text(), privatePayload);
+  const sameProjectDifferentChatClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(sameProjectDifferentChatClaim.status, 404, await sameProjectDifferentChatClaim.text());
+  const ownPromotedChatDraft = await fetch(`http://127.0.0.1:${address.port}/api/chats/${quick.id}/artifacts/keep-draft`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef],
+    }),
+  });
+  assert.equal(ownPromotedChatDraft.status, 200, await ownPromotedChatDraft.text());
+  const generatedDraft = { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID() };
+  const retainedByRuntime = await persistConversationDraft(ownerContext, {
+    projectId: project.id, owningChatId: quick.id, draft: generatedDraft,
+    requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef],
+  });
+  assert.equal(retainedByRuntime.artifact.projectId, project.id);
+  assert.equal(retainedByRuntime.artifact.owningChatId, null,
+    "AI-retained Project Artifacts must not acquire a second Chat lifecycle owner");
+  assert.deepEqual(retainedByRuntime.version.sourceRefs, [quickRef.sourceRef]);
+  await assert.rejects(
+    () => persistConversationDraft(ownerContext, {
+      projectId: project.id, owningChatId: chat.id,
+      draft: { ...generatedDraft, artifactId: crypto.randomUUID() },
+      requestId: crypto.randomUUID(), dependencyRefs: [quickRef.sourceRef],
+    }),
+    /File provenance not owned/,
+    "automatic retention must not claim a promoted file from a different Chat in the same Project",
+  );
+  const promotedChatFollowUp = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "Review this originally uploaded note after moving the Chat.",
+      sourceScope: "files", attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  assert.equal(promotedChatFollowUp.status, 200, await promotedChatFollowUp.text());
+  assert.equal((await getProjectChat(ownerContext, quick.id)).attachmentManifest.length, 1,
+    "promotion and further reuse must not duplicate the original file");
+
+  // Original professional revisions must still work after promotion, using the
+  // immutable original source and the existing version endpoint, not a new store.
+  const retainedAfterPromotion = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID() },
+      dependencyRefs: [quickRef.sourceRef], requestId: crypto.randomUUID(),
+    }),
+  });
+  assert.equal(retainedAfterPromotion.status, 200, await retainedAfterPromotion.text());
+  const promotedV3 = await fetch(artifactPath + "?version=3", { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(promotedV3.status, 200);
+  assert.deepEqual(((await promotedV3.json()) as { version: { sourceRefs: string[] } }).version.sourceRefs, [quickRef.sourceRef]);
+  assert.equal((await fetch(artifactPath + "?version=1", { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  // A second Quick Chat, even after moving into the SAME Project, does not
+  // inherit the historical source authority of the first Artifact.
+  const sameProjectQuick = await createProjectChat(ownerContext, { scope: "quick" });
+  const sameProjectUpload = await fetch(`http://127.0.0.1:${address.port}/api/quick-chats/${sameProjectQuick.id}/attachments`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id) },
+    body: attachmentForm("project-sibling-secret.txt", "Separate source, never attached to the original Artifact."),
+  });
+  const sameProjectUploadBody = await sameProjectUpload.text();
+  assert.equal(sameProjectUpload.status, 201, sameProjectUploadBody);
+  const sameProjectRef = conversationAttachmentRefSchema.parse(
+    (JSON.parse(sameProjectUploadBody) as { attachment: unknown }).attachment);
+  const sameProjectPromotion = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${sameProjectQuick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: project.id }),
+  });
+  assert.equal(sameProjectPromotion.status, 200, await sameProjectPromotion.text());
+  const sameProjectRevisionSpoof = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID(),
+        sourceRefs: [sameProjectRef.sourceRef] },
+      dependencyRefs: [sameProjectRef.sourceRef],
+    }),
+  });
+  assert.equal(sameProjectRevisionSpoof.status, 404, await sameProjectRevisionSpoof.text());
+
+  // Even after moving another owned Chat to a DIFFERENT Project, its saved file
+  // cannot be claimed in this Project's Artifact source/dependency manifest.
+  const unrelatedProject = await createProject(ownerContext, { name: "Separate private evidence Project" });
+  const promoteSibling = await fetch(`http://127.0.0.1:${address.port}/api/project-chats/${otherQuick.id}/promote`, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({ projectId: unrelatedProject.id }),
+  });
+  assert.equal(promoteSibling.status, 200, await promoteSibling.text());
+  const otherProjectClaim = await fetch(sourceClaimUrl, {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...reportDraft, projectId: project.id, artifactId: crypto.randomUUID(), sourceRefs: [siblingRef.sourceRef] },
+      dependencyRefs: [siblingRef.sourceRef],
+    }),
+  });
+  assert.equal(otherProjectClaim.status, 404, await otherProjectClaim.text());
+  const forgedAfterPromotion = await fetch(artifactPath + "/keep-draft-version", {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      draft: { ...revisionDraft, projectId: project.id, artifactId: crypto.randomUUID(), sourceRefs: [siblingRef.sourceRef] },
+      dependencyRefs: [siblingRef.sourceRef],
+    }),
+  });
+  assert.equal(forgedAfterPromotion.status, 404, await forgedAfterPromotion.text());
 
   const temporaryUrl = `http://127.0.0.1:${address.port}/api/project-chat/temporary/respond`;
   const unreviewedTemporaryVoice = await fetch(temporaryUrl, {

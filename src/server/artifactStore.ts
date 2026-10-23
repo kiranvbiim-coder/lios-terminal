@@ -35,7 +35,7 @@ import {
   type ArtifactReferenceType,
   type SpreadsheetCellDiff,
 } from "@shared/artifactContracts";
-import type { ConversationArtifactDraft } from "@shared/conversationRuntime";
+import { conversationAttachmentRefSchema, type ConversationArtifactDraft } from "@shared/conversationRuntime";
 import { trustManifestSchema, type TrustManifest } from "@shared/trustContracts";
 import { projectWorkspaceSessionStateSchema } from "@shared/projectContracts";
 import { defaultArtifactAdapterId } from "@shared/artifactAdapterRegistry";
@@ -112,6 +112,66 @@ export function assertArtifactRefsSafe(refs: readonly string[], label = "sourceR
   for (const ref of refs) {
     if (SECRET_REF.test(ref)) throw new Error(`${label} must not contain credential-bearing references.`);
   }
+}
+
+/**
+ * An authored source string is not evidence of file custody. In a Quick Chat,
+ * only that exact Chat's saved manifest can back a quick-attachment reference.
+ * Following explicit promotion, the Project owns the Artifact but the original
+ * Chat still holds its file manifest. New Project-scoped Chat drafts must be
+ * bound to THAT exact Chat; revisions without a Chat caller can preserve only
+ * previously validated immutable refs from their own base version.
+ * This is provenance validation, NOT permission to transmit bytes to an AI.
+ */
+async function assertQuickChatAttachmentProvenance(
+  ctx: TenantContext,
+  chatId: number | null,
+  projectId: number | null,
+  refs: readonly string[],
+  inheritedRefs: readonly string[] = [],
+): Promise<void> {
+  const attachmentRefs = [...new Set(refs.filter(ref => /^(?:quick|project)-attachment:/i.test(ref)))];
+  if (!attachmentRefs.length) return;
+  const deny = () => { throw new Error("File provenance not owned by the Artifact context."); };
+  if (projectId === null && chatId !== null && attachmentRefs.some(ref => /^project-attachment:/i.test(ref))) deny();
+  const quickRefs = attachmentRefs.filter(ref => /^quick-attachment:/i.test(ref));
+  if (!quickRefs.length) return; // Project attachments retain their existing separate rights checks.
+  if (quickRefs.some(ref => !/^quick-attachment:[0-9a-f-]{36}$/i.test(ref))) deny();
+
+  let manifests: unknown[];
+  if (projectId === null) {
+    if (chatId === null) deny();
+    const { getProjectChat } = await import("./projectChatStore");
+    const chat = await getProjectChat(ctx, chatId!);
+    if (chat.scope !== "quick" || chat.projectId !== null) deny();
+    manifests = [chat.attachmentManifest];
+  } else if (chatId !== null) {
+    // An authenticated Project Chat route identifies the ONLY Chat allowed to
+    // contribute a historical Quick file, including after explicit promotion.
+    const { getProjectChat } = await import("./projectChatStore");
+    const chat = await getProjectChat(ctx, chatId);
+    if (chat.scope !== "project" || chat.projectId !== projectId) deny();
+    manifests = [chat.attachmentManifest];
+  } else {
+    // A Project-owned Artifact has no owningChatId after promotion. Editing
+    // may retain its already-validated Quick file refs, but a plain source
+    // string cannot add another Chat's file, even in the same Project.
+    if (quickRefs.some(ref => !inheritedRefs.includes(ref))) deny();
+    const rows = await getDb().select({ attachmentManifest: projectChats.attachmentManifest })
+      .from(projectChats).where(and(
+        eq(projectChats.ownerUserId, ctx.userId),
+        tenantOrgClause(projectChats.organizationId, ctx),
+        eq(projectChats.projectId, projectId),
+        eq(projectChats.scope, "project"),
+        isNull(projectChats.trashedAt),
+      ));
+    manifests = rows.map(row => row.attachmentManifest);
+  }
+  const ownedRefs = manifests.flatMap(manifest => {
+    const parsed = conversationAttachmentRefSchema.array().safeParse(manifest);
+    return parsed.success ? parsed.data.filter(ref => ref.sourceRef === "quick-attachment:" + ref.id) : [];
+  });
+  if (quickRefs.some(ref => !ownedRefs.some(item => item.sourceRef === ref))) deny();
 }
 
 export function artifactTrustSourceRefs(manifest: TrustManifest | null | undefined): string[] {
@@ -668,6 +728,9 @@ async function createArtifactRecord(
   const trustManifest = input.trustManifest == null ? null : trustManifestSchema.parse(input.trustManifest);
   if (trustManifest) assertArtifactTrustSafe(trustManifest);
   const dependencyRefs = resolveArtifactDependencyRefs(input.dependencyRefs, trustManifest);
+  await assertQuickChatAttachmentProvenance(ctx, input.owningChatId ?? null, input.projectId, [
+    ...(input.sourceRefs ?? []), ...dependencyRefs,
+  ]);
   const refreshSpec = input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
   if (refreshSpec) assertArtifactRefreshSpecSafe(refreshSpec);
   const id = retention?.artifactId ?? `artifact:${crypto.randomUUID()}`;
@@ -1062,6 +1125,9 @@ export async function createArtifactVersion(
     input.dependencyRefs === undefined ? (base.dependencyRefs ?? []) : input.dependencyRefs,
     trustManifest,
   );
+  await assertQuickChatAttachmentProvenance(ctx, artifact.owningChatId, artifact.projectId, [
+    ...(input.sourceRefs ?? base.sourceRefs), ...dependencyRefs,
+  ], [...base.sourceRefs, ...(base.dependencyRefs ?? [])]);
   const refreshSpec = input.refreshSpec === undefined
     ? (base.refreshSpec ? artifactRefreshSpecSchema.parse(base.refreshSpec) : null)
     : input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);

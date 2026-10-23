@@ -11,6 +11,15 @@ export const P1_SOURCE_SCOPES: ReadonlyArray<{
   { id: "files", label: "Files", description: "Use only files explicitly attached to this Chat." },
 ]);
 
+/** A Temporary Chat cannot attach or retain files, so Files/My Data cannot remain its active source posture.
+ * This only changes the live Temporary composer: saved Quick/Project source preferences remain untouched.
+ */
+export function sourceScopeForChatMode(
+  chatMode: "quick" | "project" | "temporary", preferred: ConversationSourceScope,
+): ConversationSourceScope {
+  return chatMode === "temporary" && (preferred === "files" || preferred === "my_data") ? "auto" : preferred;
+}
+
 const SOURCE_SCOPE_KEY = "lios.p1.composer-source-scope.v1";
 const TELEMETRY_KEY = "lios.p1.shell-telemetry.v1";
 

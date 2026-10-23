@@ -23,6 +23,8 @@ import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4ArtifactWorkspace";
+import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
+import { useNativeArtifactDraftRecovery, clearNativeArtifactDraft, type NativeArtifactDraftContext } from "@/lib/nativeArtifactDraftRecovery";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -70,7 +72,7 @@ class ArtifactChartBoundary extends Component<{ children: ReactNode }, { failed:
 }
 const shortHash = (value: string) => `${value.slice(0, 10)}…${value.slice(-6)}`;
 
-function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean }) {
+function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false, recoveryContext }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean; recoveryContext?: NativeArtifactDraftContext | null }) {
   const [content, setContent] = useState(incomingContent);
   const [question, setQuestion] = useState(incomingContent.kind === "research" ? incomingContent.question : "");
   const [sourceMode, setSourceMode] = useState<"connected_sources" | "only_refs">(incomingContent.kind === "research" ? incomingContent.sourcePolicy.mode : "connected_sources");
@@ -92,6 +94,15 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
   draftRef.current = draftContent;
   baselineRef.current = baseline;
   const dirty = advancedDirty || JSON.stringify(draftContent) !== baseline;
+  const recovery = useNativeArtifactDraftRecovery(recoveryContext ?? null, draftContent,
+    dirty && !advancedDirty, JSON.stringify(draftContent), saved => {
+      setContent(saved);
+      if (saved.kind === "research") {
+        setQuestion(saved.question); setSourceMode(saved.sourcePolicy.mode);
+        setAllowedRefs(saved.sourcePolicy.allowedSourceRefs.join("\n"));
+      }
+      setAdvancedDirty(false);
+    });
   useEffect(() => { onDirtyChange?.(dirty || saving || pending); }, [dirty, saving, pending, onDirtyChange]);
   useEffect(() => { if (dirty && notice?.startsWith("Document revision saved.")) setNotice(null); }, [dirty, notice]);
   useEffect(() => {
@@ -126,8 +137,16 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
     <div className="space-y-3">{content.blocks.map((block,index)=><label key={block.id} className="block"><span className="mb-1 block font-terminal text-[12px] text-muted-foreground">{block.type} · {block.id}</span><textarea aria-label={`Document block ${index+1}`} disabled={saving || pending} value={block.text} onChange={(event)=>{const text=event.target.value;setContent(current=>({...current,blocks:current.blocks.map((item,i)=>i===index?{...item,text}:item)}));}} className="min-h-[100px] w-full rounded-lg border border-border/50 bg-black/15 p-4 font-ui text-[14px] leading-6 text-foreground outline-none disabled:opacity-50"/></label>)}</div>
   </div>;
   return <div>
+    {recovery.candidate && <div role="alert" data-testid="protected-document-recovery" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-100">
+      {recovery.matching ? "Protected unsaved document edits were found. Review or discard them before continuing." : "An encrypted draft exists for another saved revision. It will not overwrite the current Artifact."}
+      <div className="mt-2 flex gap-2">{recovery.matching && <button type="button" onClick={recovery.restore} className="rounded border px-2 py-1">Recover local edits</button>}
+      <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard recovery</button></div>
+    </div>}
+    {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
+    {advancedDirty && <p role="status" className="mb-2 text-sm text-amber-200">Advanced JSON editor changes are not included in local crash checkpoints. Save or reset them before leaving.</p>}
+    {dirty && recovery.status === "disabled" && <p role="status" className="mb-2 text-sm text-amber-200">Protected crash recovery is unavailable here. Save your revision to protect these edits.</p>}
     {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={()=>{setContent(incomingContent);if(incomingContent.kind==="research"){setQuestion(incomingContent.question);setSourceMode(incomingContent.sourcePolicy.mode);setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));}setBaseline(JSON.stringify(incomingContent));setBaseRevision(revision);saveRef.current=onSave;pendingContent.current=null;setConflict(false);setPending(false);setNotice(null);setRichError(null);setAdvancedDirty(false);}}>Discard local changes and reload revision</button></div>}
-    <fieldset disabled={advancedDirty} className="min-w-0">
+    <fieldset disabled={advancedDirty || recovery.blocked} className="min-w-0">
     {content.kind==="research"&&<div className="mb-3 space-y-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.015] p-3">
       <div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-cyan-200">RESEARCH PLAN · {content.plan.status.toUpperCase()}</span><span className="font-terminal text-[12px] text-muted-foreground">{content.plan.steps.length} STEPS · {content.evidence.length} EVIDENCE · {content.contradictions.filter((x)=>x.status==="open").length} OPEN CONTRADICTIONS · {content.executionTrail.length} TRAIL EVENTS</span></div>
       <input aria-label="Research question" disabled={saving || pending} value={question} onChange={(e)=>setQuestion(e.target.value)} placeholder="Research question" className="w-full rounded border border-border/50 bg-black/20 px-2 py-1.5 font-ui text-[14px] outline-none"/>
@@ -141,16 +160,16 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
     </div>}
     <div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-muted-foreground">LIVE DOCUMENT · BASE V{baseRevision}</span><button type="button" disabled={saving || pending} onClick={()=>{setRichError(null);setBuiltin(current=>!current);}} className="ml-auto rounded border border-border/50 px-2 py-1 text-[13px]">{builtin ? "Open rich document editor" : "Use built-in text editor"}</button></div>
     {builtin || richError ? fallback : <RichDocumentBoundary key={baseRevision} fallback={<div><p role="alert" className="mb-2 text-sm text-amber-200">Rich renderer unavailable. Your canonical draft is retained in the built-in editor.</p>{fallback}</div>}><Suspense fallback={<div><p role="status">Loading rich editor. The built-in editor remains available.</p><button type="button" onClick={()=>setBuiltin(true)} className="underline">Use built-in text editor</button></div>}><RichArtifactDocumentEditor content={content} disabled={disabled || saving || pending || advancedDirty} onChange={setContent} onError={setRichError}/></Suspense></RichDocumentBoundary>}
-    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={!dirty || saving || pending || conflict || advancedDirty} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={!dirty || saving || pending || conflict || advancedDirty || recovery.blocked} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
     </fieldset>
     {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={saving || pending || conflict} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
   </div>;
 }
-function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   if (props.content.rendererPreference === "univer") return <Suspense fallback={<p role="status">Loading spreadsheet editor…</p>}><UniverSpreadsheetEditor {...props} /></Suspense>;
   return <BuiltinSpreadsheetEditor {...props}/>;
 }
-function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey,recoveryContext}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   const [grid, setGrid] = useState(() => artifactSheetToGrid(content));
   const [draftContent, setDraftContent] = useState(content);
   const [tick, setTick] = useState(0);
@@ -161,6 +180,15 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   const draft = useRef({ content: draftContent, grid });
   draft.current = { content: draftContent, grid };
   const [conflict, setConflict] = useState(false);
+  const checkpoint = gridToArtifactSheet(draftContent, grid);
+  const isDirty = spreadsheetDraftHasChanges(baseline.current.content, checkpoint);
+  const recovery = useNativeArtifactDraftRecovery(recoveryContext ?? null, checkpoint, isDirty, tick, saved => {
+    setDraftContent(saved);
+    setGrid(artifactSheetToGrid(saved));
+    setConflict(false);
+    onDirtyChange?.(true);
+    setTick(current => current + 1);
+  });
   useEffect(() => {
     const local = gridToArtifactSheet(draft.current.content, draft.current.grid);
     const dirty = spreadsheetDraftHasChanges(baseline.current.content, local);
@@ -193,8 +221,15 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   const selectedInBounds = selectedCoordinates && selectedCoordinates.row < sheet.rowCount && selectedCoordinates.col < sheet.columnCount;
   const selectedCell = { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) };
   return <div>
+    {recovery.candidate && <div role="alert" data-testid="protected-spreadsheet-recovery" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-100">
+      {recovery.matching ? "Protected unsaved worksheet edits were found. Review or discard them before continuing." : "Encrypted worksheet edits belong to another saved revision and cannot be applied here."}
+      <div className="mt-2 flex gap-2">{recovery.matching && <button type="button" onClick={recovery.restore} className="rounded border px-2 py-1">Recover worksheet edits</button>}
+        <button type="button" onClick={() => void recovery.discard()} className="rounded border px-2 py-1">Discard recovery</button></div>
+    </div>}
+    {recovery.notice && <p role="status" className="mb-2 text-sm text-amber-200">{recovery.notice}</p>}
+    {isDirty && recovery.status === "disabled" && <p role="status" className="mb-2 text-sm text-amber-200">Protected crash recovery is unavailable here. Save this worksheet to protect your changes.</p>}
     {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => { baseline.current = { content, revisionKey }; setDraftContent(content); setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1); }} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
-    <fieldset disabled={disabled || conflict} className="min-w-0">
+    <fieldset disabled={disabled || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <span className="font-terminal text-[12px] text-muted-foreground">SPREADSHEET · BASIC EDITOR</span>
       <label className="text-[13px] text-muted-foreground">Worksheet <select aria-label="Spreadsheet worksheet" value={sheet.id} onChange={e => selectSheet(e.target.value)} className="ml-1 rounded border border-border/50 bg-[#090909] px-2 py-1">{draftContent.sheets.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
@@ -279,10 +314,11 @@ function StrategyEditor({content,onSave}:{content:Extract<ArtifactContent,{kind:
   useEffect(()=>setSource(content.source),[content.source]);
   return <div><div className="mb-2 font-terminal text-[12px] text-muted-foreground">STRATEGY STUDIO · {content.language.toUpperCase()} · {content.validation.status.toUpperCase()}</div><textarea value={source} onChange={(e)=>setSource(e.target.value)} className="min-h-[320px] w-full rounded-lg border border-border/50 bg-black/20 p-3 font-terminal text-[14px] leading-5 text-foreground outline-none"/><div className="mt-2 flex justify-end"><button onClick={()=>void onSave({...content,source,validation:{status:"unvalidated",errors:[]}})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save strategy revision</button></div></div>;
 }
-function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,onOpenExport,onAsk,owner,onNativeVersion}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;onOpenExport?:()=>void;onAsk:(id:string,title:string,stagedPrompt?:string)=>void;owner:{projectId:number|null;owningChatId:number|null};onNativeVersion:(version:number)=>void}) {
+function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,onOpenExport,onAsk,owner,onNativeVersion,recoveryOwner}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;onOpenExport?:()=>void;onAsk:(id:string,title:string,stagedPrompt?:string)=>void;owner:{projectId:number|null;owningChatId:number|null};onNativeVersion:(version:number)=>void;recoveryOwner?:string}) {
+  const recoveryContext = recoveryOwner ? { owner: recoveryOwner, artifactId, baseVersion: revision, contentHash } : null;
   if(content.kind==="screen" && content.state.terminal) return <TerminalScreenArtifact content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onAsk={onAsk} target={{artifactId,version:revision,contentHash,...owner}} onNativeVersion={onNativeVersion}/>;
-  if(content.kind==="spreadsheet") return <SpreadsheetEditor content={content} revisionKey={`${revision}:${contentHash}`} onSave={onSave} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="spreadsheet") return <SpreadsheetEditor content={content} recoveryContext={recoveryContext} revisionKey={`${revision}:${contentHash}`} onSave={onSave} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} recoveryContext={recoveryContext} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
@@ -468,8 +504,9 @@ function IntegratedArtifactEngineInputs({ detail, onOpenOutput, blocked, onApply
 interface ArtifactPaneProps {
   artifactId: string;
   version?: number | null;
+  recoveryOwner?: string;
   onVersionChange?: (version: number | null) => void;
-  onDisplayedVersionChange?: (version: number, artifactId: string) => void;
+  onDisplayedVersionChange?: (version: number, artifactId: string, requestedVersion: number | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   projectId: number | null;
   owningChatId?: number | null;
@@ -540,7 +577,7 @@ export function ArtifactPane(props: ArtifactPaneProps) {
     controlledRevision.current = { artifactId: props.artifactId, version: props.version };
     if (selection !== null) setSelection(null);
   }
-  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId && (props.version == null || selection.version >= props.version) ? selection.version : props.version;
+  const selectedVersion = resolveArtifactPaneRequestedVersion(props.artifactId, props.version, selection);
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
@@ -564,6 +601,7 @@ function ArtifactPaneWorkspace({
   onFocus,
   onRerun,
   onEngineOutput,
+  recoveryOwner,
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
   const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
@@ -598,7 +636,7 @@ function ArtifactPaneWorkspace({
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
-  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
+  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
     setExportPlan(null);
@@ -658,6 +696,13 @@ function ArtifactPaneWorkspace({
     });
     invalidateAutomation(projectId);
   });
+  const clearSavedRecovery = () => {
+    if (recoveryOwner) void clearNativeArtifactDraft({
+      owner: recoveryOwner, artifactId,
+      baseVersion: data.version.version, contentHash: data.version.contentHash,
+    })
+      .catch(() => setError("Saved revision confirmed, but encrypted draft cleanup needs review on reopening."));
+  };
   const save=async(next:ArtifactContent)=>{
     if (data.version.version !== data.artifact.headVersion) throw new Error("Open the current Artifact revision before editing.");
     if (next.kind === "portfolio") {
@@ -683,6 +728,7 @@ function ArtifactPaneWorkspace({
           trustManifest: data.version.trustManifest, dependencyRefs: data.version.dependencyRefs, refreshSpec: data.version.refreshSpec,
         });
         if (mounted.current) setSpreadsheetPendingRevision(true);
+        clearSavedRecovery();
         onVersionChange?.(saved.version);
         invalidate(projectId, artifactId);
       } catch (cause) {
@@ -702,6 +748,7 @@ function ArtifactPaneWorkspace({
           baseVersion:data.version.version,content:next,actorType:"user",
           trustManifest:data.version.trustManifest,dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
         });
+        clearSavedRecovery();
         onVersionChange?.(saved.version);
         invalidate(projectId,artifactId);
       } catch(cause) {
@@ -750,7 +797,7 @@ function ArtifactPaneWorkspace({
       {data.version.version !== data.artifact.headVersion && <p role="status" className="mb-3 text-sm">Viewing saved revision {data.version.version}; current revision is {data.artifact.headVersion}. <button type="button" className="underline" onClick={() => onVersionChange?.(null)}>Open current revision</button></p>}
       {content.kind === "portfolio" && <ArtifactPortfolioMateriality key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying}/>}
       <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
-      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)} onAsk={onAsk} owner={{projectId:data.artifact.projectId,owningChatId:data.artifact.owningChatId ?? null}} onNativeVersion={version=>{setSpreadsheetPendingRevision(true);onVersionChange?.(version);invalidate(projectId,artifactId);}}/></fieldset>}
+      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)} onAsk={onAsk} owner={{projectId:data.artifact.projectId,owningChatId:data.artifact.owningChatId ?? null}} recoveryOwner={recoveryOwner} onNativeVersion={version=>{setSpreadsheetPendingRevision(true);onVersionChange?.(version);invalidate(projectId,artifactId);}}/></fieldset>}
       </div>
       {projectId !== null && <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>}
       <details data-testid="artifact-more-actions" className="mt-4 rounded-lg border border-border/40 bg-black/10 p-3"><summary className="cursor-pointer font-ui text-[13px] text-muted-foreground">More actions · review, reports, maintenance and source inspection</summary>
