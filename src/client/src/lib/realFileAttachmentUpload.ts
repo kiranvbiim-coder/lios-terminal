@@ -1,4 +1,4 @@
-import type { ConversationAttachmentRef } from "@shared/conversationRuntime";
+import { conversationAttachmentRefSchema, type ConversationAttachmentRef } from "@shared/conversationRuntime";
 import { progressPercent } from "./fileAttachmentStaging";
 
 export type UploadStage = { state: "transferring"; percent: number | null } | { state: "verifying"; percent: null };
@@ -45,16 +45,13 @@ export function uploadRealChatAttachment(
       let value: unknown;
       try { value = JSON.parse(xhr.responseText); }
       catch { reject(new Error("The upload response was unreadable. Check the saved Chat before retrying.")); return; }
-      const record = (value && typeof value === "object" && "attachment" in value) ? value.attachment : null;
-      if (!record || typeof record !== "object"
-        || !("id" in record) || typeof record.id !== "string"
-        || !("fileName" in record) || typeof record.fileName !== "string"
-        || !("byteLength" in record) || typeof record.byteLength !== "number"
-        || !("mimeType" in record) || typeof record.mimeType !== "string") {
+      const candidate = (value && typeof value === "object" && "attachment" in value) ? value.attachment : null;
+      const parsed = conversationAttachmentRefSchema.safeParse(candidate);
+      if (!parsed.success) {
         reject(new Error("The upload was not confirmed. Check the saved Chat before retrying."));
         return;
       }
-      resolve(record as ConversationAttachmentRef);
+      resolve(parsed.data);
     };
     const form = new FormData();
     form.append("file", file, file.name);
