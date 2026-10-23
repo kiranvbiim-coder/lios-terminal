@@ -750,6 +750,7 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
     const { executeConversationRuntime, getConversationTool, currentConversationToolApprovalPolicy } = await import("./conversationRuntime");
     const { createAttribution } = await import("./byoaiRouter");
     const wireCalls: string[] = [];
+    let cancelAfterRemoteToolEntered: (() => void) | null = null;
     const server = createServer(async (request, response) => {
       if (request.url !== "/mcp") { response.writeHead(404).end(); return; }
       if (request.method === "GET") { response.writeHead(405).end(); return; }
@@ -762,6 +763,7 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       if (rpc.method === "tools/call") {
         wireCalls.push(String(rpc.params?.name));
         assert.equal(rpc.params?.arguments?.symbol, "TEST");
+        cancelAfterRemoteToolEntered?.();
       }
       if (rpc.id === undefined) { response.writeHead(202).end(); return; }
       const result = rpc.method === "initialize"
@@ -800,7 +802,7 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       const reply = JSON.stringify({ decision: "complete", answer: "The connected source supplied a test observation." });
       const run = (requestId: string, controller: AbortController, answers: string[], resume?: {
         state: import("./agentLoop").AgentLoopResumeState; authorization: unknown;
-      }) => {
+      }, onLedger?: (event: import("./exec/agent-run-events").AgentEventInput) => void | Promise<void>) => {
         const ledger: import("./exec/agent-run-events").AgentEventInput[] = [];
         const events: ConversationRuntimeEvent[] = [];
         const prompts: string[] = [];
@@ -814,7 +816,7 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
           tenant: ownerCtx, scope: "project", chatId: chatA.id,
           projectId: projectA.id, resources: [], history: [], request,
           signal: controller.signal,
-          agentLoop: { ledger: async event => { ledger.push(event); }, ...(resume ? { resume } : {}) },
+          agentLoop: { ledger: async event => { ledger.push(event); await onLedger?.(event); }, ...(resume ? { resume } : {}) },
           aiCompletion: async completion => {
             const prompt = completion.messages.map(msg => msg.content).join("\n");
             prompts.push(prompt);
@@ -907,6 +909,55 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
       assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
       assert.ok(!revokedRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
+
+      // Stop is signalled after L5 acknowledged the intent but BEFORE the
+      // registry enters tool.invoke. The registry alone can prove zero effect
+      // and append a no_effect proof without any remote tools/call.
+      await getDb().update(sourceConnections).set({ status: "configured" }).where(eq(sourceConnections.id, connection.id));
+      const noEffectId = crypto.randomUUID();
+      const noEffectController = new AbortController();
+      const noEffectPending = await run(noEffectId, noEffectController, [plan]).promise;
+      assert.ok(noEffectPending.agentPause);
+      const noEffectAuth = await reviewOwner(noEffectId, noEffectController, noEffectPending.agentPause, true);
+      assert.ok(noEffectAuth);
+      const noEffectRun = run(noEffectId, noEffectController, [reply], {
+        state: noEffectPending.agentPause.resume, authorization: noEffectAuth,
+      }, event => { if (event.kind === "tool_call_dispatch_intent") noEffectController.abort(); });
+      await noEffectRun.promise.catch(() => undefined);
+      assert.deepEqual(wireCalls, ["quotes.read"], "stopping after intent acknowledgement must not invoke the MCP SDK");
+      assert.equal(noEffectRun.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+      assert.equal(noEffectRun.ledger.filter(event => event.kind === "tool_call_dispatch_no_effect").length, 1,
+        "a pre-entry stop has a durable zero-effect reconciliation proof");
+      assert.equal(noEffectRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
+      assert.equal(noEffectRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+      assert.equal(noEffectRun.prompts.length, 0, "cancelled runs do not synthesize results");
+
+      // In contrast, after the MCP server has received tools/call, even a
+      // client-side abort cannot prove the server did not perform the effect.
+      // The L5 intent remains unresolved, NEVER a no_effect proof or commit.
+      const unknownId = crypto.randomUUID();
+      const unknownController = new AbortController();
+      const unknownPending = await run(unknownId, unknownController, [plan]).promise;
+      assert.ok(unknownPending.agentPause);
+      const unknownAuth = await reviewOwner(unknownId, unknownController, unknownPending.agentPause, true);
+      assert.ok(unknownAuth);
+      cancelAfterRemoteToolEntered = () => unknownController.abort();
+      try {
+        const unknownRun = run(unknownId, unknownController, [reply], {
+          state: unknownPending.agentPause.resume, authorization: unknownAuth,
+        });
+        await unknownRun.promise.catch(() => undefined);
+        assert.deepEqual(wireCalls, ["quotes.read", "quotes.read"],
+          "only one additional remote effect attempt may begin");
+        assert.equal(unknownRun.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_dispatch_no_effect"), false,
+          "an already received remote call is never falsely reconciled as no effect");
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+        assert.ok(!unknownRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
+      } finally {
+        cancelAfterRemoteToolEntered = null;
+      }
     } finally {
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));
