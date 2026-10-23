@@ -32,6 +32,6 @@ export function canonicalRecentChats<T extends { id: number; status: string; tra
 }
 
 function safeActivityTime(value: string | Date): number {
-  const time = new Date(value).getTime();
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
   return Number.isFinite(time) ? time : 0;
 }
