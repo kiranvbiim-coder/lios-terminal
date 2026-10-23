@@ -159,6 +159,7 @@ import { recordP2ConversationEvent } from "@/lib/p2ConversationTelemetry";
 import { recordP3TrustManifest } from "@/lib/p3TrustTelemetry";
 import { artifactReplayDraft, buildArtifactDependencyRefs } from "@/lib/p4ArtifactWorkspace";
 import { resolveWorkSearchLibraryTarget } from "@/lib/terminalCommands";
+import { matchesSavedSearchChat } from "@/lib/workSearchNavigationPolicy";
 type SandboxTerminalInput = z.output<(typeof GATEWAY_METHODS)["execution.session.input"]["params"]>["input"];
 type SandboxTerminalProposal = z.output<(typeof GATEWAY_METHODS)["execution.operation.propose"]["result"]>;
 const SANDBOX_TERMINAL_INPUTS: SandboxTerminalInput[] = ["help", "pwd", "id -u", "ls /tmp", "exit"];
@@ -659,8 +660,8 @@ export default function ProjectExperienceShell({
   };
 
   const openProject = async (project: Project, confirmed = false, showHome = false) => {
-    if (!confirmed && (selection.projectId !== project.id || selection.chatId) && !(await confirmConversationSwitch())) return;
-    if (busy) { setLifecycleNotice("Stop the current response before switching Projects."); return; }
+    if (!confirmed && (selection.projectId !== project.id || selection.chatId) && !(await confirmConversationSwitch())) return false;
+    if (busy) { setLifecycleNotice("Stop the current response before switching Projects."); return false; }
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false); setProjectHomeRequested(showHome);
     selection.setProjectId(project.id);
     selection.setChatId(null);
@@ -669,8 +670,8 @@ export default function ProjectExperienceShell({
   };
 
   const openChat = async (chat: ProjectChat, confirmed = false) => {
-    if (!confirmed && selection.chatId !== chat.id && !(await confirmConversationSwitch())) return;
-    if (busy && !confirmed) { setLifecycleNotice("Stop the current response before switching chats."); return; }
+    if (!confirmed && selection.chatId !== chat.id && !(await confirmConversationSwitch())) return false;
+    if (busy && !confirmed) { setLifecycleNotice("Stop the current response before switching chats."); return false; }
     openedChatOwnerRef.current = { chatId: chat.id, ownerUserId: chat.ownerUserId };
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false); setProjectHomeRequested(false);
     selection.setProjectId(chat.projectId);
@@ -678,51 +679,66 @@ export default function ProjectExperienceShell({
     setChatMode(chat.scope === "quick" ? "quick" : "project");
     setTemporaryMessages([]);
     temporaryWorkingContextRef.current = null;
+    return true;
   };
-  const openWorkSearchResult = async (result: WorkSearchResult) => {
+  const openWorkSearchResult = async (result: WorkSearchResult): Promise<boolean> => {
+    // Search grants no authority. Follow an exact user/tenant-scoped object,
+    // and never treat an abandoned draft-confirmation as a successful open.
     if (result.kind === "artifact" && result.projectId === null && result.chatId && result.artifactId) {
-      if (busy || !(await confirmConversationSwitch())) return;
+      // Validate the owned Quick Chat and exact Artifact *before* any draft
+      // discard; failed follow-up fetches must leave the composer untouched.
       const response = await fetch(`/api/project-chats/${result.chatId}`);
-      if (!response.ok) throw new Error("This owning Chat is no longer available.");
+      if (!response.ok) throw new Error("This owning Chat is not available with your access.");
       const chat = await response.json() as ProjectChat;
       const exact = await fetch(`/api/artifacts/${encodeURIComponent(result.artifactId)}`);
-      if (!exact.ok) throw new Error("This exact Artifact is no longer available.");
-      const detail = await exact.json();
-      if (chat.scope !== "quick" || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
+      if (!exact.ok) throw new Error("This exact Artifact is not available with your access.");
+      const detail = await exact.json() as { artifact?: { id: string; projectId: number | null; owningChatId: number | null } };
+      if (!matchesSavedSearchChat(result, chat)
+        || detail.artifact?.id !== result.artifactId
+        || detail.artifact?.projectId !== null
+        || detail.artifact?.owningChatId !== chat.id) {
+        throw new Error("This saved Artifact no longer matches the owning Chat. Search again.");
+      }
+      if (busy) { setLifecycleNotice("Stop the response before opening saved work."); return false; }
+      if (selection.chatId !== chat.id && !(await confirmConversationSwitch())) return false;
       pendingArtifactOpenRef.current = result.artifactId;
       pendingArtifactFocusRef.current = false;
-      await openChat(chat, true);
-      return;
+      return await openChat(chat, true);
     }
     if (result.kind === "chat" && result.chatId) {
       let chat = [...(allChatsQuery.data ?? []), ...quickChats].find((item) => item.id === result.chatId) ?? null;
       if (!chat) {
         const response = await fetch(`/api/project-chats/${result.chatId}`);
-        if (!response.ok) throw new Error("This conversation is no longer available.");
+        if (!response.ok) throw new Error("This conversation is not available with your access.");
         chat = await response.json() as ProjectChat;
       }
-      await openChat(chat);
-      return;
+      if (!matchesSavedSearchChat(result, chat)) throw new Error("This conversation has moved or is no longer accessible. Search again.");
+      return await openChat(chat);
     }
-
     if (result.projectId) {
       let project = projects.find((item) => item.id === result.projectId) ?? null;
       if (!project) {
         const response = await fetch(`/api/projects/${result.projectId}`);
-        if (!response.ok) throw new Error("This Project is no longer available.");
+        if (!response.ok) throw new Error("This Project is not available with your access.");
         project = await response.json() as Project;
       }
-      if (selection.projectId !== project.id && !(await openProject(project))) return;
+      if (project.id !== result.projectId || project.status !== "active" || project.trashedAt) {
+        throw new Error("This Project is no longer active or accessible. Search again.");
+      }
+      if (result.kind === "project") return (await openProject(project, false, true)) === true;
       if (result.kind === "artifact" || result.kind === "file") {
         const exactTarget = resolveWorkSearchLibraryTarget(result);
-        if (!exactTarget) throw new Error("This search result has no exact available object identity.");
-        if (busy) { setLifecycleNotice("Stop the current response before opening a search result."); return; }
+        if (!exactTarget) throw new Error("The saved search result has no exact available object identity.");
+        if (busy) { setLifecycleNotice("Stop the current response before opening a search result."); return false; }
+        if (selection.projectId !== project.id && !(await openProject(project))) return false;
         setLibrarySelection((current) => ({ ...exactTarget, request: (current?.request ?? 0) + 1 }));
         setSection("library");
         setShowLifecycleCenter(false);
         setContextOpen(false);
-      } else if (selection.projectId === project.id) setSection("conversation");
+        return true;
+      }
     }
+    return false;
   };
   const handleChatLifecycleAction = async (chat: ProjectChat, action: LifecycleAction) => {
     if (busy) { setLifecycleNotice("Stop the current response before changing saved chats."); return; }
