@@ -402,8 +402,15 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, []);
 
   const applyWorkspace = useCallback((nextWorkspace: WorkspaceState, label = "Apply workspace") => {
-    setWorkspace(() => sanitizeWorkspaceForAudience(nextWorkspace, audience), label);
-  }, [audience, setWorkspace]);
+    const next = sanitizeWorkspaceForAudience(nextWorkspace, audience);
+    if (workbenchDirtyRef.current) {
+      const current = activeTerminalTab(tabsState).workspace;
+      const artifactPane = getWorkspacePanes(current).find(({ pane }) => pane.view === "artifact");
+      if (!artifactPane || current.focusedPane !== next.focusedPane || getWorkspacePane(next, artifactPane.id) !== artifactPane.pane) return false;
+    }
+    setWorkspace(() => next, label);
+    return true;
+  }, [audience, setWorkspace, tabsState]);
 
   const handleHistoryBack = useCallback(() => {
     setTabsState((current) => {

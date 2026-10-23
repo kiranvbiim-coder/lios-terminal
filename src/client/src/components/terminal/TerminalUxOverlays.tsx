@@ -56,7 +56,7 @@ interface Props {
   preferences: TerminalUxPreferences;
   onPreferencesChange: (preferences: TerminalUxPreferences) => void;
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
-  onApplyWorkspace?: (workspace: WorkspaceState, label?: string) => void;
+  onApplyWorkspace?: (workspace: WorkspaceState, label?: string) => boolean | void;
 }
 
 function snapshotValuesFromEvidence(evidence: EvidenceSnapshot): Record<string, ComparableValue> {
@@ -185,14 +185,14 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
 
   const applyWorkspaceFallback = (nextWorkspace: WorkspaceState, label?: string) => {
     if (onApplyWorkspace) {
-      onApplyWorkspace(nextWorkspace, label);
-      return;
+      return onApplyWorkspace(nextWorkspace, label);
     }
     const panes: PaneState[] = [nextWorkspace.primary, nextWorkspace.secondary, nextWorkspace.tertiary ?? null, nextWorkspace.quaternary ?? null].filter(Boolean) as PaneState[];
     panes.forEach((pane, index) => {
       const mode: AnalyticalOpenMode = index === 0 ? "current" : index === 2 ? "split-below" : "split-right";
       onOpen(pane.view, mode, pane.symbol || undefined);
     });
+    return true;
   };
 
   useEffect(() => subscribeWorkspaceRestore((request) => applyWorkspaceFallback(request.workspace, request.label)), [onApplyWorkspace, onOpen]);
