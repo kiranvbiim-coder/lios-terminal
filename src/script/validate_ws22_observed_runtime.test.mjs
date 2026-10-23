@@ -72,7 +72,10 @@ test("WS-22 Stop double clicks guarded and Home acknowledgement is not final com
   assert.match(shell, /if \(!runtimeRequestId \|\| cancelInFlightRef\.current\) return/);
   assert.match(shell, /cancelConversationRun\(requireGateway\(\), targetRun\)/);
   assert.match(shell, /setCancelPending\(true\)/);
-  assert.match(trace, /disabled=\{cancelPending\}/);
+  assert.match(trace, /disabled=\{cancelPending \|\| stopRequested\}/);
+  assert.match(shell, /cancelAcknowledgedRunRef\.current === runtimeRequestId/);
+  assert.match(shell, /setCancelAcknowledgedRunId\(targetRun\)/);
+  assert.match(trace, /Stop requested/);
   assert.match(trace, /Requesting Stop…/);
   const stop = shell.slice(shell.indexOf("const cancelRuntime = async"), shell.indexOf("const denyRuntimeAction",shell.indexOf("const cancelRuntime = async")));
   assert.doesNotMatch(stop, /setBusy\(false\)|status: "cancelled"|type: "done"/);
