@@ -581,7 +581,7 @@ function Harness() {
       <div className="flex h-8 items-center border-b border-border bg-[#080808] px-3">
         <span className="font-terminal text-[9px] font-bold tracking-[0.18em] text-amber-300">LIOS · VISUAL SMOKE</span>
         <span className="ml-3 font-terminal text-[8px] tracking-widest text-muted-foreground">{smokeCase.toUpperCase()} · {density.toUpperCase()}</span>
-        <span className="ml-auto font-terminal text-[7px] tracking-widest text-cyan-300">DETERMINISTIC FIXTURE · DESKTOP 1440×900</span>
+        <span className="ml-auto font-terminal text-[7px] tracking-widest text-cyan-300">DETERMINISTIC FIXTURE · NOT LIVE</span>
       </div>
       <div className="h-[calc(100vh-32px)] min-h-0 overflow-hidden">
         <Surface smokeCase={smokeCase} density={density} />
