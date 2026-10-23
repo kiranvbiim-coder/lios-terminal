@@ -454,3 +454,32 @@ test("P7 Project Intelligence tools are registered as safe deterministic LiOS to
   assert.equal(changed?.permissionClass, "safe_auto");
   assert.equal(lens?.permissionClass, "safe_auto");
 });
+
+test("WS-20 duplicate on-demand label must not silently include two Project resources", () => {
+  const resources = [
+    { id: "one", kind: "note", label: "Revenue Growth", resourceRef: "source:one", contextMode: "on_demand" as const },
+    { id: "two", kind: "note", label: "Revenue_Growth", resourceRef: "source:two", contextMode: "on_demand" as const },
+  ];
+  assert.deepEqual(includedResourceRefs(resources, "Compare @revenue_growth"), []);
+});
+
+test("WS-20 unique normalized on-demand mention remains available only with permitted scope", () => {
+  const resource = { id: "one", kind: "note", label: "Revenue Growth", resourceRef: "source:one", contextMode: "on_demand" as const };
+  assert.deepEqual(includedResourceRefs([resource], "Compare @revenue_growth", [], "auto"), [resource]);
+  assert.deepEqual(includedResourceRefs([resource], "Compare @revenue_growth", [], "my_data"), [resource]);
+  assert.deepEqual(includedResourceRefs([resource], "Compare @revenue_growth", [], "web"), []);
+  assert.deepEqual(includedResourceRefs([resource], "Compare @revenue_growth", [], "files"), []);
+});
+
+test("WS-20 email address is not a Project on-demand resource selector", () => {
+  const resource = { id: "one", kind: "note", label: "quarterly_report.com", resourceRef: "source:one", contextMode: "on_demand" as const };
+  assert.deepEqual(includedResourceRefs([resource], "Contact alice@quarterly_report.com"), []);
+  assert.deepEqual(includedResourceRefs([resource], "Review @quarterly_report.com"), [resource]);
+});
+
+test("WS-20 excluded references remain excluded even when mentioned, but explicit allowed attachments remain governed", () => {
+  const excluded = { id: "hidden", kind: "note", label: "Budget", resourceRef: "source:budget", contextMode: "excluded" as const };
+  const permitted = { id: "allowed", kind: "note", label: "Budget", resourceRef: "source:allowed", contextMode: "on_demand" as const };
+  assert.deepEqual(includedResourceRefs([excluded,permitted], "Open @budget"), [permitted]);
+  assert.deepEqual(includedResourceRefs([excluded], "Open @budget"), []);
+});
