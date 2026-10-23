@@ -141,13 +141,18 @@ async function main() {
     assert.equal(listed.notifications.some(n => n.id === first.notification.id), true);
     checks.push("durable-p9-notification-and-content-free-event");
 
-    const acknowledged = await device.request("notifications.read.replay", {
-      homeId, userId: Number.NaN, deviceId, projectId: target.projectId, notificationId: first.notification.id,
-    }).catch(() => null);
-    // The HTTP owner session does not disclose its canonical numeric ID.
-    // A forged device read-replay must fail rather than guessed identity.
-    assert.equal(acknowledged, null);
-    checks.push("no-guessed-device-acknowledgement");
+    // The installed Home authorizes read acknowledgments against the same
+    // paired device and owner; no guessed numeric user ID is ever supplied.
+    const acknowledged = await device.request("notifications.read", {
+      projectId: target.projectId, notificationId: first.notification.id,
+    });
+    const replay = await device.request("notifications.read", {
+      projectId: target.projectId, notificationId: first.notification.id,
+    });
+    assert.equal(acknowledged.notification.id, first.notification.id);
+    assert.equal(acknowledged.notification.readAt, replay.notification.readAt,
+      "repeated read must retain the original durable acknowledgment");
+    checks.push("authorized-device-notification-read-ack");
     device.stop();
     const offline = await run(csrf);
     const reconnected = makeClient(created.identity);
