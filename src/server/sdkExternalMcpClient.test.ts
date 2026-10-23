@@ -1,7 +1,24 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { boundMcpResponse, scopedMcpFetch, MCP_MAX_RESPONSE_BYTES, LIOS_MCP_SDK_VERSION } from "./sdkExternalMcpClient";
+import { boundMcpResponse, scopedMcpFetch, withOfficialMcpClient, MCP_MAX_RESPONSE_BYTES, LIOS_MCP_SDK_VERSION } from "./sdkExternalMcpClient";
+
+test("GM20 official MCP transport denies missing owner credential before first request", async () => {
+  let operationCalled = false;
+  await assert.rejects(() => withOfficialMcpClient({
+    endpoint: "https://8.8.8.8/mcp",
+    policy: {
+      projectId: 77,
+      serverId: "source:41",
+      allowedToolIds: ["quotes.read"],
+      allowedResourcePrefixes: [],
+      credentialRef: "vault:gm20-absent-revoked-source-secret-20261023",
+      requireApprovalForTools: true,
+      healthTimeoutMs: 2_000,
+    },
+  }, async () => { operationCalled = true; }), /credential is unavailable or revoked/i);
+  assert.equal(operationCalled, false, "revoked MCP credentials must prevent client initialization");
+});
 
 test("D1 officially pinned client SDK preserves an exact transport budget", async () => {
   assert.equal(LIOS_MCP_SDK_VERSION, "2.3.1");
