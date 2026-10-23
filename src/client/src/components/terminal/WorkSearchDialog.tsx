@@ -7,7 +7,7 @@ import { WORK_SEARCH_FILTERS, clampWorkSearchSelection, countWorkSearchKind, fil
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSelect: (result: WorkSearchResult) => void | Promise<void>;
+  onSelect: (result: WorkSearchResult) => boolean | Promise<boolean>;
 }
 
 const KIND_LABEL: Record<WorkSearchResult["kind"], string> = {
@@ -102,11 +102,12 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
     openingRef.current = true;
     setOpening(true);
     try {
-      await onSelect(result);
-      onClose();
+      const opened = await onSelect(result);
+      if (opened) onClose();
+      else inputRef.current?.focus();
     } catch (openError) {
       // Keep the already-authorized results so the user can retry or pick another.
-      setError(openError instanceof Error ? openError.message : "That item is no longer available.");
+      setError("This saved item could not be opened with your current access. Check the selection and retry.");
     } finally {
       openingRef.current = false;
       setOpening(false);
@@ -115,7 +116,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus({ preventScroll: true }); } }}>
         <DialogTitle className="sr-only">Search LiOS</DialogTitle>
         <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -126,7 +127,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, visibleResults.length - 1))); }
               if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
-              if (event.key === "Enter" && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
+              if (event.key === "Enter" && !event.nativeEvent.isComposing && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
               if (event.key === "Escape") onClose();
             }}
             className="min-w-0 flex-1 bg-transparent font-ui text-[15px] text-foreground outline-none placeholder:text-muted-foreground/55"
