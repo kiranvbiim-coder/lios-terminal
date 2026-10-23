@@ -4,6 +4,7 @@ import {
   callExternalMcpTool,
   externalMcpConfigForSourceConnection,
   liosMcpServerExposureContract,
+  validateExternalMcpRpcResponse,
   type McpHttpTransport,
 } from "./externalMcpClient";
 
@@ -83,4 +84,48 @@ test("external MCP transport receives secret-safe canonical cancellation", async
     /cancel|AbortError/i,
   );
   assert.equal(seen?.aborted, true);
+});
+
+
+test("GM/P13 MCP responses must correlate to the exact request before tool output is trusted", async () => {
+  const mismatched: McpHttpTransport = async () => ({
+    jsonrpc: "2.0", id: "some-other-request", result: { unverified: true },
+  });
+  await assert.rejects(() => callExternalMcpTool(config, "quotes.read", {}, mismatched),
+    /mismatched JSON-RPC response/i);
+  const missingVersion: McpHttpTransport = async (_url, request) => ({
+    jsonrpc: "1.0" as "2.0", id: request.id, result: { unverified: true },
+  });
+  await assert.rejects(() => callExternalMcpTool(config, "quotes.read", {}, missingVersion),
+    /mismatched JSON-RPC response/i);
+  const noResult: McpHttpTransport = async (_url, request) => ({
+    jsonrpc: "2.0", id: request.id,
+  });
+  await assert.rejects(() => callExternalMcpTool(config, "quotes.read", {}, noResult),
+    /ambiguous JSON-RPC response/i);
+});
+
+test("GM/P13 malformed, batched and mixed-success MCP responses fail closed", () => {
+  const request = { jsonrpc: "2.0" as const, id: "exact-request", method: "tools/call" };
+  assert.deepEqual(validateExternalMcpRpcResponse(request, { jsonrpc: "2.0", id: request.id, result: null }), null,
+    "a genuine null result is an admitted success and not a missing response");
+  for (const response of [
+    null, [],
+    [{ jsonrpc: "2.0", id: request.id, result: { ok: true } }],
+    { jsonrpc: "2.0", id: request.id, result: { ok: true }, error: { code: -1, message: "unexpected" } },
+    { jsonrpc: "2.0", id: null, result: { ok: true } },
+    { jsonrpc: "2.0", id: request.id, error: { code: "bad", message: "no" } },
+    { jsonrpc: "2.0", id: request.id, error: null },
+  ]) {
+    assert.throws(() => validateExternalMcpRpcResponse(request, response), /MCP transport|MCP tool transport/);
+  }
+});
+
+test("GM/P13 remote MCP failures never echo attacker-controlled or secret response text", async () => {
+  const secret = "secrets-from-a-mcp-server-must-not-reach-chat";
+  const remoteError: McpHttpTransport = async (_url, request) => ({
+    jsonrpc: "2.0", id: request.id, error: { code: -32000, message: secret },
+  });
+  await assert.rejects(() => callExternalMcpTool(config, "quotes.read", {}, remoteError),
+    error => error instanceof Error && error.message.includes("-32000") && !error.message.includes(secret));
 });
