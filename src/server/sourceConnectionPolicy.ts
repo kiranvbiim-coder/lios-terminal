@@ -1,6 +1,8 @@
 import { isIP } from "node:net";
 import dns from "node:dns/promises";
 import { isBlockedConnectorAddress } from "./apiConnector";
+import { resolveRuntimeMode } from "./runtimeMode";
+import type { RuntimeMode } from "@shared/runtimeProviderContracts";
 
 export interface SourceEndpointPolicyResult {
   valid: boolean;
@@ -92,6 +94,50 @@ export async function validateSourceEndpoint(
   return { valid: true, normalizedEndpoint: parsed.toString(), reason: "valid" };
 }
 
+/**
+ * MCP servers have a narrower local-network allowance than general BYOD
+ * sources. Desktop can explicitly connect to its *own* loopback server,
+ * independent of DATABASE_URL. An exposed Home never receives that grant.
+ *
+ * "localhost" is canonicalized to a numeric loopback IP so a hosts-file or
+ * resolver cannot silently send an authorized localhost MCP request to LAN.
+ * Arbitrary private LAN addresses, DNS aliases and 127.x aliases are not MCP
+ * loopback grants. Public remote MCP still requires HTTPS + the usual
+ * blocked-address/DNS admission checks.
+ */
+export function isDesktopMcpLoopbackEndpoint(
+  endpoint: string,
+  mode: RuntimeMode = resolveRuntimeMode(),
+): boolean {
+  if (mode !== "desktop_local") return false;
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname.toLowerCase();
+    return (url.protocol === "http:" || url.protocol === "https:")
+      && (host === "localhost" || host === "127.0.0.1" || host === "[::1]");
+  } catch {
+    return false;
+  }
+}
+
+export async function validateMcpSourceEndpoint(
+  endpoint: string | null | undefined,
+  mode: RuntimeMode = resolveRuntimeMode(),
+  resolveHost: HostResolver = defaultResolver,
+): Promise<SourceEndpointPolicyResult> {
+  const candidate = typeof endpoint === "string" ? endpoint.trim() : "";
+  const local = isDesktopMcpLoopbackEndpoint(candidate, mode);
+  // A loopback grant requires an explicit numeric address at transport time.
+  // In particular, a local Home using PostgreSQL is STILL desktop_local.
+  let normalizedCandidate = candidate;
+  if (local) {
+    const parsed = new URL(candidate);
+    if (parsed.hostname.toLowerCase() === "localhost") parsed.hostname = "127.0.0.1";
+    normalizedCandidate = parsed.href;
+  }
+  return validateSourceEndpoint(normalizedCandidate, local, resolveHost);
+}
+
 const SECRET_CONFIG_KEYS = /password|secret|token|api[_-]?key|credential|private[_-]?key|authorization/i;
 
 export function sanitizeSourceConfig(config: Record<string, string | number | boolean | null>): Record<string, string | number | boolean | null> {
@@ -100,7 +146,11 @@ export function sanitizeSourceConfig(config: Record<string, string | number | bo
 
 export async function normalizeSourceConfig(sourceType: string, config: Record<string, string | number | boolean | null>): Promise<Record<string, string | number | boolean | null>> {
   const sanitized = sanitizeSourceConfig(config);
-  const endpoint = typeof sanitized.endpoint === "string" ? await validateSourceEndpoint(sanitized.endpoint) : null;
+  const endpoint = typeof sanitized.endpoint === "string"
+    ? sourceType === "mcp"
+      ? await validateMcpSourceEndpoint(sanitized.endpoint)
+      : await validateSourceEndpoint(sanitized.endpoint)
+    : null;
   if (endpoint && endpoint.valid && endpoint.normalizedEndpoint) sanitized.endpoint = endpoint.normalizedEndpoint;
   return { ...sanitized, sourceType };
 }
