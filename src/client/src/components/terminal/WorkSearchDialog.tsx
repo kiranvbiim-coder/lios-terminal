@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FileText, FolderKanban, MessageSquare, Search, Sparkles, X } from "lucide-react";
 import { workSearchResponseSchema, type WorkSearchResult } from "@shared/workSearch";
+import { shouldCloseSearchAfterNavigation } from "@/lib/workSearchNavigationPolicy";
 import { WORK_SEARCH_FILTERS, clampWorkSearchSelection, countWorkSearchKind, filterWorkSearchResults, workSearchEmptyMessage, type WorkSearchFilter } from "@/lib/workSearchFilters";
 
 interface Props {
@@ -103,7 +104,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
     setOpening(true);
     try {
       const opened = await onSelect(result);
-      if (opened) onClose();
+      if (shouldCloseSearchAfterNavigation(opened)) onClose();
       else inputRef.current?.focus();
     } catch (openError) {
       // Keep the already-authorized results so the user can retry or pick another.
