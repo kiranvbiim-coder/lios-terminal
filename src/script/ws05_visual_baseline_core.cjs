@@ -37,6 +37,7 @@ function assessSample(sample) {
     if (sample[field] !== true) gaps.push(field + ": missing or false");
   }
   if (!Number.isFinite(sample.cssViewportWidth) || sample.cssViewportWidth <= 0) gaps.push("viewport CSS width not measured");
+  if (sample.zoom === 1 && Number.isFinite(sample.width) && Math.abs(sample.cssViewportWidth - sample.width) > 3) gaps.push("requested viewport width differs from rendered CSS width");
   if (!Number.isFinite(sample.rootWidth) || sample.rootWidth <= 0) gaps.push("root has no rendered width");
   if (sample.rootScrollWidth > sample.rootWidth + 2) gaps.push("fixture root horizontally overflows");
   if (sample.documentScrollWidth > sample.cssViewportWidth + 2) gaps.push("document horizontally overflows");
