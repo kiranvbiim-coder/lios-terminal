@@ -22,16 +22,19 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
     if (!this.state.error) return this.props.children;
 
     return (
-      <main className="dark min-h-screen bg-[#050505] text-foreground flex items-center justify-center p-6 font-terminal">
-        <section className="w-full max-w-xl border border-red-900/70 bg-[#080808] p-5 shadow-2xl">
-          <div className="mb-4 font-terminal text-sm font-bold tracking-[0.16em] text-[#F69F0A]">LiOS Terminal</div>
+      <main className="dark min-h-screen text-foreground flex items-center justify-center p-6 font-terminal"
+        style={{ backgroundColor: "var(--lios-bg-app)" }}>
+        <section className="w-full max-w-xl border border-red-900/70 p-5 shadow-2xl"
+          style={{ backgroundColor: "var(--lios-bg-panel)" }}>
+          <div className="mb-4 font-terminal text-sm font-bold tracking-[0.16em]"
+            style={{ color: "var(--lios-brand)" }}>LiOS Terminal</div>
           <h1 className="text-sm font-bold uppercase text-red-500">INTELLIGENCE ENVIRONMENT INTERRUPTED</h1>
           <p className="mt-3 break-words text-xs leading-relaxed text-muted-foreground">
             {this.state.error.message || "The terminal could not initialize this analytical environment."}
           </p>
           <button
             type="button"
-            className="mt-5 h-9 border border-[#F69F0A]/[0.35] px-4 text-[10px] font-bold uppercase text-[#F69F0A] hover:bg-[#F69F0A]/[0.08]"
+            className="lios-root-recovery-action mt-5 h-9 border px-4 text-[10px] font-bold uppercase"
             onClick={() => window.location.reload()}
           >
             Reinitialize LiOS
