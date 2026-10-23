@@ -111,6 +111,8 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { planAttachmentStage, stagedFileKey } from "@/lib/fileAttachmentStaging";
+import { uploadRealChatAttachment, type UploadStage } from "@/lib/realFileAttachmentUpload";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -205,22 +207,6 @@ function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): Sa
     if (typeof item.id !== "string" || typeof item.fileName !== "string" || typeof item.mimeType !== "string" || typeof item.byteLength !== "number") return [];
     return [{ id: item.id, fileName: item.fileName, mimeType: item.mimeType, byteLength: item.byteLength, ...(typeof item.sourceRef === "string" ? { sourceRef: item.sourceRef } : {}) }];
   });
-}
-
-async function uploadProjectChatAttachment(projectId: number | null, chatId: number, file: File): Promise<ConversationAttachmentRef> {
-  const form = new FormData();
-  form.append("file", file, file.name);
-  const endpoint = projectId === null ? `/api/quick-chats/${chatId}/attachments` : `/api/projects/${projectId}/chats/${chatId}/attachments`;
-  const response = await fetch(endpoint, { method: "POST", body: form });
-  const payload = await response.json().catch(() => null) as { error?: string; attachment?: ConversationAttachmentRef } | null;
-  if (!response.ok || !payload?.attachment) {
-    const detail = payload?.error || `Attachment upload failed (${response.status}).`;
-    const retry = response.status >= 500
-      ? " Your staged file is still here—restore attachment storage and send again."
-      : "";
-    throw new Error(detail + retry);
-  }
-  return payload.attachment;
 }
 
 function formatAttachmentSize(bytes: number): string {
@@ -360,6 +346,7 @@ export default function ProjectExperienceShell({
   const [voiceTranscriptReviewed, setVoiceTranscriptReviewed] = useState(false);
   const [pendingAttachmentFiles, setPendingAttachmentFiles] = useState<File[]>([]);
   const [pendingAttachmentRefs, setPendingAttachmentRefs] = useState<ConversationAttachmentRef[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState<{ key: string; fileName: string; index: number; total: number; progress: UploadStage } | null>(null);
   const [speakRepliesEnabled, setSpeakRepliesEnabled] = useState(() => {
     try {
       return window.localStorage.getItem("lios.voice.speakReplies") === "1";
@@ -1208,7 +1195,12 @@ export default function ProjectExperienceShell({
 
         if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
-            const attachment = await uploadProjectChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file);
+            const key = stagedFileKey(file);
+            const index = pendingAttachmentFiles.findIndex(item => stagedFileKey(item) === key) + 1;
+            setUploadingAttachment({ key, fileName: file.name, index, total: pendingAttachmentFiles.length, progress: { state: "transferring", percent: null } });
+            const attachment = await uploadRealChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file, progress => {
+              setUploadingAttachment(current => current?.key === key ? { ...current, progress } : current);
+            });
             attachmentsForRequest = [...attachmentsForRequest, attachment];
             payload.attachments = attachmentsForRequest;
             setPendingAttachmentRefs(attachmentsForRequest);
@@ -1261,6 +1253,7 @@ export default function ProjectExperienceShell({
       if (!override?.continuationOf) setInput(message);
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
+      setUploadingAttachment(null);
       setStreaming("");
       setBusy(false);
     }
