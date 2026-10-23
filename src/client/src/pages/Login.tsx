@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Shield, KeyRound, AlertTriangle, Lock, UserPlus, Building2, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,8 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
   const [statusText, setStatusText] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
   const authPending = useRef(false);
+  const [bootstrapRetry, setBootstrapRetry] = useState(0);
+  const [bootstrapError, setBootstrapError] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<{
     setupRequired: boolean;
     setupAllowed: boolean;
@@ -48,7 +50,9 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/bootstrap/status", { cache: "no-store" })
+    setBootstrapError(false);
+    setBootstrapStatus(null);
+    authEntryFetch("/api/auth/bootstrap/status", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("bootstrap status unavailable");
         return response.json() as Promise<{ setupRequired?: boolean; setupAllowed?: boolean; mode?: string | null }>;
@@ -64,12 +68,11 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       })
       .catch(() => {
         if (!cancelled) {
-          setBootstrapStatus({ setupRequired: false, setupAllowed: false, mode: null });
-          setErrorMsg("Unable to verify first-run administrator status. Restart LiOS if this is a new installation.");
+          setBootstrapError(true);
         }
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [bootstrapRetry]);
 
   const handleLogin = async () => {
     if (authPending.current) return;
@@ -216,13 +219,13 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
   };
 
   if (bootstrapStatus === null) {
-    return (
-      <div className="min-h-screen w-screen bg-[#030303] flex items-center justify-center">
-        <span className="font-terminal text-[10px] tracking-widest text-muted-foreground animate-pulse">
-          VERIFYING FIRST-RUN SECURITY...
-        </span>
-      </div>
-    );
+    return <main className="min-h-screen w-screen bg-[#030303] flex items-center justify-center p-5">
+      {bootstrapError ? <section className="w-full max-w-md rounded-lg border border-border bg-background p-6 text-foreground">
+        <h1 className="text-lg font-semibold">Sign-in service unavailable</h1>
+        <p role="alert" className="mt-3 text-sm text-muted-foreground">LiOS could not verify whether this installation requires administrator setup. Your account and settings have not been changed.</p>
+        <button type="button" onClick={() => setBootstrapRetry((value) => value + 1)} className="mt-5 min-h-10 rounded-md border border-primary/40 px-4 py-2 text-sm text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry connection</button>
+      </section> : <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Verifying this installation's sign-in requirements…</p>}
+    </main>;
   }
 
   if (bootstrapStatus?.setupRequired) {
