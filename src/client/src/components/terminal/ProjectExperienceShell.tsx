@@ -112,6 +112,7 @@ import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, res
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
 import { canonicalRecentChats, hasUnsentConversationDraft, remainingChatMode } from "@/lib/conversationSwitchPolicy";
+import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -374,6 +375,10 @@ export default function ProjectExperienceShell({
   const voiceOutputAvailable = Boolean(voiceProvidersQuery.data?.speech.some((provider) => provider.id));
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
+  const sendInFlightRef = useRef(false);
+  const stopInFlightRef = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const chatCreationInFlightRef = useRef(false);
@@ -658,6 +663,7 @@ export default function ProjectExperienceShell({
   // Mutations that can fail must ask for consent *before* the request but
   // discard only after server acknowledgement and successful navigation.
   const confirmConversationSwitch = async (deferDiscard = false, allowPendingCreation = false) => {
+    if (sendInFlightRef.current) { setLifecycleNotice("Finish sending the current request before switching conversations."); return false; }
     if (chatCreationInFlightRef.current && !allowPendingCreation) { setLifecycleNotice("Finish creating the new Chat before switching saved work."); return false; }
     if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
@@ -835,7 +841,7 @@ export default function ProjectExperienceShell({
   };
 
   const newProjectChat = async (starterPrompt?: string) => {
-    if (busy || !selection.projectId || chatCreationInFlightRef.current) return;
+    if (busy || sendInFlightRef.current || !selection.projectId || chatCreationInFlightRef.current) return;
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
@@ -862,7 +868,7 @@ export default function ProjectExperienceShell({
   };
 
   const newQuickChat = async () => {
-    if (busy || chatCreationInFlightRef.current) return;
+    if (busy || sendInFlightRef.current || chatCreationInFlightRef.current) return;
     chatCreationInFlightRef.current = true;
     setCreatingChat(true);
     try {
@@ -1080,7 +1086,13 @@ export default function ProjectExperienceShell({
     const hasStagedAttachments = Boolean(override?.attachments?.length || pendingAttachmentRefs.length || pendingAttachmentFiles.length);
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached Project file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
-    if (!message || busy) return;
+    if (!message || busy || busyRef.current || creatingChat || chatCreationInFlightRef.current || sendInFlightRef.current) return;
+    // A ref blocks the second Enter/click synchronously, before React rerenders.
+    sendInFlightRef.current = true;
+    const originalComposerDraft = input;
+    const canClearDraft = mayClearComposerDraft(originalComposerDraft, message, Boolean(override?.continuationOf));
+    setStopRequested(false);
+    try {
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
@@ -1186,7 +1198,7 @@ export default function ProjectExperienceShell({
         const retrying = Boolean(override?.continuationOf);
         const userMessage: LocalMessage = { id: `u-${Date.now()}`, role: "user", content: message };
         if (!retrying) setTemporaryMessages((current) => [...current, userMessage]);
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
         const result = await runConversation(requireGateway(), {
           chatId: null,
           body: {
@@ -1206,12 +1218,12 @@ export default function ProjectExperienceShell({
           if (!retrying) {
             setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
           }
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
@@ -1254,7 +1266,7 @@ export default function ProjectExperienceShell({
             setLastWorkflowRequest((current) => current ? { ...current, attachments: attachmentsForRequest } : current);
           }
         }
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
 
         const result = await runConversation(requireGateway(), {
           chatId,
@@ -1262,12 +1274,12 @@ export default function ProjectExperienceShell({
           onEvent: applyRuntimeEvent,
         });
         if (result.status === 428) {
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
@@ -1295,11 +1307,19 @@ export default function ProjectExperienceShell({
         invalidate(selection.projectId, chatId);
       }
     } catch (error) {
-      if (!override?.continuationOf) setInput(message);
+      if (!override?.continuationOf) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
       setStreaming("");
       setBusy(false);
+      setStopRequested(false);
+    }
+    } catch {
+      // A command or validation failure before conversation creation must
+      // not escape as an unhandled click/Enter rejection or discard the draft.
+      setLifecycleNotice("LiOS could not start that request. Your unsent draft is still available to retry.");
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
@@ -1358,8 +1378,21 @@ export default function ProjectExperienceShell({
   };
 
   const cancelRuntime = async () => {
-    if (!runtimeRequestId) return;
-    recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
+    if (!busy || !runtimeRequestId || stopInFlightRef.current || stopRequested) return;
+    stopInFlightRef.current = true;
+    setStopping(true);
+    try {
+      await cancelConversationRun(requireGateway(), runtimeRequestId);
+      // Acknowledging Stop does not falsely report that the server run is
+      // already settled. Keep the real busy status until runtime completion.
+      setStopRequested(true);
+      recordP1ShellEvent("composer_cancel");
+    } catch {
+      setLifecycleNotice("LiOS could not confirm Stop. Your current request may still be running. Retry when the connection is available.");
+    } finally {
+      stopInFlightRef.current = false;
+      setStopping(false);
+    }
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
   const proposeSandboxTerminal = async () => {
@@ -2314,15 +2347,27 @@ export default function ProjectExperienceShell({
                   >
                     <Mic className="h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void send()}
-                    disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
-                    aria-label="Send"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </button>
+                  {busy && runtimeRequestId ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelRuntime()}
+                      disabled={stopping || stopRequested}
+                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-amber-300/45 px-3 py-2 font-ui text-sm font-semibold text-amber-100 hover:bg-amber-300/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-45"
+                      aria-label={stopRequested ? "Stop requested" : stopping ? "Requesting Stop" : "Stop response"}
+                    >
+                      {stopRequested ? "Stopping…" : stopping ? "Requesting Stop…" : "Stop"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void send()}
+                      disabled={busy || creatingChat || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                      className="flex min-h-10 min-w-10 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-30"
+                      aria-label="Send"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 {voiceRecorder.error && (
                   <div className="border-t border-red-500/20 bg-red-500/[0.04] px-3 py-1.5 font-ui text-[12px] text-red-300">
