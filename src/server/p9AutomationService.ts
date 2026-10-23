@@ -58,6 +58,8 @@ import { withP10Span } from "./p10Observability";
 import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
 import { assertP9CurrentMcpSourceReferences } from "./p9LiveMcpSourcePolicy";
 import { resolveCredential } from "./credentialVault";
+import { assertP9LivePluginDependencies } from "./p9LivePluginPolicy";
+import { getP13PluginRuntimeHost } from "./p13PluginRuntime";
 import {
   beginP9Run,
   claimDueP9Workflows,
@@ -334,6 +336,25 @@ async function runConversationRerun(
       ctx, workflow.projectId, workflow.sourceRefs,
       await listSourceConnections(ctx.userId),
       ref => Boolean(resolveCredential("", ref)),
+    );
+  }
+  // P13 registry references are a dependency, never unattended plugin
+  // execution consent. Revalidate the process host's exact signed package
+  // *now*; the plugin broker and GM-11 remain responsible at invocation.
+  if ([...workflow.engineRefs, ...workflow.sourceRefs].some(ref => ref.startsWith("plugin:"))) {
+    const host = getP13PluginRuntimeHost();
+    assertP9LivePluginDependencies(
+      [...workflow.engineRefs, ...workflow.sourceRefs],
+      id => {
+        const installed = host.plugins.get(id);
+        if (!installed) return null;
+        const trust = host.trustStore.verify(installed.manifest, installed.trust.packageDigest);
+        return {
+          state: trust.state,
+          packageDigest: trust.packageDigest,
+          runtimeKind: installed.manifest.runtime.kind,
+        };
+      },
     );
   }
   const resolvedAttachments = await resolveProjectConversationAttachments(

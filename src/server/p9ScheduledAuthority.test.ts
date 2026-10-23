@@ -108,6 +108,19 @@ test("scheduled automation rechecks pause and isolates an owner authority denial
     assert.equal(rightsDenied.run?.status, "failed");
     assert.match(rightsDenied.error ?? "", /no current owner-declared AI release rights/);
   });
+  await t.test("D4 refuses P13 package references removed before scheduled execution", async () => {
+    const { workflow, ctx } = workflows[1]!;
+    const pinned = await createP9Workflow(ctx, workflow.projectId, {
+      name: "Signed plugin dependency requires current installation",
+      template: "custom", enabled: true, trigger: { type: "manual" },
+      action: workflow.action, engineRefs: ["plugin:uninstalled.fixture"],
+      notificationPolicy: { enabled: false },
+    });
+    const outcome = await executeP9Workflow({ workflow: pinned, triggerType: "manual" });
+    assert.equal(outcome.run?.status, "failed", "missing installed plugin blocks the run before other work");
+    assert.match(outcome.error ?? "", /plugin dependency is not currently installed/);
+    assert.equal(outcome.result, null);
+  });
   await t.test("pausing after a due snapshot was captured admits no scheduled run", async () => {
     const { workflow, ctx } = workflows[0]!;
     await setP9WorkflowEnabled(ctx, workflow.id, false);
