@@ -225,10 +225,39 @@ export function serializeWorkspace(workspace: WorkspaceState): string {
 }
 
 
+/**
+ * A share link is public presentation/navigation context, NOT an Artifact,
+ * chat, Project, credential or locally persisted state transfer. Deliberately
+ * allowlist view and symbol instead of serializing an arbitrary PaneState.
+ *
+ * Artifact panels need private revision identifiers to reopen. An ordinary
+ * market pane is used in the public link rather than leaking those IDs or
+ * producing a broken Artifact view for a recipient without the revision.
+ */
+export function workspaceForShare(workspace: WorkspaceState): WorkspaceState {
+  const sharePane = (pane: PaneState | null | undefined): PaneState | null =>
+    pane ? { view: pane.view === "artifact" ? "market" : pane.view, symbol: pane.symbol } : null;
+
+  const shared: WorkspaceState = {
+    primary: sharePane(workspace.primary)!,
+    secondary: sharePane(workspace.secondary),
+    focusedPane: workspace.focusedPane,
+  };
+  // Retain legacy 1/2-pane URL shape, and the exact slot layout for 3/4 panes.
+  if ("tertiary" in workspace) shared.tertiary = sharePane(workspace.tertiary);
+  if ("quaternary" in workspace) shared.quaternary = sharePane(workspace.quaternary);
+  return shared;
+}
+
+/** Build a route-only URL; never inherit token/query/fragment from a signed-in screen. */
 export function buildWorkspaceShareUrl(workspace: WorkspaceState, currentUrl?: string): string {
   const base = currentUrl ?? (typeof window !== "undefined" ? window.location.href : "http://localhost/");
   const url = new URL(base);
-  url.searchParams.set("ws", serializeWorkspace(workspace));
+  url.username = "";
+  url.password = "";
+  url.search = "";
+  url.hash = "#/";
+  url.searchParams.set("ws", serializeWorkspace(workspaceForShare(workspace)));
   return url.toString();
 }
 

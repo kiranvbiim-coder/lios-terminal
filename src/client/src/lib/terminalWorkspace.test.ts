@@ -18,6 +18,7 @@ import {
   openSymbolInWorkspace,
   openViewInNewPane,
   serializeWorkspace,
+  workspaceForShare,
 } from "./terminalWorkspace";
 
 function withBrowserStorage<T>(entries: Record<string, string>, run: () => T): T {
@@ -282,4 +283,73 @@ test("internal deserialization rejects unknown persisted views", () => {
   });
 
   assert.equal(deserializeWorkspace(encoded, "internal"), null);
+});
+
+
+test("sharing an Artifact pane omits all private identity and revision metadata", () => {
+  const secret = "artifact:123e4567-e89b-42d3-a456-426614174000";
+  const workspace = {
+    primary: {
+      view: "artifact" as const,
+      symbol: "AAPL",
+      artifact: { projectId: 12345, chatId: 90001, artifactId: secret, version: 17 },
+      credential: "should-not-copy",
+      privateNote: "confidential-record",
+    },
+    secondary: { view: "chart" as const, symbol: "MSFT", extra: "hidden-input" },
+    focusedPane: "primary" as const,
+  };
+
+  const share = workspaceForShare(workspace);
+  assert.deepEqual(share, {
+    primary: { view: "market", symbol: "AAPL" },
+    secondary: { view: "chart", symbol: "MSFT" },
+    focusedPane: "primary",
+  });
+  // The canonical saved state is not altered to make a share link.
+  assert.equal(workspace.primary.artifact.artifactId, secret);
+  assert.equal(workspace.primary.view, "artifact");
+  const url = buildWorkspaceShareUrl(workspace, "https://lios.example.org/?access_token=TOPSECRET&invite=private#/p/123/c/90001");
+  const parsed = new URL(url);
+  assert.equal(parsed.searchParams.has("access_token"), false);
+  assert.equal(parsed.searchParams.has("invite"), false);
+  assert.deepEqual([...parsed.searchParams.keys()], ["ws"]);
+  assert.equal(parsed.hash, "#/");
+  assert.equal(url.includes("TOPSECRET"), false);
+  assert.equal(url.includes("confidential-record"), false);
+  assert.equal(url.includes("should-not-copy"), false);
+  assert.equal(url.includes("90001"), false);
+  assert.deepEqual(loadWorkspaceFromUrl(parsed.search), share);
+});
+
+test("share links preserve a four-pane public layout and selected pane without leaking additional pane fields", () => {
+  const workspace = {
+    primary: { view: "chart" as const, symbol: "AAPL", providerKey: "UNSAFE" },
+    secondary: { view: "news" as const, symbol: "MSFT" },
+    tertiary: { view: "valuation" as const, symbol: "GOOG" },
+    quaternary: { view: "market" as const, symbol: "NVDA" },
+    focusedPane: "quaternary" as const,
+    privateRootValue: "LEAK_ME",
+  };
+  const url = buildWorkspaceShareUrl(workspace);
+  const shared = loadWorkspaceFromUrl(new URL(url).search);
+  assert.deepEqual(shared, {
+    primary: { view: "chart", symbol: "AAPL" },
+    secondary: { view: "news", symbol: "MSFT" },
+    tertiary: { view: "valuation", symbol: "GOOG" },
+    quaternary: { view: "market", symbol: "NVDA" },
+    focusedPane: "quaternary",
+  });
+  assert.equal(url.includes("LEAK_ME"), false);
+  assert.equal(url.includes("UNSAFE"), false);
+});
+
+test("workspace sharing strips authentication credentials embedded in an origin URL", () => {
+  const url = buildWorkspaceShareUrl(createInitialWorkspace(), "https://alice:password@lios.example.org/?session=secret#/c/secret");
+  const parsed = new URL(url);
+  assert.equal(parsed.username, "");
+  assert.equal(parsed.password, "");
+  assert.equal(parsed.hash, "#/");
+  assert.equal(parsed.searchParams.has("session"), false);
+  assert.equal(parsed.searchParams.has("ws"), true);
 });
