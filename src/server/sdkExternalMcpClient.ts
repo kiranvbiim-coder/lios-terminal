@@ -59,9 +59,9 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
     if (!policy.valid || policy.normalizedEndpoint !== expected.href) {
       throw new Error("MCP transport endpoint failed source policy.");
     }
-    // Keep credentials and every redirected request at the originally
-    // admitted endpoint. LiOS's fetch wrapper revalidates DNS on each hop;
-    // redirects themselves are refused by checking response.url below.
+    // MCP is pinned to this exact URL, not merely its origin. The source
+    // fetch helper must reject the first 3xx BEFORE forwarding any bearer,
+    // cookie-equivalent headers, or request body to a new path or host.
     const response = await fetcher(actual.href, {
       method: init?.method,
       headers: init?.headers,
@@ -69,7 +69,7 @@ export function scopedMcpFetch(endpoint: string, fetcher = fetchWithEndpointPoli
       signal: init?.signal,
       cache: init?.cache,
       credentials: "omit",
-    }, false);
+    }, false, 0);
     if (response.url && response.url !== actual.href) {
       response.body?.cancel().catch(() => {});
       throw new Error("MCP transport refused a redirected endpoint.");
