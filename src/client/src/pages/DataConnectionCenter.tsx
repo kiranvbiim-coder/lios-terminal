@@ -12,6 +12,7 @@ import {
   Search, ExternalLink, Shield, Bot,
 } from "lucide-react";
 import DataImportWizard from "@/components/DataImportWizard";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ProviderConflictPanel from "@/components/panels/ProviderConflictPanel";
 import DataSourcesPanel from "@/components/panels/DataSourcesPanel";
 import { getDesktopWorkspaceBridge, type DesktopWorkspaceInfo } from "@/lib/desktopWorkspace";
@@ -206,19 +207,19 @@ const META_CONNECTOR_IDS = new Set(["database", "private_api", "file_upload"]);
 
 // ── Shared UI pieces ───────────────────────────────────────────────────────
 
-const inputCls = "w-full bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60";
+const inputCls = "min-h-11 w-full rounded-md bg-[#0d0d0d] border border-border px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">{label}</span>{children}</label>;
+  return <label className="block space-y-1.5"><span className="block font-ui text-xs font-medium text-muted-foreground">{label}</span>{children}</label>;
 }
 
 function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { testing: boolean; saving: boolean; canAct: boolean; onTest: () => void; onSave: () => void; saveLabel?: string }) {
   return (
     <div className="flex gap-2 pt-1">
-      <button onClick={onTest} disabled={!canAct || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+      <button type="button" onClick={onTest} disabled={!canAct || testing} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {testing ? "Testing..." : "Test Connection"}
       </button>
-      <button onClick={onSave} disabled={!canAct || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+      <button type="button" onClick={onSave} disabled={!canAct || saving} className="min-h-11 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
         {saving ? "Saving..." : saveLabel ?? "Save Connection"}
       </button>
     </div>
@@ -227,23 +228,28 @@ function ActionRow({ testing, saving, canAct, onTest, onSave, saveLabel }: { tes
 
 function ResultBanner({ ok, detail }: { ok: boolean; detail: string }) {
   return (
-    <div className={`border px-3 py-2 font-terminal text-[9px] ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-400"}`}>
+    <div role={ok ? "status" : "alert"} className={`rounded-md border px-3 py-2 font-ui text-sm leading-5 ${ok ? "border-emerald-500/40 text-emerald-400" : "border-rose-500/40 text-rose-300"}`}>
       {ok ? "✓ " : "✗ "}{detail}
     </div>
   );
 }
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  // Reuse the existing accessible Radix dialog rather than an unlabelled
+  // clickable backdrop. It owns initial focus, Tab containment, Escape,
+  // dismiss/return focus and accessible close behavior for credential forms.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
-      <div className="bg-[#0a0a0a] border border-border w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{title}</h3>
-          <button onClick={onClose} className="font-terminal text-[9px] text-muted-foreground hover:text-foreground">✕</button>
-        </div>
+    <Dialog open onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <DialogContent className="max-h-[min(90dvh,760px)] w-[calc(100vw-24px)] max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-xl border-border bg-[#0a0a0a] p-4 text-foreground shadow-2xl sm:p-6">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="font-ui text-lg font-semibold tracking-tight">{title}</DialogTitle>
+          <DialogDescription className="font-ui text-sm leading-5 text-muted-foreground">
+            Configure this connection. Credentials are handled by the existing LiOS connection service.
+          </DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -328,32 +334,32 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
     <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={onClose}>
       {/* Description */}
       {connector.description && (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.description}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.description}</p>
       )}
       {connector.sourceType === "public_api" ? (
-        <p className="font-terminal text-[9px] text-teal-400/90 mb-3">
+        <p className="mb-3 font-ui text-sm leading-6 text-emerald-300">
           PUBLIC / NO KEY — no credential is required. The Open API URL below is documentation only, not a credential.
         </p>
       ) : (
-        <p className="font-terminal text-[9px] text-muted-foreground mb-3">{connector.setupGuide}</p>
+        <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.setupGuide}</p>
       )}
 
       {/* Website link */}
       {connector.websiteUrl && (
         <a href={connector.websiteUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-terminal text-[8px] text-[hsl(38,95%,55%)] hover:underline mb-3">
+          className="mb-3 inline-flex min-h-10 items-center gap-2 rounded-md font-ui text-sm font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ExternalLink className="w-3 h-3" /> {connector.sourceType === "public_api" ? "Open API documentation" : "Register / Get API Key"}
         </a>
       )}
 
       {/* Rate limits */}
       {connector.rateLimits && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-3">
+        <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
           <span className="text-amber-400/70">Rate limits:</span> {connector.rateLimits}
         </p>
       )}
       {connector.id === "lse" && (
-        <p className="font-terminal text-[8px] text-cyan-400/90 mb-3 leading-relaxed">
+        <p className="mb-3 font-ui text-sm leading-6 text-cyan-200">
           Paste the <strong className="font-normal text-cyan-300">Vault API key</strong> from londonstrategicedge.com/data after you create an account. Site login passwords are not API keys.
         </p>
       )}
@@ -361,16 +367,16 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
       <div className="space-y-3">
         {needsKey && (
           <label className="block">
-            <span className="font-terminal text-[8px] text-muted-foreground uppercase">API Key</span>
+            <span className="block font-ui text-sm font-medium text-foreground">API key</span>
             <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your API key here"
-              className="w-full mt-1 bg-[#0d0d0d] border border-border px-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60" autoComplete="off" />
+              className="mt-1.5 min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" autoComplete="off" />
           </label>
         )}
         <div className="flex gap-2">
-          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="border border-border px-3 py-1.5 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground disabled:opacity-40">
+          <button onClick={handleTest} disabled={!canVerify || (needsKey && !key.trim()) || testing} className="min-h-11 rounded-md border border-border px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {testing ? "Testing..." : "Test Connection"}
           </button>
-          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-4 py-1.5 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+          <button onClick={handleSave} disabled={!canVerify || (needsKey && !key.trim()) || saving} className="min-h-11 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
             {saving ? "Saving..." : "Save & Connect"}
           </button>
         </div>
@@ -639,12 +645,12 @@ function ProviderCard({
   return (
     <div className="border border-border bg-[#070707] p-4 hover:border-[hsl(38,95%,50%)]/30 transition-colors group">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="font-terminal text-[10px] font-bold uppercase text-foreground leading-tight">{connector.name}</span>
+        <span className="font-ui text-sm font-semibold leading-5 text-foreground">{connector.name}</span>
         {isConnected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
       </div>
 
       {connector.description && (
-        <p className="font-terminal text-[8px] text-muted-foreground mb-2 leading-relaxed line-clamp-2">{connector.description}</p>
+        <p className="mb-2 line-clamp-2 font-ui text-sm leading-5 text-muted-foreground">{connector.description}</p>
       )}
 
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -670,7 +676,7 @@ function ProviderCard({
         </span>
       ) : canConnect ? (
         <button onClick={onConnect}
-          className="font-terminal text-[8px] uppercase px-3 py-1.5 border border-[hsl(38,95%,50%)]/50 text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/10 transition-colors">
+          className="min-h-10 rounded-md border border-primary/50 px-3 py-2 font-ui text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           Connect
         </button>
       ) : (
@@ -742,30 +748,58 @@ function ConnectionCard({
   conn: SavedConnection;
   onTest: () => void;
   onEdit: () => void;
-  onRemove: () => void;
+  onRemove: () => Promise<boolean>;
 }) {
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState(false);
   const Icon = STATUS_ICON[conn.status] ?? KeyRound;
   const color = STATUS_COLOR[conn.status] ?? "text-muted-foreground";
   const borderColor = STATUS_BORDER[conn.status] ?? "border-border";
   const recovery = connectionRecoveryPresentation(conn.status);
 
+  const remove = async () => {
+    setRemoving(true);
+    setRemoveError(false);
+    try {
+      const removed = await onRemove();
+      if (!removed) setRemoveError(true);
+    } catch {
+      setRemoveError(true);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   return (
-    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
-      <div className="flex items-center gap-2">
-        <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
-        <span className="font-terminal text-[9px] font-bold uppercase text-foreground truncate">{conn.name}</span>
-        <span className={`ml-auto font-terminal text-[8px] uppercase ${color} shrink-0`}>{conn.status}</span>
+    <article className={`rounded-lg border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon className={`h-4 w-4 shrink-0 ${color}`} aria-hidden="true" />
+        <h3 className="min-w-0 flex-1 truncate font-ui text-sm font-semibold text-foreground">{conn.name}</h3>
+        <span className={`font-ui text-xs ${color}`}>{conn.status.replaceAll("_", " ")}</span>
       </div>
-      <div className="font-terminal text-[8px] text-muted-foreground mt-1">
-        {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+      <p className="mt-1 font-ui text-xs text-muted-foreground">
+        {conn.sourceType.replaceAll("_", " ")}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+      </p>
+      {conn.statusDetail && <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{conn.statusDetail}</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <button type="button" onClick={onTest} disabled={removing} className={`min-h-10 rounded-md px-3 py-2 font-ui text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button type="button" onClick={onEdit} disabled={removing} className="min-h-10 rounded-md px-3 py-2 font-ui text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">{recovery.editLabel}</button>
+        {!confirmingRemoval && (
+          <button type="button" onClick={() => setConfirmingRemoval(true)} className="min-h-10 rounded-md px-3 py-2 font-ui text-sm text-muted-foreground hover:text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400" aria-label={`Remove saved connection ${conn.name}`}>Remove</button>
+        )}
       </div>
-      {conn.statusDetail && <div className="font-terminal text-[8px] text-muted-foreground mt-1 truncate">{conn.statusDetail}</div>}
-      <div className="flex gap-3 mt-2">
-        <button onClick={onTest} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
-        <button onClick={onEdit} className={`font-terminal text-[8px] uppercase ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
-        <button onClick={onRemove} className="font-terminal text-[8px] text-muted-foreground hover:text-rose-400 uppercase">Remove</button>
-      </div>
-    </div>
+      {confirmingRemoval && (
+        <div data-testid="connection-remove-confirm" className="mt-2 rounded-md border border-rose-400/30 bg-rose-400/[0.035] p-3">
+          <p className="font-ui text-sm leading-5 text-foreground">Remove the saved connection to {conn.name} from LiOS?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => { setConfirmingRemoval(false); setRemoveError(false); }} disabled={removing} className="min-h-10 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">Cancel</button>
+            <button type="button" onClick={() => void remove()} disabled={removing} className="min-h-10 rounded-md border border-rose-400/50 px-3 py-2 font-ui text-sm font-semibold text-rose-200 hover:bg-rose-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 disabled:opacity-40">{removing ? "Removing…" : "Remove connection"}</button>
+          </div>
+          {removeError && <p role="alert" className="mt-2 font-ui text-sm text-rose-200">Could not remove this connection. Check the connection and try again.</p>}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1055,11 +1089,16 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     } catch { refresh(); }
   }
 
-  async function handleDeleteConnection(connectionId: number) {
+  async function handleDeleteConnection(connectionId: number): Promise<boolean> {
     try {
       await apiRequest("DELETE", `/api/setup/source-connections/${connectionId}`);
+      setSaveNotice(null);
       refresh();
-    } catch { /* silent */ }
+      return true;
+    } catch (error) {
+      setSaveNotice(error instanceof Error ? `Could not remove the saved connection: ${error.message}` : "Could not remove the saved connection. Retry after checking your connection.");
+      return false;
+    }
   }
 
   function handleEditConnection(conn: SavedConnection) {
@@ -1152,13 +1191,13 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Plug className="w-4 h-4 text-[hsl(38,95%,55%)]" />
-              <span className="font-terminal text-[12px] tracking-[0.2em] text-foreground uppercase">Data Connection Center</span>
+              <span className="font-ui text-xl font-semibold tracking-tight text-foreground">Connections</span>
             </div>
-            <p className="font-ui text-[10px] text-muted-foreground">
-              Add the sources you trust when you need them. LiOS can open and start useful work without any connection.
+            <p className="mt-1 font-ui text-sm leading-6 text-muted-foreground">
+              Connect sources only when you need them. You can start using LiOS without any connection.
             </p>
           </div>
-          <span className="font-terminal text-[7px] px-2 py-0.5 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+          <span className="hidden sm:flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 font-ui text-xs text-emerald-300">
             <Shield className="w-2.5 h-2.5" /> Local-First
           </span>
         </div>
@@ -1167,11 +1206,11 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <div>
               <div className="flex items-center gap-2">
                 {connectionSummary.canEnterTerminal ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <KeyRound className="h-4 w-4 text-[hsl(38,95%,55%)]" />}
-                <h1 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{connectionSummary.statusLabel}</h1>
+                <h1 className="font-ui text-base font-semibold text-foreground">{connectionSummary.statusLabel}</h1>
               </div>
-              <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
-              {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
-              <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
+              <p className="mt-2 max-w-xl font-ui text-sm leading-6 text-muted-foreground">{connectionSummary.statusDetail}</p>
+              {saveNotice && <p role="alert" className="mt-2 max-w-xl rounded-md border border-rose-500/40 bg-rose-500/[0.05] px-3 py-2 font-ui text-sm leading-5 text-rose-200">{saveNotice}</p>}
+              <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground">
                 <span>{connectedCount} connected · {availableCount} provider{availableCount === 1 ? "" : "s"} available</span>
                 {connectedCount === 0 ? <span className="text-cyan-200/75">Optional · start without setup</span> : null}
               </div>
@@ -1179,7 +1218,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <div className="flex flex-wrap gap-2 sm:justify-end">
               <button type="button" onClick={handleEnterTerminal} disabled={saving || (Boolean(aiProviderId) && aiModelBlocked)}
                 title={aiProviderId && aiModelBlocked ? aiModelAccessMessage(aiModelAccess) ?? undefined : undefined}
-                className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
+                className="flex min-h-11 items-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
                 <Terminal className="w-3 h-3" /> {saving ? "Saving..." : connectionSummary.ctaLabel}
               </button>
             </div>
@@ -1190,8 +1229,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         <section className="border border-[hsl(38,95%,50%)]/25 bg-[hsl(38,95%,50%)]/[0.025] p-4 space-y-4" aria-label="Connect AI" data-testid="connect-ai">
           <div className="flex items-center gap-2 border-b border-border/60 pb-2">
             <Bot className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
-            <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">AI</h2>
-            <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Your provider · your key · your permission</span>
+            <h2 className="font-ui text-base font-semibold text-foreground">AI</h2>
+            <span className="font-ui text-xs text-muted-foreground">Your provider · your key · your permission</span>
           </div>
           {aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
@@ -1200,15 +1239,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">No AI provider connected. AI is optional: deterministic analytics work without it.</p>
+            <p className="font-ui text-sm leading-6 text-muted-foreground">No AI provider connected. AI is optional: deterministic analytics still work without it.</p>
           )}
           {aiConnectorsToAdd.length > 0 && (
             <div>
-              <span className="mb-1 block font-terminal text-[8px] uppercase text-muted-foreground">Add an AI provider</span>
+              <h3 className="mb-2 font-ui text-sm font-medium text-foreground">Add an AI provider</h3>
               <div className="flex flex-wrap gap-2">
                 {aiConnectorsToAdd.map((connector) => (
                   <button key={connector.id} type="button" onClick={() => { setEditingConnection(null); setSelectedProvider(connector); setModal("provider"); }}
-                    className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 font-terminal text-[8px] uppercase text-muted-foreground hover:border-[hsl(38,95%,50%)]/50 hover:text-foreground">
+                    className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                     <Plus className="h-3 w-3" /> {connector.name}
                   </button>
                 ))}
@@ -1218,7 +1257,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="space-y-3" data-testid="connect-ai-selection">
       <div>
-        <span className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Use this provider</span>
+        <label htmlFor="ai-provider-select" className="mb-2 block font-ui text-sm font-medium text-foreground">Use this provider</label>
         <select id="ai-provider-select" value={aiProviderId} onChange={(e) => { aiChoiceMadeRef.current = true; setAiProviderId(e.target.value); setAiModelId(""); }} className={inputCls}>
           <option value="">AI disabled — deterministic engines only</option>
           {selectableAiProviders.map((provider) => (
@@ -1229,7 +1268,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         </select>
         {aiProviderId && (
           <div className="mt-3">
-            <label htmlFor="ai-model-select" className="font-terminal text-[8px] text-muted-foreground uppercase block mb-1">Model</label>
+            <label htmlFor="ai-model-select" className="mb-2 block font-ui text-sm font-medium text-foreground">Model</label>
             {selectedAiProvider?.allowCustomModel && !modelDiscoveryComplete ? (
               <>
                 <input
@@ -1304,8 +1343,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         <section className="border border-border bg-[#070707] p-4 space-y-4" aria-label="Connect data" data-testid="connect-data">
           <div className="flex items-center gap-2 border-b border-border/60 pb-2">
             <Database className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
-            <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">Data</h2>
-            <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Connect what you bring · optional</span>
+            <h2 className="font-ui text-base font-semibold text-foreground">Data</h2>
+            <span className="font-ui text-xs text-muted-foreground">Connect what you bring · optional</span>
           </div>
           {dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
@@ -1314,15 +1353,15 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               ))}
             </div>
           ) : (
-            <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">No data source connected yet. Add market, filings or macro data, or import your own files, whenever a request needs it.</p>
+            <p className="font-ui text-sm leading-6 text-muted-foreground">No data source connected yet. Add market, filings or macro data, or import your own files when a request needs it.</p>
           )}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setSelectedProvider(null); setModal("provider"); }}
-              className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20">
+              className="flex min-h-11 items-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-3 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
               <Plus className="h-3 w-3" /> Connect a data source
             </button>
             <button type="button" onClick={() => setModal("import")}
-              className="flex items-center gap-1.5 border border-border px-3 py-2 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground">
+              className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
               <Upload className="h-3 w-3" /> Import files
             </button>
           </div>
@@ -1524,7 +1563,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={refresh}
-            className="flex items-center gap-1.5 border border-border px-3 py-2 font-terminal text-[9px] uppercase text-muted-foreground hover:text-foreground">
+            className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             <RefreshCw className="w-3 h-3" /> Refresh status
           </button>
         </div>
@@ -1543,7 +1582,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search providers..."
-              className="w-full bg-[#0d0d0d] border border-border pl-9 pr-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60"
+              className="min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] py-2 pl-9 pr-3 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             />
           </div>
 
@@ -1783,7 +1822,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <input
               aria-label="Search providers"
               placeholder="Search providers..."
-              className="w-full bg-[#0d0d0d] border border-border pl-9 pr-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60"
+              className="min-h-11 w-full rounded-md border border-border bg-[#0d0d0d] py-2 pl-9 pr-3 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               onChange={(e) => setSearchQuery(e.target.value)}
               value={searchQuery}
             />
@@ -1793,12 +1832,12 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               .filter((c) => !searchQuery.trim() || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.description ?? "").toLowerCase().includes(searchQuery.toLowerCase()))
               .map((c) => (
                 <button key={c.id} onClick={() => setSelectedProvider(c)}
-                  className="text-left border border-border hover:border-[hsl(38,95%,50%)]/40 p-3 transition-colors">
+                  className="min-h-11 rounded-md border border-border p-3 text-left transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                   <div className="flex items-center gap-2">
-                    <span className="font-terminal text-[9px] font-bold uppercase text-foreground">{c.name}</span>
+                    <span className="font-ui text-sm font-semibold text-foreground">{c.name}</span>
                     {configuredProviderIds.has(c.id) && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
                   </div>
-                  {c.description && <p className="font-terminal text-[8px] text-muted-foreground mt-1">{c.description}</p>}
+                  {c.description && <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{c.description}</p>}
                   <div className="flex items-center gap-1.5 mt-1">
                     <CategoryBadge category={c.category} />
                   </div>
