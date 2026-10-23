@@ -24,10 +24,10 @@ export function authEntryErrorMessage(action: AuthEntryAction, status: number, r
     : "Sign-in could not be completed. Check your details and retry.";
 }
 
-export async function verifiedEntrySession<T extends SessionIdentity>(): Promise<T> {
+export async function verifiedEntrySession<T extends SessionIdentity>(options: { fetcher?: typeof fetch } = {}): Promise<T> {
   // Only the server's fresh /me identity authorizes an authenticated UI.
   // Login/register/SSO acknowledgement alone must not create local session data.
-  const session = await restoreSession<T>("/api/auth/me");
+  const session = await restoreSession<T>("/api/auth/me", options);
   if (!session) throw new Error("Session verification required.");
   return session;
 }
