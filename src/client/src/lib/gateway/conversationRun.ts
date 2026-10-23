@@ -52,10 +52,11 @@ export async function followConversationRun(
       disposers.forEach((dispose) => dispose());
       resolve(result);
     };
+    // Only an actual terminal event from Home can settle a run as successful.
+    // Connection interruptions do not imply completion or authorize replay.
     const complete = () => finish({ status: 200, ok: true, text, error, events });
     const interrupted = (message: string) => {
-      error ??= message;
-      complete();
+      finish({ status: 503, ok: false, text, error: message, errorCode: "run_interrupted", events });
     };
 
     disposers.push(client.onEvent("conversation.event", (payload) => {
