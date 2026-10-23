@@ -37,7 +37,7 @@ The 2026-10-22 audit was written against older `main` `1fa37cc`; treat it as his
 - **Static contract tension:** `validate_ux_flagship_acceptance.ts` still asserts the older four-line Financial Intelligence Operating System public hero. Owner-approved universal Chat-first positioning should be reconciled with that Figma-specific contract in a deliberate spec/test change, **not bypassed** or surprised by source CI.
 - **Directly usable for the first Lens:** `SavedArtifactCards` reads saved P4 refs; `ArtifactReadableChart` already projects recorded calculation values into a chart; `visualizationIntent` defines context/diagnostic/primary policy; `conversationArtifactView` stores *only UI selection* while P4 authorizes and loads real Artifacts. Hence start with read-only typed projections, not a new generator or store.
 
-## 2. Live PR and integration audit at this checkpoint
+**WS-01/02 code audit and implementation gap matrix:** [65-workstream code-evidence annex](LIOS_UI_UX_WS01_WS02_GAP_MATRIX_2026-10-23.md) covers every existing UX row and all 18 prior UX-A findings with current-main source paths, draft-PR overlaps and a source-consistency test. **Status is audited, not rendered/installed accepted.** This is part of the existing master plan, not a competing board.\n\n## 2. Live PR and integration audit at this checkpoint
 
 All Source checks below refer to each displayed exact PR head **as queried on 2026-10-23**, not full visual/native testing. All are unmerged at checkpoint; no review/signoff inferred.
 
