@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, FolderKanban, MessageSquare, Package } from "lucide-react";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import {
@@ -45,6 +45,11 @@ function actionLabel(tab: CenterTab): string {
 
 export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
   const [tab, setTab] = useState<CenterTab>("trash");
+  const actionInFlight = useRef(false);
+  const [applying, setApplying] = useState(false);
+  const disabledActions: Partial<Record<LifecycleAction, string>> | undefined = applying
+    ? { restore: "Wait for the current change to finish", delete: "Wait for the current change to finish", delete_permanently: "Wait for the current change to finish" }
+    : undefined;
   const archivedProjectsQuery = useProjects("archived");
   const trashedProjectsQuery = useProjects("trash");
   const archivedChatsQuery = useAllProjectChats("archived");
@@ -61,13 +66,22 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
   const artifacts = tab === "trash" ? trashedArtifactsQuery.data ?? [] : archivedArtifactsQuery.data ?? [];
   const counts = useMemo(() => ({ projects: projects.length, chats: chats.length, artifacts: artifacts.length }), [artifacts.length, chats.length, projects.length]);
 
-  const run = async (work: () => Promise<void>) => {
+  const run = async (work: () => Promise<void | boolean>) => {
+    // A menu can dispatch again before React disables its buttons.
+    // Reject duplicates synchronously, including destructive operations.
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setApplying(true);
     onNotice(null);
     try {
-      await work();
-      onInvalidate();
+      const changed = await work();
+      // Canceling a native confirmation did not change any persisted object.
+      if (changed !== false) onInvalidate();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : `Unable to update ${actionLabel(tab).toLowerCase()}.`);
+    } finally {
+      actionInFlight.current = false;
+      setApplying(false);
     }
   };
 
@@ -76,8 +90,9 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
     const detail = dependencies.total
       ? ` This also moves ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} (${dependencies.chats} chats, ${dependencies.resources} resources, ${dependencies.sessions} sessions, ${dependencies.artifacts} artifacts) to Trash.`
       : " It has no active dependent objects.";
-    if (!window.confirm(`Move Project “${project.name}” to Trash?${detail}`)) return;
+    if (!window.confirm(`Move Project “${project.name}” to Trash?${detail}`)) return false;
     await trashProject(project.id);
+    return true;
   };
 
   const confirmProjectPermanentDelete = async (project: Project) => {
@@ -85,8 +100,9 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
     const detail = dependencies.total
       ? ` This permanently removes ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} (${dependencies.chats} chats, ${dependencies.resources} resources, ${dependencies.sessions} sessions, ${dependencies.artifacts} artifacts).`
       : " It has no active dependent objects.";
-    if (!window.confirm(`Permanently delete Project “${project.name}”?${detail} This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete Project “${project.name}”?${detail} This cannot be undone.`)) return false;
     await permanentlyDeleteProject(project.id);
+    return true;
   };
 
   const handleProjectAction = (project: Project, action: LifecycleAction) => {
@@ -108,8 +124,9 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
     });
     if (action === "delete") return run(async () => { await trashProjectChat(chat.id); });
     if (action === "delete_permanently") return run(async () => {
-      if (!window.confirm(`Permanently delete chat “${chat.title}”? This cannot be undone.`)) return;
+      if (!window.confirm(`Permanently delete chat “${chat.title}”? This cannot be undone.`)) return false;
       await permanentlyDeleteProjectChat(chat.id);
+      return true;
     });
     return Promise.resolve();
   };
@@ -121,8 +138,9 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
     });
     if (action === "delete") return run(async () => { await trashArtifact(artifact.id); });
     if (action === "delete_permanently") return run(async () => {
-      if (!window.confirm(`Permanently delete Artifact “${artifact.title}”? This cannot be undone.`)) return;
+      if (!window.confirm(`Permanently delete Artifact “${artifact.title}”? This cannot be undone.`)) return false;
       await permanentlyDeleteArtifact(artifact.id);
+      return true;
     });
     return Promise.resolve();
   };
@@ -130,7 +148,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#050505]">
       <header className="flex shrink-0 items-center gap-3 border-b border-border/70 px-5 py-4">
-        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close Lifecycle Center" title="Back to Project Home">
+        <button type="button" disabled={applying} onClick={onClose} className="min-h-10 min-w-10 rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50" aria-label="Close Lifecycle Center" title="Back to Project Home">
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
@@ -140,9 +158,10 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
         </div>
       </header>
 
+      {applying && <p role="status" aria-live="polite" className="px-5 pt-3 font-ui text-sm text-amber-200">Applying saved-work change…</p>}
       <div className="flex shrink-0 gap-2 border-b border-border/60 px-5 py-3">
         {(["trash", "archived"] as const).map((item) => (
-          <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-md border px-3 py-2 font-ui text-[8px] ${tab === item ? "border-amber-300/40 bg-amber-300/[0.08] text-amber-100" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
+          <button key={item} type="button" disabled={applying} onClick={() => setTab(item)} className={`rounded-md border px-3 py-2 font-ui text-[8px] ${tab === item ? "border-amber-300/40 bg-amber-300/[0.08] text-amber-100" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
             {item === "trash" ? "Trash" : "Archived"}
           </button>
         ))}
@@ -151,14 +170,14 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5" aria-busy={applying}>
         {tab === "trash" && <div className="mb-5 rounded-lg border border-red-300/20 bg-red-300/[0.035] px-4 py-3 font-ui text-[9px] leading-5 text-red-100/80">Trash is recoverable. Permanent deletion removes the selected object and cannot be undone.</div>}
         <div className="grid gap-4 xl:grid-cols-3">
           <LifecycleGroup title="Projects" icon={<FolderKanban className="h-3.5 w-3.5 text-amber-300" />} empty={tab === "trash" ? "Trash is empty." : "No archived Projects."}>
             {projects.map((project) => (
               <div key={project.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
                 <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{project.name}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{project.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
-                <ObjectActionMenu kind="project" status={lifecycleStatus(project.trashedAt, project.status)} pinned={project.pinned} hidden={["share"]} label={`Actions for ${project.name}`} onAction={(action) => void handleProjectAction(project, action)} />
+                <ObjectActionMenu disabled={disabledActions} kind="project" status={lifecycleStatus(project.trashedAt, project.status)} pinned={project.pinned} hidden={["share"]} label={`Actions for ${project.name}`} onAction={(action) => void handleProjectAction(project, action)} />
               </div>
             ))}
           </LifecycleGroup>
@@ -167,7 +186,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
             {chats.map((chat) => (
               <div key={chat.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
                 <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{chat.title}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{chat.scope.toUpperCase()} · {chat.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
-                <ObjectActionMenu kind="chat" scope={chat.scope} status={lifecycleStatus(chat.trashedAt, chat.status)} pinned={chat.pinned} hidden={["branch"]} label={`Actions for ${chat.title}`} onAction={(action) => void handleChatAction(chat, action)} />
+                <ObjectActionMenu disabled={disabledActions} kind="chat" scope={chat.scope} status={lifecycleStatus(chat.trashedAt, chat.status)} pinned={chat.pinned} hidden={["branch"]} label={`Actions for ${chat.title}`} onAction={(action) => void handleChatAction(chat, action)} />
               </div>
             ))}
           </LifecycleGroup>
@@ -176,7 +195,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
             {artifacts.map((artifact) => (
               <div key={artifact.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
                 <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{artifact.title}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">{artifact.kind.toUpperCase()} · {artifact.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
-                <ObjectActionMenu kind="artifact" status={lifecycleStatus(artifact.trashedAt, artifact.status)} hidden={[]} label={`Actions for ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
+                <ObjectActionMenu disabled={disabledActions} kind="artifact" status={lifecycleStatus(artifact.trashedAt, artifact.status)} hidden={[]} label={`Actions for ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
               </div>
             ))}
           </LifecycleGroup>
