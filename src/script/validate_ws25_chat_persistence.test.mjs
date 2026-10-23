@@ -39,7 +39,9 @@ test("WS-25 Temporary sends never include stale selected saved Project Artifact 
   assert.match(boundary,/return mode === "temporary" \? undefined : context/);
   assert.match(shell,/sourceScope: effectiveSourceScope/);
   assert.match(shell,/const effectiveSourceScope = sourceScopeForChatMode\(chatMode, sourceScope\)/);
-  assert.match(boundary,/return mode === "temporary" \? "auto" : scope/);
+  assert.match(boundary,/mode === "temporary" && scope !== "web" \? "auto" : scope/);
+  assert.match(shell,/chatMode === "temporary" \? "auto" : loadComposerSourceScope\(scopedProjectId\)/);
+  assert.match(shell,/if \(chatMode !== "temporary"\) saveComposerSourceScope/);
 });
 
 test("WS-25 Temporary never reads saved Chat messages or stores ephemeral history", () => {
