@@ -172,11 +172,13 @@ async function rpc(
     linkAbortSignal(signal, controller),
   ];
   try {
+    const bearer = credential(policy);
+    if (policy.credentialRef && !bearer) throw new Error("MCP source credential is unavailable or revoked.");
     const request: McpJsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params };
     const response = await transport(
       config.endpoint,
       request,
-      credential(policy),
+      bearer,
       controller.signal,
     );
     return sanitizeLedgerPayload(validateExternalMcpRpcResponse(request, response) ?? null);
