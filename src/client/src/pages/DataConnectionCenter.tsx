@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
+import AsyncSurfaceNotice from "@/components/terminal/AsyncSurfaceNotice";
 import { type CatalogProvider } from "@/lib/providerCatalog";
 import { connectionRecoveryPresentation, isConnectorConnectable, summarizeConnectionCenter } from "@/lib/connectionCenterPresentation";
 import { aiModelAccessMessage, resolveAiModelAccess } from "@/lib/aiModelAccess";
@@ -1140,8 +1142,23 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     }
   }
 
-  if (setupQuery.isLoading) {
-    return <Shell session={session} onLogout={onLogout}><p className="font-terminal text-[10px] text-muted-foreground animate-pulse">Loading data environment...</p></Shell>;
+  const setupReadState = resolveAsyncSurfaceState({
+    hasData: Boolean(setupQuery.data),
+    isPending: setupQuery.isPending,
+    isError: setupQuery.isError,
+    error: setupQuery.error,
+  });
+  if (setupReadState !== "ready") {
+    return <Shell session={session} onLogout={onLogout}>
+      <AsyncSurfaceNotice
+        surface="connections"
+        state={setupReadState}
+        onRetry={() => { void setupQuery.refetch(); }}
+        retrying={setupQuery.isFetching}
+        onLeave={onLogout}
+        leaveLabel="Sign out"
+      />
+    </Shell>;
   }
 
   return (
