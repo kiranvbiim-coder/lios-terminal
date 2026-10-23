@@ -111,6 +111,7 @@ import { collectCitationSources, savedMessageCitationSources } from "@/lib/chatM
 import { fillStarterPrompt, findStarterPlaceholder, PROJECT_STARTER_PROMPTS, resolveProjectConversationVisualIntensity } from "@/lib/projectExperienceVisualState";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
 import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { ambiguousMentionTokens, eligibleProjectMentions, stageResourceMention } from "@shared/mentionContext";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
 import SavedArtifactCards from "./SavedArtifactCards";
@@ -635,12 +636,10 @@ export default function ProjectExperienceShell({
   }, [home?.project.name, selection.projectId, selection.chatId, activeChat?.title, onNavigationContext]);
 
   const resources = home?.resources ?? [];
-  const mentionCandidates = useMemo(() => {
-    const match = input.match(/@([^\s@]*)$/);
-    if (!match) return [];
-    const q = match[1].toLowerCase();
-    return resources.filter((resource) => resource.label.toLowerCase().includes(q)).slice(0, 6);
-  }, [input, resources]);
+  const mentionCandidates = useMemo(
+    () => eligibleProjectMentions(resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences),
+    [resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences],
+  );
 
   const commandCandidates = useMemo(() => {
     if (!input.startsWith("/")) return [];
@@ -1441,7 +1440,11 @@ export default function ProjectExperienceShell({
   };
 
   const selectMention = (resource: ProjectResource) => {
-    setInput((current) => current.replace(/@[^\s@]*$/, `@${resource.label.replace(/\s+/g, "_")} `));
+    // IDs are from the selected, tenant-scoped Project resources; the server
+    // still authorizes any context inclusion and enforces source scope.
+    if (!mentionCandidates.some(candidate => candidate.id === resource.id)) return;
+    setInput(current => stageResourceMention(current, resource.label));
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const createResource = async () => {
