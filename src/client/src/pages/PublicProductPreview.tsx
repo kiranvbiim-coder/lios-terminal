@@ -71,38 +71,38 @@ const EXECUTION_STEPS = [
   },
   {
     step: "EXECUTE",
-    desc: "Deterministic engines + BYOAI inference in parallel",
+    desc: "Use permitted AI, sources and specialist engines as needed",
   },
   { step: "INSPECT", desc: "Evidence panel, data lineage, source attribution" },
   { step: "REFINE", desc: "Follow-up, drill-down, parameter adjustment" },
-  { step: "SAVE", desc: "Live artifact persisted to project ledger" },
-  { step: "MONITOR", desc: "Automated alerts, scheduled re-runs, watchlists" },
+  { step: "SAVE", desc: "Regular Chats and Artifacts save; Projects are optional" },
+  { step: "MONITOR", desc: "Optional, explicitly enabled updates and recurring work" },
 ];
 
 const FEATURES = [
   {
-    label: "PROJECTS / CHATS",
-    title: "Persistent intelligence workspaces",
-    desc: "Every analysis lives inside a Project. Chats retain full financial context — positions, universe filters, prior calculations — across sessions.",
-    tag: "ChatGPT-style context",
+    label: "CHAT / OPTIONAL PROJECTS",
+    title: "Start with a conversation",
+    desc: "Explore any topic in a regular Chat. Keep useful work and Artifacts automatically, organize larger work into optional Projects, or use Temporary Chat without persistence.",
+    tag: "Ask first",
   },
   {
     label: "LIVE ARTIFACTS",
     title: "Side-by-side interactive outputs",
-    desc: "Charts, models, tables, and reports render live beside the conversation. Scroll, filter, drill, export — without leaving the chat.",
-    tag: "Claude-style artifacts",
+    desc: "Open relevant charts, models, research and reports beside Chat. Refine the same saved Artifact, then expand into the original professional Workbench when deeper editing is useful.",
+    tag: "One saved work object",
   },
   {
     label: "EVIDENCE LAYER",
-    title: "Every claim cites its source",
-    desc: "Every data point surfaces its provider, timestamp, and confidence tier. AI-derived estimates are clearly labelled; engines remain authoritative.",
-    tag: "Perplexity-style citations",
+    title: "Inspect evidence and limitations",
+    desc: "For source-backed work, inspect permitted evidence, dates, calculation assumptions and gaps. LiOS must not invent missing observations or treat AI estimates as verified facts.",
+    tag: "Sources you can inspect",
   },
   {
     label: "BYOD / BYOAI",
-    title: "Bring your own data and models",
-    desc: "Connect any REST/GraphQL/SQL source. Route inference to Claude, GPT-4, Gemini, local Ollama, or any provider-neutral endpoint. Your keys, your cost.",
-    tag: "Provider-neutral",
+    title: "Bring your own AI access and data",
+    desc: "Choose supported APIs, local or self-hosted models, enterprise gateways and officially permitted account or CLI access. Source rights, consent and user-controlled costs govern every connection.",
+    tag: "Your access and permissions",
   },
 ];
 
@@ -328,6 +328,49 @@ function TerminalMockup() {
         </span>
       )}
       <style>{`@keyframes referenceBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
+    </div>
+  );
+}
+
+
+/** Non-executable public preview of the default Chat experience, distinct from the specialist terminal demo. */
+function ConversationMockup() {
+  return (
+    <div
+      className="lios-reference-conversation-demo"
+      aria-label="Example LiOS chat, illustrative only"
+      style={{
+        border: "1px solid #292731",
+        background: "#111115",
+        borderRadius: 14,
+        padding: 20,
+        boxShadow: "0 18px 55px rgba(0,0,0,0.3)",
+        fontFamily: "'Inter', sans-serif",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, borderBottom: "1px solid #292731", paddingBottom: 14 }}>
+        <strong style={{ color: "#ede9e0", fontSize: 14 }}>LiOS · Quick Chat</strong>
+        <span style={{ color: "#d4a017", fontSize: 9, letterSpacing: "0.1em", fontFamily: "'JetBrains Mono', monospace" }}>ILLUSTRATIVE PREVIEW</span>
+      </div>
+      <div style={{ padding: "24px 0 14px", color: "#ede9e0", fontSize: 23, fontWeight: 600, lineHeight: 1.25 }}>Ask about anything. Keep the work.</div>
+      <div style={{ alignSelf: "flex-end", margin: "6px 0 18px 38px", borderRadius: 12, padding: "14px 16px", background: "#25232b", color: "#dfdce0", fontSize: 13, lineHeight: 1.55 }}>
+        Research how clean energy policy affects small businesses. Create a report with evidence gaps.
+      </div>
+      <section aria-label="Example assistant response" style={{ borderLeft: "2px solid #d4a017", padding: "4px 0 4px 15px" }}>
+        <div style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", marginBottom: 8 }}>LIOS · SAMPLE RESPONSE</div>
+        <p style={{ color: "#cec9d0", margin: 0, fontSize: 13, lineHeight: 1.7 }}>
+          I can compare permitted sources, distinguish findings from assumptions and build a professional report. Missing or unavailable evidence stays explicit.
+        </p>
+        <div style={{ marginTop: 16, border: "1px solid #34303a", borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <div>
+            <div style={{ color: "#e6e2e6", fontSize: 12, fontWeight: 600 }}>Research report</div>
+            <div style={{ color: "#aaa3b0", fontSize: 10, marginTop: 4 }}>Artifact preview · source access required</div>
+          </div>
+          <span style={{ color: "#d4a017", fontSize: 11 }}>Preview →</span>
+        </div>
+      </section>
+      <div style={{ color: "#958e9d", border: "1px solid #38333f", borderRadius: 12, padding: "14px 16px", marginTop: 22, fontSize: 13 }}>Message LiOS…</div>
+      <p style={{ color: "#948c99", fontSize: 10, margin: "12px 0 0", lineHeight: 1.5 }}>Static demonstration only. Sign in to access permitted AI, sources and tools.</p>
     </div>
   );
 }
@@ -613,10 +656,7 @@ export default function PublicProductPreview({
         </div>
       </nav>
 
-      {/* TICKER */}
-      <Ticker items={tickerItems} />
-
-      {/* HERO */}
+      {/* HERO: general intelligence comes first; illustrative finance ticker is shown with specialist depth. */}
       <section
         className="lios-reference-source-hero"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px 60px" }}
@@ -666,7 +706,7 @@ export default function PublicProductPreview({
                 textTransform: "uppercase",
               }}
             >
-              Financial
+              Universal
               <br />
               <span style={{ color: "#d4a017" }}>Intelligence</span>
               <br />
@@ -685,9 +725,9 @@ export default function PublicProductPreview({
                 maxWidth: 460,
               }}
             >
-              Projects, chats, live analytical artifacts, provider-neutral
-              BYOD/BYOAI, deterministic finance engines, persistent financial
-              state and automation.
+              Ask LiOS about any topic. Research, create and refine professional
+              work through one conversation. Open the original finance Workbench
+              only when you need its specialist depth.
             </p>
 
             <div
@@ -743,7 +783,7 @@ export default function PublicProductPreview({
                   (e.currentTarget.style.borderColor = "#2e2e3a")
                 }
               >
-                VIEW DEMO
+                VIEW FINANCE DEMO
               </button>
             </div>
 
@@ -757,9 +797,9 @@ export default function PublicProductPreview({
               }}
             >
               {[
-                ["11", "Finance capability families"],
-                ["BYOD", "Your connected sources"],
-                ["BYOAI", "Provider-neutral AI"],
+                ["CHAT", "Start with any question"],
+                ["ARTIFACTS", "Living professional work"],
+                ["FINANCE", "Specialist on demand"],
               ].map(([val, label]) => (
                 <div key={label}>
                   <div
@@ -789,7 +829,343 @@ export default function PublicProductPreview({
             </div>
           </div>
 
-          <div id="reference-demo" aria-label="Illustrative product demo">
+          <div aria-label="Illustrative LiOS chat preview; no live AI, tools or research">
+            <ConversationMockup />
+          </div>
+        </div>
+      </section>
+
+      {/* EXECUTION MODEL */}
+      <section
+        style={{ borderTop: "1px solid #1f1f28", background: "#0d0d10" }}
+        id="product"
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "64px 24px" }}>
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              letterSpacing: "0.14em",
+              color: "#d4a017",
+              marginBottom: 16,
+            }}
+          >
+            EXECUTION MODEL
+          </div>
+          <h2
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "clamp(36px, 4vw, 52px)",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "-0.01em",
+              margin: "0 0 48px",
+              color: "#ede9e0",
+            }}
+          >
+            Ask → Research → Create → Refine
+          </h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, 1fr)",
+              gap: 0,
+            }}
+          >
+            {EXECUTION_STEPS.map((s, i) => (
+              <div
+                key={s.step}
+                style={{
+                  borderLeft: i === 0 ? "1px solid #1f1f28" : "none",
+                  borderRight: "1px solid #1f1f28",
+                  borderTop: "1px solid #1f1f28",
+                  borderBottom: "1px solid #1f1f28",
+                  padding: "20px 16px",
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    color: "#3a3840",
+                    letterSpacing: "0.1em",
+                    marginBottom: 8,
+                  }}
+                >
+                  0{i + 1}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 16,
+                    color: "#d4a017",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    marginBottom: 8,
+                  }}
+                >
+                  {s.step}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 11,
+                    color: "#6b6870",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {s.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section id="features" style={{ borderTop: "1px solid #1f1f28" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px" }}>
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              letterSpacing: "0.14em",
+              color: "#d4a017",
+              marginBottom: 16,
+            }}
+          >
+            EXPERIENCE LAYER
+          </div>
+          <h2
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "clamp(36px, 4vw, 52px)",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "-0.01em",
+              margin: "0 0 48px",
+              color: "#ede9e0",
+              maxWidth: 600,
+            }}
+          >
+            One conversation, professional depth
+          </h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 1,
+              background: "#1f1f28",
+            }}
+          >
+            {FEATURES.map((f, i) => (
+              <div
+                key={f.title}
+                style={{
+                  background: "#09090b",
+                  padding: "36px 36px",
+                  transition: "background 0.2s",
+                  cursor: "default",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "#111115")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "#09090b")
+                }
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 20,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      color: "#d4a017",
+                    }}
+                  >
+                    {f.label}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9,
+                      letterSpacing: "0.08em",
+                      color: "#3a3840",
+                      background: "#111115",
+                      padding: "3px 8px",
+                      border: "1px solid #1f1f28",
+                    }}
+                  >
+                    {f.tag.toUpperCase()}
+                  </span>
+                </div>
+                <h3
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 24,
+                    letterSpacing: "0.01em",
+                    color: "#ede9e0",
+                    margin: "0 0 12px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {f.title}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 13,
+                    lineHeight: 1.65,
+                    color: "#6b6870",
+                    margin: 0,
+                  }}
+                >
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* The sample finance ticker belongs with the specialist capabilities, not the general-purpose entry. */}
+      <Ticker items={tickerItems} />
+
+      {/* CAPABILITY FAMILIES */}
+      <section
+        style={{ borderTop: "1px solid #1f1f28", background: "#0d0d10" }}
+        id="capabilities"
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              marginBottom: 48,
+              flexWrap: "wrap",
+              gap: 24,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10,
+                  letterSpacing: "0.14em",
+                  color: "#d4a017",
+                  marginBottom: 16,
+                }}
+              >
+                SPECIALIST FINANCE DEPTH
+              </div>
+              <h2
+                style={{
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                  fontSize: "clamp(36px, 4vw, 52px)",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "-0.01em",
+                  margin: 0,
+                  color: "#ede9e0",
+                }}
+              >
+                11 Financial Capability Families
+              </h2>
+            </div>
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 13,
+                color: "#6b6870",
+                maxWidth: 360,
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              Work begins in Chat. The complete finance terminal and specialist
+              tools are available on demand, not required for ordinary questions.
+            </p>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 0,
+              background: "#1f1f28",
+            }}
+          >
+            {FINANCE_FAMILIES.map((fam, i) => (
+              <div
+                key={fam.id}
+                style={{
+                  background: "#09090b",
+                  padding: "24px 24px",
+                  borderBottom: i < 9 ? "1px solid #1f1f28" : "none",
+                  display: "flex",
+                  gap: 16,
+                  alignItems: "flex-start",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "#111115")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "#09090b")
+                }
+              >
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    color: "#d4a017",
+                    letterSpacing: "0.08em",
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }}
+                >
+                  {fam.id}
+                </span>
+                <div>
+                  <div
+                    style={{
+                      fontFamily: "'Barlow Condensed', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "#ede9e0",
+                      letterSpacing: "0.02em",
+                      textTransform: "uppercase",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {fam.name}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: 12,
+                      color: "#6b6870",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {fam.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div id="reference-demo" aria-label="Illustrative specialist finance Workbench demo, not live execution" style={{ maxWidth: 900, margin: "40px auto 0" }}>
+            <p style={{ color: "#d4a017", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", margin: "0 0 12px" }}>SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO</p>
             <TerminalMockup key={demoRun} />
 
             {/* DCF artifact mockup */}
@@ -899,335 +1275,7 @@ export default function PublicProductPreview({
               </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* EXECUTION MODEL */}
-      <section
-        style={{ borderTop: "1px solid #1f1f28", background: "#0d0d10" }}
-        id="product"
-      >
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "64px 24px" }}>
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10,
-              letterSpacing: "0.14em",
-              color: "#d4a017",
-              marginBottom: 16,
-            }}
-          >
-            EXECUTION MODEL
-          </div>
-          <h2
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: "clamp(36px, 4vw, 52px)",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "-0.01em",
-              margin: "0 0 48px",
-              color: "#ede9e0",
-            }}
-          >
-            Ask → Execute → Inspect → Automate
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 0,
-            }}
-          >
-            {EXECUTION_STEPS.map((s, i) => (
-              <div
-                key={s.step}
-                style={{
-                  borderLeft: i === 0 ? "1px solid #1f1f28" : "none",
-                  borderRight: "1px solid #1f1f28",
-                  borderTop: "1px solid #1f1f28",
-                  borderBottom: "1px solid #1f1f28",
-                  padding: "20px 16px",
-                  position: "relative",
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9,
-                    color: "#3a3840",
-                    letterSpacing: "0.1em",
-                    marginBottom: 8,
-                  }}
-                >
-                  0{i + 1}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'Barlow Condensed', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 16,
-                    color: "#d4a017",
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                    marginBottom: 8,
-                  }}
-                >
-                  {s.step}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: 11,
-                    color: "#6b6870",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {s.desc}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section id="features" style={{ borderTop: "1px solid #1f1f28" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px" }}>
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10,
-              letterSpacing: "0.14em",
-              color: "#d4a017",
-              marginBottom: 16,
-            }}
-          >
-            EXPERIENCE LAYER
-          </div>
-          <h2
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: "clamp(36px, 4vw, 52px)",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "-0.01em",
-              margin: "0 0 48px",
-              color: "#ede9e0",
-              maxWidth: 600,
-            }}
-          >
-            The best of every intelligence interface
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 1,
-              background: "#1f1f28",
-            }}
-          >
-            {FEATURES.map((f, i) => (
-              <div
-                key={f.title}
-                style={{
-                  background: "#09090b",
-                  padding: "36px 36px",
-                  transition: "background 0.2s",
-                  cursor: "default",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "#111115")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "#09090b")
-                }
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 20,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9,
-                      letterSpacing: "0.12em",
-                      color: "#d4a017",
-                    }}
-                  >
-                    {f.label}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9,
-                      letterSpacing: "0.08em",
-                      color: "#3a3840",
-                      background: "#111115",
-                      padding: "3px 8px",
-                      border: "1px solid #1f1f28",
-                    }}
-                  >
-                    {f.tag.toUpperCase()}
-                  </span>
-                </div>
-                <h3
-                  style={{
-                    fontFamily: "'Barlow Condensed', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 24,
-                    letterSpacing: "0.01em",
-                    color: "#ede9e0",
-                    margin: "0 0 12px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {f.title}
-                </h3>
-                <p
-                  style={{
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: 13,
-                    lineHeight: 1.65,
-                    color: "#6b6870",
-                    margin: 0,
-                  }}
-                >
-                  {f.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CAPABILITY FAMILIES */}
-      <section
-        style={{ borderTop: "1px solid #1f1f28", background: "#0d0d10" }}
-        id="capabilities"
-      >
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              marginBottom: 48,
-              flexWrap: "wrap",
-              gap: 24,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10,
-                  letterSpacing: "0.14em",
-                  color: "#d4a017",
-                  marginBottom: 16,
-                }}
-              >
-                FINANCE-FIRST SCOPE
-              </div>
-              <h2
-                style={{
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  fontSize: "clamp(36px, 4vw, 52px)",
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: "-0.01em",
-                  margin: 0,
-                  color: "#ede9e0",
-                }}
-              >
-                11 Capability Families
-              </h2>
-            </div>
-            <p
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontSize: 13,
-                color: "#6b6870",
-                maxWidth: 360,
-                lineHeight: 1.6,
-                margin: 0,
-              }}
-            >
-              Complexity lives inside LiOS. The user sees Projects, Chats, and
-              Artifacts.
-            </p>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 0,
-              background: "#1f1f28",
-            }}
-          >
-            {FINANCE_FAMILIES.map((fam, i) => (
-              <div
-                key={fam.id}
-                style={{
-                  background: "#09090b",
-                  padding: "24px 24px",
-                  borderBottom: i < 9 ? "1px solid #1f1f28" : "none",
-                  display: "flex",
-                  gap: 16,
-                  alignItems: "flex-start",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "#111115")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "#09090b")
-                }
-              >
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    color: "#d4a017",
-                    letterSpacing: "0.08em",
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }}
-                >
-                  {fam.id}
-                </span>
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "'Barlow Condensed', sans-serif",
-                      fontWeight: 700,
-                      fontSize: 16,
-                      color: "#ede9e0",
-                      letterSpacing: "0.02em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {fam.name}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "'Inter', sans-serif",
-                      fontSize: 12,
-                      color: "#6b6870",
-                      lineHeight: 1.55,
-                    }}
-                  >
-                    {fam.desc}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -1278,16 +1326,16 @@ export default function PublicProductPreview({
                   margin: "0 0 36px",
                 }}
               >
-                LiOS is not limited to a fixed provider list. Any API key, OAuth
-                service, REST/OpenAPI/GraphQL endpoint, SQL database, file,
-                cloud storage, or MCP-compatible source converges into one
-                governed data layer.
+                Connect supported, authorized APIs, databases, files and services
+                under one governed source system. Choose legitimate AI access via
+                permitted provider accounts, APIs, local runtimes or enterprise
+                gateways. Nothing connected grants unlimited rights or free inference.
               </p>
               {[
                 ["REST / OpenAPI / GraphQL", "Any HTTP API with a schema"],
                 ["Databases / SQL", "Postgres, SQLite, DuckDB, PGlite"],
                 ["Files & Cloud Storage", "CSV, Excel, Parquet, S3, GCS"],
-                ["BYOAI", "Claude, GPT-4, Gemini, Ollama, any endpoint"],
+                ["BYOAI", "Authorized API, account/CLI, local or enterprise access where supported"],
                 ["MCP", "Governed tool exposure, not an auth bypass"],
               ].map(([title, sub]) => (
                 <div
@@ -1734,7 +1782,7 @@ export default function PublicProductPreview({
                 e.currentTarget.style.borderColor = "#2e2e3a";
               }}
             >
-              VIEW DEMO
+              VIEW FINANCE DEMO
             </button>
           </div>
         </div>
@@ -1810,7 +1858,7 @@ export default function PublicProductPreview({
                   margin: 0,
                 }}
               >
-                Limuria Intelligence · Financial Intelligence Operating System ·
+                Limuria Intelligence · Universal Intelligence Operating System ·
                 v1.0.0
               </p>
             </div>

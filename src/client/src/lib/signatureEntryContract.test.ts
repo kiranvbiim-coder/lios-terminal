@@ -9,6 +9,7 @@ const backdrop = fs.readFileSync(path.join(clientRoot, "components", "terminal",
 const css = fs.readFileSync(path.join(clientRoot, "signature-entry.css"), "utf8");
 const preview = fs.readFileSync(path.join(clientRoot, "pages", "PublicProductPreview.tsx"), "utf8");
 const login = fs.readFileSync(path.join(clientRoot, "pages", "Login.tsx"), "utf8");
+const navigation = fs.readFileSync(path.join(clientRoot, "components", "terminal", "AuthenticatedNavigation.tsx"), "utf8");
 const globalCss = fs.readFileSync(path.join(clientRoot, "index.css"), "utf8");
 
 test("signature entry is cinematic but restrained", () => {
@@ -26,7 +27,8 @@ test("signature entry is cinematic but restrained", () => {
 test("reference entry follows the supplied graphite/gold design and stays inside auth boundaries", () => {
   assert.match(preview, /lios-reference-entry/);
   assert.match(login, /lios-reference-login/);
-  assert.match(preview, /Financial\s*<br\s*\/>/);
+  assert.match(preview, /Universal\s*<br\s*\/>/);
+  assert.match(preview, /SPECIALIST FINANCE DEPTH/);
   assert.match(preview, /Intelligence/);
   assert.match(preview, /LIMURIA INTELLIGENCE/);
   assert.doesNotMatch(preview, /fetch\(/);
@@ -39,3 +41,36 @@ test("typography separates thought from data", () => {
   assert.match(preview, /font-display/);
 });
 
+
+test("public entry promises the approved universal Chat experience without mandatory Projects", () => {
+  assert.match(preview, /Ask LiOS about any topic/);
+  assert.match(preview, /CHAT \/ OPTIONAL PROJECTS/);
+  assert.match(preview, /Regular Chats and Artifacts save; Projects are optional/);
+  assert.match(preview, /Temporary Chat without persistence/);
+  assert.match(preview, /original professional Workbench/);
+  assert.match(preview, /SPECIALIST FINANCE WORKBENCH · ILLUSTRATIVE DEMO/);
+  assert.match(preview, /function ConversationMockup\(\)/);
+  assert.match(preview, /Example LiOS chat, illustrative only/);
+  assert.match(preview, /VIEW FINANCE DEMO/);
+  assert.ok(preview.indexOf("<ConversationMockup />") < preview.indexOf("<TerminalMockup key={demoRun} />"), "first-fold demo must be universal Chat, with original financial demo retained in specialist section");
+  assert.ok(preview.indexOf("Universal") < preview.indexOf("<Ticker items={tickerItems} />"), "illustrative market ticker belongs after the universal entry");
+  for (const inaccurate of [
+    "Every analysis lives inside a Project",
+    "Every claim cites its source",
+    "Your keys, your cost",
+    "Financial Intelligence Operating System",
+  ]) assert.ok(!preview.includes(inaccurate), "outdated public promise: " + inaccurate);
+});
+
+test("public BYOAI language respects official entitlements and source restrictions", () => {
+  assert.match(preview, /officially permitted account or CLI access/);
+  assert.match(preview, /Nothing connected grants unlimited rights or free inference/);
+  assert.match(preview, /Your access and permissions/);
+  assert.match(preview, /const requireSignIn = \(\) =>/);
+  assert.match(preview, /const requireRegistration = \(\) =>/);
+});
+
+test("general Chat shows the LiOS product identity instead of a forced Projects identity", () => {
+  assert.match(navigation, /props\.section === "conversation" \? "LiOS"/);
+  assert.doesNotMatch(navigation, /props\.section === "conversation" \? "PROJECTS"/);
+});
