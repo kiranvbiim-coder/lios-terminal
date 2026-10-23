@@ -126,17 +126,24 @@ export async function fetchWithEndpointPolicy(
   url: string,
   options: Omit<RequestInit, "redirect"> = {},
   allowLocalhost = !process.env.DATABASE_URL,
+  maxRedirects = DEFAULT_MAX_REDIRECTS,
 ): Promise<Response> {
+  // MCP and other authenticated, endpoint-pinned clients must be able to
+  // forbid redirects *before* a second request carries headers/body to a
+  // different path. Other source callers retain their existing default.
+  if (!Number.isSafeInteger(maxRedirects) || maxRedirects < 0 || maxRedirects > DEFAULT_MAX_REDIRECTS) {
+    throw new Error("Invalid source redirect limit.");
+  }
   let current = url;
   let requestInit: RequestInit = { ...options, redirect: "manual" };
-  for (let redirectCount = 0; redirectCount <= DEFAULT_MAX_REDIRECTS; redirectCount += 1) {
+  for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
     const policy = await validateSourceEndpoint(current, allowLocalhost);
     if (!policy.valid || !policy.normalizedEndpoint) {
       throw new Error(`Endpoint rejected: ${policy.reason}.`);
     }
     const response = await fetch(policy.normalizedEndpoint, requestInit);
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
-    if (redirectCount === DEFAULT_MAX_REDIRECTS) throw new Error("Endpoint exceeded the redirect safety limit.");
+    if (redirectCount === maxRedirects) throw new Error("Endpoint exceeded the redirect safety limit.");
     const location = response.headers.get("location");
     if (!location) throw new Error("Endpoint redirect did not include a Location header.");
     const next = new URL(location, policy.normalizedEndpoint);
