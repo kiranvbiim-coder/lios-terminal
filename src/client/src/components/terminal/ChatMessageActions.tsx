@@ -1,33 +1,42 @@
 // Assistant and user message actions are deliberate; no implicit model calls or stored feedback.
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, CornerDownLeft } from "lucide-react";
 import { visibleChatMessageText, copyChatMessageText, type ChatMessageRole } from "@/lib/chatMessageActions";
 
 interface Props {
   content: string;
   role: ChatMessageRole;
+  messageId?: string | number;
   /** Composer-only action. The caller must not auto-send this message. */
   onQuote?: () => void;
 }
 
 type CopyState = "idle" | "copying" | "copied" | "failed";
 
-export default function ChatMessageActions({ content, role, onQuote }: Props) {
+export default function ChatMessageActions({ content, role, messageId, onQuote }: Props) {
   const [copyState, setCopyState] = useState<CopyState>("idle");
+  const identity = `${role}:${messageId ?? "unsaved"}:${content}`;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const copyInFlightRef = useRef<string | null>(null);
   useEffect(() => { setCopyState("idle"); }, [content, role]);
 
   const visible = visibleChatMessageText(content, role);
   if (!visible.trim()) return null;
   const copy = async () => {
-    if (copyState === "copying") return;
+    // Ref mutex acquires synchronously before React renders a disabled button.
+    if (copyInFlightRef.current === identity) return;
+    copyInFlightRef.current = identity;
     setCopyState("copying");
     const writeText = typeof navigator !== "undefined" && navigator.clipboard?.writeText
       ? (value: string) => navigator.clipboard.writeText(value)
       : undefined;
-    setCopyState(await copyChatMessageText(writeText, visible) ? "copied" : "failed");
+    const succeeded = await copyChatMessageText(writeText, visible);
+    if (identityRef.current === identity) setCopyState(succeeded ? "copied" : "failed");
+    if (copyInFlightRef.current === identity) copyInFlightRef.current = null;
   };
-  const buttonClass = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-ui text-[12px] text-muted-foreground hover:border-border/70 hover:bg-white/[0.045] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-wait disabled:opacity-55";
+  const buttonClass = "inline-flex min-h-10 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-ui text-[12px] text-muted-foreground hover:border-border/70 hover:bg-white/[0.045] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-wait disabled:opacity-55";
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/30 pt-1.5" role="group" aria-label={role === "assistant" ? "LiOS answer actions" : "Your message actions"} data-testid="chat-message-actions">
