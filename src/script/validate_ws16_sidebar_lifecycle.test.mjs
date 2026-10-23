@@ -33,12 +33,13 @@ test("WS-16 draft guard includes text, staged files, uploaded refs, voice and di
   assert.match(block, /Stop the current response before switching conversations/);
   assert.match(block, /if \(!answer\) return false/);
   assert.match(block, /if \(!deferDiscard\) discardConversationDraft\(\)/);
+  assert.match(block, /chatCreationInFlightRef\.current && !allowPendingCreation/);
 });
 
 test("WS-16 Quick Chat creation never discards a draft before confirmed server creation", () => {
   const block = between("const newQuickChat = async", "const startTemporary = async");
   assert.match(block, /chatCreationInFlightRef\.current/);
-  assert.match(block, /if \(!\(await confirmConversationSwitch\(true\)\)\) return/);
+  assert.match(block, /if \(!\(await confirmConversationSwitch\(true, true\)\)\) return/);
   assert.match(block, /const chat = await createQuickChat\(\)/);
   assert.ok(block.indexOf("discardConversationDraft()") > block.indexOf("await createQuickChat()"));
   assert.match(block, /await openChat\(chat, true\)/);
@@ -48,7 +49,7 @@ test("WS-16 Quick Chat creation never discards a draft before confirmed server c
 test("WS-16 Project chat creation keeps draft until accepted by server and never allocates duplicate", () => {
   const block = between("const newProjectChat = async", "const newQuickChat = async");
   assert.match(block, /chatCreationInFlightRef\.current = true/);
-  assert.match(block, /if \(!\(await confirmConversationSwitch\(true\)\)\)/);
+  assert.match(block, /if \(!\(await confirmConversationSwitch\(true, true\)\)\)/);
   assert.match(block, /const chat = await createProjectChat\(projectId\)/);
   assert.ok(block.indexOf("discardConversationDraft()") > block.indexOf("await createProjectChat(projectId)"));
   assert.match(block, /setInput\(starterPrompt\.trim\(\)\)/);
