@@ -1,5 +1,8 @@
 # LiOS UI Innovation Lab — Beyond the Existing Donor Catalog
 
+> **Final single reuse-selection list:** [LIOS UI/UX OSS Reuse Final Shortlist](LIOS_UI_UX_REUSE_FINAL_SHORTLIST_2026-10-23.md) — 26 screened external projects, including user-submitted Uiverse, Material UI, Chakra UI and HeroUI. This Innovation Lab remains the earlier experiment/evidence annex; **the shortlist is authoritative for current UI donor choices**, subject to project donor policy.
+
+
 **Discovery date:** 2026-10-23  
 **Owner direction:** Go beyond the existing donor list; harvest and combine *complete useful* OSS UI and UX packages, rather than following a conventional clone-and-reskin plan. Innovation must be visible in real user journeys.  
 **Authority:** AGENTS.md; docs/LIOS_UX_SYSTEM.md; docs/technical/LIOS_DONOR_IMPORT_REUSE_POLICY.md; docs/PENDING_WORK.md; issue #91.  
