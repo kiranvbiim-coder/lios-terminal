@@ -11,6 +11,7 @@ import {
 } from "@/lib/visualEnvironment";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { ambientMotionAllowed, isSoftwareRendered } from "@/lib/desktopRendering";
+import { resolveVisualCanvasPolicy } from "@/lib/visualCanvasPolicy";
 
 interface Props {
   surface: string;
@@ -81,17 +82,24 @@ export default function VisualCanvas({
     return "contextual";
   }, [context.intensity, focusMode, presentationMode, surface]);
 
-  const asset = preferences.lowResourceMode ? environment.lowResourceAssetPath : environment.assetPath;
+  const softwareRendered = isSoftwareRendered();
+  const policy = resolveVisualCanvasPolicy({
+    enabled: preferences.visualEnvironmentsEnabled,
+    intensity,
+    lowResourceMode: preferences.lowResourceMode,
+    softwareRendered,
+  });
+  const asset = policy.useLowResourceAsset ? environment.lowResourceAssetPath : environment.assetPath;
   const likelyNextEnvironment = getVisualEnvironment(resolveVisualEnvironment({
     projectId: null,
     semanticContext: inferVisualSemanticContext(activeView),
   }));
-  const likelyNextAsset = preferences.lowResourceMode
+  const likelyNextAsset = policy.useLowResourceAsset
     ? likelyNextEnvironment.lowResourceAssetPath
     : likelyNextEnvironment.assetPath;
 
   useEffect(() => {
-    if (!preferences.visualEnvironmentsEnabled || preferences.lowResourceMode || typeof Image === "undefined") return;
+    if (!policy.preloadScene || typeof Image === "undefined") return;
     const assets = [...new Set([asset, likelyNextAsset])].slice(0, 2);
     const preloads = assets.map((src) => {
       const image = new Image();
@@ -102,13 +110,13 @@ export default function VisualCanvas({
     return () => {
       for (const image of preloads) image.src = "";
     };
-  }, [asset, likelyNextAsset, preferences.lowResourceMode, preferences.visualEnvironmentsEnabled]);
+  }, [asset, likelyNextAsset, policy.preloadScene]);
 
-  if (!preferences.visualEnvironmentsEnabled) {
-    return <div className="lios-visual-canvas lios-visual-canvas--solid" aria-hidden="true" data-intensity="focus" />;
+  if (!policy.renderScene) {
+    return <div className="lios-visual-canvas lios-visual-canvas--solid" aria-hidden="true" data-intensity="focus" data-render-policy="solid" />;
   }
 
-  const motionEnabled = ambientMotionAllowed(preferences, isSoftwareRendered());
+  const motionEnabled = ambientMotionAllowed(preferences, softwareRendered);
 
   return (
     <div
@@ -117,6 +125,7 @@ export default function VisualCanvas({
       data-environment={environment.id}
       data-intensity={intensity}
       data-motion={motionEnabled ? "true" : "false"}
+      data-render-policy={policy.useLowResourceAsset ? "low-resource" : "full"}
       style={{ "--lios-visual-environment-image": `url("${asset}")` } as CSSProperties}
     >
       <div className="lios-visual-canvas__image" />
