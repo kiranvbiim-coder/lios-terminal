@@ -20,7 +20,7 @@
 
 ## Evidence and tests
 
-- `src/client/src/lib/composerAvailability.test.ts` — **11 executable pure cases** for source readiness and voice status/error mapping.
+- `src/client/src/lib/composerAvailability.test.ts` — **12 executable pure cases** for source readiness and voice status/error mapping.
 - `src/script/validate_ws21_controls.test.mjs` — source contracts for Source Registry, provider IDs, original voice routes, no raw errors, privacy copy, model readiness, voice transcript staging, no fake pricing and native acceptance honesty.
 - Preserve existing `useBoundedAgentComposer` and voice provider tests, the parent #100 Chat attachment/source tests and P1 source scope tests.
 
