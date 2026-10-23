@@ -146,7 +146,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#050505]" aria-busy={applying}>
+    <section className="flex h-full min-h-0 flex-col bg-[#050505]">
       <header className="flex shrink-0 items-center gap-3 border-b border-border/70 px-5 py-4">
         <button type="button" disabled={applying} onClick={onClose} className="min-h-10 min-w-10 rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50" aria-label="Close Lifecycle Center" title="Back to Project Home">
           <ArrowLeft className="h-4 w-4" />
@@ -170,7 +170,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5" aria-busy={applying}>
         {tab === "trash" && <div className="mb-5 rounded-lg border border-red-300/20 bg-red-300/[0.035] px-4 py-3 font-ui text-[9px] leading-5 text-red-100/80">Trash is recoverable. Permanent deletion removes the selected object and cannot be undone.</div>}
         <div className="grid gap-4 xl:grid-cols-3">
           <LifecycleGroup title="Projects" icon={<FolderKanban className="h-3.5 w-3.5 text-amber-300" />} empty={tab === "trash" ? "Trash is empty." : "No archived Projects."}>
