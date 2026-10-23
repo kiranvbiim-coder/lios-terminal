@@ -67,7 +67,7 @@ test("WS-19 preserves file/voice/privacy restrictions, not a model source-permis
   assert.match(shell, /sourceScope === "web" && hasStagedAttachments/);
   assert.match(shell, /sourceScope === "files" && !hasStagedAttachments/);
   assert.match(shell, /chatMode === "temporary"/);
-  assert.match(shell, /textPreview/); // existing downstream saved-attachment contract
+  assert.match(runtime, /textPreview: z.string\(\)\.max\(20_000\)\.nullable\(\)\.default\(null\)/); // existing strict attachment contract
   assert.match(server, /projectAttachmentUpload.single\("file"\)/);
 });
 
