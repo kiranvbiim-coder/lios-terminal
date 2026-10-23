@@ -58,6 +58,9 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
         return response.json() as Promise<{ setupRequired?: boolean; setupAllowed?: boolean; mode?: string | null }>;
       })
       .then((data) => {
+        if (typeof data?.setupRequired !== "boolean" || typeof data?.setupAllowed !== "boolean") {
+          throw new Error("Invalid bootstrap policy.");
+        }
         if (!cancelled) {
           setBootstrapStatus({
             setupRequired: data.setupRequired === true,
