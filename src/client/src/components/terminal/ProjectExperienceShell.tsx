@@ -1295,16 +1295,22 @@ export default function ProjectExperienceShell({
   };
 
   const cancelInFlightRef = useRef(false);
+  const cancelAcknowledgedRunRef = useRef<string | null>(null);
+  const [cancelAcknowledgedRunId, setCancelAcknowledgedRunId] = useState<string | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
   const cancelRuntime = async () => {
     // Stop is a request to Home, not evidence that Home cancelled the run.
-    if (!runtimeRequestId || cancelInFlightRef.current) return;
+    if (!runtimeRequestId || cancelInFlightRef.current || cancelAcknowledgedRunRef.current === runtimeRequestId) return;
     cancelInFlightRef.current = true;
     setCancelPending(true);
     const targetRun = runtimeRequestId;
     try {
       const acknowledged = await cancelConversationRun(requireGateway(), targetRun);
-      if (acknowledged) recordP1ShellEvent("composer_cancel");
+      if (acknowledged) {
+        cancelAcknowledgedRunRef.current = targetRun;
+        setCancelAcknowledgedRunId(targetRun);
+        recordP1ShellEvent("composer_cancel");
+      }
       else setLifecycleNotice("Home did not confirm cancellation. Inspect the original run before trying again.");
     } catch {
       setLifecycleNotice("Could not confirm Stop with Home. The original run may still be active; retry after reconnecting.");
@@ -1959,6 +1965,7 @@ export default function ProjectExperienceShell({
                 requestId={runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null}
                 busy={busy}
                 cancelPending={cancelPending}
+                stopRequested={cancelAcknowledgedRunId !== null && cancelAcknowledgedRunId === runtimeRequestId}
                 onCancel={() => void cancelRuntime()}
                 onApprove={(action, scope) => void approveRuntimeAction(action, scope)}
                 onDeny={denyRuntimeAction}
