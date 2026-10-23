@@ -40,6 +40,8 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
   const [statusText, setStatusText] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
   const authPending = useRef(false);
+  const screenMounted = useRef(true);
+  useEffect(() => { screenMounted.current = true; return () => { screenMounted.current = false; }; }, []);
   const [bootstrapRetry, setBootstrapRetry] = useState(0);
   const [bootstrapError, setBootstrapError] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<{
@@ -104,7 +106,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       }
       setStatusText(["Credentials accepted. Verifying your saved session…"]);
       const session = await verifiedEntrySession<SessionData>();
-      onLoginSuccess(session);
+      if (screenMounted.current) onLoginSuccess(session);
     } catch {
       setErrorMsg("LiOS could not verify your sign-in. Check your connection and retry.");
     } finally {
@@ -147,14 +149,16 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       }
       setStatusText(["Opening your organization's secure approval page…"]);
       await openExternalUrl(verificationUrl);
+      if (!screenMounted.current) return;
       const expiresAt = Date.parse(authorization.expiresAt);
       if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
         setErrorMsg("Organization approval expired. Start sign-in again.");
         return;
       }
       setStatusText(["Waiting for approval in the organization sign-in page…"]);
-      while (Date.now() < expiresAt) {
+      while (screenMounted.current && Date.now() < expiresAt) {
         await delay(1_500);
+        if (!screenMounted.current) return;
         const pollResponse = await authEntryFetch("/api/client/auth/sso/device/poll", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -172,10 +176,10 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
         }
         setStatusText(["Organization approval confirmed. Verifying your session…"]);
         const session = await verifiedEntrySession<SessionData>();
-        onLoginSuccess(session);
+        if (screenMounted.current) onLoginSuccess(session);
         return;
       }
-      setErrorMsg("Organization sign-in approval expired. Start sign-in again.");
+      if (screenMounted.current) setErrorMsg("Organization sign-in approval expired. Start sign-in again.");
     } catch {
       setErrorMsg("LiOS could not complete organization SSO. Check your connection and retry.");
     } finally {
@@ -212,7 +216,7 @@ export default function Login({ onLoginSuccess, initialMode = "signin" }: LoginP
       }
       setStatusText(["Account request accepted. Verifying your session…"]);
       const session = await verifiedEntrySession<SessionData>();
-      onLoginSuccess(session);
+      if (screenMounted.current) onLoginSuccess(session);
     } catch {
       setErrorMsg("LiOS could not verify your new account session. Check your connection and retry.");
     } finally {
