@@ -56,6 +56,8 @@ import { listSourceConnections } from "./sourceConnectionService";
 import { hashLedgerValue } from "./ledgerStore";
 import { withP10Span } from "./p10Observability";
 import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
+import { assertP9CurrentMcpSourceReferences } from "./p9LiveMcpSourcePolicy";
+import { resolveCredential } from "./credentialVault";
 import {
   beginP9Run,
   claimDueP9Workflows,
@@ -323,6 +325,17 @@ async function runConversationRerun(
     requestId: crypto.randomUUID(),
     continuationOf: null,
   });
+  // A saved workflow's citations are never lasting source authorization.
+  // Recheck the exact live owner/project/rights/credential before research or
+  // sending anything to a BYOAI model. L4 remains the only tool-effect grant.
+  if (workflow.sourceRefs.some(ref => ref.startsWith("source-connection:")
+    || ref.startsWith("mcp-server:") || ref.startsWith("mcp-tool:"))) {
+    assertP9CurrentMcpSourceReferences(
+      ctx, workflow.projectId, workflow.sourceRefs,
+      await listSourceConnections(ctx.userId),
+      ref => Boolean(resolveCredential("", ref)),
+    );
+  }
   const resolvedAttachments = await resolveProjectConversationAttachments(
     ctx, workflow.projectId, resources,
     request.sourceScope === "web" ? [] : request.attachments,
