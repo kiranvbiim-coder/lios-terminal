@@ -200,6 +200,11 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      // Radix dialogs (e.g. workflow drafts, comfort, share and connection
+      // forms) must own Escape and all keystrokes while focused. The global
+      // capture listener otherwise unmounts a draft before its discard
+      // confirmation can run, or opens unrelated shortcut surfaces.
+      if (target?.closest?.("[role='dialog']")) return;
       const editable = Boolean(target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT");
       const modifier = event.metaKey || event.ctrlKey;
 
