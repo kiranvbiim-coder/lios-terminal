@@ -85,6 +85,35 @@ test("endpoint redirect policy refuses to forward sensitive headers across origi
   }
 });
 
+test("GM20 endpoint-pinned source requests never follow redirects even within the same origin", async () => {
+  const originalFetch = globalThis.fetch;
+  const seen: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    seen.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    return new Response(null, {
+      status: 307,
+      headers: { location: "/different-path" },
+    });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => fetchWithEndpointPolicy("https://8.8.8.8/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer test-only-secret" },
+        body: JSON.stringify({ action: "read" }),
+      }, false, 0),
+      /redirect safety limit/i,
+    );
+    assert.deepEqual(seen, ["https://8.8.8.8/mcp"],
+      "exact-endpoint MCP mode cannot transmit credentials or request body to redirect target");
+    await assert.rejects(() => fetchWithEndpointPolicy("https://8.8.8.8/mcp", {}, false, 6),
+      /Invalid source redirect limit/i);
+    assert.equal(seen.length, 1, "invalid redirect policy fails before any network request");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("bounded response reader aborts while streaming once the byte limit is exceeded", async () => {
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
