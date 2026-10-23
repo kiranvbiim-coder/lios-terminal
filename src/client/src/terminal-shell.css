@@ -119,6 +119,20 @@ body,
   color: var(--lios-text-primary);
 }
 
+/* Crash recovery mounts outside .terminal-root: reuse these same root tokens,
+   rather than falling back to the retired amber/near-black theme. */
+.lios-root-recovery-action {
+  border-color: color-mix(in srgb, var(--lios-brand) 35%, transparent);
+  color: var(--lios-brand);
+}
+.lios-root-recovery-action:hover {
+  background: color-mix(in srgb, var(--lios-brand) 8%, transparent);
+}
+.lios-root-recovery-action:focus-visible {
+  outline: 2px solid var(--lios-brand);
+  outline-offset: 2px;
+}
+
 /* Typography is semantic and terminal-scoped: Inter for interface/conversation, mono for data. */
 .terminal-root :where(.font-ui, .font-sans) {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
