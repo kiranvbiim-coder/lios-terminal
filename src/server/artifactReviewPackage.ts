@@ -129,7 +129,7 @@ export async function createArtifactReviewPackage(ctx: TenantContext, artifactId
       artifactId,
       version: input.version,
       contentHash: input.contentHash,
-      role: "decision",
+      role: artifact.kind === "decision" ? "decision" : "evidence",
     }],
     authoredSections: [{ title: "Review scope", text: "Recorded immutable review, not an approval or execution instruction." }],
   }, {
