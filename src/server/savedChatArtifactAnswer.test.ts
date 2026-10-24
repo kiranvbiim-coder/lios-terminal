@@ -37,13 +37,13 @@ test("WS-35: runtime message retention is bound to real P4 writes, exact refs an
   const runtime = readFileSync(new URL("./conversationRunService.ts", import.meta.url), "utf8");
   assert.match(runtime, /const savedAnswer = savedChatArtifactAnswer\(/);
   assert.match(runtime, /persistedArtifactCount: persistedArtifacts\.length/);
-  assert.match(runtime, /failed: held\.errored \|\| held\.done\?\.status === "failed"/);
+  assert.match(runtime, /failed: held\.errored \|\| held\.done\?\.status !== "completed"/);
   assert.match(runtime, /await transcript\.recordText\(savedAnswer \?\? result\.text\)/);
   assert.match(runtime, /const saved = savedAnswer !== null/);
   assert.match(runtime, /content: savedAnswer!/);
   assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(savedArtifact\)\)/);
   assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(\{ artifact, version \}\)\)/);
-  assert.match(runtime, /if \(!result\.cancelled && !result\.awaitingApproval && !held\.errored && held\.done\?\.status !== "failed"\)/);
+  assert.match(runtime, /if \(!result\.cancelled && !result\.awaitingApproval && !held\.errored && held\.done\?\.status === "completed"\)/);
   assert.match(runtime, /scope: "temporary"/);
   const temporaryEntry = runtime.slice(runtime.indexOf("export async function startTemporaryRun("));
   assert.ok(temporaryEntry.length > 100);
