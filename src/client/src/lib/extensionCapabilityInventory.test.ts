@@ -107,9 +107,9 @@ test("existing P13 owner routes and rights review stay canonical and the UX expo
   assert.match(server, /this.admit\(actor\)/);
   assert.match(server, /this.host.plugins.list\(\)/);
   assert.match(server, /this.packs\?\.discover\(\)/);
-  assert.match(server, /extensionConsentSchema.parse\\(raw\\)/);
-  assert.match(server, /if \\(consent.packageDigest !== item.preview.packageDigest\\)/);
-  assert.match(server, /if \\(!item.preview.installable\\)/);
+  assert.ok(server.includes("extensionConsentSchema.parse(raw)"));
+  assert.ok(server.includes("consent.packageDigest !== item.preview.packageDigest"));
+  assert.ok(server.includes("!item.preview.installable"));
   assert.doesNotMatch(panel, /\/api\/permissions\/grant|\/api\/plugins\/install-unsafe/);
 });
 
