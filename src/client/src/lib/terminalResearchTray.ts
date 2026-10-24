@@ -19,7 +19,9 @@ export interface ResearchTrayItem {
 
 const STORAGE_KEY = "limuria-terminal-research-tray-v1";
 const EVENT_NAME = "lios:research-tray";
-const MAX_ITEMS = 120;
+/** One device-local research store is bounded, so the UI can prevent unannounced eviction. */
+export const MAX_RESEARCH_TRAY_ITEMS = 120;
+const MAX_ITEMS = MAX_RESEARCH_TRAY_ITEMS;
 
 function createId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -53,24 +55,31 @@ function isItem(value: unknown): value is ResearchTrayItem {
     typeof item.createdAt === "number" && typeof item.updatedAt === "number";
 }
 
+/** Parse the saved local document without trusting external storage events or mutating their arrays. */
+function parseResearchTray(raw: string | null): ResearchTrayItem[] {
+  const parsed: unknown = JSON.parse(raw || "[]");
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isItem).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_ITEMS);
+}
+
 export function loadResearchTray(): ResearchTrayItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isItem).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_ITEMS);
+    return parseResearchTray(localStorage.getItem(STORAGE_KEY));
   } catch {
     return [];
   }
 }
 
 export function saveResearchTray(items: readonly ResearchTrayItem[]): void {
-  if (typeof window === "undefined") return;
-  const normalized = items
+  if (typeof window === "undefined") throw new Error("Device-local research storage is unavailable.");
+  // Never mutate caller-owned React arrays, even when storage.setItem throws.
+  const normalized = [...items]
     .filter(isItem)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_ITEMS);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  // Only publish to the current window AFTER the local write succeeds.
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: normalized }));
 }
 
@@ -84,10 +93,25 @@ export function subscribeResearchTray(listener: (items: ResearchTrayItem[]) => v
   if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
     if (!(event instanceof CustomEvent) || !Array.isArray(event.detail)) return;
-    listener(event.detail.filter(isItem));
+    listener([...event.detail].filter(isItem).slice(0, MAX_ITEMS));
+  };
+  // The browser does not emit "storage" in the writing tab, so both paths
+  // are needed. Same-device edits/deletions in another tab must not be hidden.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
+    try {
+      listener(parseResearchTray(event.key === null ? localStorage.getItem(STORAGE_KEY) : event.newValue));
+    } catch {
+      // A malformed/blocked external storage event must not erase visible
+      // research or pretend that no pinned items exist.
+    }
   };
   window.addEventListener(EVENT_NAME, handler);
-  return () => window.removeEventListener(EVENT_NAME, handler);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(EVENT_NAME, handler);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 export function createResearchContextItem(input: {
