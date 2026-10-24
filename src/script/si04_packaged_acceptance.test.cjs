@@ -15,12 +15,18 @@ const hash=data=>crypto.createHash("sha256").update(data).digest("hex");
 function tempApp(t){
   const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"lios-si04-native-acceptance-"));
   t.after(()=>fs.rmSync(tmp,{recursive:true,force:true}));
-  const app=path.join(tmp,"LiOS-test-app");
-  const resources=path.join(tmp,"resources");
-  fs.mkdirSync(resources);
+  // Match each platform's actual installed Electron layout. On macOS,
+  // app.asar is in Contents/Resources, not alongside the .app bundle;
+  // source CI must reject an incorrect archive path rather than relaxing it.
+  const app=process.platform==="darwin"
+    ? path.join(tmp,"LiOS-test.app","Contents","MacOS","LiOS-test")
+    : path.join(tmp,"LiOS-test-app");
+  const archive=appArchivePath(app);
+  fs.mkdirSync(path.dirname(app),{recursive:true});
+  fs.mkdirSync(path.dirname(archive),{recursive:true});
   fs.writeFileSync(app,"synthetic packaged executable\n");
-  fs.writeFileSync(path.join(resources,"app.asar"),"synthetic ASAR\n");
-  return {tmp,app};
+  fs.writeFileSync(archive,"synthetic ASAR\n");
+  return {tmp,app,archive};
 }
 
 test("Native acceptance requires explicit absolute paths and finds installed OS app archive",()=>{
@@ -91,8 +97,8 @@ test("Native acceptance runs installed binary, verifies PDF receipt, tracks exac
 });
 
 test("Native packaged runner rejects missing archive and never presents a false success receipt",async t=>{
-  const {tmp,app}=tempApp(t);
-  fs.unlinkSync(path.join(tmp,"resources","app.asar"));
+  const {tmp,app,archive}=tempApp(t);
+  fs.unlinkSync(archive);
   await assert.rejects(runPackagedUnicodePdfAcceptance({
     appPath:app,outDir:path.join(tmp,"no-output"),
   }),/ENOENT/);
