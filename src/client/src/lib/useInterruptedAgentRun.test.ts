@@ -28,8 +28,10 @@ test("the resume control is request-bound, hidden while busy, explicit-click onl
   const trace = source("components/terminal/ConversationRuntimeTrace.tsx");
   assert.match(trace, /const canResume = !busy && !!resumableRequestId && !!onResume;/);
   assert.match(trace, /\{canResume && \(/);
-  assert.match(trace, /data-testid="agent-run-resume"/);
-  assert.match(trace, /data-request-id=\{resumableRequestId\}/);
+  assert.match(trace, /<ResearchCheckpointCard/);
+  const checkpointCard = source("components/terminal/ResearchCheckpointCard.tsx");
+  assert.match(checkpointCard, /data-testid="agent-run-resume"/);
+  assert.match(checkpointCard, /data-request-id=\{requestId\}/);
   assert.match(trace, /if \(!events\.length && !busy && !resumableRequestId\) return null;/);
 
   const hook = source("lib/useInterruptedAgentRun.ts");
@@ -44,4 +46,8 @@ test("the resume control is request-bound, hidden while busy, explicit-click onl
   assert.match(shell, /\{\.\.\.interruptedRun\.traceProps\}/);
   assert.match(hook, /shell\.setRuntimeRequestId\(requestId\)/);
   assert.match(hook, /resumableRequestId: offered, onResume: resume/);
+  assert.match(hook, /resumableCheckpointView\(history.data, offered\)/);
+  assert.match(hook, /history.isFetching \|\| history.isError/);
+  assert.match(hook, /\.catch\(\(error: unknown\) =>/);
+  assert.match(hook, /shell.busyRef.current = false;/);
 });
