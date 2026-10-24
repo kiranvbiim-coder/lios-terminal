@@ -65,11 +65,12 @@ export function workflowExecutionTruth(workflow: P9WorkflowRecord, last: P9RunRe
 } {
   const state = workflow.enabled ? workflow.trigger.type === "manual" ? "manual" : "enabled" : "paused";
   const next = state !== "enabled" ? "None while paused or manual-only"
+    : workflow.trigger.type === "event" ? "Event-driven · no fixed due time"
     : workflow.nextRunAt ?? "No next schedule time confirmed";
   const latest = !last ? "No recorded run" : `${last.triggerType}: ${last.status}${last.completedAt ? ` at ${last.completedAt}` : " · not settled"}`;
   return {
     state, next, latest,
-    receiptCount: last?.executionReceiptIds.length ?? 0,
+    receiptCount: last?.executionReceiptIds?.length ?? 0,
     warning: state === "enabled"
       ? "Enabled is an intent, not a guarantee of future execution. The running Home and the existing P9 scheduler, rights and receipts determine actual outcomes."
       : state === "paused"
