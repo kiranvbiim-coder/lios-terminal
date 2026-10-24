@@ -22,7 +22,7 @@ export function useP6ProjectContinuity(projectId: number | null) {
 export function assertProjectContinuitySnapshot(payload: unknown, projectId: number): P6ProjectContinuitySnapshot {
   if (!Number.isSafeInteger(projectId) || projectId <= 0) throw new Error("A current Project is required to view Continuity.");
   const parsed = p6ProjectContinuitySnapshotSchema.parse(payload);
-  if (parsed.projectId !== projectId || parsed.graph.projectId !== projectId || parsed.dependencySummary.projectId !== projectId) {
+  if (parsed.projectId !== projectId || parsed.graph.projectId !== projectId || parsed.dependencies.projectId !== projectId) {
     throw new Error("Project Continuity belongs to another Project; this result was not displayed.");
   }
   return parsed;
