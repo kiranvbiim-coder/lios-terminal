@@ -53,6 +53,7 @@ export interface ReportPack {
 
 export type ReportTemplateId =
   | "investment_memo"
+  | "research_evidence_report"
   | "company_tearsheet"
   | "dcf_model_pack"
   | "portfolio_review"
@@ -69,6 +70,12 @@ export interface ReportTemplate {
 }
 
 export const REPORT_TEMPLATES: ReportTemplate[] = [
+  {
+    id: "research_evidence_report",
+    name: "Research Evidence Report",
+    description: "Editable source-grounded research report with separate evidence, limitations and references",
+    sectionOrder: ["title", "summary", "text", "limitations", "sources"],
+  },
   {
     id: "investment_memo",
     name: "Investment Memo",
@@ -121,6 +128,7 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
 
 const REPORT_TEMPLATE_ALIASES: Record<ReportTemplateId, readonly string[]> = {
   investment_memo: ["investment memo", "investment memorandum"],
+  research_evidence_report: ["research evidence report", "evidence research report"],
   company_tearsheet: ["company tear sheet", "company tearsheet", "company tear-sheet"],
   dcf_model_pack: ["dcf model pack", "dcf report"],
   portfolio_review: ["portfolio review", "portfolio report"],
@@ -131,7 +139,8 @@ const REPORT_TEMPLATE_ALIASES: Record<ReportTemplateId, readonly string[]> = {
 };
 
 export function defaultArtifactReportTemplate(kind: string): ReportTemplateId {
-  return kind === "portfolio" ? "portfolio_review"
+  return kind === "research" ? "research_evidence_report"
+    : kind === "portfolio" ? "portfolio_review"
     : kind === "valuation" ? "dcf_model_pack"
       : kind === "decision" ? "decision_receipt_report"
         : "investment_memo";
