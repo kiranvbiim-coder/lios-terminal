@@ -21,6 +21,7 @@ test("WS-38 malformed selected-cell references never reach built-in grid engine 
   assert.match(pane, /const selectedInBounds = checkedSpreadsheetCellRef\(sheet, selectedRef\) !== null/);
   assert.match(pane, /const selectedCell = selectedInBounds\s*\?/);
   assert.match(pane, /selectedInBounds && selectedCell \? <SpreadsheetCellSourceInspect/);
+  assert.match(pane, /value=\{selectedCell\?\.format \?\? ""\}/);
   assert.match(pane, /Select a cell reference within this worksheet to inspect its recorded source/);
   assert.match(pane, /const checkpoint = gridToArtifactSheet\(draftContent, grid\)/);
 });
