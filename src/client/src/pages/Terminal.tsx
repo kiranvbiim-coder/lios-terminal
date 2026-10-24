@@ -472,7 +472,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
     if (workbenchDirtyRef.current) return;
     if (context) {
-      const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(), maximizedPane, workbenchDirtyRef.current);
+      const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(tabsState.activeTabId), maximizedPane, workbenchDirtyRef.current);
       if (!result) return;
       artifactHandoffRef.current = artifactHandoffRef.current?.priorTab.id === result.handoff.priorTab.id
         ? { ...result.handoff, priorTab: artifactHandoffRef.current.priorTab, priorLayout: artifactHandoffRef.current.priorLayout, priorMaximizedPane: artifactHandoffRef.current.priorMaximizedPane }
@@ -503,7 +503,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     setTabsState(() => result.state);
     setMaximizedPane(handoff.priorMaximizedPane);
     setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
-    requestDockviewLayoutRestore(handoff.priorLayout);
+    requestDockviewLayoutRestore(handoff.priorLayout, handoff.priorTab.id);
     artifactHandoffRef.current = null;
     clearArtifactWorkbenchRecovery();
     handleSurface("projects");
@@ -1105,6 +1105,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             {workbenchDirty && <p role="status" className="shrink-0 border-b border-amber-300/30 p-2 text-sm text-amber-200">Unsaved Artifact edits · save or reset in the Artifact pane before leaving this workspace.</p>}
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               <DockviewWorkspaceGrid
+                layoutScope={activeTab.id}
                 workspace={workspace}
                 isMobile={isMobile}
                 preserveArtifactDraft={workbenchDirty}

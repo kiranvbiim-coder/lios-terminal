@@ -317,6 +317,7 @@ function LayoutCase({ count, density }: { count: 2 | 3 | 4; density: Density }) 
   const workspace = useMemo(() => layoutFor(count), [count]);
   return (
     <DockviewWorkspaceGrid
+      layoutScope={`visual-smoke-layout-${count}-${density}`}
       workspace={workspace}
       isMobile={false}
       maximizedPane={null}
@@ -351,6 +352,7 @@ function RealWorkbenchCase({ density, narrow = false }: { density: Density; narr
       </div>
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <DockviewWorkspaceGrid
+          layoutScope={`visual-smoke-real-${narrow ? "narrow" : "wide"}-${density}`}
           workspace={workspace}
           isMobile={false}
           maximizedPane={null}
