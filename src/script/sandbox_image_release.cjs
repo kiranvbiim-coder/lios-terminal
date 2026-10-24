@@ -285,6 +285,14 @@ async function main() {
       }
       fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke.py'), path.join(context, 'smoke.py'));
       fs.copyFileSync(path.join(root, 'sandbox-image', 'quant_smoke.py'), path.join(context, 'quant_smoke.py'));
+      fs.copyFileSync(path.join(root, 'sandbox-image', 'worker_smoke.py'), path.join(context, 'worker_smoke.py'));
+      const workerSmokeRoot = path.join(context, 'worker-smoke');
+      fs.mkdirSync(workerSmokeRoot, { recursive: true });
+      // Fixed, source-owned numerical route: no arbitrary repo files or
+      // request-selected Python modules enter the immutable release image.
+      for (const source of ['engine_worker.py', 'engine_routes.py', 'advanced_valuation.py']) {
+        fs.copyFileSync(regularFile(path.join(root, 'python-service'), source), path.join(workerSmokeRoot, source));
+      }
       fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke-xlsx.cjs'), path.join(context, 'smoke-xlsx.cjs'));
       fs.writeFileSync(path.join(context, 'opencv-headless.lock.txt'), `opencv-python-headless==${headlessWheel[0].version} --hash=sha256:${headlessWheel[0].sha256}\n`, { flag: 'wx' });
       const dockerfile = runtimeBase ? 'Dockerfile.runtime-base' : 'Dockerfile';
