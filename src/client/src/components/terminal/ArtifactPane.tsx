@@ -698,6 +698,72 @@ function ArtifactPaneWorkspace({
     && restoreIntent.targetVersion === left
     && restoreIntent.targetHash === leftRecord.contentHash
     && sameArtifactHistoryAnchor(restoreIntent.anchor, anchor) ? restoreIntent : null;
+  const compareSelectedHistory = async () => {
+    if (historyInFlight.current || !leftRecord || !displayedRecord || leftRecord.version === displayedRecord.version) return;
+    if (displayedRecord.contentHash !== anchor.contentHash) {
+      setError("The version catalog does not match the displayed Artifact. Refresh history before comparing.");
+      return;
+    }
+    const captured = { ...anchor };
+    const from = leftRecord;
+    const to = displayedRecord;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setComparison(null); setError(null);
+    try {
+      const result = await compareArtifactVersions(artifactId, from.version, to.version);
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== from.version
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured)) return;
+      if (!exactArtifactHistoryComparison(result, captured, from, to)) {
+        throw new Error("The comparison response does not match the selected saved revisions or content hashes. Nothing was applied.");
+      }
+      const metadataLabels = metadataDeltaLabels(compareArtifactVersionMetadata(from, to));
+      const contentSummary = result.changed
+        ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
+        : "Content unchanged";
+      const semanticSummary = semanticArtifactComparisonLabel(result.semantic);
+      const summary = metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
+      setComparison({ text: `Compared exact v${from.version} with v${to.version} · ${semanticSummary ? `${summary} · ${semanticSummary}` : summary}`, anchor: captured, from: from.version });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Exact saved Artifact comparison failed.");
+    } finally {
+      historyInFlight.current = false; if (mounted.current) setHistoryBusy(false);
+    }
+  };
+  const prepareRestoreHistory = () => {
+    if (!canRestore || !leftRecord) {
+      setError("Open the current Artifact head, finish unsaved edits and select an earlier recorded revision before restoring.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setError(null);
+    setRestoreIntent({ anchor: { ...anchor }, targetVersion: leftRecord.version, targetHash: leftRecord.contentHash });
+  };
+  const confirmRestoreHistory = async () => {
+    if (!activeRestoreIntent || !canRestore || !leftRecord || historyInFlight.current) return;
+    const captured = activeRestoreIntent;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setRestoreIntent(null); setError(null);
+    try {
+      // P4 enforces optimistic concurrency against this exact head version.
+      // Restoring creates a NEW immutable revision; it never edits history.
+      const saved = await restoreArtifactRevision(artifactId, captured.anchor.headVersion, captured.targetVersion);
+      invalidate(projectId, artifactId);
+      if (saved.artifactId !== captured.anchor.artifactId || saved.version !== captured.anchor.headVersion + 1) {
+        throw new Error("Restore response has an unexpected Artifact ID or revision. Refresh history to verify the saved outcome.");
+      }
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== captured.targetVersion
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured.anchor)) return;
+      onVersionChange?.(saved.version);
+      setComparison({ text: `Restored v${captured.targetVersion} as new v${saved.version}. Original saved revisions remain unchanged.`, anchor: captured.anchor, from: captured.targetVersion });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Restore failed; no successful new revision was confirmed. Refresh and retry.");
+    } finally {
+      historyInFlight.current = false;
+      if (mounted.current) setHistoryBusy(false);
+    }
+  };
   const changeDisplayedRevision = (next: number | null) => {
     if (hasUnsavedArtifactEdits || historyInFlight.current) {
       setError("Save or reset unsaved Artifact edits before switching revisions; your draft has not been discarded.");
