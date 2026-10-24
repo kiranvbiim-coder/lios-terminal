@@ -44,7 +44,7 @@ interface DesktopWorkspaceBridge {
   getWorkspaceInfo: () => Promise<DesktopWorkspaceInfo>;
   artifactDraftRecoveryAvailable?: () => Promise<boolean>;
   readArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope) => Promise<ProtectedArtifactDraftSnapshot | null>;
-  writeArtifactDraftRecovery?: (input: ProtectedArtifactDraftAuthorizedScope & { content: unknown }) => Promise<{ protected: boolean }>;
+  writeArtifactDraftRecovery?: (input: ProtectedArtifactDraftAuthorizedScope & { content: unknown }) => Promise<{ protected: boolean; checkpointId?: string }>;
   clearArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope & { expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> & { checkpointId?: string } }) => Promise<{ removed: boolean }>;
   chooseFolder?: (purpose: DesktopFolderPurpose) => Promise<string | null>;
   getDataFolder?: () => Promise<DesktopDataFolder>;
