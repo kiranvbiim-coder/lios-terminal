@@ -1,23 +1,23 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { createGunzip } from "node:zlib";
-import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { runCommand } from "./exec/run-command";
+import { streamSandboxImageArchive } from "./sandboxImageArchiveImport";
+import { isLinuxSandboxEngineOs, localSandboxEngineOsProbe } from "./sandboxEnginePlatform";
 import { resolveSandboxRuntimeProfile } from "./exec/sandbox-runtime-profile";
 
 export interface SandboxImageRelease {
   schemaVersion: 1;
-  platform: "linux/arm64";
+  platform: "linux/arm64" | "linux/amd64";
   image: string;
   archive: "sandbox-image.tar.gz";
   archiveSha256: string;
   provenance: {
     sourceLock: "source-lock.json";
     sourceLockSha256: string;
-    baseImage: { reference: string; platform: "linux/arm64" };
+    baseImage: { reference: string; platform: "linux/arm64" | "linux/amd64" };
     node: { version: string };
     xlsx: { version: string };
     docling: { version: string };
@@ -40,14 +40,14 @@ export interface SandboxImageReadiness {
 }
 const releaseSchema = z.object({
   schemaVersion: z.literal(1),
-  platform: z.literal("linux/arm64"),
+  platform: z.enum(["linux/arm64", "linux/amd64"]),
   image: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   archive: z.literal("sandbox-image.tar.gz"),
   archiveSha256: z.string().regex(/^[a-f0-9]{64}$/),
   provenance: z.object({
     sourceLock: z.literal("source-lock.json"),
     sourceLockSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    baseImage: z.object({ reference: z.string(), platform: z.literal("linux/arm64") }),
+    baseImage: z.object({ reference: z.string(), platform: z.enum(["linux/arm64", "linux/amd64"]) }),
     node: z.object({ version: z.string() }),
     xlsx: z.object({ version: z.string() }),
     docling: z.object({ version: z.string() }),
@@ -61,6 +61,33 @@ const releaseSchema = z.object({
     }),
   }),
 }).strict();
+/** Same host-to-OCI architecture contract used by the packaged desktop bootstrap.
+ * This maps a candidate platform only; it never qualifies a release image.
+ * Support is limited to signed desktop target families with a Linux OCI sandbox.
+ */
+export function requiredSandboxReleasePlatform(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): "linux/arm64" | "linux/amd64" {
+  if (platform !== "darwin" && platform !== "win32" && platform !== "linux") {
+    throw new Error("Sandbox repair is unsupported for this host operating system.");
+  }
+  if (arch === "arm64") return "linux/arm64";
+  if (arch === "x64") return "linux/amd64";
+  throw new Error("Sandbox repair is unsupported for this host architecture.");
+}
+
+export function requireSandboxReleasePlatform(
+  releasePlatform: SandboxImageRelease["platform"],
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): void {
+  const expected = requiredSandboxReleasePlatform(platform, arch);
+  if (releasePlatform !== expected) {
+    throw new Error(`Packaged sandbox is incompatible with host ${platform}/${arch}: expected ${expected}, found ${releasePlatform}.`);
+  }
+}
+
 const ARCHIVE = "sandbox-image.tar.gz";
 const MANIFEST = "sandbox-image.json";
 function releaseDirectory(): string | null {
@@ -77,7 +104,7 @@ function readRelease(): { release: SandboxImageRelease; archive: string; lock: s
   const manifestStat = fs.lstatSync(releasePath);
   if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error("The packaged sandbox manifest is not a regular file.");
   const release = releaseSchema.parse(JSON.parse(fs.readFileSync(releasePath, "utf8")));
-  if (process.arch !== "arm64") throw new Error("The packaged sandbox is qualified only for macOS arm64.");
+  requireSandboxReleasePlatform(release.platform);
   const archive = path.join(directory, ARCHIVE);
   const archiveStat = fs.lstatSync(archive);
   if (!archiveStat.isFile() || archiveStat.isSymbolicLink()) throw new Error("The packaged sandbox archive is not a regular file.");
@@ -122,8 +149,14 @@ async function engineCommand(engine: "docker" | "podman", target: string, args: 
 function status(state: SandboxImageReadiness["state"], image: string | null, reason: string, repairAction: SandboxImageReadiness["repairAction"]): SandboxImageReadiness {
   return { state, ready: state === "ready", image, reason, repairAction };
 }
-/** Packaged release is read-only. Repair imports only its hash-verified image into the explicit local engine. */
-export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadiness> {
+/** Packaged release is read-only. Repair imports only its hash-verified image into the explicit local engine.
+ * The optional trusted test runner is internal-only; user requests cannot
+ * supply engine commands or bypass the release/profile validation.
+ */
+export async function inspectSandboxImageReadiness(options: {
+  engineProbe?: typeof engineCommand;
+} = {}): Promise<SandboxImageReadiness> {
+  const probe = options.engineProbe ?? engineCommand;
   let bundle;
   try { bundle = await verifiedRelease(); }
   catch (error) { return status("integrity_failed", null, error instanceof Error ? error.message : "Sandbox release integrity failed.", "reinstall_app"); }
@@ -139,13 +172,23 @@ export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadin
     return status("incompatible", release.image, "Strict sandbox isolation is not enabled.", "reinstall_app");
   }
   try {
-    const inspected = await engineCommand(profile.engine, profile.engineTarget, ["image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", release.image]);
+    const inspected = await probe(profile.engine, profile.engineTarget, ["image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", release.image]);
     if (inspected !== `${release.image} ${release.platform}`) return status("integrity_failed", release.image, `Engine image ID/platform differs from release (${inspected}).`, "reinstall_app");
     return status("ready", release.image, "Verified packaged image ID and platform are available on the explicit local engine.", "none");
   } catch {
-    try { await engineCommand(profile.engine, profile.engineTarget, ["info", "--format", "{{.OSType}}"]); }
-    catch { return status("engine_unavailable", release.image, "Local container engine is unavailable; start Docker Desktop or Podman.", "install_engine"); }
-    return status("image_missing", release.image, "The packaged sandbox image has not been imported into the local engine.", "load");
+    // Docker and Podman expose OS differently in their info templates.
+    // A running engine in Windows-container mode must never be offered an
+    // import of the signed Linux-only LiOS sandbox image.
+    let engineOs: string;
+    try {
+      engineOs = await probe(profile.engine, profile.engineTarget, [...localSandboxEngineOsProbe(profile.engine)]);
+    } catch {
+      return status("engine_unavailable", release.image, "Local container engine is unavailable or cannot report its host OS; start Docker Desktop or Podman.", "install_engine");
+    }
+    if (!isLinuxSandboxEngineOs(engineOs)) {
+      return status("incompatible", release.image, "LiOS requires an engine running Linux containers; switch the engine to Linux mode before importing this image.", "retry");
+    }
+    return status("image_missing", release.image, "The packaged sandbox image has not been imported into the local Linux engine.", "load");
   }
 }
 let loading: Promise<SandboxImageReadiness> | null = null;
@@ -163,34 +206,9 @@ export function repairSandboxImage(): Promise<SandboxImageReadiness> {
         profile.engine === "docker" ? `--host=${profile.engineTarget}` : `--url=${profile.engineTarget}`,
         "load",
       ], { stdio: ["pipe", "pipe", "pipe"] });
-      let stderr = "";
-      let timedOut = false;
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => { stderr = (stderr + chunk).slice(-4096); });
-      const completed = new Promise<void>((resolve, reject) => {
-        child.once("error", reject);
-        child.once("close", (code) => code === 0
-          ? resolve()
-          : reject(new Error(timedOut
-            ? "Image import exceeded the 15-minute limit."
-            : `Local sandbox image load failed: ${stderr.trim() || code}`)));
-      });
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, 15 * 60_000);
-      timeout.unref();
-      try {
-        await Promise.all([
-          pipeline(fs.createReadStream(bundle.archive), createGunzip(), child.stdin),
-          completed,
-        ]);
-      } catch (error) {
-        child.kill("SIGKILL");
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-      }
+      // Drain engine diagnostics without buffering or logging them; otherwise a
+      // full stdout pipe can stall the import and incorrectly time it out.
+      await streamSandboxImageArchive(bundle.archive, child, bundle.release.archiveSha256);
       const after = await inspectSandboxImageReadiness();
       return after.state === "ready" ? after : status("repair_failed", bundle.release.image, `Image load completed but verification returned ${after.state}: ${after.reason}`, "retry");
     } catch (error) {
