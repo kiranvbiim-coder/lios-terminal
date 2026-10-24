@@ -19,6 +19,9 @@ const { fingerprintRecordedExcerpt } = await import("./langalphaExcerptProvenanc
 const { researchReportFromArtifactTool, researchReportFromArtifactInputSchema,
   researchReportFromArtifactOutputSchema, buildReportFromResearchArtifact } = await import("./researchReportFromArtifactTool");
 const { getArtifactExportPlan } = await import("./artifactExport");
+const { prepareReportDocxDownload } = await import("./reportDocxDownload");
+const { readOfficeArtifactRoundtrip } = await import("@shared/officeArtifactRoundtrip");
+const { proposeOfficeArtifactReturn } = await import("./officeArtifactReturn");
 const { getReportTemplate, defaultArtifactReportTemplate } = await import("./reportEngine");
 
 const allowed = {
@@ -142,6 +145,8 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     assert.equal(response.output.citedSourceCount, 1);
     assert.equal(response.output.excerptCount, 1);
     assert.equal(response.output.editorPreference, "tiptap");
+    assert.equal(response.output.docxDownloadPath,
+      "/api/artifacts/" + encodeURIComponent(createdId) + "/report.docx?version=1");
     const artifact = await getArtifact(ctx, createdId);
     assert.equal(artifact.kind, "report");
     assert.equal(artifact.projectId, project.id);
@@ -170,6 +175,26 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     assert.equal(exportPlan.artifactId, createdId);
     assert.equal(exportPlan.contentHash, version.contentHash);
 
+    // Real native Word ZIP, not a JSON report labelled ".docx".
+    const word = await prepareReportDocxDownload(ctx, createdId, 1);
+    assert.match(word.filename, /\.docx$/);
+    assert.equal(word.contentHash, version.contentHash);
+    assert.equal(word.mimeType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    assert.ok(word.bytes.length > 500);
+    const roundtrip = await readOfficeArtifactRoundtrip(word.bytes, "docx");
+    assert.equal(roundtrip.sourceArtifactId, createdId);
+    assert.equal(roundtrip.sourceVersion, 1);
+    assert.equal(roundtrip.sourceHash, version.contentHash);
+    assert.deepEqual(roundtrip.content, report);
+    assert.ok(roundtrip.content.kind === "report");
+    assert.equal(roundtrip.content.blocks.find(block => block.type === "quote")?.attrs.excerptSha256,
+      fingerprintRecordedExcerpt(quoteText).excerptSha256);
+    // No native edits means no proposal. The existing Office return contract
+    // remains responsible for reviewing any Word edits.
+    const returnResult = await proposeOfficeArtifactReturn(ctx, createdId, roundtrip);
+    assert.equal(returnResult.changed, false);
+    assert.equal(returnResult.proposal, null);
+
     const edited = reportArtifactContentSchema.parse({
       ...report,
       blocks: [...report.blocks, { id: "analyst-addendum", type: "paragraph",
@@ -190,10 +215,17 @@ test("An owned saved research comparison becomes an editable P4 report, and only
       (await getArtifactVersion(ctx, createdId, 1)).content,
     );
     assert.equal(old.blocks.some(block => block.id === "analyst-addendum"), false);
+    await assert.rejects(prepareReportDocxDownload(ctx, createdId, 1), /revision changed/);
+    const latestWord = await prepareReportDocxDownload(ctx, createdId, 2);
+    const reopenedWord = await readOfficeArtifactRoundtrip(latestWord.bytes, "docx");
+    assert.equal(reopenedWord.sourceVersion, 2);
+    assert.ok(reopenedWord.content.kind === "report");
+    assert.ok(reopenedWord.content.blocks.some(block => block.id === "analyst-addendum"));
   });
 
   await t.test("refuses cross-Project, revoked, stale, read-only and unapproved-source report attempts", async () => {
     const count = (await listProjectArtifacts(ctx, project.id)).length;
+    await assert.rejects(prepareReportDocxDownload(ctx, source.artifact.id), /requires an active saved Report Artifact/);
     await assert.rejects(
       () => researchReportFromArtifactTool.invoke(input, new AbortController().signal, { ...call, projectId: other.id }),
       /not active in the authorized Project/,

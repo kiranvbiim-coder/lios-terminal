@@ -37,6 +37,7 @@ export const researchReportFromArtifactOutputSchema = z.object({
     citedSourceCount: z.number().int().positive().max(100),
     excerptCount: z.number().int().positive().max(100),
     editorPreference: z.literal("tiptap"),
+    docxDownloadPath: z.string().startsWith("/api/artifacts/").max(400),
   }).strict(),
   summary: z.string().trim().max(2_000),
   deterministic: z.literal(true),
@@ -251,6 +252,8 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
         citedSourceCount: report.sourceRefs.length,
         excerptCount: report.excerptCount,
         editorPreference: "tiptap",
+        docxDownloadPath: "/api/artifacts/" + encodeURIComponent(created.artifact.id)
+          + "/report.docx?version=" + created.version.version,
       },
       summary: "Saved editable report " + created.artifact.id + "@v" + created.version.version
         + " from " + report.sourceArtifactVersionRef + " with " + report.sourceRefs.length
