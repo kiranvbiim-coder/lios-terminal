@@ -58,6 +58,9 @@ interface Props {
   onResume?: () => void;
   /** Display-only snapshot of server-exposed checkpoint counts, never local resume authority. */
   checkpointView?: ResumableCheckpointView | null;
+  /** Authenticated Home execution history could not be checked; no Resume is offered. */
+  checkpointLookupError?: boolean;
+  onRetryCheckpointLookup?: () => void;
   /** Start with the Show work disclosure open. Defaults to closed so ordinary chats stay quiet. */
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
@@ -150,6 +153,8 @@ export default function ConversationRuntimeTrace({
   resumableRequestId,
   onResume,
   checkpointView,
+  checkpointLookupError = false,
+  onRetryCheckpointLookup,
   defaultShowWork = false,
   onSubmitAssumptions,
 }: Props) {
@@ -159,7 +164,7 @@ export default function ConversationRuntimeTrace({
   const reviewInFlight = useRef(false);
   const [guidedDismissedKey, setGuidedDismissedKey] = useState<string | null>(null);
   const workPanelId = useId();
-  if (!events.length && !busy && !resumableRequestId) return null;
+  if (!events.length && !busy && !resumableRequestId && !checkpointLookupError) return null;
   const plan = [...events].reverse().find((event) => event.type === "plan");
   const approval = [...events].reverse().find((event) => event.type === "approval_required");
   const latestGovernedApproval = [...events].reverse().find((event) => event.type === "governed_tool_approval_required");
@@ -257,6 +262,16 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
+      {checkpointLookupError && !busy && (
+        <div role="alert" data-testid="trace-checkpoint-lookup-error" className="my-2 rounded border border-amber-300/25 px-3 py-2 font-ui text-[12px] text-amber-100">
+          Saved checkpoint eligibility could not be checked. Resume is unavailable until the Home responds.
+          {onRetryCheckpointLookup && (
+            <button type="button" onClick={onRetryCheckpointLookup} className="ml-2 min-h-8 rounded px-2 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+              Retry checkpoint check
+            </button>
+          )}
+        </div>
+      )}
       {canResume && resumableRequestId && onResume && (
         <ResearchCheckpointCard
           requestId={resumableRequestId}
