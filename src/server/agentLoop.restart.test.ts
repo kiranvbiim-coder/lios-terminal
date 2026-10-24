@@ -532,7 +532,7 @@ test("GM-12: real encrypted L6 checkpoint survives Stop/restart and resumes one 
 
   await assert.rejects(
     restarted.resumeInterruptedAgentCheckpoint(requestId, owner, "f".repeat(64)),
-    /binding changed/,
+    /checkpoint changed after resume validation/,
   );
   assert.equal((await restarted.read(requestId, owner))?.status, "interrupted");
   await restarted.resumeInterruptedAgentCheckpoint(requestId, owner, snapshot.bindingSha256);
