@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertProfessionalDecisionSourceRole } from "@shared/professionalSourceRole";
 import { artifactContentSchema, type ArtifactContent, type RichArtifactBlock } from "@shared/artifactContracts";
 import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { getEntitlementPolicyById } from "./dataEntitlementStore";
@@ -120,9 +121,7 @@ export async function createProfessionalWorkPackage(ctx: TenantContext, raw: unk
     // A source role labels the content in the frozen report. Never allow the
     // caller to relabel an arbitrary Artifact as an authored Decision record.
     // A Decision role is not an approval, even for a genuine Decision Artifact.
-    if (selected.role === "decision" && artifact.kind !== "decision") {
-      throw new Error("Only a Decision Artifact can be labeled as a decision source. Select evidence or another accurate source role.");
-    }
+    assertProfessionalDecisionSourceRole(artifact.kind, selected.role);
     const version = await getArtifactVersion(ctx, artifact.id, selected.version);
     if (version.contentHash !== selected.contentHash || hashLedgerValue(version.content) !== version.contentHash) throw new Error("Selected immutable source hash does not match.");
     for (const ref of [...version.sourceRefs, ...version.dependencyRefs]) if (ref.startsWith("entitlement-policy:")) {
