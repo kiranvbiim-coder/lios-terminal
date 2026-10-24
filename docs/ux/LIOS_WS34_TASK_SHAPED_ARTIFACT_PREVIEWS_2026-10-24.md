@@ -21,7 +21,7 @@
 From `src/`:
 
 ```sh
-node --import tsx --test client/src/lib/recordedArtifactPreview.test.ts client/src/components/terminal/SavedArtifactCards.test.ts shared/conversationArtifactRefs.test.ts shared/artifactContracts.test.ts
+node --import tsx --test client/src/lib/recordedArtifactPreview.test.ts client/src/components/terminal/SavedArtifactCards.test.ts shared/artifactContracts.test.ts
 npm run check
 npm run test:p4
 npm run test:ux
