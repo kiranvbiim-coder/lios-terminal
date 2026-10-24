@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ExtensionCatalog, ExtensionPreview, LocalExtensionInput } from "@shared/p13ExtensionContracts";
 import { LOCAL_EXTENSION_MAX_BYTES } from "@shared/p13ExtensionContracts";
+import { summarizeExtensionCapabilities } from "@/lib/extensionCapabilityInventory";
 
 async function extensionRequest<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/extensions${path}`, { method: body === undefined ? "GET" : "POST", credentials: "include", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -22,6 +23,7 @@ export default function GovernedExtensionsPanel() {
   const [fingerprint, setFingerprint] = useState("");
   const [trustConsent, setTrustConsent] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<{ kind: "p13" | "p11"; id: string; digest: string; version?: string } | null>(null);
+  const inventory = catalog ? summarizeExtensionCapabilities(catalog) : null;
   useEffect(() => {
     let live = true;
     void extensionRequest<ExtensionCatalog>("").then(value => { if (live) setCatalog(value); }).catch(reason => { if (live) setError(String(reason instanceof Error ? reason.message : reason)); });
@@ -31,6 +33,15 @@ export default function GovernedExtensionsPanel() {
   async function action(run: () => Promise<void>) {
     setBusy(true); setError("");
     try { await run(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Extension operation failed."); } finally { setBusy(false); }
+  }
+
+  async function refreshCatalog() {
+    await action(async () => {
+      // Never show a stale cached catalog as the current runtime when refresh
+      // fails, nor keep a pending revoke tied to an old contribution digest.
+      setCatalog(null); setInspection(null); setRevokeTarget(null);
+      setCatalog(await extensionRequest<ExtensionCatalog>(""));
+    });
   }
 
   async function importFile(file: File | undefined) {
@@ -54,9 +65,30 @@ export default function GovernedExtensionsPanel() {
 
   return <section aria-label="Governed extensions" className="space-y-4 rounded-lg border border-border p-4">
     <div><h2 className="font-semibold">Governed Finance extensions</h2><p className="text-sm text-muted-foreground">Inspect existing runtime contributions or import an approved local package. No public vendor catalog, downloads or automatic installation. Package signatures do not establish independent publisher identity, license or data/model/API rights.</p></div>
-    <p className="text-sm">P13 declarative plugins are active only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    <p className="text-sm">Registered P13 declarative contributions last only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    <button type="button" onClick={() => void refreshCatalog()} disabled={busy} className="min-h-10 rounded border px-3 py-1.5 text-sm disabled:opacity-50" data-testid="extensions-refresh-catalog">Refresh current runtime inventory</button>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {!catalog ? <p className="text-sm">{error ? "Extension management requires the current unlocked Home owner administrator." : "Loading canonical runtime catalog…"}</p> : <>
+    {!catalog ? <p role="status" className="text-sm">{error ? "Canonical extension catalog unavailable. Confirm the Home owner administrator session or try refreshing; installed capability status is unknown." : "Loading canonical runtime catalog…"}</p> : <>
+      {inventory && <section aria-label="Extension capability inventory" data-testid="extension-capability-inventory" className="space-y-3 rounded-lg border border-border/60 p-3">
+        <h3 className="text-base font-semibold">Capability availability · current Home runtime</h3>
+        <p className="text-sm text-muted-foreground" data-testid="extension-inventory-counts">
+          {inventory.registered} registered this session · {inventory.blocked} not registered/untrusted · {inventory.inactive} stored inactive · {inventory.unsupported} unsupported by this installer
+        </p>
+        <p className="text-sm text-muted-foreground">{inventory.importPosture}</p>
+        <p className="text-sm text-muted-foreground">Registered is not verified operational health, source entitlement, data rights or authorization to execute. Manifest permissions are requests, not granted privileges. Live decisions remain under existing P13/P11 owners and runtime policy.</p>
+        {inventory.entries.length === 0 ? <p role="status" className="text-sm text-muted-foreground">No registered contributions or locally stored packs reported. Available third-party packages cannot be inferred from an empty local catalog.</p> : (
+          <div role="list" aria-label="Registered and unavailable extension capabilities" className="grid gap-2 md:grid-cols-2">
+            {inventory.entries.map(item => <article role="listitem" data-capability-state={item.availability} key={item.key} className="min-w-0 space-y-1 rounded border border-border/50 p-3 text-sm">
+              <h4 className="break-words font-semibold">{item.name} <span className="font-normal text-muted-foreground">· {item.kind}</span></h4>
+              <p className="break-words text-xs text-muted-foreground">{item.provider} · {item.id}</p>
+              <p className="font-medium">{item.availabilityLabel}</p>
+              <p className="text-xs text-muted-foreground">{item.health}</p>
+              <p className="text-xs text-muted-foreground">{item.reason}</p>
+              <p className="break-words text-xs text-muted-foreground">Manifest permission requests: {item.permissions.join(", ") || "none listed"} · not independent rights verification or an execution grant</p>
+            </article>)}
+          </div>
+        )}
+      </section>}
       <label className="block text-sm">Import owner-supplied local package (.json P13 envelope or .lios-pack archive)
         <input type="file" accept=".json,.lios-pack" disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void importFile(file); }} className="mt-2 block w-full" />
       </label>
@@ -66,7 +98,7 @@ export default function GovernedExtensionsPanel() {
         {catalog.plugins.map(plugin => <article key={plugin.id} className="rounded border p-3 text-sm space-y-2">
           <p className="font-medium">{plugin.manifest.name} · {plugin.version}</p><p>{plugin.id} · {plugin.manifest.publisher} · {plugin.trust.state}</p>
           <p className="break-all">Package SHA-256: {plugin.trust.packageDigest ?? "No observed package digest"}</p>
-          <p>Permissions: {plugin.manifest.permissions.join(", ") || "None"}</p>
+          <p>Manifest permission requests (not granted execution authority): {plugin.manifest.permissions.join(", ") || "None"}</p>
           <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void action(async () => { setInspection(await extensionRequest(`/inspect?kind=p13&id=${encodeURIComponent(plugin.id)}`)); setRevokeTarget(null); })} className="rounded border px-3 py-1">Inspect contributions and trust</button>
             {plugin.trust.packageDigest && <button type="button" disabled={busy} onClick={() => setRevokeTarget({ kind: "p13", id: plugin.id, digest: plugin.trust.packageDigest! })} className="rounded border px-3 py-1">Review revocation</button>}
           </div>
@@ -76,7 +108,7 @@ export default function GovernedExtensionsPanel() {
       </div>
       <div className="space-y-2"><h3 className="font-medium">Local P11 packs</h3><p className="text-sm text-muted-foreground">Verified local storage only. Executable activation is unavailable without its canonical supervised runtime adapter; installed does not mean enabled.</p>
         {catalog.packs.length === 0 && <p className="text-sm">No locally imported P11 packs.</p>}
-        {catalog.packs.flatMap(pack => pack.versions.map(version => <article key={`${pack.packId}@${version.version}`} className="rounded border p-3 text-sm"><p>{pack.packId} · {version.version} · {version.state} · {version.lastHealth}</p><button type="button" disabled={busy} className="rounded border px-3 py-1" onClick={() => void action(async () => { const result = await extensionRequest<{ manifest: { integrity: { manifestSha256: string } } | null }>(`/inspect?kind=p11&id=${encodeURIComponent(pack.packId)}&version=${encodeURIComponent(version.version)}`); setInspection(result); setRevokeTarget(result.manifest && pack.activeVersion !== version.version ? { kind: "p11", id: pack.packId, version: version.version, digest: result.manifest.integrity.manifestSha256 } : null); })}>Inspect / review removal</button></article>))}
+        {catalog.packs.flatMap(pack => pack.versions.map(version => <article key={`${pack.packId}@${version.version}`} className="rounded border p-3 text-sm"><p>{pack.packId} · {version.version} · {version.state} · recorded health: {version.lastHealth || "not reported"} · not executable from this panel</p><button type="button" disabled={busy} className="rounded border px-3 py-1" onClick={() => void action(async () => { const result = await extensionRequest<{ manifest: { integrity: { manifestSha256: string } } | null }>(`/inspect?kind=p11&id=${encodeURIComponent(pack.packId)}&version=${encodeURIComponent(version.version)}`); setInspection(result); setRevokeTarget(result.manifest && pack.activeVersion !== version.version ? { kind: "p11", id: pack.packId, version: version.version, digest: result.manifest.integrity.manifestSha256 } : null); })}>Inspect / review removal</button></article>))}
       </div>
     </>}
     {preview && <section aria-label="Exact local package review" className="space-y-3 rounded border p-3 text-sm">
