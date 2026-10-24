@@ -20,6 +20,7 @@ import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity, receiptPresentation } from "@/lib/agentReceiptActivity";
+import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
 import type {
   ApprovalGrant,
   ConversationActionName,
@@ -150,6 +151,9 @@ export default function ConversationRuntimeTrace({
   const [showWork, setShowWork] = useState(defaultShowWork);
   const [appliedReviewKey, setAppliedReviewKey] = useState<string | null>(null);
   const [pendingReviewKey, setPendingReviewKey] = useState<string | null>(null);
+  const [acknowledgedRiskKey, setAcknowledgedRiskKey] = useState<string | null>(null);
+  const [reviewOutcome, setReviewOutcome] = useState<{ key: string; decision: GovernedToolReviewDecision } | null>(null);
+  const [reviewError, setReviewError] = useState<{ key: string; message: string } | null>(null);
   const reviewInFlight = useRef(false);
   const [guidedDismissedKey, setGuidedDismissedKey] = useState<string | null>(null);
   const workPanelId = useId();
@@ -177,13 +181,25 @@ export default function ConversationRuntimeTrace({
   const reviewIndex = latestGovernedApproval ? events.lastIndexOf(latestGovernedApproval) : -1;
   const continued = reviewIndex >= 0 && events.some((event, index) => index > reviewIndex && (event.type === "plan" || event.type === "tool_start"));
   const governedApproval = !terminal && !continued && reviewKey !== appliedReviewKey ? latestGovernedApproval : undefined;
+  const reviewRisk = governedApproval?.type === "governed_tool_approval_required"
+    ? governedReviewRisk(governedApproval, Date.now()) : null;
+  const legacyApproval = !terminal && approval?.type === "approval_required" ? approval : null;
   const reviewing = pendingReviewKey === reviewKey;
   const reviewTool = async (decision: GovernedToolReviewDecision) => {
-    if (!onGovernedToolReview || governedApproval?.type !== "governed_tool_approval_required" || reviewInFlight.current || !reviewKey) return;
+    if (!onGovernedToolReview || governedApproval?.type !== "governed_tool_approval_required" || reviewInFlight.current || !reviewKey || !reviewRisk) return;
+    if (!governedApproval.choices.includes(decision)) return;
+    if (decision === "allow_project" && (!allowProjectApproval || !reviewRisk.projectScope)) return;
+    if (decision !== "deny" && (reviewRisk.blockAllow || (reviewRisk.highRisk && acknowledgedRiskKey !== reviewKey))) return;
     reviewInFlight.current = true;
     setPendingReviewKey(reviewKey);
+    setReviewError(null);
     try {
-      if (await onGovernedToolReview(governedApproval.reviewId, decision)) setAppliedReviewKey(reviewKey);
+      if (await onGovernedToolReview(governedApproval.reviewId, decision)) {
+        setAppliedReviewKey(reviewKey);
+        setReviewOutcome({ key: reviewKey, decision });
+      } else setReviewError({ key: reviewKey, message: "The server has not accepted this review. It remains unresolved." });
+    } catch {
+      setReviewError({ key: reviewKey, message: "Review submission failed. No approval or denial is confirmed. Refresh the run before trying again." });
     } finally {
       reviewInFlight.current = false;
       setPendingReviewKey(null);
@@ -200,7 +216,7 @@ export default function ConversationRuntimeTrace({
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
   const working = busy && !terminal;
-  const waitingForApproval = Boolean(approval || governedApproval);
+  const waitingForApproval = Boolean(legacyApproval || governedApproval);
   const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
@@ -521,7 +537,7 @@ export default function ConversationRuntimeTrace({
         );
       })()}
 
-      {!runtimeError && !dataGap && !approval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (
+      {!runtimeError && !dataGap && !legacyApproval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (
         <div className="mb-2 rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2 font-ui text-[13px] text-muted-foreground" role="status" data-testid="trace-run-status" data-run-status={done.status}>
           {done.status === "failed"
             ? "This run didn’t complete and produced no result. Nothing was changed. You can try again."
@@ -577,6 +593,13 @@ export default function ConversationRuntimeTrace({
         );
       })()}
 
+      {reviewOutcome?.key === reviewKey && !governedApproval && (
+        <div role="status" data-testid="governed-review-submitted" className="mb-2 rounded-lg border border-border/60 p-3 font-ui text-[13px] text-muted-foreground">
+          {reviewOutcome.decision === "deny"
+            ? "Denial accepted by the server for this review. The original run's cancellation and outside-system state must still be checked."
+            : `${reviewOutcome.decision === "allow_project" ? "Project-scoped" : "One-time"} review accepted by the server. This is not an execution receipt; inspect the run results and reconcile any external side effect.`}
+        </div>
+      )}
       {governedApproval?.type === "governed_tool_approval_required" && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" data-testid="governed-tool-approval" data-request-id={governedApproval.requestId} data-review-id={governedApproval.reviewId}>
           <div className="flex items-start gap-2">
@@ -584,6 +607,29 @@ export default function ConversationRuntimeTrace({
             <div className="min-w-0 flex-1">
               <div className="font-ui text-[13px] font-semibold text-foreground">Approval required · {governedApproval.label}</div>
               <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{governedApproval.message}</div>
+              {reviewRisk && <div aria-label="Governed action scope and side-effect risk" data-testid="governed-review-risk" className="mt-2 space-y-2 rounded border border-amber-300/25 p-2 font-ui text-[12px]">
+                <p><strong>Impact:</strong> {reviewRisk.risk} · <strong>Permission:</strong> {governedApproval.permissionClass.replace("_", " ")} · <strong>Retry safe:</strong> {governedApproval.replaySafe === undefined ? "not recorded" : governedApproval.replaySafe ? "declared yes" : "no"}</p>
+                <p><strong>Target scope:</strong> {reviewRisk.scopeLabel}</p>
+                <p><strong>Review expiry:</strong> {governedApproval.expiresAt ?? "not recorded"} {reviewRisk.expired ? "· expired: allow disabled" : ""}</p>
+                {governedApproval.blastRadius && <p><strong>Potential effects:</strong> {governedApproval.blastRadius}</p>}
+                <p>{reviewRisk.inputDisclosure}</p>
+                {governedApproval.reviewBinding && <details><summary className="cursor-pointer underline underline-offset-2">Exact server-bound tool call and SHA-256 fingerprints</summary>
+                  <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
+                    <div>Tool: {governedApproval.reviewBinding.toolId}</div>
+                    <div>Step: {governedApproval.reviewBinding.stepId}</div>
+                    <div>Call: {governedApproval.reviewBinding.toolCallId}</div>
+                    <div>Input SHA-256: {governedApproval.reviewBinding.inputSha256}</div>
+                    <div>Plan SHA-256: {governedApproval.reviewBinding.planSha256}</div>
+                    <div>Run: {governedApproval.requestId} · Review: {governedApproval.reviewId}</div>
+                  </dl>
+                </details>}
+                {reviewRisk.blockAllow && <p role="alert" className="text-amber-200">This privileged review lacks a current exact server binding or has expired. Allow is unavailable; deny or refresh the run.</p>}
+                {reviewRisk.highRisk && !reviewRisk.blockAllow && <label className="flex cursor-pointer items-start gap-2">
+                  <input type="checkbox" data-testid="governed-review-risk-ack" checked={acknowledgedRiskKey === reviewKey} disabled={reviewing} onChange={event => setAcknowledgedRiskKey(event.target.checked ? reviewKey : null)} />
+                  <span>I reviewed the recorded scope and impact. The raw external target is not verified by this card; I will reconcile any side effects separately.</span>
+                </label>}
+              </div>}
+              {reviewError?.key === reviewKey && <p role="alert" data-testid="governed-review-error" className="mt-2 text-amber-200">{reviewError.message}</p>}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -604,17 +650,17 @@ export default function ConversationRuntimeTrace({
                 data-testid="governed-tool-allow-once"
                 data-request-id={governedApproval.requestId}
                 data-review-id={governedApproval.reviewId}
-                disabled={!onGovernedToolReview || reviewing}
+                disabled={!onGovernedToolReview || reviewing || !!reviewRisk?.blockAllow || (!!reviewRisk?.highRisk && acknowledgedRiskKey !== reviewKey)}
                 className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50"
               >
                 Allow once
               </button>
             )}
-            {allowProjectApproval && governedApproval.choices.includes("allow_project") && (
+            {allowProjectApproval && !!reviewRisk?.projectScope && governedApproval.choices.includes("allow_project") && (
               <button
                 type="button"
                 onClick={() => void reviewTool("allow_project")}
-                disabled={!onGovernedToolReview || reviewing}
+                disabled={!onGovernedToolReview || reviewing || !!reviewRisk?.blockAllow || (!!reviewRisk?.highRisk && acknowledgedRiskKey !== reviewKey)}
                 className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200 disabled:opacity-50"
               >
                 Allow for Project
@@ -625,24 +671,29 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
-      {approval?.type === "approval_required" && (
+      {legacyApproval && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" data-testid="trace-approval">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <div className="font-ui text-[13px] font-semibold text-foreground">Approval required</div>
-              <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{approval.message}</div>
+              <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{legacyApproval.message}</div>
+              <div aria-label="Legacy approval scope and impact" data-testid="legacy-approval-risk" className="mt-2 space-y-1 rounded border border-border/50 p-2 font-ui text-[12px] text-muted-foreground">
+                <p>Action: {legacyReviewFacts(legacyApproval).action} · Component: {legacyReviewFacts(legacyApproval).component} · Target: {legacyReviewFacts(legacyApproval).target}</p>
+                <p>Permission: {legacyReviewFacts(legacyApproval).permission} · {legacyReviewFacts(legacyApproval).sideEffect}</p>
+                <p>Legacy review; exact server input fingerprint is not included. Verify operation inputs and target before allowing; authorizations are not execution receipts.</p>
+              </div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => onDeny(approval.action)} className="flex items-center gap-1 rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
+            <button type="button" onClick={() => onDeny(legacyApproval.action)} className="flex items-center gap-1 rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
               <X className="h-2.5 w-2.5" aria-hidden="true" /> Deny
             </button>
-            <button type="button" onClick={() => onApprove(approval.action, "once")} className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06]">
+            <button type="button" onClick={() => onApprove(legacyApproval.action, "once")} disabled={!legacyApproval.choices.includes("allow_once")} className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06]">
               Allow once
             </button>
-            {allowProjectApproval && (
-              <button type="button" onClick={() => onApprove(approval.action, "project")} className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200">
+            {allowProjectApproval && legacyApproval.choices.includes("allow_project") && (
+              <button type="button" onClick={() => onApprove(legacyApproval.action, "project")} className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200">
                 Allow for Project
               </button>
             )}

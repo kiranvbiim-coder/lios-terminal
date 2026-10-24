@@ -354,3 +354,74 @@ test("WS-50: failed, cancelled and foreign-run receipts warn even while Show wor
   assert.match(full, /1 recorded execution receipt/);
   assert.match(full, /0 completed · 1 failed · 0 cancelled/);
 });
+
+
+test("WS-51: privileged approval displays exact run-bound hashed input, side effect, scope and no secret arguments", () => {
+  const review = event({
+    type: "governed_tool_approval_required",
+    reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Email send",
+    permissionClass: "user_confirm",
+    sideEffect: "external",
+    replaySafe: false,
+    externalSideEffect: true,
+    blastRadius: "May send a message to another provider.",
+    choices: ["allow_once", "allow_project", "deny"],
+    expiresAt: "2099-10-25T12:00:00.000Z",
+    message: "Send this message?",
+    reviewBinding: {
+      toolId: "email.send", stepId: "step-1", toolCallId: "call-1",
+      inputSha256: "a".repeat(64), planSha256: "b".repeat(64),
+      chatId: 15, projectId: 4,
+    },
+  });
+  const markup = render([review], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(markup, /data-testid="governed-review-risk"/);
+  assert.match(markup, /External side effect/);
+  assert.match(markup, /Project 4 · Chat 15/);
+  assert.match(markup, /Input SHA-256/);
+  assert.match(markup, /Plan SHA-256/);
+  assert.match(markup, /May send a message to another provider/);
+  assert.match(markup, /data-testid="governed-review-risk-ack"/);
+  assert.match(markup, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+  assert.match(markup, /Allow for Project/);
+  assert.match(markup, /Raw input and external target are NOT exposed/);
+  assert.doesNotMatch(markup, /secretToken|apiKey|accessKey/);
+});
+
+test("WS-51: expired or missing exact bindings fail closed, but denial remains possible", () => {
+  const base = {
+    type: "governed_tool_approval_required",
+    reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Send email", permissionClass: "admin_confirm",
+    sideEffect: "external", externalSideEffect: true, replaySafe: false,
+    choices: ["allow_once", "deny"],
+    expiresAt: "2020-01-01T00:00:00.000Z", message: "Review this external write.",
+  };
+  const missing = render([event(base)], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(missing, /lacks a current exact server binding or has expired/);
+  assert.match(missing, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+  assert.match(missing, /\bDeny<\/button>/);
+  assert.doesNotMatch(missing, /Allow for Project/);
+  const validBinding = { toolId: "email.send", stepId: "s1", toolCallId: "c1",
+    inputSha256: "a".repeat(64), planSha256: "b".repeat(64), chatId: 7, projectId: null };
+  const expired = render([event({ ...base, reviewBinding: validBinding })], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(expired, /expired: allow disabled/);
+  assert.match(expired, /\bDeny<\/button>/);
+});
+
+test("WS-51: legacy action review shows exact target, offered scope and hides approvals after terminal result", () => {
+  const action = event({
+    type: "approval_required", action: "RunBacktest",
+    actionRequest: { componentId: "finance.backtest", targetRef: "portfolio:15",
+      externalSideEffect: false, reversible: true, permissionClass: "user_confirm" },
+    choices: ["allow_once", "deny"], message: "Run the model?",
+  });
+  const open = render([action], { busy: true });
+  assert.match(open, /data-testid="legacy-approval-risk"/);
+  assert.match(open, /Target: portfolio:15/);
+  assert.match(open, /Legacy review; exact server input fingerprint is not included/);
+  assert.doesNotMatch(open, /Allow for Project/);
+  const completed = render([action, doneOk]);
+  assert.doesNotMatch(completed, /data-testid="trace-approval"/);
+});
