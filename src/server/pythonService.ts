@@ -28,6 +28,7 @@ import {
   sandboxIsolationMode,
 } from "./exec/sandbox-runtime-profile";
 import { callIsolatedPythonService, IsolatedPythonInputError } from "./isolatedPythonService";
+import { strictSandboxInventoryFingerprint } from "./exec/strict-sandbox-inventory";
 
 const dirname = typeof __dirname !== "undefined" ? __dirname : path.dirname(process.argv[1] || process.cwd());
 // Same resourcesBase pattern already used for script/download_history.py in
@@ -57,7 +58,7 @@ export function createSidecarToken(): string {
 const SIDECAR_TOKEN = createSidecarToken();
 let isolatedInventory: { key: string; python: string; packages: Record<string, string> } | null = null;
 function isolatedInventoryKey(): string {
-  return JSON.stringify(["LIOS_EXECUTION_SANDBOX_ENGINE", "LIOS_EXECUTION_SANDBOX_TARGET", "LIOS_EXECUTION_SANDBOX_IMAGE", "LIOS_EXECUTION_SANDBOX_PYTHON"].map(name => process.env[name] ?? ""));
+  return strictSandboxInventoryFingerprint();
 }
 let localPort: number | null = null;
 
@@ -383,6 +384,11 @@ export function getPythonServiceEnvironment(): Promise<{ python: string; package
     const key = isolatedInventoryKey();
     return callIsolatedPythonService<unknown>("/runtime-info", {}, { serviceDir: SERVICE_DIR, timeoutMs: 15_000 }).then(value => {
       const metadata = z.object({ python: z.string(), packages: z.record(z.string()) }).parse(value);
+      // A mutable Home configuration may change while the isolated inventory probe is running.
+      // Never cache (or report) a stale proof under the previous sandbox/image/tool authority.
+      if (key !== isolatedInventoryKey()) {
+        throw new Error("Strict Python sandbox configuration changed during runtime verification; retry health inspection.");
+      }
       isolatedInventory = { key, ...metadata };
       return metadata;
     }, error => { isolatedInventory = null; throw error; });
