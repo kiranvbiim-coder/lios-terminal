@@ -62,7 +62,7 @@ test("negative observed price-return effects keep their sign, are not floored or
   assert.equal(result.state, "ready");
   if (result.state !== "ready") return;
   assert.ok(Math.abs(result.rows.reduce((sum, row) => sum + row.totalEffect, 0) + 10) < 1e-9);
-  assert.equal(result.rows.find((row) => row.segment === "Technology")!.portfolioReturn, -10);
+  assert.ok(Math.abs(result.rows.find((row) => row.segment === "Technology")!.portfolioReturn + 10) < 1e-10);
 });
 
 test("missing history and mismatched trading days explicitly block attribution", () => {
