@@ -94,7 +94,7 @@ test("actual P9 management route and store atomically check reviewed updatedAt o
   assert.match(store, /Workflow changed since review/);
   const deleteStart = store.indexOf("export async function deleteP9Workflow");
   const deletePart = store.slice(deleteStart, store.indexOf("export interface ClaimedP9Workflow", deleteStart));
-  assert.ok(deletePart.indexOf(".returning({ id: projectAutomationWorkflows.id })") < deletePart.indexOf('action: "deleted"'));
+  assert.ok(deletePart.indexOf(".returning()") < deletePart.indexOf('action: "deleted"'));
   assert.match(routes, /expectedUpdatedAt: z.string\(\).datetime\(\{ offset: true \}\).optional\(\)/);
   assert.match(routes, /replaceP9Workflow\(ctx\(req\), current.id, definition, expectedUpdatedAt\)/);
   assert.match(routes, /setP9WorkflowEnabled\(ctx\(req\), current.id, body.enabled, body.expectedUpdatedAt\)/);
