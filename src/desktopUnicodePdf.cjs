@@ -138,18 +138,25 @@ function normalizeUnicodePdfPayload(payload) {
   if (!Array.isArray(paragraphs) || !paragraphs.length || paragraphs.length > MAX_PARAGRAPHS) {
     throw new Error("Unicode PDF paragraph count exceeds the local publishing budget.");
   }
-  let characters = 0, images = 0, charts = 0, tableCells = 0;
+  let characters = 0, paragraphCharacters = 0, images = 0, charts = 0, tableCells = 0;
   const addText = value => {
     characters += value.length;
     if (characters > MAX_CHARACTERS) throw new Error("Unicode PDF exceeds the local publishing text budget.");
   };
+  // The legacy paragraph view and structured native items describe the
+  // same report. Validate each view separately, but do not count the same
+  // text twice in the actual publishing budget.
   const safeParagraphs = paragraphs.map(value => {
     const result = paragraph(value);
-    addText(result.text);
+    paragraphCharacters += result.text.length;
+    if (paragraphCharacters > MAX_CHARACTERS) {
+      throw new Error("Unicode PDF exceeds the local publishing text budget.");
+    }
     return result;
   });
   let safeItems;
   if (items === undefined) {
+    characters = paragraphCharacters;
     safeItems = safeParagraphs.map(item => ({kind:"paragraph",...item}));
   } else {
     if (!Array.isArray(items) || !items.length || items.length > MAX_ITEMS) throw new Error("Unicode PDF print item count exceeds the budget.");

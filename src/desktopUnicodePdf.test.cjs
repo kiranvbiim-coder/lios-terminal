@@ -121,3 +121,17 @@ test("SVG plots are source-backed, preserve gaps and negative numbers; never int
     {...plot,windows:[{xValues:[0,1],series:[{label:"bad",points:[{xIndex:2,y:8}]}]}]},
   ]}), /Invalid or duplicate/);
 });
+
+
+test("Structured Unicode print payload counts the flattened and native views independently", () => {
+  const texts=Array.from({length: 5},(_,i)=>"தமிழ் "+String(i)+" "+"x".repeat(99_980));
+  const paragraphs=texts.map(text=>({style:"body",text}));
+  const items=paragraphs.map(item=>({kind:"paragraph",...item}));
+  const parsed=normalizeUnicodePdfPayload({...payload,paragraphs,items});
+  assert.equal(parsed.paragraphs.length,5);
+  assert.equal(parsed.items.length,5);
+  assert.equal(parsed.items.map(x=>x.text).join(""),texts.join(""));
+  const inflated=Array.from({length:10},()=>({kind:"paragraph",style:"body",text:"x".repeat(100_000)}));
+  assert.throws(()=>normalizeUnicodePdfPayload({...payload,paragraphs,items:inflated}),/text budget/);
+  assert.throws(()=>normalizeUnicodePdfPayload({...payload,paragraphs:inflated,items}),/text budget/);
+});
