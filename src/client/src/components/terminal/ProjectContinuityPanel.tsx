@@ -47,7 +47,7 @@ export function ProjectContinuityPanel({
             Project Continuity
           </div>
           <div className="mt-1 max-w-2xl font-ui text-[8px] leading-4 text-muted-foreground">
-            Deterministic continuation across Project context, Decision Artifacts, monitoring and saved workflows. This surface composes existing LiOS state; it does not invent a second memory or automation system.
+            Read-only Project-scoped decision and saved-work memory. The explicit Recompute action below writes a retained continuity snapshot for this Project; it does not change other Projects or resume agents, requests, or scheduled work.
           </div>
         </div>
         <button
@@ -57,18 +57,18 @@ export function ProjectContinuityPanel({
           className="flex items-center gap-1.5 rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground hover:text-foreground disabled:opacity-40"
         >
           <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh continuity
+          Recompute this Project snapshot
         </button>
       </div>
 
       {message && <div className="mt-3 rounded border border-border/50 bg-black/20 px-3 py-2 font-ui text-[8px] text-muted-foreground">{message}</div>}
-      {continuity.isError && <div className="mt-3 rounded border border-red-400/20 bg-red-400/[0.03] px-3 py-2 font-ui text-[8px] text-red-200">Project Continuity could not be loaded.</div>}
+      {continuity.isError && <div role="alert" className="mt-3 rounded border border-red-400/20 bg-red-400/[0.03] px-3 py-2 font-ui text-sm text-red-200">This Project's continuity could not be loaded or did not match its identity. No previous Project's saved state is shown. Try reloading before acting.</div>}
 
       <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Metric label="Continue" value={snapshot?.counts.continuationItems ?? 0} />
-        <Metric label="Decisions" value={snapshot?.counts.decisions ?? 0} />
-        <Metric label="Sessions" value={snapshot?.counts.sessions ?? 0} />
-        <Metric label="Active workflows" value={snapshot?.counts.activeAutomations ?? 0} />
+        <Metric label="Continue" value={snapshot ? snapshot.counts.continuationItems : "—"} />
+        <Metric label="Decisions" value={snapshot ? snapshot.counts.decisions : "—"} />
+        <Metric label="Sessions" value={snapshot ? snapshot.counts.sessions : "—"} />
+        <Metric label="Active workflows" value={snapshot ? snapshot.counts.activeAutomations : "—"} />
       </div>
 
       <div className="mt-4 grid gap-3 xl:grid-cols-2">
@@ -163,7 +163,7 @@ export function ProjectContinuityPanel({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return <div className="rounded-lg border border-border/45 bg-black/15 px-3 py-2">
     <div className="font-terminal text-[6px] uppercase text-muted-foreground">{label}</div>
     <div className="mt-1 font-ui text-[13px] font-semibold text-foreground">{value}</div>
