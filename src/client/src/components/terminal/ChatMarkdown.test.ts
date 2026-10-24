@@ -230,3 +230,30 @@ test("saved answer citation sources never depend on another run", () => {
   assert.equal(savedMessageCitationSources(previous)[0].href, "https://example.test/old");
   assert.deepEqual(savedMessageCitationSources({}), []);
 });
+
+test("WS-29: forged provider homepage and swapped URL never become clickable inline citations", () => {
+  const sources: ChatCitationSource[] = [
+    { id: "provider:sec_edgar", label: "SEC EDGAR", href: "https://www.sec.gov/", index: 1 },
+    { id: "https://example.org/filing", label: "Swapped filing", href: "https://example.org/home", index: 2 },
+    { id: "https://example.org/recorded", label: "Recorded filing", href: "https://example.org/recorded", index: 3 },
+  ];
+  const markup = render("Records [1], [2] and [3] should respect exact source custody.", { sources });
+  assert.equal((markup.match(/data-citation=/g) ?? []).length, 3);
+  assert.equal((markup.match(/<a\b/g) ?? []).length, 1);
+  assert.match(markup, /<button[^>]+aria-label="Source 1: SEC EDGAR"/);
+  assert.match(markup, /<button[^>]+aria-label="Source 2: Swapped filing"/);
+  assert.match(markup, /<a href="https:\/\/example.org\/recorded"/);
+  assert.doesNotMatch(markup, /href="https:\/\/www.sec.gov|href="https:\/\/example.org\/home"/);
+});
+
+test("WS-29: saved chat references cannot gain a clickable provider URL from unrelated metadata", () => {
+  const sources = savedMessageCitationSources({ citationSources: [
+    { id: "provider:fred", label: "FRED", href: "https://fred.stlouisfed.org/" },
+    { id: "https://example.org/document", label: "Document", href: "https://example.org/swap" },
+  ] });
+  assert.equal(sources[0].href, null);
+  assert.equal(sources[1].href, "https://example.org/document");
+  const markup = render("Recorded [source: provider:fred] and [source: https://example.org/document].", { sources });
+  assert.equal((markup.match(/<a\b/g) ?? []).length, 1);
+  assert.doesNotMatch(markup, /fred.stlouisfed.org|example.org\/swap/);
+});
