@@ -86,6 +86,25 @@ test("concurrent windows on the SAME saved P4 version cannot discard each other'
   assert.equal(readProtectedArtifactDraft({ root, safeStorage, input }), null);
 });
 
+test("legacy OS-encrypted checkpoint remains readable, but never silently overwritten by a new generation", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-draft-legacy-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const safeStorage = encryptionFixture();
+  const fileDir = path.join(root, "artifact-draft-recovery");
+  fs.mkdirSync(fileDir, { recursive: true, mode: 0o700 });
+  const name = crypto.createHash("sha256").update(input.owner.toLowerCase() + "\\0" + input.artifactId).digest("hex") + ".safe";
+  const legacy = JSON.stringify({ schemaVersion: 1, owner: input.owner, artifactId: input.artifactId,
+    baseVersion: input.baseVersion, contentHash: input.contentHash, content: input.content });
+  fs.writeFileSync(path.join(fileDir, name), safeStorage.encryptString(legacy), { mode: 0o600 });
+  const reopened = readProtectedArtifactDraft({ root, safeStorage, input });
+  assert.deepEqual(reopened, { baseVersion: input.baseVersion, contentHash: input.contentHash, content: input.content });
+  assert.throws(() => storeProtectedArtifactDraft({ root, safeStorage, input }), /changed by another editor/,
+    "older checkpoints need an explicit user decision before new drafts are written");
+  assert.deepEqual(removeProtectedArtifactDraft({ root, safeStorage, input: {
+    ...input, expectedCheckpoint: { baseVersion: input.baseVersion, contentHash: input.contentHash },
+  } }), { removed: true }, "legacy snapshots remain explicitly discardable by their original P4 baseline");
+});
+
 test("unavailable OS protection and Linux plaintext backends never write a checkpoint", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-draft-denial-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
