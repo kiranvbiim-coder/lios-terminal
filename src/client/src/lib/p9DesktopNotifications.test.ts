@@ -5,6 +5,7 @@ import {
   createBrowserP9DesktopNotificationPort,
   deliverP9DesktopNotifications,
   sanitizeP9DesktopNotificationText,
+  requestP9DesktopPermissionFromGesture,
   setP9DesktopNotificationOwner,
   type P9DesktopNotificationPermission,
   type P9DesktopNotificationPort,
@@ -122,22 +123,67 @@ test("SI-06 desktop delivery is durable-idempotent through the canonical notific
   assert.equal(shown.length, 1);
 });
 
-test("SI-06 desktop delivery resolves Electron default permission before claiming or showing", async () => {
+test("WS-56: passive background P9 poll never requests OS permission or claims the desktop delivery ID", async () => {
   const pending = port("default", "granted");
   const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
-  assert.equal(result.delivered, 1);
-  assert.equal(pending.permissionRequests(), 1);
-  assert.deepEqual(pending.shown.map((item) => item.id), [canonical.id]);
-  assert.equal(pending.delivered.has(canonical.id), true);
+  assert.equal(result.delivered, 0);
+  assert.equal(result.unavailable, 1);
+  assert.equal(pending.permissionRequests(), 0);
+  assert.equal(pending.delivered.size, 0);
+  assert.equal(pending.shown.length, 0);
 });
 
-test("SI-06 desktop delivery leaves canonical id unclaimed when permission request is denied", async () => {
-  const pending = port("default", "denied");
-  const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
-  assert.equal(result.unavailable, 1);
-  assert.equal(pending.permissionRequests(), 1);
-  assert.equal(pending.shown.length, 0);
-  assert.equal(pending.delivered.size, 0);
+test("WS-56: denied or undecided OS permission keeps P9 in-app state and delivery IDs unchanged", async () => {
+  for (const permission of ["default", "denied"] as const) {
+    const pending = port(permission);
+    const result = await deliverP9DesktopNotifications([canonical], pending.adapter, options);
+    assert.equal(result.unavailable, 1);
+    assert.equal(pending.permissionRequests(), 0);
+    assert.equal(pending.shown.length, 0);
+    assert.equal(pending.delivered.size, 0);
+  }
+});
+
+test("WS-56: only an explicit gesture requests OS permission and owner changes fail closed", async () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  const storageValues = new Map<string, string>();
+  let requested = 0;
+  class FakeNotification {
+    static permission: "default" | "granted" = "default";
+    static requestPermission() {
+      requested += 1;
+      FakeNotification.permission = "granted";
+      return Promise.resolve("granted");
+    }
+    constructor(_title: string, _options?: unknown) {}
+  }
+  Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: {
+    limuriaDesktop: { isElectron: true }, localStorage: {
+      getItem: (k: string) => storageValues.get(k) ?? null,
+      setItem: (k: string, v: string) => { storageValues.set(k, v); },
+    }, Notification: FakeNotification,
+  } });
+  try {
+    setP9DesktopNotificationOwner(onlineSession(42));
+    const pending = await deliverP9DesktopNotifications([canonical], createBrowserP9DesktopNotificationPort(), options);
+    assert.equal(pending.unavailable, 1);
+    assert.equal(requested, 0);
+    const grant = await requestP9DesktopPermissionFromGesture();
+    assert.equal(grant, "granted");
+    assert.equal(requested, 1);
+    const fresh = await deliverP9DesktopNotifications([canonical], createBrowserP9DesktopNotificationPort(), options);
+    assert.equal(fresh.delivered, 1);
+    setP9DesktopNotificationOwner(onlineSession(43));
+    FakeNotification.permission = "default";
+    const oldPort = createBrowserP9DesktopNotificationPort();
+    const inflight = oldPort.requestPermission!();
+    setP9DesktopNotificationOwner(null);
+    assert.equal(await inflight, "unsupported");
+  } finally {
+    setP9DesktopNotificationOwner(null);
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: originalWindow });
+  }
 });
 
 test("SI-06 desktop delivery does not fail the workflow when OS notifications are explicitly denied", async () => {
