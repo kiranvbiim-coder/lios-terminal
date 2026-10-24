@@ -112,3 +112,76 @@ test("different architecture cannot be repaired even with internally self-consis
   assert.match(status.reason, /expected linux\/(?:arm64|amd64).*found linux\/(?:arm64|amd64)/);
   assert.equal(status.repairAction, "reinstall_app");
 });
+
+test("Podman fallback checks its Host.OS field and permits image repair only on Linux", async t => {
+  const platform = requiredSandboxReleasePlatform();
+  const { root, image } = releaseFixture(t, platform);
+  useReleaseEnvironment(t, root, image);
+  const target = "unix:///run/user/1000/podman/podman.sock";
+  process.env.LIOS_EXECUTION_SANDBOX_ENGINE = "podman";
+  process.env.LIOS_EXECUTION_SANDBOX_TARGET = target;
+  const invocations: string[][] = [];
+  const result = await inspectSandboxImageReadiness({
+    engineProbe: async (engine, address, args) => {
+      assert.equal(engine, "podman");
+      assert.equal(address, target);
+      invocations.push([...args]);
+      if (args[0] === "image") throw new Error("No such image.");
+      return "linux\n";
+    },
+  });
+  assert.equal(result.state, "image_missing");
+  assert.equal(result.repairAction, "load");
+  assert.deepEqual(invocations[0], ["image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", image]);
+  assert.deepEqual(invocations[1], ["info", "--format", "{{.Host.OS}}"]);
+});
+
+test("Docker Windows-container mode and unknown OS never offer Linux image import", async t => {
+  const platform = requiredSandboxReleasePlatform();
+  const { root, image } = releaseFixture(t, platform);
+  useReleaseEnvironment(t, root, image);
+  process.env.LIOS_EXECUTION_SANDBOX_ENGINE = "docker";
+  process.env.LIOS_EXECUTION_SANDBOX_TARGET = process.platform === "win32"
+    ? "npipe:////./pipe/docker_engine" : "unix:///var/run/docker.sock";
+  for (const os of ["windows", "unknown", "", "linux\nwindows"]) {
+    const queried: string[][] = [];
+    const result = await inspectSandboxImageReadiness({
+      engineProbe: async (engine, _target, args) => {
+        assert.equal(engine, "docker");
+        queried.push([...args]);
+        if (args[0] === "image") throw new Error("Image inspect failed.");
+        return os;
+      },
+    });
+    assert.equal(result.state, "incompatible", os);
+    assert.equal(result.ready, false);
+    assert.equal(result.repairAction, "retry");
+    assert.match(result.reason, /requires an engine running Linux containers/);
+    assert.deepEqual(queried[1], ["info", "--format", "{{.OSType}}"]);
+  }
+});
+
+test("image inspect success requires exact digest/platform and never needs engine fallback", async t => {
+  const platform = requiredSandboxReleasePlatform();
+  const { root, image } = releaseFixture(t, platform);
+  useReleaseEnvironment(t, root, image);
+  process.env.LIOS_EXECUTION_SANDBOX_ENGINE = "docker";
+  process.env.LIOS_EXECUTION_SANDBOX_TARGET = process.platform === "win32"
+    ? "npipe:////./pipe/docker_engine" : "unix:///var/run/docker.sock";
+  let calls = 0;
+  const ready = await inspectSandboxImageReadiness({
+    engineProbe: async (_engine, _target, args) => {
+      calls++;
+      assert.equal(args[0], "image");
+      return `${image} ${platform}`;
+    },
+  });
+  assert.equal(ready.state, "ready");
+  assert.equal(ready.repairAction, "none");
+  assert.equal(calls, 1);
+  const mismatch = await inspectSandboxImageReadiness({
+    engineProbe: async () => `${image} linux/386`,
+  });
+  assert.equal(mismatch.state, "integrity_failed");
+  assert.equal(mismatch.ready, false);
+});
