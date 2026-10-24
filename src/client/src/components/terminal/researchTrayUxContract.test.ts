@@ -86,13 +86,24 @@ test("Research note edits and explicit delete retain unrelated canonical finding
 });
 
 
-test("blocked local storage produces truthful feedback rather than a false saved state", () => {
+test("blocked local storage and full-capacity research fail loudly without false success", () => {
   assert.match(source, /const persist = \(next: ResearchTrayItem\[\]\): boolean => \{/);
-  assert.match(source, /try \{\s*\/\/ Report a blocked/);
+  assert.match(source, /if \(next.length > MAX_RESEARCH_TRAY_ITEMS\)/);
+  assert.match(source, /items.some\(item => !next.some\(candidate => candidate.id === item.id\)\)/);
   assert.match(source, /saveResearchTray\(next\)/);
-  assert.match(source, /setNotice\("Could not save research on this device/);
+  assert.match(source, /notify\("Could not save research on this device/);
   assert.match(source, /if \(!persist\(\[item, \.\.\.items\]\)\) return/);
   assert.match(source, /if \(!persist\(updateResearchTrayItem/);
   assert.match(source, /if \(!persist\(removeResearchTrayItem/);
   assert.match(source, /Could not clear research history on this device/);
+  assert.match(source, /role=\{noticeIsError \? "alert" : "status"\}/);
+});
+
+test("WS-33 concurrent device-local edits never overwrite another tab's saved annotation", () => {
+  assert.match(source, /setEditingSnapshot\(item\)/);
+  assert.match(source, /editingSnapshot.updatedAt !== item.updatedAt/);
+  assert.match(source, /JSON.stringify\(editingSnapshot.tags\) !== JSON.stringify\(item.tags\)/);
+  assert.match(source, /Your draft was not saved/);
+  assert.match(source, /setEditingSnapshot\(null\)/);
+  assert.doesNotMatch(source, /window.confirm|window.prompt|onBlur=\{/);
 });
