@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { PDFParse } from "pdf-parse";
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-report-from-research-"));
 process.env.LIMURIA_DATA_DIR = dataDir;
@@ -20,6 +21,7 @@ const { researchReportFromArtifactTool, researchReportFromArtifactInputSchema,
   researchReportFromArtifactOutputSchema, buildReportFromResearchArtifact } = await import("./researchReportFromArtifactTool");
 const { getArtifactExportPlan } = await import("./artifactExport");
 const { prepareReportDocxDownload } = await import("./reportDocxDownload");
+const { prepareReportPdfDownload } = await import("./reportPdfDownload");
 const { readOfficeArtifactRoundtrip } = await import("@shared/officeArtifactRoundtrip");
 const { proposeOfficeArtifactReturn } = await import("./officeArtifactReturn");
 const { getReportTemplate, defaultArtifactReportTemplate } = await import("./reportEngine");
@@ -147,6 +149,8 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     assert.equal(response.output.editorPreference, "tiptap");
     assert.equal(response.output.docxDownloadPath,
       "/api/artifacts/" + encodeURIComponent(createdId) + "/report.docx?version=1");
+    assert.equal(response.output.pdfDownloadPath,
+      "/api/artifacts/" + encodeURIComponent(createdId) + "/report.pdf?version=1");
     const artifact = await getArtifact(ctx, createdId);
     assert.equal(artifact.kind, "report");
     assert.equal(artifact.projectId, project.id);
@@ -195,6 +199,29 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     assert.equal(returnResult.changed, false);
     assert.equal(returnResult.proposal, null);
 
+    // Actual PDF bytes, parsed with existing pdf-parse (not merely
+    // checking a ".pdf" extension or an invented completion receipt).
+    const renderedPdf = await prepareReportPdfDownload(ctx, createdId, 1);
+    assert.equal(renderedPdf.version, 1);
+    assert.equal(renderedPdf.contentHash, version.contentHash);
+    assert.match(renderedPdf.filename, /\.pdf$/);
+    assert.equal(renderedPdf.mimeType, "application/pdf");
+    assert.ok(renderedPdf.pageCount >= 1);
+    assert.equal(new TextDecoder().decode(renderedPdf.bytes.slice(0, 5)), "%PDF-");
+    const parser = new PDFParse({ data: new Uint8Array(renderedPdf.bytes) });
+    try {
+      const extracted = await parser.getText();
+      const pdfInfo = await parser.getInfo();
+      assert.equal(pdfInfo.total, renderedPdf.pageCount);
+      assert.match(extracted.text, /Outreach impact evidence report/);
+      assert.match(extracted.text, /Survey interviews recorded improved attendance/);
+      assert.match(extracted.text, /internal:study:respondent-feedback/);
+      assert.match(extracted.text, /absenteeism costs/);
+      assert.match(extracted.text, new RegExp(version.contentHash));
+    } finally {
+      await parser.destroy();
+    }
+
     const edited = reportArtifactContentSchema.parse({
       ...report,
       blocks: [...report.blocks, { id: "analyst-addendum", type: "paragraph",
@@ -216,16 +243,25 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     );
     assert.equal(old.blocks.some(block => block.id === "analyst-addendum"), false);
     await assert.rejects(prepareReportDocxDownload(ctx, createdId, 1), /revision changed/);
+    await assert.rejects(prepareReportPdfDownload(ctx, createdId, 1), /revision changed/);
     const latestWord = await prepareReportDocxDownload(ctx, createdId, 2);
     const reopenedWord = await readOfficeArtifactRoundtrip(latestWord.bytes, "docx");
     assert.equal(reopenedWord.sourceVersion, 2);
     assert.ok(reopenedWord.content.kind === "report");
     assert.ok(reopenedWord.content.blocks.some(block => block.id === "analyst-addendum"));
+    const latestPdf = await prepareReportPdfDownload(ctx, createdId, 2);
+    const latestParser = new PDFParse({ data: new Uint8Array(latestPdf.bytes) });
+    try {
+      assert.match((await latestParser.getText()).text, /Analyst follow-up/);
+    } finally {
+      await latestParser.destroy();
+    }
   });
 
   await t.test("refuses cross-Project, revoked, stale, read-only and unapproved-source report attempts", async () => {
     const count = (await listProjectArtifacts(ctx, project.id)).length;
     await assert.rejects(prepareReportDocxDownload(ctx, source.artifact.id), /requires an active saved Report Artifact/);
+    await assert.rejects(prepareReportPdfDownload(ctx, source.artifact.id), /requires an active saved Report Artifact/);
     await assert.rejects(
       () => researchReportFromArtifactTool.invoke(input, new AbortController().signal, { ...call, projectId: other.id }),
       /not active in the authorized Project/,

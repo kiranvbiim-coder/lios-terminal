@@ -62,6 +62,7 @@ import { artifactModelMaintenanceHeadSchema, artifactModelMaintenanceReviewSchem
 import { createModelChangeReport } from "./artifactModelChangeReport";
 import { proposeOfficeArtifactReturn } from "./officeArtifactReturn";
 import { prepareReportDocxDownload } from "./reportDocxDownload";
+import { prepareReportPdfDownload } from "./reportPdfDownload";
 import { proposeSpreadsheetReturn } from "./spreadsheetArtifactReturn";
 import { proposeArtifactComposition } from "./artifactComposition";
 import { createProfessionalWorkPackage } from "./professionalWorkPackage";
@@ -550,6 +551,27 @@ export function registerArtifactRoutes(app: Express): void {
       );
       // Content-Disposition uses a bounded ASCII filename so recorded user
       // titles cannot inject headers or turn the response into inline HTML.
+      const filename = file.filename
+        .replace(/[^\x20-\x7e]/g, "_")
+        .replace(/["\\]/g, "_")
+        .slice(0, 220);
+      res.setHeader("Content-Type", file.mimeType);
+      res.setHeader("Content-Disposition", 'attachment; filename="' + filename + '"');
+      res.setHeader("Content-Length", String(file.bytes.byteLength));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.status(200).end(Buffer.from(file.bytes));
+    } catch (error) { fail(res, error); }
+  });
+
+  // Authenticated native PDF of an immutable saved Report revision.
+  // Download only: editing still happens in canonical P4/Workbench.
+  app.get("/api/artifacts/:artifactId/report.pdf", async (req, res) => {
+    try {
+      const version = req.query.version ? pathVersion(req.query.version) : undefined;
+      const file = await prepareReportPdfDownload(
+        ctx(req), pathText(req.params.artifactId), version,
+      );
       const filename = file.filename
         .replace(/[^\x20-\x7e]/g, "_")
         .replace(/["\\]/g, "_")
