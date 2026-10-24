@@ -169,12 +169,12 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
     {dirty && <p role="status" className="mb-2 font-ui text-xs text-amber-200">Unsaved Artifact edits — save or reset them before expanding into Workbench.</p>}
     <ArtifactPane {...props}
       onDirtyChange={value => { setDirty(value); props.onDirtyChange?.(value); }}
-      onDisplayedVersionChange={(version, artifactId) => {
+      onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
         if (artifactId === props.artifactId) {
-          setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === requestedVersion && current.version === version
-            ? current : { artifactId, requestedVersion, version });
+          setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === loadedRequest && current.version === version
+            ? current : { artifactId, requestedVersion: loadedRequest, version });
         }
-        props.onDisplayedVersionChange?.(version, artifactId);
+        props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);
       }}
     />
   </aside>;
