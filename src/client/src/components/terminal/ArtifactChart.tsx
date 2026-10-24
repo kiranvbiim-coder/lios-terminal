@@ -4,6 +4,8 @@ import { lazy, Suspense, useId, useMemo, useRef, useState } from "react";
 import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import { prepareArtifactChart, selectArtifactChartViewport } from "@/lib/artifactChartProjection";
+import { chartRecordedContext, chartSourceCaveat } from "@/lib/artifactChartContext";
+import ArtifactChartRecordedTable from "./ArtifactChartRecordedTable";
 import { ExpertViewDisclosure } from "./ArtifactExpertView";
 const EChartsArtifactPlot=lazy(()=>import("./EChartsArtifactPlot"));
 
@@ -36,6 +38,7 @@ export default function ArtifactChart({ content, ...mode }: {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const prepared = useMemo(() => prepareArtifactChart({ ...content, chartType }), [content, chartType]);
+  const recordedContext = useMemo(() => chartRecordedContext(content), [content]);
   const viewport = useMemo(() => prepared.status === "ready"
     ? selectArtifactChartViewport(prepared, { offset, limit: WINDOW_SIZE }) : null, [prepared, offset]);
   const visibleSeries = useMemo(() => viewport?.series.filter(series => !hidden.has(series.index)) ?? [], [viewport, hidden]);
@@ -78,6 +81,15 @@ export default function ArtifactChart({ content, ...mode }: {
       {chartType !== content.chartType && <><button type="button" disabled={saving} onClick={() => { setChartType(content.chartType); setSaveError(null); setSaveMessage(null); }} className={CONTROL}>Reset chart type</button><span className="font-ui text-[13px] text-amber-200">Unsaved preview · recorded type: {content.chartType}</span></>}
     </div>}
     <p className="font-ui text-[13px] text-muted-foreground">Exact recorded values · one linear Y axis, fixed across series and windows · gaps are not connected. Series visibility and point inspection are local view controls, not Artifact edits.</p>
+    <section data-testid="artifact-chart-recorded-context" aria-label="Recorded chart units, period and source context" className="space-y-1 rounded border border-border/50 p-3 font-ui text-[12px]">
+      <p>X: {recordedContext.xLabel}{recordedContext.xUnit ? ` · Unit: ${recordedContext.xUnit}` : " · Unit: unknown"} · Y: {recordedContext.yLabel}{recordedContext.yUnit ? ` · Unit: ${recordedContext.yUnit}` : " · Unit: unknown"}</p>
+      <p>Period: {recordedContext.period ?? "Not recorded"}. Source refs: {recordedContext.evidenceRefs.length ? `${recordedContext.evidenceRefs.length} recorded` : "Not recorded"}.</p>
+      <p className="text-amber-200">{chartSourceCaveat(recordedContext)}</p>
+      {!!recordedContext.evidenceRefs.length && <details className="pt-1">
+        <summary className="cursor-pointer">Show recorded source references (not verified)</summary>
+        <ul className="max-h-40 list-disc overflow-auto pl-5">{recordedContext.evidenceRefs.map(sourceRef => <li key={sourceRef} className="break-all">{sourceRef}</li>)}</ul>
+      </details>}
+    </section>
     {content.rendererPreference !== "recharts" && content.rendererPreference !== "echarts" && <p className="font-ui text-[13px] text-amber-200">This chart was saved with a different drawing preference ({content.rendererPreference}). It is shown with the standard chart view; saving the chart type keeps that preference.</p>}
     {Object.keys(content.options).length > 0 && <ExpertViewDisclosure summary="Expert view" hint="Recorded chart settings not used by this view"><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-terminal text-[12px]">{JSON.stringify(content.options, null, 2)}</pre></ExpertViewDisclosure>}
     {saveError && <p role="alert" data-testid="artifact-chart-save-error" className="text-sm text-red-200">{saveError}</p>}
@@ -120,6 +132,7 @@ export default function ArtifactChart({ content, ...mode }: {
             </ComposedChart>
           </ResponsiveContainer></>}
         </div>}
+        <ArtifactChartRecordedTable projection={prepared} content={content}/>
         <section aria-label="Exact chart point inspector" data-testid="artifact-chart-inspector" className="space-y-3 rounded border border-border/50 p-3">
           <h3 className="font-ui text-[14px] font-semibold">Exact recorded point</h3>
           <div className="flex flex-wrap items-end gap-3">
