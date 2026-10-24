@@ -1,0 +1,28 @@
+# Optional developer-only evaluation. No paid model, network, secrets, or user data.
+# Run with an approved, pinned Promptfoo CLI (Node >=22.22), from src/.
+description: "LiOS governed routing — offline real planner golden regression"
+providers:
+  - file://evals/promptfoo/golden-provider.cjs
+prompts:
+  - "{{caseId}}"
+tests:
+  - vars: { caseId: R01 }
+    assert:
+      - type: contains
+        value: '"passed":true'
+  - vars: { caseId: R02 }
+    assert:
+      - type: contains
+        value: '"passed":true'
+  - vars: { caseId: R03 }
+    assert:
+      - type: contains
+        value: '"passed":true'
+  - vars: { caseId: R09 }
+    assert:
+      - type: contains
+        value: '"passed":true'
+  - vars: { caseId: R10 }
+    assert:
+      - type: contains
+        value: '"passed":true'
