@@ -288,7 +288,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     </div>
     {selectedInBounds && selectedCell ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <button onClick={() => void persist(gridToArtifactSheet(draftContent,grid))} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save spreadsheet revision</button>
+      <button disabled={!isDirty} onClick={() => { if (isDirty) void persist(gridToArtifactSheet(draftContent,grid)); }} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Save spreadsheet revision</button>
       <div className="ml-auto flex gap-1"><input aria-label="Proposed cell reference" aria-invalid={!reviewRef} value={ref} onChange={e => setRef(e.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><input aria-label="Proposed cell value" value={value} onChange={e => setValue(e.target.value)} placeholder="proposed raw" className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><button disabled={!reviewRef} onClick={() => void propose()} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Create review diff</button></div>
     </div>
     </fieldset>
