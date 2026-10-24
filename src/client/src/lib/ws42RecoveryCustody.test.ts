@@ -46,6 +46,8 @@ test("WS-42 native generation is required for explicit Discard and save cleanup;
   assert.match(client, /checkpointId: candidate\.checkpointId/);
   assert.match(client, /checkpointId: localGeneration/);
   assert.match(client, /written\.checkpointId/);
+  assert.match(client, /expectedCheckpointId: ownedCheckpointIds\.get\(nativeDraftCheckpointScope\(context\)\)/);
+  assert.match(store, /current\.checkpointId !== input\.expectedCheckpointId/);
   assert.match(client, /if \(!removed\) \{/);
   assert.match(client, /status: "error", candidate: null/);
   assert.match(client, /Retry protected recovery to inspect the current state/);
