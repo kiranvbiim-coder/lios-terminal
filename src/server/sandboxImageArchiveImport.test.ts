@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +14,10 @@ function fixture(t: TestContext, content: Buffer): string {
   const archive = path.join(root, "image.tar.gz");
   fs.writeFileSync(archive, gzipSync(content));
   return archive;
+}
+
+function archiveSha256(archive: string): string {
+  return createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
 }
 
 test("offline image import drains multi-megabyte engine stdout before its stdin load", { timeout: 12_000 }, async t => {
@@ -29,7 +34,7 @@ test("offline image import drains multi-megabyte engine stdout before its stdin 
   `;
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
-  await streamSandboxImageArchive(archive, child, 9_000);
+  await streamSandboxImageArchive(archive, child, archiveSha256(archive), 9_000);
   assert.equal(child.exitCode, 0);
   assert.equal(child.stdout.readableLength, 0, "untrusted engine output is never retained");
 });
@@ -40,7 +45,7 @@ test("malformed packaged gzip input fails closed and child is extinct before ret
   const script = 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));';
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
-  await assert.rejects(streamSandboxImageArchive(archive, child, 9_000));
+  await assert.rejects(streamSandboxImageArchive(archive, child, archiveSha256(archive), 9_000));
   assert.ok(child.exitCode !== null || child.signalCode !== null,
     "engine process must be joined before repair reports failure");
 });
@@ -50,7 +55,7 @@ test("child exit failure cannot be recorded as a successful image import", { tim
   const script = 'process.stdin.resume(); process.stdin.on("end", () => { process.stderr.write("load denied"); process.exit(23); });';
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
-  await assert.rejects(streamSandboxImageArchive(archive, child, 9_000), /load denied|load failed/);
+  await assert.rejects(streamSandboxImageArchive(archive, child, archiveSha256(archive), 9_000), /load denied|load failed/);
   assert.equal(child.exitCode, 23);
 });
 
@@ -59,6 +64,21 @@ test("hung image import reaches its deadline and the child is joined", { timeout
   const script = 'process.stdin.resume(); process.stdin.on("end", () => setInterval(() => {}, 1000));';
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
-  await assert.rejects(streamSandboxImageArchive(archive, child, 250), /allowed deadline/);
+  await assert.rejects(streamSandboxImageArchive(archive, child, archiveSha256(archive), 250), /allowed deadline/);
   assert.ok(child.exitCode !== null || child.signalCode !== null, "timed-out child must be extinct");
+});
+
+test("a valid gzip archive replaced after signature verification cannot be accepted", { timeout: 12_000 }, async t => {
+  const archive = fixture(t, Buffer.from("exact-released-image"));
+  const signedSha256 = archiveSha256(archive);
+  // Simulate a path being modified after verifiedRelease() completed its hash.
+  fs.writeFileSync(archive, gzipSync(Buffer.from("different-but-valid-gzip-image")));
+  const script = 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));';
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
+  await assert.rejects(
+    streamSandboxImageArchive(archive, child, signedSha256, 9_000),
+    /archive bytes differ from the signed release digest/,
+  );
+  assert.equal(child.exitCode, 0, "the fake engine succeeded, but LiOS must reject the wrong bytes");
 });
