@@ -218,6 +218,53 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
     assert.equal(finished?.events?.filter((event) => event.kind === "step_finished" && event.status === "completed").length, 1);
   });
 
+
+  await t.test("a refused Project evidence tool cannot produce a phantom Artifact card from an AI success claim", async () => {
+    const beforeCount = (await listProjectArtifacts(tenant, project.id)).length;
+    const requestId = crypto.randomUUID();
+    const falseSuccess = "ALL_ARTIFACTS_SAVED_UNVERIFIED";
+    const replies = [
+      JSON.stringify({ steps: [{
+        id: "restricted-evidence", toolId: "lios.project.evidence_artifact",
+        label: "Attempt restricted Project evidence digest",
+        input: { query: "office accessibility", title: "Must not appear as an Artifact" }, dependsOn: [],
+      }] }),
+      JSON.stringify({ decision: "complete", answer: falseSuccess }),
+    ];
+    await startProjectChatRun(conversationUser, chat.id, {
+      requestId, agent: true, executionMode: "ai_assisted", sourceScope: "web",
+      message: "Attempt a Project evidence digest with Web-only data scope.",
+    }, {
+      aiCompletion: async () => {
+        const text = replies.shift();
+        assert.ok(text, "The scripted model may plan and review only once.");
+        return {
+          provider: "openai", model: "gpt-4o", text,
+          attribution: createAttribution({ provider: "openai", model: "gpt-4o", prompt: "synthetic-failure", output: text }),
+        };
+      },
+    });
+    const emitted = await eventsOf(requestId, user.id);
+    assert.equal(emitted.some((event) => event.type === "artifact"), false,
+      "a refused registry tool must never publish a saved P4 Artifact reference");
+    const tool = emitted.find((event) => event.type === "tool_result");
+    assert.ok(tool && tool.type === "tool_result");
+    assert.match(tool.summary, /^failed:/i);
+    assert.equal(tool.sourceRefs.some((ref) => ref.startsWith("artifact:")), false);
+    assert.equal(JSON.stringify(emitted).includes(falseSuccess), false,
+      "an AI completion claim cannot fabricate a result after tool refusal");
+    const receipt = emitted.find((event) => event.type === "receipt");
+    assert.ok(receipt && receipt.type === "receipt");
+    assert.equal(receipt.receipt.aiDerived, false, "server records a refused tool, not an accepted AI result");
+    assert.equal((await listProjectArtifacts(tenant, project.id)).length, beforeCount,
+      "no P4 side effect occurred in the refused path");
+    const messages = await listProjectChatMessages(tenant, chat.id);
+    const saved = messages.find((item) => item.role === "assistant" && item.metadata.runtimeRequestId === requestId);
+    assert.ok(saved);
+    assert.deepEqual(savedMessageArtifactRefs(saved.metadata), [],
+      "a failed plan cannot become a saved Artifact card on conversation reload");
+  });
+
   await t.test("without the flag a run is an ordinary version-1 record", async () => {
     const requestId = crypto.randomUUID();
     await startProjectChatRun(conversationUser, chat.id, { requestId, message: "technical analysis AAPL", executionMode: "deterministic_first", sourceScope: "my_data" });
