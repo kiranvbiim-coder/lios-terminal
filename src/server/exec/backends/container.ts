@@ -111,6 +111,17 @@ function validateConfig(config: ContainerExecutionBackendConfig): void {
   if (config.engine !== "docker" && config.engine !== "podman") {
     throw new Error("Container execution engine must be docker or podman.");
   }
+  // Enforce the engine/endpoint pairing at the canonical GM backend too,
+  // not only at the packaged desktop bootstrap. Otherwise a manually
+  // configured strict profile can appear valid until its first Python call.
+  if (config.engine === "podman" && WINDOWS_NPIPE.test(config.engineTarget)) {
+    throw new Error("Podman execution cannot use a Windows Docker named-pipe endpoint.");
+  }
+  const localSocketPath = WINDOWS_NPIPE.test(config.engineTarget)
+    ? null : decodeURIComponent(new URL(config.engineTarget).pathname);
+  if (config.engine === "docker" && localSocketPath?.endsWith("/podman/podman.sock")) {
+    throw new Error("A local Podman socket must be paired with the Podman execution engine.");
+  }
   if (!IMAGE_DIGEST.test(config.image)) {
     throw new Error("Container execution image must use an immutable sha256 digest.");
   }
