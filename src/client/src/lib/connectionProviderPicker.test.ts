@@ -53,6 +53,7 @@ test("Connection Center uses existing accessible Radix dialog and separate provi
   assert.match(code, /aria-label="Search providers"/);
   assert.match(code, /value=\{providerPickerQuery\}/);
   assert.match(code, /data-testid="connection-provider-chooser"/);
+  assert.match(code, /setEditingConnection\(savedConnections\.find\(connection => connection\.connectorId === c\.id\) \?\? null\)/);
   assert.match(code, /disabled=\{!connectionPickerStatus\(c, configuredProviderIds\.has\(c\.id\)\)\.canSelect\}/);
   assert.match(code, /Saved configuration · review verification separately|connectionPickerStatus\(c, configuredProviderIds\.has\(c\.id\)\)\.label/);
   assert.match(code, /pickerProviders\.length === 0/);
