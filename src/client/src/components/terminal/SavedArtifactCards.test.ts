@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SavedArtifactCardList, describeSavedArtifactCard, savedArtifactMatchesScope } from "./SavedArtifactCards";
+import { SavedArtifactCardList, describeSavedArtifactCard, exactSavedArtifactDetail, savedArtifactMatchesScope } from "./SavedArtifactCards";
+import type { ArtifactDetail } from "@/lib/useArtifacts";
 
 const id = "artifact:22222222-2222-4222-8222-222222222222";
 
@@ -96,11 +97,34 @@ test("WS-34 every task preview has an explicit exact-version and scope check bef
   // Source-contract assertions complement, rather than replace, signed-in
   // tenant/Project HTTP negative tests.
   const source = readFileSync(new URL("./SavedArtifactCards.tsx", import.meta.url), "utf8");
-  assert.match(source, /query\.data\.artifact\.id === ref\.id/);
-  assert.match(source, /query\.data\.version\.artifactId === ref\.id/);
-  assert.match(source, /query\.data\.version\.version === ref\.version/);
-  assert.match(source, /savedArtifactMatchesScope\(query\.data\.artifact, projectId, chatId\)/);
+  assert.match(source, /candidate\.artifact\.id !== ref\.id/);
+  assert.match(source, /candidate\.version\.artifactId !== ref\.id/);
+  assert.match(source, /candidate\.version\.version !== ref\.version/);
+  assert.match(source, /savedArtifactMatchesScope\(candidate\.artifact, projectId, chatId\)/);
+  assert.match(source, /query\?\.isFetchedAfterMount && !query\.isFetching && !query\.isError/);
+  assert.match(source, /refetchOnMount: "always"/);
   assert.match(source, /const preview = detail \? recordedArtifactPreview\(detail\.version\.content\) : null/);
   assert.match(source, /\?version=\$\{ref\.version\}/);
   assert.doesNotMatch(source, /recordedArtifactPreview\(ref|recordedArtifactPreview\(fromList/);
+});
+
+test("WS-34 exact preview custody rejects foreign Project, Quick Chat, wrong version or data kind", () => {
+  const ref = { id, version: 2, title: "Saved research", kind: "research" };
+  const detail = {
+    artifact: { id, projectId: 7, owningChatId: null, kind: "research", title: "Server title", headVersion: 5 },
+    version: { artifactId: id, version: 2, content: { kind: "research", question: "Stored question", blocks: [], claims: [], evidence: [] } },
+  } as unknown as ArtifactDetail;
+  assert.equal(exactSavedArtifactDetail(ref, detail, 7, null), detail);
+  assert.equal(exactSavedArtifactDetail(ref, detail, 8, null), null);
+  assert.equal(exactSavedArtifactDetail(ref, detail, null, 7), null);
+  assert.equal(exactSavedArtifactDetail(ref, { ...detail, version: { ...detail.version, version: 5 } }, 7, null), null);
+  assert.equal(exactSavedArtifactDetail(ref, { ...detail, version: { ...detail.version, artifactId: "artifact:foreign" } }, 7, null), null);
+  assert.equal(exactSavedArtifactDetail(ref, { ...detail, artifact: { ...detail.artifact, id: "artifact:foreign" } }, 7, null), null);
+  assert.equal(exactSavedArtifactDetail(ref, { ...detail, artifact: { ...detail.artifact, kind: "report" } }, 7, null), null);
+  assert.equal(exactSavedArtifactDetail(ref, undefined, 7, null), null);
+
+  const quick = { ...detail, artifact: { ...detail.artifact, projectId: null, owningChatId: 42 } };
+  assert.equal(exactSavedArtifactDetail(ref, quick, null, 42), quick);
+  assert.equal(exactSavedArtifactDetail(ref, quick, null, 43), null);
+  assert.equal(exactSavedArtifactDetail(ref, quick, null, null), null, "Temporary may not open saved-work content");
 });
