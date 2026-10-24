@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const search = read("client/src/components/terminal/WorkSearchDialog.tsx");
 const workflow = read("client/src/components/terminal/SaveWorkflowDialog.tsx");
 const dialog = read("client/src/components/ui/dialog.tsx");
+const shell = read("client/src/components/terminal/ProjectExperienceShell.tsx");
 const acceptance = read("script/validate_desktop_accessibility.ts");
 
 test("WS-58 search exposes combobox to listbox active-option contract", () => {
@@ -30,7 +31,10 @@ test("WS-58 keyboard navigation preserves actual result, stale-query and no-resu
   assert.match(search, /event\.key === "Enter" && results\[selected\]/);
   assert.match(search, /setQuery\(event\.target\.value\);\s*setResults\(\[\]\);\s*setSelected\(0\);/);
   assert.match(search, /controller\.abort\(\)/);
-  assert.match(search, /onCloseAutoFocus=\{\(event\) => \{ event\.preventDefault\(\); returnFocus\.current\?\.focus\(\); \}\}/);
+  assert.match(shell, /workSearchOpenerRef\.current = document\.activeElement/);
+  assert.match(shell, /returnFocusTo=\{workSearchOpenerRef\.current\}/);
+  assert.match(search, /onCloseAutoFocus=\{\(event\) => \{ if \(returnFocusTo\?\.isConnected\)/);
+  assert.doesNotMatch(search, /returnFocus\.current = document\.activeElement/);
   assert.match(search, /onOpenAutoFocus=\{\(event\) => \{ event\.preventDefault\(\); inputRef\.current\?\.focus\(\); \}\}/);
 });
 
