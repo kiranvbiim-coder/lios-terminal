@@ -28,7 +28,7 @@ test("offline image import drains multi-megabyte engine stdout before its stdin 
     process.stdin.on("end", () => process.exit(size === ${input.length} ? 0 : 9));
   `;
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
-  t.after(() => { if (child.exitCode === null) child.kill("SIGKILL"); });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   await streamSandboxImageArchive(archive, child, 9_000);
   assert.equal(child.exitCode, 0);
   assert.equal(child.stdout.readableLength, 0, "untrusted engine output is never retained");
@@ -39,16 +39,17 @@ test("malformed packaged gzip input fails closed and child is extinct before ret
   fs.writeFileSync(archive, "this-is-not-a-gzip");
   const script = 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));';
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
-  t.after(() => { if (child.exitCode === null) child.kill("SIGKILL"); });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   await assert.rejects(streamSandboxImageArchive(archive, child, 9_000));
-  assert.notEqual(child.exitCode, null, "engine process must be joined before repair reports failure");
+  assert.ok(child.exitCode !== null || child.signalCode !== null,
+    "engine process must be joined before repair reports failure");
 });
 
 test("child exit failure cannot be recorded as a successful image import", { timeout: 12_000 }, async t => {
   const archive = fixture(t, Buffer.from("valid"));
   const script = 'process.stdin.resume(); process.stdin.on("end", () => { process.stderr.write("load denied"); process.exit(23); });';
   const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
-  t.after(() => { if (child.exitCode === null) child.kill("SIGKILL"); });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   await assert.rejects(streamSandboxImageArchive(archive, child, 9_000), /load denied|load failed/);
   assert.equal(child.exitCode, 23);
 });
