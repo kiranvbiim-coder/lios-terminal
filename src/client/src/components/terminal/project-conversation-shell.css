@@ -96,7 +96,8 @@
   /* Replace the later fixed 348px shell width with a bounded flexible split. */
   .terminal-root .lios-artifact-sidecar,
   .lios-artifact-sidecar {
-    width: clamp(20rem, 36%, 28rem) !important;
+    /* WS-36 may set a measured, keyboard-resizable width. Keep the responsive fallback. */
+    width: var(--lios-sidecar-width, clamp(20rem, 36%, 28rem)) !important;
     max-width: 45%;
     min-width: 0;
   }
