@@ -53,6 +53,9 @@ test("original server version write and proposal acceptance both protect valuati
   assert.match(source, /if \(input\.action !== "undo"\) assertValuationRevisionIsRecorded\(baseContent, content\)/);
   assert.match(source, /assertValuationRevisionIsRecorded\(baseContent, proposedContent\)/);
   assert.match(source, /const nativeWriteAuthorized/);
+  for (const field of ["executionReceiptIds", "assumptionRefs", "sourceRefs", "trustManifest", "dependencyRefs", "refreshSpec"]) {
+    assert.ok(source.includes(`same(input.${field}, base.${field})`), `recorded valuation ${field} must not be replaced by user JSON`);
+  }
 });
 
 test("readable valuation never saves arbitrary JSON or labels proposed WACC as recalculated", () => {
