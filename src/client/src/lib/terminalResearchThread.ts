@@ -36,18 +36,22 @@ function isEvent(value: unknown): value is ResearchThreadEvent {
     typeof item.detail === "string" && typeof item.createdAt === "number";
 }
 
+function parseResearchThread(raw: string | null): ResearchThreadEvent[] {
+  const parsed: unknown = JSON.parse(raw || "[]");
+  return Array.isArray(parsed) ? parsed.filter(isEvent).sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_EVENTS) : [];
+}
+
 export function loadResearchThread(): ResearchThreadEvent[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter(isEvent).sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_EVENTS) : [];
+    return parseResearchThread(localStorage.getItem(STORAGE_KEY));
   } catch {
     return [];
   }
 }
 
 function save(events: readonly ResearchThreadEvent[]): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") throw new Error("Device-local research history storage is unavailable.");
   const normalized = [...events].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_EVENTS);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: normalized }));
@@ -57,10 +61,23 @@ export function subscribeResearchThread(listener: (events: ResearchThreadEvent[]
   if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
     if (!(event instanceof CustomEvent) || !Array.isArray(event.detail)) return;
-    listener(event.detail.filter(isEvent));
+    listener([...event.detail].filter(isEvent).slice(0, MAX_EVENTS));
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
+    try {
+      listener(parseResearchThread(event.key === null ? localStorage.getItem(STORAGE_KEY) : event.newValue));
+    } catch {
+      // A malformed remote payload cannot silently erase an intact visible
+      // research history; await a valid storage event or explicit reload.
+    }
   };
   window.addEventListener(EVENT_NAME, handler);
-  return () => window.removeEventListener(EVENT_NAME, handler);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(EVENT_NAME, handler);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 export function appendResearchThreadEvent(input: {
