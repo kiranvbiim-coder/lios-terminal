@@ -8,7 +8,7 @@ import {
   listProjectChatMessages,
 } from "./projectChatStore";
 import { getProject } from "./projectStore";
-import { getArtifact, persistConversationDraft } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { listProjectResources } from "./projectResourceStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { requireMasterAiOn } from "./masterAiGate";
@@ -651,6 +651,11 @@ async function runProjectChat(
       }
       const persistedArtifacts: Array<{ id: string; version: number; title: string; kind: string }> = [];
       const pendingArtifacts: Extract<ConversationRuntimeEvent, { type: "artifact" }>[] = [];
+      // The built-in agent evidence tool already commits its own canonical P4
+      // Artifact. Capture its server-issued reference for Chat handoff; NEVER
+      // feed it back into persistConversationDraft as a second P4 write.
+      const evidenceStepIds = new Set<string>();
+      const committedAgentArtifacts: Array<{ id: string; version: number }> = [];
       try {
         const result = await withConversationExecutionScope(request.requestId, () => executeConversationRuntime({
           tenant: context,
@@ -757,6 +762,22 @@ async function runProjectChat(
           preferredModel: aiSetup?.aiModelId,
           emit: async (runtimeEvent) => {
             const event = runtimeEvent;
+            if (agent && event.type === "plan") {
+              for (const step of event.plan.steps) {
+                if (step.componentId === "lios.project.evidence_artifact") evidenceStepIds.add(step.id);
+              }
+            }
+            if (agent && event.type === "tool_result" && event.deterministic && evidenceStepIds.has(event.stepId)) {
+              // Tool results are emitted by the governed server, not directly
+              // by the model. Only this known P4-writing descriptor is eligible.
+              for (const ref of event.sourceRefs) {
+                const match = /^artifact:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@v([1-9][0-9]*)$/.exec(ref);
+                if (match && committedAgentArtifacts.length < 20) {
+                  const version = Number(match[2]);
+                  if (Number.isSafeInteger(version)) committedAgentArtifacts.push({ id: `artifact:${match[1]}`, version });
+                }
+              }
+            }
             if (event.type === "artifact") {
               pendingArtifacts.push(event);
               return;
@@ -801,6 +822,39 @@ async function runProjectChat(
             const persistedArtifact = { id: savedArtifact.artifact.id, version: savedArtifact.version.version };
             persistedArtifacts.push(retainedArtifactMessageRef(savedArtifact));
             const retainedEvent = { ...event, persistedArtifact };
+            await ledger.recordRuntimeEvent(retainedEvent);
+            await transcript.recordEvent(retainedEvent);
+            emit(retainedEvent);
+          }
+          const seenAgentArtifacts = new Set<string>();
+          for (const ref of committedAgentArtifacts) {
+            const identity = `${ref.id}@v${ref.version}`;
+            if (seenAgentArtifacts.has(identity)) continue;
+            seenAgentArtifacts.add(identity);
+            const stored = await getArtifact(context, ref.id);
+            if (chat.projectId === null || stored.projectId !== chat.projectId || stored.origin !== "conversation") {
+              throw new Error("Governed agent Artifact reference is not owned by this Project conversation.");
+            }
+            const version = await getArtifactVersion(context, ref.id, ref.version);
+            const persistedArtifact = { id: stored.id, version: version.version };
+            persistedArtifacts.push(retainedArtifactMessageRef({ artifact: stored, version }));
+            // This event is a pointer for the existing Chat/Workbench viewer;
+            // content and revisions remain solely in access-checked P4.
+            const retainedEvent: Extract<ConversationRuntimeEvent, { type: "artifact" }> = {
+              type: "artifact", requestId: request.requestId, at: new Date().toISOString(),
+              artifact: {
+                schemaVersion: "1",
+                artifactId: stored.id.slice("artifact:".length),
+                artifactType: stored.kind,
+                title: stored.title,
+                projectId: stored.projectId,
+                sourceRefs: version.sourceRefs ?? [],
+                executionReceiptIds: version.executionReceiptIds ?? [],
+                data: {},
+                persistence: "project_candidate",
+              },
+              persistedArtifact,
+            };
             await ledger.recordRuntimeEvent(retainedEvent);
             await transcript.recordEvent(retainedEvent);
             emit(retainedEvent);
