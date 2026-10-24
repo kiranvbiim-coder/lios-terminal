@@ -153,8 +153,12 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
         if (written.protected === true && typeof written.checkpointId === "string") {
           ownedCheckpointIds.set(nativeDraftCheckpointScope(context), written.checkpointId);
         }
-      }).catch(() => {
-        if (lease.active && scheduledEpoch === epoch(identity)) setState(current => current.key === key ? { ...current, status: "error", notice: "Protected draft checkpoint failed. Save your Artifact revision to protect the work." } : current);
+      }).catch(cause => {
+        const otherEditor = cause instanceof Error && /checkpoint was changed by another editor/i.test(cause.message);
+        const notice = otherEditor
+          ? "Another window has a newer protected draft for this Artifact. Your local edits remain unsaved. Save a canonical revision or reopen protected recovery to review the other checkpoint."
+          : "Protected draft checkpoint failed. Save your Artifact revision to protect the work.";
+        if (lease.active && scheduledEpoch === epoch(identity)) setState(current => current.key === key ? { ...current, status: "error", notice } : current);
       });
     }, 250);
     return () => clearTimeout(timer);
