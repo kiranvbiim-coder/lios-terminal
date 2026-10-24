@@ -47,7 +47,7 @@ function queueMutation<T>(key: string, action: () => Promise<T>): Promise<T> {
   void current.then(remove, remove);
   return current;
 }
-export async function clearNativeArtifactDraft(context: NativeArtifactDraftContext, lifetime: NativeDraftLifetime, expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash">): Promise<boolean> {
+export async function clearNativeArtifactDraft(context: NativeArtifactDraftContext, lifetime: NativeDraftLifetime, expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> & { checkpointId?: string }): Promise<boolean> {
   const native = bridge();
   if (!native || !lifetime.active) return false;
   const key = nativeDraftRecoveryKey(context);
@@ -144,7 +144,7 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
     if (!context) return;
     const lease = lifetime.current;
     try {
-      const expected = candidate ? { baseVersion: candidate.baseVersion, contentHash: candidate.contentHash } : undefined;
+      const expected = candidate ? { baseVersion: candidate.baseVersion, contentHash: candidate.contentHash, checkpointId: candidate.checkpointId } : undefined;
       const removed = await clearNativeArtifactDraft(context, lease, expected);
       if (!lease.active) return;
       if (!removed) {
