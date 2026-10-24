@@ -1249,12 +1249,13 @@ async function invokeGovernedAi(
       if (invokeAI !== invokeAIRoutedCompletion) await content.beforeTransmission();
     }
     const policy = input.request.transmissionPolicy;
+    const boundedResearch = plan.intent.parameters.workflow === "ws26_natural_research";
     const answered = await invokeAI({
       ...request,
       maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
-      maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
+      maxAttempts: privateReason || boundedResearch ? 1 : policy.maxProviderAttempts ?? 2,
       ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
-      fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
+      fallback: privateReason || boundedResearch || policy.maxProviderAttempts === 1 ? "none" : "configured",
       ...(content.containsPrivateResearch ? { beforeTransmission: content.beforeTransmission } : {}),
     });
     if (answered.fallback?.attempts.length) {
