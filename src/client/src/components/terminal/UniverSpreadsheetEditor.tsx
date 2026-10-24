@@ -38,6 +38,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
   const baselineContentKey = useMemo(() => spreadsheetContentComparisonKey(baseline.content), [baseline.content]);
   const dirtyCallback = useRef(onDirtyChange);
   const dirty = useRef(false);
+  const [dirtyShown, setDirtyShown] = useState(false);
   const externallyDisabled = useRef(disabled);
   dirtyCallback.current = onDirtyChange;
   const [ready, setReady] = useState(false);
@@ -51,7 +52,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
   const [restoredDraft, setRestoredDraft] = useState<SpreadsheetContent | null>(null);
   const recovery = useNativeArtifactDraftRecovery(baseline.recoveryContext ?? null, checkpoint, dirty.current, checkpointSerial, recovered => {
     setRestoredDraft(recovered); setCheckpoint(recovered);
-    dirty.current = true; dirtyCallback.current?.(true);
+    dirty.current = true; setDirtyShown(true); dirtyCallback.current?.(true);
     setCheckpointSerial(value => value + 1);
   });
   externallyDisabled.current = disabled || conflict || recovery.blocked;
@@ -90,6 +91,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
     setError(null);
     setSelected(null);
     dirty.current = restoredDraft !== null && spreadsheetDraftHasChanges(content, restoredDraft);
+    setDirtyShown(dirty.current);
     dirtyCallback.current?.(dirty.current);
     const listeners: IDisposable[] = [];
     const { univer, univerAPI } = createUniver({
@@ -122,13 +124,14 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
         try {
           next = fromUniverWorkbookSnapshot(current.save(), content, current.getActiveSheet().getSheetId());
         } catch (cause) {
-          dirty.current = true; dirtyCallback.current?.(true);
+          dirty.current = true; setDirtyShown(true); dirtyCallback.current?.(true);
           setError(cause instanceof Error ? cause.message : "The current spreadsheet draft could not be inspected.");
           return;
         }
         const nextDirty = spreadsheetDraftHasChanges(content, next);
         if (nextDirty !== dirty.current) {
           dirty.current = nextDirty;
+          setDirtyShown(nextDirty);
           dirtyCallback.current?.(nextDirty);
         }
         if (nextDirty) {
@@ -156,7 +159,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
 
   const save = async () => {
     const current = workbook.current;
-    if (!current || saving || disabled || conflict || recovery.blocked) return;
+    if (!current || !dirty.current || saving || disabled || conflict || recovery.blocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -205,7 +208,7 @@ export default function UniverSpreadsheetEditor({ content, onSave, onDraft, onDi
     {selected && <SpreadsheetCellSourceInspect sheetName={selected.sheetName} cellRef={selected.ref} cell={selected.cell}/>}
     {error && <p role="alert" className="mt-2 text-[13px] text-red-300">{error}</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <button disabled={!ready || saving || disabled || conflict || recovery.blocked} onClick={() => void save()} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-50">{saving ? "Saving revision…" : "Save spreadsheet revision"}</button>
+      <button disabled={!ready || !dirtyShown || saving || disabled || conflict || recovery.blocked} onClick={() => void save()} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-50">{saving ? "Saving revision…" : "Save spreadsheet revision"}</button>
       <div className="ml-auto flex gap-1">
         <input disabled={!ready || saving || disabled || conflict || recovery.blocked} aria-label="Proposed cell reference" aria-invalid={!reviewRefValid} aria-describedby="univer-proposal-ref-hint" value={cellRef} onChange={(event) => setCellRef(event.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]" />
         <input disabled={!ready || saving || disabled || conflict || recovery.blocked} aria-label="Proposed cell value" value={proposedRaw} onChange={(event) => setProposedRaw(event.target.value)} className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]" />
