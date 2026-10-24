@@ -126,17 +126,16 @@ import type {
   UniversalDataPlan,
 } from "@shared/trustContracts";
 import { universalDataPlanSchema } from "@shared/trustContracts";
+import { ambiguousMentionTokens, normalizedMentionToken, userMentionTokens } from "@shared/mentionContext";
 import {
   assertNotAborted,
   eventBase,
   hashPayload,
   isAbortLike,
   nowIso,
-  normalizedMentionToken,
   sourceScopeAllowsExternalData,
   sourceScopeAllowsFiles,
   sourceScopeAllowsProjectData,
-  userMentionTokens,
 } from "./conversationRuntimeCore";
 import {
   GovernedToolApprovalRequiredError,
@@ -176,7 +175,9 @@ import { deriveAgentToolIdempotencyKey } from "./exec/agent-idempotency";
 import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 
 import { conversationRuns } from "./conversationRunRegistry";
-import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool, preflightGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { listSourceConnections } from "./sourceConnectionService";
+import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
 import { codingConversationToolDescriptors } from "./acp/coding-tools";
 import { listInstalledSkillAdapters } from "./skillRuntime";
@@ -750,6 +751,8 @@ function registerBuiltinConversationTools(): void {
           projectId,
         },
         signal,
+        undefined,
+        call.recordExternalMcpObservation,
       );
     },
   });
@@ -1185,6 +1188,7 @@ export function includedResourceRefs(
 ): ProjectRuntimeResource[] {
   if (sourceScope === "web") return [];
   const mentions = userMentionTokens(message);
+  const ambiguous = new Set(ambiguousMentionTokens(resources, message));
   const selectedAttachments = new Set(attachments.map((attachment) => attachment.sourceRef));
   return resources.filter((resource) => {
     if (resource.contextMode === "excluded") return false;
@@ -1192,7 +1196,8 @@ export function includedResourceRefs(
     if (sourceScope === "files") return explicitlyAttached;
     if (explicitlyAttached) return true;
     if (resource.contextMode === "project") return true;
-    return mentions.has(normalizedMentionToken(resource.label));
+    const token = normalizedMentionToken(resource.label);
+    return !ambiguous.has(token) && mentions.has(token);
   }).slice(0, 30);
 }
 
@@ -4499,6 +4504,9 @@ async function executeAgentLoop(
     });
   }
   let assertReviewResearchCurrent: (() => Promise<void>) | undefined;
+  // Never journal, checkpoint or expose raw external MCP observations. They
+  // exist only in the current run and are re-authorized before AI release.
+  const mcpEvidenceByStep = new Map<string, McpAgentEvidenceCapture>();
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
@@ -4580,9 +4588,58 @@ async function executeAgentLoop(
     },
     resolveReviewObservations: async ({ completedSteps, signal: reviewSignal, reviewedSourceRefs }) => {
       assertReviewResearchCurrent = undefined;
-      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
-      assertReviewResearchCurrent = observation?.assertCurrent;
-      return observation ? { text: observation.text, sourceRefs: observation.sourceRefs } : null;
+      const research = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
+      let mcp: ReturnType<typeof renderMcpAgentReviewEvidence> = null;
+      let assertMcpCurrent: (() => Promise<void>) | undefined;
+      if (input.scope === "project" && input.projectId
+        && input.request.transmissionPolicy.allowResourceReferences
+        && sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+        const candidates = completedSteps.map(step => mcpEvidenceByStep.get(step.id)).filter((value): value is McpAgentEvidenceCapture => value !== undefined);
+        if (candidates.length) {
+          const connections = await listSourceConnections(input.tenant.userId);
+          const activePolicy = await activeResearchSourcePolicy(input);
+          const selectedRefs = activePolicy.researchSourcePolicy?.mode === "only_refs"
+            ? new Set(activePolicy.researchSourcePolicy.allowedSourceRefs) : null;
+          mcp = renderMcpAgentReviewEvidence(candidates.filter(candidate =>
+            mcpEvidenceMatchesSelectedRefs(candidate, selectedRefs) && isMcpEvidenceCurrent(
+              candidate, connections.find(connection => connection.id === candidate.connectionId),
+              input.tenant.userId, input.tenant.organizationId, input.projectId!,
+            )), new Set([...reviewedSourceRefs, ...(research?.sourceRefs ?? [])]));
+          if (mcp) {
+            const admitted = mcp.included;
+            assertMcpCurrent = async () => {
+              assertNotAborted(reviewSignal);
+              if (!input.request.transmissionPolicy.allowResourceReferences
+                || !sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+                throw new AIProviderError("policy_denied", "MCP source transmission permission changed.");
+              }
+              const current = await listSourceConnections(input.tenant.userId);
+              const currentPolicy = await activeResearchSourcePolicy(input);
+              const currentRefs = currentPolicy.researchSourcePolicy?.mode === "only_refs"
+                ? new Set(currentPolicy.researchSourcePolicy.allowedSourceRefs) : null;
+              if (JSON.stringify(currentPolicy.researchSourcePolicyBinding ?? null)
+                !== JSON.stringify(activePolicy.researchSourcePolicyBinding ?? null)) {
+                throw new AIProviderError("policy_denied", "Active research source selection changed.");
+              }
+              for (const candidate of admitted) {
+                if (!mcpEvidenceMatchesSelectedRefs(candidate, currentRefs) || !isMcpEvidenceCurrent(
+                  candidate, current.find(connection => connection.id === candidate.connectionId),
+                  input.tenant.userId, input.tenant.organizationId, input.projectId!,
+                )) throw new AIProviderError("policy_denied", "MCP source permission was revoked; refresh before AI review.");
+              }
+              assertNotAborted(reviewSignal);
+            };
+          }
+        }
+      }
+      assertReviewResearchCurrent = research || mcp ? async () => {
+        if (research) await research.assertCurrent();
+        if (assertMcpCurrent) await assertMcpCurrent();
+      } : undefined;
+      return research || mcp ? {
+        text: [research?.text, mcp?.text].filter(Boolean).join("\n\n"),
+        sourceRefs: [...new Set([...(research?.sourceRefs ?? []), ...(mcp?.sourceRefs ?? [])])],
+      } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
       const descriptor = getConversationTool(step.toolId);
@@ -4615,6 +4672,20 @@ async function executeAgentLoop(
           })).digest("hex")}`;
           let dispatchAttempt = 0;
           beforeExternalDispatch = async () => {
+            // The registry only calls this hook after consuming the exact
+            // owner-issued grant and verifying the current authorization.
+            // A local refusal is PROVEN pre-entry and must not create an L5
+            // dispatch intent or an outcome-unknown record.
+            if (step.toolId === "lios.external-mcp.call") {
+              if (input.scope !== "project" || !input.projectId) {
+                throw new Error("External MCP requires an authenticated Project.");
+              }
+              await preflightGovernedExternalMcpTool(
+                step.input,
+                { userId: input.tenant.userId, organizationId: input.tenant.organizationId, projectId: input.projectId },
+                signal,
+              );
+            }
             if (dispatchAttempt > 0 && (!dispatchNoEffectPersisted || !descriptor?.replaySafe || dispatchAttempt >= 2)) {
               throw new Error("External dispatch retry needs durable no-effect proof, replay-safe policy and remaining attempt budget.");
             }
@@ -4655,8 +4726,12 @@ async function executeAgentLoop(
           };
         }
 
+        let pendingMcpEvidence: McpAgentEvidenceCapture | undefined;
         const callFor = createConversationToolCall(input, "agent", {
           ...await activeResearchSourcePolicy(input),
+          ...(step.toolId === "lios.external-mcp.call" ? {
+            recordExternalMcpObservation: (capture: McpAgentEvidenceCapture) => { pendingMcpEvidence = capture; },
+          } : {}),
           stepId: step.id,
           toolCallId,
           ...(idempotencyKey ? {
@@ -4693,6 +4768,9 @@ async function executeAgentLoop(
             : {}),
         });
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);
+        // Only after the governed registry validated the result AND committed
+        // the external dispatch may it become review-eligible, never before.
+        if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
         if (step.toolId === terminalArtifactTool.id && result.output && typeof result.output === "object") {
           const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string() }).passthrough().parse(result.output);
           const artifact = await getArtifact(input.tenant, updated.artifactId);

@@ -170,6 +170,45 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
     assert.ok(record?.stderr.trim());
   });
 
+  await t.test("late Stop before durable completion claim cannot leave a completed answer or journal", async () => {
+    const requestId = crypto.randomUUID();
+    const original = conversationRuns.claimCompletion.bind(conversationRuns);
+    let accepted = false;
+    conversationRuns.claimCompletion = (id, userId) => {
+      if (id === requestId) accepted = cancelConversationExecution(id, userId);
+      return original(id, userId);
+    };
+    try {
+      await startProjectChatRun(user, chat.id, { requestId, message: "what changed in this project?", ...offline });
+      const events = await eventsOf(requestId, user.id);
+      assert.equal(accepted, true);
+      assert.deepEqual(events.filter(event => event.type === "done").map(event => event.status), ["cancelled"]);
+      const messages = await listProjectChatMessages(tenant, chat.id);
+      assert.equal(messages.some(message => message.role === "assistant" && message.metadata.runtimeRequestId === requestId), false);
+      assert.equal((await journal.read(requestId, owner))?.status, "cancelled");
+    } finally { conversationRuns.claimCompletion = original; }
+  });
+
+  await t.test("a successful durable completion claim refuses a late Stop and retains consistent output", async () => {
+    const requestId = crypto.randomUUID();
+    const original = conversationRuns.claimCompletion.bind(conversationRuns);
+    let accepted: boolean | null = null;
+    conversationRuns.claimCompletion = (id, userId) => {
+      const claimed = original(id, userId);
+      if (id === requestId && claimed) accepted = cancelConversationExecution(id, userId);
+      return claimed;
+    };
+    try {
+      await startProjectChatRun(user, chat.id, { requestId, message: "what changed in this project?", ...offline });
+      const events = await eventsOf(requestId, user.id);
+      assert.equal(accepted, false);
+      assert.deepEqual(events.filter(event => event.type === "done").map(event => event.status), ["completed"]);
+      const messages = await listProjectChatMessages(tenant, chat.id);
+      assert.equal(messages.filter(message => message.role === "assistant" && message.metadata.runtimeRequestId === requestId).length, 1);
+      assert.equal((await journal.read(requestId, owner))?.status, "completed");
+    } finally { conversationRuns.claimCompletion = original; }
+  });
+
   await t.test("canonical cancellation persists cancelled before the terminal event", async () => {
     const requestId = crypto.randomUUID();
     await startProjectChatRun(user, chat.id, { requestId, message: "what changed in this project?", ...offline });

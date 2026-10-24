@@ -14,14 +14,16 @@ export function buildArtifactDependencyRefs(input: {
   ].filter(Boolean))];
 }
 
-export function artifactReplayDraft(
-  title: string,
-  spec: ArtifactRefreshSpec,
-): {
+export interface ArtifactReplayDraft {
   message: string;
   sourceScope: ArtifactRefreshSpec["sourceScope"];
   executionMode: ArtifactRefreshSpec["executionMode"];
-} {
+}
+
+export function artifactReplayDraft(
+  title: string,
+  spec: ArtifactRefreshSpec,
+): ArtifactReplayDraft {
   return {
     message: spec.message?.trim()
       || `Rerun Artifact "${title}" using its governed dependencies and preserve prior assumptions unless new evidence requires a reviewed change.`,

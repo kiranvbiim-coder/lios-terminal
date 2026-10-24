@@ -147,7 +147,7 @@ LiOS combines:
 
 Current Pulse / Explore / Workbench / Signals / Library capabilities remain useful supporting surfaces while the Projects/Chats/Artifacts model becomes the primary mental model.
 
-Exact visual rules are in `docs/LIOS_UX_SYSTEM.md` and `src/client/src/terminal-theme-lock.css`.
+Exact visual rules are in `docs/LIOS_UX_SYSTEM.md`; `src/client/src/terminalStyles.ts` imports the canonical palette in `terminal-shell.css`, followed by the contextual Visual Canvas layer.
 
 
 Global/New Chat is minimal; Project Home is a rich adaptive intelligence dashboard with verified metrics, What Changed, live work and stable pins. Working Context is hidden, with no mandatory entity selector/inspector. Important Project outputs must auto-persist as immutable-versioned Artifacts; this required behavior is pending TC-13/P4 integration, while current source requires explicit Keep. Quick/Temporary Keep requires an explicit Project destination.

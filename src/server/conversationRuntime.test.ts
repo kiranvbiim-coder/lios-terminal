@@ -454,3 +454,14 @@ test("P7 Project Intelligence tools are registered as safe deterministic LiOS to
   assert.equal(changed?.permissionClass, "safe_auto");
   assert.equal(lens?.permissionClass, "safe_auto");
 });
+
+test("ambiguous on-demand names and email substrings cannot select unintended Project context", () => {
+  const first = { id: "first", kind: "note", label: "Revenue Growth", resourceRef: "source:first", contextMode: "on_demand" as const };
+  const second = { ...first, id: "second", label: "Revenue_Growth", resourceRef: "source:second" };
+  assert.deepEqual(includedResourceRefs([first, second], "Read @revenue_growth"), []);
+  assert.deepEqual(includedResourceRefs([first], "Read @revenue_growth"), [first]);
+  assert.deepEqual(includedResourceRefs([first], "Email alice@revenue_growth"), []);
+  assert.deepEqual(includedResourceRefs([first], "Read @revenue_growth", [], "web"), []);
+  assert.deepEqual(includedResourceRefs([first], "Read @revenue_growth", [], "files"), []);
+  assert.deepEqual(includedResourceRefs([{ ...first, contextMode: "excluded" }, second], "Read @revenue_growth"), [second]);
+});

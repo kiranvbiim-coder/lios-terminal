@@ -786,15 +786,24 @@ async function runProjectChat(
               }
               return;
             }
+            if (event.type === "done") { held.done = event; return; }
             await ledger.recordRuntimeEvent(event);
             await transcript.recordEvent(event);
-            if (event.type === "done") held.done = event;
-            else {
-              if (event.type === "error") held.errored = true;
-              emit(event);
-            }
+            if (event.type === "error") held.errored = true;
+            emit(event);
           },
         }));
+        if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
+          // Stop won before durable output commit. Do not save a completed
+          // assistant answer or pending Artifact after acknowledging cancellation.
+          const cancelled: Extract<ConversationRuntimeEvent, { type: "done" }> = { type: "done", requestId: request.requestId, at: new Date().toISOString(), status: "cancelled" };
+          await ledger.recordRuntimeEvent(cancelled);
+          await transcript.recordEvent(cancelled);
+          if (agent) await transcript.finishCancelled(runOwner);
+          else await transcript.finish("cancelled");
+          emit({ ...cancelled, workingContext: preRun });
+          return;
+        }
         if (!result.cancelled && !result.awaitingApproval) {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
@@ -961,6 +970,8 @@ async function runProjectChat(
           at: new Date().toISOString(),
           status: "failed" as const,
         };
+        await ledger.recordRuntimeEvent(terminal);
+        await transcript.recordEvent(terminal);
         if (terminal.status === "waiting_approval" && agent) {
           await transcript.pauseForApproval();
           emit({ ...terminal, workingContext });
@@ -1256,6 +1267,10 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
         return null;
       });
       if (!result) return;
+      if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
+        emit({ type: "done", requestId: request.requestId, at: new Date().toISOString(), status: "cancelled", workingContext: preRun });
+        return;
+      }
       const workingContext = result.text && !result.cancelled
         ? deriveWorkingContext({ previous: carried, owner, resolution: { ...resolution, request }, plan: result.plan, result, providerId: aiSetup?.aiProviderId ?? null })
         : preRun;

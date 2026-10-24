@@ -12,6 +12,7 @@ import {
   type AIProviderType,
 } from "./byoaiRouter";
 import { assertCurrentCredentialSnapshot, resolveCredential } from "./credentialVault";
+import { isTransientBYOAIFailure } from "./openclawByoaiFailover";
 import { recordConnectorVerification } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
 import { getStoredEnterprisePolicy } from "./enterprisePolicyService";
@@ -365,7 +366,7 @@ export function classifyProviderFailure(body: string): "insufficient_quota" | "i
 function responseError(config: AIProviderConfig, provider: AIProviderType, response: Response, body: string): AIProviderError {
   const reason = classifyProviderFailure(body);
   if (reason === "insufficient_quota") {
-    return new AIProviderError("rate_limited", `${config.name} reports no available quota for this API key (credits or billing). Add credits or enable billing with the provider, or choose another provider.`, { provider, status: response.status });
+    return new AIProviderError("quota_exhausted", `${config.name} reports no available quota for this API key (credits or billing). Add credits or enable billing with the provider, or choose another provider.`, { provider, status: response.status });
   }
   if (reason === "invalid_api_key") {
     return new AIProviderError("upstream_error", `${config.name} rejected the API key. Re-enter it in the Connection Center.`, { provider, status: response.status });
@@ -586,7 +587,9 @@ export async function invokeAIRoutedCompletion(request: AIRoutedCompletionReques
       failures.push(error);
       console.warn(`[byoai] ${provider} failed: code=${error.code}${error.status ? ` status=${error.status}` : ""}`);
       attempts.push({ provider, code: error.code, ...(error.status ? { status: error.status } : {}) });
-      if (error.code === "invalid_request" || error.code === "invalid_provider" || error.code === "policy_denied") throw error;
+      // A denial or missing entitlement is not an outage: never forward the
+      // prompt to a second provider after authorization, access or model failure.
+      if (error.code === "policy_denied" || !isTransientBYOAIFailure(error)) throw error;
     }
   }
   const lastFailure = failures[failures.length - 1];

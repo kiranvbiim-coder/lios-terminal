@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizedMentionToken, userMentionTokens } from "@shared/mentionContext";
 import {
   assertNotAborted,
   eventBase,
   hashPayload,
   isAbortLike,
-  normalizedMentionToken,
   sourceScopeAllowsExternalData,
   sourceScopeAllowsFiles,
   sourceScopeAllowsProjectData,
-  userMentionTokens,
 } from "./conversationRuntimeCore";
 
 test("conversation runtime core builds stable event and payload helpers", () => {

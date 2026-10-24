@@ -109,8 +109,12 @@ export default function IntelligenceActionCoordinator({ onOpen }: Props) {
           description: object.description,
           tags: object.tags,
         });
-        saveResearchTray(next);
-        flash("PINNED TO RESEARCH CONTINUITY");
+        try {
+          saveResearchTray(next);
+          flash("PINNED TO RESEARCH CONTINUITY");
+        } catch {
+          flash("PIN NOT SAVED · LOCAL STORAGE UNAVAILABLE");
+        }
         return;
       }
       if (action.kind === "scenario") {

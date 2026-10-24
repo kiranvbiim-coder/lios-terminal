@@ -8,11 +8,21 @@ export const INVALIDATION_QUERY_KEYS: Record<Exclude<GatewayInvalidationTopic, "
   backup: [["/api/backup"]],
   license: [["/api/license/status"]],
   devices: [["/api/devices"]],
+  // Project IDs are the second segment, so no single static query prefix
+  // can select only P9 notifications without invalidating unrelated pages.
+  notifications: [],
 };
 
 export function invalidateTopics(queryClient: QueryClient, topics: readonly GatewayInvalidationTopic[]): void {
   for (const topic of topics) {
     if (topic === "quantlab") continue; // Quant Lab keeps its own local state and subscribes to the event directly.
+    if (topic === "notifications") {
+      void queryClient.invalidateQueries({
+        predicate: ({ queryKey }) => queryKey[0] === "/api/projects"
+          && queryKey[2] === "automation" && queryKey[3] === "notifications",
+      });
+      continue;
+    }
     for (const queryKey of INVALIDATION_QUERY_KEYS[topic]) void queryClient.invalidateQueries({ queryKey });
   }
 }

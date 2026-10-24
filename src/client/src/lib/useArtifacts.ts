@@ -115,7 +115,7 @@ export function useAllArtifacts(status: "active" | "archived" | "trash" = "activ
 export function useArtifact(artifactId: string | null, version?: number | null) {
   return useQuery<ArtifactDetail>({
     queryKey: version ? ["/api/artifacts", artifactId, "version", version] : ["/api/artifacts", artifactId],
-    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error("Failed to load Artifact."); return res.json(); },
+    queryFn: async () => { const res = await fetch(`/api/artifacts/${encodeURIComponent(artifactId!)}${version ? `?version=${version}` : ""}`); if (!res.ok) throw new Error(`${res.status}: Artifact request failed.`); return res.json(); },
     enabled: Boolean(artifactId),
     placeholderData: previous => previous?.artifact.id === artifactId ? previous : undefined,
   });

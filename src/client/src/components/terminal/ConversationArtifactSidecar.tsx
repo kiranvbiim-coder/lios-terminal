@@ -19,7 +19,13 @@ export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpa
     : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
     <div role="separator" aria-label="Resize analytical Artifact" aria-orientation="vertical" tabIndex={focus ? -1 : 0}
       className={focus ? "hidden" : "absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"}
-      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setWidth(value => Math.max(320, (value ?? 600) + (event.key === "ArrowLeft" ? 40 : -40))); } }}
+      onKeyDown={event => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const initial = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 600;
+          setWidth(Math.max(320, Math.min(window.innerWidth * 0.8, initial + (event.key === "ArrowLeft" ? 40 : -40))));
+        }
+      }}
       onPointerDown={event => {
         event.preventDefault(); cleanup.current?.();
         const aside = event.currentTarget.parentElement, initial = aside?.getBoundingClientRect().width ?? 600, start = event.clientX;
@@ -36,9 +42,9 @@ export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpa
         }}>Expand workspace</button>
       </div>
     </div>
-    <ArtifactPane {...props} onDisplayedVersionChange={(version, artifactId) => {
-        if (artifactId === props.artifactId) setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === requestedVersion && current.version === version ? current : { artifactId, requestedVersion, version });
-        props.onDisplayedVersionChange?.(version, artifactId);
+    <ArtifactPane {...props} onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
+        if (artifactId === props.artifactId && loadedRequest === requestedVersion) setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === loadedRequest && current.version === version ? current : { artifactId, requestedVersion: loadedRequest, version });
+        props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);
     }} />
   </aside>;
 }

@@ -1,3 +1,5 @@
+import { asyncSurfaceStatus, resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
+import AsyncSurfaceNotice from "@/components/terminal/AsyncSurfaceNotice";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -1310,12 +1312,18 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     }
   }
 
-  if (setupQuery.isLoading) {
-    return <Shell session={session} onLogout={onLogout}><p className="font-terminal text-[10px] text-muted-foreground animate-pulse">Loading data environment...</p></Shell>;
-  }
+  const setupDenied = setupQuery.isError && [401, 403].includes(asyncSurfaceStatus(setupQuery.error) ?? 0);
+  const setupReadState = resolveAsyncSurfaceState({ hasData: Boolean(setupQuery.data) && !setupDenied, isPending: setupQuery.isPending, isError: setupQuery.isError, error: setupQuery.error });
+  if (setupReadState !== "ready") return <Shell session={session} onLogout={onLogout}>
+    <AsyncSurfaceNotice surface="connections" state={setupReadState} onRetry={() => void setupQuery.refetch()} retrying={setupQuery.isFetching} onLeave={onComplete} leaveLabel="Return to Chat" />
+  </Shell>;
 
   return (
     <Shell session={session} onLogout={onLogout}>
+      {setupQuery.isError && !setupDenied && setupQuery.data && <div role="alert" className="mx-auto mb-3 w-full max-w-5xl rounded border border-amber-300/30 p-3 text-sm">
+        Connection status could not be refreshed. Showing the last loaded configuration; current availability is unverified. Your open form remains here.
+        <button type="button" disabled={setupQuery.isFetching} onClick={() => void setupQuery.refetch()} className="ml-2 min-h-10 underline">Retry connection status</button>
+      </div>}
       <div className="w-full max-w-5xl space-y-5 overflow-y-auto max-h-[calc(100vh-120px)] pr-1">
 
         <div className="flex items-end justify-between border-b border-border pb-3">

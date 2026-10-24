@@ -15,6 +15,7 @@
  */
 import crypto from "crypto";
 import { resolveCredential } from "./credentialVault";
+import { classifyLiOSAIProviderAccess, type LiOSAIProviderAccessContract } from "./openclawAiAccessMethod";
 
 // ─── Provider Registry ────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ export type AIProviderErrorCode =
   | "not_configured"
   | "unavailable"
   | "rate_limited"
+  | "quota_exhausted"
   | "timeout"
   | "upstream_error"
   | "empty_completion"
@@ -243,6 +245,8 @@ export interface ProviderAvailability {
 }
 
 export interface AIProviderSetupOption extends ProviderAvailability {
+  /** Executable access only. A consumer chat subscription is not an API credential. */
+  access: LiOSAIProviderAccessContract;
   /** Safe credential slot identifier; never a credential value. */
   credentialName: string;
   requiresExternalConfig: boolean;
@@ -304,6 +308,7 @@ export function getProviderSetupOptions(): AIProviderSetupOption[] {
   return AI_PROVIDERS.map((provider) => ({
     ...availability.get(provider.id)!,
     credentialName: provider.vaultKey,
+    access: classifyLiOSAIProviderAccess(provider.id),
     requiresExternalConfig: (provider.requiredEnvKeys?.length ?? 0) > 0,
     defaultModel: provider.defaultModel,
     allowCustomModel: provider.allowCustomModel === true,

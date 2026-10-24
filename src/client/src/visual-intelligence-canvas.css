@@ -203,3 +203,15 @@
   filter: saturate(.72) contrast(1.01) brightness(.62);
 }
 
+
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__light,
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__grain { display: none; }
+.lios-visual-canvas[data-render-policy="low-resource"] .lios-visual-canvas__image {
+  transition: none !important;
+  transform: none !important;
+  filter: saturate(.72) contrast(1.01) brightness(.62);
+}
+main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-resource"]) .lios-conversation-composer,
+main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-resource"]) .lios-project-experience-shell > aside {
+  backdrop-filter: none !important;
+}

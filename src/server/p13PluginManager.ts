@@ -196,7 +196,12 @@ function brokerInvoke(
   operation: string,
   payload: unknown,
   context: RuntimeExecutionContext,
+  assertLive: () => void,
 ): Promise<unknown> {
+  // A publisher can be revoked, or a plugin updated/uninstalled, after an
+  // adapter was captured from RuntimeRegistry. Static install-time trust
+  // verification is not sufficient execution authority.
+  assertLive();
   const active = requireBroker(broker, manifest);
   // A plugin call made under a conversation run is a child of that run's cancellation scope (SI-02.07).
   const unregister = onConversationScopeCancel(async () => { await active.cancel?.(context.requestId); });
@@ -206,25 +211,31 @@ function brokerInvoke(
     operation,
     payload,
     context,
+  }).then((value) => {
+    // Do not publish a successful observation from an invocation whose
+    // publisher/package was revoked while the isolated worker was running.
+    assertLive();
+    return value;
   }).finally(unregister);
 }
 
 function createManagedAdapters(
   manifest: LiosPluginManifestV1,
   broker: P13PluginInvocationBroker | null,
+  assertLive: () => void,
 ): RuntimeAdapter[] {
   const executionScope = pluginExecutionScope(manifest);
 
   const connectors: ConnectorAdapter[] = manifest.connectors.map((contribution) => ({
     descriptor: contributionDescriptor(manifest, contribution, "connector", executionScope),
     connect: async (context) => {
-      await brokerInvoke(broker, manifest, contribution.componentId, "connector.connect", {}, context);
+      await brokerInvoke(broker, manifest, contribution.componentId, "connector.connect", {}, context, assertLive);
     },
     disconnect: async (context) => {
-      await brokerInvoke(broker, manifest, contribution.componentId, "connector.disconnect", {}, context);
+      await brokerInvoke(broker, manifest, contribution.componentId, "connector.disconnect", {}, context, assertLive);
     },
     discover: async (context) => {
-      const value = await brokerInvoke(broker, manifest, contribution.componentId, "connector.discover", {}, context);
+      const value = await brokerInvoke(broker, manifest, contribution.componentId, "connector.discover", {}, context, assertLive);
       if (!Array.isArray(value)) throw new Error("Plugin connector discover result must be an array.");
       return value as ConnectorResource[];
     },
@@ -235,6 +246,7 @@ function createManagedAdapters(
       "connector.query",
       request,
       context,
+      assertLive,
     ),
   }));
 
@@ -247,6 +259,7 @@ function createManagedAdapters(
       "tool.invoke",
       input,
       context,
+      assertLive,
     ),
   }));
 
@@ -264,6 +277,7 @@ function createManagedAdapters(
       "agent.run",
       input,
       context,
+      assertLive,
     ),
     cancel: async (requestId) => {
       if (broker?.cancel) await broker.cancel(requestId);
@@ -307,6 +321,23 @@ export class P13PluginManager {
     private readonly trustStore: PluginTrustStore,
     private readonly liosVersion = "1.0.0",
   ) {}
+
+  /**
+   * A plugin registration is not a perpetual execution grant. Recheck the
+   * same exact package identity and live publisher/digest trust on every
+   * brokered invocation, including results that return after a revocation.
+   */
+  private liveExecutableGuard(plugin: PluginManifestPackage): () => void {
+    return () => {
+      if (this.installedPackages.get(plugin.manifest.id) !== plugin) {
+        throw new PluginInstallError("Plugin execution refused: this package is no longer active.");
+      }
+      const decision = this.trustStore.verify(plugin.manifest, plugin.observedPackageDigest);
+      if (decision.state !== "trusted") {
+        throw new PluginInstallError("Plugin execution refused: package trust is " + decision.state + ".");
+      }
+    };
+  }
 
   private installedVersions(excludePluginId: string | null = null): Map<string, string> {
     return new Map(
@@ -435,7 +466,7 @@ export class P13PluginManager {
       }
       this.assertDependencyGraph(plugin.manifest);
       const trust = this.validateForActivation(plugin, this.installedVersions(), broker);
-      const adapters = createManagedAdapters(plugin.manifest, broker);
+      const adapters = createManagedAdapters(plugin.manifest, broker, this.liveExecutableGuard(plugin));
       const registered: string[] = [];
       try {
         for (const adapter of adapters) {
@@ -481,8 +512,8 @@ export class P13PluginManager {
       this.assertReverseDependencyCompatibility(pluginId, nextPlugin.manifest.version);
       this.assertDependencyGraph(nextPlugin.manifest);
       const trust = this.validateForActivation(nextPlugin, this.installedVersions(pluginId), nextBroker);
-      const currentAdapters = createManagedAdapters(currentPlugin.manifest, currentBroker);
-      const nextAdapters = createManagedAdapters(nextPlugin.manifest, nextBroker);
+      const currentAdapters = createManagedAdapters(currentPlugin.manifest, currentBroker, this.liveExecutableGuard(currentPlugin));
+      const nextAdapters = createManagedAdapters(nextPlugin.manifest, nextBroker, this.liveExecutableGuard(nextPlugin));
       const currentIds = new Set(currentSnapshot.componentIds);
 
       for (const adapter of nextAdapters) {

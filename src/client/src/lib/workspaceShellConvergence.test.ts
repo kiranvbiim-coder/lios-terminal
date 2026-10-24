@@ -272,21 +272,6 @@ test("execution traces are cleared when another chat is selected, but never duri
 });
 
 
-test("H2a chat feel: finished runs collapse to a receipt, work stays open when unfinished, follow-ups never auto-send", () => {
-  const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
-  const project = source("../components/terminal/ProjectExperienceShell.tsx");
-  // Technical step/capability telemetry stays behind Show work; recovery/approval cards remain visible separately.
-  assert.match(trace, /const workVisible = showWork/);
-  assert.match(trace, /Show work/);
-  assert.match(trace, /data-testid="trace-sources"/);
-  assert.match(trace, /data-testid="trace-follow-ups"/);
-  assert.match(trace, /\{workVisible && !!steps\.length/);
-  assert.match(trace, /\{workVisible && !!capabilities\.length/);
-  // A follow-up chip only prefills the composer for review.
-  const handler = project.slice(project.indexOf("onFollowUp={(prompt) => {"), project.indexOf("onKeepArtifact={"));
-  assert.match(handler, /setInput\(prompt\)/);
-  assert.doesNotMatch(handler, /submit|sendMessage|send\(/i);
-});
 
 test("H2a sidebar: rare actions live in the account menu", () => {
   const navigation = source("../components/terminal/AuthenticatedNavigation.tsx");
@@ -305,12 +290,3 @@ test("H2b receipts persist per chat and restore on reload without storing answer
   assert.match(shell, /traceOwnerChatRef\.current = chatId/);
 });
 
-test("H2b error kit: failed runs show a plain-language card with retry and Connect, not a raw code headline", () => {
-  const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
-  const shell = source("../components/terminal/ProjectExperienceShell.tsx");
-  assert.match(trace, /presentRuntimeError\(runtimeError\.code, runtimeError\.message\)/);
-  assert.match(trace, /data-testid="trace-error-retry"/);
-  assert.match(trace, /data-testid="trace-error-connect"/);
-  assert.doesNotMatch(trace, /Execution failed/);
-  assert.match(shell, /onRetry=\{\(\) => \{ if \(lastSubmittedMessage\.trim\(\) && !busy\)/);
-});

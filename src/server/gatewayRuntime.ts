@@ -2,8 +2,20 @@ import { GatewayHub } from "./gatewayHub";
 import type { GatewayConnection } from "./gatewayHub";
 import type { GatewayInvalidationTopic } from "@shared/gatewayProtocol";
 
-/** The one Gateway of this LiOS Home (GM-08a). Features register their methods here; index.ts only attaches sockets. */
-export const gatewayHub = new GatewayHub({ version: process.env.LIOS_PUBLIC_VERSION ?? "dev" });
+/** The one Gateway of this LiOS Home (GM-08a). Features register their methods here; index.ts only attaches sockets.
+ * Pairing is a handshake, not perpetual method authority. Revalidate the
+ * canonical paired-device/account state for every RPC (including generic
+ * conversation and quotes methods), without creating a second device store.
+ */
+export const gatewayHub = new GatewayHub({
+  version: process.env.LIOS_PUBLIC_VERSION ?? "dev",
+  authorizeRequest: async (connection, scope) => {
+    if (!connection.identity.deviceId) return;
+    // Lazy import avoids the deviceRuntime ↔ gatewayRuntime init cycle.
+    const { requireCurrentGatewayUser } = await import("./gatewayDeviceContinuity");
+    await requireCurrentGatewayUser(connection, scope);
+  },
+});
 
 const QUOTE_SUBSCRIPTIONS = "quotes.symbols";
 const MAX_SUBSCRIBED_SYMBOLS = 500;

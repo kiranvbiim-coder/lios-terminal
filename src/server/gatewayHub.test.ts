@@ -14,15 +14,24 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function startHub(options: { granted?: GatewayScope[]; policy?: ConstructorParameters<typeof GatewayHub>[0]["policy"] } = {}) {
-  const hub = new GatewayHub({ version: "test", policy: options.policy });
+async function startHub(options: {
+  granted?: GatewayScope[];
+  policy?: ConstructorParameters<typeof GatewayHub>[0]["policy"];
+  deviceId?: string;
+  authorizeRequest?: ConstructorParameters<typeof GatewayHub>[0]["authorizeRequest"];
+} = {}) {
+  const hub = new GatewayHub({ version: "test", policy: options.policy, authorizeRequest: options.authorizeRequest });
   hub.register("quotes.subscribe", ({ symbols }, connection) => {
     connection.state.set("symbols", new Set(symbols));
     return { subscribed: symbols, total: symbols.length };
   });
   const http = createServer();
   const wss = new WebSocketServer({ server: http });
-  wss.on("connection", (socket) => hub.attach(socket, { userId: 1, email: "t@example.test", role: "client_user", organizationId: null, grantedScopes: options.granted ?? ["read", "write"] }));
+  wss.on("connection", (socket) => hub.attach(socket, {
+    userId: 1, email: "t@example.test", role: "client_user", organizationId: null,
+    grantedScopes: options.granted ?? ["read", "write"],
+    ...(options.deviceId ? { deviceId: options.deviceId } : {}),
+  }));
   await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
   const url = `ws://127.0.0.1:${(http.address() as AddressInfo).port}`;
   cleanups.push(async () => {
@@ -75,6 +84,60 @@ async function connected(url: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe("Gateway hub", () => {
+  it("D5 rechecks paired device authority per RPC after a live revocation", async () => {
+    let current = true;
+    const checks: GatewayScope[] = [];
+    const { hub, url } = await startHub({
+      deviceId: "test-paired-device",
+      authorizeRequest: (connection, scope) => {
+        assert.equal(connection.identity.deviceId, "test-paired-device");
+        checks.push(scope);
+        if (!current) throw new Error("Sensitive DB revocation details must not leak");
+      },
+    });
+    const { c } = await connected(url);
+    c.send({ type: "req", id: "before", method: "gateway.ping", params: {} });
+    const prior = await c.next(frame => frame.type === "res" && frame.id === "before");
+    assert.ok(prior.type === "res" && prior.ok);
+    assert.deepEqual(checks, ["read", "read"], "a successful RPC checks authority before handler and before releasing result");
+    current = false;
+    c.send({ type: "req", id: "after", method: "gateway.ping", params: {} });
+    const denied = await c.next(frame => frame.type === "res" && frame.id === "after");
+    assert.ok(denied.type === "res" && !denied.ok && denied.error?.code === "FORBIDDEN");
+    assert.ok(!JSON.stringify(denied).includes("Sensitive DB revocation details"));
+    c.send({ type: "req", id: "quotes", method: "quotes.subscribe", params: { symbols: ["AAPL"] } });
+    const refused = await c.next(frame => frame.type === "res" && frame.id === "quotes");
+    assert.ok(refused.type === "res" && !refused.ok && refused.error?.code === "FORBIDDEN");
+    assert.equal((hub.readyConnections()[0]!.state.get("symbols") as Set<string> | undefined)?.size ?? 0, 0,
+      "a stale device cannot change even an ordinary Gateway handler's state");
+    await assert.rejects(hub.invokeForConnection("gateway.ping", {}, hub.readyConnections()[0]!), (error: unknown) =>
+      error instanceof Error && error.message.includes("authorization is unavailable or revoked"),
+    );
+  });
+
+  it("D5 rechecks after a method; revocation in flight blocks response disclosure and composition", async () => {
+    let checks = 0;
+    const { hub, url } = await startHub({
+      deviceId: "paired-inflight",
+      authorizeRequest: () => {
+        checks++;
+        if (checks % 2 === 0) throw new Error("revoked while method was pending");
+      },
+    });
+    const { c } = await connected(url);
+    c.send({ type: "req", id: "inflight", method: "gateway.ping", params: {} });
+    const refused = await c.next(frame => frame.type === "res" && frame.id === "inflight");
+    assert.ok(refused.type === "res" && !refused.ok && refused.error?.code === "FORBIDDEN",
+      "a mid-request denial cannot release the method result");
+    assert.equal(checks, 2);
+    await assert.rejects(
+      hub.invokeForConnection("gateway.ping", {}, hub.readyConnections()[0]!),
+      (error: unknown) => error instanceof Error && error.message.includes("authorization is unavailable or revoked"),
+      "server-composed RPC must enforce the same post-call revocation boundary",
+    );
+    assert.equal(checks, 4);
+  });
+
   it("answers connect with a schema-valid hello-ok listing only reachable methods", async () => {
     const { url, hub } = await startHub();
     const { res } = await connected(url);

@@ -202,6 +202,8 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       const target = event.target as HTMLElement | null;
       const editable = Boolean(target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT");
       const modifier = event.metaKey || event.ctrlKey;
+      // Radix dialogs own Escape and editing keys; capture must not bypass draft review.
+      if (target?.closest('[role="dialog"], [role="alertdialog"]')) return;
 
       if (event.key === "Escape" && (surface || contextMenu || peek || inspector)) {
         event.preventDefault();

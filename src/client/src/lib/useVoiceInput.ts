@@ -8,8 +8,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
 import { voiceTranscriptSchema, type VoiceTranscript } from "@shared/multimodalContracts";
+import { voiceFailureCopy } from "./composerAvailability";
 
 export type VoiceTranscriptResult = VoiceTranscript;
+const VOICE_PUBLIC_FAILURES = {
+  invalid: voiceFailureCopy("invalid"),
+  network: voiceFailureCopy("network"),
+  denied: voiceFailureCopy(403),
+  auth: voiceFailureCopy(401),
+  tooLarge: voiceFailureCopy(413),
+  limited: voiceFailureCopy(429),
+  unknown: voiceFailureCopy(422),
+} as const;
 
 interface VoiceProvidersResponse {
   transcription: Array<{ id: string; label: string; local: boolean }>;
@@ -90,12 +100,22 @@ export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) =
           const form = new FormData();
           form.append("audio", blob, "voice-input.webm");
           const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
-          const payload = await res.json();
-          if (!res.ok) throw new Error(payload?.error || "Voice transcription failed.");
-          const transcript = voiceTranscriptSchema.parse(payload.transcript);
+          // The server can include provider diagnostics, system paths, or
+          // credential-bearing details in error bodies. Never surface them.
+          if (!res.ok) throw new Error(voiceFailureCopy(res.status));
+          let payload: unknown;
+          try { payload = await res.json(); }
+          catch { throw new Error(voiceFailureCopy("invalid")); }
+          const parsed = voiceTranscriptSchema.safeParse(
+            payload && typeof payload === "object" && "transcript" in payload ? payload.transcript : null,
+          );
+          if (!parsed.success) throw new Error(voiceFailureCopy("invalid"));
+          const transcript = parsed.data;
           onTranscript(transcript);
         } catch (transcribeError) {
-          setError(transcribeError instanceof Error ? transcribeError.message : "Voice transcription failed.");
+          setError(transcribeError instanceof Error
+            && Object.values(VOICE_PUBLIC_FAILURES).includes(transcribeError.message)
+            ? transcribeError.message : voiceFailureCopy("network"));
         } finally {
           setIsTranscribing(false);
         }
@@ -104,7 +124,7 @@ export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) =
       recorder.start();
       setIsRecording(true);
     } catch (permissionError) {
-      setError(permissionError instanceof Error ? permissionError.message : "Microphone permission was denied.");
+      setError(voiceFailureCopy("microphone"));
       stopStream();
     }
   }, [onTranscript, stopStream]);

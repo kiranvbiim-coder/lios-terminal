@@ -121,6 +121,12 @@ export async function verifyAIProviderConnection(
   if (!result.text.trim()) {
     throw new AIProviderError("empty_completion", config.name + " returned an empty completion.", { provider });
   }
+  // Metadata can match while a proxy returns arbitrary prose; require the public
+  // low-cost challenge before claiming a live connection (quoting/punctuation only).
+  const acknowledgement = result.text.trim().replace(/^["'`]+|["'`.!]+$/g, "").trim();
+  if (acknowledgement !== "LIOS_AI_OK") {
+    throw new AIProviderError("upstream_error", config.name + " did not complete the LiOS connection verification challenge.", { provider });
+  }
   if (localModelIdentity !== undefined && result.localModelIdentity !== localModelIdentity) {
     throw new AIProviderError("upstream_error", "The loaded local model changed during chat verification. List and verify it again.", { provider });
   }

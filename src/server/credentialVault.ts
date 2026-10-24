@@ -11,10 +11,11 @@
  * the legacy config.json path, which this module reads as a migration
  * fallback but never writes to).
  *
- * Env vars always take precedence: if FRED_API_KEY is set in the
- * environment, the vault is not consulted for that credential. This
- * preserves the existing operator workflow (env vars in dev, vault in
- * packaged desktop app).
+ * For desktop/operator requests, env vars take precedence over the
+ * machine-local vault (env vars in development, vault in packaged desktop).
+ * In explicitly enabled hosted-organization mode, an authenticated tenant
+ * request MUST use only its organization-scoped credential namespace; it
+ * never inherits operator environment variables or the machine-local vault.
  */
 import crypto from "crypto";
 import fs from "fs";
@@ -506,23 +507,29 @@ export function migrateLegacyConfigCredentials(): number {
 /**
  * Canonical credential resolver. A `vaultName` may also be a SecretRef (`env:LIOS_SECRET_X`, `file:/run/secrets/x`,
  * `vault:name`). Priority:
- * 1. Environment variable (operator-managed, e.g. FRED_API_KEY)
- * 2. Request-scoped organization credential in hosted mode
- * 3. Encrypted machine-local vault (plaintext config.json credentials are migrated into it at startup)
+ * 1. Organization request in explicitly enabled hosted mode: ONLY the
+ *    request-scoped organization credential, never operator env or local vault
+ * 2. Desktop/operator request: environment variable if present
+ * 3. Otherwise encrypted machine-local vault (legacy credentials migrate on startup)
  *
  * A hosted organization request never falls back to the machine-local vault.
  * That boundary prevents one customer's provider credential from being used
  * for another customer's request.
  */
 export function resolveCredential(envName: string, vaultName: string): string | null {
-  const envValue = process.env[envName];
-  if (typeof envValue === "string" && envValue.trim().length > 0) return envValue.trim();
-
+  // A hosted organization's credentials are the ONLY permissible credential
+  // source for that request. Checking process.env first would silently grant
+  // a tenant access to the operator's provider API key, even when the tenant
+  // has not connected that provider. Desktop/operator requests still use
+  // their established env-over-local-vault precedence below.
   const identity = getRequestIdentity();
   if (organizationCredentialStoreEnabled() && identity?.organizationId != null) {
     const organizationValue = identity.credentials?.[vaultName];
-    return organizationValue && organizationValue.length > 0 ? organizationValue : null;
+    return organizationValue && organizationValue.trim().length > 0 ? organizationValue : null;
   }
+
+  const envValue = process.env[envName];
+  if (typeof envValue === "string" && envValue.trim().length > 0) return envValue.trim();
 
   const ref = parseSecretRef(vaultName);
   if (ref && ref.source !== "vault") return resolveExternalSecretRef(ref);

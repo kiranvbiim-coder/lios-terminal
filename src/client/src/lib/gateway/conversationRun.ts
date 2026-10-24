@@ -54,8 +54,7 @@ export async function followConversationRun(
     };
     const complete = () => finish({ status: 200, ok: true, text, error, events });
     const interrupted = (message: string) => {
-      error ??= message;
-      complete();
+      finish({ status: 503, ok: false, text, error: message, errorCode: "run_interrupted", events });
     };
 
     disposers.push(client.onEvent("conversation.event", (payload) => {

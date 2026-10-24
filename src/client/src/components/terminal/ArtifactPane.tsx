@@ -1,3 +1,6 @@
+import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
+import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
+import { resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { JsonEditor } from "./ArtifactExpertView";
 import type { ReactNode } from "react";
@@ -536,7 +539,7 @@ interface ArtifactPaneProps {
   artifactId: string;
   version?: number | null;
   onVersionChange?: (version: number | null) => void;
-  onDisplayedVersionChange?: (version: number, artifactId: string) => void;
+  onDisplayedVersionChange?: (version: number, artifactId: string, requestedVersion: number | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   projectId: number | null;
   owningChatId?: number | null;
@@ -607,7 +610,7 @@ export function ArtifactPane(props: ArtifactPaneProps) {
     controlledRevision.current = { artifactId: props.artifactId, version: props.version };
     if (selection !== null) setSelection(null);
   }
-  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId && (props.version == null || selection.version >= props.version) ? selection.version : props.version;
+  const selectedVersion = resolveArtifactPaneRequestedVersion(props.artifactId, props.version, selection);
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
@@ -665,7 +668,7 @@ function ArtifactPaneWorkspace({
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
-  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
+  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
     setExportPlan(null);
@@ -679,7 +682,10 @@ function ArtifactPaneWorkspace({
     return () => { active = false; };
   }, [artifactId, data?.version.version, data?.version.contentHash, exportOpen]);
   const run=async(fn:()=>Promise<void>)=>{setError(null);try{await fn()}catch(e){setError(e instanceof Error?e.message:"Artifact action failed.")}};
-  if(!data)return <div className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading?"Loading Artifact…":"Artifact unavailable."}</div>;
+  if (!data) {
+    const state = resolveAsyncSurfaceState({ hasData: false, isPending: detail.isPending, isError: detail.isError, error: detail.error });
+    return <AsyncSurfaceNotice surface="artifact" state={state === "ready" ? "missing" : state} onRetry={() => void detail.refetch()} retrying={detail.isFetching} onLeave={onClose} leaveLabel="Close Artifact" />;
+  }
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;

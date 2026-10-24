@@ -44,6 +44,7 @@ interface Run extends RunSummary {
   /** Durable cancellation finalizer supplied by the run service for a paused run. */
   pauseCancelFinalizer: (() => Promise<void>) | null;
   cancellationPending: boolean;
+  completionClaimed: boolean;
 }
 
 export class ConversationRunConflictError extends Error {
@@ -110,6 +111,7 @@ export class ConversationRunRegistry {
       pausePayload: undefined,
       pauseCancelFinalizer: null,
       cancellationPending: false,
+      completionClaimed: false,
     };
     this.runs.set(run.requestId, run);
     this.launch(run, execute);
@@ -312,7 +314,7 @@ export class ConversationRunRegistry {
   /** Owner-only cancellation for entry points that carry no Project/Chat scope (HTTP). */
   cancel(requestId: string, userId: number): boolean {
     const run = this.runs.get(requestId);
-    if (!run || run.finished || run.cancellationPending || run.userId !== userId) return false;
+    if (!run || run.finished || run.completionClaimed || run.cancellationPending || run.userId !== userId) return false;
     this.abortRun(run);
     return true;
   }
@@ -323,8 +325,16 @@ export class ConversationRunRegistry {
     owner: { userId: number; projectId: number | null; chatId: number | null },
   ): boolean {
     const run = this.runs.get(requestId);
-    if (!run || run.finished || run.cancellationPending || !this.ownedBy(run, owner)) return false;
+    if (!run || run.finished || run.completionClaimed || run.cancellationPending || !this.ownedBy(run, owner)) return false;
     this.abortRun(run);
+    return true;
+  }
+
+  /** Synchronous Stop-versus-commit boundary before durable successful output. */
+  claimCompletion(requestId: string, userId: number): boolean {
+    const run = this.runs.get(requestId);
+    if (!run || run.finished || run.userId !== userId || run.controller.signal.aborted || run.cancellationPending) return false;
+    run.completionClaimed = true;
     return true;
   }
 

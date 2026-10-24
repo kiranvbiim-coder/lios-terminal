@@ -69,3 +69,39 @@
 .lios-project-experience-shell .lios-conversation-composer-actions {
   border-top: 0 !important;
 }
+
+/* WS-08: preserve mounted editor state while the existing focus view handles narrow space. */
+@container conversation (max-width: 899px) {
+  .lios-artifact-sidecar { display: none !important; }
+  .lios-project-chat-content { min-width: 0; max-width: 100%; }
+}
+@container conversation (max-width: 560px) {
+  .lios-project-experience-shell .lios-conversation-header {
+    flex-wrap: wrap !important;
+    height: auto !important;
+    min-height: 44px;
+    padding-block: 8px;
+  }
+  .lios-project-experience-shell .lios-conversation-header > div:first-child {
+    flex: 1 0 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .lios-project-experience-shell .lios-conversation-header > button {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+@container conversation (max-width: 420px) {
+  .lios-project-experience-shell .lios-conversation-composer-actions {
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: 6px;
+  }
+  .lios-project-experience-shell .lios-conversation-composer-actions > .flex-1 {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

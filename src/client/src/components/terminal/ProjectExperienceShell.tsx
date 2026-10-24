@@ -122,9 +122,20 @@ import { fillStarterPrompt, findStarterPlaceholder, starterPromptsForChatMode, r
 import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
 import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/lib/chatSelectionActions";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
-import { LIOS_FIRST_USE_CONTRACT } from "@/lib/firstUseJourney";
+import { LIOS_FIRST_USE_CONTRACT, firstUseRecoveryDestination } from "@/lib/firstUseJourney";
+import { voiceAvailability } from "@/lib/composerAvailability";
+import { asyncSurfaceStatus } from "@/lib/asyncSurfaceState";
+import { planAttachmentStage, stagedFileKey } from "@/lib/fileAttachmentStaging";
+import { uploadRealChatAttachment, type UploadStage } from "@/lib/realFileAttachmentUpload";
+import { ambiguousMentionTokens, eligibleProjectMentions, stageResourceMention } from "@shared/mentionContext";
+import { stageUniversalChatQuestion, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
+import { hasObservedCompletion, stageSafeRunRetry } from "@/lib/observedRunPolicy";
+import { clearSubmittedComposerDraft, mayClearComposerDraft, restoreFailedComposerDraft } from "@/lib/composerDraftSafety";
 import ConversationRuntimeTrace from "./ConversationRuntimeTrace";
 import ChatMarkdown from "./ChatMarkdown";
+import { matchesSavedSearchChat } from "@/lib/workSearchNavigationPolicy";
+import ChatMessageActions from "./ChatMessageActions";
+import { quoteChatResponse } from "@/lib/chatMessageActions";
 import SavedArtifactCards from "./SavedArtifactCards";
 import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
@@ -170,7 +181,7 @@ import {
 } from "@/lib/p1Shell";
 import { recordP2ConversationEvent } from "@/lib/p2ConversationTelemetry";
 import { recordP3TrustManifest } from "@/lib/p3TrustTelemetry";
-import { artifactReplayDraft, buildArtifactDependencyRefs } from "@/lib/p4ArtifactWorkspace";
+import { artifactReplayDraft, buildArtifactDependencyRefs, type ArtifactReplayDraft } from "@/lib/p4ArtifactWorkspace";
 import { resolveWorkSearchLibraryTarget } from "@/lib/terminalCommands";
 type SandboxTerminalInput = z.output<(typeof GATEWAY_METHODS)["execution.session.input"]["params"]>["input"];
 type SandboxTerminalProposal = z.output<(typeof GATEWAY_METHODS)["execution.operation.propose"]["result"]>;
@@ -184,6 +195,7 @@ interface Props {
   workspaceAdapter: WorkspaceAdapter;
   onOpenWorkbench: (context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => void;
   workbenchReturn?: { context: ArtifactWorkbenchContext; request: number; prompt?: string } | null;
+  universalChatHandoff?: UniversalChatHandoff | null;
   renderTerminalPanel?: ChatTerminalRenderer;
   chatWorkbenchReturn?: { origin: ChatWorkbenchOrigin; request: number } | null;
   onOpenEnvironment: () => void;
@@ -222,21 +234,6 @@ function savedMessageAttachments(message: ProjectChatMessage | LocalMessage): Sa
   });
 }
 
-async function uploadProjectChatAttachment(projectId: number | null, chatId: number, file: File): Promise<ConversationAttachmentRef> {
-  const form = new FormData();
-  form.append("file", file, file.name);
-  const endpoint = projectId === null ? `/api/quick-chats/${chatId}/attachments` : `/api/projects/${projectId}/chats/${chatId}/attachments`;
-  const response = await fetch(endpoint, { method: "POST", body: form });
-  const payload = await response.json().catch(() => null) as { error?: string; attachment?: ConversationAttachmentRef } | null;
-  if (!response.ok || !payload?.attachment) {
-    const detail = payload?.error || `Attachment upload failed (${response.status}).`;
-    const retry = response.status >= 500
-      ? " Your staged file is still here—restore attachment storage and send again."
-      : "";
-    throw new Error(detail + retry);
-  }
-  return payload.attachment;
-}
 
 function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -304,7 +301,7 @@ export default function ProjectExperienceShell({
   activeView: workbenchView,
   activeSymbol: workbenchSymbol,
   workspaceAdapter,
-  onOpenWorkbench: navigateWorkbench, workbenchReturn,
+  onOpenWorkbench: navigateWorkbench, workbenchReturn, universalChatHandoff,
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
@@ -367,6 +364,7 @@ export default function ProjectExperienceShell({
   const [voiceTranscriptReviewed, setVoiceTranscriptReviewed] = useState(false);
   const [pendingAttachmentFiles, setPendingAttachmentFiles] = useState<File[]>([]);
   const [pendingAttachmentRefs, setPendingAttachmentRefs] = useState<ConversationAttachmentRef[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState<{ key: string; fileName: string; index: number; total: number; progress: UploadStage } | null>(null);
   const [speakRepliesEnabled, setSpeakRepliesEnabled] = useState(() => {
     try {
       return window.localStorage.getItem("lios.voice.speakReplies") === "1";
@@ -376,16 +374,26 @@ export default function ProjectExperienceShell({
   });
   const voiceProvidersQuery = useVoiceProviders();
   const voiceRuntimeStatus = voiceProvidersQuery.data?.runtime;
-  const hasNonWhisperTranscription = Boolean(voiceProvidersQuery.data?.transcription.some((provider) => provider.id !== "lios.voice.whisper-cpp"));
-  const hasLocalWhisper = Boolean(voiceProvidersQuery.data?.transcription.some((provider) => provider.id === "lios.voice.whisper-cpp"));
-  const voiceInputAvailable = hasNonWhisperTranscription || (hasLocalWhisper && Boolean(voiceRuntimeStatus?.browserRecordingReady));
-  const voiceOutputAvailable = Boolean(voiceProvidersQuery.data?.speech.some((provider) => provider.id));
+  const voiceStatus = voiceAvailability({ loading: voiceProvidersQuery.isLoading, error: voiceProvidersQuery.isError, transcription: voiceProvidersQuery.data?.transcription, speech: voiceProvidersQuery.data?.speech, browserRecordingReady: voiceRuntimeStatus?.browserRecordingReady, ffmpegFound: voiceRuntimeStatus?.ffmpegFound });
+  const voiceInputAvailable = voiceStatus.transcriptionReady;
+  const voiceOutputAvailable = voiceStatus.speechReady;
+  const chatCreationInFlightRef = useRef(false);
+  const projectCreationInFlightRef = useRef(false);
+  const draftSnapshot = { input, files: pendingAttachmentFiles, attachments: pendingAttachmentRefs, voice: voiceTranscripts, chatId: selection.chatId, projectId: selection.projectId };
+  const currentDraftRef = useRef(draftSnapshot);
+  currentDraftRef.current = draftSnapshot;
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
+  const sendInFlightRef = useRef(false);
+  const cancelInFlightRef = useRef(false);
+  const cancelAcknowledgedRunRef = useRef<string | null>(null);
+  const [cancelAcknowledgedRunId, setCancelAcknowledgedRunId] = useState<string | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const [runtimeEvents, setRuntimeEvents] = useState<ConversationRuntimeEvent[]>([]);
   const [runtimeRequestId, setRuntimeRequestId] = useState<string | null>(null);
+  const [declinedRunAction, setDeclinedRunAction] = useState<{ requestId: string; action: ConversationActionName } | null>(null);
   const [executionTerminalOpen, setExecutionTerminalOpen] = useState(false);
   const [sandboxProposal, setSandboxProposal] = useState<SandboxTerminalProposal | null>(null);
   const [sandboxSessionId, setSandboxSessionId] = useState<string | null>(null);
@@ -515,6 +523,14 @@ export default function ProjectExperienceShell({
   const keepingArtifactRef = useRef(false);
   const [projectDestination, setProjectDestination] = useState<{ description: string; save: (project: Project) => Promise<void> } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const handledUniversalChatHandoff = useRef<number | null>(null);
+  useEffect(() => {
+    if (!universalChatHandoff || handledUniversalChatHandoff.current === universalChatHandoff.request) return;
+    handledUniversalChatHandoff.current = universalChatHandoff.request;
+    setSection("conversation"); setShowLifecycleCenter(false); setProjectHomeRequested(false);
+    setInput(current => stageUniversalChatQuestion(current, universalChatHandoff.prompt));
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, [universalChatHandoff]);
   // The user's own most recent ticker fills the starter slot so an example is ready to send.
   const recentStarterSymbol = useMemo(() => loadRecentAnalyticalContexts().find((context) => context.symbol)?.symbol ?? null, []);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -529,11 +545,9 @@ export default function ProjectExperienceShell({
     setInput((current) => (current.trim() ? `${current.trim()} ${result.text}` : result.text));
     requestAnimationFrame(() => composerRef.current?.focus());
   });
-  const voiceInputHint = voiceProvidersQuery.isLoading
-    ? "Checking voice readiness…"
-    : voiceInputAvailable
-      ? (voiceRecorder.isRecording ? "Stop recording" : "Speak to LiOS")
-      : voiceRuntimeStatus?.guidance ?? "Set up a transcription runtime to use voice input.";
+  const voiceInputHint = voiceRecorder.isRecording ? "Stop recording to upload this clip to LiOS Home for transcription. Review the transcript before Send."
+    : voiceInputAvailable ? "Record speech; stopping uploads it to LiOS Home for transcription, never automatically to Chat."
+    : voiceStatus.label;
   const voiceActionLabel = voiceProvidersQuery.isLoading
     ? "Checking…"
     : voiceInputAvailable
@@ -558,6 +572,7 @@ export default function ProjectExperienceShell({
     chatSelected: chatMode !== "temporary" && Boolean(selection.chatId),
   });
   const shellError = projectsQuery.error ?? projectHomeQuery.error ?? messagesQuery.error ?? quickChatsQuery.error;
+  const shellErrorStatus = asyncSurfaceStatus(shellError);
   // Quiet entry: no chat selected means the composer, never a forced Project Home. Home opens only from the Projects rail.
   const entrySurface = resolveEntrySurface({ chatMode, chatId: selection.chatId, projectHomeRequested, projectHomeAvailable: Boolean(home) });
   useEffect(() => {
@@ -709,12 +724,10 @@ export default function ProjectExperienceShell({
   }, [home?.project.name, selection.projectId, selection.chatId, activeChat?.title, onNavigationContext]);
 
   const resources = home?.resources ?? [];
-  const mentionCandidates = useMemo(() => {
-    const match = input.match(/@([^\s@]*)$/);
-    if (!match) return [];
-    const q = match[1].toLowerCase();
-    return resources.filter((resource) => resource.label.toLowerCase().includes(q)).slice(0, 6);
-  }, [input, resources]);
+  const mentionCandidates = useMemo(
+    () => eligibleProjectMentions(resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences),
+    [resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences],
+  );
 
   const commandCandidates = useMemo(() => {
     if (!input.startsWith("/")) return [];
@@ -722,19 +735,30 @@ export default function ProjectExperienceShell({
     return QUICK_COMMANDS.filter((item) => item.command.startsWith(q)).slice(0, 6);
   }, [input]);
 
-  const confirmConversationSwitch = async () => {
-    if (busy) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
+  const discardConversationDraft = (expected = currentDraftRef.current) => {
+    const current = currentDraftRef.current;
+    if (current.input !== expected.input || current.files !== expected.files || current.attachments !== expected.attachments || current.voice !== expected.voice || current.chatId !== expected.chatId || current.projectId !== expected.projectId) {
+      setLifecycleNotice("Your draft or conversation changed while that action was pending. It has been kept; open the saved destination when ready.");
+      return false;
+    }
+    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]); setVoiceTranscriptReviewed(false);
+    return true;
+  };
+  const confirmConversationSwitch = async (deferDiscard = false, allowCreation = false) => {
+    if (sendInFlightRef.current || ((chatCreationInFlightRef.current || projectCreationInFlightRef.current) && !allowCreation)) { setLifecycleNotice("Finish the pending request before switching conversations."); return false; }
+    if (busy || busyRef.current) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
+    const expected = currentDraftRef.current;
     if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length) return true;
     const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
     if (!answer) return false;
-    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]);
+    if (!deferDiscard && !discardConversationDraft(expected)) return false;
     return true;
   };
 
   const openProject = async (project: Project, confirmed = false, showHome = false) => {
-    if (!confirmed && (selection.projectId !== project.id || selection.chatId) && !(await confirmConversationSwitch())) return;
-    if (busy) { setLifecycleNotice("Stop the current response before switching Projects."); return; }
+    if (!confirmed && (selection.projectId !== project.id || selection.chatId) && !(await confirmConversationSwitch())) return false;
+    if (busy) { setLifecycleNotice("Stop the current response before switching Projects."); return false; }
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false); setProjectHomeRequested(showHome);
     selection.setProjectId(project.id);
     selection.setChatId(null);
@@ -743,8 +767,8 @@ export default function ProjectExperienceShell({
   };
 
   const openChat = async (chat: ProjectChat, confirmed = false) => {
-    if (!confirmed && selection.chatId !== chat.id && !(await confirmConversationSwitch())) return;
-    if (busy && !confirmed) { setLifecycleNotice("Stop the current response before switching chats."); return; }
+    if (!confirmed && selection.chatId !== chat.id && !(await confirmConversationSwitch())) return false;
+    if (busy && !confirmed) { setLifecycleNotice("Stop the current response before switching chats."); return false; }
     openedChatOwnerRef.current = { chatId: chat.id, ownerUserId: chat.ownerUserId };
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false); setProjectHomeRequested(false);
     selection.setProjectId(chat.projectId);
@@ -752,18 +776,21 @@ export default function ProjectExperienceShell({
     setChatMode(chat.scope === "quick" ? "quick" : "project");
     setTemporaryMessages([]);
     temporaryWorkingContextRef.current = null;
+    return true;
   };
-  const openWorkSearchResult = async (result: WorkSearchResult) => {
+  const openWorkSearchResult = async (result: WorkSearchResult): Promise<boolean> => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current) return false;
+    const before = currentDraftRef.current;
     if (result.kind === "artifact" && result.projectId === null && result.chatId && result.artifactId) {
-      if (busy || !(await confirmConversationSwitch())) return;
       const response = await fetch(`/api/project-chats/${result.chatId}`);
       if (!response.ok) throw new Error("This owning Chat is no longer available.");
       const chat = await response.json() as ProjectChat;
       const exact = await fetch(`/api/artifacts/${encodeURIComponent(result.artifactId)}`);
       if (!exact.ok) throw new Error("This exact Artifact is no longer available.");
-      const detail = await exact.json();
-      if (chat.scope !== "quick" || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
-      if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening this search result."); return; }
+      const detail = await exact.json() as ArtifactDetail;
+      if (!matchesSavedSearchChat(result, chat) || detail.artifact.id !== result.artifactId || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
+      if (busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) return false;
+      if (selection.chatId !== chat.id && (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before))) return false;
       if (selection.chatId === chat.id) {
         pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
         setConversationArtifactRef(result.artifactId); setArtifactFocusMode(false);
@@ -771,41 +798,47 @@ export default function ProjectExperienceShell({
         pendingArtifactOpenRef.current = result.artifactId; pendingArtifactFocusRef.current = false;
       }
       setArtifactViewVersion(detail.version.version);
-      await openChat(chat, true);
-      return;
+      return await openChat(chat, true);
     }
     if (result.kind === "chat" && result.chatId) {
-      let chat = [...(allChatsQuery.data ?? []), ...quickChats].find((item) => item.id === result.chatId) ?? null;
-      if (!chat) {
-        const response = await fetch(`/api/project-chats/${result.chatId}`);
-        if (!response.ok) throw new Error("This conversation is no longer available.");
-        chat = await response.json() as ProjectChat;
-      }
-      await openChat(chat);
-      return;
+      const response = await fetch(`/api/project-chats/${result.chatId}`);
+      if (!response.ok) throw new Error("This conversation is no longer available.");
+      const chat = await response.json() as ProjectChat;
+      if (!matchesSavedSearchChat(result, chat)) throw new Error("This conversation moved or is no longer active.");
+      if (busyRef.current || sendInFlightRef.current) return false;
+      if (selection.chatId !== chat.id && (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before))) return false;
+      return await openChat(chat, true);
     }
 
     if (result.projectId) {
-      let project = projects.find((item) => item.id === result.projectId) ?? null;
-      if (!project) {
-        const response = await fetch(`/api/projects/${result.projectId}`);
-        if (!response.ok) throw new Error("This Project is no longer available.");
-        project = await response.json() as Project;
+      const response = await fetch(`/api/projects/${result.projectId}`);
+      if (!response.ok) throw new Error("This Project is no longer available.");
+      const project = await response.json() as Project;
+      if (project.id !== result.projectId || project.status !== "active" || project.trashedAt) throw new Error("This Project is no longer active.");
+      if (busyRef.current || sendInFlightRef.current) return false;
+      if (result.kind === "project") {
+        if (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before)) return false;
+        return await openProject(project, true, true);
       }
-      if (selection.projectId !== project.id && !(await openProject(project))) return;
       if (result.kind === "artifact" || result.kind === "file") {
         const exactTarget = resolveWorkSearchLibraryTarget(result);
         if (!exactTarget) throw new Error("This search result has no exact available object identity.");
-        if (busy) { setLifecycleNotice("Stop the current response before opening a search result."); return; }
+        if (selection.projectId !== project.id) {
+          if (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before)) return false;
+          if (!(await openProject(project, true))) return false;
+        }
+        if (busyRef.current || artifactDraftDirtyRef.current) return false;
         setLibrarySelection((current) => ({ ...exactTarget, request: (current?.request ?? 0) + 1 }));
         setSection("library");
         setShowLifecycleCenter(false);
         setContextOpen(false);
-      } else if (selection.projectId === project.id) setSection("conversation");
+        return true;
+      }
     }
+    return false;
   };
   const handleChatLifecycleAction = async (chat: ProjectChat, action: LifecycleAction) => {
-    if (busy) { setLifecycleNotice("Stop the current response before changing saved chats."); return; }
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current) { setLifecycleNotice("Finish the current request before changing saved chats."); return; }
     setLifecycleNotice(null);
     try {
       if (action === "rename") {
@@ -822,20 +855,26 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const before = currentDraftRef.current;
+        const leaving = action === "archive" && selection.chatId === chat.id;
+        if (leaving && !(await confirmConversationSwitch(true))) return;
         await updateProjectChat(chat.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.chatId === chat.id) {
+        if (leaving && discardConversationDraft(before)) {
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(chat.projectId === null ? "quick" : "project");
         }
         invalidate(chat.projectId, chat.id);
         return;
       }
       if (action === "delete") {
+        const before = currentDraftRef.current;
+        const leaving = selection.chatId === chat.id;
+        if (leaving && !(await confirmConversationSwitch(true))) return;
         if (!(await requestLifecycle({ title: "Move chat to Trash?", detail: `“${chat.title}” can be restored from Trash & archive.`, confirmLabel: "Move to Trash" }))) return;
         await trashProjectChat(chat.id);
-        if (selection.chatId === chat.id) {
+        if (leaving && discardConversationDraft(before)) {
           selection.setChatId(null);
-          setChatMode("project");
+          setChatMode(chat.projectId === null ? "quick" : "project");
         }
         invalidate(chat.projectId, chat.id);
         return;
@@ -849,7 +888,7 @@ export default function ProjectExperienceShell({
     }
   };
   const handleProjectLifecycleAction = async (project: Project, action: LifecycleAction) => {
-    if (busy) { setLifecycleNotice("Stop the current response before changing Projects."); return; }
+    if (busy || busyRef.current || sendInFlightRef.current || projectCreationInFlightRef.current) { setLifecycleNotice("Finish the current request before changing Projects."); return; }
     setLifecycleNotice(null);
     try {
       if (action === "rename") {
@@ -866,22 +905,30 @@ export default function ProjectExperienceShell({
         return;
       }
       if (action === "archive" || action === "restore") {
+        const before = currentDraftRef.current;
+        const leaving = action === "archive" && selection.projectId === project.id;
+        if (leaving && !(await confirmConversationSwitch(true))) return;
         await updateProject(project.id, { status: action === "archive" ? "archived" : "active" });
-        if (action === "archive" && selection.projectId === project.id) {
+        if (leaving && discardConversationDraft(before)) {
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
         return;
       }
       if (action === "delete") {
+        const before = currentDraftRef.current;
+        const leaving = selection.projectId === project.id;
+        if (leaving && !(await confirmConversationSwitch(true))) return;
         const dependencies = await getProjectDependencySummary(project.id);
         const detail = dependencies.total ? ` This moves ${dependencies.total} dependent object${dependencies.total === 1 ? "" : "s"} to Trash.` : "";
         if (!(await requestLifecycle({ title: "Move Project to Trash?", detail: `“${project.name}” can be restored from Trash & archive.${detail}`, confirmLabel: "Move to Trash" }))) return;
         await trashProject(project.id);
-        if (selection.projectId === project.id) {
+        if (leaving && discardConversationDraft(before)) {
           selection.setChatId(null);
           selection.setProjectId(null);
+          setChatMode("quick");
         }
         invalidate();
       }
@@ -890,27 +937,50 @@ export default function ProjectExperienceShell({
     }
   };
 
-  const newProjectChat = async (starterPrompt?: string) => {
-    if (busy || !selection.projectId) return;
-    if (!(await confirmConversationSwitch())) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setPendingPersonalFinance(null); return; }
-    let chat: ProjectChat;
-    try { chat = await createProjectChat(selection.projectId); }
-    catch (error) { pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false; setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project chat."); return; }
-    invalidate(selection.projectId, chat.id);
-    void openChat(chat, true);
-    if (starterPrompt?.trim()) {
-      setInput(starterPrompt.trim());
-      requestAnimationFrame(() => composerRef.current?.focus());
-    }
+  const newProjectChat = async (starterPrompt?: string, intent?: {
+    artifactId?: string;
+    personalFinance?: P6PersonalFinanceRequest;
+    replay?: ArtifactReplayDraft;
+  }) => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || !selection.projectId) return;
+    chatCreationInFlightRef.current = true;
+    const before = currentDraftRef.current;
+    try {
+      if (!(await confirmConversationSwitch(true, true))) return;
+      const chat = await createProjectChat(selection.projectId);
+      invalidate(chat.projectId, chat.id);
+      if (!discardConversationDraft(before)) return;
+      // Keep operation intent local until creation and the draft fence succeed.
+      // Cancelled/failed creation cannot contaminate a later unrelated Chat.
+      pendingArtifactOpenRef.current = intent?.artifactId ?? null;
+      pendingArtifactFocusRef.current = false;
+      setPendingPersonalFinance(intent?.personalFinance ?? null);
+      if (intent?.replay) {
+        updateSourceScope(intent.replay.sourceScope);
+        setExecutionMode(intent.replay.executionMode);
+      }
+      await openChat(chat, true);
+      if (starterPrompt?.trim()) {
+        setInput(starterPrompt.trim());
+        requestAnimationFrame(() => composerRef.current?.focus());
+      }
+    } catch (error) {
+      setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Project Chat. Your draft remains here.");
+    } finally { chatCreationInFlightRef.current = false; }
   };
 
   const newQuickChat = async () => {
-    if (!(await confirmConversationSwitch())) return;
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current) return;
+    chatCreationInFlightRef.current = true;
+    const before = currentDraftRef.current;
     try {
+      if (!(await confirmConversationSwitch(true, true))) return;
       const chat = await createQuickChat();
       invalidate(null, chat.id);
-      void openChat(chat, true);
-    } catch (error) { setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a chat."); }
+      if (!discardConversationDraft(before)) return;
+      await openChat(chat, true);
+    } catch (error) { setLifecycleNotice(error instanceof Error ? error.message : "Unable to create a Chat. Your draft remains here."); }
+    finally { chatCreationInFlightRef.current = false; }
   };
 
   const startTemporary = async () => {
@@ -1074,10 +1144,10 @@ export default function ProjectExperienceShell({
     if (!gateway || !resumeChatId) return;
     let abandoned = false;
     const attach = async () => {
-      if (busyRef.current) return;
+      if (busyRef.current || sendInFlightRef.current) return;
       const { runs } = await gateway.request("conversation.active", undefined, { timeoutMs: 15_000 });
       const run = runs.find((candidate) => candidate.chatId === resumeChatId);
-      if (!run || abandoned || busyRef.current) return;
+      if (!run || abandoned || busyRef.current || sendInFlightRef.current) return;
       busyRef.current = true;
       traceOwnerChatRef.current = resumeChatId;
       setBusy(true);
@@ -1088,12 +1158,9 @@ export default function ProjectExperienceShell({
       if (persisted) setLastSubmittedMessage(persisted.content);
       try {
         const result = await attachConversationRun(gateway, run.requestId, applyRuntimeEvent);
-        if (result.text) {
-          const parsed = parseProjectWorkspaceDirectives(result.text);
-          for (const action of parsed.actions) {
-            recordP1ShellEvent("living_workspace_action");
-            await applyWorkspaceAction(action, "assistant");
-          }
+        // Reattachment observes buffered output; it must never replay workspace mutations.
+        if (!hasObservedCompletion(result.events, run.requestId)) {
+          setLifecycleNotice("The previous run has no observed completion. Inspect its status before retrying; no workspace action was replayed.");
         }
         invalidate(selection.projectId, resumeChatId);
       } finally {
@@ -1120,7 +1187,18 @@ export default function ProjectExperienceShell({
     const hasStagedAttachments = Boolean(override?.attachments?.length || pendingAttachmentRefs.length || pendingAttachmentFiles.length);
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
-    if (!message || busy) return;
+    if (!message || busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) return;
+    if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences && (sourceScope === "auto" || sourceScope === "my_data")) {
+      const owned = resources.filter(resource => resource.projectId === selection.projectId && resource.status === "active" && !resource.trashedAt);
+      if (ambiguousMentionTokens(owned, message).length) {
+        setLifecycleNotice("That Project reference matches multiple resource names. Rename duplicates or remove the mention; your draft is unchanged.");
+        return;
+      }
+    }
+    sendInFlightRef.current = true;
+    const originalComposerDraft = input;
+    const canClearDraft = mayClearComposerDraft(originalComposerDraft, message, Boolean(override?.continuationOf));
+    try {
     followLatestRef.current = true;
     setAwayFromLatest(false);
     setLifecycleNotice(null);
@@ -1140,12 +1218,12 @@ export default function ProjectExperienceShell({
           setArtifactViewVersion(result.version);
           invalidate(detail.artifact.projectId, selection.chatId); invalidateArtifacts(detail.artifact.projectId, detail.artifact.id);
         }
-        setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
       } catch (cause) { setLifecycleNotice(cause instanceof Error ? cause.message : "Terminal operation was not applied."); }
       return;
     }
     const terminalRequest = !hasStagedAttachments && !override?.approval && !override?.continuationOf && renderTerminalPanel ? parseChatTerminalRequest(message, terminalContext?.symbol ?? null, audience) : null;
-    if (terminalRequest) { if (await openTerminalPanel(terminalRequest, message)) setInput(""); return; }
+    if (terminalRequest) { if (await openTerminalPanel(terminalRequest, message) && canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message)); return; }
     if (sourceScope === "files" && !hasStagedAttachments) {
       setLifecycleNotice("Files scope requires at least one explicitly attached file.");
       return;
@@ -1239,6 +1317,9 @@ export default function ProjectExperienceShell({
     }
 
     recordP1ShellEvent("composer_submit");
+    busyRef.current = true;
+    cancelAcknowledgedRunRef.current = null;
+    setCancelAcknowledgedRunId(null);
     setBusy(true);
     setStreaming("");
     setRuntimeEvents([]);
@@ -1249,7 +1330,7 @@ export default function ProjectExperienceShell({
         const retrying = Boolean(override?.continuationOf);
         const userMessage: LocalMessage = { id: `u-${Date.now()}`, role: "user", content: message };
         if (!retrying) setTemporaryMessages((current) => [...current, userMessage]);
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
         const result = await runConversation(requireGateway(), {
           chatId: null,
           body: {
@@ -1269,18 +1350,21 @@ export default function ProjectExperienceShell({
           if (!retrying) {
             setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
           }
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
         }
-        const final = result.error || result.text;
-        if (final) {
+        const final = result.text;
+        if (result.error && !hasObservedCompletion(result.events, requestId)) {
+          setLifecycleNotice(result.error);
+        }
+        if (hasObservedCompletion(result.events, requestId) && final) {
           const parsed = parseProjectWorkspaceDirectives(final);
           for (const action of parsed.actions) {
             recordP1ShellEvent("living_workspace_action");
@@ -1309,7 +1393,11 @@ export default function ProjectExperienceShell({
 
         if (pendingAttachmentFiles.length && !override?.continuationOf) {
           for (const file of [...pendingAttachmentFiles]) {
-            const attachment = await uploadProjectChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file);
+            const key = stagedFileKey(file);
+            setUploadingAttachment({ key, fileName: file.name, index: pendingAttachmentFiles.findIndex(item => stagedFileKey(item) === key) + 1, total: pendingAttachmentFiles.length, progress: { state: "transferring", percent: null } });
+            const attachment = await uploadRealChatAttachment(chatMode === "project" ? selection.projectId : null, chatId, file, progress => {
+              setUploadingAttachment(current => current?.key === key ? { ...current, progress } : current);
+            });
             attachmentsForRequest = [...attachmentsForRequest, attachment];
             payload.attachments = attachmentsForRequest;
             setPendingAttachmentRefs(attachmentsForRequest);
@@ -1318,7 +1406,7 @@ export default function ProjectExperienceShell({
             setLastWorkflowRequest((current) => current ? { ...current, attachments: attachmentsForRequest } : current);
           }
         }
-        if (!override?.continuationOf) setInput("");
+        if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
 
         const result = await runConversation(requireGateway(), {
           chatId,
@@ -1326,29 +1414,21 @@ export default function ProjectExperienceShell({
           onEvent: applyRuntimeEvent,
         });
         if (result.status === 428) {
-          setInput(message);
+          setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
           setVoiceTranscriptReviewed(false);
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
+        if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
         }
         if (result.ok) setPendingAttachmentRefs([]);
         if (result.error && !result.events.some((runtimeEvent) => runtimeEvent.type === "error")) {
-          const at = new Date().toISOString();
-          const syntheticError: ConversationRuntimeEvent = { type: "error", requestId, at, message: result.error!, code: "request_failed" };
-          const syntheticDone: ConversationRuntimeEvent = { type: "done", requestId, at, status: "failed" };
-          recordP2ConversationEvent(syntheticDone);
-          setRuntimeEvents((current) => [
-            ...current,
-            syntheticError,
-            syntheticDone,
-          ]);
+          setLifecycleNotice(result.error);
         }
-        if (result.text) {
+        if (hasObservedCompletion(result.events, requestId) && result.text) {
           const parsed = parseProjectWorkspaceDirectives(result.text);
           for (const action of parsed.actions) {
             recordP1ShellEvent("living_workspace_action");
@@ -1359,16 +1439,24 @@ export default function ProjectExperienceShell({
         invalidate(selection.projectId, chatId);
       }
     } catch (error) {
-      if (!override?.continuationOf) setInput(message);
+      if (!override?.continuationOf) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
       setLifecycleNotice(error instanceof Error ? error.message : "Unable to send this conversation request.");
     } finally {
+      setUploadingAttachment(null);
       setStreaming("");
+      busyRef.current = false;
       setBusy(false);
+    }
+    } catch {
+      setLifecycleNotice("LiOS could not start that request. Your unsent draft is still available.");
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
   const approveRuntimeAction = async (action: ConversationActionName, scope: ApprovalGrant["scope"]) => {
     if (!lastSubmittedMessage || !runtimeRequestId) return;
+    if (declinedRunAction?.requestId === runtimeRequestId && declinedRunAction.action === action) return;
     if (scope === "project" && (chatMode !== "project" || !selection.projectId)) return;
     // The server decides what this run may do: record the approval there first. The request body never carries it.
     try {
@@ -1407,23 +1495,42 @@ export default function ProjectExperienceShell({
     }
   };
 
-  const denyRuntimeAction = (action: ConversationActionName) => {
-    setRuntimeEvents((current) => {
-      const retained = current.filter((runtimeEvent) => {
-        if (runtimeEvent.type === "approval_required" && runtimeEvent.action === action) return false;
-        if (runtimeEvent.type === "mutation_review" && runtimeEvent.proposal.action === action) return false;
-        if (runtimeEvent.type === "done") return false;
-        return true;
-      });
-      return runtimeRequestId
-        ? [...retained, { type: "done" as const, requestId: runtimeRequestId, at: new Date().toISOString(), status: "cancelled" as const }]
-        : retained;
-    });
-  };
-
   const cancelRuntime = async () => {
+    if (!runtimeRequestId || cancelInFlightRef.current || cancelAcknowledgedRunRef.current === runtimeRequestId) return;
+    const targetRun = runtimeRequestId;
+    cancelInFlightRef.current = true;
+    setCancelPending(true);
+    try {
+      const acknowledged = await cancelConversationRun(requireGateway(), targetRun);
+      if (acknowledged) {
+        cancelAcknowledgedRunRef.current = targetRun;
+        setCancelAcknowledgedRunId(targetRun);
+        recordP1ShellEvent("composer_cancel");
+      } else {
+        setLifecycleNotice("Home did not acknowledge Stop. The original run may still be active.");
+      }
+    } catch {
+      setLifecycleNotice("Could not confirm Stop with Home. Inspect the original run after reconnecting.");
+    } finally {
+      cancelInFlightRef.current = false;
+      setCancelPending(false);
+    }
+  };
+  const denyRuntimeAction = (action: ConversationActionName) => {
     if (!runtimeRequestId) return;
-    recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
+    const latestDone = [...runtimeEvents].reverse().find(event => event.requestId === runtimeRequestId && event.type === "done");
+    const agent = runtimeEvents.some(event => event.requestId === runtimeRequestId && (
+      event.type === "governed_tool_approval_required" || (event.type === "plan" && event.plan.steps.some(step => step.kind === "agent"))
+    ));
+    if (!agent && latestDone?.type === "done" && latestDone.status === "waiting_approval") {
+      // This legacy attempt already ended at its approval boundary. Declining
+      // dismisses only the proposal; it is not a new server execution outcome.
+      setDeclinedRunAction({ requestId: runtimeRequestId, action });
+      setLifecycleNotice("You declined this proposed action. No approval or retry was submitted.");
+      return;
+    }
+    setLifecycleNotice(`Declined ${action}; requesting cancellation of the original run.`);
+    void cancelRuntime();
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
   const proposeSandboxTerminal = async () => {
@@ -1498,12 +1605,13 @@ export default function ProjectExperienceShell({
 
   const retryShell = async () => {
     recordP1ShellEvent("shell_retry");
-    await Promise.all([
+    const results = await Promise.all([
       projectsQuery.refetch(),
       quickChatsQuery.refetch(),
       chatMode === "project" && selection.projectId ? projectHomeQuery.refetch() : Promise.resolve(),
       chatMode !== "temporary" && selection.chatId ? messagesQuery.refetch() : Promise.resolve(),
     ]);
+    if (results.some(result => result?.isError)) return;
     recordP1ShellEvent("shell_recovered");
   };
 
@@ -1522,32 +1630,16 @@ export default function ProjectExperienceShell({
       setLifecycleNotice("Temporary Chat does not retain files. Start a regular Quick Chat or Project Chat.");
       return;
     }
-    const incoming = Array.from(fileList);
-    if (pendingAttachmentFiles.length + pendingAttachmentRefs.length + incoming.length > 5) {
-      setLifecycleNotice("A message can include up to five files. Remove one before adding more.");
-      return;
-    }
-    const accepted = new Set(["pdf", "docx", "pptx", "xlsx", "txt", "md", "csv", "tsv", "json", "png", "jpg", "jpeg", "webp"]);
-    for (const file of incoming) {
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!accepted.has(extension)) {
-        setLifecycleNotice(`${file.name}: use PDF, DOCX, PPTX, XLSX, TXT, Markdown, CSV, TSV, JSON, PNG, JPEG or WebP.`);
-        return;
-      }
-      if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
-        setLifecycleNotice(`${file.name}: each file must be between 1 byte and 20 MiB.`);
-        return;
-      }
-      if (["png", "jpg", "jpeg", "webp"].includes(extension) && file.size > 6 * 1024 * 1024) {
-        setLifecycleNotice(`${file.name}: images must be 6 MiB or smaller.`);
-        return;
-      }
-    }
-    setLifecycleNotice(null);
-    setPendingAttachmentFiles((current) => [...current, ...incoming]);
+    if (busyRef.current || sendInFlightRef.current) { setLifecycleNotice("Finish the pending request before changing staged files."); return; }
+    const staged = planAttachmentStage(currentDraftRef.current.files, Array.from(fileList), currentDraftRef.current.attachments.length);
+    if (staged.error) { setLifecycleNotice(staged.error); return; }
+    setLifecycleNotice(staged.files.length === currentDraftRef.current.files.length ? "Those files are already staged." : null);
+    currentDraftRef.current = { ...currentDraftRef.current, files: staged.files };
+    setPendingAttachmentFiles(staged.files);
   };
 
   const removePendingAttachment = (id: string) => {
+    if (busyRef.current || sendInFlightRef.current) return;
     setPendingAttachmentRefs((current) => current.filter((attachment) => attachment.id !== id));
     setPendingAttachmentFiles((current) => current.filter((file) => `${file.name}:${file.size}:${file.lastModified}` !== id));
   };
@@ -1562,7 +1654,9 @@ export default function ProjectExperienceShell({
   };
 
   const selectMention = (resource: ProjectResource) => {
-    setInput((current) => current.replace(/@[^\s@]*$/, `@${resource.label.replace(/\s+/g, "_")} `));
+    if (!mentionCandidates.some(candidate => candidate.id === resource.id)) return;
+    setInput(current => stageResourceMention(current, resource.label));
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const createResource = async () => {
@@ -1580,26 +1674,32 @@ export default function ProjectExperienceShell({
   };
 
   const createNewProject = async () => {
-    if (creatingProject || busy) return;
+    if (creatingProject || busy || busyRef.current || sendInFlightRef.current || projectCreationInFlightRef.current) return;
     if (!newProjectName.trim()) { setProjectCreateError("Enter a Project name."); return; }
-    if (!(await confirmConversationSwitch())) return;
+    projectCreationInFlightRef.current = true;
+    const before = currentDraftRef.current;
     setCreatingProject(true); setProjectCreateError(null);
     try {
+      if (!(await confirmConversationSwitch(true, true))) return;
       const project = await createProject({ name: newProjectName.trim() });
+      invalidate(project.id);
+      if (!discardConversationDraft(before)) return;
       setNewProjectName(""); setNewProjectOpen(false);
-      invalidate(project.id); void openProject(project, true);
+      await openProject(project, true);
     } catch (error) { setProjectCreateError(error instanceof Error ? error.message : "Unable to create a Project. Your name is still here; try again."); }
-    finally { setCreatingProject(false); }
+    finally { projectCreationInFlightRef.current = false; setCreatingProject(false); }
   };
 
   const chooseChatDestination = (chat: ProjectChat) => {
     setProjectDestination({
       description: `Move “${chat.title}” and its saved messages into a Project. Future requests can use that Project's context.`,
       save: async (project) => {
-        if (selection.chatId === chat.id && !(await confirmConversationSwitch())) throw new Error("Save or reset the current draft before moving this Chat.");
+        const before = currentDraftRef.current;
+        const selectedHere = selection.chatId === chat.id;
+        if (selectedHere && !(await confirmConversationSwitch(true))) throw new Error("Save or reset the current draft before moving this Chat.");
         const moved = await promoteQuickChat(chat.id, project.id);
         invalidate(project.id, moved.id);
-        if (selection.chatId === chat.id) await openChat(moved, true);
+        if (selectedHere && discardConversationDraft(before)) await openChat(moved, true);
       },
     });
   };
@@ -1832,8 +1932,8 @@ export default function ProjectExperienceShell({
                   initialVersion={librarySelection?.projectId === home.project.id ? librarySelection.version ?? null : null}
                   selectedResourceId={librarySelection?.projectId === home.project.id ? librarySelection.resourceId : null}
                   resources={home.resources}
-                  onAskArtifact={(id, title, prompt) => { pendingArtifactOpenRef.current = id; pendingArtifactFocusRef.current = false; void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review.`); }}
-                  onFocusArtifact={(id) => { pendingArtifactOpenRef.current = id; pendingArtifactFocusRef.current = false; void newProjectChat(); }} /> : <ProjectAutomationPanel key={home.project.id} projectId={home.project.id} />}
+                  onAskArtifact={(id, title, prompt) => { void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review.`, { artifactId: id }); }}
+                  onFocusArtifact={(id) => { void newProjectChat(undefined, { artifactId: id }); }} /> : <ProjectAutomationPanel key={home.project.id} projectId={home.project.id} />}
               </div>}
             </>}
             {section === "plugins" && <GovernedExtensionsPanel />}
@@ -1862,11 +1962,11 @@ export default function ProjectExperienceShell({
               <div className="font-terminal text-[11px] uppercase tracking-[0.18em] text-red-200">Workspace recovery</div>
               <div className="mt-3 font-ui text-[16px] font-semibold text-foreground">LiOS could not restore part of this workspace.</div>
               <div className="mt-2 font-ui text-[12px] leading-5 text-muted-foreground">
-                {shellError instanceof Error ? shellError.message : "The Project or conversation state is temporarily unavailable."}
+                {shellErrorStatus === 401 ? "Your session cannot read this saved work. Sign in again." : shellErrorStatus === 403 ? "Your current account cannot access this workspace. No permissions were changed." : shellErrorStatus === 404 ? "This saved Project or Chat is no longer available." : "The Project or Chat could not be restored. Retry without resetting your work."}
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button type="button" onClick={() => void retryShell()} className="rounded-md bg-amber-400 px-3 py-2 font-ui text-[12px] font-semibold text-black hover:bg-amber-300">Retry restore</button>
-                <button type="button" onClick={() => void startTemporary()} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[12px] text-muted-foreground hover:text-foreground">Open Temporary Chat</button>
+                {shellErrorStatus === 401 || shellErrorStatus === 403 ? <button type="button" onClick={onLogout} className="min-h-10 rounded border px-3 text-sm">Sign out</button> : <button type="button" onClick={() => void startTemporary()} className="min-h-10 rounded border px-3 text-sm">Open Temporary Chat</button>}
               </div>
               <div className="mt-3 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/70">No connector setup or data reset is required to retry.</div>
             </div>
@@ -1888,28 +1988,17 @@ export default function ProjectExperienceShell({
             onRestoreProject={() => void handleProjectLifecycleAction(home.project, "restore")}
             onTrashProject={() => void handleProjectLifecycleAction(home.project, "delete")}
             onAskArtifact={(id, title, prompt) => {
-              pendingArtifactOpenRef.current = id;
-              pendingArtifactFocusRef.current = false;
-              void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`);
+              void newProjectChat(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`, { artifactId: id });
             }}
-            onFocusArtifact={(id, title) => {
-              pendingArtifactOpenRef.current = id;
-              pendingArtifactFocusRef.current = false;
-              setLifecycleNotice(`Focused Artifact "${title}" as the active professional work object.`);
-              void newProjectChat();
+            onFocusArtifact={(id) => {
+              void newProjectChat(undefined, { artifactId: id });
             }}
             onRerunArtifact={(id, title, spec) => {
-              pendingArtifactOpenRef.current = id;
-              pendingArtifactFocusRef.current = false;
               const replay = artifactReplayDraft(title, spec);
-              updateSourceScope(replay.sourceScope);
-              setExecutionMode(replay.executionMode);
-              setLifecycleNotice(`Restored the saved replay posture for "${title}". Review or send the staged request.`);
-              void newProjectChat(replay.message);
+              void newProjectChat(replay.message, { artifactId: id, replay });
             }}
             onAnalyzePersonalFinance={(profile) => {
-              setPendingPersonalFinance(profile);
-              void newProjectChat("Analyze my Personal Finance profile with the deterministic LiOS engine. Show net worth, trailing cash flow, debt payoff, goal funding and retirement gaps. Keep every assumption explicit and do not invent missing observations.");
+              void newProjectChat("Analyze my Personal Finance profile with the deterministic LiOS engine. Show net worth, trailing cash flow, debt payoff, goal funding and retirement gaps. Keep every assumption explicit and do not invent missing observations.", { personalFinance: profile });
             }}
           />
         ) : (
@@ -1926,7 +2015,7 @@ export default function ProjectExperienceShell({
                 </button>
               )}
               {chatMode === "quick" && activeChat && (
-                <button type="button" disabled={busy} onClick={() => chooseChatDestination(activeChat)} className="rounded-md px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground">
+                <button type="button" disabled={busy} onClick={event => { event.currentTarget.focus(); chooseChatDestination(activeChat); }} className="rounded-md px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground">
                   Move to Project
                 </button>
               )}
@@ -1976,7 +2065,10 @@ export default function ProjectExperienceShell({
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
-                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-[12px] font-semibold text-black transition-colors hover:bg-amber-300">
+                      <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-sm font-semibold text-black focus-visible:outline focus-visible:outline-2">
+                        <Sparkles className="h-4 w-4" /> Ask LiOS
+                      </button>
+                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
                         <Plus className="h-3.5 w-3.5" /> Create a Project
                       </button>
                       <button
@@ -2007,6 +2099,11 @@ export default function ProjectExperienceShell({
                       {message.role === "assistant"
                         ? <ChatMarkdown text={message.content} sources={"metadata" in message ? savedMessageCitationSources(message.metadata) : undefined} />
                         : <div className="whitespace-pre-wrap font-ui text-[14px] leading-6 text-foreground">{message.content}</div>}
+                      {message.role !== "system" && <ChatMessageActions content={message.content} role={message.role}
+                        onQuote={message.role === "assistant" ? () => {
+                          setInput(draft => quoteChatResponse(draft, message.content));
+                          requestAnimationFrame(() => composerRef.current?.focus());
+                        } : undefined} />}
                       {message.role === "assistant" && chatMode !== "temporary" && "metadata" in message && <SavedArtifactCards metadata={message.metadata} projectId={selection.projectId} chatId={selection.chatId} activeId={conversationArtifactRef} onOpen={async (id, version) => { if (id === conversationArtifactRef && version === artifactViewVersion) return; if (artifactDraftDirtyRef.current && !(await requestLifecycle({ title: "Leave unsaved Artifact edits?", detail: "Opening this saved revision discards the current local Artifact draft. Saved revisions are unchanged.", confirmLabel: "Discard local edits" }))) return; artifactDraftDirtyRef.current = false; setArtifactFocusMode(false); setConversationArtifactRef(id); setArtifactViewVersion(version); }} />}
                       {message.role === "user" && chatMode !== "temporary" && selection.chatId && savedMessageAttachments(message).length > 0 && (
                         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2" aria-label="Attached files">
@@ -2088,9 +2185,14 @@ export default function ProjectExperienceShell({
                 />
               )}
               <ConversationRuntimeTrace
-                events={runtimeEvents}
+                events={runtimeEvents.filter(event => !(declinedRunAction?.requestId === event.requestId && (
+                  (event.type === "approval_required" && event.action === declinedRunAction.action)
+                  || (event.type === "mutation_review" && event.proposal.action === declinedRunAction.action)
+                )))}
                 requestId={runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null}
                 busy={busy}
+                cancelPending={cancelPending}
+                stopRequested={cancelAcknowledgedRunId !== null && cancelAcknowledgedRunId === runtimeRequestId}
                 onCancel={() => void cancelRuntime()}
                 onApprove={(action, scope) => void approveRuntimeAction(action, scope)}
                 onDeny={denyRuntimeAction}
@@ -2099,24 +2201,31 @@ export default function ProjectExperienceShell({
                 onMutationApply={(action) => void approveRuntimeAction(action, "once")}
                 onMutationCancel={(action) => denyRuntimeAction(action)}
                 onRecoveryAction={(action) => {
-                  if (/^(connect\b|open connection center$)/i.test(action)) {
+                  if (firstUseRecoveryDestination(action) === "connections") {
                     if (lastSubmittedMessage.trim()) {
-                      setInput(lastSubmittedMessage);
+                      setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
                     }
                     onOpenEnvironment();
                     return;
                   }
-                  if (action.startsWith("/")) {
-                    void runCommand(action);
-                    return;
-                  }
-                  setInput(action);
+                  setInput(current => stageSafeRunRetry(current, action));
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
-                onRetry={() => { if (lastSubmittedMessage.trim() && !busy) void send({ message: lastSubmittedMessage }); }}
+                onRetry={() => {
+                  if (busy || !lastSubmittedMessage.trim()) return;
+                  setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
+                  setLifecycleNotice("Review the previous request and run status before choosing Send. Nothing was automatically retried.");
+                  requestAnimationFrame(() => composerRef.current?.focus());
+                }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
                 {...interruptedRun.traceProps}
+                onResume={() => {
+                  if (sendInFlightRef.current || cancelInFlightRef.current) return;
+                  cancelAcknowledgedRunRef.current = null;
+                  setCancelAcknowledgedRunId(null);
+                  interruptedRun.resume();
+                }}
                 onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
@@ -2204,6 +2313,11 @@ export default function ProjectExperienceShell({
                     </div>
                   </div>
                 )}
+                {uploadingAttachment && <div role="status" aria-live="polite" className="border-b border-cyan-300/20 px-3 py-2 font-ui text-sm">
+                  <p>{uploadingAttachment.progress.state === "verifying" ? "Verifying saved file" : "Uploading file"} {uploadingAttachment.index} of {uploadingAttachment.total}: {uploadingAttachment.fileName}</p>
+                  <progress max={100} value={uploadingAttachment.progress.percent ?? undefined} aria-label="Attachment transfer progress" className="my-2 w-full" />
+                  <p>Transfer progress is not confirmation of storage. The local file remains staged until the server confirms it.</p>
+                </div>}
                 {(pendingAttachmentFiles.length > 0 || pendingAttachmentRefs.length > 0) && (
                   <div className="border-b border-cyan-300/10 bg-cyan-300/[0.025] px-3 py-2" aria-label="Files staged for this message">
                     <div className="flex flex-wrap gap-1.5">
@@ -2214,7 +2328,7 @@ export default function ProjectExperienceShell({
                             <FileText className="h-3 w-3 shrink-0" />
                             <span className="max-w-[220px] truncate">{file.name}</span>
                             <span className="shrink-0 font-terminal text-muted-foreground">{formatAttachmentSize(file.size)}</span>
-                            <button type="button" onClick={() => removePendingAttachment(key)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${file.name}`}><X className="h-3 w-3" /></button>
+                            <button type="button" disabled={busy} onClick={() => removePendingAttachment(key)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${file.name}`}><X className="h-3 w-3" /></button>
                           </span>
                         );
                       })}
@@ -2223,18 +2337,18 @@ export default function ProjectExperienceShell({
                           <FileText className="h-3 w-3 shrink-0" />
                           <span className="max-w-[220px] truncate">{attachment.fileName}</span>
                           <span className="shrink-0 font-terminal text-muted-foreground">{formatAttachmentSize(attachment.byteLength)} · saved</span>
-                          <button type="button" onClick={() => removePendingAttachment(attachment.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${attachment.fileName}`}><X className="h-3 w-3" /></button>
+                          <button type="button" disabled={busy} onClick={() => removePendingAttachment(attachment.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Remove ${attachment.fileName}`}><X className="h-3 w-3" /></button>
                         </span>
                       ))}
                     </div>
                     <div className="mt-1.5 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/80">
-                      {sourceScope === "web"
-                        ? "Saved in this Chat · Web scope excludes file contents until you switch source scope"
-                        : !transmissionPolicy.allowResourceReferences
-                          ? "Saved in this Chat · current policy prevents sending file contents to AI"
-                          : sourceScope === "files"
-                            ? "Files scope · only explicitly attached files are staged for this Chat"
-                            : "Saved in this Chat · file contents may be sent under the selected AI transmission policy"}
+                      {pendingAttachmentFiles.length > 0
+                        ? "Local files staged · not yet confirmed saved. Send uploads them to this Chat."
+                        : "Server-confirmed attachment references staged for this Chat."}
+                      {" "}{sourceScope === "web" ? "Web scope excludes file contents."
+                        : !transmissionPolicy.allowResourceReferences ? "Current policy prevents sending file contents to AI."
+                        : sourceScope === "files" ? "Files scope uses only explicitly attached files."
+                        : "File contents may be sent only under the selected AI transmission policy."}
                     </div>
                   </div>
                 )}
@@ -2393,16 +2507,22 @@ export default function ProjectExperienceShell({
                   >
                     <Mic className="h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void send()}
-                    disabled={busy || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
-                    aria-label="Send"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </button>
+                  {busy && runtimeRequestId ? (
+                    <button type="button" onClick={() => void cancelRuntime()}
+                      disabled={cancelPending || cancelAcknowledgedRunId === runtimeRequestId}
+                      className="inline-flex min-h-10 items-center rounded-full border border-amber-300/45 px-3 font-ui text-sm focus-visible:outline focus-visible:outline-2 disabled:opacity-45"
+                      aria-label={cancelAcknowledgedRunId === runtimeRequestId ? "Stop requested" : cancelPending ? "Requesting Stop" : "Stop response"}>
+                      {cancelAcknowledgedRunId === runtimeRequestId ? "Stop requested" : cancelPending ? "Requesting Stop…" : "Stop"}
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => void send()}
+                      disabled={busy || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                      className="flex min-h-10 min-w-10 items-center justify-center rounded-full bg-amber-400 text-black focus-visible:outline focus-visible:outline-2 disabled:opacity-30"
+                      aria-label="Send"><Send className="h-4 w-4" /></button>
+                  )}
                 </div>
+                {(voiceRecorder.isRecording || voiceRecorder.isTranscribing) && <p role="status" className="px-4 pb-2 font-ui text-sm text-muted-foreground">{voiceRecorder.isRecording ? "Recording locally. Stop uploads the clip to LiOS Home for transcription." : "Transcribing the recorded clip in LiOS Home."} Review and edit the transcript before Send; provider pricing and quotas are not verified here.</p>}
+                {voiceProvidersQuery.isError && <button type="button" onClick={() => void voiceProvidersQuery.refetch()} className="mx-4 mb-2 min-h-10 text-sm underline">Retry voice provider status</button>}
                 {voiceRecorder.error && (
                   <div className="border-t border-red-500/20 bg-red-500/[0.04] px-3 py-1.5 font-ui text-[12px] text-red-300">
                     {voiceRecorder.error}

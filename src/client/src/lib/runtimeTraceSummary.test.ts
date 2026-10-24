@@ -73,3 +73,8 @@ test("durations read naturally", () => {
   assert.equal(formatDuration(1500), "1.5 s");
   assert.equal(formatDuration(42_000), "42 s");
 });
+
+test("an idle observer without a terminal Home event reports interruption, not execution success", () => {
+  assert.equal(summarizeRuntimeTrace([plan([], ["fetch"]), result("fetch", 1)], false).status, "interrupted");
+  assert.equal(summarizeRuntimeTrace([plan([], ["fetch"])], true).status, "running");
+});

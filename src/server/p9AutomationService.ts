@@ -55,6 +55,11 @@ import { getCompanyFilings } from "./secEdgarData";
 import { listSourceConnections } from "./sourceConnectionService";
 import { hashLedgerValue } from "./ledgerStore";
 import { withP10Span } from "./p10Observability";
+import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
+import { assertP9CurrentMcpSourceReferences } from "./p9LiveMcpSourcePolicy";
+import { resolveCredential } from "./credentialVault";
+import { assertP9LivePluginDependencies } from "./p9LivePluginPolicy";
+import { getP13PluginRuntimeHost } from "./p13PluginRuntime";
 import {
   beginP9Run,
   claimDueP9Workflows,
@@ -322,6 +327,36 @@ async function runConversationRerun(
     requestId: crypto.randomUUID(),
     continuationOf: null,
   });
+  // A saved workflow's citations are never lasting source authorization.
+  // Recheck the exact live owner/project/rights/credential before research or
+  // sending anything to a BYOAI model. L4 remains the only tool-effect grant.
+  if (workflow.sourceRefs.some(ref => ref.startsWith("source-connection:")
+    || ref.startsWith("mcp-server:") || ref.startsWith("mcp-tool:"))) {
+    assertP9CurrentMcpSourceReferences(
+      ctx, workflow.projectId, workflow.sourceRefs,
+      await listSourceConnections(ctx.userId),
+      ref => Boolean(resolveCredential("", ref)),
+    );
+  }
+  // P13 registry references are a dependency, never unattended plugin
+  // execution consent. Revalidate the process host's exact signed package
+  // *now*; the plugin broker and GM-11 remain responsible at invocation.
+  if ([...workflow.engineRefs, ...workflow.sourceRefs].some(ref => ref.startsWith("plugin:"))) {
+    const host = getP13PluginRuntimeHost();
+    assertP9LivePluginDependencies(
+      [...workflow.engineRefs, ...workflow.sourceRefs],
+      id => {
+        const installed = host.plugins.get(id);
+        if (!installed) return null;
+        const trust = host.trustStore.verify(installed.manifest, installed.trust.packageDigest);
+        return {
+          state: trust.state,
+          packageDigest: trust.packageDigest,
+          runtimeKind: installed.manifest.runtime.kind,
+        };
+      },
+    );
+  }
   const resolvedAttachments = await resolveProjectConversationAttachments(
     ctx, workflow.projectId, resources,
     request.sourceScope === "web" ? [] : request.attachments,
@@ -540,6 +575,8 @@ export async function executeP9Workflow(input: ExecuteP9WorkflowInput): Promise<
 
   try {
     const action = p9WorkflowActionSchema.parse(input.workflow.action);
+    // Saved rows (including restored backups) are never a grant ledger.
+    assertP9HasNoReplayedGrant(action);
     if (action.kind === "conversation_rerun" && action.sourceRequestId) {
       await requireSuccessfulP9Recipe(ctx, input.workflow.projectId, action);
     }

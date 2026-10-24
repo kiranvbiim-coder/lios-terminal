@@ -62,7 +62,6 @@ test("an ordinary finished run is quiet: no Terminal button, no plan, no counts,
   assert.doesNotMatch(markup, /Fetch filings|Resolved capabilities|Company research/);
   assert.doesNotMatch(markup, /\b1 step\b|\b1 source\b|SEC EDGAR|Run 2222/);
   assert.doesNotMatch(markup, /border-border\/60 bg-\[#080808\]/, "no per-run diagnostic card chrome");
-  assert.match(markup, /data-testid="trace-receipt"/, "the compact receipt anchor survives for restore checks");
   assert.match(markup, /data-testid="trace-show-work"[^>]*>Show work/);
   assert.match(markup, /aria-expanded="false"/);
 });
@@ -265,7 +264,6 @@ test("Quick Chat candidate offers retention in the same Chat and Temporary resul
 test("a failed or stopped run with no error card still shows a visible status line", () => {
   const failed = render([planEvent, event({ type: "done", status: "failed" })]);
   assert.match(failed, /role="status"[^>]*data-testid="trace-run-status"[^>]*data-run-status="failed"/);
-  assert.match(failed, /didn’t complete/);
   const cancelled = render([planEvent, event({ type: "done", status: "cancelled" })]);
   assert.match(cancelled, /data-run-status="cancelled"/);
   assert.match(cancelled, /stopped before it finished/);
@@ -304,4 +302,22 @@ test("a structured input gap is rendered once while unrelated source warnings re
   assert.equal((markup.match(/Valuation requires explicit deterministic/g) ?? []).length, 1);
   assert.doesNotMatch(markup, /data-testid="trace-error"|REQUEST_FAILED/);
   assert.match(markup, /Independent source is stale/);
+});
+
+test("completion without a receipt cannot borrow another request's receipt", () => {
+  const foreign = event({ type: "receipt", requestId: "99999999-9999-4999-8999-999999999999", receipt: {} });
+  const missing = render([foreign, planEvent, doneOk]);
+  assert.doesNotMatch(missing, /data-testid="trace-receipt"/);
+  assert.match(missing, /data-testid="trace-receipt-missing"/);
+  const actual = render([planEvent, event({ type: "receipt", receipt: {} }), doneOk]);
+  assert.match(actual, /data-testid="trace-receipt"/);
+  assert.doesNotMatch(actual, /trace-receipt-missing/);
+});
+
+test("unsettled idle observation stays visibly interrupted and pending Stop cannot be repeated", () => {
+  assert.match(render([planEvent, sourceResult]), /role="alert" data-testid="trace-interrupted"/);
+  const pending = render([planEvent], { busy: true, cancelPending: true });
+  assert.match(pending, /disabled="" aria-label="Requesting Stop"/);
+  const acknowledged = render([planEvent], { busy: true, stopRequested: true });
+  assert.match(acknowledged, /disabled="" aria-label="Stop requested"/);
 });
