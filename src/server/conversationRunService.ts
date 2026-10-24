@@ -796,7 +796,7 @@ async function runProjectChat(
             }
           },
         }));
-        if (!result.cancelled && !result.awaitingApproval && !held.errored && held.done?.status !== "failed") {
+        if (!result.cancelled && !result.awaitingApproval && !held.errored && held.done?.status === "completed") {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
           const refreshSpec = {
@@ -841,7 +841,7 @@ async function runProjectChat(
           persistedArtifactCount: persistedArtifacts.length,
           cancelled: result.cancelled,
           awaitingApproval: result.awaitingApproval,
-          failed: held.errored || held.done?.status === "failed",
+          failed: held.errored || held.done?.status !== "completed",
         });
         await transcript.recordText(savedAnswer ?? result.text);
 
