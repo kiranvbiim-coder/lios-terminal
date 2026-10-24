@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Send } from "lucide-react";
 import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
-import type { Project, ProjectChat, ProjectResource, ProjectSession } from "@/lib/useProjects";
+import { updateProjectResource, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
+import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
 import {
   VISUAL_ENVIRONMENTS,
   dispatchVisualContext,
@@ -67,6 +69,51 @@ export function ProjectHome({
   onAnalyzePersonalFinance: (profile: P6PersonalFinanceRequest) => void;
   onOpenContext: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [workQuery, setWorkQuery] = useState("");
+  const [pendingContext, setPendingContext] = useState<{ projectId: number; resourceId: string; from: ProjectResourceContextMode; to: ProjectResourceContextMode } | null>(null);
+  const [contextBusy, setContextBusy] = useState(false);
+  const [contextNotice, setContextNotice] = useState<string | null>(null);
+  const contextSaveInFlight = useRef(false);
+  const selectedProjectId = useRef(project.id);
+  selectedProjectId.current = project.id;
+  const found = useMemo(() => findProjectHomeItems(project.id, chats, resources, sessions, workQuery), [project.id, chats, resources, sessions, workQuery]);
+
+  async function confirmContextUpdate() {
+    const draft = pendingContext;
+    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id) return;
+    const resource = resources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
+    if (!resource || resource.contextMode !== draft.from || !mayEditProjectResourceContext(draft.projectId, resource, draft.to)) {
+      setPendingContext(null);
+      setContextNotice("Resource details changed. Reopen this Project's context to review the latest saved state.");
+      return;
+    }
+    contextSaveInFlight.current = true;
+    setContextBusy(true);
+    setContextNotice(null);
+    try {
+      const saved = await updateProjectResource(draft.projectId, draft.resourceId, { contextMode: draft.to });
+      if (selectedProjectId.current !== draft.projectId) return;
+      if (saved.projectId !== draft.projectId || saved.id !== draft.resourceId || saved.contextMode !== draft.to) {
+        setContextNotice("The server did not confirm this exact Project resource and mode. Reload the context before relying on the change.");
+      } else {
+        setContextNotice("Context mode saved for this Project resource. Source rights and retrieval permissions still apply.");
+      }
+      setPendingContext(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "home"], exact: true }),
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "resources"], exact: true }),
+      ]);
+    } catch {
+      if (selectedProjectId.current === draft.projectId) {
+        setContextNotice("Resource context change was not confirmed. The saved mode remains authoritative; refresh this Project before retrying.");
+      }
+    } finally {
+      contextSaveInFlight.current = false;
+      if (selectedProjectId.current === draft.projectId) setContextBusy(false);
+    }
+  }
+
   const [editingName, setEditingName] = useState(false);
   const [projectDepthOpen, setProjectDepthOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
@@ -75,6 +122,10 @@ export function ProjectHome({
   );
   useEffect(() => {
     setNameDraft(project.name);
+    setWorkQuery("");
+    setPendingContext(null);
+    setContextNotice(null);
+    setContextBusy(false);
     setEditingName(false);
     setProjectDepthOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
@@ -193,14 +244,20 @@ export function ProjectHome({
         </section>
 
 
+        <section aria-label="Find work within this Project" data-testid="project-scoped-discovery" className="mt-6 space-y-2 rounded-xl border border-border/55 bg-black/15 p-4">
+          <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Find this Project's chats, context and Sessions</label>
+          <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
+            placeholder="Search saved titles and resource kinds" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />
+          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} Sessions in this Project{workQuery.trim() ? " matching your search" : ""}. Search is local to the currently loaded Project; it does not search other Projects or change source access.</p>
+        </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
             <div className="flex items-center justify-between">
               <div className="font-ui text-[14px] font-semibold">Recent chats</div>
-              <span className="font-terminal text-[11px] text-muted-foreground">{chats.length} ACTIVE</span>
+              <span className="font-terminal text-[11px] text-muted-foreground">{found.chats.length} MATCHING</span>
             </div>
             <div className="mt-3 space-y-1.5">
-              {chats.length ? chats.slice(0, 8).map((chat) => (
+              {found.chats.length ? found.chats.slice(0, 8).map((chat) => (
                 <button key={chat.id} onClick={() => onOpenChat(chat)} className="flex w-full items-center gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left hover:border-amber-300/25 hover:bg-white/[0.025]">
                   <MessageSquare className="h-3.5 w-3.5 text-amber-300/80" />
                   <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-foreground">{chat.title}</span>
@@ -208,7 +265,7 @@ export function ProjectHome({
                 </button>
               )) : (
                 <button onClick={() => onNewChat()} className="w-full rounded-lg border border-dashed border-border/60 px-4 py-8 font-ui text-[13px] text-muted-foreground hover:border-amber-300/30 hover:text-foreground">
-                  Start the first conversation in this Project
+                  {workQuery.trim() ? "No matching chats. Start a new conversation in this Project" : "Start the first conversation in this Project"}
                 </button>
               )}
             </div>
@@ -217,10 +274,10 @@ export function ProjectHome({
           <section className="border-t border-border/45 pt-4">
             <div className="flex items-center justify-between gap-2">
               <div className="font-ui text-[14px] font-semibold">Project context</div>
-              <span className="font-terminal text-[11px] text-muted-foreground">{resources.length} SOURCES</span>
+              <span className="font-terminal text-[11px] text-muted-foreground">{found.resources.length} MATCHING</span>
             </div>
             <div className="mt-3 space-y-2">
-              {resources.slice(0, 6).map((resource) => (
+              {found.resources.slice(0, 6).map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-border/45 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-ui text-[13px] text-foreground">{resource.label}</span>
@@ -231,19 +288,19 @@ export function ProjectHome({
                   <div className="mt-1 font-terminal text-[11px] uppercase tracking-wider text-muted-foreground">{resource.kind}</div>
                 </div>
               ))}
-              {!resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-[13px] text-muted-foreground">No resources connected yet.</div>}
+              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-[13px] text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
             </div>
           </section>
         </div>
 
-        {!!sessions.length && (
+        {!!found.sessions.length && (
           <section className="mt-8 border-t border-border/45 pt-4">
             <div className="flex items-center justify-between">
               <div className="font-ui text-[14px] font-semibold">Resume a Session</div>
               <span className="font-terminal text-[11px] text-muted-foreground">FORKABLE ANALYTICAL STATE</span>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {sessions.slice(0, 6).map((session) => (
+              {found.sessions.slice(0, 6).map((session) => (
                 <button key={session.id} onClick={() => onOpenSession(session)} className="rounded-lg border border-border/50 bg-black/15 p-3 text-left hover:border-fuchsia-300/25 hover:bg-white/[0.025]">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
@@ -272,7 +329,7 @@ export function ProjectHome({
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
-              <ProjectContinuityPanel projectId={project.id} onFocusArtifact={onFocusArtifact} />
+              <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
               <ProjectIntelligencePanel projectId={project.id} />
               <ProjectAutomationPanel projectId={project.id} />
               <ProjectArtifactsPanel
