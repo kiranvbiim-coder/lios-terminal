@@ -19,6 +19,7 @@ import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
+import { inspectAgentReceiptActivity, receiptPresentation } from "@/lib/agentReceiptActivity";
 import type {
   ApprovalGrant,
   ConversationActionName,
@@ -162,6 +163,7 @@ export default function ConversationRuntimeTrace({
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
   const trust = [...events].reverse().find((event) => event.type === "trust");
   const summary = summarizeRuntimeTrace(events, busy);
+  const activity = inspectAgentReceiptActivity(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -199,7 +201,7 @@ export default function ConversationRuntimeTrace({
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(approval || governedApproval);
-  const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0;
+  const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -265,7 +267,9 @@ export default function ConversationRuntimeTrace({
       <div id={workPanelId} className={workVisible ? "mb-2 space-y-2 rounded-xl border border-border/50 bg-[#080808] p-3" : undefined}>
         {workVisible && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-[12px] text-muted-foreground" data-testid="trace-work-summary">
-            {stepCount > 0 && <span>{stepCount} step{stepCount === 1 ? "" : "s"}</span>}
+            {stepCount > 0 && <span>{stepCount} step{stepCount === 1 ? "" : "s"} · {summary.settledSteps} reported complete</span>}
+            {activity.observedSteps > 0 && <span>{activity.observedSteps} observed activity step{activity.observedSteps === 1 ? "" : "s"}</span>}
+            {activity.receipts.length > 0 && <span data-testid="trace-receipt-count">{activity.receipts.length} recorded execution receipt{activity.receipts.length === 1 ? "" : "s"}</span>}
             {summary.sources.length > 0 && <span>{summary.sources.length} source{summary.sources.length === 1 ? "" : "s"}</span>}
             {duration && <span>{duration}</span>}
             {requestId && <span className="font-terminal">Run {requestId}</span>}
@@ -282,7 +286,41 @@ export default function ConversationRuntimeTrace({
           </div>
         )}
 
-        {workVisible && summary.sources.length > 0 && (
+        {workVisible && activity.receipts.length > 0 && (
+          <section aria-label="Observed execution receipts" data-testid="trace-agent-receipts" className="space-y-2 rounded-lg border border-border/45 p-3">
+            <div className="font-ui text-[13px] font-semibold text-foreground">Recorded execution receipts · {activity.receipts.length}</div>
+            <p className="font-ui text-[12px] text-muted-foreground">Observed from this exact runtime request: {activity.completed} completed · {activity.failed} failed · {activity.cancelled} cancelled. Step reports, model plans and text are not execution receipts. Receipts do not grant approval or prove an external action occurred; check the original governed review and external system before relying on side effects.</p>
+            <ol className="space-y-2">
+              {activity.receipts.map(receipt => {
+                const info = receiptPresentation(receipt);
+                return <li key={receipt.id} className="space-y-1 rounded border border-border/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 font-ui text-[12px]">
+                    <span className="font-semibold text-foreground">{info.component} · {info.operation}</span>
+                    <span className={receipt.status === "completed" ? "text-emerald-200" : "text-amber-200"}>{receipt.status}</span>
+                    <span className="text-muted-foreground">{info.kind}</span>
+                  </div>
+                  <div className="font-ui text-[12px] text-muted-foreground">
+                    {info.sourceCount} recorded source ref{info.sourceCount === 1 ? "" : "s"} · input hash {info.hasInputHash ? "recorded" : "absent"} · output hash {info.hasOutputHash ? "recorded" : "absent"} · {info.warnings} warning{info.warnings === 1 ? "" : "s"}
+                  </div>
+                  <details className="font-ui text-[12px] text-muted-foreground">
+                    <summary className="cursor-pointer text-foreground">Exact receipt identity and hashes</summary>
+                    <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
+                      <div><dt className="inline">Receipt</dt><dd className="ml-2 inline">{receipt.id}</dd></div>
+                      <div><dt className="inline">Run</dt><dd className="ml-2 inline">{receipt.requestId}</dd></div>
+                      <div><dt className="inline">Started</dt><dd className="ml-2 inline">{receipt.startedAt}</dd></div>
+                      <div><dt className="inline">Finished</dt><dd className="ml-2 inline">{receipt.completedAt}</dd></div>
+                      <div><dt className="inline">Input SHA-256</dt><dd className="ml-2 inline">{receipt.inputHash ?? "not recorded"}</dd></div>
+                      <div><dt className="inline">Output SHA-256</dt><dd className="ml-2 inline">{receipt.outputHash ?? "not recorded"}</dd></div>
+                    </dl>
+                    <p className="mt-1">Raw request/response evidence, provider credentials, and source URI values are not exposed by this summary.</p>
+                  </details>
+                </li>;
+              })}
+            </ol>
+          </section>
+        )}
+
+                {workVisible && summary.sources.length > 0 && (
           <div className="flex flex-wrap gap-1.5" data-testid="trace-sources" aria-label="Sources used">
             {summary.sources.slice(0, 6).map((source) => (
               <span key={source} className="rounded-full border border-border/55 bg-white/[0.02] px-2.5 py-1 font-ui text-[12px] text-foreground/85">{source}</span>
@@ -391,6 +429,12 @@ export default function ConversationRuntimeTrace({
           </div>
         )}
       </div>
+
+      {activity.hasReceiptProblems && (
+        <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
+          Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+        </div>
+      )}
 
       {caveats && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.025] px-3 py-2.5" role="note" data-testid="trace-source-caveats">
