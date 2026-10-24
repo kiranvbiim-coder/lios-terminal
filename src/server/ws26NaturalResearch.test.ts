@@ -44,6 +44,17 @@ test("WS-26 does not replace specialized finance routing or generic chat", () =>
   assert.equal(specialized.intent.action, "calculate");
   const ordinary = planConversationWorkflow({ ...baseline, message: "Explain photosynthesis" });
   assert.equal(ordinary.intent.action, "chat");
+  // Established company routes and active symbol context take precedence.
+  const company = planConversationWorkflow({ ...baseline, message: "research apple" });
+  assert.equal(company.intent.parameters.workflow, "p5_professional_bundle");
+  assert.ok(company.capabilities.some((capability) => capability.id === "company.research"));
+  const contextual = planConversationWorkflow({
+    ...baseline,
+    message: "research nvidia",
+    context: { symbol: "NVDA" },
+  });
+  assert.ok(contextual.capabilities.some((capability) => capability.id === "company.research"));
+  assert.equal(contextual.intent.parameters.workflow, "p5_professional_bundle");
 });
 
 test("WS-26 emits the real run plan and keeps one observed BYOAI call separate from source retrieval", async () => {
