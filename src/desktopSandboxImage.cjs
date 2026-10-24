@@ -51,6 +51,14 @@ function validLocalEngineTarget(target, platform) {
   return /^unix:\/\/\/[^?#\0]+$/.test(target);
 }
 
+// A discovered Linux rootless Podman socket must never be sent to the Docker CLI.
+// This is inference only for a LOCAL endpoint, not proof the engine is running
+// or that the pinned OCI image has been loaded and qualified.
+function inferLocalContainerEngine(target, platform) {
+  if (platform !== 'win32' && /^unix:\/\/\/[^?#\0]*\/podman\/podman\.sock$/.test(target)) return 'podman';
+  return 'docker';
+}
+
 function packagedSandboxEnvironment(resourcesPath, env = process.env, options = {}) {
   const platform = options.platform || process.platform;
   const arch = options.arch || process.arch;
@@ -91,9 +99,16 @@ function packagedSandboxEnvironment(resourcesPath, env = process.env, options = 
   if (!resolveTarget) return { LIOS_EXECUTION_SANDBOX_IMAGE: release.image };
 
   const target = env.LIOS_EXECUTION_SANDBOX_TARGET || defaultLocalDockerTarget({ platform, home: options.home || os.homedir(), env });
-  const engine = env.LIOS_EXECUTION_SANDBOX_ENGINE || 'docker';
+  const inferredEngine = inferLocalContainerEngine(target, platform);
+  const engine = env.LIOS_EXECUTION_SANDBOX_ENGINE || inferredEngine;
   if (!['docker', 'podman'].includes(engine) || !validLocalEngineTarget(target, platform)) {
     throw new Error(`Packaged sandbox requires an explicit local ${platform === 'win32' ? 'named-pipe' : 'Unix-socket'} container engine target.`);
+  }
+  if (platform === 'win32' && engine !== 'docker') {
+    throw new Error('Packaged Windows named-pipe execution is supported only with Docker, not Podman.');
+  }
+  if (inferredEngine === 'podman' && engine !== 'podman') {
+    throw new Error('A local Podman socket must be paired with the Podman execution engine.');
   }
   return {
     LIOS_EXECUTION_ISOLATION: 'strict',
@@ -165,6 +180,7 @@ module.exports = {
   bootstrapPackagedSandboxEnvironment,
   containerPlatformForHost,
   defaultLocalDockerTarget,
+  inferLocalContainerEngine,
   packagedSandboxBootstrap,
   packagedSandboxEnvironment,
   requirePackagedSandboxEnvironment,
