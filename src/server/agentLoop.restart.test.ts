@@ -571,3 +571,99 @@ test("GM-12: real encrypted L6 checkpoint survives Stop/restart and resumes one 
   assert.equal(ciphertext.includes(Buffer.from(objective)), false, "raw objective is not a checkpoint/ledger field");
   assert.equal(await finalJournal.read(requestId, foreign), null);
 });
+
+
+test("GM-12 L5: outcome-unknown dispatch in encrypted checkpoint is never automatically replayed on restart", { timeout: 15_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-agent-unknown-outcome-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const opts = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(opts);
+  const requestId = crypto.randomUUID();
+  const owner = { userId: 7, projectId: 12, chatId: 34 };
+  const foreign = { ...owner, userId: 8 };
+  const objective = "Use a synthetic external tool after owner approval.";
+  const budget = { maxSteps: 1, maxAiCalls: 2, maxRevisions: 0, maxDurationMs: 30_000 };
+  const context: ConversationContextEnvelope = {
+    schemaVersion: "1",
+    identity: { userId: owner.userId, organizationId: null, role: "internal_analyst" },
+    project: { projectId: owner.projectId, name: "Synthetic project", instructionIncluded: false, resourceRefs: [] },
+    conversation: { chatId: owner.chatId, scope: "project", sourceScope: "my_data", branchId: null },
+    workspace: { sessionId: null, view: "conversation", symbol: null },
+    active: { objectRefs: [], selection: null },
+  };
+  const planned = step("effect", "t.external");
+  const state: AgentLoopContinuationState = {
+    version: 1,
+    planSha256: agentPlanSha256([planned]),
+    steps: [planned],
+    segment: ["effect"],
+    settled: [],
+    counters: { aiCalls: 1, revisions: 0, executed: 0 },
+  };
+  const checkpoint = createNativeAgentLoopCheckpoint({
+    requestId, owner, context, projectInstructions: null, sourceMessageId: 12,
+    state, toolSetSha256: "a".repeat(64), policySha256: "b".repeat(64),
+    resumeBinding: { role: "internal_analyst", objective, budget },
+  });
+  await journal.begin({ id: requestId, owner, label: "Ambiguous external dispatch audit", agentRun: true });
+  await journal.writeAgentCheckpoint(requestId, owner, checkpoint);
+  const toolCallId = "effect-call";
+  const inputSha256 = agentInputSha256(planned.input);
+  const idempotencyKey = deriveAgentToolIdempotencyKey({
+    requestId, stepId: planned.id, toolId: planned.toolId, inputSha256,
+  });
+  await journal.appendAgentEvent(requestId, { kind: "step_started", stepId: planned.id });
+  await journal.appendAgentEvent(requestId, {
+    kind: "tool_call_started", stepId: planned.id, toolCallId, toolId: planned.toolId,
+    inputSha256, decision: "confirm", permissionClass: "user_confirm", sideEffect: "external",
+  });
+  await journal.appendAgentEvent(requestId, { kind: "tool_call_waiting_approval", toolCallId });
+  await journal.markWaitingApproval(requestId);
+  // This opaque L2 review reference stands in for an already-granted owner
+  // approval: journal events alone never mint or prove a GM-11a grant.
+  await journal.resumeAfterApproval(requestId, owner, toolCallId, "review:synthetic-once");
+  await journal.appendAgentEvent(requestId, { kind: "tool_call_dispatch_intent", toolCallId, idempotencyKey, attempt: 1 });
+
+  // The process loses the response after an intent has been recorded.
+  // Even if the provider has already acted, there is no persisted commit
+  // or independently verified no-effect evidence. Stopping must fail closed.
+  await assert.rejects(journal.finish(requestId, "completed", 0), /reconciliation/);
+  await assert.rejects(journal.interruptCheckpointed(requestId, owner), /Outcome-unknown/);
+  await journal.markAgentReconciliationRequired(requestId);
+
+  const restarted = await createExecutionJournal(opts);
+  await restarted.recoverInterrupted();
+  const recorded = await restarted.read(requestId, owner);
+  assert.ok(recorded?.events);
+  assert.equal(recorded.status, "interrupted");
+  assert.equal(await restarted.read(requestId, foreign), null);
+  assert.equal((await restarted.readAgentCheckpoint(requestId, owner))?.bindingSha256, checkpoint.bindingSha256);
+  assert.doesNotThrow(() => assertAgentEventChain(recorded.events, requestId));
+  assert.equal(recorded.events.filter((event) => event.kind === "tool_call_dispatch_intent").length, 1);
+  assert.equal(recorded.events.some((event) => event.kind === "tool_call_dispatch_committed"), false);
+  assert.equal(recorded.events.some((event) => event.kind === "tool_call_dispatch_no_effect"), false);
+  assert.equal(recorded.events.some((event) => event.kind === "tool_call_finished"), false);
+  const continuation = nativeContinuationOf(recorded.checkpoint);
+  assert.ok(continuation);
+  assert.throws(
+    () => planAgentLoopReopen({
+      requestId, events: recorded.events!, continuation,
+      toolFacts: () => ({ sideEffect: "external", replaySafe: false }),
+    }),
+    (error: unknown) => error instanceof AgentRestartResumeRefusedError && error.code === "reconciliation_required",
+    "the sealed ledger must forbid an automatic retry even with the original idempotency key",
+  );
+  await assert.rejects(
+    restarted.resumeInterruptedAgentCheckpoint(requestId, owner, checkpoint.bindingSha256),
+    /Outcome-unknown/,
+  );
+  await assert.rejects(
+    restarted.appendAgentEvent(requestId, { kind: "tool_call_dispatch_intent", toolCallId, idempotencyKey, attempt: 2 }),
+    /finalized/,
+  );
+  await assert.rejects(restarted.finish(requestId, "completed", 0), /finalized/);
+  assert.equal((await restarted.read(requestId, owner))?.status, "interrupted");
+  const ciphertext = await fs.readFile(path.join(opts.directory, requestId));
+  assert.equal(ciphertext.subarray(0, 8).toString(), "LIOSENC1");
+  assert.equal(ciphertext.includes(Buffer.from("review:synthetic-once")), false);
+});
