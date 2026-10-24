@@ -1127,7 +1127,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         )}
       </div>
 
-      {cmdOpen && <CommandBar audience={audience} navigationContext={isProjectsSurface ? navigationContext : `Workspace · ${activePane.symbol ?? "no security selected"}; saved Project/Chat retained`} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
+      {cmdOpen && <CommandBar audience={audience} activeView={isProjectsSurface ? undefined : activePane.view} navigationContext={isProjectsSurface ? navigationContext : `Workspace · ${activePane.symbol ?? "no security selected"}; saved Project/Chat retained`} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
 
       {switcherOpen && <QuickSwitcher tabs={tabsState.tabs} activeTabId={tabsState.activeTabId} favorites={loadTerminalFavorites()} recents={recentContexts} onActivateTab={(tabId) => setTabsState((current) => activateTerminalTab(current, tabId))} onOpenView={handleNav} onOpenRecent={handleOpenRecent} onClose={() => setSwitcherOpen(false)} />}
 

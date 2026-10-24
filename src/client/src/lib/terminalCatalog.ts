@@ -349,7 +349,8 @@ function scoreCapability(capability: TerminalCapability, query: string): number 
     if (lower === normalized) score += 80;
     else if (lower.includes(normalized) || normalized.includes(lower)) score += 25;
   }
-  if (capability.hero) score += 8;
+  // A core-tool boost may order matches, but must never manufacture a match.
+  if (score > 0 && capability.hero) score += 8;
   return score;
 }
 
