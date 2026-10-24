@@ -284,7 +284,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <label className="text-[13px] text-muted-foreground">Selected cell <input aria-label="Selected cell reference" value={selectedRef} onChange={e => setSelectedRef(e.target.value.trim().toUpperCase())} className="ml-1 w-20 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal"/></label>
-      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
+      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell?.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
     </div>
     {selectedInBounds && selectedCell ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
