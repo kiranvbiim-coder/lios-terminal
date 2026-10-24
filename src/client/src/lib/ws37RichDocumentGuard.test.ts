@@ -20,7 +20,7 @@ test("WS-37 save UI stays read-only and conflicts never bypass governed canonica
   assert.match(pane, /disabled=\{disabled \|\| saving \|\| pending \|\| conflict\} value=\{block\.text\}/);
   assert.match(pane, /data-testid="save-document-revision" disabled=\{disabled \|\| !dirty \|\| saving \|\| pending \|\| conflict \|\| advancedDirty \|\| recovery\.blocked\}/);
   assert.match(pane, /<JsonEditor key=\{baseRevision\} content=\{draftContent\} disabled=\{disabled \|\| saving \|\| pending \|\| conflict \|\| recovery\.blocked\}/);
-  assert.match(pane, /createArtifactVersion\(artifactId, \{ baseVersion: data\.version\.version, content: next, actorType: "user" \}\)/);
+  assert.match(pane, /if\(next\.kind!=="chart"\) return run\(async\(\)=>\{const saved=await createArtifactVersion\(artifactId,\{baseVersion:data\.artifact\.headVersion,content:next,actorType:"user"\}\)/);
   assert.match(pane, /document-revision-conflict/);
   assert.match(pane, /useNativeArtifactDraftRecovery/);
 });
