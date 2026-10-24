@@ -629,7 +629,7 @@ export default function ConversationRuntimeTrace({
                   <span>I reviewed the recorded scope and impact. The raw external target is not verified by this card; I will reconcile any side effects separately.</span>
                 </label>}
               </div>}
-              {reviewError?.key === reviewKey && <p role="alert" data-testid="governed-review-error" className="mt-2 text-amber-200">{reviewError.message}</p>
+              {reviewError?.key === reviewKey && <p role="alert" data-testid="governed-review-error" className="mt-2 text-amber-200">{reviewError.message}</p>}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
