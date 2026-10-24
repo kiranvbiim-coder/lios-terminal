@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookmarkPlus, Clock3, FileText, Folder, MoreHorizontal, Pin, Plus, Search, SplitSquareHorizontal, Tags, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Clock3, FileText, Folder, Pin, Plus, Search, SplitSquareHorizontal, Tags, Trash2, X } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   createResearchContextItem,
+  MAX_RESEARCH_TRAY_ITEMS,
   getResearchTrayGroups,
   loadResearchTray,
   pinResearchContext,
@@ -31,20 +32,23 @@ interface Props {
 }
 
 function kindLabel(item: ResearchTrayItem): string {
-  if (item.kind === "evidence") return "EVIDENCE";
-  if (item.kind === "output") return "OUTPUT";
-  if (item.kind === "note") return "NOTE";
-  return "CONTEXT";
+  if (item.kind === "evidence") return "Evidence";
+  if (item.kind === "output") return "Output";
+  if (item.kind === "note") return "Note";
+  return "Context";
 }
 
 function relativeTime(value: number): string {
   const minutes = Math.max(0, Math.floor((Date.now() - value) / 60_000));
   if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return String(minutes) + "m";
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 24) return String(hours) + "h";
+  return String(Math.floor(hours / 24)) + "d";
 }
+
+const smallButton = "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-border/70 px-3 py-2 font-ui text-sm text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
+const inputClass = "min-h-11 w-full rounded-md border border-border/70 bg-[#0b0b0b] px-3 py-2 font-ui text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
 
 export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose }: Props) {
   const [items, setItems] = useState<ResearchTrayItem[]>(() => loadResearchTray());
@@ -52,88 +56,379 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   const [tab, setTab] = useState<"pinned" | "thread">("pinned");
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("ALL");
+  const [addingNote, setAddingNote] = useState(false);
+  const [newNote, setNewNote] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [menuId, setMenuId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [tagsDraft, setTagsDraft] = useState("");
+  const [groupDraft, setGroupDraft] = useState("");
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
+  const [editingSnapshot, setEditingSnapshot] = useState<ResearchTrayItem | null>(null);
+  const notify = (message: string, error = false) => { setNotice(message); setNoticeIsError(error); };
 
   useEffect(() => subscribeResearchTray(setItems), []);
   useEffect(() => subscribeResearchThread(setThread), []);
 
   const groups = useMemo(() => getResearchTrayGroups(items), [items]);
+  useEffect(() => {
+    // A pin can be deleted/regrouped in another tab. Do not keep a stale
+    // invisible filter once its selected group no longer exists.
+    if (group !== "ALL" && !groups.includes(group)) setGroup("ALL");
+  }, [group, groups]);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return items.filter((item) => {
       if (group !== "ALL" && item.group !== group) return false;
       if (!normalized) return true;
-      return `${item.title} ${item.description} ${item.note} ${item.tags.join(" ")} ${item.symbol}`.toLowerCase().includes(normalized);
+      return (item.title + " " + item.description + " " + item.note + " " + item.tags.join(" ") + " " + item.symbol).toLowerCase().includes(normalized);
     });
   }, [group, items, query]);
 
   const filteredThread = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return thread;
-    return thread.filter((event) => `${event.label} ${event.detail} ${event.symbol} ${event.kind}`.toLowerCase().includes(normalized));
+    return thread.filter((event) => (event.label + " " + event.detail + " " + event.symbol + " " + event.kind).toLowerCase().includes(normalized));
   }, [query, thread]);
   const threadDays = useMemo(() => groupResearchThreadByDay(filteredThread), [filteredThread]);
 
-  const persist = (next: ResearchTrayItem[]) => {
-    setItems(next);
-    saveResearchTray(next);
+  const persist = (next: ResearchTrayItem[]): boolean => {
+    // A full tray must not silently evict a person's oldest pin or note.
+    if (next.length > MAX_RESEARCH_TRAY_ITEMS) {
+      notify("Research Tray is full (120 items). Remove an existing pin before saving another; no item was removed.", true);
+      return false;
+    }
+    try {
+      // Report blocked/private/quota-limited storage instead of claiming success.
+      saveResearchTray(next);
+      setItems(next);
+      return true;
+    } catch {
+      notify("Could not save research on this device. Your unsaved draft is still here; check local storage and retry.", true);
+      return false;
+    }
   };
 
   const pinCurrent = () => {
-    persist(pinResearchContext(items, { view: activeView, symbol: activeSymbol }));
-    appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, detail: "Pinned to Research Tray for later use." });
+    const next = pinResearchContext(items, { view: activeView, symbol: activeSymbol });
+    if (items.some(item => !next.some(candidate => candidate.id === item.id))) {
+      notify("Research Tray is full (120 items). Remove an existing pin before pinning another; no item was removed.", true);
+      return;
+    }
+    if (!persist(next)) return;
+    try {
+      appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, detail: "Pinned to Research Tray for later use." });
+      notify("Current analysis pinned for later.");
+    } catch {
+      notify("Analysis pinned, but the research history could not be updated.", true);
+    }
   };
 
   const addNote = () => {
-    const note = window.prompt("Research note");
-    if (!note?.trim()) return;
+    const note = newNote.trim();
+    if (!note) return;
     const item = createResearchContextItem({
       view: activeView,
       symbol: activeSymbol,
       kind: "note",
-      title: activeSymbol ? `${activeSymbol} · Research Note` : "Research Note",
+      title: activeSymbol ? activeSymbol + " · Research Note" : "Research Note",
       note,
     });
-    persist([item, ...items]);
-    appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
+    if (!persist([item, ...items])) return;
+    try {
+      appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
+      notify("Research note saved locally.");
+    } catch {
+      notify("Note saved, but the research history could not be updated.", true);
+    }
+    setNewNote("");
+    setAddingNote(false);
+  };
+
+  const edit = (item: ResearchTrayItem) => {
+    setEditingId(item.id);
+    setEditingSnapshot(item);
+    setNoteDraft(item.note);
+    setTagsDraft(item.tags.join(", "));
+    setGroupDraft(item.group);
+    setRemoveId(null);
+  };
+
+  const saveEdit = (item: ResearchTrayItem) => {
+    // If another tab changed/deleted this item after edit began, preserve
+    // the unsaved draft rather than silently overwriting their newer work.
+    if (!editingSnapshot || editingSnapshot.id !== item.id ||
+      editingSnapshot.updatedAt !== item.updatedAt ||
+      editingSnapshot.note !== item.note ||
+      editingSnapshot.group !== item.group ||
+      editingSnapshot.title !== item.title ||
+      JSON.stringify(editingSnapshot.tags) !== JSON.stringify(item.tags)) {
+      notify("This pinned item changed elsewhere while you were editing. Your draft was not saved. Cancel and reopen the latest item to review it.", true);
+      return;
+    }
+    if (!persist(updateResearchTrayItem(items, item.id, {
+      note: noteDraft,
+      tags: tagsDraft.split(","),
+      group: groupDraft,
+    }))) return;
+    setEditingId(null);
+    setEditingSnapshot(null);
+    notify("Research annotation saved locally.");
+  };
+
+  const remove = (item: ResearchTrayItem) => {
+    if (!persist(removeResearchTrayItem(items, item.id))) return;
+    setRemoveId(null);
+    if (editingId === item.id) { setEditingId(null); setEditingSnapshot(null); }
+    notify("Pinned item removed. Your research thread is unchanged.");
   };
 
   return (
-    <aside className="lios-research-tray" aria-label="Research continuity">
-      <header className="flex items-start gap-3 border-b border-border/60 p-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/[0.055] text-amber-300"><Pin className="h-4 w-4" /></div>
-        <div className="min-w-0 flex-1"><div className="font-ui text-[12px] font-semibold tracking-tight text-foreground">Research Continuity</div><p className="font-ui mt-1 text-[9px] leading-relaxed text-muted-foreground">Pin what matters and reconstruct the path your investigation actually took. Everything stays local to this device.</p></div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground" aria-label="Close Research Tray"><X className="h-3.5 w-3.5" /></button>
+    <aside className="lios-research-tray flex h-[min(620px,calc(100dvh-145px))] min-h-0 flex-col text-foreground" aria-label="Research continuity">
+      <header className="flex shrink-0 items-start gap-3 border-b border-border/60 p-3 sm:p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/[0.06] text-primary">
+          <Pin className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-ui text-lg font-semibold tracking-tight text-foreground">Research continuity</h2>
+          <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+            Pin important analysis, take notes and retrace your work. Research stays on this device.
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close Research Tray"
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-white/[0.05] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
       </header>
 
-      <div className="flex items-center gap-1 border-b border-border/50 px-3 pt-2">
-        <button onClick={() => setTab("pinned")} className={`font-ui rounded-t-lg border-b-2 px-3 py-2 text-[8px] font-semibold transition-colors ${tab === "pinned" ? "border-amber-300 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}><span className="flex items-center gap-1.5"><Pin className="h-3 w-3" /> Pinned <span className="lios-pane-code text-[6px] text-muted-foreground/60">{items.length}</span></span></button>
-        <button onClick={() => setTab("thread")} className={`font-ui rounded-t-lg border-b-2 px-3 py-2 text-[8px] font-semibold transition-colors ${tab === "thread" ? "border-cyan-300 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}><span className="flex items-center gap-1.5"><Clock3 className="h-3 w-3" /> Thread <span className="lios-pane-code text-[6px] text-muted-foreground/60">{thread.length}</span></span></button>
+      <nav className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2" aria-label="Research sections">
+        <button type="button" onClick={() => { setTab("pinned"); setConfirmClear(false); }} aria-pressed={tab === "pinned"}
+          className={"min-h-11 flex-1 rounded-md border-b-2 px-3 py-2 font-ui text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary " + (tab === "pinned" ? "border-primary bg-primary/[0.055] text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+          Pinned ({items.length})
+        </button>
+        <button type="button" onClick={() => { setTab("thread"); setRemoveId(null); }} aria-pressed={tab === "thread"}
+          className={"min-h-11 flex-1 rounded-md border-b-2 px-3 py-2 font-ui text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary " + (tab === "thread" ? "border-primary bg-primary/[0.055] text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+          History ({thread.length})
+        </button>
+      </nav>
+
+      <div className="shrink-0 space-y-3 border-b border-border/50 p-3">
+        {tab === "pinned" && (
+          <>
+            {editingId && !items.some(item => item.id === editingId) && (
+              <section role="alert" data-testid="research-removed-draft" className="space-y-2 rounded-lg border border-amber-300/30 p-3">
+                <p className="font-ui text-sm text-amber-100">
+                  This pinned item was removed in another tab while you were editing. Nothing was saved over it.
+                  Your draft is still here for review.
+                </p>
+                <label className="block font-ui text-sm">
+                  Unsaved note draft
+                  <textarea readOnly value={noteDraft} rows={3} className={inputClass + " mt-1 resize-y"} />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => {
+                    setNewNote(noteDraft);
+                    setAddingNote(true);
+                    setEditingId(null);
+                    setEditingSnapshot(null);
+                    notify("Draft moved to New note. Review and save it before leaving the tray.");
+                  }} className={smallButton}>Keep as new note draft</button>
+                  <button type="button" onClick={() => { setEditingId(null); setEditingSnapshot(null); }} className={smallButton}>Dismiss draft</button>
+                </div>
+              </section>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={pinCurrent} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-primary/45 bg-primary/[0.065] px-3 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                <BookmarkPlus className="h-4 w-4" aria-hidden="true" /> Pin current
+              </button>
+              <button type="button" onClick={() => { setAddingNote((current) => !current); setNewNote(""); }} aria-expanded={addingNote} aria-controls="research-new-note"
+                className={smallButton}>
+                <Plus className="h-4 w-4" aria-hidden="true" /> New note
+              </button>
+            </div>
+            {addingNote && (
+              <form id="research-new-note" className="space-y-2 rounded-lg border border-border/70 bg-black/20 p-3" onSubmit={(event) => { event.preventDefault(); addNote(); }}>
+                <label htmlFor="research-note-content" className="block font-ui text-sm font-semibold text-foreground">Research note</label>
+                <textarea id="research-note-content" value={newNote} onChange={(event) => setNewNote(event.target.value)}
+                  maxLength={1200} rows={3} autoFocus placeholder="Write an observation, thesis, question or follow-up…"
+                  className={inputClass + " resize-y"} />
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={!newNote.trim()} className={smallButton + " border-primary/50 text-primary disabled:opacity-40"}>Save note</button>
+                  <button type="button" onClick={() => { setAddingNote(false); setNewNote(""); }} className={smallButton}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
+        <label className="flex min-h-11 items-center gap-2 rounded-md border border-border/70 bg-[#0b0b0b] px-3 focus-within:border-primary/50">
+          <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className="sr-only">Search {tab === "pinned" ? "pinned research" : "research history"}</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder={tab === "pinned" ? "Search pinned research" : "Search research history"}
+            className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
+        </label>
+        {tab === "pinned" && groups.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin" role="group" aria-label="Filter research by group">
+            {["ALL", ...groups].map((itemGroup) => (
+              <button type="button" key={itemGroup} aria-pressed={group === itemGroup} onClick={() => setGroup(itemGroup)}
+                className={"min-h-10 shrink-0 rounded-full border px-3 py-2 font-ui text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary " + (group === itemGroup ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border/70 text-muted-foreground hover:text-foreground")}>
+                {itemGroup === "ALL" ? "All groups" : itemGroup}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="border-b border-border/50 p-3">
-        {tab === "pinned" && <div className="flex gap-2"><button onClick={pinCurrent} className="font-ui flex flex-1 items-center justify-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.055] px-3 py-2 text-[9px] font-semibold text-amber-200 transition-colors hover:bg-amber-500/[0.1]"><BookmarkPlus className="h-3.5 w-3.5" /> Pin current analysis</button><button onClick={addNote} className="font-ui flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-[9px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"><Plus className="h-3.5 w-3.5" /> Note</button></div>}
-        <div className={`${tab === "pinned" ? "mt-2" : ""} flex items-center gap-2 rounded-lg border border-border/60 bg-black/10 px-2.5`}><Search className="h-3 w-3 text-muted-foreground/70" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tab === "pinned" ? "Search pinned research" : "Search research thread"} className="font-ui h-8 min-w-0 flex-1 bg-transparent text-[9px] text-foreground outline-none placeholder:text-muted-foreground/45" /></div>
-        {tab === "pinned" && groups.length > 0 && <div className="mt-2 flex gap-1 overflow-x-auto pb-1 scrollbar-thin">{["ALL", ...groups].map((itemGroup) => <button key={itemGroup} onClick={() => setGroup(itemGroup)} className={`font-ui shrink-0 rounded-full border px-2 py-1 text-[7px] font-medium ${group === itemGroup ? "border-cyan-400/30 bg-cyan-400/[0.055] text-cyan-200" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>{itemGroup}</button>)}</div>}
-      </div>
-
-      {tab === "pinned" ? (
-        <div className="max-h-[430px] overflow-y-auto p-2 scrollbar-thin">
-          {filtered.length === 0 ? <div className="m-2 rounded-xl border border-dashed border-border/70 p-6 text-center"><Pin className="mx-auto h-4 w-4 text-muted-foreground/45" /><div className="font-ui mt-3 text-[10px] font-medium text-foreground">Nothing pinned here yet</div><div className="font-ui mt-1 text-[8px] leading-relaxed text-muted-foreground">Pin the active DCF, financials, chart, evidence, or another context you want to revisit during this investigation.</div></div> : filtered.map((item) => {
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 scrollbar-thin">
+        {tab === "pinned" ? (
+          filtered.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border/70 p-5 text-center">
+              <Pin className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 font-ui text-sm font-semibold">No matching pinned research</h3>
+              <p className="mt-2 font-ui text-sm leading-6 text-muted-foreground">
+                {items.length ? "Try another search or choose All groups." : "Pin a chart, filing, model or analysis, or write a note to revisit later."}
+              </p>
+            </div>
+          ) : filtered.map((item) => {
             const capability = getTerminalCapability(item.view);
             const editing = editingId === item.id;
-            return <article key={item.id} className="group relative mb-1.5 rounded-xl border border-border/55 bg-white/[0.012] p-3 transition-all hover:border-border hover:bg-white/[0.025]"><div className="flex items-start gap-2.5"><div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-black/15 text-cyan-300/80">{item.kind === "note" ? <FileText className="h-3.5 w-3.5" /> : item.group ? <Folder className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2">{item.symbol && <span className="lios-symbol text-[8px] font-semibold text-amber-300">{item.symbol}</span>}<span className="font-ui truncate text-[10px] font-semibold text-foreground">{item.title}</span></div><div className="mt-1 flex flex-wrap items-center gap-1.5"><span className="lios-pane-code text-[6px] tracking-wider text-muted-foreground/70">{kindLabel(item)}</span><span className="font-ui text-[7px] text-muted-foreground/70">{capability.label}</span>{item.group && <span className="font-ui rounded-full border border-border/60 px-1.5 py-0.5 text-[6px] text-muted-foreground">{item.group}</span>}</div>{!editing && item.note && <p className="font-ui mt-2 line-clamp-3 text-[8px] leading-relaxed text-muted-foreground">{item.note}</p>}{editing && <div className="mt-2 space-y-2"><textarea defaultValue={item.note} onBlur={(event) => persist(updateResearchTrayItem(items, item.id, { note: event.target.value }))} placeholder="Add your research note…" className="font-ui min-h-20 w-full resize-y rounded-lg border border-border/70 bg-black/15 p-2 text-[9px] leading-relaxed text-foreground outline-none focus:border-amber-400/35" /><input defaultValue={item.tags.join(", ")} onBlur={(event) => persist(updateResearchTrayItem(items, item.id, { tags: event.target.value.split(",") }))} placeholder="Tags: valuation, catalyst, risk" className="font-ui h-8 w-full rounded-lg border border-border/70 bg-black/15 px-2 text-[8px] text-foreground outline-none focus:border-cyan-400/35" /><input defaultValue={item.group} onBlur={(event) => persist(updateResearchTrayItem(items, item.id, { group: event.target.value }))} placeholder="Group: NVDA thesis / Client A" className="font-ui h-8 w-full rounded-lg border border-border/70 bg-black/15 px-2 text-[8px] text-foreground outline-none focus:border-cyan-400/35" /></div>}{item.tags.length > 0 && !editing && <div className="mt-2 flex flex-wrap gap-1">{item.tags.map((tag) => <span key={tag} className="font-ui flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-[6px] text-muted-foreground"><Tags className="h-2 w-2" />{tag}</span>)}</div>}<div className="mt-2 flex flex-wrap gap-1"><button onClick={() => onOpen(item.view, "current", item.symbol || undefined)} className="font-ui rounded-md border border-border/60 px-2 py-1 text-[7px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground">Open here</button><button onClick={() => onOpen(item.view, "tab", item.symbol || undefined)} className="font-ui rounded-md border border-border/60 px-2 py-1 text-[7px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground">New tab</button><button onClick={() => onOpen(item.view, "split-right", item.symbol || undefined)} className="font-ui flex items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[7px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"><SplitSquareHorizontal className="h-2.5 w-2.5" /> Split</button><button onClick={() => setEditingId(editing ? null : item.id)} className="font-ui rounded-md border border-transparent px-2 py-1 text-[7px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground">{editing ? "Done" : "Annotate"}</button></div></div><div className="relative"><button onClick={() => setMenuId(menuId === item.id ? null : item.id)} className="rounded-md p-1 text-muted-foreground/45 opacity-0 transition-all hover:bg-white/[0.04] hover:text-foreground group-hover:opacity-100" aria-label="Research item actions"><MoreHorizontal className="h-3 w-3" /></button>{menuId === item.id && <div className="lios-v4-overlay absolute right-0 top-6 z-20 w-40 rounded-lg p-1"><button onClick={() => { persist(removeResearchTrayItem(items, item.id)); setMenuId(null); }} className="font-ui flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[8px] text-red-300/80 hover:bg-red-500/[0.04] hover:text-red-200"><Trash2 className="h-3 w-3" /> Remove</button></div>}</div></div></article>;
-          })}
-        </div>
-      ) : (
-        <div className="max-h-[430px] overflow-y-auto p-3 scrollbar-thin">
-          {threadDays.length === 0 ? <div className="rounded-xl border border-dashed border-border/70 p-6 text-center"><Clock3 className="mx-auto h-4 w-4 text-muted-foreground/45" /><div className="font-ui mt-3 text-[10px] font-medium text-foreground">Your research path will appear here</div><div className="font-ui mt-1 text-[8px] leading-relaxed text-muted-foreground">As you move through companies, financials, DCF, risk, evidence and other tools, LiOS records a local navigation chronology.</div></div> : threadDays.map((day) => <section key={day.dateKey} className="mb-4"><div className="font-ui mb-2 flex items-center justify-between text-[7px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/65"><span>{day.label}</span><span className="lios-pane-code">{day.events.length} moves</span></div><div className="relative ml-1 border-l border-border/55 pl-3">{day.events.map((event) => <button key={event.id} onClick={() => onOpen(event.view, "current", event.symbol || undefined)} className="group relative mb-1.5 w-full rounded-xl p-2.5 text-left transition-colors hover:bg-white/[0.025]"><span className={`absolute -left-[15.5px] top-4 h-1.5 w-1.5 rounded-full ring-4 ring-[hsl(var(--lios-overlay))] ${event.kind === "pin" ? "bg-amber-300" : event.kind === "evidence" ? "bg-cyan-300" : event.kind === "decision" ? "bg-violet-300" : "bg-muted-foreground/55"}`} /><div className="flex items-center gap-2">{event.symbol && <span className="lios-symbol text-[7px] font-semibold text-amber-300/85">{event.symbol}</span>}<span className="font-ui min-w-0 flex-1 truncate text-[8px] font-medium text-foreground">{event.label}</span><span className="lios-pane-code text-[6px] text-muted-foreground/50">{relativeTime(event.createdAt)}</span></div><div className="font-ui mt-1 line-clamp-2 text-[7px] leading-relaxed text-muted-foreground">{event.detail}</div><div className="font-ui mt-1.5 text-[6px] font-medium uppercase tracking-[0.12em] text-cyan-300/50">{event.kind}</div></button>)}</div></section>)}
-          {thread.length > 0 && <button onClick={() => { if (window.confirm("Clear local research thread? Pinned Research Tray items will remain.")) clearResearchThread(); }} className="font-ui mt-2 w-full rounded-lg border border-border/55 px-3 py-2 text-[7px] text-muted-foreground transition-colors hover:border-red-400/20 hover:bg-red-500/[0.025] hover:text-red-300">Clear thread history</button>}
-        </div>
-      )}
+            return (
+              <article key={item.id} className="mb-3 rounded-lg border border-border/70 bg-white/[0.015] p-3">
+                <div className="flex items-start gap-3">
+                  <div aria-hidden="true" className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/70 text-cyan-300">
+                    {item.kind === "note" ? <FileText className="h-4 w-4" /> : item.group ? <Folder className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.symbol && <span className="font-ui text-xs font-semibold text-primary">{item.symbol}</span>}
+                      <h3 className="min-w-0 break-words font-ui text-sm font-semibold">{item.title}</h3>
+                    </div>
+                    <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+                      {kindLabel(item)} · {capability.label}{item.group ? " · " + item.group : ""}
+                    </p>
+                    {!editing && item.note && <p className="mt-2 whitespace-pre-wrap break-words font-ui text-sm leading-6 text-muted-foreground">{item.note}</p>}
+                    {item.tags.length > 0 && !editing && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {item.tags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 font-ui text-xs text-muted-foreground"><Tags className="h-3 w-3" aria-hidden="true" />{tag}</span>)}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-      <footer className="flex items-center justify-between border-t border-border/50 px-3 py-2"><span className="font-ui text-[7px] text-muted-foreground">{items.length} pinned · {thread.length} thread events · local device only</span><span className="lios-pane-code text-[6px] text-muted-foreground/60">RESEARCH CONTINUITY</span></footer>
+                {editing && (
+                  <form className="mt-3 space-y-3 rounded-lg border border-border/70 bg-black/20 p-3"
+                    onSubmit={(event) => { event.preventDefault(); saveEdit(item); }}>
+                    <label className="block font-ui text-sm font-medium">
+                      Note
+                      <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={1200} rows={4}
+                        className={inputClass + " mt-1 resize-y"} placeholder="Record findings or next questions…" />
+                    </label>
+                    <label className="block font-ui text-sm font-medium">
+                      Tags (comma-separated)
+                      <input value={tagsDraft} onChange={(event) => setTagsDraft(event.target.value)} className={inputClass + " mt-1"} placeholder="valuation, risk, catalysts" />
+                    </label>
+                    <label className="block font-ui text-sm font-medium">
+                      Group
+                      <input value={groupDraft} onChange={(event) => setGroupDraft(event.target.value)} className={inputClass + " mt-1"} placeholder="AAPL thesis" />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="submit" className={smallButton + " border-primary/50 text-primary"}>Save annotation</button>
+                      <button type="button" onClick={() => setEditingId(null)} className={smallButton}>Cancel</button>
+                    </div>
+                  </form>
+                )}
+
+                {!editing && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => onOpen(item.view, "current", item.symbol || undefined)} className={smallButton}>Open here</button>
+                    <button type="button" onClick={() => onOpen(item.view, "tab", item.symbol || undefined)} className={smallButton}>New tab</button>
+                    <button type="button" onClick={() => onOpen(item.view, "split-right", item.symbol || undefined)} className={smallButton}>
+                      <SplitSquareHorizontal className="h-4 w-4" aria-hidden="true" /> Split
+                    </button>
+                    <button type="button" onClick={() => edit(item)} aria-label={"Annotate " + item.title} className={smallButton}>Annotate</button>
+                    <button type="button" onClick={() => setRemoveId(item.id)} aria-label={"Remove pinned item " + item.title} className={smallButton + " hover:text-rose-300"}>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" /> Remove
+                    </button>
+                  </div>
+                )}
+                {removeId === item.id && !editing && (
+                  <div className="mt-3 rounded-lg border border-rose-400/30 bg-rose-400/[0.035] p-3" data-testid="research-remove-confirm">
+                    <p className="font-ui text-sm leading-5">Remove “{item.title}” from pinned research? This does not clear your research history.</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setRemoveId(null)} className={smallButton}>Cancel</button>
+                      <button type="button" onClick={() => remove(item)} className={smallButton + " border-rose-400/50 text-rose-200"}>Remove pinned item</button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })
+        ) : (
+          threadDays.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border/70 p-5 text-center">
+              <Clock3 className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 font-ui text-sm font-semibold">No matching research history</h3>
+              <p className="mt-2 font-ui text-sm leading-6 text-muted-foreground">
+                {thread.length ? "Try another search." : "Your path through companies, filings, calculations and evidence will appear here."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {threadDays.map((day) => (
+                <section key={day.dateKey} className="mb-5">
+                  <h3 className="mb-2 font-ui text-xs font-semibold text-muted-foreground">{day.label} · {day.events.length} events</h3>
+                  <div className="space-y-1 border-l border-border/70 pl-3">
+                    {day.events.map((event) => (
+                      <button type="button" key={event.id} onClick={() => onOpen(event.view, "current", event.symbol || undefined)}
+                        className="w-full rounded-lg p-3 text-left hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="min-w-0 break-words font-ui text-sm font-medium text-foreground">{event.symbol ? event.symbol + " · " : ""}{event.label}</span>
+                          <span className="shrink-0 font-ui text-xs text-muted-foreground">{relativeTime(event.createdAt)}</span>
+                        </div>
+                        <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{event.detail}</p>
+                        <span className="mt-2 block font-ui text-xs capitalize text-cyan-300">{event.kind}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {thread.length > 0 && (
+                <div className="mt-4 border-t border-border/70 pt-3">
+                  {!confirmClear ? (
+                    <button type="button" className={smallButton + " w-full"} onClick={() => setConfirmClear(true)}>
+                      Clear research history
+                    </button>
+                  ) : (
+                    <div data-testid="research-clear-confirm" className="space-y-3 rounded-lg border border-rose-400/30 bg-rose-400/[0.035] p-3">
+                      <p className="font-ui text-sm leading-6">Clear research history on this device? Pinned notes and findings will remain.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setConfirmClear(false)} className={smallButton}>Cancel</button>
+                        <button type="button" onClick={() => {
+                          try {
+                            clearResearchThread();
+                            setConfirmClear(false);
+                            notify("Research history cleared. Pinned findings are unchanged.");
+                          } catch {
+                            notify("Could not clear research history on this device. Check local storage availability.", true);
+                          }
+                        }}
+                          className={smallButton + " border-rose-400/50 text-rose-200"}>Clear history</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )
+        )}
+      </div>
+
+      <footer className="shrink-0 border-t border-border/60 px-3 py-3">
+        <p className="font-ui text-xs leading-5 text-muted-foreground">{items.length} pinned · {thread.length} history events · stored on this device</p>
+        {notice && <p role={noticeIsError ? "alert" : "status"} className={"mt-1 font-ui text-xs leading-5 " + (noticeIsError ? "text-amber-200" : "text-primary")}>{notice}</p>}
+      </footer>
     </aside>
   );
 }
