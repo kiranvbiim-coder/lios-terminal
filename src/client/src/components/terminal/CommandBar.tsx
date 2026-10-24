@@ -18,7 +18,8 @@ import {
   loadRecentAnalyticalContexts, loadTerminalFavorites, recordRecentAnalyticalContext,
   saveRecentAnalyticalContexts, type RecentAnalyticalContext,
 } from "@/lib/terminalPersonalization";
-import { getWorkspaceDefinition, isViewVisibleToAudience } from "@/lib/featureRegistry";
+import { getVisibleWorkspaces, getWorkspaceDefinition, isViewVisibleToAudience, type WorkspaceKey } from "@/lib/featureRegistry";
+import { browseRegisteredSpecialists } from "@/lib/contextualSpecialistDiscovery";
 import { rankSecuritySearchResults, type SecuritySearchResult } from "@/lib/terminalSecuritySearch";
 import { useGuidedMode } from "@/hooks/use-guided-mode";
 import { useAudience } from "@/lib/audience";
@@ -31,6 +32,7 @@ interface Props {
   onExploreField?: (fieldId: string) => void;
   audience: WorkspaceAudience;
   navigationContext?: string;
+  activeView?: ViewMode;
 }
 
 type LauncherMode = "all" | "tools" | "entities" | "mine" | "favorites" | "recent";
@@ -46,6 +48,7 @@ type LauncherResult = {
   capability?: TerminalCapability;
   askQuestion?: string;
   fieldId?: string;
+  relatedReason?: string;
 };
 
 const MODES: readonly { id: LauncherMode; label: string; icon: LucideIcon }[] = [
@@ -81,6 +84,7 @@ function resultSection(result: LauncherResult): string {
   if (result.type === "entity") return "Companies & securities";
   if (result.type === "data") return "Data & metrics";
   if (result.type === "favorite" || result.type === "recent") return "My LiOS";
+  if (result.type === "tool" && result.relatedReason) return "Related to current panel";
   return "Tools";
 }
 
@@ -88,7 +92,7 @@ function commandForCapability(capability: TerminalCapability): ParsedTerminalCom
   return { raw: capability.shortLabel, view: capability.view };
 }
 
-function resultFromCapability(capability: TerminalCapability, type: "tool" | "favorite" = "tool"): LauncherResult {
+function resultFromCapability(capability: TerminalCapability, type: "tool" | "favorite" = "tool", relatedReason?: string): LauncherResult {
   const workspace = getWorkspaceDefinition(capability.workspace);
   return {
     key: `${type}:${capability.view}`,
@@ -99,6 +103,7 @@ function resultFromCapability(capability: TerminalCapability, type: "tool" | "fa
     icon: capability.hero ? Sparkles : Layers3,
     command: commandForCapability(capability),
     capability,
+    ...(relatedReason ? { relatedReason } : {}),
   };
 }
 const DISCOVERY_NAVIGATION_TARGETS: Readonly<Record<string, CanonicalNavigationTarget | undefined>> = {
@@ -173,10 +178,11 @@ function resultFromSecurity(security: SecuritySearchResult): LauncherResult {
   };
 }
 
-export default function CommandBar({ onClose, onExecute, onAskLios, onExploreField, audience, navigationContext }: Props) {
+export default function CommandBar({ onClose, onExecute, onAskLios, onExploreField, audience, navigationContext, activeView }: Props) {
   const isClient = useAudience() === "client";
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<LauncherMode>("all");
+  const [workspaceFilter, setWorkspaceFilter] = useState<WorkspaceKey | "all">("all");
   const [selected, setSelected] = useState(0);
   const [remoteEntities, setRemoteEntities] = useState<SecuritySearchResult[]>([]);
   const [universalCapabilities, setUniversalCapabilities] = useState<CapabilityDiscoveryResult[]>([]);
@@ -187,6 +193,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
   const inputRef = useRef<HTMLInputElement>(null);
   const guided = useGuidedMode();
   const availableModes = isClient ? RETAIL_MODES : MODES;
+  const visibleWorkspaces = useMemo(() => getVisibleWorkspaces(audience), [audience]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -249,18 +256,23 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
     return () => { controller.abort(); window.clearTimeout(timeout); };
   }, [audience, mode, normalizedQuery, parsedCommand?.navigation]);
 
+  const browsedSpecialists = useMemo(() => mode === "tools"
+    ? browseRegisteredSpecialists({ query: normalizedQuery, audience, activeView, workspace: workspaceFilter })
+    : [], [activeView, audience, mode, normalizedQuery, workspaceFilter]);
+
   const toolResults = useMemo(() => {
     if (mode === "entities" || mode === "recent") return [];
     const favoritesOnly = mode === "favorites" || mode === "mine";
     const queryForTools = favoritesOnly ? "" : normalizedQuery;
+    if (mode === "tools") return browsedSpecialists.map(({ capability, relatedReason }) => resultFromCapability(capability, "tool", normalizedQuery ? undefined : relatedReason));
     const capabilities = favoritesOnly
       ? favorites.map(getTerminalCapability)
-      : searchTerminalCapabilities(queryForTools, audience === "internal", mode === "tools" ? 18 : 10);
+      : searchTerminalCapabilities(queryForTools, audience === "internal", 10);
     return capabilities
       .filter((capability) => isViewVisibleToAudience(capability.view, audience))
       .filter((capability) => !favoritesOnly || !normalizedQuery || [capability.label, capability.shortLabel, ...capability.keywords].join(" ").toLowerCase().includes(normalizedQuery.toLowerCase()))
       .map((capability) => resultFromCapability(capability, favoritesOnly ? "favorite" : "tool"));
-  }, [audience, favorites, mode, normalizedQuery]);
+  }, [audience, browsedSpecialists, favorites, mode, normalizedQuery]);
 
   const universalToolResults = useMemo(() => {
     if (mode === "entities" || mode === "favorites" || mode === "recent") return [];
@@ -299,7 +311,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
   }, [mode, normalizedQuery, onExploreField]);
 
   const navigationResults = useMemo<LauncherResult[]>(() => {
-    if (mode === "entities" || mode === "favorites" || mode === "recent") return [];
+    if (mode === "entities" || mode === "favorites" || mode === "recent" || (mode === "tools" && !normalizedQuery)) return [];
     return searchCanonicalNavigation(normalizedQuery).map((entry) => ({
       key: `navigation:${entry.target}`, type: "intent", title: entry.label,
       subtitle: `${entry.description}${navigationContext ? ` Current context: ${navigationContext}.` : " Current selection is retained."}`,
@@ -413,12 +425,21 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
             {availableModes.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setMode(id); setSelected(0); }} className={`font-ui flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[8px] font-medium transition-colors ${mode === id ? "border-amber-300 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} aria-pressed={mode === id}><Icon className="h-3 w-3" /> {label}</button>)}
             <div className="font-ui ml-auto hidden items-center gap-2 px-3 text-[7px] text-muted-foreground/55 md:flex"><kbd className="lios-pane-code rounded border border-border/60 px-1.5 py-0.5">TAB</kbd> filter <kbd className="lios-pane-code rounded border border-border/60 px-1.5 py-0.5">↑↓</kbd> move <kbd className="lios-pane-code rounded border border-border/60 px-1.5 py-0.5">↵</kbd> open</div>
           </nav>
+          {mode === "tools" && <div className="flex flex-wrap items-center gap-2 border-t border-border/45 px-4 py-2.5">
+            <label htmlFor="lios-specialist-workspace-filter" className="font-ui text-xs text-muted-foreground">Workspace</label>
+            <select id="lios-specialist-workspace-filter" value={workspaceFilter} onChange={(event) => { setWorkspaceFilter(event.target.value as WorkspaceKey | "all"); setSelected(0); }} className="min-h-10 min-w-0 max-w-full rounded-lg border border-border bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
+              <option value="all">All registered tools</option>
+              {visibleWorkspaces.map((workspace) => <option key={workspace.key} value={workspace.key}>{workspace.label}</option>)}
+            </select>
+            <span role="status" className="font-ui text-xs text-muted-foreground">{browsedSpecialists.length} matching tools · navigate to inspect; access and data are checked when used</span>
+          </div>}
         </header>
 
         <div className={isClient ? "min-h-[390px] max-h-[68vh]" : "grid min-h-[390px] max-h-[68vh] grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px]"}>
           <div className={`min-h-0 overflow-y-auto p-2 scrollbar-thin ${isClient ? "" : "border-r border-border/50"}`}>
             {searching && entityResults.length === 0 && (mode === "all" || mode === "entities") && <div className="font-ui m-1 flex items-center gap-2 rounded-lg px-3 py-2 text-[8px] text-muted-foreground"><ActivityPulse /> Searching securities…</div>}
             {discoveringTools && universalToolResults.length === 0 && (mode === "all" || mode === "tools") && <div className="font-ui m-1 flex items-center gap-2 rounded-lg px-3 py-2 text-[8px] text-muted-foreground"><ActivityPulse /> Discovering LiOS capabilities…</div>}
+            {mode === "tools" && browsedSpecialists.length > 24 && <p className="font-ui px-3 py-2 text-xs text-muted-foreground">Showing the first results. Search or choose a workspace to find additional tools.</p>}
             {results.length === 0 ? (
               <div className="flex min-h-[340px] flex-col items-center justify-center px-8 text-center"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/55 bg-white/[0.012]"><Search className="h-5 w-5 text-muted-foreground/45" /></div><div className="font-ui mt-4 text-[11px] font-semibold text-foreground">{isClient ? "Search LiOS" : "Search the analytical system"}</div>{!isClient && <p className="font-ui mt-2 max-w-md text-[8px] leading-relaxed text-muted-foreground">Try a company, task, model, dataset or provider: <span className="lios-pane-code text-amber-300/85">AAPL GP</span>, <span className="lios-pane-code text-amber-300/85">reverse DCF</span>, <span className="font-medium text-foreground/80">credit merton</span>, <span className="font-medium text-foreground/80">FRED macro</span>.</p>}</div>
             ) : results.map((result, index) => {
@@ -426,7 +447,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
               const active = index === selected;
               const section = resultSection(result);
               const previousSection = index > 0 ? resultSection(results[index - 1]) : null;
-              return <div key={result.key}>{section !== previousSection && <div className="px-3 pb-1 pt-2 font-ui text-[7px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">{section}</div>}<button onMouseEnter={() => { setSelected(index); if (!result.command.navigation && result.type !== "ask" && result.type !== "data") prefetchLikelyDestination(result.command.view, result.command.symbol); }} onClick={() => execute(result)} className={`group mb-1 flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${active ? "border-amber-400/20 bg-amber-400/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,.018)]" : "border-transparent hover:border-border/55 hover:bg-white/[0.018]"}`}><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${RESULT_TONE[result.type]}`}><Icon className="h-3.5 w-3.5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-ui truncate text-[10px] font-semibold text-foreground">{result.title}</span>{result.capability?.hero && <span className="font-ui hidden rounded-full border border-amber-500/18 px-1.5 py-0.5 text-[6px] font-medium text-amber-300/75 sm:inline">Core</span>}</div><div className="font-ui mt-1 truncate text-[8px] text-muted-foreground">{result.subtitle}</div></div><div className="hidden shrink-0 text-right sm:block"><div className="lios-pane-code text-[6px] tracking-wide text-muted-foreground/55">{result.meta}</div><div className={`font-ui mt-1 text-[7px] font-medium ${active ? "text-amber-300/85" : "text-muted-foreground/40"}`}>{result.type === "ask" ? "Ask" : result.type === "data" ? "Explore" : "Open"} <ArrowRight className="ml-1 inline h-2.5 w-2.5" /></div></div></button></div>;
+              return <div key={result.key}>{section !== previousSection && <div className="px-3 pb-1 pt-2 font-ui text-[7px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">{section}</div>}<button onMouseEnter={() => { setSelected(index); if (!result.command.navigation && result.type !== "ask" && result.type !== "data") prefetchLikelyDestination(result.command.view, result.command.symbol); }} onClick={() => execute(result)} className={`group mb-1 flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${active ? "border-amber-400/20 bg-amber-400/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,.018)]" : "border-transparent hover:border-border/55 hover:bg-white/[0.018]"}`}><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${RESULT_TONE[result.type]}`}><Icon className="h-3.5 w-3.5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-ui truncate text-[10px] font-semibold text-foreground">{result.title}</span>{result.capability?.hero && <span className="font-ui hidden rounded-full border border-amber-500/18 px-1.5 py-0.5 text-[6px] font-medium text-amber-300/75 sm:inline">Core</span>}</div><div className="font-ui mt-1 truncate text-[8px] text-muted-foreground">{result.subtitle}</div>{result.relatedReason && <div className="font-ui mt-1 line-clamp-2 text-[11px] leading-4 text-amber-300/80">Suggested next: {result.relatedReason}</div>}</div><div className="hidden shrink-0 text-right sm:block"><div className="lios-pane-code text-[6px] tracking-wide text-muted-foreground/55">{result.meta}</div><div className={`font-ui mt-1 text-[7px] font-medium ${active ? "text-amber-300/85" : "text-muted-foreground/40"}`}>{result.type === "ask" ? "Ask" : result.type === "data" ? "Explore" : "Open"} <ArrowRight className="ml-1 inline h-2.5 w-2.5" /></div></div></button></div>;
             })}
           </div>
 
@@ -438,6 +459,7 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
                   <div className="font-ui text-[7px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">Selected context</div>
                   <div className="font-ui mt-2 text-[15px] font-semibold tracking-[-0.02em] text-foreground">{selectedResult.title}</div>
                   <p className="font-ui mt-2 text-[9px] leading-relaxed text-muted-foreground">{selectedResult.subtitle}</p>
+                  {selectedResult.relatedReason && <p className="font-ui mt-2 text-xs leading-relaxed text-amber-300/80">Related next step: {selectedResult.relatedReason}</p>}
                   {guided && selectedResult.capability?.guidance && (
                     <div className="mt-3 space-y-1.5 rounded-xl border border-[hsl(38,95%,50%)]/20 bg-[hsl(38,95%,50%)]/[0.035] p-2.5">
                       <p className="font-ui text-[8px] leading-relaxed text-muted-foreground"><span className="font-semibold uppercase tracking-wide text-[hsl(38,95%,55%)]">Why it matters — </span>{selectedResult.capability.guidance.why}</p>
