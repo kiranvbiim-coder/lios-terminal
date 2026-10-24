@@ -378,6 +378,47 @@ test("GM-12: owner-reviewed approval is an exact once-only release in the encryp
   assert.equal(storedBytes.includes(Buffer.from("synthetic-approved-review")), false, "audit metadata must not be in plaintext");
 });
 
+test("GM-12: cancelled agent call is durably terminal, never a replay or a model-generated success", { timeout: 15_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-brain-cancelled-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const settings = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(settings);
+  const id = crypto.randomUUID();
+  const owner = { userId: 7, projectId: null, chatId: null };
+  const controller = new AbortController();
+  await journal.begin({ id, owner, label: "Synthetic cancellation receipt", agentRun: true });
+
+  const runOnce = run(id, [planJson([step("cancelled-read", "test.agent.slow")])], {
+    projectId: null, signal: controller.signal,
+    agentLoop: { ledger: async (event) => { await journal.appendAgentEvent(id, event); } },
+  });
+  const timer = setTimeout(() => controller.abort(), 100);
+  let result: ConversationRuntimeResult;
+  try {
+    result = await runOnce.promise;
+  } finally {
+    clearTimeout(timer);
+  }
+  assert.equal(result.cancelled, true);
+  assert.equal(result.receiptIds.length, 0, "no success receipt may be issued for a cancelled run");
+  assert.equal(runOnce.events.some((event) => event.type === "text"), false);
+  assert.equal(runOnce.calls(), 1, "a cancelled tool must not produce a model inspection or a second plan");
+  await journal.finish(id, "cancelled", null);
+
+  const restarted = await createExecutionJournal(settings);
+  await restarted.recoverInterrupted();
+  const record = await restarted.read(id, owner);
+  assert.ok(record && record.version === 2);
+  assert.equal(record.status, "cancelled", "restart cannot silently re-enable a cancelled run");
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_started").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "cancelled").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "step_finished" && event.status === "cancelled").length, 1);
+  assert.equal(record.events?.some((event) => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+  await assert.rejects(restarted.begin({ id, owner, label: "Forbidden reused request ID", agentRun: true }), /already exists/);
+  await assert.rejects(restarted.appendAgentEvent(id, { kind: "step_started", stepId: "replay" }), /finalized/);
+  assert.equal((await restarted.read(id, owner))?.status, "cancelled");
+});
+
 test("the runtime passes the server-set prepareApproval through: confirm-class only, before the wait, no execution", async () => {
   const id = "b3333333-3333-4333-8333-333333333333";
   const prepared: string[] = [];
