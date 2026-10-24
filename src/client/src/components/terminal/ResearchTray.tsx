@@ -73,6 +73,11 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   useEffect(() => subscribeResearchThread(setThread), []);
 
   const groups = useMemo(() => getResearchTrayGroups(items), [items]);
+  useEffect(() => {
+    // A pin can be deleted/regrouped in another tab. Do not keep a stale
+    // invisible filter once its selected group no longer exists.
+    if (group !== "ALL" && !groups.includes(group)) setGroup("ALL");
+  }, [group, groups]);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return items.filter((item) => {
@@ -212,6 +217,28 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
       <div className="shrink-0 space-y-3 border-b border-border/50 p-3">
         {tab === "pinned" && (
           <>
+            {editingId && !items.some(item => item.id === editingId) && (
+              <section role="alert" data-testid="research-removed-draft" className="space-y-2 rounded-lg border border-amber-300/30 p-3">
+                <p className="font-ui text-sm text-amber-100">
+                  This pinned item was removed in another tab while you were editing. Nothing was saved over it.
+                  Your draft is still here for review.
+                </p>
+                <label className="block font-ui text-sm">
+                  Unsaved note draft
+                  <textarea readOnly value={noteDraft} rows={3} className={inputClass + " mt-1 resize-y"} />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => {
+                    setNewNote(noteDraft);
+                    setAddingNote(true);
+                    setEditingId(null);
+                    setEditingSnapshot(null);
+                    notify("Draft moved to New note. Review and save it before leaving the tray.");
+                  }} className={smallButton}>Keep as new note draft</button>
+                  <button type="button" onClick={() => { setEditingId(null); setEditingSnapshot(null); }} className={smallButton}>Dismiss draft</button>
+                </div>
+              </section>
+            )}
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={pinCurrent} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-primary/45 bg-primary/[0.065] px-3 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                 <BookmarkPlus className="h-4 w-4" aria-hidden="true" /> Pin current
