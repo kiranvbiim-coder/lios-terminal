@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DOCKVIEW_LAYOUT_STORAGE_KEY,
+  DOCKVIEW_TAB_LAYOUTS_STORAGE_KEY,
   LEGACY_DOCKVIEW_LAYOUT_STORAGE_KEYS,
   loadDockviewLayoutState,
   saveDockviewLayoutState,
@@ -60,6 +61,53 @@ test("corrupt current Dockview geometry is removed before it can be restored", (
     storage.set(DOCKVIEW_LAYOUT_STORAGE_KEY, "{broken");
     assert.equal(loadDockviewLayoutState(), null);
     assert.equal(storage.has(DOCKVIEW_LAYOUT_STORAGE_KEY), false);
+  });
+});
+
+test("Dockview geometry follows each original Terminal tab without replacing another tab", () => {
+  withFakeWindow((storage) => {
+    const legacy = { grid: { width: 960 } };
+    const research = { grid: { width: 720 }, activeGroup: "research" };
+    const portfolio = { grid: { width: 1120 }, activeGroup: "portfolio" };
+    saveDockviewLayoutState(legacy);
+    assert.deepEqual(loadDockviewLayoutState("new-tab"), legacy, "an upgraded tab can seed its first geometry from v2");
+    saveDockviewLayoutState(research, "tab-research");
+    saveDockviewLayoutState(portfolio, "tab-portfolio");
+    assert.deepEqual(loadDockviewLayoutState("tab-research"), research);
+    assert.deepEqual(loadDockviewLayoutState("tab-portfolio"), portfolio);
+    assert.deepEqual(loadDockviewLayoutState(), legacy, "legacy callers still use the original v2 key");
+    assert.ok(storage.has(DOCKVIEW_TAB_LAYOUTS_STORAGE_KEY));
+    saveDockviewLayoutState({ grid: { width: 630 } }, "tab-research");
+    assert.deepEqual(loadDockviewLayoutState("tab-portfolio"), portfolio, "resizing one tab cannot resize another");
+  });
+});
+
+test("clearing a scoped Dockview layout does not resurrect obsolete global geometry", () => {
+  withFakeWindow(() => {
+    saveDockviewLayoutState({ grid: { width: 900 } });
+    saveDockviewLayoutState({ grid: { width: 680 } }, "tab-one");
+    saveDockviewLayoutState(null, "tab-one");
+    assert.equal(loadDockviewLayoutState("tab-one"), null);
+    assert.deepEqual(loadDockviewLayoutState("tab-two"), { grid: { width: 900 } });
+  });
+});
+
+test("scoped layouts reject invalid IDs and damaged caches, and do not grow without bounds", () => {
+  withFakeWindow((storage) => {
+    saveDockviewLayoutState({ grid: { old: true } }, "safe");
+    saveDockviewLayoutState({ grid: { illegal: true } }, "__proto__!");
+    assert.equal(loadDockviewLayoutState("__proto__!"), null);
+    assert.deepEqual(loadDockviewLayoutState("safe"), { grid: { old: true } });
+    for (let index = 0; index < 30; index++) {
+      saveDockviewLayoutState({ grid: { index } }, "tab-" + index);
+    }
+    const saved = JSON.parse(storage.get(DOCKVIEW_TAB_LAYOUTS_STORAGE_KEY) ?? "[]") as Array<{ scope: string }>;
+    assert.equal(saved.length, 24);
+    assert.equal(loadDockviewLayoutState("tab-0"), null);
+    assert.deepEqual(loadDockviewLayoutState("tab-29"), { grid: { index: 29 } });
+    storage.set(DOCKVIEW_TAB_LAYOUTS_STORAGE_KEY, "{broken");
+    assert.equal(loadDockviewLayoutState("tab-29"), null);
+    assert.equal(storage.has(DOCKVIEW_TAB_LAYOUTS_STORAGE_KEY), false);
   });
 });
 
