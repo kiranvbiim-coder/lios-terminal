@@ -117,6 +117,12 @@ export async function createProfessionalWorkPackage(ctx: TenantContext, raw: unk
     const artifact = await getArtifact(ctx, selected.artifactId);
     if (artifact.projectId !== input.projectId || (input.projectId === null && artifact.owningChatId !== composition.owningChatId)
       || artifact.ownerUserId !== ctx.userId || artifact.status !== "active") throw new Error("Select owned active sources from this Project or originating Chat only.");
+    // A source role labels the content in the frozen report. Never allow the
+    // caller to relabel an arbitrary Artifact as an authored Decision record.
+    // A Decision role is not an approval, even for a genuine Decision Artifact.
+    if (selected.role === "decision" && artifact.kind !== "decision") {
+      throw new Error("Only a Decision Artifact can be labeled as a decision source. Select evidence or another accurate source role.");
+    }
     const version = await getArtifactVersion(ctx, artifact.id, selected.version);
     if (version.contentHash !== selected.contentHash || hashLedgerValue(version.content) !== version.contentHash) throw new Error("Selected immutable source hash does not match.");
     for (const ref of [...version.sourceRefs, ...version.dependencyRefs]) if (ref.startsWith("entitlement-policy:")) {
