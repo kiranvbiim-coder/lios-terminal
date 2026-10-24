@@ -123,6 +123,7 @@
     "acceptance:flagship:packaged": "tsx script/validate_packaged_flagship_evidence.ts",
     "test:si01-offline": "node --import tsx --test server/si01OfflineBaseline.test.ts server/si01OfflineBaseline.contract.test.ts server/si01-offline-evidence.test.ts server/sessionRestoration.test.ts server/exec/execution-journal.test.ts server/backupArchive.test.ts server/backupService.test.ts",
     "acceptance:si01-offline-v2": "tsx script/si01_offline_v2.ts",
+    "test:sandbox-quant-smoke": "python -m unittest discover -s sandbox-image -p test_quant_smoke.py",
     "acceptance:sp02-packaged": "tsx script/sp02_packaged_journey.ts",
     "test:sp02-contract": "node --import tsx --test script/sp02_packaged_contract.test.ts script/sp02_resume_reapproval_contract.test.ts",
     "test:sp03-contract": "node --import tsx --test script/sp03_packaged_contract.test.ts script/sp03_packaged_inspection.test.ts",
