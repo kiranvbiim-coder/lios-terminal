@@ -53,3 +53,12 @@ test("child exit failure cannot be recorded as a successful image import", { tim
   await assert.rejects(streamSandboxImageArchive(archive, child, 9_000), /load denied|load failed/);
   assert.equal(child.exitCode, 23);
 });
+
+test("hung image import reaches its deadline and the child is joined", { timeout: 12_000 }, async t => {
+  const archive = fixture(t, Buffer.from("valid"));
+  const script = 'process.stdin.resume(); process.stdin.on("end", () => setInterval(() => {}, 1000));';
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "pipe"] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
+  await assert.rejects(streamSandboxImageArchive(archive, child, 250), /allowed deadline/);
+  assert.ok(child.exitCode !== null || child.signalCode !== null, "timed-out child must be extinct");
+});
