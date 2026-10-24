@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { TrustManifest } from "@shared/trustContracts";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
+import EvidencePrism from "./EvidencePrism";
 
 interface Props {
   manifest: TrustManifest;
@@ -125,31 +126,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </ol>
           </section>
 
-          {!!manifest.claims.length && (
-            <section>
-              <div className="font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">Claims & calculations</div>
-              <div className="mt-2 space-y-1.5">
-                {manifest.claims.map((claim) => (
-                  <div key={claim.claimId} className="rounded border border-border/40 bg-black/20 px-2.5 py-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-ui text-[12px] font-semibold text-foreground">{claim.label}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.status}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.confidence} confidence</span>
-                    </div>
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{claim.explanation}</div>
-                    {!!claim.formulaRefs.length && (
-                      <div className="mt-1 font-terminal text-[12px] leading-3 text-cyan-200/80">
-                        {claim.formulaRefs.join(" · ")}
-                      </div>
-                    )}
-                    {!!claim.receiptIds.length && (
-                      <div className="mt-1 font-terminal text-[12px] text-muted-foreground">Receipts: {claim.receiptIds.join(" · ")}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <EvidencePrism key={manifest.trustId} manifest={manifest} />
 
           {!!manifest.assumptions.length && (
             <section>
