@@ -58,17 +58,17 @@ export function researchComparisonArtifactContent(
 ) {
   const byDoc = new Map(sources.map(source => [source.documentId, source]));
   const refs = new Set<string>();
-  const blocks: Array<z.input<typeof researchArtifactContentSchema>["blocks"][number]> = [
-    { id: "comparison-title", type: "heading", text: "Research evidence comparison" },
-    { id: "comparison-scope", type: "paragraph", text: "Research question: " + query },
-    { id: "comparison-method", type: "callout", text: RESEARCH_EVIDENCE_COMPARISON_LIMITATION },
+  const blocks: Array<z.infer<typeof researchArtifactContentSchema>["blocks"][number]> = [
+    { id: "comparison-title", type: "heading", text: "Research evidence comparison", attrs: {} },
+    { id: "comparison-scope", type: "paragraph", text: "Research question: " + query, attrs: {} },
+    { id: "comparison-method", type: "callout", text: RESEARCH_EVIDENCE_COMPARISON_LIMITATION, attrs: {} },
   ];
   const evidence: Array<z.infer<typeof researchArtifactContentSchema>["evidence"][number]> = [];
 
   for (const [i, facet] of facets.entries()) {
-    blocks.push({ id: "facet-" + i, type: "heading", text: facet.facet });
+    blocks.push({ id: "facet-" + i, type: "heading", text: facet.facet, attrs: {} });
     if (!facet.rows.length) {
-      blocks.push({ id: "gap-" + i, type: "paragraph", text: "Evidence gap: no exact passage matched among " + facet.inspectedSources + " permitted retrieved source(s). This is not proof the topic is absent." });
+      blocks.push({ id: "gap-" + i, type: "paragraph", text: "Evidence gap: no exact passage matched among " + facet.inspectedSources + " permitted retrieved source(s). This is not proof the topic is absent.", attrs: {} });
       continue;
     }
     for (const [j, row] of facet.rows.entries()) {
@@ -98,6 +98,7 @@ export function researchComparisonArtifactContent(
         id: "comparison-citation-" + i + "-" + j,
         type: "paragraph",
         text: "Source: " + source.sourceRef + (source.occurredAt ? " · recorded " + source.occurredAt : " · source date unavailable"),
+        attrs: {},
       });
       evidence.push({
         id: evidenceId,
@@ -110,7 +111,7 @@ export function researchComparisonArtifactContent(
       });
     }
     if (facet.omittedMatches) {
-      blocks.push({ id: "more-matches-" + i, type: "paragraph", text: String(facet.omittedMatches) + " additional matching source(s) omitted by the presentation limit. Rerun with a narrower question to inspect them." });
+      blocks.push({ id: "more-matches-" + i, type: "paragraph", text: String(facet.omittedMatches) + " additional matching source(s) omitted by the presentation limit. Rerun with a narrower question to inspect them.", attrs: {} });
     }
   }
   if (!refs.size || !evidence.length) throw new Error("No permitted cited comparison evidence matched; no empty Artifact was created.");

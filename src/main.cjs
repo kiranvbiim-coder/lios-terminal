@@ -20,7 +20,7 @@ const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
 const { assertTrustedIpcSender } = require("./desktopIpcSecurity.cjs");
-const { normalizeUnicodePdfPayload, buildUnicodeReportHtml } = require("./desktopUnicodePdf.cjs");
+const { normalizeUnicodePdfPayload, buildUnicodeReportHtml, runNativeUnicodePdfSmoke } = require("./desktopUnicodePdf.cjs");
 const { redactDesktopLogText } = require("./desktopLogRedaction.cjs");
 const {
   createRestoreWorkerLaunchPlan,
@@ -31,6 +31,7 @@ const {
 app.setName("LiOS Intelligence Terminal");
 
 const desktopSelfTestRequested = process.argv.includes("--desktop-self-test");
+const nativeUnicodePdfSmokeRequested = process.argv.includes("--unicode-pdf-smoke");
 
 // One desktop profile owns one Home process. A second launch must not compete for its database.
 if (!app.requestSingleInstanceLock()) app.exit(0);
@@ -536,7 +537,9 @@ ipcMain.handle("limuria:export-unicode-pdf", async (event, raw) => {
     filters: [{ name: "PDF Document", extensions: ["pdf"] }],
   });
   if (pick.canceled || !pick.filePath) return { saved: false, cancelled: true };
-  const partition = "lios-unicode-pdf";
+  // Isolated in-memory partition per export: no surviving request interceptor,
+  // cache, cookie or site data from the previous private document.
+  const partition = "lios-unicode-pdf-" + crypto.randomUUID();
   const printSession = session.fromPartition(partition, { cache: false });
   // Network egress is never needed: all source excerpts come from the owned
   // canonical Artifact projection and fonts must be installed locally.
@@ -798,6 +801,41 @@ function createWindow() {
 
 // Initialize Electron lifecycle
 app.whenReady().then(async () => {
+  if (nativeUnicodePdfSmokeRequested) {
+    // A separate opt-in installed-app renderer test. It does not start the
+    // local server or access a user workspace. A PDF may be saved ONLY when
+    // an operator explicitly supplies a new local evidence path.
+    // This is a render smoke probe, not automatic font/visual acceptance.
+    const reportPath = process.env.LIOS_UNICODE_PDF_SMOKE_REPORT?.trim();
+    const outputPath = process.env.LIOS_UNICODE_PDF_SMOKE_OUTPUT?.trim();
+    try {
+      if (!app.isPackaged)throw new Error("Native Unicode PDF smoke requires an installed packaged LiOS build.");
+      if (outputPath && (!path.isAbsolute(outputPath) || !/\.pdf$/i.test(outputPath))) {
+        throw new Error("Native Unicode PDF evidence output requires an absolute .pdf file path.");
+      }
+      const onPdf = outputPath ? async bytes => {
+        // No overwrite, no public upload and no user data. The payload is
+        // synthetic, but keep its emitted file private by default.
+        await fs.promises.writeFile(outputPath, bytes, {flag:"wx",mode:0o600});
+      } : undefined;
+      const result = await runNativeUnicodePdfSmoke({BrowserWindow,session,onPdf});
+      const report = {version:1,generatedAt:new Date().toISOString(),
+        platform:process.platform,arch:process.arch,...result};
+      if(reportPath)fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+"\n","utf8");
+      console.log(JSON.stringify(report,null,2));
+      app.exit(0);
+    } catch(error) {
+      const report={version:1,generatedAt:new Date().toISOString(),
+        platform:process.platform,arch:process.arch,status:"failed",
+        error:error?.message??String(error)};
+      if(reportPath) {
+        try{fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+"\n","utf8");}catch{}
+      }
+      console.error(JSON.stringify(report,null,2));
+      app.exit(1);
+    }
+    return;
+  }
   if (desktopSelfTestRequested) {
     const reportPath = process.env.LIOS_DESKTOP_SELF_TEST_REPORT?.trim();
     try {

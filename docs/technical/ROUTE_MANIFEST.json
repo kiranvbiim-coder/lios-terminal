@@ -1132,6 +1132,30 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/report.docx",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/report.pdf",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/artifacts/:artifactId/restore-revision",
    "reachableBy": [
