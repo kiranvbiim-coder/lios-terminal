@@ -86,7 +86,7 @@ test("raw valuation JSON is reachable only as read-only recorded evidence", () =
   const open = valuation({ expertDefaultOpen: true });
   assert.match(open, /aria-expanded="true"/);
   assert.match(open, /<pre[^>]*aria-label="Recorded valuation JSON"/);
-  assert.match(open, /"valuePerShare": 71\.370824940136/);
+  assert.match(open, /&quot;valuePerShare&quot;: 71\.370824940136/);
   assert.match(open, /This is recorded calculation evidence, not an input editor/);
   assert.doesNotMatch(open, /<textarea|Save revision/);
 });
