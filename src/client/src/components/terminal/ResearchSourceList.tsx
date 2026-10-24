@@ -18,7 +18,7 @@ export default function ResearchSourceList({ sources }: { sources: readonly Chat
   const remaining = sources.length - INITIAL_VISIBLE;
 
   return (
-    <section data-testid="trace-sources" aria-label="Sources used" className="space-y-2">
+    <section data-testid="trace-sources" aria-label="Recorded source references" className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-ui text-[12px] font-semibold text-foreground">
           Recorded source references ({sources.length})
