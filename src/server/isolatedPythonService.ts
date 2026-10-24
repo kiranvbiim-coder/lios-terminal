@@ -4,6 +4,7 @@ import path from "node:path";
 import { TextDecoder } from "node:util";
 import { runExecutionBackendRequest, type ExecutionBackendRunner, type ExecutionBackendRunResult } from "./exec/run-backend";
 import { resolveSandboxRuntimeProfile } from "./exec/sandbox-runtime-profile";
+import { matchesWorkspaceOutputDigest } from "./exec/workspace-output-integrity";
 
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_SOURCE_FILE_BYTES = 4 * 1024 * 1024;
@@ -216,6 +217,9 @@ export async function callIsolatedPythonService<T>(
     if (!Buffer.isBuffer(returned.data) || !Number.isSafeInteger(returned.size) ||
         returned.size <= 0 || returned.size > MAX_JSON_BYTES || returned.data.length !== returned.size) {
       throw unavailable("worker returned an empty, inconsistent, or oversized result file.");
+    }
+    if (!matchesWorkspaceOutputDigest(returned)) {
+      throw unavailable("worker result file digest did not match the returned bytes.");
     }
     return parseResult<T>(returned.data);
   } finally {
