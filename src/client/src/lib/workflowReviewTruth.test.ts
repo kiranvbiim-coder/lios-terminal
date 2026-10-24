@@ -112,6 +112,9 @@ test("P9 UI never immediately creates an enabled schedule or silently deletes/pa
   assert.match(panel, /requestWorkflowReview\(workflow, "delete"\)/);
   assert.match(panel, /requestWorkflowReview\(workflow, "edit"\)/);
   assert.match(panel, /candidate.expectedUpdatedAt/);
+  assert.match(panel, /selectedProject.current === originalProject/);
+  assert.match(panel, /managementInFlight.current = false;\s*\/\/ Workbench may have switched Projects/);
+  assert.equal((panel.match(/setBusyId\(null\);/g) ?? []).length >= 2, true, "Project-switch management locks must always be released");
   assert.match(panel, /setP9WorkflowEnabled\(originalProject, candidate.workflowId, enabled, candidate.expectedUpdatedAt\)/);
   assert.match(panel, /replaceP9Workflow\(originalProject, candidate.workflowId, definition, candidate.expectedUpdatedAt\)/);
   assert.match(panel, /deleteP9Workflow\(originalProject, candidate.workflowId, candidate.expectedUpdatedAt\)/);
