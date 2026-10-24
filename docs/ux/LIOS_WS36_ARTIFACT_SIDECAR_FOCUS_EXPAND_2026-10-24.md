@@ -25,11 +25,12 @@ From `src/`:
 
 ```sh
 node --import tsx --test client/src/lib/artifactSidecarSizing.test.ts
-node --test script/validate_ws08_responsive_shell.test.mjs
 npm run check
 npm run test:ux
 npm run acceptance:ux
 ```
+
+On the **separate #127 WS-08 branch**, run `node --test script/validate_ws08_responsive_shell.test.mjs`; that script is not part of parent #98 or this isolated WS-36 child until the two stacks are integrated.
 
 **Live acceptance still required:** signed-in real desktop and packaged Electron Mac/Windows resize from 320/390/768/900/1024/1440px at 100% and 200% zoom; keyboard-only Left/Right/Shift/Home/End; mouse/touch pointer cancellation, narrow Focus/back and focus indicators, dirty document/spreadsheet preservation during Focus/Expand, identical Artifact ID/version under owner/Chat switch, P4 ACL negative cases and independent PR review. **Do not claim release/merge or native validation merely from authored source tests.**
 
