@@ -51,6 +51,7 @@ import { AIProviderError } from "./byoaiRouter";
 import { createArtifactProposal, getArtifact, getArtifactVersion } from "./artifactStore";
 import { projectEvidenceArtifactTool } from "./projectEvidenceArtifactTool";
 import { saveResearchComparisonTool } from "./researchComparisonArtifactTool";
+import { researchReportFromArtifactTool } from "./researchReportFromArtifactTool";
 import { artifactInspectTool, artifactMaintenanceTool, buildArtifactMaintenancePrompt, isCredentialBearingOutboundText } from "./artifactMaintenance";
 import { webResearchArtifactTool } from "./webResearchArtifactTool";
 import { createMemoryReflectionTool } from "./memoryReflectionTool";
@@ -1134,6 +1135,7 @@ function registerBuiltinConversationTools(): void {
   for (const tool of codingConversationToolDescriptors) registerConversationTool(tool);
   registerConversationTool(projectEvidenceArtifactTool);
   registerConversationTool(saveResearchComparisonTool);
+  registerConversationTool(researchReportFromArtifactTool);
   registerConversationTool(artifactInspectTool);
   registerConversationTool(artifactMaintenanceTool);
   registerConversationTool(terminalArtifactTool);
