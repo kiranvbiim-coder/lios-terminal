@@ -8,6 +8,7 @@ export interface ChartRecordedContext {
   yUnit: string | null;
   period: string | null;
   evidenceRefs: string[];
+  sourceBasis: "artifact_version" | "chart_options" | "none";
 }
 
 /**
@@ -16,7 +17,7 @@ export interface ChartRecordedContext {
  * infer currencies, frequency, annualization or trusted provenance from x/y.
  * Options are user/Artifact-supplied metadata, not independent verification.
  */
-export function chartRecordedContext(chart: ChartContent): ChartRecordedContext {
+export function chartRecordedContext(chart: ChartContent, versionSourceRefs?: readonly string[]): ChartRecordedContext {
   const options = chart.options;
   function label(key: string, max = 100): string | null {
     const value = options[key];
@@ -25,7 +26,11 @@ export function chartRecordedContext(chart: ChartContent): ChartRecordedContext 
     if (!compact || compact.length > max || /[\u0000-\u001f\u007f]/.test(value)) return null;
     return compact;
   }
-  const sourceRefs = options.sourceRefs;
+  // The authenticated P4 saved Artifact *version* is the authoritative
+  // source-reference inventory for the normal ArtifactPane. Chart options
+  // are only a display-level fallback for read-only derived charts without
+  // version metadata; never blend the two scopes or infer validation.
+  const sourceRefs = versionSourceRefs ?? options.sourceRefs;
   const evidenceRefs = Array.isArray(sourceRefs) && sourceRefs.length <= 100
     && sourceRefs.every(v => typeof v === "string" && v.trim().length > 0 && v.length <= 1_000)
     ? [...new Set(sourceRefs as string[])] : [];
@@ -36,6 +41,7 @@ export function chartRecordedContext(chart: ChartContent): ChartRecordedContext 
     yUnit: label("yUnit"),
     period: label("periodLabel", 200),
     evidenceRefs,
+    sourceBasis: versionSourceRefs !== undefined ? "artifact_version" : evidenceRefs.length ? "chart_options" : "none",
   };
 }
 
@@ -52,6 +58,6 @@ export function chartSourceCaveat(context: ChartRecordedContext): string {
     ...(!context.evidenceRefs.length ? ["source references"] : []),
   ];
   return missing.length
-    ? `Not recorded: ${missing.join(", ")}. Values shown are saved Artifact observations, not independently verified data.`
+    ? `Not recorded in the displayed chart or saved version: ${missing.join(", ")}. Values shown are saved Artifact observations, not independently verified data.`
     : "Labels, period, units and source references are recorded claims only; this view has not independently verified provider access, freshness or source identity.";
 }
