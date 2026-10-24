@@ -101,7 +101,7 @@ test("existing P13 owner routes and rights review stay canonical and the UX expo
   assert.match(panel, /Current Home runtime|current Home runtime/i);
   assert.match(panel, /data-testid="extensions-refresh-catalog"/);
   assert.match(panel, /setCatalog\(null\); setInspection\(null\); setRevokeTarget\(null\)/);
-  assert.match(panel, /extensionRequest\<ExtensionCatalog\>\("\/install"/);
+  assert.match(panel, /extensionRequest\("\/install"/);
   assert.match(panel, /rightsConfirmed: true/);
   assert.match(panel, /Confirm exact revocation/);
   assert.match(server, /this.admit\(actor\)/);
