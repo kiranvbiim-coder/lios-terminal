@@ -386,6 +386,17 @@ export const conversationRuntimeEventSchema = z.discriminatedUnion("type", [
     replaySafe: z.boolean().optional(),
     externalSideEffect: z.boolean().optional(),
     blastRadius: z.string().trim().min(1).max(500).optional(),
+    /** Safe exact binding identities from the canonical server-owned pending grant.
+     * Never include raw tool arguments, credentials, provider URLs or target payloads. */
+    reviewBinding: z.object({
+      toolId: z.string().trim().min(1).max(300),
+      stepId: z.string().trim().min(1).max(300),
+      toolCallId: z.string().trim().min(1).max(300),
+      inputSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      planSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      chatId: z.number().int().positive().nullable(),
+      projectId: z.number().int().positive().nullable(),
+    }).strict().optional(),
     choices: z.array(governedToolReviewDecisionSchema).min(1).max(3),
     expiresAt: z.string().datetime().nullable(),
     message: z.string().max(1_000),
