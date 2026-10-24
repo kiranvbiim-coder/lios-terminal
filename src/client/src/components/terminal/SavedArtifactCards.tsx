@@ -3,6 +3,7 @@ import { useQueries } from "@tanstack/react-query";
 import { FileBarChart } from "lucide-react";
 import { savedMessageArtifactRefs, type SavedMessageArtifactRef } from "@shared/conversationArtifactRefs";
 import { useOwnedArtifacts, type ArtifactDetail, type ProjectArtifactRecord } from "@/lib/useArtifacts";
+import { recordedArtifactPreview } from "@/lib/recordedArtifactPreview";
 
 const KIND_LABEL: Record<string, string> = {
   chart: "Chart",
@@ -27,6 +28,8 @@ export interface SavedArtifactCardModel {
   kindLabel: string | null;
   version: number;
   ariaLabel: string;
+  /** Only from an access-checked P4 lookup for this exact saved revision. */
+  preview: string | null;
   /** The exact access-checked lookup of this Artifact version failed or returned another Project (deleted or no longer accessible). Absence from the active list alone never sets this. */
   unavailable: boolean;
 }
@@ -36,10 +39,10 @@ export interface SavedArtifactCardModel {
  * Live list metadata is used only for availability and legacy display fallback.
  * Nothing is rerun or advanced to a newer head implicitly.
  */
-export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, exactLookup: "pending" | "found" | "missing" = "pending"): SavedArtifactCardModel {
+export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, exactLookup: "pending" | "found" | "missing" = "pending", recordedPreview: string | null = null, exactKind: ProjectArtifactRecord["kind"] | null = null): SavedArtifactCardModel {
   const unavailable = !live && exactLookup === "missing";
   const title = ref.title ?? live?.title ?? "Saved Artifact";
-  const kind = ref.kind ?? live?.kind;
+  const kind = exactKind ?? ref.kind ?? live?.kind;
   const kindLabel = kind ? (KIND_LABEL[kind] ?? kind) : null;
   const version = ref.version;
   return {
@@ -47,6 +50,7 @@ export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pi
     title,
     kindLabel,
     version,
+    preview: exactLookup === "found" ? recordedPreview : null,
     ariaLabel: unavailable
       ? `Saved Artifact ${title}${kindLabel ? `, ${kindLabel}` : ""}, version ${version} is unavailable`
       : `Open saved Artifact ${title}${kindLabel ? `, ${kindLabel}` : ""}, version ${version}`,
@@ -73,7 +77,10 @@ export function SavedArtifactCardList({ cards, activeId, onOpen }: {
           className="flex w-full min-w-0 items-center gap-2 rounded-md border border-border/50 bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-fuchsia-300/30 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border/50 disabled:hover:bg-black/20"
         >
           <FileBarChart className="h-3.5 w-3.5 shrink-0 text-fuchsia-300" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-foreground">{card.title}</span>
+          <span className="min-w-0 flex-1 space-y-1">
+            <span className="block truncate font-ui text-[13px] text-foreground">{card.title}</span>
+            {card.preview && <span data-testid="artifact-task-preview" className="block truncate font-ui text-[12px] text-muted-foreground">{card.preview}</span>}
+          </span>
           {card.kindLabel && <span className="shrink-0 font-ui text-[12px] text-muted-foreground">{card.kindLabel}</span>}
           <span className="shrink-0 font-ui text-[12px] text-muted-foreground">v{card.version}</span>
           {card.unavailable
@@ -86,6 +93,26 @@ export function SavedArtifactCardList({ cards, activeId, onOpen }: {
 }
 export function savedArtifactMatchesScope(artifact: Pick<ProjectArtifactRecord, "projectId" | "owningChatId">, projectId: number | null, chatId: number | null): boolean {
   return projectId !== null ? artifact.projectId === projectId : chatId !== null && artifact.projectId === null && artifact.owningChatId === chatId;
+}
+
+/**
+ * Fail closed when the exact saved revision, P4 identity, content-kind
+ * contract or active Chat/Project boundary fails to match. This is an
+ * additional client guard, not a replacement for server authorization.
+ */
+export function exactSavedArtifactDetail(
+  ref: SavedMessageArtifactRef,
+  candidate: ArtifactDetail | undefined,
+  projectId: number | null,
+  chatId: number | null,
+): ArtifactDetail | null {
+  if (!candidate
+    || candidate.artifact.id !== ref.id
+    || candidate.version.artifactId !== ref.id
+    || candidate.version.version !== ref.version
+    || candidate.artifact.kind !== candidate.version.content.kind
+    || !savedArtifactMatchesScope(candidate.artifact, projectId, chatId)) return null;
+  return candidate;
 }
 
 /**
@@ -103,7 +130,7 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
   const refs = savedMessageArtifactRefs(metadata);
   const list = useOwnedArtifacts({ projectId: refs.length ? projectId : null, owningChatId: refs.length ? chatId : null });
   // The active list is a bounded page that excludes archived Artifacts, so absence there proves nothing.
-  // Refs not in the list are resolved by the exact access-checked Artifact query at the retained version.
+  // Fetch the exact saved revision for EVERY card: list data cannot authorize a content preview.
   const listed = list.data;
   const exact = useQueries({
     queries: refs.map((ref) => ({
@@ -113,18 +140,25 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
         if (!res.ok) throw new Error("Failed to load Artifact.");
         return res.json();
       },
-      enabled: Boolean(projectId || chatId) && (listed === undefined || !listed.some((artifact) => artifact.id === ref.id)),
+      enabled: Boolean(projectId || chatId),
+      // Never display a previous browser user's cached content on a fresh
+      // mount without a new current-session access-checked read.
+      refetchOnMount: "always" as const,
     })),
   });
   if (!refs.length || (!projectId && !chatId)) return null;
   const cards = refs.map((ref, index) => {
     const fromList = listed?.find((artifact) => artifact.id === ref.id && savedArtifactMatchesScope(artifact, projectId, chatId));
     const query = exact[index];
-    const detail = query?.data && savedArtifactMatchesScope(query.data.artifact, projectId, chatId) ? query.data : undefined;
+    // Query caches and returned documents still get an exact identity, version and
+    // ownership comparison before displaying a content-derived sentence.
+    const detail = query?.isFetchedAfterMount && !query.isFetching && !query.isError
+      ? exactSavedArtifactDetail(ref, query.data, projectId, chatId) : null;
     const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
-    const wrongProject = Boolean(query?.data) && !detail;
-    const lookup = live ? "found" : wrongProject || query?.isError ? "missing" : "pending";
-    return describeSavedArtifactCard(ref, live, lookup);
+    const wrongIdentityOrScope = Boolean(query?.data) && Boolean(query?.isFetchedAfterMount) && !query?.isFetching && !detail;
+    const lookup = live ? "found" : wrongIdentityOrScope || query?.isError ? "missing" : "pending";
+    const preview = detail ? recordedArtifactPreview(detail.version.content) : null;
+    return describeSavedArtifactCard(ref, live, lookup, preview, detail?.artifact.kind ?? null);
   });
   return <SavedArtifactCardList cards={cards} activeId={activeId} onOpen={onOpen} />;
 }
