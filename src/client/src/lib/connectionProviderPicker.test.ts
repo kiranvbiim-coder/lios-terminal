@@ -48,7 +48,7 @@ test("Connection Center uses existing accessible Radix dialog and separate provi
   assert.match(code, /<Dialog open onOpenChange=/);
   assert.match(code, /<DialogTitle/);
   assert.match(code, /onCloseAutoFocus=\{event =>/);
-  assert.match(code, /const \[providerPickerQuery, setProviderPickerQuery\] = useState\(" "\.trim\(\)\)/);
+  assert.match(code, /const \[providerPickerQuery, setProviderPickerQuery\] = useState\(""\)/);
   assert.match(code, /const pickerProviders = useMemo\(\(\) => chooseConnectionProviders\(catalogConnectors, providerPickerQuery\)/);
   assert.match(code, /aria-label="Search providers"/);
   assert.match(code, /value=\{providerPickerQuery\}/);
