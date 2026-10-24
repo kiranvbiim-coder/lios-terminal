@@ -151,6 +151,32 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
     assert.ok(assistant, "completed agent message must be persisted");
     assert.deepEqual(savedMessageArtifactRefs(assistant.metadata).map((item) => ({ id: item.id, version: item.version })),
       [{ id: saved.id, version: saved.version }], "normal restored Chat cards must reference the original P4 version");
+
+    // Reconstruct the *same* Home database from its on-disk data root. This
+    // proves the saved message and underlying P4 record survive a restart,
+    // rather than merely remaining in this process's memory.
+    await closeDb();
+    await initDb();
+    const reloaded = await listProjectChatMessages(tenant, chat.id);
+    const restoredAssistant = reloaded.find((item) => item.role === "assistant" && item.metadata.runtimeRequestId === requestId);
+    assert.ok(restoredAssistant, "the saved AI turn must survive the database reopen");
+    assert.deepEqual(savedMessageArtifactRefs(restoredAssistant.metadata).map((item) => ({ id: item.id, version: item.version })),
+      [{ id: saved.id, version: saved.version }]);
+    const restoredArtifact = await getArtifact(tenant, saved.id);
+    assert.equal(restoredArtifact.id, saved.id);
+    assert.equal((await getArtifactVersion(tenant, saved.id, saved.version)).contentHash, immutable.contentHash,
+      "the saved Chat pointer must resolve to the same immutable P4 version");
+    assert.equal((await listProjectArtifacts(tenant, project.id)).length, priorCount + 1,
+      "restart must not create an extra Artifact");
+    const [foreign] = await getDb().insert(users).values({
+      email: `${crypto.randomUUID()}@example.test`, passwordHash: "test-only", name: "Unrelated Artifact reader",
+      role: "internal_analyst", organizationId: null,
+    }).returning();
+    const foreignTenant = { userId: foreign.id, role: foreign.role, organizationId: null };
+    await assert.rejects(() => listProjectChatMessages(foreignTenant, chat.id),
+      "an unrelated account cannot read saved Chat references");
+    await assert.rejects(() => getArtifactVersion(foreignTenant, saved.id, saved.version),
+      "an unrelated account cannot resolve the referenced P4 version");
     const finished = (await journal.read(requestId, owner));
     assert.equal(finished?.status, "completed");
     assert.equal(finished?.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
