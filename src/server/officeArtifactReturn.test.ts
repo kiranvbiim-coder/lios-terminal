@@ -22,6 +22,7 @@ test("Office edits require owned immutable source custody and explicit P4 accept
   const content = artifactContentSchema.parse({ kind: "report", blocks: [{ id: "authored", type: "paragraph", text: "Authored source", attrs: { sourceRef: "source:authored" } }], sections: [], templateId: null });
   const original = await store.createArtifact(ctx, { projectId: project.id, title: "Authored work", content, sourceRefs: ["source:authored"] });
   const input = { sourceArtifactId: original.artifact.id, sourceVersion: 1, sourceHash: original.version.contentHash, sourceContent: content, content: artifactContentSchema.parse({ ...content, blocks: [{ id: "authored", type: "paragraph", text: "Actual edited Office text", attrs: { sourceRef: "source:authored", officeEdited: true } }] }), format: "docx" as const, fileHash: "a".repeat(64), warnings: [] };
+  if (input.content.kind !== "report") throw new Error("Expected report input.");
   const staged = await proposeOfficeArtifactReturn(ctx, original.artifact.id, input);
   assert.ok(staged.proposal);
   assert.equal((await store.getArtifact(ctx, original.artifact.id)).headVersion, 1);
