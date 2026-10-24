@@ -6,6 +6,7 @@ import {
 } from "@shared/conversationRuntime";
 import { classifyAskLiosIntent, buildAskLiosDelegation } from "@shared/askLiosRouter";
 import { resolveP5ProfessionalIntents } from "./p5ProfessionalWorkflow";
+import { naturalResearchEntry } from "./naturalResearchEntry";
 
 // Uppercase finance abbreviations that appear in stated assumptions are never tickers.
 const COMMON_UPPERCASE_WORDS = new Set([
@@ -109,6 +110,19 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
   const wantsPersonalFinance = /\b(?:personal finance|personal finances|net worth|retirement|retire|debt payoff|savings rate|financial goals?|my finances|my income|my expenses|my cash flow)\b/i.test(message);
   const explicitMarketBundleCue = /\b(?:backtest|back-test|historical simulation|technical|technicals|rsi|macd|chart|support|resistance|momentum|price action)\b/i.test(message);
   const explicitResearchJourney = /\b(?:research|review|assess|investigate|look into)\b/i.test(message);
+  // Generic topic research must not become a fictitious company merely because
+  // the existing entity extractor accepts any text after "research" as a name.
+  // Explicit financial/company cues and named entities keep their original P5 path.
+  const plainResearch = naturalResearchEntry(message);
+  const generalResearchTopic = Boolean(
+    plainResearch
+    // Single-word names ("research apple", "research nvidia") are ambiguous
+    // and remain on the established company/security route.
+    && plainResearch.objective.trim().split(/\s+/).length > 1
+    && !symbol
+    && /^[a-z]/.test(plainResearch.objective)
+    && !/\b(?:company|stock|equity|shares?|ticker|firm|business|security|earnings|fundamentals?|financials?|valuation|dcf|portfolio)\b/i.test(plainResearch.objective)
+  );
   const softResearchCue = /\b(?:tell me about|what(?:'s| is) going on with|deep dive|what do you think (?:of|about)|(?:over|under)valued|worth)\b/i.test(message);
   const genericAnalyzeJourney = /\banaly[sz]e\b/i.test(message) && !explicitMarketBundleCue;
   const add = (item: CapabilityInput) => {
@@ -123,6 +137,7 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
   if (!artifactReportOnly && entity && (explicitResearchJourney || genericAnalyzeJourney || valuationWithCompanyAnalysis || softResearchCue)
     && !p5Intents.some((item) => item.family === "company_research")
     && !wantsPersonalFinance
+    && !generalResearchTopic
     && !/\b(?:project|portfolio)\b/i.test(message)) {
     p5Intents.push({
       family: "company_research",
@@ -350,7 +365,8 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
   const wantsOverview = (/\b(research|analy[sz]e|overview|review|look into|assess|investigate)\b/i.test(message) || wantsQuote)
     && (!wantsPersonalFinance || explicitSecurityCue)
     && (!mentionsPortfolio || explicitSecurityCue)
-    && !p5OwnsCompanyJourney;
+    && !p5OwnsCompanyJourney
+    && !generalResearchTopic;
   if (wantsOverview) {
     add({
       id: "security.overview",
