@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { type CatalogProvider } from "@/lib/providerCatalog";
 import { connectionRecoveryPresentation, isConnectorConnectable, summarizeConnectionCenter } from "@/lib/connectionCenterPresentation";
+import { chooseConnectionProviders, connectionPickerStatus, returnFromConnectionCenter } from "@/lib/connectionProviderPicker";
 import { aiModelAccessMessage, resolveAiModelAccess } from "@/lib/aiModelAccess";
 import { normalizeProviderApiCredential } from "@shared/providerCredentialNormalize";
 import type { RuntimeLifecyclePreview, RuntimeLifecycleRequest } from "@shared/runtimeLifecycle";
@@ -349,7 +350,7 @@ function ConnectProviderModal({ connector, editing, onClose, onSaved, onModelsDi
   }
 
   return (
-    <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={onClose}>
+    <ModalShell title={editing ? `Update ${connector.name}` : `Connect ${connector.name}`} onClose={() => { if (!saving && !testing) onClose(); }}>
       {/* Description */}
       {connector.description && (
         <p className="mb-3 font-ui text-sm leading-6 text-muted-foreground">{connector.description}</p>
@@ -818,6 +819,9 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
   const [pythonRuntimeId, setPythonRuntimeId] = useState("lios-managed");
   const [pythonEnvironmentPath, setPythonEnvironmentPath] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  // The chooser owns its own query: browsing one provider must not silently
+  // alter the underlying provider catalog filters when focus returns.
+  const [providerPickerQuery, setProviderPickerQuery] = useState("");
   const [activeTab, setActiveTab] = useState<CategoryTab>("all");
   const [catalogSeed, setCatalogSeed] = useState<CatalogProvider | null>(null);
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
@@ -972,6 +976,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
   // Catalog: all connectors except meta-connectors (database, private_api, file_upload)
   const catalogConnectors = useMemo(() => connectors.filter((c) => !META_CONNECTOR_IDS.has(c.id)), [connectors]);
 
+  const pickerProviders = useMemo(() => chooseConnectionProviders(catalogConnectors, providerPickerQuery), [catalogConnectors, providerPickerQuery]);
+
   const filteredCatalog = useMemo(() => {
     let items = catalogConnectors;
     if (activeTab !== "all") {
@@ -1065,7 +1071,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
   const handleModalSaved = useCallback(() => {
     if (selectedProvider?.category === "ai") setChatVerification(null);
-    setModal(null); setSelectedProvider(null); setCatalogSeed(null); setEditingConnection(null); refresh();
+    setModal(null); setSelectedProvider(null); setProviderPickerQuery(""); setCatalogSeed(null); setEditingConnection(null); refresh();
   }, [refresh, selectedProvider]);
   const handleImported = useCallback(async () => {
     await apiRequest("PUT", "/api/setup/source-connections", {
@@ -1295,6 +1301,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
     }
   }
 
+  /** Return to the already-mounted Chat/Workbench without saving or changing
+   * AI selection. The explicit Continue action below still persists setup. */
+  const handleReturnToWork = () => returnFromConnectionCenter(onComplete);
+
   async function handleEnterTerminal() {
     if (aiBusy || masterBusy || saving) return;
     setSaveNotice(null);
@@ -1343,6 +1353,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 <h1 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{connectionSummary.statusLabel}</h1>
               </div>
               <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
+              <p className="mt-1 font-ui text-xs text-muted-foreground">Return to previous work closes Connections without changing your AI setup or sending a request. Use Continue to save setup explicitly. A paused or failed task never resumes on its own.</p>
               {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
               <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
                 {connectionsQuery.data && !connectionsQuery.isError && <span>{connectionSummary.savedCount} saved · {connectionSummary.verifiedCount} verified · {connectionSummary.attentionCount} need attention</span>}
@@ -1351,6 +1362,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               </div>
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
+              <button type="button" onClick={handleReturnToWork} disabled={saving || aiBusy || masterBusy || runtimeBusy !== null} data-testid="connection-return-to-work"
+                className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
+                Return to previous work
+              </button>
               <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
                 title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
                 className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
@@ -1997,6 +2012,10 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         )}
         <div className="flex items-center justify-between pb-4 pt-2">
           <span className="font-terminal text-[8px] text-muted-foreground">{connectionSummary.statusDetail}</span>
+          <button type="button" onClick={handleReturnToWork} disabled={saving || aiBusy || masterBusy || runtimeBusy !== null} data-testid="connection-return-to-work-footer"
+            className="min-h-10 rounded border border-border px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            Return to previous work
+          </button>
           <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
             title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
             className="flex items-center gap-2 border border-[hsl(38,95%,50%)] bg-[hsl(38,95%,50%)]/10 px-5 py-2.5 font-terminal text-[10px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
@@ -2023,33 +2042,34 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         />
       )}
       {modal === "provider" && !selectedProvider && (
-        <ModalShell title="Select a Data Provider" onClose={() => setModal(null)}>
+        <ModalShell title="Select a Data Provider" onClose={() => { setModal(null); setProviderPickerQuery(""); }}>
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <input
               aria-label="Search providers"
               placeholder="Search providers..."
-              className="w-full bg-[#0d0d0d] border border-border pl-9 pr-3 py-2 font-terminal text-[10px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/60"
-              onChange={(e) => setSearchQuery(e.target.value)}
-              value={searchQuery}
+              className={`${inputCls} pl-9`}
+              onChange={(e) => setProviderPickerQuery(e.target.value)}
+              value={providerPickerQuery}
             />
           </div>
-          <div className="grid grid-cols-1 gap-2 max-h-[50vh] overflow-y-auto">
-            {catalogConnectors
-              .filter((c) => !searchQuery.trim() || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.description ?? "").toLowerCase().includes(searchQuery.toLowerCase()))
-              .map((c) => (
-                <button key={c.id} onClick={() => setSelectedProvider(c)}
-                  className="text-left border border-border hover:border-[hsl(38,95%,50%)]/40 p-3 transition-colors">
+          <p className="mb-2 font-ui text-xs text-muted-foreground">Choose one provider. Catalog listings do not establish connectivity, source rights or live verification.</p>
+          <div className="grid grid-cols-1 gap-2 max-h-[50vh] overflow-y-auto" data-testid="connection-provider-chooser">
+            {pickerProviders.map((c) => (
+                <button key={c.id} type="button" disabled={!connectionPickerStatus(c, configuredProviderIds.has(c.id)).canSelect} onClick={() => { setEditingConnection(savedConnections.find(connection => connection.connectorId === c.id) ?? null); setSelectedProvider(c); }}
+                  className="min-h-11 text-left border border-border hover:border-[hsl(38,95%,50%)]/40 p-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed">
                   <div className="flex items-center gap-2">
                     <span className="font-terminal text-[9px] font-bold uppercase text-foreground">{c.name}</span>
-                    {configuredProviderIds.has(c.id) && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                    {configuredProviderIds.has(c.id) && <span className="font-ui text-xs text-muted-foreground">Saved</span>}
                   </div>
-                  {c.description && <p className="font-terminal text-[8px] text-muted-foreground mt-1">{c.description}</p>}
+                  {c.description && <p className="font-ui text-xs text-muted-foreground mt-1">{c.description}</p>}
+                  <p className="mt-1 font-ui text-xs text-muted-foreground">{connectionPickerStatus(c, configuredProviderIds.has(c.id)).label}</p>
                   <div className="flex items-center gap-1.5 mt-1">
                     <CategoryBadge category={c.category} />
                   </div>
                 </button>
               ))}
+            {pickerProviders.length === 0 && <p role="status" className="p-3 font-ui text-sm text-muted-foreground">No provider matches this search. Clear the search or continue without adding a connection.</p>}
           </div>
         </ModalShell>
       )}
