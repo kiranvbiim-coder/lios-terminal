@@ -256,7 +256,7 @@ Do not add a donor merely because it is popular. Add it because there is a plaus
 
 | Catalog ID | Donor / repository | Candidate capability or mechanism | Likely SI phase | Canonical owner candidate | License status | Tier candidate | State | Why it may matter | Next evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `D+009` | _available_ | — | — | — | — | `SECONDARY` / `OTHER` | `DISCOVERY` | — | — |
+| `D+009` | `promptfoo/promptfoo` | Offline AI/agent evaluation and red-team validation; initial local golden-routing adapter | SI-02 / SI-07 | GM/P2 evaluation + CA provenance | MIT LICENSE observed at upstream; full dependency/edition review pending | `OTHER` | `DISCOVERY` | Separate benchmark surface for existing LiOS golden routes without modifying runtime/permissions | Exact CLI pin and license audit, native Node compatibility, run real optional Promptfoo CLI, compare baseline and validate AI/citation/permission tests independently |
 
 ### ID and tier rule
 
@@ -266,6 +266,21 @@ Do not add a donor merely because it is popular. Add it because there is a plaus
 - `PRIMARY`, `SECONDARY`, `OTHER` and `DISCOVERY` are strategic catalog tiers, not machine truth states.
 - A donor can move between Secondary/Other/Discovery as evidence improves without changing architecture authority.
 - Promotion to real implementation requires the relevant CA/GM/P task plus exact machine-truth accounting, pin/license/provenance and acceptance evidence.
+
+---
+
+### D+009 — Promptfoo intake snapshot (2026-10-24)
+
+- **Identity and observed source:** [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo), observed main HEAD `c0b88a324175c60019cc80de1b2e32b4c849d4c3`. Observation is **not** a selected import pin.
+- **Original purpose:** Developer evaluations, prompt/agent regression testing and adversarial assessments.
+- **Interesting mechanism:** Extensible custom JavaScript provider + test-case assertions. Initial adapter invokes only existing LiOS golden routing fixtures through the real planner, with no provider/model/network use.
+- **LiOS value:** Complement `src/evals/golden` with an optional external test matrix, starting with known regression risk (company/topic routing). Later consider prompt-injection/citation/consent tests *only with explicit harness and approved inputs*.
+- **Overlap:** LiOS already owns `src/evals` and evaluation fixture authority. Do not create a competing test truth registry; this is an optional *consumer* of the existing baseline, not a new product evaluator.
+- **Potential transformations:** Adapt the provider interface to other LiOS acceptance cases while retaining source-grounded tests and approvals. Promptfoo package itself is **not** imported or executed by the initial prototype.
+- **License and rights:** Repository-level `LICENSE` observed as MIT; exact dependency tree, CLI distribution, subdirectories, editions, and network/telemetry features remain unapproved for shipping.
+- **Runtime/security:** Promptfoo currently documents Node >=22.22 while LiOS supports Node >=22.12. CLI execution is optional, isolated, developer-only; normal product dependencies, CI and user-owned Home are unchanged. No paid inference, uploaded data, or external model access.
+- **Integration state:** Optional adapter/config + Node source unit tests proposed in ENG-05. Do **not** promote `third_party/capability-assimilation.json` beyond its 92 baseline or claim `runtime_integrated`/shipping.
+- **Next gate:** Independent CA/GM/P2 review, select exact CLI pin and verify its rights/footprint, execute actual Promptfoo eval on supported Node, compare measured results to `npm run eval:golden`, and only then decide `ADAPT` versus `REFERENCE_VALIDATOR` or `DEFER_WITH_TRIGGER`.
 
 ---
 
