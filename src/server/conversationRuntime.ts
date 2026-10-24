@@ -4824,7 +4824,7 @@ async function executeAgentLoop(
       return counts;
     }, {});
   const executionDisclosure = completed && Object.keys(incompleteStatuses).length
-    ? `LiOS execution record: ${Object.entries(incompleteStatuses).map(([status, count]) => `${count} ${agentStatusLabel(status as AgentStepOutcome["status"])}`).join(", ")} tool step(s) did not complete. The AI answer below is not proof that those actions ran.`
+    ? `LiOS execution record: ${Object.entries(incompleteStatuses).map(([status, count]) => `${count} ${agentStatusLabel(status as AgentStepOutcome["status"])}`).join(", ")} tool step(s) did not complete. A model completion statement is not proof that those actions ran.`
     : null;
   // A model's final prose is not a trusted execution receipt. If any planned
   // tool failed, was denied or was skipped, do not display the model's possibly
