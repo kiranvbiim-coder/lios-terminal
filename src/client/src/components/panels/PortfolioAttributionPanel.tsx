@@ -14,10 +14,6 @@ function fmtEffect(v: number, digits = 2): string {
   return Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(digits)} pp` : "—";
 }
 
-function fmt(v: number, digits = 2): string {
-  return Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%` : "—";
-}
-
 function BrinsonTab() {
   const [inputA, setInputA] = useTerminalArtifactState("BrinsonTab.inputA", "AAPL:30,JPM:25,XOM:20,JNJ:25");
   const [inputB, setInputB] = useTerminalArtifactState("BrinsonTab.inputB", "AAPL:20,JPM:20,XOM:30,JNJ:30");
@@ -180,7 +176,8 @@ function StyleTab() {
   const bars = ohlcv.data?.bars ?? [];
   const startDate = bars[0]?.date ?? range.start;
   const endDate = bars[bars.length - 1]?.date ?? range.end;
-  const { data: ff3 = [], isLoading: ffLoading } = useFamaFrench3(startDate, endDate);
+  const factors = useFamaFrench3(startDate, endDate);
+  const { data: ff3 = [], isLoading: ffLoading } = factors;
 
   const exposure = useMemo(() => {
     if (!bars.length || !ff3.length) return null;
@@ -189,11 +186,15 @@ function StyleTab() {
     for (let i = 1; i < bars.length; i++) {
       const f = factorMap.get(bars[i].date);
       if (!f) continue;
+      if (!Number.isFinite(bars[i].close) || !Number.isFinite(bars[i - 1].close) || bars[i].close <= 0 || bars[i - 1].close <= 0
+        || ![f.RF, f.MktRF, f.SMB, f.HML].every(Number.isFinite)) continue;
       const ret = ((bars[i].close - bars[i - 1].close) / bars[i - 1].close) * 100;
+      if (!Number.isFinite(ret)) continue;
       matched.push({ ret: ret - f.RF, mktRf: f.MktRF, smb: f.SMB, hml: f.HML });
     }
     if (matched.length < 20) return null;
     const reg = olsRegression(matched.map((m) => m.ret), [matched.map((m) => m.mktRf), matched.map((m) => m.smb), matched.map((m) => m.hml)]);
+    if (!Number.isFinite(reg.rSquared) || reg.betas.some((beta) => !Number.isFinite(beta))) return null;
     // Normalize |betas| to sum to 100% as an approximate style-tilt readout
     // (a true Sharpe-style analysis solves a constrained QP; this is the
     // unconstrained OLS loadings re-scaled for readability, not the exact
@@ -209,14 +210,16 @@ function StyleTab() {
         <input value={inputSym} onChange={(e) => setInputSym(e.target.value)} placeholder="TICKER..." className="bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground w-28 focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
       </form>
 
-      {ohlcv.isLoading || ffLoading ? (
-        <div className="font-terminal text-[9px] text-muted-foreground">LOADING...</div>
+      {ohlcv.isError || factors.isError ? (
+        <div role="alert" className="border border-red-300/30 p-3 font-ui text-[12px] text-red-200">Security history or Fama-French factor source failed. No style exposure is calculated from missing observations.</div>
+      ) : ohlcv.isLoading || ffLoading ? (
+        <div role="status" className="font-terminal text-[9px] text-muted-foreground">LOADING PRICE AND FACTOR OBSERVATIONS...</div>
       ) : !exposure ? (
         <div className="font-terminal text-[9px] text-muted-foreground">NOT ENOUGH OVERLAPPING DATA FOR {symbol}.</div>
       ) : (
         <>
           <div className="font-terminal text-[8px] text-muted-foreground/80 border border-border bg-[#0a0a0a] p-2.5">
-            Approximate factor-style tilt (Market / Size / Value), derived by re-scaling the Fama-French 3-factor regression loadings — <span className="text-foreground">not</span> a fully constrained (non-negative, sum-to-1) Sharpe-style analysis. R² = {exposure.rSquared.toFixed(3)} on {exposure.n} days.
+            Price-only returns (%) aligned by observation date with Fama-French factor observations (%). Missing/invalid prices and factors are omitted; the regression requires 20+ matched days. Factor source is fetched, not an immutable signed snapshot. Approximate factor-style tilt (Market / Size / Value), derived by re-scaling the Fama-French 3-factor regression loadings — <span className="text-foreground">not</span> a fully constrained (non-negative, sum-to-1) Sharpe-style analysis. R² = {exposure.rSquared.toFixed(3)} on {exposure.n} days.
           </div>
           <div className="space-y-1.5">
             {[
