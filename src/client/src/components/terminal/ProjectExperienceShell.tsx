@@ -422,6 +422,7 @@ export default function ProjectExperienceShell({
   const terminalSelectionRef = useRef({ chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion });
   terminalSelectionRef.current = { chatId: selection.chatId, setArtifact: setConversationArtifactRef, setVersion: setArtifactViewVersion };
   const artifactDraftDirtyRef = useRef(false);
+  const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
   const terminalDetail = useArtifact(chatMode === "temporary" ? null : conversationArtifactRef, artifactViewVersion);
@@ -1931,7 +1932,7 @@ export default function ProjectExperienceShell({
                 </button>
               )}
               {conversationArtifactRef && (
-                <button type="button" onClick={() => setArtifactFocusMode(true)} className="rounded-md px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground">
+                <button ref={reopenArtifactFocusRef} type="button" onClick={() => setArtifactFocusMode(true)} className="rounded-md px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground">
                   Open artifact
                 </button>
               )}
@@ -2425,7 +2426,9 @@ export default function ProjectExperienceShell({
             </div>
             {chatMode === "temporary" && temporaryTerminal && <aside className="lios-artifact-sidecar w-[48%] overflow-auto border-l p-3"><button type="button" onClick={() => setTemporaryTerminal(null)}>Close terminal Artifact</button><TerminalScreenArtifact key={temporaryTerminal.view} content={temporaryTerminal} revision={1} onSave={async content => { if (content.kind === "screen") setTemporaryTerminal(content); }} ephemeral/></aside>}
             {conversationArtifactRef && chatMode !== "temporary" && selection.chatId && (
-              <ConversationArtifactSidecar focus={artifactFocusMode} onExitFocus={() => setArtifactFocusMode(false)}
+              <ConversationArtifactSidecar focus={artifactFocusMode}
+                    onEnterFocus={() => setArtifactFocusMode(true)}
+                    onExitFocus={() => { setArtifactFocusMode(false); requestAnimationFrame(() => reopenArtifactFocusRef.current?.focus()); }}
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
                     onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, requestedVersion: artifactViewVersion, version }; }}
                     artifactId={conversationArtifactRef}
