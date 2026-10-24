@@ -43,7 +43,10 @@ test("WS-35: runtime message retention is bound to real P4 writes, exact refs an
   assert.match(runtime, /content: savedAnswer!/);
   assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(savedArtifact\)\)/);
   assert.match(runtime, /persistedArtifacts\.push\(retainedArtifactMessageRef\(\{ artifact, version \}\)\)/);
-  assert.match(runtime, /if \(result\.cancelled\)|if \(!result\.cancelled && !result\.awaitingApproval\)/);
+  assert.match(runtime, /if \(!result\.cancelled && !result\.awaitingApproval && !held\.errored && held\.done\?\.status !== "failed"\)/);
   assert.match(runtime, /scope: "temporary"/);
-  assert.doesNotMatch(runtime, /persistConversationDraft\(context, \{[\s\S]*?chatId: null/);
+  const temporaryEntry = runtime.slice(runtime.indexOf("export async function startTemporaryRun("));
+  assert.ok(temporaryEntry.length > 100);
+  assert.doesNotMatch(temporaryEntry, /persistConversationDraft\(/);
+  assert.doesNotMatch(temporaryEntry, /addProjectChatMessage\(/);
 });
