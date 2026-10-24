@@ -50,9 +50,15 @@ test("Publishing boundary rejects oversized, forged and traversal payloads", () 
   assert.throws(() => normalizeUnicodePdfPayload({ ...payload, paragraphs: [
     { style: "html", text: "<iframe />" },
   ] }), /Invalid Unicode PDF paragraph/);
+  // Each paragraph has a 100k text guard before the aggregate 900k limit.
   assert.throws(() => normalizeUnicodePdfPayload({ ...payload, paragraphs: [
     { style: "body", text: "x".repeat(100_001) },
-  ] }), /text budget/);
+  ] }), /Invalid Unicode PDF paragraph/);
+  // A set of individually permitted paragraphs must still respect the
+  // cumulative text budget; do not weaken either bound to satisfy a test.
+  assert.throws(() => normalizeUnicodePdfPayload({ ...payload, paragraphs:
+    Array.from({ length: 10 }, () => ({ style: "body", text: "x".repeat(100_000) })),
+  }), /local publishing text budget/);
   assert.throws(() => normalizeUnicodePdfPayload({ ...payload, paragraphs:
     Array.from({ length: 4_001 }, () => ({ text: "x", style: "body" })),
   }), /paragraph count/);
