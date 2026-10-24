@@ -21,7 +21,7 @@ function result(stepId: string, summary: string, sourceRefs: string[] = []): Con
   return event({ type: "tool_result", stepId, label: stepId, summary, deterministic: true, sourceRefs });
 }
 function markup(events: ConversationRuntimeEvent[], view: "inline" | "findings") {
-  return renderToStaticMarkup(createElement(ResearchRunProgress, { events, view }));
+  return renderToStaticMarkup(createElement(ResearchRunProgress, { events, view, requestId }));
 }
 
 test("live progress counts only actual completed step events and shows only a reported active label", () => {
