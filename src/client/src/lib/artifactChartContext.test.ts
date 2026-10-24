@@ -26,9 +26,9 @@ test("WS-39 absent units, period and sources stay explicitly unknown, never gues
   const result = chartRecordedContext(chart());
   assert.deepEqual(result, {
     xLabel: "X (label not recorded)", yLabel: "Y (label not recorded)",
-    xUnit: null, yUnit: null, period: null, evidenceRefs: [],
+    xUnit: null, yUnit: null, period: null, evidenceRefs: [], sourceBasis: "none",
   });
-  assert.match(chartSourceCaveat(result), /Not recorded: X unit, Y unit, period, source references/);
+  assert.match(chartSourceCaveat(result), /Not recorded in the displayed chart or saved version: X unit, Y unit, period, source references/);
   assert.match(chartSourceCaveat(result), /not independently verified/);
 });
 
@@ -42,12 +42,24 @@ test("WS-39 copied labels and source refs are saved metadata, not verified entit
     xLabel: "Fiscal year", yLabel: "Revenue",
     xUnit: "FY", yUnit: "USD millions", period: "FY2025–FY2027",
     evidenceRefs: ["filing:v1", "manual:observation"],
+    sourceBasis: "chart_options",
   });
   assert.match(chartSourceCaveat(chartRecordedContext(input)), /not independently verified/);
   assert.equal(chartRecordedContext(chart({ xAxisLabel: 4, yAxisLabel: "", periodLabel: null, sourceRefs: [12] })).evidenceRefs.length, 0);
   assert.equal(chartRecordedContext(chart({ xUnit: "x".repeat(201), yUnit: "\nUnsafe" })).yUnit, null);
   assert.equal(exactChartValue(-0), "-0");
   assert.equal(exactChartValue(71.370824940136), "71.370824940136");
+});
+
+test("WS-39 P4 version-level provenance takes precedence over editable chart-option claims", () => {
+  const input = chart({ sourceRefs: ["untrusted:chart-option"] });
+  const view = chartRecordedContext(input, ["filing:p4-version", "filing:p4-version", "provider:recorded"]);
+  assert.deepEqual(view.evidenceRefs, ["filing:p4-version", "provider:recorded"]);
+  assert.equal(view.sourceBasis, "artifact_version");
+  assert.equal(chartRecordedContext(input, []).sourceBasis, "artifact_version");
+  assert.deepEqual(chartRecordedContext(input, []).evidenceRefs, [],
+    "an exact version with zero source refs must not inherit unverified option refs");
+  assert.match(chartSourceCaveat(view), /not independently verified/);
 });
 
 test("WS-39 SSR fallback is a fully labelled exact 2-series table; gaps are not zeros", () => {
@@ -94,7 +106,10 @@ test("WS-39 chart retains original keyboard point inspector and independent full
   assert.match(source, /<ChartPlotBoundary key=\{`\$\{chartType\}:\$\{content\.rendererPreference\}`\}>/);
   assert.match(source, /data-testid="artifact-chart-recorded-context"/);
   assert.match(source, /chartSourceCaveat\(recordedContext\)/);
-  assert.match(source, /Source refs: /);
+  assert.match(source, /Saved P4 version source refs/);
+  assert.match(source, /artifactSourceRefs/);
+  const paneSource = readFileSync(new URL("../components/terminal/ArtifactPane.tsx", import.meta.url), "utf8");
+  assert.match(paneSource, /artifactSourceRefs=\{data\.version\.sourceRefs\}/);
   assert.match(source, /data-testid="artifact-chart-inspector"/);
   assert.match(source, /aria-label="Exact point values; arrow keys change point, Home and End move within window"/);
   assert.match(source, /connectNulls=\{false\}/);
