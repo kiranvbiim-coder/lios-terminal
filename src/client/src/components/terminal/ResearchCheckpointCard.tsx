@@ -29,9 +29,9 @@ export default function ResearchCheckpointCard({ requestId, checkpoint, onResume
         && exact.completedSteps !== null ? (
         <div className="mt-2 font-ui text-[12px] text-foreground/85" data-testid="checkpoint-recorded-progress">
           Last saved checkpoint: {exact.completedSteps} of {exact.totalSteps} steps recorded complete.
-          {exact.awaitingReviewSteps ? ` ${exact.awaitingReviewSteps} step(s) were waiting for review when saved.` : ""}
+          {exact.awaitingReviewSteps ? ` ${exact.awaitingReviewSteps} ${exact.awaitingReviewSteps === 1 ? "step was" : "steps were"} waiting for review when saved.` : ""}
           {exact.recordedReferenceCount !== null
-            ? ` ${exact.recordedReferenceCount} reference(s) recorded, not independently verified.`
+            ? ` ${exact.recordedReferenceCount} ${exact.recordedReferenceCount === 1 ? "reference" : "references"} recorded, not independently verified.`
             : ""}
         </div>
       ) : (
