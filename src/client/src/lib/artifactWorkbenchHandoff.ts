@@ -64,12 +64,29 @@ export function returnFromArtifactWorkbench(
 ): { state: TerminalTabsState; context: ArtifactWorkbenchContext } | null {
   if (dirty || context.projectId !== handoff.context.projectId || context.chatId !== handoff.context.chatId
     || context.artifactId !== handoff.context.artifactId) return null;
-  const exists = state.tabs.some(tab => tab.id === handoff.priorTab.id);
+  const paneId = handoff.priorTab.workspace.focusedPane;
+  const origin = state.tabs.find(tab => tab.id === handoff.priorTab.id);
+  const currentPane = origin?.workspace[paneId];
+  // The original tab/pane must still own this exact P4 handoff. Never resurrect
+  // a closed tab or overwrite a pane replaced by another Workbench action.
+  if (!origin || currentPane?.view !== "artifact"
+    || currentPane.artifact?.projectId !== handoff.context.projectId
+    || currentPane.artifact?.chatId !== handoff.context.chatId
+    || currentPane.artifact?.artifactId !== handoff.context.artifactId) return null;
+
+  // Only undo the temporary navigation projection. Other panes, entity/source
+  // choices, tab metadata and analytical work changed in Dockview remain intact;
+  // P4 owns the saved Artifact content, assumptions and exact returned revision.
+  const workspace = {
+    ...origin.workspace,
+    [paneId]: handoff.priorTab.workspace[paneId],
+    focusedPane: paneId,
+  };
   return {
     state: {
       ...state,
-      tabs: exists ? state.tabs.map(tab => tab.id === handoff.priorTab.id ? { ...tab, workspace: handoff.priorTab.workspace } : tab) : [...state.tabs, handoff.priorTab],
-      activeTabId: handoff.priorTab.id,
+      tabs: state.tabs.map(tab => tab.id === origin.id ? { ...tab, workspace } : tab),
+      activeTabId: origin.id,
     },
     context: { ...context },
   };
