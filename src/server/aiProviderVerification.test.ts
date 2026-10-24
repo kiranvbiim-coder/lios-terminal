@@ -4,6 +4,13 @@ import {
   verifyAIProviderConnection,
   type AIProviderVerificationInvoker,
 } from "./aiProviderVerification";
+/** Extract only the fresh public challenge issued to this invocation. */
+function challengeFromRequest(request: Parameters<AIProviderVerificationInvoker>[0]): string {
+  const tokens = request.messages[0]?.content.match(/LIOS_AI_OK_[a-f0-9]{24}/g) ?? [];
+  assert.equal(tokens.length, 1);
+  return tokens[0]!;
+}
+
 
 test("live AI verification uses a tiny public probe and returns safe metadata", async () => {
   const calls: Parameters<AIProviderVerificationInvoker>[0][] = [];
@@ -14,7 +21,7 @@ test("live AI verification uses a tiny public probe and returns safe metadata", 
       return {
         provider: "openai",
         model: request.model ?? "gpt-4o-mini",
-        text: "LIOS_AI_OK",
+        text: challengeFromRequest(request),
         attribution: {
           id: "11111111-1111-4111-8111-111111111111",
           provider: "openai",
@@ -36,7 +43,7 @@ test("live AI verification uses a tiny public probe and returns safe metadata", 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].dataClassification, "public");
   assert.equal(calls[0].enterpriseApproval, true);
-  assert.equal(calls[0].maxTokens, 16);
+  assert.equal(calls[0].maxTokens, 48);
   assert.match(calls[0].messages[0].content, /LIOS_AI_OK/);
 });
 
@@ -171,10 +178,14 @@ test("GM12 a nonempty but incorrect AI acknowledgement is not a verified model c
   }
 });
 
-test("GM12 minor model acknowledgement punctuation does not produce a false negative", async () => {
-  for (const text of ["  LIOS_AI_OK  ", '"LIOS_AI_OK"', "LIOS_AI_OK."]) {
-    const result = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async () => ({
-      provider: "openai", model: "gpt-4o-mini", text,
+test("GM12 minor acknowledgement punctuation does not produce a false negative", async () => {
+  for (const decorate of [
+    (token: string) => `  ${token}  `,
+    (token: string) => `"${token}"`,
+    (token: string) => `${token}.`,
+  ]) {
+    const result = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async (request) => ({
+      provider: "openai", model: "gpt-4o-mini", text: decorate(challengeFromRequest(request)),
       attribution: {
         id: "77777777-7777-4777-8777-777777777777",
         provider: "openai", model: "gpt-4o-mini",
@@ -183,5 +194,43 @@ test("GM12 minor model acknowledgement punctuation does not produce a false nega
       },
     }));
     assert.equal(result.ok, true);
+  }
+});
+
+test("GM12 rejects replay from a previous successful AI verification and static cached OK", async () => {
+  const seen: string[] = [];
+  const first = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async (request) => {
+    const token = challengeFromRequest(request);
+    seen.push(token);
+    return {
+      provider: "openai", model: "gpt-4o-mini", text: token,
+      attribution: {
+        id: "66666666-6666-4666-8666-666666666666",
+        provider: "openai", model: "gpt-4o-mini",
+        promptHash: "a".repeat(64), outputHash: "b".repeat(64),
+        toolsCalled: [], dataAccessed: [], timestamp: new Date().toISOString(),
+      },
+    };
+  });
+  assert.equal(first.ok, true);
+  assert.equal(JSON.stringify(first).includes(seen[0]!), false, "challenge stays outside public verification details");
+
+  for (const replay of [seen[0]!, "LIOS_AI_OK"]) {
+    await assert.rejects(
+      () => verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async (request) => {
+        seen.push(challengeFromRequest(request));
+        return {
+          provider: "openai", model: "gpt-4o-mini", text: replay,
+          attribution: {
+            id: "66666666-6666-4666-8666-666666666666",
+            provider: "openai", model: "gpt-4o-mini",
+            promptHash: "a".repeat(64), outputHash: "b".repeat(64),
+            toolsCalled: [], dataAccessed: [], timestamp: new Date().toISOString(),
+          },
+        };
+      }),
+      /did not complete the LiOS connection verification challenge/,
+    );
+    assert.notEqual(seen.at(-1), replay, "each verification request is fresh");
   }
 });
