@@ -59,7 +59,7 @@ export function computeObservedBrinsonAttribution(
     if (!history || !Array.isArray(history.bars)) return missing("Observed daily price series unavailable; missing history is not a zero return.", [symbol]);
     const dates = new Map<string, number>();
     for (const bar of history.bars) {
-      if (typeof bar?.date !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(bar.date.slice(0, 10))) continue;
+      if (typeof bar?.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(bar.date.slice(0, 10))) continue;
       if (!Number.isFinite(bar.close) || bar.close <= 0) continue;
       const day = bar.date.slice(0, 10);
       if (dates.has(day)) return missing("Ambiguous duplicate daily close for a holding; no attribution was calculated.", [symbol]);
