@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { z } from "zod";
 import { runCommand } from "./exec/run-command";
 import { streamSandboxImageArchive } from "./sandboxImageArchiveImport";
+import { isLinuxSandboxEngineOs, localSandboxEngineOsProbe } from "./sandboxEnginePlatform";
 import { resolveSandboxRuntimeProfile } from "./exec/sandbox-runtime-profile";
 
 export interface SandboxImageRelease {
@@ -169,9 +170,19 @@ export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadin
     if (inspected !== `${release.image} ${release.platform}`) return status("integrity_failed", release.image, `Engine image ID/platform differs from release (${inspected}).`, "reinstall_app");
     return status("ready", release.image, "Verified packaged image ID and platform are available on the explicit local engine.", "none");
   } catch {
-    try { await engineCommand(profile.engine, profile.engineTarget, ["info", "--format", "{{.OSType}}"]); }
-    catch { return status("engine_unavailable", release.image, "Local container engine is unavailable; start Docker Desktop or Podman.", "install_engine"); }
-    return status("image_missing", release.image, "The packaged sandbox image has not been imported into the local engine.", "load");
+    // Docker and Podman expose OS differently in their info templates.
+    // A running engine in Windows-container mode must never be offered an
+    // import of the signed Linux-only LiOS sandbox image.
+    let engineOs: string;
+    try {
+      engineOs = await engineCommand(profile.engine, profile.engineTarget, [...localSandboxEngineOsProbe(profile.engine)]);
+    } catch {
+      return status("engine_unavailable", release.image, "Local container engine is unavailable or cannot report its host OS; start Docker Desktop or Podman.", "install_engine");
+    }
+    if (!isLinuxSandboxEngineOs(engineOs)) {
+      return status("incompatible", release.image, "LiOS requires an engine running Linux containers; switch the engine to Linux mode before importing this image.", "retry");
+    }
+    return status("image_missing", release.image, "The packaged sandbox image has not been imported into the local Linux engine.", "load");
   }
 }
 let loading: Promise<SandboxImageReadiness> | null = null;
