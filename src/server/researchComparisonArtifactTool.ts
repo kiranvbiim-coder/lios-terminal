@@ -201,13 +201,19 @@ export const saveResearchComparisonTool: ConversationToolDefinition = {
     if (rechecked.included.length !== verifiedDocuments.length ||
       rechecked.included.some((source, index) =>
         source.documentId !== verifiedDocuments[index]!.id
-        || source.contentHash !== verifiedDocuments[index]!.contentHash)) {
-      throw new Error("Research use rights changed before saving; rerun the comparison.");
+        || source.contentHash !== verifiedDocuments[index]!.contentHash
+        || JSON.stringify(source.rights) !== JSON.stringify(composedResult.output.sources[index]?.rights)
+        || JSON.stringify(source.identity) !== JSON.stringify(composedResult.output.sources[index]?.identity)
+        || source.sourceClass !== composedResult.output.sources[index]?.sourceClass)) {
+      throw new Error("Research source identity or use rights changed before saving; rerun the comparison.");
     }
     const { content, sourceRefs } = researchComparisonArtifactContent(
       parsed.query,
       composedResult.output.comparison,
-      composedResult.output.sources,
+      rechecked.included.map(source => {
+        const prior = composedResult.output.sources.find(item => item.documentId === source.documentId)!;
+        return { ...source, excerpt: prior.excerpt };
+      }),
       {
         providerAllow: call.researchSourcePolicy?.providerAllow,
         providerDeny: call.researchSourcePolicy?.providerDeny,
