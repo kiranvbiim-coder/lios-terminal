@@ -113,14 +113,23 @@ function isFreshNotification(
   return ageMs >= 0 && ageMs <= freshnessMs;
 }
 
-async function resolvePermission(port: P9DesktopNotificationPort): Promise<P9DesktopNotificationPermission> {
-  if (port.permission !== "default") return port.permission;
-  if (!port.requestPermission) return "unsupported";
-  try {
-    return await port.requestPermission();
-  } catch {
-    return "unsupported";
-  }
+/** Passive P9 polling is not a user gesture. Never ask for OS permission
+ * during query loading, background refresh or notification delivery. */
+function passivePermission(port: P9DesktopNotificationPort): P9DesktopNotificationPermission {
+  return port.permission;
+}
+
+/** Call only from a direct user gesture in the authenticated foreground UI.
+ * The OS remains the permission owner; neither this result nor an in-app P9
+ * delivery receipt confirms that a native banner appeared. */
+export function requestP9DesktopPermissionFromGesture(): Promise<P9DesktopNotificationPermission> {
+  const port = createBrowserP9DesktopNotificationPort();
+  if (port.permission !== "default" || !port.requestPermission) return Promise.resolve(port.permission);
+  return port.requestPermission().catch(() => "unsupported");
+}
+
+export function p9DesktopPermissionState(): P9DesktopNotificationPermission {
+  return createBrowserP9DesktopNotificationPort().permission;
 }
 
 export async function deliverP9DesktopNotifications(
@@ -163,11 +172,10 @@ export async function deliverP9DesktopNotifications(
       continue;
     }
 
-    // Resolve Chromium/Electron's default notification permission before the
-    // durable delivery claim. A denied request therefore leaves the canonical
-    // id unclaimed and still available inside LiOS rather than pretending an
-    // OS alert was attempted.
-    if (resolvedPermission === null) resolvedPermission = await resolvePermission(port);
+    // Never invoke requestPermission() from polling/background delivery.
+    // Pending OS permission means no native claim or notification. The
+    // authenticated user explicitly requests access in the P9 panel.
+    if (resolvedPermission === null) resolvedPermission = passivePermission(port);
     if (resolvedPermission !== "granted") {
       result.unavailable += 1;
       continue;
@@ -244,7 +252,11 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
 
   return {
     permission,
-    requestPermission: async () => window.Notification.requestPermission() as Promise<P9DesktopNotificationPermission>,
+    requestPermission: async () => {
+      if (!authorized()) return "unsupported";
+      const choice = await window.Notification.requestPermission() as P9DesktopNotificationPermission;
+      return authorized() ? choice : "unsupported";
+    },
     claimDelivery: (id) => {
       // A session switch invalidates ports created for the previous principal,
       // including an in-flight permission prompt that resolved after logout.
