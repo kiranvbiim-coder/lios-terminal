@@ -328,7 +328,7 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
         </div>
       ) : (
         <>
-      <form onSubmit={handleSearch} className="hidden md:flex items-center h-full border-r border-border group relative">
+      <form onSubmit={handleSearch} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsFocused(false); }} className="hidden md:flex items-center h-full border-r border-border group relative">
         <div className="flex items-center gap-1.5 px-2.5">
           <Search className="w-3 h-3 text-muted-foreground" />
           <input
@@ -337,7 +337,6 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
             value={searchVal}
             onChange={(e) => { setSearchVal(e.target.value.toUpperCase()); setSearchResults([]); setCompletedSearch(null); setSearchNotice(null); }}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
             className="bg-transparent font-terminal text-[10px] text-[hsl(38,95%,60%)] placeholder:text-muted-foreground/60 focus:outline-none w-24 uppercase"
             data-testid="ticker-search"
             aria-label="Search returned companies and securities"
