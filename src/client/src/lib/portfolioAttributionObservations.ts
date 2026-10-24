@@ -1,5 +1,6 @@
 import type { Quote, OHLCVSeries } from "./finance";
 import { brinsonAttribution, type BrinsonRow } from "./quantModels";
+import { isObservedQuote } from "./quoteObservation";
 
 export interface AttributionHolding { symbol: string; weight: number }
 
@@ -29,7 +30,11 @@ export function parseAttributionHoldings(raw: string): { holdings: AttributionHo
   }
   const total = parsed.reduce((sum, holding) => sum + holding.weight, 0);
   if (!Number.isFinite(total) || total <= 0) return { holdings: [], error: "Total holding weight must be positive and finite." };
-  return { holdings: parsed.map((holding) => ({ ...holding, weight: holding.weight / total })), error: null };
+  const normalized = parsed.map((holding) => ({ ...holding, weight: holding.weight / total }));
+  if (normalized.some((holding) => !Number.isFinite(holding.weight) || holding.weight <= 0)) {
+    return { holdings: [], error: "Weight normalization underflowed or overflowed; use reasonable finite units." };
+  }
+  return { holdings: normalized, error: null };
 }
 
 const missing = (message: string, symbols: string[] = []): AttributionPreparation => ({ state: "unavailable", message, symbols });
@@ -39,24 +44,37 @@ const missing = (message: string, symbols: string[] = []): AttributionPreparatio
 export function computeObservedBrinsonAttribution(
   actual: readonly AttributionHolding[],
   benchmark: readonly AttributionHolding[],
-  quotes: readonly Pick<Quote, "symbol" | "sector" | "status">[],
+  quotes: readonly Pick<Quote, "symbol" | "sector" | "status" | "price" | "quoteSource">[],
   histories: Readonly<Record<string, OHLCVSeries | undefined>>,
 ): AttributionPreparation {
   if (!actual.length || !benchmark.length) return missing("Apply non-empty weights for both portfolios.");
   const symbols = [...new Set([...actual, ...benchmark].map((holding) => holding.symbol))];
+  const validWeights = (holdings: readonly AttributionHolding[]) =>
+    Math.abs(holdings.reduce((sum, holding) => sum + holding.weight, 0) - 1) <= 1e-6;
+  if (!validWeights(actual) || !validWeights(benchmark)) {
+    return missing("Portfolio weights must each sum to one after normalization. Apply both lists again.");
+  }
   if ([...actual, ...benchmark].some(({ symbol, weight }) => !symbol || !Number.isFinite(weight) || weight <= 0)) {
     return missing("Holdings contain invalid weights or symbols; no attribution was calculated.");
   }
-  const sectorBySymbol = new Map(quotes.filter((quote) =>
+  const quoteBySymbol = new Map(quotes.filter((quote) =>
+    typeof quote.symbol === "string" && isObservedQuote(quote)
+  ).map((quote) => [quote.symbol.toUpperCase(), quote]));
+  const missingQuotes = symbols.filter((symbol) => !quoteBySymbol.has(symbol));
+  if (missingQuotes.length) return missing("No observed quote for a holding. Unobserved source values cannot establish sector attribution.", missingQuotes);
+  const sectorBySymbol = new Map([...quoteBySymbol].filter(([, quote]) =>
     typeof quote.sector === "string" && quote.sector.trim()
-  ).map((quote) => [quote.symbol.toUpperCase(), quote.sector!.trim()]));
+  ).map(([symbol, quote]) => [symbol, quote.sector!.trim()]));
   const missingSectors = symbols.filter((symbol) => !sectorBySymbol.has(symbol));
   if (missingSectors.length) return missing("Observed quote-sector classification unavailable. Sector attribution cannot assume 'Other' or invent sector returns.", missingSectors);
 
   const closeBySymbol = new Map<string, Map<string, number>>();
   for (const symbol of symbols) {
     const history = histories[symbol];
-    if (!history || !Array.isArray(history.bars)) return missing("Observed daily price series unavailable; missing history is not a zero return.", [symbol]);
+    if (!history || !Array.isArray(history.bars) || !history.status
+      || !history.status.provider || history.status.provider === "unavailable") {
+      return missing("Attributed daily close history or source status unavailable; missing history is not a zero return.", [symbol]);
+    }
     const dates = new Map<string, number>();
     for (const bar of history.bars) {
       if (typeof bar?.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(bar.date.slice(0, 10))) continue;
@@ -100,6 +118,6 @@ export function computeObservedBrinsonAttribution(
     return { segment, wp: v.wp, wb: v.wb, rp: v.wp > 0 ? v.wpReturnSum / v.wp : reference, rb: v.wb > 0 ? v.wbReturnSum / v.wb : reference };
   });
   const priceSources = [...new Set(symbols.map((symbol) => histories[symbol]?.status?.delayLabel).filter((item): item is string => Boolean(item)))];
-  const fallbackSymbols = symbols.filter((symbol) => histories[symbol]?.status?.isFallback || quotes.find((quote) => quote.symbol.toUpperCase() === symbol)?.status?.isFallback);
+  const fallbackSymbols = symbols.filter((symbol) => histories[symbol]?.status?.isFallback || quoteBySymbol.get(symbol)?.status?.isFallback);
   return { state: "ready", rows: brinsonAttribution(inputs), startDate, endDate, commonObservations: commonDates.length, priceSources, fallbackSymbols };
 }
