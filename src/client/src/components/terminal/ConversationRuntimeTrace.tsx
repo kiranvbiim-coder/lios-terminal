@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import ResearchSourceList from "./ResearchSourceList";
+import ResearchRunProgress from "./ResearchRunProgress";
 import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
@@ -220,6 +221,7 @@ export default function ConversationRuntimeTrace({
             <span role="status" className="inline-flex items-center gap-1.5 px-1">
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" aria-hidden="true" />
               {waitingForApproval ? "Waiting for your approval" : "Working"}
+              {!waitingForApproval && <ResearchRunProgress events={events} requestId={requestId} view="inline" />}
             </span>
           )}
           {working && (
@@ -286,6 +288,7 @@ export default function ConversationRuntimeTrace({
         )}
 
         {workVisible && recordedSources.length > 0 && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
+        {workVisible && !!steps.length && <ResearchRunProgress events={events} requestId={requestId} view="findings" />}
 
         {workVisible && !!capabilities.length && (
           <div className="border-t border-border/45 pt-2.5" data-p2-capability-resolution="true">
