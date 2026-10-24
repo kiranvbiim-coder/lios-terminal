@@ -295,8 +295,11 @@ export function ProjectHome({
               {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-[13px] text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
               <p className="font-ui text-xs leading-5 text-muted-foreground">Project = eligible for automatic context; on demand = only when requested; excluded = retained but not routinely retrieved. These modes never override server data rights.</p>
               {pendingContext?.projectId === project.id && (() => {
-                const resource = found.resources.find(row => row.id === pendingContext.resourceId);
-                if (!resource) return <p role="alert" className="font-ui text-xs text-amber-200">The selected resource is no longer visible in this Project. Cancel and reopen its context.</p>;
+                const resource = resources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
+                if (!resource) return <div role="alert" className="space-y-2 font-ui text-xs text-amber-200">
+                  <p>The selected resource is no longer active in this Project. Cancel and reopen its context.</p>
+                  <button type="button" onClick={() => setPendingContext(null)} className="min-h-10 rounded border border-border px-3 py-2">Cancel review</button>
+                </div>;
                 return <section aria-label="Review exact Project resource context change" data-testid="project-context-review" className="space-y-2 rounded border border-amber-300/30 p-3">
                   <label className="block font-ui text-sm">Resource inclusion mode
                     <select value={pendingContext.to} disabled={contextBusy} onChange={event => setPendingContext(current => current ? { ...current, to: event.target.value as ProjectResourceContextMode } : null)}
