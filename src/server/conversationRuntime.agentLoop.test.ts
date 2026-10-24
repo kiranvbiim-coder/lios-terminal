@@ -230,6 +230,28 @@ test("a model cannot silently turn a failed tool into a verified execution succe
   assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
 });
 
+test("GM-12: a failed prerequisite and skipped dependent step cannot be reported as a finished AI workflow", async () => {
+  seen.length = 0;
+  const r = run("c5555555-5555-4555-8555-555555555555", [
+    planJson([
+      step("source", "test.agent.leaky"),
+      { ...step("dependent", "test.agent.echo"), dependsOn: ["source"] },
+    ]),
+    answer("Both steps ran successfully, and the dependent result was saved."),
+  ]);
+  const result = await r.promise;
+  assert.equal(result.label, "observed_source");
+  assert.match(result.text, /1 failed, 1 skipped tool step\(s\) did not complete/);
+  assert.equal(result.text.includes("Both steps ran successfully"), false);
+  assert.equal(seen.length, 0, "dependent tool must not run after a failed prerequisite");
+  assert.equal(r.ledger.some((event) => event.kind === "step_finished" && event.stepId === "source" && event.status === "failed"), true);
+  assert.equal(r.ledger.some((event) => event.kind === "step_finished" && event.stepId === "dependent" && event.status === "skipped"), true);
+  const receipt = r.events.find((event) => event.type === "receipt");
+  assert.ok(receipt && receipt.type === "receipt");
+  assert.equal(receipt.receipt.aiDerived, false);
+  assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
+});
+
 test("an approval wait leaves the step and call open in the ledger", async () => {
   const r = run("b1111111-1111-4111-8111-111111111111", [planJson([step("ask", "test.agent.confirm")])]);
   await r.promise;
