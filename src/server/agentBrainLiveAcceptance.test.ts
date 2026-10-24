@@ -40,6 +40,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   const { indexProjectDocument } = await import("./p7ProjectIntelligenceStore");
   const { getArtifact, getArtifactVersion, listProjectArtifacts } = await import("./artifactStore");
   const { executeConversationRuntime } = await import("./conversationRuntime");
+  const { createExecutionJournal } = await import("./exec/execution-journal");
   const { artifactContentSchema } = await import("@shared/artifactContracts");
   const { listProjectLedgerEvents } = await import("./ledgerStore");
   const events: import("@shared/conversationRuntime").ConversationRuntimeEvent[] = [];
@@ -77,6 +78,11 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   });
 
   const requestId = crypto.randomUUID();
+  const journal = await createExecutionJournal({
+    directory: path.join(dataDir, "agent-journal"), keyDirectory: path.join(dataDir, "agent-journal-keys"),
+  });
+  const journalOwner = { userId: tenant.userId, projectId: project.id, chatId: null };
+  await journal.begin({ id: requestId, owner: journalOwner, label: "Live-model governed evidence digest", agentRun: true });
   const result = await executeConversationRuntime({
     tenant, scope: "project", projectId: project.id, chatId: null, resources: [], history: [],
     preferredProvider: provider,
@@ -94,7 +100,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
     },
     agentLoop: {
       maxSteps: 1, maxAiCalls: 2, maxRevisions: 0, maxDurationMs: 120_000,
-      ledger: async (event) => { agentEvents.push(event); },
+      ledger: async (event) => { await journal.appendAgentEvent(requestId, event); agentEvents.push(event); },
     },
     emit: (event) => { events.push(event); },
   });
@@ -107,8 +113,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   const planned = events.find(event => event.type === "plan");
   assert.ok(planned && planned.type === "plan");
   assert.equal(planned.plan.steps.some(step => step.componentId === "lios.project.evidence_artifact"), true);
-  const toolResult = events.find(event => event.type === "tool_result"
-    && event.type === "tool_result" && event.stepId && event.sourceRefs.some(ref => ref.startsWith("artifact:")));
+  const toolResult = events.find(event => event.type === "tool_result" && event.stepId && event.sourceRefs.some(ref => ref.startsWith("artifact:")));
   assert.ok(toolResult && toolResult.type === "tool_result", "An actual governed tool must complete, not just an AI claim.");
   assert.equal(toolResult.deterministic, true);
   const savedRef = toolResult.sourceRefs.find(ref => /^artifact:[0-9a-f-]{36}@v[1-9]\d*$/.test(ref));
@@ -116,6 +121,10 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   const artifactId = savedRef.split("@")[0];
   assert.equal(agentEvents.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), true);
   assert.equal(agentEvents.some(event => event.kind === "step_finished" && event.status === "completed"), true);
+  const persistedRun = await journal.read(requestId, journalOwner);
+  assert.ok(persistedRun);
+  assert.equal(persistedRun.events.filter(event => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+  assert.equal(JSON.stringify(persistedRun).includes(excerpt), false, "L2 stores receipts and references, not source passages.");
   assert.equal(result.receiptIds.length, 1);
   const receiptEvent = events.find(event => event.type === "receipt");
   assert.ok(receiptEvent && receiptEvent.type === "receipt");
@@ -127,7 +136,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   if (content.kind !== "research") assert.fail("Real P4 Research Artifact expected.");
   assert.deepEqual(content.evidence.map(item => item.sourceRef), ["document:accessibility-site-survey"]);
   assert.equal(content.claims.length, 0, "The tool extracts evidence; it does not invent claims.");
-  assert.equal(content.evidence[0].snippet, excerpt);
+  assert.ok(excerpt.includes(content.evidence[0].snippet), "Saved quote must be an unchanged P7 excerpt.");
   assert.equal(JSON.stringify([events, content]).includes("SECRET_OTHER_TENANT"), false);
   assert.equal((await listProjectArtifacts(tenant, project.id)).length, 1);
   assert.equal((await listProjectLedgerEvents(tenant, project.id, { eventType: "artifact.created", limit: 10 }))
