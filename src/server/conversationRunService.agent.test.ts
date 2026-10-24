@@ -14,7 +14,12 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { users, domains } = await import("@shared/schema");
 const { eq } = await import("drizzle-orm");
 const { createProject } = await import("./projectStore");
-const { createProjectChat } = await import("./projectChatStore");
+const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
+const { indexProjectDocument } = await import("./p7ProjectIntelligenceStore");
+const { getArtifactVersion, getArtifact, listProjectArtifacts } = await import("./artifactStore");
+const { createAttribution } = await import("./byoaiRouter");
+const { artifactContentSchema } = await import("@shared/artifactContracts");
+const { savedMessageArtifactRefs } = await import("@shared/conversationArtifactRefs");
 const { startProjectChatRun, ConversationStartError } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("./exec/execution-scope");
@@ -81,6 +86,70 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
     assert.equal(record?.label, "Agent run");
     assert.equal(record?.status, "failed");
     assert.deepEqual(record?.events, []);
+  });
+
+  await t.test("a governed AI-written P4 evidence digest appears as the same saved Chat Artifact after restart without a duplicate write", async () => {
+    const sourceRef = "document:synthetic-accessibility-survey";
+    await indexProjectDocument(tenant, {
+      projectId: project.id,
+      sourceType: "document",
+      sourceRef,
+      title: "Synthetic accessibility survey",
+      body: "Office accessibility: the northern entrance has a step-free ramp and the southern entrance has stairs.",
+      occurredAt: "2026-10-01T12:00:00Z",
+    });
+    const priorCount = (await listProjectArtifacts(tenant, project.id)).length;
+    const requestId = crypto.randomUUID();
+    const replies = [
+      JSON.stringify({ steps: [{
+        id: "save-site-evidence", toolId: "lios.project.evidence_artifact", label: "Save cited office accessibility evidence",
+        input: { query: "office accessibility", title: "Accessibility evidence digest" }, dependsOn: [],
+      }] }),
+      JSON.stringify({ decision: "complete", answer: "The cited accessibility evidence digest was saved." }),
+    ];
+    await startProjectChatRun(conversationUser, chat.id, {
+      requestId, agent: true, executionMode: "ai_assisted", sourceScope: "my_data",
+      message: "Create a cited Project Research Artifact using lios.project.evidence_artifact for office accessibility.",
+    }, {
+      aiCompletion: async () => {
+        const text = replies.shift();
+        assert.ok(text, "Only plan and completion model calls are permitted.");
+        return {
+          provider: "openai", model: "gpt-4o", text,
+          attribution: createAttribution({ provider: "openai", model: "gpt-4o", prompt: "synthetic-test", output: text }),
+        };
+      },
+    });
+    const emitted = await eventsOf(requestId, user.id);
+    assert.equal(emitted.at(-1)?.type, "done");
+    assert.equal(emitted.at(-1)?.type === "done" && emitted.at(-1)?.status, "completed");
+    const savedEvent = emitted.find((event) => event.type === "artifact");
+    assert.ok(savedEvent && savedEvent.type === "artifact" && savedEvent.persistedArtifact,
+      "already-written P4 must be surfaced using the normal saved Chat Artifact event");
+    assert.equal(savedEvent.artifact.title, "Accessibility evidence digest");
+    assert.equal(savedEvent.artifact.projectId, project.id);
+    const saved = savedEvent.persistedArtifact;
+    assert.equal(saved.version, 1);
+    assert.equal((await listProjectArtifacts(tenant, project.id)).length, priorCount + 1,
+      "the Chat retention path must NOT create another Artifact or version");
+    const artifact = await getArtifact(tenant, saved.id);
+    assert.equal(artifact.title, savedEvent.artifact.title);
+    const immutable = await getArtifactVersion(tenant, saved.id, saved.version);
+    const content = artifactContentSchema.parse(immutable.content);
+    assert.equal(content.kind, "research");
+    if (content.kind !== "research") assert.fail("Research content expected.");
+    assert.deepEqual(content.evidence.map((item) => item.sourceRef), [sourceRef]);
+    assert.equal(content.claims.length, 0);
+
+    const messages = await listProjectChatMessages(tenant, chat.id);
+    const assistant = messages.find((item) => item.role === "assistant" && item.metadata.runtimeRequestId === requestId);
+    assert.ok(assistant, "completed agent message must be persisted");
+    assert.deepEqual(savedMessageArtifactRefs(assistant.metadata).map((item) => ({ id: item.id, version: item.version })),
+      [{ id: saved.id, version: saved.version }], "normal restored Chat cards must reference the original P4 version");
+    const finished = (await journal.read(requestId, owner));
+    assert.equal(finished?.status, "completed");
+    assert.equal(finished?.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+    assert.equal(finished?.events?.filter((event) => event.kind === "step_finished" && event.status === "completed").length, 1);
   });
 
   await t.test("without the flag a run is an ordinary version-1 record", async () => {
