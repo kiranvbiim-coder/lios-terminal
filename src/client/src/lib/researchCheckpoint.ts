@@ -12,7 +12,7 @@ export interface ResumableCheckpointView {
   recordedReferenceCount: number | null;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHECKPOINT_STATES = new Set([
   "pending", "waiting_approval", "running", "completed", "failed", "cancelled", "skipped",
 ]);

@@ -120,7 +120,7 @@ test("WS-31 read-only detail renders all conflicting refs, missing observations,
   assert.match(html, /ws31-source-access/);
   assert.match(html, /Recorded source access: revoked/);
   assert.match(html, /Source access\/entitlement not confirmed/);
-  assert.match(html, /never silently selected/);
+  assert.match(html, /No conflicting value is silently selected/);
   assert.doesNotMatch(html, /onclick=|<script|<a /i);
   const nothing = { ...fixture(), conflicts: [], claims: [], evidence: [], missing: [] };
   assert.equal(renderToStaticMarkup(React.createElement(EvidenceExceptionDetails, { manifest: nothing })), "");

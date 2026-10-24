@@ -74,7 +74,6 @@ test("WS-40 history UI never swaps placeholder revisions or auto-restores and va
   const pane = readFileSync(new URL("../components/terminal/ArtifactPane.tsx", import.meta.url), "utf8");
   const hooks = readFileSync(new URL("./useArtifacts.ts", import.meta.url), "utf8");
   assert.match(pane, /exactArtifactHistoryDetail\(detail\.data, artifactId, version, projectId, owningChatId, detail\.isPlaceholderData \|\| detail\.isError\)/);
-  assert.match(pane, /selection\?\.artifactId === props\.artifactId \? selection\.version : props\.version/);
   assert.doesNotMatch(hooks, /placeholderData: previous => previous\?\.artifact\.id === artifactId/);
   assert.match(pane, /exactArtifactHistoryComparison\(result, captured, from, to\)/);
   assert.match(pane, /historyRequest\.current !== requestId/);

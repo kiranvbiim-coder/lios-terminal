@@ -7548,6 +7548,30 @@
   },
   {
    "method": "POST",
+   "path": "/api/setup/source-connections/database/analysis/actions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/analysis/run",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/setup/source-connections/database/catalog",
    "reachableBy": [
     "client_user",
