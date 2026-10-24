@@ -119,3 +119,24 @@ test("WS-32: no prompt, credentials, raw tool inputs or authorization grants are
   assert.doesNotMatch(markup, /NEVER_SHOW_PASSWORD|NEVER_SHOW_TOKEN|Sensitive tool input/);
   assert.match(markup, /recorded complete/);
 });
+
+test("WS-32: failed history lookup is visible and recoverable without an unauthorized resume action", () => {
+  const common = {
+    events: [], requestId: null, busy: false,
+    onCancel: noop, onApprove: noop, onDeny: noop,
+    allowProjectApproval: false, onMutationApply: noop, onMutationCancel: noop,
+  };
+  const failure = renderToStaticMarkup(createElement(ConversationRuntimeTrace, {
+    ...common, checkpointLookupError: true, onRetryCheckpointLookup: noop,
+  }));
+  assert.match(failure, /role="alert"/);
+  assert.match(failure, /Saved checkpoint eligibility could not be checked/);
+  assert.match(failure, /Retry checkpoint check/);
+  assert.doesNotMatch(failure, /agent-run-resume|Resume from checkpoint/);
+  assert.doesNotMatch(renderToStaticMarkup(createElement(ConversationRuntimeTrace, common)), /checkpoint/);
+
+  const busy = renderToStaticMarkup(createElement(ConversationRuntimeTrace, {
+    ...common, checkpointLookupError: true, onRetryCheckpointLookup: noop, busy: true,
+  }));
+  assert.doesNotMatch(busy, /trace-checkpoint-lookup-error/);
+});
