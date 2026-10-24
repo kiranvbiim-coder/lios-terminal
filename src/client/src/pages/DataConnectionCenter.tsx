@@ -2056,7 +2056,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
           <p className="mb-2 font-ui text-xs text-muted-foreground">Choose one provider. Catalog listings do not establish connectivity, source rights or live verification.</p>
           <div className="grid grid-cols-1 gap-2 max-h-[50vh] overflow-y-auto" data-testid="connection-provider-chooser">
             {pickerProviders.map((c) => (
-                <button key={c.id} type="button" disabled={!connectionPickerStatus(c, configuredProviderIds.has(c.id)).canSelect} onClick={() => { setEditingConnection(null); setSelectedProvider(c); }}
+                <button key={c.id} type="button" disabled={!connectionPickerStatus(c, configuredProviderIds.has(c.id)).canSelect} onClick={() => { setEditingConnection(savedConnections.find(connection => connection.connectorId === c.id) ?? null); setSelectedProvider(c); }}
                   className="min-h-11 text-left border border-border hover:border-[hsl(38,95%,50%)]/40 p-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed">
                   <div className="flex items-center gap-2">
                     <span className="font-terminal text-[9px] font-bold uppercase text-foreground">{c.name}</span>
