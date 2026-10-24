@@ -221,7 +221,7 @@ export async function deleteP9Workflow(ctx: TenantContext, workflowId: string, e
   const current = await getP9Workflow(ctx, workflowId);
   const deleted = await getDb().delete(projectAutomationWorkflows)
     .where(and(workflowTenantFilter(ctx, workflowId), ...(expectedUpdatedAt ? [eq(projectAutomationWorkflows.updatedAt, new Date(expectedUpdatedAt))] : [])))
-    .returning({ id: projectAutomationWorkflows.id });
+    .returning();
   if (!deleted.length) throw new Error("Workflow changed since review. Refresh the Project before deleting it.");
   await appendLedgerEvent(ctx, {
     projectId: current.projectId,
