@@ -41,3 +41,50 @@ test("upstream-derived LIOS search retains an accessible label, status and clear
   assert.match(html, /bg-background/);
   assert.doesNotMatch(html, /bg-white|text-neutral-900/);
 });
+
+test("WS-28 search matches canonical capabilities, coverage and source category without changing rights", () => {
+  const specialized: SourceRegistryGroup[] = [{
+    id: "economic_public",
+    title: "Economic & Public",
+    description: "Research statistics",
+    items: [
+      {
+        ...entry("c", "Official Series", false, "adapter_available"),
+        category: "macro",
+        sourceType: "public_api",
+        connectorId: "fred",
+        capabilities: [
+          { contractFamily: "macro", fields: ["cpi", "yield_curve"], coverage: "US" },
+          { contractFamily: "price_history", fields: ["economic_series"], coverage: "US" },
+        ],
+      },
+      {
+        ...entry("d", "Exchange Feed", true, "healthy"),
+        capabilities: [{ contractFamily: "market_data", fields: ["quote"], coverage: "Europe" }],
+      },
+    ],
+  }];
+  assert.deepEqual(filterSourceCatalogue(specialized, "  US CPI  ", false).map(x => x.id), ["c"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "yield_curve", false).map(x => x.id), ["c"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "economic series", false).map(x => x.id), ["c"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "FRED", false).map(x => x.id), ["c"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "macro", false).map(x => x.id), ["c"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "quote", true).map(x => x.id), ["d"]);
+  assert.deepEqual(filterSourceCatalogue(specialized, "US CPI", true), []);
+  assert.equal(specialized[0].items[0].connected, false);
+  assert.equal(specialized[0].items[0].operational, false);
+});
+
+test("WS-28 connected filter means saved connection, never live-verified catalogue", () => {
+  const verified = [{
+    ...entry("verified-catalog", "Public macro", false, "live_verified"),
+    kind: "catalog" as const, operational: true,
+  }, {
+    ...entry("saved-unhealthy", "User warehouse", true, "unreachable"),
+    kind: "connection" as const, operational: false,
+  }];
+  const sample = [{ id: "custom", title: "Private", description: "", items: verified }] as SourceRegistryGroup[];
+  assert.deepEqual(filterSourceCatalogue(sample, "", true).map(v => v.id), ["saved-unhealthy"]);
+  assert.deepEqual(filterSourceCatalogue(sample, "live verified", false).map(v => v.id), ["verified-catalog"]);
+  assert.deepEqual(filterSourceCatalogue(sample, "unreachable", true).map(v => v.id), ["saved-unhealthy"]);
+});
