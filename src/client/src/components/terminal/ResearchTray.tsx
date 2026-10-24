@@ -159,7 +159,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
       editingSnapshot.note !== item.note ||
       editingSnapshot.group !== item.group ||
       editingSnapshot.title !== item.title ||
-      editingSnapshot.tags.join("\\u0000") !== item.tags.join("\\u0000")) {
+      JSON.stringify(editingSnapshot.tags) !== JSON.stringify(item.tags)) {
       notify("This pinned item changed elsewhere while you were editing. Your draft was not saved. Cancel and reopen the latest item to review it.", true);
       return;
     }
