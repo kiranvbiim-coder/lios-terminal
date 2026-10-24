@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isProfessionalDecisionSourceRoleAccurate } from "@shared/professionalSourceRole";
 import { apiRequest } from "@/lib/queryClient";
 import { useProjectArtifacts, type ArtifactDetail } from "@/lib/useArtifacts";
 import type { ProjectSession } from "@/lib/useProjects";
@@ -7,7 +8,7 @@ export default function ProfessionalWorkPackage({ detail, sessions, blocked, onA
   const catalogue = useProjectArtifacts(detail.artifact.projectId);
   const [workflow, setWorkflow] = useState("ic_memo"), [title, setTitle] = useState(""), [audience, setAudience] = useState(""), [period, setPeriod] = useState(""), [brand, setBrand] = useState(""), [narrative, setNarrative] = useState(""), [additional, setAdditional] = useState(""), [role, setRole] = useState("evidence");
   const [evidenceAssessment, setEvidenceAssessment] = useState(""), [riskAssessment, setRiskAssessment] = useState(""), [proposedActions, setProposedActions] = useState("");
-  const sourceRoleCompatible = role !== "decision" || detail.artifact.kind === "decision";
+  const sourceRoleCompatible = isProfessionalDecisionSourceRoleAccurate(detail.artifact.kind, role);
   const [output, setOutput] = useState<string | null>(null), [pending, setPending] = useState(false), [error, setError] = useState<string | null>(null);
   if (detail.artifact.projectId === null) return <p className="mb-4 text-sm text-muted-foreground">Institutional multi-source work packages use Project sources. This Chat Artifact can still be edited, exported and reviewed here without a Project.</p>;
   if (output) return <section><button type="button" onClick={() => setOutput(null)}>Back to selected source</button><ArtifactPane artifactId={output} projectId={detail.artifact.projectId} sessions={sessions} onClose={() => setOutput(null)} onAsk={onAsk}/></section>;
