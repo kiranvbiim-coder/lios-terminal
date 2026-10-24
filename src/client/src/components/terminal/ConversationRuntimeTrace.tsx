@@ -164,7 +164,7 @@ export default function ConversationRuntimeTrace({
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
   const trust = [...events].reverse().find((event) => event.type === "trust");
   const summary = summarizeRuntimeTrace(events, busy);
-  const recordedSources = collectCitationSources(events);
+  const recordedSources = collectCitationSources(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
