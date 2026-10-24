@@ -13,6 +13,7 @@ import {
   type ArtifactDetail, type IntegratedModelArtifactRunResult,
 } from "@/lib/useArtifacts";
 import type { ArtifactContent, ArtifactExportPlan, ArtifactRefreshSpec, SpreadsheetCellDiff } from "@shared/artifactContracts";
+import { prepareValuationRecalculationPrompt } from "@shared/valuationRevisionPolicy";
 import type { ProjectSession } from "@/lib/useProjects";
 import { colIndexToLetters, parseCellRef } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
@@ -357,7 +358,7 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   if(content.kind==="thesis") return <ThesisEditor content={content} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem}/>;
   if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
   if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
-  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onRequestRecalculation={(waccPct) => onAsk(artifactId, `Recalculate valuation · ${content.symbol || content.modelId}`, prepareValuationRecalculationPrompt(content, { artifactId, version: revision, contentHash }, waccPct))}/>;
   if(content.kind==="portfolio") return <PortfolioArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   return <ArtifactViewerFallback kind={content.kind} content={content} onSave={onSave} onOpenExport={onOpenExport} facts={content.kind==="screen"?[{label:"Screen",value:content.view},...(content.symbol?[{label:"Symbol",value:content.symbol}]:[])]:[]}/>;
 }
