@@ -149,6 +149,7 @@ export async function replaceP9Workflow(
   ctx: TenantContext,
   workflowId: string,
   raw: unknown,
+  expectedUpdatedAt?: string,
 ): Promise<ProjectAutomationWorkflow> {
   const current = await getP9Workflow(ctx, workflowId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
@@ -178,7 +179,8 @@ export async function replaceP9Workflow(
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
-  }).where(workflowTenantFilter(ctx, workflowId)).returning();
+  }).where(and(workflowTenantFilter(ctx, workflowId), ...(expectedUpdatedAt ? [eq(projectAutomationWorkflows.updatedAt, new Date(expectedUpdatedAt))] : []))).returning();
+  if (!row) throw new Error("Workflow changed since review. Refresh and inspect the current Project schedule before saving.");
   await appendLedgerEvent(ctx, {
     projectId: current.projectId,
     eventType: "policy.changed",
@@ -193,6 +195,7 @@ export async function setP9WorkflowEnabled(
   ctx: TenantContext,
   workflowId: string,
   enabled: boolean,
+  expectedUpdatedAt?: string,
 ): Promise<ProjectAutomationWorkflow> {
   const current = await getP9Workflow(ctx, workflowId);
   const now = new Date();
@@ -203,7 +206,8 @@ export async function setP9WorkflowEnabled(
     claimToken: null,
     claimExpiresAt: null,
     updatedAt: now,
-  }).where(workflowTenantFilter(ctx, workflowId)).returning();
+  }).where(and(workflowTenantFilter(ctx, workflowId), ...(expectedUpdatedAt ? [eq(projectAutomationWorkflows.updatedAt, new Date(expectedUpdatedAt))] : []))).returning();
+  if (!row) throw new Error("Workflow changed since review. Refresh and inspect the current Project before changing its enabled state.");
   await appendLedgerEvent(ctx, {
     projectId: current.projectId,
     eventType: "policy.changed",
@@ -213,15 +217,18 @@ export async function setP9WorkflowEnabled(
   return row;
 }
 
-export async function deleteP9Workflow(ctx: TenantContext, workflowId: string): Promise<void> {
+export async function deleteP9Workflow(ctx: TenantContext, workflowId: string, expectedUpdatedAt?: string): Promise<void> {
   const current = await getP9Workflow(ctx, workflowId);
+  const deleted = await getDb().delete(projectAutomationWorkflows)
+    .where(and(workflowTenantFilter(ctx, workflowId), ...(expectedUpdatedAt ? [eq(projectAutomationWorkflows.updatedAt, new Date(expectedUpdatedAt))] : [])))
+    .returning({ id: projectAutomationWorkflows.id });
+  if (!deleted.length) throw new Error("Workflow changed since review. Refresh the Project before deleting it.");
   await appendLedgerEvent(ctx, {
     projectId: current.projectId,
     eventType: "policy.changed",
     actorType: "user",
     payload: { workflowId, policy: "automation", action: "deleted" },
   });
-  await getDb().delete(projectAutomationWorkflows).where(workflowTenantFilter(ctx, workflowId));
   await touchProjectActivity(ctx, current.projectId);
 }
 
