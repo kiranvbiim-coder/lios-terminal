@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { TrustManifest } from "@shared/trustContracts";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
+import EvidencePrism from "./EvidencePrism";
 
 interface Props {
   manifest: TrustManifest;
@@ -125,52 +126,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </ol>
           </section>
 
-          {!!manifest.claims.length && (
-            <section>
-              <div className="font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">Claims & calculations</div>
-              <div className="mt-2 space-y-1.5">
-                {manifest.claims.map((claim) => (
-                  <div key={claim.claimId} className="rounded border border-border/40 bg-black/20 px-2.5 py-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-ui text-[12px] font-semibold text-foreground">{claim.label}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.status}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.confidence} confidence</span>
-                    </div>
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{claim.explanation}</div>
-                    {!!claim.formulaRefs.length && (
-                      <div className="mt-1 font-terminal text-[12px] leading-3 text-cyan-200/80">
-                        {claim.formulaRefs.join(" · ")}
-                      </div>
-                    )}
-                    {!!claim.receiptIds.length && (
-                      <div className="mt-1 font-terminal text-[12px] text-muted-foreground">Receipts: {claim.receiptIds.join(" · ")}</div>
-                    )}
-                    <details className="mt-2">
-                      <summary className="cursor-pointer rounded py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2">Inspect evidence for {claim.label}</summary>
-                      <p className="my-2 text-sm text-muted-foreground">Recorded claim path: {claim.path}. This snapshot does not grant current source access. Units are not recorded in this claim contract; inspect the original source or Artifact before comparing quantities.</p>
-                      {claim.sourceRefs.length ? claim.sourceRefs.map(ref => {
-                        const evidence = manifest.evidence.filter(item => item.sourceRef === ref);
-                        return <div key={ref} className="my-2 rounded border border-border/50 p-2 text-sm">
-                          <p className="break-all">{ref}</p>
-                          {evidence.length ? evidence.map(item => <div key={item.evidenceId} className="mt-1 text-muted-foreground">
-                            <p>{item.providerLabel} · recorded class: {item.kind} · {item.freshness} · {item.quality} quality</p>
-                            <p>Observed: {asOfLabel(item.observedAt)} · Period/as-of: {asOfLabel(item.asOf)}</p>
-                            <p>Recorded access: {item.access ? `${item.access.state}${item.access.reason ? ` · ${item.access.reason}` : ""}` : "not recorded"}</p>
-                            {item.fields.length > 0 && <p>Recorded fields: {item.fields.join(", ")}</p>}
-                          </div>) : <p className="mt-1 text-amber-200">No exact observation is recorded for this source reference.</p>}
-                        </div>;
-                      }) : <p className="text-sm text-muted-foreground">No supporting source references recorded.</p>}
-                      {claim.assumptionRefs.map(ref => {
-                        const assumption = manifest.assumptions.find(item => item.ref === ref);
-                        return <p key={ref} className="my-1 break-words text-sm">{assumption ? `${assumption.label}: ${String(assumption.value)} · ${assumption.source}` : `Assumption ${ref}: not recorded`}</p>;
-                      })}
-                      {manifest.conflicts.filter(conflict => conflict.sourceRefs.some(ref => claim.sourceRefs.includes(ref))).map((conflict, index) => <p key={`${conflict.field}-${index}`} role="note" className="my-1 text-sm text-amber-200">{conflict.field}: {conflict.summary}</p>)}
-                    </details>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <EvidencePrism key={manifest.trustId} manifest={manifest} />
 
           {!!manifest.assumptions.length && (
             <section>
