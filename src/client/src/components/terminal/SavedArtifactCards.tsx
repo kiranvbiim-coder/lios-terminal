@@ -155,7 +155,7 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
     const detail = query?.isFetchedAfterMount && !query.isFetching && !query.isError
       ? exactSavedArtifactDetail(ref, query.data, projectId, chatId) : null;
     const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
-    const wrongIdentityOrScope = Boolean(query?.data) && !detail;
+    const wrongIdentityOrScope = Boolean(query?.data) && Boolean(query?.isFetchedAfterMount) && !query?.isFetching && !detail;
     const lookup = live ? "found" : wrongIdentityOrScope || query?.isError ? "missing" : "pending";
     const preview = detail ? recordedArtifactPreview(detail.version.content) : null;
     return describeSavedArtifactCard(ref, live, lookup, preview);
