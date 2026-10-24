@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
+import { Transform } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createGunzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
@@ -21,8 +23,12 @@ const MAX_ENGINE_STDERR_CHARS = 4_096;
 export async function streamSandboxImageArchive(
   archive: string,
   child: ChildProcessWithoutNullStreams,
+  expectedArchiveSha256: string,
   timeoutMs: number = IMAGE_LOAD_TIMEOUT_MS,
 ): Promise<void> {
+  if (!/^[a-f0-9]{64}$/.test(expectedArchiveSha256)) {
+    throw new Error("Sandbox image import requires an exact verified archive SHA-256 digest.");
+  }
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > IMAGE_LOAD_TIMEOUT_MS) {
     throw new Error("Sandbox image import timeout must be between 1ms and 15 minutes.");
   }
@@ -54,9 +60,21 @@ export async function streamSandboxImageArchive(
   }, timeoutMs);
   timeout.unref();
 
-  const transfer = pipeline(fs.createReadStream(archive), createGunzip(), child.stdin);
+  const actualDigest = createHash("sha256");
+  const observeCompressedBytes = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      actualDigest.update(chunk);
+      callback(null, chunk);
+    },
+  });
+  const transfer = pipeline(fs.createReadStream(archive), observeCompressedBytes, createGunzip(), child.stdin);
   try {
     await Promise.all([transfer, completed]);
+    // A path may have changed after verifiedRelease() read the signed archive.
+    // Never report a successful import from bytes that differ from that digest.
+    if (actualDigest.digest("hex") !== expectedArchiveSha256) {
+      throw new Error("Imported sandbox archive bytes differ from the signed release digest.");
+    }
   } catch (error) {
     // Join BOTH the child and the archive stream before repair can retry.
     child.kill("SIGKILL");
