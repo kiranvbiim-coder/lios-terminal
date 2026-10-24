@@ -51,7 +51,7 @@ function fail(res: Response, error: unknown): void {
     res.status(404).json({ error: message });
     return;
   }
-  if (/approval|credential|permission|requires fresh/i.test(message)) {
+  if (/approval|credential|permission|requires fresh|changed since review/i.test(message)) {
     res.status(409).json({ error: message });
     return;
   }
@@ -108,17 +108,19 @@ export function registerP9AutomationRoutes(app: Express): void {
       const pid = projectId(req);
       const current = await getP9Workflow(ctx(req), String(req.params.workflowId));
       if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
-      res.json(await replaceP9Workflow(ctx(req), current.id, req.body));
+      const payload = z.object({ expectedUpdatedAt: z.string().datetime({ offset: true }).optional() }).passthrough().parse(req.body);
+      const { expectedUpdatedAt, ...definition } = payload;
+      res.json(await replaceP9Workflow(ctx(req), current.id, definition, expectedUpdatedAt));
     } catch (error) { fail(res, error); }
   });
 
   app.post("/api/projects/:projectId/automation/workflows/:workflowId/enabled", async (req, res) => {
     try {
       const pid = projectId(req);
-      const body = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+      const body = z.object({ enabled: z.boolean(), expectedUpdatedAt: z.string().datetime({ offset: true }).optional() }).strict().parse(req.body);
       const current = await getP9Workflow(ctx(req), String(req.params.workflowId));
       if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
-      res.json(await setP9WorkflowEnabled(ctx(req), current.id, body.enabled));
+      res.json(await setP9WorkflowEnabled(ctx(req), current.id, body.enabled, body.expectedUpdatedAt));
     } catch (error) { fail(res, error); }
   });
 
@@ -127,7 +129,8 @@ export function registerP9AutomationRoutes(app: Express): void {
       const pid = projectId(req);
       const current = await getP9Workflow(ctx(req), String(req.params.workflowId));
       if (current.projectId !== pid) throw new Error("Automation workflow belongs to a different Project.");
-      await deleteP9Workflow(ctx(req), current.id);
+      const expected = z.object({ expectedUpdatedAt: z.string().datetime({ offset: true }).optional() }).strict().parse(req.body ?? {});
+      await deleteP9Workflow(ctx(req), current.id, expected.expectedUpdatedAt);
       res.json({ ok: true });
     } catch (error) { fail(res, error); }
   });
