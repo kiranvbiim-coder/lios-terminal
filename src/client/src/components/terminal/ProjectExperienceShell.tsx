@@ -325,17 +325,22 @@ export default function ProjectExperienceShell({
     lifecycleTrigger.current = null;
   });
   const [section, setSection] = useState<NavigationSection>("conversation");
+  const [workSearchOpen, setWorkSearchOpen] = useState(false);
+  const workSearchOpenerRef = useRef<HTMLElement | null>(null);
+  const showWorkSearch = () => {
+    workSearchOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setWorkSearchOpen(true);
+  };
   const handledNavigation = useRef<number | null>(null);
   useEffect(() => {
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
     handledNavigation.current = navigationRequest.id;
-    if (navigationRequest.section === "search") setWorkSearchOpen(true);
+    if (navigationRequest.section === "search") showWorkSearch();
     else setSection(navigationRequest.section);
     setShowLifecycleCenter(false);
     setContextOpen(false);
   }, [navigationRequest]);
   const [librarySelection, setLibrarySelection] = useState<{ projectId: number; artifactId: string | null; resourceId: string | null; version?: number | null; request: number } | null>(null);
-  const [workSearchOpen, setWorkSearchOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [chatLimit, setChatLimit] = useState(50);
   const contextCloseRef = useRef<HTMLButtonElement>(null);
@@ -661,7 +666,7 @@ export default function ProjectExperienceShell({
   }, [persistedMessages, temporaryMessages, streaming]);
 
   useEffect(() => {
-    const openSearch = () => setWorkSearchOpen(true);
+    const openSearch = () => showWorkSearch();
     window.addEventListener("lios:open-work-search", openSearch);
     return () => window.removeEventListener("lios:open-work-search", openSearch);
   }, []);
@@ -1703,6 +1708,7 @@ export default function ProjectExperienceShell({
       <ProjectLifecycleDialog request={lifecycleRequest} onClose={() => { lifecycleResolver.current = null; setLifecycleRequest(null); }} />
       <WorkSearchDialog
         open={workSearchOpen}
+        returnFocusTo={workSearchOpenerRef.current}
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
       />
@@ -1710,7 +1716,7 @@ export default function ProjectExperienceShell({
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
-        onSearch={onOpenCommand ?? (() => setWorkSearchOpen(true))}
+        onSearch={onOpenCommand ?? showWorkSearch}
         onWorkbench={onOpenWorkbench}
         onConnectors={onOpenEnvironment}
         onSettings={onOpenSettings} onLogout={onLogout}
