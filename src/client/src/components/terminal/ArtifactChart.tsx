@@ -95,7 +95,7 @@ export default function ArtifactChart({ content, artifactSourceRefs, ...mode }: 
     <p className="font-ui text-[13px] text-muted-foreground">Exact recorded values · one linear Y axis, fixed across series and windows · gaps are not connected. Series visibility and point inspection are local view controls, not Artifact edits.</p>
     <section data-testid="artifact-chart-recorded-context" aria-label="Recorded chart units, period and source context" className="space-y-1 rounded border border-border/50 p-3 font-ui text-[12px]">
       <p>X: {recordedContext.xLabel}{recordedContext.xUnit ? ` · Unit: ${recordedContext.xUnit}` : " · Unit: unknown"} · Y: {recordedContext.yLabel}{recordedContext.yUnit ? ` · Unit: ${recordedContext.yUnit}` : " · Unit: unknown"}</p>
-      <p>Period: {recordedContext.period ?? "Not recorded"}. {recordedContext.sourceBasis === "artifact_version" ? "Saved P4 version source refs" : "Chart option source refs"}: {recordedContext.evidenceRefs.length ? `${recordedContext.evidenceRefs.length} recorded` : "Not recorded"}.</p>
+      <p>Period: {recordedContext.period ?? "Not recorded"}. {recordedContext.sourceBasis === "artifact_version" ? "Saved P4 version source refs" : "Chart option source refs"}: {recordedContext.totalRecordedSourceRefs ? `${recordedContext.totalRecordedSourceRefs} recorded${recordedContext.totalRecordedSourceRefs > recordedContext.evidenceRefs.length ? ` (showing first ${recordedContext.evidenceRefs.length})` : ""}` : "Not recorded"}.</p>
       <p className="text-amber-200">{chartSourceCaveat(recordedContext)}</p>
       {!!recordedContext.evidenceRefs.length && <details className="pt-1">
         <summary className="cursor-pointer">Show recorded source references (not verified)</summary>
