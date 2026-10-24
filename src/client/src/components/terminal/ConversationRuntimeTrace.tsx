@@ -21,6 +21,7 @@ import { observedResearchProgress } from "@/lib/observedResearchProgress";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
+import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import type {
   ApprovalGrant,
@@ -87,7 +88,17 @@ export function trustCaveats(manifest: TrustManifest, shownGap?: { field: string
     if (!shownGap || !warning.includes(shownGap.message)) lines.push(warning);
   }
   if (manifest.summary.quality === "low" && manifest.evidence.some(item => item.kind !== "ai")) lines.push("Supporting evidence is marked low quality. Review its sources and limitations before relying on it.");
-  return lines.length ? { lines, recoveryActions } : null;
+  if ((manifest.summary.conflictState === "material" || manifest.summary.conflictState === "minor") && manifest.conflicts.length === 0) {
+    lines.push("A source conflict is recorded in the trust summary, but its detailed comparison is unavailable.");
+  }
+  if (manifest.summary.missingCount > manifest.missing.length) {
+    lines.push("Some missing evidence is recorded in the summary without detailed recovery information.");
+  }
+  // P3's recorded claim/access exceptions must remain visible before Show work,
+  // without asserting that a past denial or health state was just rechecked.
+  lines.push(...sourceExceptionCaveats(reviewEvidenceExceptions(manifest)));
+  const distinct = [...new Set(lines)];
+  return distinct.length ? { lines: distinct, recoveryActions } : null;
 }
 
 function readableValue(value: unknown): string {
