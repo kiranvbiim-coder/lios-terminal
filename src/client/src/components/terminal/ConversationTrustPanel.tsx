@@ -42,7 +42,12 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
   const needsReview = exceptions.conflicts.length > 0
     || exceptions.unknown.length > 0
     || exceptions.access.some(item => item.assessment.level === "blocked" || item.assessment.level === "restricted")
-    || manifest.missing.length > 0;
+    || manifest.missing.length > 0
+    || summary.missingCount > 0
+    || summary.quality === "low"
+    || summary.conflictState === "minor"
+    || summary.conflictState === "material"
+    || manifest.warnings.length > 0;
 
   return (
     <div className={`mx-3 mb-3 overflow-hidden rounded-lg border ${needsReview ? "border-amber-300/25 bg-amber-300/[0.025]" : "border-emerald-300/15 bg-emerald-300/[0.018]"}`} data-p3-trust-manifest="true">
