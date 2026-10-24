@@ -70,7 +70,7 @@ test("summary never hides dissent or relabels completed tracking as execution", 
   assert.match(markup, /not an approved decision|not an approved|not orders/);
   assert.match(markup, /marked completed/);
   assert.match(markup, /These statuses are not execution proof/);
-  assert.match(markup, /not an immutable/i);
+  assert.match(markup, /Authored references do not prove claims/);
   assert.ok(!markup.includes("CURRENT APPROVAL: APPROVED"));
   assert.match(markup, /Reviewer disputes liquidity assumption/);
 });
