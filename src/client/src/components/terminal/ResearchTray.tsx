@@ -4,6 +4,7 @@ import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   createResearchContextItem,
+  MAX_RESEARCH_TRAY_ITEMS,
   getResearchTrayGroups,
   loadResearchTray,
   pinResearchContext,
@@ -64,6 +65,9 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
+  const [editingSnapshot, setEditingSnapshot] = useState<ResearchTrayItem | null>(null);
+  const notify = (message: string, error = false) => { setNotice(message); setNoticeIsError(error); };
 
   useEffect(() => subscribeResearchTray(setItems), []);
   useEffect(() => subscribeResearchThread(setThread), []);
@@ -86,25 +90,34 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   const threadDays = useMemo(() => groupResearchThreadByDay(filteredThread), [filteredThread]);
 
   const persist = (next: ResearchTrayItem[]): boolean => {
+    // A full tray must not silently evict a person's oldest pin or note.
+    if (next.length > MAX_RESEARCH_TRAY_ITEMS) {
+      notify("Research Tray is full (120 items). Remove an existing pin before saving another; no item was removed.", true);
+      return false;
+    }
     try {
-      // Report a blocked/private/quota-limited storage failure rather than
-      // claiming a research note was durably saved when it was not.
+      // Report blocked/private/quota-limited storage instead of claiming success.
       saveResearchTray(next);
       setItems(next);
       return true;
     } catch {
-      setNotice("Could not save research on this device. Check local storage availability and retry.");
+      notify("Could not save research on this device. Your unsaved draft is still here; check local storage and retry.", true);
       return false;
     }
   };
 
   const pinCurrent = () => {
-    if (!persist(pinResearchContext(items, { view: activeView, symbol: activeSymbol }))) return;
+    const next = pinResearchContext(items, { view: activeView, symbol: activeSymbol });
+    if (items.some(item => !next.some(candidate => candidate.id === item.id))) {
+      notify("Research Tray is full (120 items). Remove an existing pin before pinning another; no item was removed.", true);
+      return;
+    }
+    if (!persist(next)) return;
     try {
       appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, detail: "Pinned to Research Tray for later use." });
-      setNotice("Current analysis pinned for later.");
+      notify("Current analysis pinned for later.");
     } catch {
-      setNotice("Analysis pinned, but the research history could not be updated.");
+      notify("Analysis pinned, but the research history could not be updated.", true);
     }
   };
 
@@ -121,9 +134,9 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
     if (!persist([item, ...items])) return;
     try {
       appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
-      setNotice("Research note saved locally.");
+      notify("Research note saved locally.");
     } catch {
-      setNotice("Note saved, but the research history could not be updated.");
+      notify("Note saved, but the research history could not be updated.", true);
     }
     setNewNote("");
     setAddingNote(false);
@@ -131,6 +144,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
 
   const edit = (item: ResearchTrayItem) => {
     setEditingId(item.id);
+    setEditingSnapshot(item);
     setNoteDraft(item.note);
     setTagsDraft(item.tags.join(", "));
     setGroupDraft(item.group);
@@ -138,20 +152,32 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   };
 
   const saveEdit = (item: ResearchTrayItem) => {
+    // If another tab changed/deleted this item after edit began, preserve
+    // the unsaved draft rather than silently overwriting their newer work.
+    if (!editingSnapshot || editingSnapshot.id !== item.id ||
+      editingSnapshot.updatedAt !== item.updatedAt ||
+      editingSnapshot.note !== item.note ||
+      editingSnapshot.group !== item.group ||
+      editingSnapshot.title !== item.title ||
+      editingSnapshot.tags.join("\\u0000") !== item.tags.join("\\u0000")) {
+      notify("This pinned item changed elsewhere while you were editing. Your draft was not saved. Cancel and reopen the latest item to review it.", true);
+      return;
+    }
     if (!persist(updateResearchTrayItem(items, item.id, {
       note: noteDraft,
       tags: tagsDraft.split(","),
       group: groupDraft,
     }))) return;
     setEditingId(null);
-    setNotice("Research annotation saved locally.");
+    setEditingSnapshot(null);
+    notify("Research annotation saved locally.");
   };
 
   const remove = (item: ResearchTrayItem) => {
     if (!persist(removeResearchTrayItem(items, item.id))) return;
     setRemoveId(null);
-    if (editingId === item.id) setEditingId(null);
-    setNotice("Pinned item removed. Your research thread is unchanged.");
+    if (editingId === item.id) { setEditingId(null); setEditingSnapshot(null); }
+    notify("Pinned item removed. Your research thread is unchanged.");
   };
 
   return (
@@ -356,9 +382,9 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
                           try {
                             clearResearchThread();
                             setConfirmClear(false);
-                            setNotice("Research history cleared. Pinned findings are unchanged.");
+                            notify("Research history cleared. Pinned findings are unchanged.");
                           } catch {
-                            setNotice("Could not clear research history on this device. Check local storage availability.");
+                            notify("Could not clear research history on this device. Check local storage availability.", true);
                           }
                         }}
                           className={smallButton + " border-rose-400/50 text-rose-200"}>Clear history</button>
@@ -374,7 +400,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
 
       <footer className="shrink-0 border-t border-border/60 px-3 py-3">
         <p className="font-ui text-xs leading-5 text-muted-foreground">{items.length} pinned · {thread.length} history events · stored on this device</p>
-        {notice && <p role="status" className="mt-1 font-ui text-xs leading-5 text-primary">{notice}</p>}
+        {notice && <p role={noticeIsError ? "alert" : "status"} className={"mt-1 font-ui text-xs leading-5 " + (noticeIsError ? "text-amber-200" : "text-primary")}>{notice}</p>}
       </footer>
     </aside>
   );
