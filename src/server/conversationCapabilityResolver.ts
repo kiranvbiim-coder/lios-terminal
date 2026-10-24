@@ -361,7 +361,8 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
   const wantsOverview = (/\b(research|analy[sz]e|overview|review|look into|assess|investigate)\b/i.test(message) || wantsQuote)
     && (!wantsPersonalFinance || explicitSecurityCue)
     && (!mentionsPortfolio || explicitSecurityCue)
-    && !p5OwnsCompanyJourney;
+    && !p5OwnsCompanyJourney
+    && !generalResearchTopic;
   if (wantsOverview) {
     add({
       id: "security.overview",
