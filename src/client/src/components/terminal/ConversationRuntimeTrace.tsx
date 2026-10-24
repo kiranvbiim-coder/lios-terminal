@@ -8,7 +8,6 @@ import {
   Database,
   FileBarChart,
   Loader2,
-  Play,
   ShieldAlert,
   Square,
   Workflow,
@@ -17,6 +16,8 @@ import {
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import ResearchSourceList from "./ResearchSourceList";
 import ResearchRunProgress from "./ResearchRunProgress";
+import ResearchCheckpointCard from "./ResearchCheckpointCard";
+import type { ResumableCheckpointView } from "@/lib/researchCheckpoint";
 import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
@@ -55,6 +56,11 @@ interface Props {
   resumableRequestId?: string | null;
   /** Explicit person-initiated resume of `resumableRequestId`; it carries no other input. */
   onResume?: () => void;
+  /** Display-only snapshot of server-exposed checkpoint counts, never local resume authority. */
+  checkpointView?: ResumableCheckpointView | null;
+  /** Authenticated Home execution history could not be checked; no Resume is offered. */
+  checkpointLookupError?: boolean;
+  onRetryCheckpointLookup?: () => void;
   /** Start with the Show work disclosure open. Defaults to closed so ordinary chats stay quiet. */
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
@@ -146,6 +152,9 @@ export default function ConversationRuntimeTrace({
   onOpenTerminal,
   resumableRequestId,
   onResume,
+  checkpointView,
+  checkpointLookupError = false,
+  onRetryCheckpointLookup,
   defaultShowWork = false,
   onSubmitAssumptions,
 }: Props) {
@@ -155,7 +164,7 @@ export default function ConversationRuntimeTrace({
   const reviewInFlight = useRef(false);
   const [guidedDismissedKey, setGuidedDismissedKey] = useState<string | null>(null);
   const workPanelId = useId();
-  if (!events.length && !busy && !resumableRequestId) return null;
+  if (!events.length && !busy && !resumableRequestId && !checkpointLookupError) return null;
   const plan = [...events].reverse().find((event) => event.type === "plan");
   const approval = [...events].reverse().find((event) => event.type === "approval_required");
   const latestGovernedApproval = [...events].reverse().find((event) => event.type === "governed_tool_approval_required");
@@ -236,21 +245,7 @@ export default function ConversationRuntimeTrace({
               Stop
             </button>
           )}
-          {canResume && (
-            <>
-              <span className="px-1">Stopped</span>
-              <button
-                type="button"
-                onClick={onResume}
-                data-testid="agent-run-resume"
-                data-request-id={resumableRequestId}
-                className="inline-flex min-h-7 items-center gap-1 rounded-md border border-cyan-300/30 px-2 py-1 font-ui text-[12px] text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
-              >
-                <Play className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-                Resume
-              </button>
-            </>
-          )}
+
           {canShowWork && (
             <button
               type="button"
@@ -265,6 +260,24 @@ export default function ConversationRuntimeTrace({
             </button>
           )}
         </div>
+      )}
+
+      {checkpointLookupError && !busy && (
+        <div role="alert" data-testid="trace-checkpoint-lookup-error" className="my-2 rounded border border-amber-300/25 px-3 py-2 font-ui text-[12px] text-amber-100">
+          Saved checkpoint eligibility could not be checked. Resume is unavailable until the Home responds.
+          {onRetryCheckpointLookup && (
+            <button type="button" onClick={onRetryCheckpointLookup} className="ml-2 min-h-8 rounded px-2 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+              Retry checkpoint check
+            </button>
+          )}
+        </div>
+      )}
+      {canResume && resumableRequestId && onResume && (
+        <ResearchCheckpointCard
+          requestId={resumableRequestId}
+          checkpoint={checkpointView ?? null}
+          onResume={onResume}
+        />
       )}
 
       <div id={workPanelId} className={workVisible ? "mb-2 space-y-2 rounded-xl border border-border/50 bg-[#080808] p-3" : undefined}>
