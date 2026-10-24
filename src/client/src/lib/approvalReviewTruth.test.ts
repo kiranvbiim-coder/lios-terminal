@@ -78,7 +78,7 @@ test("legacy action displays target and effect while never granting receipt-like
 });
 
 test("server emits only hashes from canonical proposed grant; browser never sees raw arguments", () => {
-  const server = readFileSync(new URL("../../server/conversationRunService.ts", import.meta.url), "utf8");
+  const server = readFileSync(new URL("../../../server/conversationRunService.ts", import.meta.url), "utf8");
   const source = server.slice(server.indexOf("governedApprovalEvent = {"), server.indexOf("governedApprovalEvent = {") + 1900);
   for (const text of [
     "toolId: proposal.binding.toolId", "stepId: proposal.binding.stepId",
