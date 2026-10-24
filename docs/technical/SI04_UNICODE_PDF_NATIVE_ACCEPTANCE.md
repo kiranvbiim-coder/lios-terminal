@@ -25,7 +25,7 @@ Use corresponding quoted paths to the installed EXE and existing output director
 
 The test uses no user Project, login, local data, provider, network API or secret. In an isolated sandboxed Chromium process, it renders synthetic Tamil and Hindi text, a typed table, a 1 × 1 PNG with verified SHA-256 and a source-labeled line chart. The temporary window is destroyed afterwards.
 
-Expected receipt: status **native-pdf-rendered**, source **synthetic**, PDF byte length, `pdfSha256`, `pdfRetained` and **visualAcceptance: not_tested**. The offline verifier compares the PDF bytes, SHA-256, format envelope and receipt. **Checksum verification does not certify visually readable Indic glyphs or accurate PDF extraction.** An error, hash mismatch or nonzero exit code blocks the release.
+Expected receipt: status **native-pdf-rendered**, source **synthetic**, PDF byte length, `pdfSha256`, `pdfRetained` and **visualAcceptance: not_tested**. The offline verifier checks **two separate gates**: (1) original PDF bytes, SHA-256 and receipt integrity, then (2) real PDF text extraction using the existing pdf-parse package. The extraction gate requires the exact Tamil title, Hindi phrase, Tamil table heading and three synthetic source citations; it rejects an unreadable or incorrectly encoded PDF even when its hash matches the receipt. A successful extraction still leaves **visualAcceptance: not_tested** because page appearance, combining marks, chart placement and raster images require actual human/visual inspection. An error, extraction mismatch, hash mismatch or nonzero exit code blocks the release.
 
 ## Manual installed-app acceptance, still required
 

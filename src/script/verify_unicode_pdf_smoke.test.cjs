@@ -2,7 +2,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const crypto=require("node:crypto");
-const {verifyUnicodePdfSmokeEvidence}=require("./verify_unicode_pdf_smoke.cjs");
+const {verifyUnicodePdfSmokeEvidence,assessUnicodePdfExtractedText,verifyUnicodePdfSmokeText}=require("./verify_unicode_pdf_smoke.cjs");
 
 const pdf=Buffer.from("%PDF-1.7\n"+"x".repeat(135)+"%%EOF\n");
 const receipt={
@@ -30,4 +30,57 @@ test("Rejects truncated, forged or misleading native smoke receipts",()=>{
   assert.throws(()=>verifyUnicodePdfSmokeEvidence({...receipt,pdfRetained:false},pdf),/incomplete/);
   assert.throws(()=>verifyUnicodePdfSmokeEvidence({...receipt,visualAcceptance:"passed"},pdf),/incomplete/);
   assert.throws(()=>verifyUnicodePdfSmokeEvidence({...receipt,contentCoverage:["Tamil"]},pdf),/incomplete/);
+});
+
+
+const documentedText=[
+  "தமிழ் அறிக்கை · Native PDF smoke",
+  "हिंदी परीक्षण · ₹450 · source:synthetic:test",
+  "கிராமம் · கடலை",
+  "Synthetic PNG · Source: source:synthetic:image",
+  "சான்று · Synthetic plot · Source: source:synthetic:chart",
+].join("\n");
+
+test("Synthetic PDF extraction proves Tamil, Hindi, typed-table text and source labels",()=>{
+  const result=assessUnicodePdfExtractedText(documentedText);
+  assert.equal(result.status,"text-extraction-verified");
+  assert.equal(result.visualAcceptance,"not_tested");
+  assert.equal(result.requiredFragments.length,6);
+  assert.ok(result.extractedCharacters>25);
+});
+
+test("Synthetic PDF extraction fails on damaged script text or missing evidence references",()=>{
+  assert.throws(()=>assessUnicodePdfExtractedText(
+    documentedText.replace("தமிழ் அறிக்கை","???? ???????")),/Tamil title/);
+  assert.throws(()=>assessUnicodePdfExtractedText(
+    documentedText.replace("हिंदी परीक्षण","xxxx")),/Hindi text/);
+  assert.throws(()=>assessUnicodePdfExtractedText(
+    documentedText.replace("கிராமம்","xxxx")),/table heading/);
+  assert.throws(()=>assessUnicodePdfExtractedText(
+    documentedText.replace("source:synthetic:chart","source:unlinked")),/chart source/);
+  assert.throws(()=>assessUnicodePdfExtractedText(""),/missing or outside/);
+});
+
+test("PDF text gate actually runs parser, bounds page count and always releases its resources",async()=>{
+  let destroyed=0;
+  class ValidPDFParse {
+    constructor({data}) { assert.ok(data instanceof Uint8Array); }
+    async getText(){return {text:documentedText};}
+    async getInfo(){return {total:2};}
+    async destroy(){destroyed++;}
+  }
+  const result=await verifyUnicodePdfSmokeText(pdf,ValidPDFParse);
+  assert.equal(result.status,"text-extraction-verified");
+  assert.equal(result.pages,2);
+  assert.equal(destroyed,1);
+  class InvalidPDFParse extends ValidPDFParse {
+    async getText(){return {text:"Tamil report but missing real script glyphs"};}
+  }
+  await assert.rejects(verifyUnicodePdfSmokeText(pdf,InvalidPDFParse),/missing: Tamil title/);
+  assert.equal(destroyed,2);
+  class InvalidPageCount extends ValidPDFParse {
+    async getInfo(){return {total:0};}
+  }
+  await assert.rejects(verifyUnicodePdfSmokeText(pdf,InvalidPageCount),/page count is invalid/);
+  assert.equal(destroyed,3);
 });
