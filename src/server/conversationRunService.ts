@@ -913,6 +913,17 @@ async function runProjectChat(
             replaySafe: descriptor.replaySafe,
             externalSideEffect: descriptor.sideEffect === "external",
             blastRadius,
+            // Only the canonical pending grant's immutable identifiers/hashes cross
+            // the wire. Never send the tool arguments or credential-bearing target.
+            reviewBinding: {
+              toolId: proposal.binding.toolId,
+              stepId: proposal.binding.stepId,
+              toolCallId: proposal.binding.toolCallId,
+              inputSha256: proposal.binding.inputSha256,
+              planSha256: proposal.binding.planHash,
+              chatId: proposal.binding.chatId,
+              projectId: proposal.binding.projectId,
+            },
             choices: chat.projectId === null || descriptor.allowProjectApproval === false
               ? ["allow_once", "deny"]
               : ["allow_once", "allow_project", "deny"],
