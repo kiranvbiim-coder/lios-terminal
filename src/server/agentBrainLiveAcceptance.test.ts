@@ -40,6 +40,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   const { indexProjectDocument } = await import("./p7ProjectIntelligenceStore");
   const { getArtifact, getArtifactVersion, listProjectArtifacts } = await import("./artifactStore");
   const { executeConversationRuntime } = await import("./conversationRuntime");
+  const { verifyAIProviderConnection } = await import("./aiProviderVerification");
   const { createExecutionJournal } = await import("./exec/execution-journal");
   const { artifactContentSchema } = await import("@shared/artifactContracts");
   const { listProjectLedgerEvents } = await import("./ledgerStore");
@@ -77,6 +78,13 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
     title: "Never accessible", body: "SECRET_OTHER_TENANT_NOT_AUTHORIZED",
   });
 
+  // Prove that the selected provider/model responded to a fresh public nonce
+  // before trusting it to plan any local work. Do not permit silent fallback
+  // from this verified runtime to another model during the run.
+  const verifiedModel = await verifyAIProviderConnection({ provider, ...(model ? { model } : {}) });
+  assert.equal(verifiedModel.provider, provider);
+  if (model) assert.equal(verifiedModel.model, model);
+
   const requestId = crypto.randomUUID();
   const journal = await createExecutionJournal({
     directory: path.join(dataDir, "agent-journal"), keyDirectory: path.join(dataDir, "agent-journal-keys"),
@@ -85,14 +93,14 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   await journal.begin({ id: requestId, owner: journalOwner, label: "Live-model governed evidence digest", agentRun: true });
   const result = await executeConversationRuntime({
     tenant, scope: "project", projectId: project.id, chatId: null, resources: [], history: [],
-    preferredProvider: provider,
-    ...(model ? { preferredModel: model } : {}),
+    preferredProvider: verifiedModel.provider,
+    preferredModel: verifiedModel.model,
     request: {
       requestId, continuationOf: null,
       message: "Use the governed tool lios.project.evidence_artifact to create a cited Project Research Artifact. Query exactly 'office accessibility' and title it 'Accessibility evidence digest'. Do not use any other tool. Complete only after the tool really succeeds.",
       executionMode: "ai_assisted", sourceScope: "my_data", aiDirectApproved: false, approvals: [],
       transmissionPolicy: {
-        mode: "configured", providerAllow: [provider], providerDeny: [],
+        mode: "configured", providerAllow: [verifiedModel.provider], providerDeny: [],
         allowProjectInstructions: false, allowResourceReferences: false, allowSelection: false,
         allowToolCalling: true, dataClassification: "private", maxProviderAttempts: 1,
       },
