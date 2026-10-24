@@ -116,6 +116,10 @@ export function resolveConversationCapabilities(request: ConversationRequest): C
   const plainResearch = naturalResearchEntry(message);
   const generalResearchTopic = Boolean(
     plainResearch
+    // Single-word names ("research apple", "research nvidia") are ambiguous
+    // and remain on the established company/security route.
+    && plainResearch.objective.trim().split(/\s+/).length > 1
+    && !symbol
     && /^[a-z]/.test(plainResearch.objective)
     && !/\b(?:company|stock|equity|shares?|ticker|firm|business|security|earnings|fundamentals?|financials?|valuation|dcf|portfolio)\b/i.test(plainResearch.objective)
   );
