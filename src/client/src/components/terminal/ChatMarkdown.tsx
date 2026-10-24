@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   parseChatMarkdown,
   resolveCitation,
-  safeHref,
+  inspectableSourceHref,
   type Align,
   type Block,
   type ChatCitationSource,
@@ -45,7 +45,7 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 function CitationChip({ number, source, onSelect }: { number: number; source: ChatCitationSource; onSelect?: (source: ChatCitationSource) => void }) {
   const [open, setOpen] = useState(false);
   const label = `Source ${number}: ${source.label}`;
-  const href = source.href ? safeHref(source.href) : null;
+  const href = inspectableSourceHref(source);
   if (href) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={CITE_CLASS} aria-label={label} title={label} data-citation={number}>
@@ -69,7 +69,7 @@ function CitationChip({ number, source, onSelect }: { number: number; source: Ch
       >
         [{number}]
       </button>
-      {open && <span role="note" className="mx-1 rounded bg-white/[0.06] px-1.5 py-0.5 font-ui text-[12px] text-muted-foreground">{source.label}</span>}
+      {open && <span role="note" className="mx-1 rounded bg-white/[0.06] px-1.5 py-0.5 font-ui text-[12px] text-muted-foreground">{source.label} · Reference only, no recorded document link</span>}
     </>
   );
 }
