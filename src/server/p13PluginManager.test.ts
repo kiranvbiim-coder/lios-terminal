@@ -253,6 +253,41 @@ test("P13 registration collision is transactional and disposes the rejected gove
   assert.equal(broker.isDisposed(), true);
 });
 
+test("P13 live publisher-key revocation blocks already captured executable adapters", async (t) => {
+  const { trust, privateKey } = signer();
+  const registry = new RuntimeRegistry();
+  const manager = new P13PluginManager(registry, trust, "1.0.0");
+  const pkg = signed(executableManifest({ id: "com.example.key-revocation" }), privateKey);
+  const broker = governedBroker(t, pkg.manifest);
+  manager.install({ ...pkg, broker });
+  const tool = registry.require("com.example.key-revocation.tool") as ToolAdapter;
+
+  await tool.invoke({ value: 1 }, context);
+  trust.revokeKey("publisher.main");
+  await assert.rejects(
+    () => tool.invoke({ value: 2 }, context),
+    /package trust is revoked/i,
+  );
+  assert.equal(registry.has("com.example.key-revocation.tool"), true,
+    "revocation must deny a cached adapter even before removal from registry");
+  assert.equal(manager.remove("com.example.key-revocation"), true);
+  await assert.rejects(() => tool.invoke({ value: 3 }, context), /no longer active/i);
+});
+
+test("P13 live package-digest revocation denies execution without a new install", async (t) => {
+  const { trust, privateKey } = signer();
+  const registry = new RuntimeRegistry();
+  const manager = new P13PluginManager(registry, trust, "1.0.0");
+  const pkg = signed(executableManifest({ id: "com.example.digest-revocation" }), privateKey);
+  const broker = governedBroker(t, pkg.manifest);
+  manager.install({ ...pkg, broker });
+  const tool = registry.require("com.example.digest-revocation.tool") as ToolAdapter;
+
+  await tool.invoke({ value: 1 }, context);
+  trust.revokeDigest(pkg.observedPackageDigest);
+  await assert.rejects(() => tool.invoke({ value: 2 }, context), /package trust is revoked/i);
+});
+
 test("P13 update swaps exact governed brokers transactionally and retires the previous runtime", async (t) => {
   const { trust, privateKey } = signer();
   const registry = new RuntimeRegistry();
