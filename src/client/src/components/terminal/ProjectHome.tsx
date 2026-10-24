@@ -93,6 +93,12 @@ export function ProjectHome({
     setContextNotice(null);
     try {
       const saved = await updateProjectResource(draft.projectId, draft.resourceId, { contextMode: draft.to });
+      // Even if the user switches Projects while the server responds, only
+      // invalidate the exact old Project's caches; never update the new view.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "home"], exact: true }),
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "resources"], exact: true }),
+      ]);
       if (selectedProjectId.current !== draft.projectId) return;
       if (saved.projectId !== draft.projectId || saved.id !== draft.resourceId || saved.contextMode !== draft.to) {
         setContextNotice("The server did not confirm this exact Project resource and mode. Reload the context before relying on the change.");
@@ -100,10 +106,6 @@ export function ProjectHome({
         setContextNotice("Context mode saved for this Project resource. Source rights and retrieval permissions still apply.");
       }
       setPendingContext(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "home"], exact: true }),
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "resources"], exact: true }),
-      ]);
     } catch {
       if (selectedProjectId.current === draft.projectId) {
         setContextNotice("Resource context change was not confirmed. The saved mode remains authoritative; refresh this Project before retrying.");
