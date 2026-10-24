@@ -1,4 +1,5 @@
 import { artifactContentSchema, type ArtifactContent } from "@shared/artifactContracts";
+import { canonicalLedgerValue } from "./ledgerStore";
 
 /** Fields copied from source records are *not* editable Office prose. */
 const PROTECTED_BLOCK_ATTRS = [
@@ -8,7 +9,7 @@ const PROTECTED_BLOCK_ATTRS = [
 ] as const;
 
 function equal(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  return canonicalLedgerValue(a ?? null) === canonicalLedgerValue(b ?? null);
 }
 
 /**
