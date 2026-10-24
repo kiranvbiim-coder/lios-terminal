@@ -123,7 +123,7 @@ test("Brain V1: a real entitled model plans a governed tool, saves an owned P4 R
   assert.equal(agentEvents.some(event => event.kind === "step_finished" && event.status === "completed"), true);
   const persistedRun = await journal.read(requestId, journalOwner);
   assert.ok(persistedRun);
-  assert.equal(persistedRun.events.filter(event => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+  assert.equal(persistedRun.events?.filter(event => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
   assert.equal(JSON.stringify(persistedRun).includes(excerpt), false, "L2 stores receipts and references, not source passages.");
   assert.equal(result.receiptIds.length, 1);
   const receiptEvent = events.find(event => event.type === "receipt");
