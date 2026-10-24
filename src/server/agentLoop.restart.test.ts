@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
+import { assertAgentCheckpointResumeCurrent } from "./agent-checkpoint";
+import { createExecutionJournal } from "./exec/execution-journal";
+import {
+  createNativeAgentLoopCheckpoint,
+  nativeContinuationOf,
+} from "./agentLoopCheckpoint";
 import {
   AgentPlanError,
   agentInputSha256,
@@ -423,3 +434,140 @@ test("reopen planning refuses outcome-unknown, committed-but-unfinished and non-
 function deriveKeyHex(stepId: string): string {
   return deriveAgentToolIdempotencyKey({ requestId: REQUEST_ID, stepId, toolId: "t.quote", inputSha256: agentInputSha256({ symbol: "SAFE" }) }).replace("agent-tool:v1:", "");
 }
+
+
+test("GM-12: real encrypted L6 checkpoint survives Stop/restart and resumes one settled read and one unfinished call without re-planning", { timeout: 20_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-agent-restart-joined-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const opts = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(opts);
+  const requestId = crypto.randomUUID();
+  const owner = { userId: 7, projectId: 12, chatId: 34 };
+  const foreign = { ...owner, userId: 8 };
+  const objective = "Compare two synthetic quote references using governed reads.";
+  const budget = { maxSteps: 3, maxAiCalls: 3, maxRevisions: 0, maxDurationMs: 30_000 };
+  const toolSetSha256 = "a".repeat(64);
+  const policySha256 = "b".repeat(64);
+  const context: ConversationContextEnvelope = {
+    schemaVersion: "1",
+    identity: { userId: owner.userId, organizationId: null, role: "internal_analyst" },
+    project: { projectId: owner.projectId, name: "Synthetic project", instructionIncluded: false, resourceRefs: [] },
+    conversation: { chatId: owner.chatId, scope: "project", sourceScope: "my_data", branchId: null },
+    workspace: { sessionId: null, view: "conversation", symbol: null },
+    active: { objectRefs: [], selection: null },
+  };
+  const binding = { role: "internal_analyst", objective, budget };
+  const sourceMessageId = 7;
+  const checkpoint = (state: AgentLoopContinuationState) => createNativeAgentLoopCheckpoint({
+    state, requestId, owner, context, projectInstructions: null,
+    sourceMessageId, toolSetSha256, policySha256, resumeBinding: binding,
+  });
+
+  await journal.begin({ id: requestId, owner, label: "Synthetic interruption with durable L6", agentRun: true });
+  const stopped = new AbortController();
+  const first = harness([plan([step("a"), step("b", "t.calc", { dependsOn: ["a"] })])], {
+    signal: stopped.signal,
+    stop: true,
+    invoke: async (planned) => {
+      if (planned.id === "b") {
+        stopped.abort();
+        throw new DOMException("Stopped by owner", "AbortError");
+      }
+    },
+  });
+  first.deps.goal = objective;
+  first.deps.budget = budget;
+  first.deps.ledger = async (event) => { await journal.appendAgentEvent(requestId, event); };
+  first.deps.checkpoint = async (state) => { await journal.writeAgentCheckpoint(requestId, owner, checkpoint(state)); };
+  await assert.rejects(runAgentLoop(first.deps), { name: "AbortError" });
+  assert.deepEqual(first.ran, ["a", "b"]);
+  await journal.interruptCheckpointed(requestId, owner);
+
+  // New journal instance deliberately reconstructs the state from encrypted
+  // bytes, not the original process's in-memory checkpoint and event arrays.
+  const restarted = await createExecutionJournal(opts);
+  await restarted.recoverInterrupted();
+  assert.equal((await restarted.read(requestId, owner))?.status, "interrupted");
+  assert.equal(await restarted.readAgentCheckpoint(requestId, foreign), null);
+  await assert.rejects(
+    restarted.resumeInterruptedAgentCheckpoint(requestId, foreign, "0".repeat(64)),
+    /not found/i,
+  );
+  const snapshot = await restarted.readAgentCheckpoint(requestId, owner);
+  assert.ok(snapshot);
+  assert.equal(snapshot.version, 2, "native restart must carry original role, goal and budgets");
+  const continuation = nativeContinuationOf(snapshot);
+  assert.ok(continuation);
+  assert.deepEqual(continuation.settled.map((outcome) => outcome.id), ["a"]);
+  assert.equal(continuation.counters.aiCalls, 1);
+
+  const current = {
+    snapshot, requestId, owner,
+    planSha256: snapshot.planSha256, toolSetSha256, policySha256,
+    context, adapterId: snapshot.adapterId, sourceMessageId, projectInstructions: null, resumeBinding: binding,
+  };
+  assert.equal(assertAgentCheckpointResumeCurrent(current).bindingSha256, snapshot.bindingSha256);
+  for (const mismatched of [
+    { resumeBinding: { ...binding, objective: "A different goal" } },
+    { resumeBinding: { ...binding, budget: { ...budget, maxSteps: 4 } } },
+    { policySha256: "c".repeat(64) },
+    { toolSetSha256: "d".repeat(64) },
+    { sourceMessageId: sourceMessageId + 1 },
+  ]) {
+    assert.throws(() => assertAgentCheckpointResumeCurrent({ ...current, ...mismatched }), /changed|mismatch|original/i);
+  }
+  assert.equal((await restarted.read(requestId, owner))?.status, "interrupted",
+    "a rejected binding cannot authorize or reopen the execution");
+
+  const before = await restarted.read(requestId, owner);
+  assert.ok(before?.events);
+  const reopen = planAgentLoopReopen({
+    requestId, events: before.events, continuation,
+    toolFacts: (toolId) => TOOLS.some((tool) => tool.id === toolId)
+      ? { sideEffect: "none", replaySafe: true } : null,
+  });
+  assert.deepEqual(reopen, {
+    stepId: "b", supersedeToolCallId: "b-call", resumesToolCallId: "b-call", toolCallId: "b-call-r1",
+  });
+
+  await assert.rejects(
+    restarted.resumeInterruptedAgentCheckpoint(requestId, owner, "f".repeat(64)),
+    /binding changed/,
+  );
+  assert.equal((await restarted.read(requestId, owner))?.status, "interrupted");
+  await restarted.resumeInterruptedAgentCheckpoint(requestId, owner, snapshot.bindingSha256);
+  await assert.rejects(
+    restarted.resumeInterruptedAgentCheckpoint(requestId, owner, snapshot.bindingSha256),
+    /Only an interrupted/,
+  );
+
+  const second = harness([complete("The synthetic comparison is completed.")]);
+  second.deps.goal = objective;
+  second.deps.budget = budget;
+  second.deps.ledger = async (event) => { await restarted.appendAgentEvent(requestId, event); };
+  second.deps.checkpoint = async (state) => {
+    await restarted.writeAgentCheckpoint(requestId, owner, checkpoint(state));
+  };
+  const result = await resumeAgentLoopFromCheckpoint(
+    second.deps, { ...continuation, planSha256: snapshot.planSha256 }, reopen,
+  );
+  assert.equal(result.status, "completed");
+  assert.deepEqual(second.ran, ["b"], "the settled first step cannot execute again after restart");
+  assert.equal(second.prompts.length, 1, "the model reviews completed results but does not re-plan");
+  assert.equal(result.aiCalls, 2, "model budget and counters continue from the real checkpoint");
+  await restarted.finish(requestId, "completed", 0);
+  const finalJournal = await createExecutionJournal(opts);
+  const record = await finalJournal.read(requestId, owner);
+  assert.ok(record?.events);
+  assert.equal(record.status, "completed");
+  assert.doesNotThrow(() => assertAgentEventChain(record.events, requestId));
+  assert.equal(record.events.filter((event) => event.kind === "step_started" && event.stepId === "a").length, 1);
+  assert.equal(record.events.filter((event) => event.kind === "step_started" && event.stepId === "b").length, 1);
+  assert.equal(record.events.filter((event) => event.kind === "tool_call_finished" && event.toolCallId === "b-call" && event.status === "cancelled").length, 1);
+  assert.equal(record.events.filter((event) => event.kind === "tool_call_started" && event.toolCallId === "b-call-r1").length, 1);
+  assert.equal(record.events.filter((event) => event.kind === "tool_call_finished" && event.toolCallId === "b-call-r1" && event.status === "succeeded").length, 1);
+  const ciphertext = await fs.readFile(path.join(opts.directory, requestId));
+  assert.equal(ciphertext.subarray(0, 8).toString("utf8"), "LIOSENC1");
+  assert.equal(ciphertext.includes(Buffer.from(objective)), false, "raw objective is not a checkpoint/ledger field");
+  assert.equal(await finalJournal.read(requestId, foreign), null);
+});
