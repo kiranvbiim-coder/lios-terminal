@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { trustManifestSchema, type TrustManifest } from "@shared/trustContracts";
 import { reviewEvidenceExceptions, recordedSourceAccess, sourceExceptionCaveats } from "./evidenceExceptions";
 import EvidenceExceptionDetails from "../components/terminal/EvidenceExceptionDetails";
+import ConversationTrustPanel from "../components/terminal/ConversationTrustPanel";
 import { trustCaveats } from "../components/terminal/ConversationRuntimeTrace";
 
 const REQUEST = "11111111-1111-4111-8111-111111111111";
@@ -136,4 +137,20 @@ test("WS-31 conflict messages and external source names are escaped, not executa
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /&lt;img/);
   assert.doesNotMatch(html, /<script|<img/);
+});
+
+test("WS-31 a trust record with material conflicts is not shown as an all-green approval", () => {
+  const withProblems = renderToStaticMarkup(React.createElement(ConversationTrustPanel, { manifest: fixture() }));
+  assert.match(withProblems, /Evidence needs review/);
+  assert.match(withProblems, /border-amber-300/);
+  assert.doesNotMatch(withProblems, /h-3\.5 w-3\.5 text-emerald-300/);
+  const empty = fixture();
+  const clean: TrustManifest = {
+    ...empty,
+    summary: { ...empty.summary, conflictState: "none", missingCount: 0, quality: "high" },
+    evidence: [], claims: [], conflicts: [], missing: [], warnings: [],
+  };
+  const cleanHtml = renderToStaticMarkup(React.createElement(ConversationTrustPanel, { manifest: clean }));
+  assert.match(cleanHtml, />Trust</);
+  assert.doesNotMatch(cleanHtml, /Evidence needs review/);
 });
