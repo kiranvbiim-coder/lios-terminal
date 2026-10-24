@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import { reportArtifactContentSchema, researchArtifactContentSchema, type RichArtifactBlock } from "./artifactContracts";
-import { fromTiptapDocumentProjection, readRecordedDocumentTable, readRichDocumentFormatting, recordedDocumentTablePreview, recordedDocumentValue, safeRichDocumentHref, toTiptapDocumentProjection } from "./richArtifactDocument";
+import { fromTiptapDocumentProjection, readRecordedDocumentTable, readRichDocumentFormatting, reconcileReportBlockSections, recordedDocumentTablePreview, recordedDocumentValue, safeRichDocumentHref, toTiptapDocumentProjection } from "./richArtifactDocument";
 
 const block = (id: string, type: RichArtifactBlock["type"], text = "", attrs: Record<string, unknown> = {}): RichArtifactBlock => ({ id, type, text, attrs });
 
@@ -112,7 +112,7 @@ test("inserted IDs are stable across saves, donor metadata is not inherited and 
   assert.deepEqual(fromTiptapDocumentProjection(projected, updated), updated);
   assert.equal(updated.kind, "report");
   if (updated.kind !== "report") throw new Error("Expected report.");
-  assert.deepEqual(updated.sections, [{ ...canonical.sections[0], blockIds: canonical.sections[0].blockIds.filter(id => id !== "h") }]);
+  assert.deepEqual(updated.sections, [{ ...canonical.sections[0], blockIds: [...canonical.sections[0].blockIds.filter(id => id !== "h"), "inserted"] }]);
 });
 
 test("duplicate pasted canonical IDs and colliding factories are blocked without source mutation", () => {
@@ -297,4 +297,71 @@ test("SI-04.20 captured image is opaque: caption edits preserve exact bytes/sour
   const flattened = { type: "doc", content: [{ type: "paragraph", attrs: { canonicalId: "image" }, content: [{ type: "text", text: "replace image" }] }] };
   assert.throws(() => fromTiptapDocumentProjection(flattened, canonical), /cannot be flattened/);
   assert.throws(() => fromTiptapDocumentProjection({ type: "doc", content: [{ type: "canonicalBlock", attrs: { canonicalId: "forged", canonicalType: "image", canonicalText: "forged", canonicalAttrs: { image } } }] }, canonical), /retain their canonical identity/);
+});
+
+test("WS-37 report insertion belongs to nearest recorded section in visible document order", () => {
+  const sections = [
+    { id: "s1", title: "Introduction", blockIds: ["a", "b"] },
+    { id: "s2", title: "Evidence", blockIds: ["c", "d"] },
+  ];
+  const from = ["a", "b", "c", "d"];
+  const next = ["before", "a", "middle", "b", "c", "near-evidence", "d", "after"];
+  const result = reconcileReportBlockSections(sections, from, next);
+  assert.deepEqual(result, [
+    { ...sections[0], blockIds: ["before", "a", "middle", "b"] },
+    { ...sections[1], blockIds: ["c", "near-evidence", "d", "after"] },
+  ]);
+  assert.deepEqual(sections[0].blockIds, ["a", "b"], "original P4 input cannot be mutated");
+  assert.deepEqual(sections[1].blockIds, ["c", "d"]);
+  assert.deepEqual(reconcileReportBlockSections(result, next, next), result, "repeated editor projection is stable");
+});
+
+test("WS-37 deleted blocks release section membership, unresolved refs survive, and orphan older blocks do not get auto-minted provenance", () => {
+  const sections = [
+    { id: "a", title: "Recorded", blockIds: ["old", "unresolved-ref"] },
+    { id: "b", title: "Appendix", blockIds: ["appendix"] },
+  ];
+  const result = reconcileReportBlockSections(sections, ["old", "orphan", "appendix"], ["orphan", "authored", "appendix"]);
+  assert.deepEqual(result, [
+    { ...sections[0], blockIds: ["unresolved-ref"] },
+    { ...sections[1], blockIds: ["authored", "appendix"] },
+  ], "new block receives nearby recorded section, not a fabricated citation or link");
+  assert.equal(result.flatMap(item => item.blockIds).includes("orphan"), false);
+  assert.deepEqual(reconcileReportBlockSections([], ["old"], ["added"]), [],
+    "documents without sections do not get a fabricated section");
+});
+
+test("WS-37 insertion through canonical report decoder retains section IDs and separate evidence metadata", () => {
+  const canonical = reportArtifactContentSchema.parse({
+    kind: "report", templateId: "investment-memo", editorPreference: "tiptap",
+    sections: [
+      { id: "facts", title: "Verified sources", blockIds: ["a"] },
+      { id: "findings", title: "Analysis", blockIds: ["b"] },
+    ],
+    blocks: [
+      block("a", "paragraph", "Recorded", { sourceRefs: ["filing:v1"], receiptId: "receipt:1" }),
+      block("b", "paragraph", "Assessment", { sourceRefs: ["filing:v2"] }),
+    ],
+  });
+  const projected = toTiptapDocumentProjection(canonical);
+  projected.content.splice(1, 0, { type: "paragraph", content: [{ type: "text", text: "A user note, not sourced" }] });
+  const updated = fromTiptapDocumentProjection(projected, canonical, { createBlockId: () => "note" });
+  assert.equal(updated.kind, "report");
+  if (updated.kind !== "report") return;
+  assert.deepEqual(updated.sections.map(section => section.blockIds), [["a", "note"], ["b"]]);
+  assert.deepEqual(updated.blocks[0].attrs, canonical.blocks[0].attrs);
+  assert.deepEqual(updated.blocks[1].attrs, {});
+  assert.deepEqual(updated.blocks[2].attrs, canonical.blocks[1].attrs);
+  assert.equal(updated.blocks[1].text, "A user note, not sourced");
+  assert.deepEqual(fromTiptapDocumentProjection(projected, updated), updated, "save/reopen preserves the same canonical IDs");
+});
+
+test("WS-37 report section limit rejects inserts rather than silently dropping user-authored content", () => {
+  const ids = Array.from({ length: 5_000 }, (_, i) => `id-${i}`);
+  const sections = [{ id: "full", title: "Full", blockIds: ids }];
+  assert.throws(
+    () => reconcileReportBlockSections(sections, ids, [...ids, "new-authored"]),
+    /Report section block limit exceeded/,
+  );
+  assert.equal(sections[0].blockIds.length, 5_000);
 });
