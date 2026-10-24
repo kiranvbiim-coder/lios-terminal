@@ -220,7 +220,9 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Unable to save this reviewed workflow.");
     } finally {
       managementInFlight.current = false;
-      if (selectedProject.current === originalProject) setBusyId(null);
+      // Workbench may have switched Projects while P9 was responding. Always
+      // release the UI lock, but never show the old Project's response there.
+      setBusyId(null);
     }
   };
 
@@ -272,7 +274,9 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Workflow update failed. No change is confirmed. Reload the workflow before retrying.");
     } finally {
       managementInFlight.current = false;
-      if (selectedProject.current === originalProject) setBusyId(null);
+      // Workbench may have switched Projects while P9 was responding. Always
+      // release the UI lock, but never show the old Project's response there.
+      setBusyId(null);
     }
   };
 
