@@ -203,6 +203,25 @@ test("a tool's exception text never reaches the model or the client", async () =
   assert.match(result.summary, /unexpected error/);
 });
 
+test("a model cannot silently turn a failed tool into a verified execution success", async () => {
+  const r = run("c4444444-4444-4444-8444-444444444444", [
+    planJson([step("failed-source", "test.agent.leaky")]),
+    answer("All tasks completed successfully and the result has been saved."),
+  ]);
+  const result = await r.promise;
+  assert.equal(result.label, "ai_derived", "The model is still only the source of the explanation");
+  assert.match(result.text, /^LiOS execution record: 1 failed tool step\(s\) did not complete\./);
+  assert.match(result.text, /The AI answer below is not proof that those actions ran\./);
+  assert.match(result.text, /All tasks completed successfully and the result has been saved\./);
+  assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "failed"), true);
+  assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+  const receipt = r.events.find((event) => event.type === "receipt");
+  assert.ok(receipt && receipt.type === "receipt");
+  assert.equal(receipt.receipt.warnings.some((warning) => warning.includes("1 failed tool step(s)")), true);
+  assert.equal(receipt.receipt.output && JSON.stringify(receipt.receipt.output).includes('"status":"failed"'), true);
+  assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
+});
+
 test("an approval wait leaves the step and call open in the ledger", async () => {
   const r = run("b1111111-1111-4111-8111-111111111111", [planJson([step("ask", "test.agent.confirm")])]);
   await r.promise;
