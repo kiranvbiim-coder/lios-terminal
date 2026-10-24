@@ -10,6 +10,7 @@ import { getTerminalPersona, resolveTerminalPersonaId, type TerminalPersonaId } 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import { useAudience } from "@/lib/audience";
+import { isSecuritySearchResult, rankSecuritySearchResults, resolveVerifiedSecuritySelection, type SecuritySearchResult } from "@/lib/terminalSecuritySearch";
 
 const PERSONA_PREFERENCES_KEY = ["/api/me/persona-preferences"] as const;
 const LEGACY_PERSONA_KEYS = [
@@ -120,7 +121,10 @@ function formatRelativeTime(value: string | Date | null) {
 export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd, onAskLios, session, onLogout, domain, onSwitchDomain }: Props) {
   const isClient = useAudience() === "client";
   const [searchVal, setSearchVal] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; exchange: string; sector: string; assetClass?: string; region?: string }>>([]);
+  const [searchResults, setSearchResults] = useState<SecuritySearchResult[]>([]);
+  const [completedSearch, setCompletedSearch] = useState<string | null>(null);
+  const [searchingSecurity, setSearchingSecurity] = useState(false);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [passwordChanged, setPasswordChanged] = useState(false);
@@ -178,17 +182,36 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
   };
 
   useEffect(() => {
-    if (!searchVal.trim()) {
+    const query = searchVal.trim();
+    if (!query) {
       setSearchResults([]);
+      setCompletedSearch(null);
+      setSearchingSecurity(false);
       return;
     }
-    const timeout = setTimeout(() => {
-      fetch(`/api/finance/search?q=${encodeURIComponent(searchVal)}`)
-        .then(res => res.json())
-        .then(data => setSearchResults(data))
-        .catch(err => console.error("Search fetch failed:", err));
+    const controller = new AbortController();
+    setSearchingSecurity(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/finance/search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("Security lookup is unavailable");
+        const payload: unknown = await response.json();
+        const rows = Array.isArray(payload) ? payload.filter(isSecuritySearchResult) : [];
+        if (!controller.signal.aborted) {
+          setSearchResults(rankSecuritySearchResults(rows, query, 8));
+          setCompletedSearch(query);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setSearchResults([]);
+          setCompletedSearch(query);
+          setSearchNotice("Security lookup unavailable. Check your connection and retry; no security was selected.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearchingSecurity(false);
+      }
     }, 150);
-    return () => clearTimeout(timeout);
+    return () => { clearTimeout(timeout); controller.abort(); };
   }, [searchVal]);
   const [clock, setClock] = useState(() => new Date());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -223,13 +246,25 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
     return () => window.removeEventListener("mousedown", handleOutside);
   }, [notificationsOpen]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const v = searchVal.trim().toUpperCase();
-    if (v) {
-      onSymbol(v);
-      setSearchVal("");
-    }
+  const chooseSecurity = (result: SecuritySearchResult) => {
+    // A company name or typed ticker is only a query. The selected symbol must
+    // be a validated row returned by this exact completed backend search.
+    if (completedSearch?.trim().toUpperCase() !== searchVal.trim().toUpperCase() || !isSecuritySearchResult(result)) return;
+    onSymbol(result.symbol.trim().toUpperCase());
+    setSearchVal("");
+    setSearchResults([]);
+    setCompletedSearch(null);
+    setSearchNotice(null);
+    setIsFocused(false);
+  };
+
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const resolved = resolveVerifiedSecuritySelection(searchVal, searchResults, completedSearch);
+    if (resolved) chooseSecurity(resolved);
+    else setSearchNotice(searchingSecurity
+      ? "Searching securities. Choose a returned match after lookup finishes."
+      : "No unique verified ticker matched. Choose an exact security from search results; the current workspace is unchanged.");
   };
 
   const timeStr = clock.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -298,13 +333,15 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
           <Search className="w-3 h-3 text-muted-foreground" />
           <input
             type="text"
-            placeholder="TICKER <GO>"
+            placeholder="FIND SECURITY"
             value={searchVal}
-            onChange={(e) => setSearchVal(e.target.value.toUpperCase())}
+            onChange={(e) => { setSearchVal(e.target.value.toUpperCase()); setSearchResults([]); setCompletedSearch(null); setSearchNotice(null); }}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             className="bg-transparent font-terminal text-[10px] text-[hsl(38,95%,60%)] placeholder:text-muted-foreground/60 focus:outline-none w-24 uppercase"
             data-testid="ticker-search"
+            aria-label="Search verified companies and securities"
+            aria-describedby="lios-topbar-lookup-status"
           />
           {searchVal && (
             <button type="submit" className="font-terminal text-[8px] px-1.5 py-0.5 bg-[hsl(38,95%)] text-black rounded font-bold">
@@ -313,19 +350,15 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
           )}
         </div>
 
-        {isFocused && searchResults.length > 0 && (
+        {isFocused && completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length > 0 && (
           <div
             onMouseDown={(e) => e.preventDefault()}
             className="absolute left-0 top-[35px] w-64 max-h-60 bg-[#090909] border border-border shadow-2xl overflow-y-auto scrollbar-thin z-50 py-1"
           >
             {searchResults.map((item, idx) => (
               <button type="button"
-                key={idx}
-                onClick={() => {
-                  onSymbol(item.symbol);
-                  setSearchVal("");
-                  setIsFocused(false);
-                }}
+                key={`${item.symbol}:${item.exchange ?? ""}:${idx}`}
+                onClick={() => chooseSecurity(item)}
                 className="w-full text-left px-3 py-1.5 hover:bg-neutral-900 border-b border-border/20 last:border-b-0 flex items-center justify-between font-terminal"
               >
                 <div className="flex flex-col">
@@ -344,6 +377,11 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
                 </div>
               </button>
             ))}
+          </div>
+        )}
+        {(isFocused || searchNotice) && searchVal.trim() && (
+          <div id="lios-topbar-lookup-status" role="status" aria-live="polite" className="absolute left-0 top-full z-40 w-72 max-w-[90vw] border border-border bg-[#090909] px-3 py-2 font-ui text-xs leading-relaxed text-muted-foreground">
+            {searchNotice ?? (searchingSecurity ? "Searching permitted security listings…" : completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 ? "No matching securities returned by the source. Nothing was selected." : "Select a returned security. GO only opens one exact ticker match.")}
           </div>
         )}
       </form>
