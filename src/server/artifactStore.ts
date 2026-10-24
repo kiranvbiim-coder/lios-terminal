@@ -44,6 +44,7 @@ import type { TenantContext } from "./tenantContext";
 import type { ArtifactModelMaintenanceReview } from "@shared/artifactModelMaintenance";
 import type { ArtifactIntegratedModelReview } from "./artifactIntegratedModelInput";
 import { loadArtifactIntegratedModelReview } from "./artifactIntegratedModelInput";
+import { assertValuationRevisionIsRecorded } from "@shared/valuationRevisionPolicy";
 
 export type ArtifactReadContext = Pick<TenantContext, "userId" | "organizationId">;
 
@@ -1067,6 +1068,10 @@ export async function createArtifactVersion(
   assertArtifactRefsSafe(input.dependencyRefs ?? [], "dependencyRefs");
   const base = await getArtifactVersion(ctx, input.artifactId, input.baseVersion);
   const baseContent = artifactContentSchema.parse(base.content);
+  // Generic version saves (including actorType: "system" supplied by clients)
+  // do not prove a model ran. Only the audited restore/undo path may restore
+  // previously recorded valuation results without a new engine calculation.
+  if (input.action !== "undo") assertValuationRevisionIsRecorded(baseContent, content);
   const terminalProof = terminalEngineProof ? terminalEngineWrites.get(terminalEngineProof) : null;
   const nativeWriteAuthorized = Boolean(terminalProof && terminalProof.userId === ctx.userId && terminalProof.artifactId === artifact.id && terminalProof.baseVersion === input.baseVersion && terminalProof.hash === contentHash(content));
   if (content.kind === "screen" && content.state.terminalExecutions !== undefined && (baseContent.kind !== "screen" || baseContent.state.terminal === undefined)) throw new Error("Terminal execution records require an existing original terminal screen and native run.");
@@ -1654,6 +1659,8 @@ export async function decideArtifactProposal(ctx: TenantContext, proposalId: str
     : applyArtifactPatch(baseContent, proposal.patch);
   if (proposedContent.kind === "screen" && (proposedContent.state.terminal !== undefined || proposedContent.state.terminalExecutions !== undefined)) throw new Error("Generic proposals cannot mint terminal execution state.");
   if (proposedContent.kind === "spreadsheet") proposedContent = guardSpreadsheetCellLineage(baseContent.kind === "spreadsheet" ? baseContent : null, proposedContent);
+  // Proposal acceptance is not a deterministic calculation receipt either.
+  assertValuationRevisionIsRecorded(baseContent, proposedContent);
   assertArtifactContentSafe(proposedContent);
   assertResearchClaimRefsSafe(proposedContent);
   if ((proposedContent.kind === "report" || proposedContent.kind === "research") && proposedContent.blocks.some(block => block.type === "image" || block.attrs.sourceArtifactId || block.attrs.sourceAttachmentId)) {
