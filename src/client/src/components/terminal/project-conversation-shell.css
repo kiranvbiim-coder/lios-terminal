@@ -69,3 +69,87 @@
 .lios-project-experience-shell .lios-conversation-composer-actions {
   border-top: 0 !important;
 }
+
+/*
+ * WS-08 — respond to the *conversation container*, not just browser width.
+ * At 768px desktop browser width the 260px project navigation still occupies
+ * space: a viewport-only mobile breakpoint does not protect Chat/Artifacts.
+ *
+ * The actual Chat/Artifact state is owned by ProjectExperienceShell; the
+ * non-focused Artifact stays mounted (and keeps unsaved drafts) while hidden.
+ * "Open artifact" is available in the visible Chat header, and focus mode
+ * renders a distinct flex-1 <aside> without .lios-artifact-sidecar.
+ */
+@container conversation (max-width: 899px) {
+  .lios-artifact-sidecar {
+    display: none !important;
+  }
+
+  .lios-project-chat-content,
+  .lios-project-chat-surface > div:first-child {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@container conversation (min-width: 900px) {
+  /* Replace the later fixed 348px shell width with a bounded flexible split. */
+  .terminal-root .lios-artifact-sidecar,
+  .lios-artifact-sidecar {
+    /* WS-36 may set a measured, keyboard-resizable width. Keep the responsive fallback. */
+    width: var(--lios-sidecar-width, clamp(20rem, 36%, 28rem)) !important;
+    max-width: 45%;
+    min-width: 0;
+  }
+}
+
+@container conversation (max-width: 560px) {
+  /* The title and 2–3 context actions previously competed for one clipped
+     44px row. All controls remain in normal flow and keyboard reachable. */
+  .terminal-root .lios-project-experience-shell .lios-conversation-header,
+  .lios-project-experience-shell .lios-conversation-header {
+    flex-wrap: wrap !important;
+    height: auto !important;
+    min-height: 44px;
+    align-content: center;
+    padding-block: 8px;
+  }
+
+  .lios-project-experience-shell .lios-conversation-header > div:first-child {
+    flex: 1 0 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .lios-project-experience-shell .lios-conversation-header > button {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .lios-project-experience-shell .lios-conversation-composer {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+@container conversation (max-width: 420px) {
+  /* Keep Sources, Tools, Voice and Send visible at 320px and 200% zoom
+     without inventing a duplicate composer or swallowing typed drafts. */
+  .lios-project-experience-shell .lios-conversation-composer-actions {
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: 6px;
+  }
+
+  .lios-project-experience-shell .lios-conversation-composer-actions > .flex-1 {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .lios-project-experience-shell .lios-conversation-composer-actions > button {
+    flex: 0 0 auto;
+  }
+}

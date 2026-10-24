@@ -1474,3 +1474,52 @@ body:has([data-testid='connect-data']) :is(
   font-size: .75rem !important;
   line-height: 1.4;
 }
+
+/* WS-08 — Workbench chrome responds to actual Dockview PANE width.
+ * Do not hide Close, Maximize/Restore, Focus or analytical context controls;
+ * make the existing clipped header horizontally reachable, including Tab
+ * auto-scrolling, without changing Dockview layout persistence or pane count.
+ */
+.terminal-root [data-testid^='workspace-pane-'] {
+  container-type: inline-size;
+  container-name: lios-workspace-chrome;
+}
+
+@container lios-workspace-chrome (max-width: 480px) {
+  .terminal-root .lios-pane-header {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 8px;
+    scrollbar-width: thin;
+  }
+
+  .terminal-root .lios-pane-header > :last-child {
+    flex: 0 0 auto;
+  }
+
+  .terminal-root .lios-pane-header .lios-pane-title {
+    min-width: 72px;
+    flex: 0 1 auto;
+  }
+}
+
+/* The existing mobile/focused fallback exposes all panes in a horizontally
+ * scrollable tablist, not by dropping any pane from the workspace model.
+ * Keep the active button readable at high zoom and keyboard-scrollable.
+ */
+.terminal-root .lios-mobile-pane-switcher {
+  min-width: 0;
+  max-width: 100%;
+  scroll-padding-inline: 8px;
+  overscroll-behavior-inline: contain;
+}
+.terminal-root .lios-mobile-pane-switcher button {
+  min-height: 32px;
+  flex-shrink: 0;
+  font-size: var(--lios-ux-caption-type, .6875rem);
+}
+.terminal-root .lios-mobile-pane-switcher button:focus-visible {
+  outline: 2px solid var(--lios-brand) !important;
+  outline-offset: -2px !important;
+}
