@@ -796,7 +796,7 @@ async function runProjectChat(
             }
           },
         }));
-        if (!result.cancelled && !result.awaitingApproval) {
+        if (!result.cancelled && !result.awaitingApproval && !held.errored && held.done?.status !== "failed") {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
           const refreshSpec = {
