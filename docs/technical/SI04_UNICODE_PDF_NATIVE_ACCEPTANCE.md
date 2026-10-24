@@ -27,6 +27,43 @@ The test uses no user Project, login, local data, provider, network API or secre
 
 Expected receipt: status **native-pdf-rendered**, source **synthetic**, PDF byte length, `pdfSha256`, `pdfRetained` and **visualAcceptance: not_tested**. The offline verifier checks **two separate gates**: (1) original PDF bytes, SHA-256 and receipt integrity, then (2) real PDF text extraction using the existing pdf-parse package. The extraction gate requires the exact Tamil title, Hindi phrase, Tamil table heading and three synthetic source citations; it rejects an unreadable or incorrectly encoded PDF even when its hash matches the receipt. A successful extraction still leaves **visualAcceptance: not_tested** because page appearance, combining marks, chart placement and raster images require actual human/visual inspection. An error, extraction mismatch, hash mismatch or nonzero exit code blocks the release.
 
+## Single-command installed acceptance (preferred)
+
+From the **src** directory of the same LiOS checkout, with dependencies already
+installed and an **actual packaged LiOS executable** already present, run
+the following on macOS (substitute the actual app path and choose a fresh
+absolute evidence directory that does not yet exist):
+
+```bash
+npm run acceptance:si04-packaged -- \
+  --app="/Applications/LiOS Intelligence Terminal.app/Contents/MacOS/LiOS Intelligence Terminal" \
+  --out="/tmp/lios-si04-native-acceptance-1"
+```
+
+On Windows, supply the installed LiOS .exe and a fresh absolute Windows
+evidence directory using the same --app= and --out= arguments. The runner
+passes no AI/API credentials to the child process, refuses source-only Electron
+(the packaged flag must be true), validates the source application's packaged
+`app.asar`, and requires a real renderer-generated PDF.
+
+The command creates a new private evidence directory and writes:
+
+- **smoke-receipt.json** — native synthetic renderer output and PDF checksum
+- **synthetic.pdf** — exact Chromium-rendered PDF for independent human inspection
+- **native-acceptance.json** — SHA-256 of the packaged executable and app.asar,
+  verified PDF bytes and actual Tamil/Hindi text extraction, with
+  `visualAcceptance: not_tested` and `productJourneyAcceptance: not_tested`
+
+It rejects missing or non-packaged binaries, tampered PDFs, missing source
+citations, missing Indic text, and existing output directories. It neither
+builds the app nor modifies the customer's workspace. **Code-signing identity,
+notarization, installer cleanliness, chart visual parity and professional
+Report save/edit/reopen acceptance are still separate P14 gates.**
+
+The earlier direct `--unicode-pdf-smoke` command remains available for
+targeted troubleshooting; prefer the combined acceptance command for evidence
+that can be attached to an exact release-candidate review.
+
 ## Manual installed-app acceptance, still required
 
 1. Install an exact signed candidate on a clean Mac and Windows. Check login, restart, and reopening a saved Research/Report Artifact.
