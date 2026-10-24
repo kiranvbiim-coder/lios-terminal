@@ -14,7 +14,7 @@ import {
 } from "@/lib/useArtifacts";
 import type { ArtifactContent, ArtifactExportPlan, ArtifactRefreshSpec, SpreadsheetCellDiff } from "@shared/artifactContracts";
 import type { ProjectSession } from "@/lib/useProjects";
-import { colIndexToLetters, parseCellRef } from "@/lib/spreadsheetEngine";
+import { colIndexToLetters } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
 import { semanticArtifactComparisonLabel } from "@/lib/artifactSemanticComparisonSummary";
 import { exportArtifactLocal } from "@/lib/artifactExport";
