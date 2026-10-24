@@ -32,7 +32,7 @@ test("the resume control is request-bound, hidden while busy, explicit-click onl
   const checkpointCard = source("components/terminal/ResearchCheckpointCard.tsx");
   assert.match(checkpointCard, /data-testid="agent-run-resume"/);
   assert.match(checkpointCard, /data-request-id=\{requestId\}/);
-  assert.match(trace, /if \(!events\.length && !busy && !resumableRequestId\) return null;/);
+  assert.match(trace, /if \(!events\.length && !busy && !resumableRequestId && !checkpointLookupError\) return null;/);
 
   const hook = source("lib/useInterruptedAgentRun.ts");
   assert.match(hook, /resumeConversationRun\(gateway, requestId, onEvent\)/);
@@ -48,6 +48,8 @@ test("the resume control is request-bound, hidden while busy, explicit-click onl
   assert.match(hook, /resumableRequestId: offered, onResume: resume/);
   assert.match(hook, /resumableCheckpointView\(history.data, offered\)/);
   assert.match(hook, /history.isFetching \|\| history.isError/);
+  assert.match(hook, /checkpointLookupError: !busy && chatId !== null && history.isError/);
+  assert.match(hook, /onRetryCheckpointLookup: \(\) =>/);
   assert.match(hook, /\.catch\(\(error: unknown\) =>/);
   assert.match(hook, /shell.busyRef.current = false;/);
 });
