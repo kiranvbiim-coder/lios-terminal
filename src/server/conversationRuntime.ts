@@ -176,7 +176,7 @@ import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 import { conversationRuns } from "./conversationRunRegistry";
 import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool, preflightGovernedExternalMcpTool } from "./governedExternalMcpTool";
 import { listSourceConnections } from "./sourceConnectionService";
-import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
+import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, McpAgentReviewEvidenceIndex, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
 import { codingConversationToolDescriptors } from "./acp/coding-tools";
 import { listInstalledSkillAdapters } from "./skillRuntime";
@@ -4494,7 +4494,7 @@ async function executeAgentLoop(
   let assertReviewResearchCurrent: (() => Promise<void>) | undefined;
   // Never journal, checkpoint or expose raw external MCP observations. They
   // exist only in the current run and are re-authorized before AI release.
-  const mcpEvidenceByStep = new Map<string, McpAgentEvidenceCapture>();
+  const mcpEvidenceByStep = new McpAgentReviewEvidenceIndex();
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
@@ -4575,7 +4575,7 @@ async function executeAgentLoop(
       if (input.scope === "project" && input.projectId
         && input.request.transmissionPolicy.allowResourceReferences
         && sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
-        const candidates = completedSteps.map(step => mcpEvidenceByStep.get(step.id)).filter((value): value is McpAgentEvidenceCapture => value !== undefined);
+        const candidates = mcpEvidenceByStep.fromCompletedSteps(completedSteps.map(step => step.id));
         if (candidates.length) {
           const connections = await listSourceConnections(input.tenant.userId);
           const activePolicy = await activeResearchSourcePolicy(input);
@@ -4623,6 +4623,9 @@ async function executeAgentLoop(
       } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
+      // Clear a prior attempt before approval or dispatch: if retry fails,
+      // an older success can never reappear in a later AI evidence review.
+      mcpEvidenceByStep.beginAttempt(step.id);
       const descriptor = getConversationTool(step.toolId);
       const externalDispatch = descriptor?.sideEffect === "external";
       let dispatchIntentPersisted = false;
@@ -4751,7 +4754,7 @@ async function executeAgentLoop(
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);
         // Only after the governed registry validated the result AND committed
         // the external dispatch may it become review-eligible, never before.
-        if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
+        mcpEvidenceByStep.recordCompleted(step.id, pendingMcpEvidence);
         return { kind: "ok", summary: result.summary, deterministic: result.deterministic, sourceRefs: result.sourceRefs };
       } catch (error) {
         if (dispatchIntentPersisted && !dispatchNoEffectPersisted) return { kind: "outcome_unknown" };
@@ -4763,6 +4766,9 @@ async function executeAgentLoop(
       }
     },
     onPlan: async (steps) => {
+      // New/revised plans may reuse step IDs; evidence from the previous
+      // plan is not current even when the textual tool label is identical.
+      mcpEvidenceByStep.resetForPlan();
       agentPlan = planFromSteps(steps);
       await emit(input, { ...eventBase(request.requestId), type: "plan", plan: agentPlan });
     },

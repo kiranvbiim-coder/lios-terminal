@@ -3,7 +3,7 @@ import test from "node:test";
 import type { SourceConnection } from "@shared/schema";
 import {
   captureMcpAgentEvidence, isMcpEvidenceCurrent,
-  renderMcpAgentReviewEvidence, mcpEvidencePolicyFingerprint, mcpEvidenceMatchesSelectedRefs,
+  renderMcpAgentReviewEvidence, mcpEvidencePolicyFingerprint, mcpEvidenceMatchesSelectedRefs, McpAgentReviewEvidenceIndex,
 } from "./mcpAgentEvidence";
 
 function connection(
@@ -106,4 +106,33 @@ test("MCP evidence obeys active Research Artifact only_refs and remains unavaila
   assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set()), false);
   assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set(["unrelated-source"])), false);
   assert.equal(mcpEvidenceMatchesSelectedRefs(capture, new Set(["mcp-server:source:41"])), true);
+});
+
+
+test("MCP review never inherits evidence from a retried step, failed attempt or replanned step identity", () => {
+  const index = new McpAgentReviewEvidenceIndex();
+  const first = captureMcpAgentEvidence(connection(), 77, "quotes.read", output);
+  const later = captureMcpAgentEvidence(connection(), 77, "quotes.read", {
+    content: [{ type: "text", text: "AAPL price 128, later authorized observation" }],
+  });
+  assert.ok(first);
+  assert.ok(later);
+  index.recordCompleted("step-1", first);
+  assert.deepEqual(index.fromCompletedSteps(["step-1", "not-completed"]), [first]);
+
+  // A new attempt starts before approval, so even a denied or failed retry
+  // has no previous successful observation to present to an AI model.
+  index.beginAttempt("step-1");
+  assert.deepEqual(index.fromCompletedSteps(["step-1"]), []);
+  index.recordCompleted("step-1", undefined);
+  assert.deepEqual(index.fromCompletedSteps(["step-1"]), []);
+  index.recordCompleted("step-1", later);
+  assert.deepEqual(index.fromCompletedSteps(["step-1"]), [later]);
+
+  // On any new plan, even the same step ID cannot resurrect old MCP text.
+  index.resetForPlan();
+  assert.deepEqual(index.fromCompletedSteps(["step-1"]), []);
+  index.recordCompleted("step-2", first);
+  assert.deepEqual(index.fromCompletedSteps(["step-1"]), []);
+  assert.deepEqual(index.fromCompletedSteps(["step-2"]), [first]);
 });

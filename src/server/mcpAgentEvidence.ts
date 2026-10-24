@@ -37,6 +37,35 @@ export interface McpAgentEvidenceCapture {
   text: string;
 }
 
+/**
+ * Per-run MCP observations are usable only for the currently completed
+ * attempt in the currently active plan. A retry, denied attempt or replan
+ * must not inherit an earlier successful tool's untrusted evidence.
+ * This index is ephemeral and is never serialized to the agent checkpoint.
+ */
+export class McpAgentReviewEvidenceIndex {
+  private readonly byStep = new Map<string, McpAgentEvidenceCapture>();
+
+  resetForPlan(): void {
+    this.byStep.clear();
+  }
+
+  beginAttempt(stepId: string): void {
+    this.byStep.delete(stepId);
+  }
+
+  recordCompleted(stepId: string, capture: McpAgentEvidenceCapture | undefined): void {
+    if (capture) this.byStep.set(stepId, capture);
+  }
+
+  fromCompletedSteps(stepIds: readonly string[]): McpAgentEvidenceCapture[] {
+    return stepIds.flatMap(stepId => {
+      const capture = this.byStep.get(stepId);
+      return capture ? [capture] : [];
+    });
+  }
+}
+
 /** Hash only non-secret source configuration and its generation, never the credential value. */
 export function mcpEvidencePolicyFingerprint(connection: SourceConnection): string {
   return crypto.createHash("sha256").update(JSON.stringify({
