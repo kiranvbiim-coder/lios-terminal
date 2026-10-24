@@ -14,6 +14,29 @@ import { requiresChromiumUnicodePdf } from "../client/src/lib/artifactUnicodePdf
 import { currentPermittedProjectSearchDocuments } from "./p7ProjectIntelligenceStore";
 import { composeResearchSources } from "./researchSourceComposition";
 import { matchesRecordedExcerptFingerprint } from "./langalphaExcerptProvenance";
+/**
+ * The quote's saved fingerprint checks the editable Research Artifact bytes,
+ * not whether those bytes came from its claimed P7 source. Re-check the actual
+ * current entitled document before copying quotes into a professional report.
+ *
+ * P7 search normalizes whitespace and may add only boundary ellipsis markers
+ * when clipping a long document excerpt. Do not allow internal ellipsis to
+ * turn separate source phrases into a fabricated joined quotation.
+ */
+export function recordedQuoteAppearsInSource(quote: string, sourceBody: string): boolean {
+  if (typeof quote !== "string" || typeof sourceBody !== "string") return false;
+  const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
+  const text = compact(quote);
+  const body = compact(sourceBody);
+  if (text.length < 2 || !body.length) return false;
+  if (body.includes(text)) return true;
+  const withoutSearchClipping = text.replace(/^…/, "").replace(/…$/, "").trim();
+  return withoutSearchClipping.length >= 2
+    && withoutSearchClipping !== text
+    && body.includes(withoutSearchClipping);
+}
+
+
 import { generateReportPack } from "./reportEngine";
 import { projectReportSections } from "./reportSectionProjection";
 import { tenantContext } from "./tenantContext";
@@ -215,11 +238,21 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
     if (entitled.blocked.length || entitled.included.length !== selected.length) {
       throw new Error("Research report source rights no longer permit AI assistance.");
     }
-    // Quote source hashes are mandatory, not just the source ref string.
+    // Hashing the editable quote again cannot prove that its words are in
+    // the source. Only the CURRENT owner-accessible P7 document can do that.
+    // Fail closed even when a changed quote carries a newly forged fingerprint.
     for (const quote of source.blocks.filter(block => block.type === "quote")) {
       const doc = current.get(String(quote.attrs.sourceRef));
       if (!doc || quote.attrs.contentHash !== doc.contentHash) {
         throw new Error("Research report quote source revision changed; refresh Research Artifact first.");
+      }
+      if ((quote.attrs.documentId !== undefined && quote.attrs.documentId !== doc.id)
+        || (quote.attrs.evidenceVersionRef !== undefined
+          && quote.attrs.evidenceVersionRef !== doc.sourceRef + "@" + doc.contentHash)) {
+        throw new Error("Research report quote source identity or version reference changed.");
+      }
+      if (!recordedQuoteAppearsInSource(quote.text, doc.body)) {
+        throw new Error("Research report quote is not a recorded passage of the current permitted source.");
       }
     }
     const providerAllowed = (providerId: string | null, allow: readonly string[], deny: readonly string[]) =>

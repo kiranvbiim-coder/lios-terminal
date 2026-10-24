@@ -18,7 +18,8 @@ const { createArtifact, getArtifact, getArtifactVersion, createArtifactVersion, 
 const { researchArtifactContentSchema, reportArtifactContentSchema } = await import("@shared/artifactContracts");
 const { fingerprintRecordedExcerpt } = await import("./langalphaExcerptProvenance");
 const { researchReportFromArtifactTool, researchReportFromArtifactInputSchema,
-  researchReportFromArtifactOutputSchema, buildReportFromResearchArtifact } = await import("./researchReportFromArtifactTool");
+  researchReportFromArtifactOutputSchema, buildReportFromResearchArtifact,
+  recordedQuoteAppearsInSource } = await import("./researchReportFromArtifactTool");
 const { getArtifactExportPlan } = await import("./artifactExport");
 const { prepareReportDocxDownload } = await import("./reportDocxDownload");
 const { prepareReportPdfDownload } = await import("./reportPdfDownload");
@@ -274,6 +275,51 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     assert.equal(v3.version, 3);
     await assert.rejects(prepareReportPdfDownload(ctx, createdId, 3),
       /Cannot render Unicode professional PDF/);
+  });
+
+  await t.test("fails closed if an editable Research quote is re-fingerprinted but does not occur in P7 source", async () => {
+    // A self-consistent SHA-256 on a user-edited quote is not source custody.
+    const forgedQuote = "Survey interviews recorded a 900% attendance increase with no delays.";
+    assert.equal(recordedQuoteAppearsInSource(quoteText, sourceBody), true);
+    assert.equal(recordedQuoteAppearsInSource("Survey interviews  recorded improved attendance", sourceBody), true);
+    assert.equal(recordedQuoteAppearsInSource("…" + quoteText + "…", sourceBody), true);
+    assert.equal(recordedQuoteAppearsInSource(forgedQuote, sourceBody), false);
+    assert.equal(recordedQuoteAppearsInSource("Survey interviews…transport delays", sourceBody), false);
+
+    const fakeContent = researchArtifactContentSchema.parse({
+      ...researchContent,
+      blocks: researchContent.blocks.map(block => block.id === "quote-0"
+        ? { ...block, text: forgedQuote,
+            attrs: { ...block.attrs, ...fingerprintRecordedExcerpt(forgedQuote) } }
+        : block),
+    });
+    const fakeArtifact = await createArtifact(ctx, {
+      projectId: project.id, title: "Edited research quotation requiring review",
+      content: fakeContent, sourceRefs: [ref], dependencyRefs: [ref],
+    });
+    await assert.rejects(
+      () => researchReportFromArtifactTool.invoke(
+        { ...input, artifactId: fakeArtifact.artifact.id },
+        new AbortController().signal, { ...call, requestId: crypto.randomUUID() },
+      ), /not a recorded passage of the current permitted source/,
+    );
+
+    const forgedIdentity = researchArtifactContentSchema.parse({
+      ...researchContent,
+      blocks: researchContent.blocks.map(block => block.id === "quote-0"
+        ? { ...block, attrs: { ...block.attrs, documentId: "p7doc:incorrect-source" } }
+        : block),
+    });
+    const wrongIdArtifact = await createArtifact(ctx, {
+      projectId: project.id, title: "Edited research quote source ID",
+      content: forgedIdentity, sourceRefs: [ref], dependencyRefs: [ref],
+    });
+    await assert.rejects(
+      () => researchReportFromArtifactTool.invoke(
+        { ...input, artifactId: wrongIdArtifact.artifact.id },
+        new AbortController().signal, { ...call, requestId: crypto.randomUUID() },
+      ), /quote source identity or version reference changed/,
+    );
   });
 
   await t.test("refuses cross-Project, revoked, stale, read-only and unapproved-source report attempts", async () => {
