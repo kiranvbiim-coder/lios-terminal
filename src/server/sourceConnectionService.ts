@@ -4,7 +4,7 @@ import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getConnectorById, getConnectorRegistrySnapshot, getUserScopedConnectorRegistrySnapshot, testConnectorCredential } from "./connectorService";
 import { hasConnectorProbe, probeConnector } from "./connectorVerification";
 import "./connectorProbes";
-import { fetchWithEndpointPolicy, normalizeSourceConfig, validateSourceEndpoint } from "./sourceConnectionPolicy";
+import { fetchWithEndpointPolicy, normalizeSourceConfig, validateMcpSourceEndpoint, validateSourceEndpoint } from "./sourceConnectionPolicy";
 import { resolveCredential } from "./credentialVault";
 import { discoverDatabaseSchema, executeReadOnlyQuery, profileDatabaseTable, testDatabaseConnection, type DatabaseColumn, type DatabaseQueryResult, type DatabaseSourceConfig } from "./databaseConnector";
 import { fetchApiSource, mapApiRecordsToContract, type ApiFetchResult, type ApiMappedResult, type ApiSourceConfig } from "./apiConnector";
@@ -30,7 +30,9 @@ async function assertConnectorConfig(input: SourceConnectionConfig): Promise<voi
   if (input.sourceType === "private_api" || input.sourceType === "cloud_storage" || input.sourceType === "mcp") {
     const endpoint = input.config.endpoint;
     if (typeof endpoint !== "string") throw new Error("An endpoint is required for this source type.");
-    const policy = await validateSourceEndpoint(endpoint);
+    const policy = input.sourceType === "mcp"
+      ? await validateMcpSourceEndpoint(endpoint)
+      : await validateSourceEndpoint(endpoint);
     if (!policy.valid) throw new Error(`Endpoint rejected: ${policy.reason}.`);
   }
   if (input.sourceType === "file") {

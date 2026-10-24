@@ -511,3 +511,11 @@ LiOS adapts SEC URL-construction mechanisms from `dgunning/edgartools@4e817de7bf
 LiOS adapts the bounded mathematical mechanism `effective_number_assets` from `skfolio/skfolio@eb73a4cfe3136d5615a6047060705695d4462588`, source `src/skfolio/measures/_measures.py` (blob `6451c83f92b80af50cdc9f8eca275da4bd635af4`), with tests referenced from `tests/test_measures/test_measures.py` (blob `b3dc127bce043411449e8c15be833a16e2246ff1`). Copyright (c) 2023–2026 the skfolio developers; full original BSD-3-Clause license retained at `third_party/licenses/skfolio-BSD-3-Clause.txt`. 
 
 The pure TypeScript `src/server/skfolioEffectiveDiversification.ts` implements inverse Herfindahl concentration using already-recorded same-date long exposures; `src/server/portfolioAnalytics.ts` exposes the optional effective asset count and observation date through the existing portfolio analytics route. It refuses missing/stale/non-finite quotes, negative or invalid position sizes. This metric uses unverified recorded source closes, does not imply verified current pricing, and imports no Python skfolio runtime, optimizer, covariance model, new market provider, trading authority or data store. LiOS P6/P11 risk and portfolio authorities remain canonical; no full donor exhaustion or SP-05 packaged shipping claim.
+
+## MCP TypeScript SDK v2.3.1 (client)
+
+- Upstream: https://github.com/modelcontextprotocol/typescript-sdk
+- Selected source: `v2.3.1` at commit `fcef852f6cdafea07f36cf6fae69b37c8adf85be`.
+- Dependency: `@modelcontextprotocol/client@2.3.1` and its locked `@modelcontextprotocol/core@2.3.1` runtime dependency.
+- License: Apache License, Version 2.0 (upstream client and core). Preserve the distributed npm package license and applicable notices when packaging or redistributing.
+- LiOS use: official MCP client protocol/Streamable HTTP transport, wrapped by existing P5/P13 network admission, credential custody, tool permissions, cancellation and source limits. The upstream client is **not** a new LiOS store, agent, execution authority or data-license grant. Real MCP server/installed desktop qualification remains separately required.
