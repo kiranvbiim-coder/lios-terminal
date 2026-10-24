@@ -1,6 +1,7 @@
 // Direct node:tsx/server-rendered tests use the classic JSX transform.
 import * as React from "react";
 import { useMemo, useState } from "react";
+import ChatTableBlock from "./ChatTableBlock";
 import ChatCodeBlock from "./ChatCodeBlock";
 import {
   parseChatMarkdown,
@@ -122,28 +123,7 @@ function renderBlocks(blocks: readonly Block[], sources: readonly ChatCitationSo
       case "quote":
         return <blockquote key={index} className="my-2 border-l-2 border-amber-300/40 pl-3 text-muted-foreground">{renderBlocks(block.c, sources, onSelect, false, streaming)}</blockquote>;
       case "table":
-        return (
-          <div key={index} role="region" tabIndex={0} aria-label="Table" className="my-3 max-w-full overflow-x-auto rounded-lg border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50">
-            <table className="w-full border-collapse font-ui text-[13px] leading-5">
-              <thead className="bg-white/[0.04]">
-                <tr>
-                  {block.head.map((cell, column) => (
-                    <th key={column} scope="col" className={`border-b border-border/60 px-3 py-2 font-semibold text-foreground ${ALIGN_CLASS[block.align[column] ?? "left"]}`}>{renderInline(cell, sources, onSelect)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {block.rows.map((row, rowIndex) => (
-                  <tr key={rowIndex} className="border-b border-border/30 last:border-b-0">
-                    {row.map((cell, column) => (
-                      <td key={column} className={`px-3 py-2 align-top tabular-nums ${ALIGN_CLASS[block.align[column] ?? "left"]}`}>{renderInline(cell, sources, onSelect)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
+        return <ChatTableBlock key={index} table={block} streaming={streaming} renderCell={(nodes) => renderInline(nodes, sources, onSelect)} />;
       case "hr":
         return <hr key={index} className="my-3 border-border/50" />;
     }
