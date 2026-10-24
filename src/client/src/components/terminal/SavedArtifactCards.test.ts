@@ -128,3 +128,14 @@ test("WS-34 exact preview custody rejects foreign Project, Quick Chat, wrong ver
   assert.equal(exactSavedArtifactDetail(ref, quick, null, 43), null);
   assert.equal(exactSavedArtifactDetail(ref, quick, null, null), null, "Temporary may not open saved-work content");
 });
+
+test("WS-34 canonical kind overrides contradictory saved-message display metadata only after exact authorization", () => {
+  const ref = { id, version: 4, title: "Saved object", kind: "chart" };
+  const actual = describeSavedArtifactCard(ref, { title: "Updated", kind: "report", headVersion: 8 }, "found", "Report · 1 section", "report");
+  assert.equal(actual.kindLabel, "Report");
+  assert.equal(actual.version, 4);
+  assert.equal(actual.preview, "Report · 1 section");
+  const pending = describeSavedArtifactCard(ref, { title: "Updated", kind: "report", headVersion: 8 }, "pending", "Fictional", null);
+  assert.equal(pending.kindLabel, "Chart", "no P4 content has been authorized; retain the saved message kind snapshot");
+  assert.equal(pending.preview, null);
+});
