@@ -1,11 +1,29 @@
 import type { SourceRegistryGroup, SourceRegistryItem } from "@shared/sourceRegistry";
 
-/** Display-only filtering of P1 canonical source registry records. Never confers permissions. */
+/**
+ * Display-only search of the canonical SourceRegistry returned for this user.
+ * Search never enables, configures, transmits or authorizes any source.
+ */
 export function filterSourceCatalogue(groups: readonly SourceRegistryGroup[], query: string, connectedOnly: boolean): SourceRegistryItem[] {
-  const term = query.trim().toLocaleLowerCase();
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
   return groups.flatMap(group => group.items.filter(item => {
     if (connectedOnly && !item.connected) return false;
-    if (!term) return true;
-    return [item.name, item.detail, item.state, item.sourceType, group.title].some(value => value.toLocaleLowerCase().includes(term));
+    if (!terms.length) return true;
+    const searchable = [
+      item.name,
+      item.detail,
+      item.connectorId,
+      item.sourceType,
+      item.category,
+      item.state.replaceAll("_", " "),
+      group.title,
+      group.description,
+      ...item.capabilities.flatMap(capability => [
+        capability.contractFamily,
+        capability.coverage ?? "",
+        ...(capability.fields ?? []),
+      ]),
+    ].join(" ").toLocaleLowerCase();
+    return terms.every(term => searchable.includes(term));
   }));
 }
