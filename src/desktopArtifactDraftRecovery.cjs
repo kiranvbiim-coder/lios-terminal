@@ -33,7 +33,15 @@ function storeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs
   const { owner, artifactId } = normalizeIdentity(input);
   if (!Number.isSafeInteger(input.baseVersion) || input.baseVersion < 1 || typeof input.contentHash !== "string" || !/^[a-f0-9]{64}$/i.test(input.contentHash)
     || !input.content || typeof input.content !== "object" || Array.isArray(input.content) || !ALLOWED_KINDS.has(input.content.kind)) throw new Error("Invalid Artifact draft revision.");
-  const payload = JSON.stringify({ schemaVersion: 1, owner, artifactId, baseVersion: input.baseVersion, contentHash: input.contentHash, content: input.content });
+  // A distinct server-authorized editor may replace a checkpoint for the
+  // SAME saved revision. Bind explicit discard to the actual encrypted file
+  // generation, not only to the shared P4 baseline version and content hash.
+  const current = readProtectedArtifactDraft({ root, safeStorage, input, fileSystem, platform });
+  if (current && (!input.expectedCheckpointId || current.checkpointId !== input.expectedCheckpointId)) {
+    throw new Error("Protected Artifact checkpoint was changed by another editor. Recover or discard it explicitly before writing.");
+  }
+  const checkpointId = crypto.randomUUID();
+  const payload = JSON.stringify({ schemaVersion: 1, owner, artifactId, baseVersion: input.baseVersion, contentHash: input.contentHash, checkpointId, content: input.content });
   if (Buffer.byteLength(payload, "utf8") > DRAFT_MAX_BYTES) throw new Error("Artifact draft exceeds the protected-recovery size budget.");
   const ciphertext = safeStorage.encryptString(payload);
   if (!Buffer.isBuffer(ciphertext) || ciphertext.length === 0 || ciphertext.length > ENCRYPTED_MAX_BYTES) throw new Error("Native draft encryption failed.");
@@ -45,7 +53,7 @@ function storeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs
     fileSystem.renameSync(temporary, filename);
   } finally { try { fileSystem.rmSync(temporary, { force: true }); } catch {} }
   try { fileSystem.chmodSync(filename, 0o600); } catch { /* Windows uses ACLs. */ }
-  return { protected: true };
+  return { protected: true, checkpointId };
 }
 function readProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs, platform = process.platform }) {
   requireEncryption(safeStorage, platform);
@@ -58,15 +66,17 @@ function readProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs,
   if (Buffer.byteLength(decoded, "utf8") > DRAFT_MAX_BYTES) throw new Error("Protected draft is oversized.");
   const record = JSON.parse(decoded);
   if (record?.schemaVersion !== 1 || record.owner !== owner || record.artifactId !== artifactId || !Number.isSafeInteger(record.baseVersion) || record.baseVersion < 1
-    || typeof record.contentHash !== "string" || !/^[a-f0-9]{64}$/i.test(record.contentHash) || !record.content || !ALLOWED_KINDS.has(record.content.kind)) throw new Error("Protected draft identity or contents do not match.");
-  return { baseVersion: record.baseVersion, contentHash: record.contentHash, content: record.content };
+    || typeof record.contentHash !== "string" || !/^[a-f0-9]{64}$/i.test(record.contentHash) || !record.content || !ALLOWED_KINDS.has(record.content.kind)
+    || (record.checkpointId !== undefined && (typeof record.checkpointId !== "string" || !/^[0-9a-f-]{36}$/i.test(record.checkpointId)))) throw new Error("Protected draft identity or contents do not match.");
+  return { baseVersion: record.baseVersion, contentHash: record.contentHash, ...(record.checkpointId ? { checkpointId: record.checkpointId } : {}), content: record.content };
 }
 function removeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs, platform = process.platform }) {
   requireEncryption(safeStorage, platform);
   const expected = input.expectedCheckpoint ?? input;
   if (!Number.isSafeInteger(expected.baseVersion) || expected.baseVersion < 1 || typeof expected.contentHash !== "string" || !/^[a-f0-9]{64}$/i.test(expected.contentHash)) throw new Error("Invalid checkpoint retirement identity.");
   const current = readProtectedArtifactDraft({ root, safeStorage, input, fileSystem, platform });
-  if (!current || current.baseVersion !== expected.baseVersion || current.contentHash !== expected.contentHash) return { removed: false };
+  if (!current || current.baseVersion !== expected.baseVersion || current.contentHash !== expected.contentHash
+    || (current.checkpointId !== undefined && current.checkpointId !== expected.checkpointId)) return { removed: false };
   fileSystem.rmSync(draftFile(root, input), { force: true });
   return { removed: true };
 }

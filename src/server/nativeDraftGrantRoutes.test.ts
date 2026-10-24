@@ -9,7 +9,7 @@ import express from "express";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-native-grant-route-"));
 process.env.LIMURIA_DATA_DIR = root;
-const [{ initDb, closeDb, getDb }, { users }, { createProjectChat }, { createArtifact }, { registerArtifactRoutes }, { LOCAL_TRUST_HANDOFF }, { verifyNativeDraftGrant, MAX_LIFETIME_MS }] = await Promise.all([
+const [{ initDb, closeDb, getDb }, { users }, { createProjectChat, trashProjectChat }, { createArtifact, trashArtifact, restoreTrashedArtifact }, { registerArtifactRoutes }, { LOCAL_TRUST_HANDOFF }, { verifyNativeDraftGrant, MAX_LIFETIME_MS }] = await Promise.all([
   import("./db"), import("@shared/schema"), import("./projectChatStore"), import("./artifactStore"), import("./artifactRoutes"), import("./localDesktopTrust"), import("../nativeDraftGrant.cjs"),
 ]);
 
@@ -67,6 +67,15 @@ test("native draft capabilities require authenticated immutable P4 custody and c
   assert.throws(() => verifyNativeDraftGrant(token, grant.grant, scope, grant.expiresAt));
   assert.throws(() => verifyNativeDraftGrant(token, grant.grant + "forged", scope));
   assert.ok(grant.expiresAt <= Date.now() + MAX_LIFETIME_MS);
+  // Every Electron read/write/clear re-fetches a signed grant. A formerly
+  // authorized account cannot recover source content after lifecycle revocation.
+  await trashArtifact(ctx, saved.artifact.id);
+  assert.notEqual((await post(owner.id)).status, 200, "trashed P4 Artifact cannot issue a recovery grant");
+  await restoreTrashedArtifact(ctx, saved.artifact.id);
+  assert.equal((await post(owner.id)).status, 200, "explicit restoration returns owner-controlled access");
+  await trashProjectChat(ctx, chat.id);
+  assert.notEqual((await post(owner.id)).status, 200, "trashed owning Chat revokes native draft access");
+  assert.notEqual((await post(stranger.id)).status, 200);
   delete tokenStore[LOCAL_TRUST_HANDOFF];
   assert.equal((await post(owner.id)).status, 404);
 });

@@ -20,6 +20,13 @@ export function useNativeDraftLifetime(key: string) {
 interface RecoveryState { key: string; status: Status; candidate: ProtectedArtifactDraftSnapshot | null; notice: string | null }
 const queues = new Map<string, Promise<unknown>>();
 const writeEpochs = new Map<string, number>();
+// A protected checkpoint is a generation of an unsaved draft, not merely its
+// shared P4 base revision. Only this editor's actual write or explicitly
+// recovered generation can be retired by a later save.
+const ownedCheckpointIds = new Map<string, string>();
+export function nativeDraftCheckpointScope(context: NativeArtifactDraftContext): string {
+  return nativeDraftRecoveryKey(context) + "\0" + context.baseVersion + "\0" + context.contentHash;
+}
 const epoch = (key: string) => writeEpochs.get(key) ?? 0;
 export function nativeDraftRecoveryKey(context: Pick<NativeArtifactDraftContext, "owner" | "artifactId">): string {
   return context.owner.trim().toLowerCase() + "\0" + context.artifactId;
@@ -47,15 +54,29 @@ function queueMutation<T>(key: string, action: () => Promise<T>): Promise<T> {
   void current.then(remove, remove);
   return current;
 }
-export async function clearNativeArtifactDraft(context: NativeArtifactDraftContext, lifetime: NativeDraftLifetime, expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash">): Promise<void> {
+export async function clearNativeArtifactDraft(context: NativeArtifactDraftContext, lifetime: NativeDraftLifetime, expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> & { checkpointId?: string }): Promise<boolean> {
   const native = bridge();
-  if (!native || !lifetime.active) return;
+  if (!native || !lifetime.active) return false;
   const key = nativeDraftRecoveryKey(context);
   writeEpochs.set(key, epoch(key) + 1);
-  await queueMutation(key, async () => {
-    if (!lifetime.active || !await native.artifactDraftRecoveryAvailable!() || !lifetime.active) return;
+  return queueMutation(key, async () => {
+    if (!lifetime.active || !await native.artifactDraftRecoveryAvailable!() || !lifetime.active) return false;
     const scope = await authorizedScope(context);
-    if (lifetime.active) await native.clearArtifactDraftRecovery!({ ...scope, expectedCheckpoint });
+    if (!lifetime.active) return false;
+    // The main-process encrypted store reports removed:false when another
+    // editor has advanced the checkpoint. Do not call that a successful
+    // discard: its newer unsaved data must remain protected.
+    const localGeneration = ownedCheckpointIds.get(nativeDraftCheckpointScope(context));
+    const expected = expectedCheckpoint ?? {
+      baseVersion: context.baseVersion,
+      contentHash: context.contentHash,
+      checkpointId: localGeneration,
+    };
+    const result = await native.clearArtifactDraftRecovery!({ ...scope, expectedCheckpoint: expected });
+    if (result.removed === true && localGeneration && expected.checkpointId === localGeneration) {
+      ownedCheckpointIds.delete(nativeDraftCheckpointScope(context));
+    }
+    return result.removed === true;
   });
 }
 export function matchesNativeArtifactDraft(candidate: ProtectedArtifactDraftSnapshot, context: NativeArtifactDraftContext, kind: string): boolean {
@@ -128,9 +149,16 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
         if (!lease.active || scheduledEpoch !== epoch(identity)) return;
         const scope = await authorizedScope(context);
         if (!lease.active || scheduledEpoch !== epoch(identity)) return;
-        await native.writeArtifactDraftRecovery!({ ...scope, content: draft });
-      }).catch(() => {
-        if (lease.active && scheduledEpoch === epoch(identity)) setState(current => current.key === key ? { ...current, status: "error", notice: "Protected draft checkpoint failed. Save your Artifact revision to protect the work." } : current);
+        const written = await native.writeArtifactDraftRecovery!({ ...scope, content: draft, expectedCheckpointId: ownedCheckpointIds.get(nativeDraftCheckpointScope(context)) });
+        if (written.protected === true && typeof written.checkpointId === "string") {
+          ownedCheckpointIds.set(nativeDraftCheckpointScope(context), written.checkpointId);
+        }
+      }).catch(cause => {
+        const otherEditor = cause instanceof Error && /checkpoint was changed by another editor/i.test(cause.message);
+        const notice = otherEditor
+          ? "Another window has a newer protected draft for this Artifact. Your local edits remain unsaved. Save a canonical revision or reopen protected recovery to review the other checkpoint."
+          : "Protected draft checkpoint failed. Save your Artifact revision to protect the work.";
+        if (lease.active && scheduledEpoch === epoch(identity)) setState(current => current.key === key ? { ...current, status: "error", notice } : current);
       });
     }, 250);
     return () => clearTimeout(timer);
@@ -139,16 +167,31 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
     if (!context) return;
     const lease = lifetime.current;
     try {
-      const expected = candidate ? { baseVersion: candidate.baseVersion, contentHash: candidate.contentHash } : undefined;
-      await clearNativeArtifactDraft(context, lease, expected);
-      if (lease.active) setState(current => current.key === key ? { ...current, candidate: null, notice: "Encrypted recovery checkpoint discarded." } : current);
-    } catch { if (lease.active) setState(current => current.key === key ? { ...current, notice: "Unable to discard encrypted recovery. The saved Artifact was not changed." } : current); }
+      const expected = candidate ? { baseVersion: candidate.baseVersion, contentHash: candidate.contentHash, checkpointId: candidate.checkpointId } : undefined;
+      const removed = await clearNativeArtifactDraft(context, lease, expected);
+      if (!lease.active) return;
+      if (!removed) {
+        // A concurrent editor replaced the checkpoint, it disappeared, or
+        // the native store is unavailable. Re-read the true protected state.
+        // Never unblock this editor or claim the checkpoint was deleted.
+        setState(current => current.key === key ? {
+          ...current, status: "error", candidate: null,
+          notice: "Encrypted checkpoint was not removed. It may have changed in another window. Retry protected recovery to inspect the current state; the saved Artifact is unchanged.",
+        } : current);
+        return;
+      }
+      setState(current => current.key === key ? { ...current, candidate: null, notice: "Encrypted recovery checkpoint discarded." } : current);
+    } catch { if (lease.active) setState(current => current.key === key ? {
+      ...current, status: "error", candidate: null,
+      notice: "Unable to confirm encrypted checkpoint deletion. Retry protected recovery; the saved Artifact was not changed.",
+    } : current); }
   };
   const restore = () => {
     if (!matching || !candidate) return;
     const parsed = artifactContentSchema.safeParse(candidate.content);
     if (!parsed.success) return;
     apply.current(parsed.data as T);
+    if (context && candidate.checkpointId) ownedCheckpointIds.set(nativeDraftCheckpointScope(context), candidate.checkpointId);
     setState(current => current.key === key ? { ...current, candidate: null, notice: "Local edits restored for review. Save to create a canonical revision." } : current);
   };
   return {
