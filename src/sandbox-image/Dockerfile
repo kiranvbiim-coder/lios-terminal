@@ -15,6 +15,8 @@ COPY wheelhouse /tmp/wheelhouse
 COPY opencv-headless.lock.txt /tmp/opencv-headless.lock.txt
 COPY smoke.py /opt/lios/sandbox-smoke.py
 COPY quant_smoke.py /opt/lios/quant_smoke.py
+COPY worker_smoke.py /opt/lios/worker_smoke.py
+COPY worker-smoke/ /opt/lios/worker-smoke/
 COPY smoke-xlsx.cjs /opt/lios/smoke-xlsx.cjs
 COPY browser-inputs /tmp/browser-inputs
 COPY source-lock.json /opt/lios/browser-source-lock.json
