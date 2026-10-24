@@ -101,7 +101,7 @@ test("original P9 panel retains server-owned read status and history; native per
   assert.match(ui, /onClick=\{requestDesktopPermission\}/);
   assert.match(ui, /requestP9DesktopPermissionFromGesture\(\)/);
   assert.match(desktop, /passivePermission\(port\)/);
-  assert.match(client, /GET|fetch\(\x60\/api\/projects\/\$\{projectId\}\/automation\/notifications\?limit=100/);
+  assert.ok(client.includes('fetch(`/api/projects/${projectId}/automation/notifications?limit=100`)'), "history remains on canonical owner-scoped P9 GET");
   assert.match(client, /markP9NotificationRead/);
   assert.doesNotMatch(ui, /new Notification\(|useEffect\(.*requestPermission/);
 });
