@@ -54,15 +54,14 @@ export async function streamSandboxImageArchive(
   }, timeoutMs);
   timeout.unref();
 
+  const transfer = pipeline(fs.createReadStream(archive), createGunzip(), child.stdin);
   try {
-    await Promise.all([
-      pipeline(fs.createReadStream(archive), createGunzip(), child.stdin),
-      completed,
-    ]);
+    await Promise.all([transfer, completed]);
   } catch (error) {
-    // Always await child extinction before unwinding repair or retrying.
+    // Join BOTH the child and the archive stream before repair can retry.
     child.kill("SIGKILL");
-    await completed.catch(() => undefined);
+    await Promise.allSettled([transfer, completed]);
+    if (timedOut) throw new Error("Image import exceeded its allowed deadline.");
     throw error;
   } finally {
     clearTimeout(timeout);
