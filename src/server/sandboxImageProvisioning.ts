@@ -149,8 +149,14 @@ async function engineCommand(engine: "docker" | "podman", target: string, args: 
 function status(state: SandboxImageReadiness["state"], image: string | null, reason: string, repairAction: SandboxImageReadiness["repairAction"]): SandboxImageReadiness {
   return { state, ready: state === "ready", image, reason, repairAction };
 }
-/** Packaged release is read-only. Repair imports only its hash-verified image into the explicit local engine. */
-export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadiness> {
+/** Packaged release is read-only. Repair imports only its hash-verified image into the explicit local engine.
+ * The optional trusted test runner is internal-only; user requests cannot
+ * supply engine commands or bypass the release/profile validation.
+ */
+export async function inspectSandboxImageReadiness(options: {
+  engineProbe?: typeof engineCommand;
+} = {}): Promise<SandboxImageReadiness> {
+  const probe = options.engineProbe ?? engineCommand;
   let bundle;
   try { bundle = await verifiedRelease(); }
   catch (error) { return status("integrity_failed", null, error instanceof Error ? error.message : "Sandbox release integrity failed.", "reinstall_app"); }
@@ -166,7 +172,7 @@ export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadin
     return status("incompatible", release.image, "Strict sandbox isolation is not enabled.", "reinstall_app");
   }
   try {
-    const inspected = await engineCommand(profile.engine, profile.engineTarget, ["image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", release.image]);
+    const inspected = await probe(profile.engine, profile.engineTarget, ["image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", release.image]);
     if (inspected !== `${release.image} ${release.platform}`) return status("integrity_failed", release.image, `Engine image ID/platform differs from release (${inspected}).`, "reinstall_app");
     return status("ready", release.image, "Verified packaged image ID and platform are available on the explicit local engine.", "none");
   } catch {
@@ -175,7 +181,7 @@ export async function inspectSandboxImageReadiness(): Promise<SandboxImageReadin
     // import of the signed Linux-only LiOS sandbox image.
     let engineOs: string;
     try {
-      engineOs = await engineCommand(profile.engine, profile.engineTarget, [...localSandboxEngineOsProbe(profile.engine)]);
+      engineOs = await probe(profile.engine, profile.engineTarget, [...localSandboxEngineOsProbe(profile.engine)]);
     } catch {
       return status("engine_unavailable", release.image, "Local container engine is unavailable or cannot report its host OS; start Docker Desktop or Podman.", "install_engine");
     }
