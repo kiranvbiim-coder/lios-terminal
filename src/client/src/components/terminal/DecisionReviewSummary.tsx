@@ -13,8 +13,8 @@ function TextItems({ values, none }: { values: string[]; none: string }) {
 
 /** A read-only authored review map; server-owned approval appears in the
  * existing DecisionApprovalInspector, and is never inferred from these fields. */
-export default function DecisionReviewSummary({ content, dirty, conflict }: {
-  content: Decision; dirty?: boolean; conflict?: boolean;
+export default function DecisionReviewSummary({ content, dirty, pending, conflict }: {
+  content: Decision; dirty?: boolean; pending?: boolean; conflict?: boolean;
 }) {
   const review = decisionReviewOverview(content);
   return <section aria-label="Decision, evidence, risks and proposed actions" data-testid="decision-review-summary" className="space-y-3 rounded-lg border border-border/50 p-3">
@@ -22,6 +22,7 @@ export default function DecisionReviewSummary({ content, dirty, conflict }: {
       <h3 className="font-ui text-[15px] font-semibold">Decision review map</h3>
       <p role="status" className="font-ui text-[12px] text-amber-200">
         {conflict ? "Revision conflict: this is the retained local draft, not the latest canonical version."
+          : pending ? "Save acknowledged; waiting for the canonical revision to refresh. No approval is implied."
           : dirty ? "Unsaved authored draft; changes are not yet in the canonical Artifact."
           : "Authored saved decision content; not an approved decision or verified evidence."}
       </p>
