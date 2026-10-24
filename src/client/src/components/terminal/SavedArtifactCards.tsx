@@ -96,6 +96,26 @@ export function savedArtifactMatchesScope(artifact: Pick<ProjectArtifactRecord, 
 }
 
 /**
+ * Fail closed when the exact saved revision, P4 identity, content-kind
+ * contract or active Chat/Project boundary fails to match. This is an
+ * additional client guard, not a replacement for server authorization.
+ */
+export function exactSavedArtifactDetail(
+  ref: SavedMessageArtifactRef,
+  candidate: ArtifactDetail | undefined,
+  projectId: number | null,
+  chatId: number | null,
+): ArtifactDetail | null {
+  if (!candidate
+    || candidate.artifact.id !== ref.id
+    || candidate.version.artifactId !== ref.id
+    || candidate.version.version !== ref.version
+    || candidate.artifact.kind !== candidate.version.content.kind
+    || !savedArtifactMatchesScope(candidate.artifact, projectId, chatId)) return null;
+  return candidate;
+}
+
+/**
  * Restores the saved-Artifact cards of an assistant message from its persisted metadata after reload/restart.
  * `onOpen` focuses the SAME canonical Artifact in the contextual panel; the panel loads it through the
  * tenant/Project access-checked Artifact query.
@@ -121,7 +141,9 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
         return res.json();
       },
       enabled: Boolean(projectId || chatId),
-      staleTime: 30_000,
+      // Never display a previous browser user's cached content on a fresh
+      // mount without a new current-session access-checked read.
+      refetchOnMount: "always" as const,
     })),
   });
   if (!refs.length || (!projectId && !chatId)) return null;
@@ -130,13 +152,8 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
     const query = exact[index];
     // Query caches and returned documents still get an exact identity, version and
     // ownership comparison before displaying a content-derived sentence.
-    const detail = query?.data
-      && query.data.artifact.id === ref.id
-      && query.data.version.artifactId === ref.id
-      && query.data.version.version === ref.version
-      && query.data.artifact.kind === query.data.version.content.kind
-      && savedArtifactMatchesScope(query.data.artifact, projectId, chatId)
-      ? query.data : undefined;
+    const detail = query?.isFetchedAfterMount && !query.isFetching && !query.isError
+      ? exactSavedArtifactDetail(ref, query.data, projectId, chatId) : null;
     const live = fromList ?? (detail ? { title: detail.artifact.title, kind: detail.artifact.kind, headVersion: detail.artifact.headVersion } : undefined);
     const wrongIdentityOrScope = Boolean(query?.data) && !detail;
     const lookup = live ? "found" : wrongIdentityOrScope || query?.isError ? "missing" : "pending";
