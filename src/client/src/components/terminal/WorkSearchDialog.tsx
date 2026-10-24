@@ -6,6 +6,7 @@ import { workSearchResponseSchema, type WorkSearchResult } from "@shared/workSea
 interface Props {
   open: boolean;
   onClose: () => void;
+  returnFocusTo: HTMLElement | null;
   onSelect: (result: WorkSearchResult) => void | Promise<void>;
 }
 
@@ -23,18 +24,16 @@ function ResultIcon({ kind }: { kind: WorkSearchResult["kind"] }) {
   return <FileText className="h-4 w-4" />;
 }
 
-export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
+export default function WorkSearchDialog({ open, onClose, onSelect, returnFocusTo }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WorkSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const returnFocus = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery("");
     setResults([]);
     setError(null);
@@ -103,7 +102,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <DialogContent className="max-w-2xl overflow-hidden rounded-2xl border border-border/70 bg-[#0b0b0b] p-0 shadow-2xl" aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }} onCloseAutoFocus={(event) => { if (returnFocusTo?.isConnected) { event.preventDefault(); returnFocusTo.focus(); } }}>
         <DialogTitle className="sr-only">Search LiOS</DialogTitle>
         <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
