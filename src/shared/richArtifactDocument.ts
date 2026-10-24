@@ -191,6 +191,48 @@ export function toTiptapDocumentProjection(raw: unknown): TiptapDocumentProjecti
   return { type: "doc", content: canonical.blocks.map(projectBlock) };
 }
 
+/**
+ * Reconcile user-inserted report blocks with their nearest recorded section.
+ * The original section IDs/titles and unresolved source refs remain untouched.
+ * New authored blocks gain section membership, never inherited citations.
+ */
+export function reconcileReportBlockSections(
+  sections: Extract<RichArtifactDocument, { kind: "report" }>["sections"],
+  previousIds: readonly string[],
+  nextIds: readonly string[],
+): Extract<RichArtifactDocument, { kind: "report" }>["sections"] {
+  const present = new Set(nextIds);
+  const previous = new Set(previousIds);
+  const result = sections.map(section => ({
+    ...section,
+    blockIds: section.blockIds.filter(id => !previous.has(id) || present.has(id)),
+  }));
+  if (!result.length) return result;
+
+  const membership = new Map<string, number>();
+  result.forEach((section, sectionIndex) => section.blockIds.forEach(id => {
+    if (present.has(id) && !membership.has(id)) membership.set(id, sectionIndex);
+  }));
+  for (let i = 0; i < nextIds.length; i++) {
+    const id = nextIds[i];
+    if (previous.has(id) || membership.has(id)) continue;
+    // Prefer the preceding live block's section. For an insertion before the
+    // first block use the following anchor, else the first existing section.
+    const left = nextIds.slice(0, i).reverse().find(other => membership.has(other));
+    const right = left ? undefined : nextIds.slice(i + 1).find(other => membership.has(other));
+    const owner = membership.get(left ?? "") ?? membership.get(right ?? "") ?? 0;
+    const destination = result[owner].blockIds;
+    if (destination.length >= 5_000) throw new Error("Report section block limit exceeded. The unsaved document is retained.");
+    const index = left && membership.get(left) === owner
+      ? destination.indexOf(left) + 1
+      : right && membership.get(right) === owner
+        ? destination.indexOf(right) : destination.length;
+    destination.splice(Math.max(0, index), 0, id);
+    membership.set(id, owner);
+  }
+  return result;
+}
+
 type DecodedBlock = { type: RichArtifactBlock["type"]; text: string; runs: RichDocumentFormatting["runs"] };
 function decodeNode(raw: unknown): DecodedBlock {
   const node = record(raw, "document node");
@@ -302,7 +344,7 @@ export function fromTiptapDocumentProjection(document: unknown, rawCanonical: un
     }
     return richDocumentBlockSchema.parse({ id, type: decoded.type, text: decoded.text, attrs: blockAttrs });
   });
-  const result = parseCanonical({ ...canonical, blocks, ...(canonical.kind === "report" ? { sections: canonical.sections.map(section => ({ ...section, blockIds: section.blockIds.filter(id => !originals.has(id) || seen.has(id)) })) } : {}) });
+  const result = parseCanonical({ ...canonical, blocks, ...(canonical.kind === "report" ? { sections: reconcileReportBlockSections(canonical.sections, canonical.blocks.map(block => block.id), blocks.map(block => block.id)) } : {}) });
   for (const { node, attrs, id } of assigned) node.attrs = { ...attrs, canonicalId: id };
   return result;
 }
