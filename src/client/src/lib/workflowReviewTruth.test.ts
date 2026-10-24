@@ -81,6 +81,8 @@ test("paused, manual and enabled schedules never invent future executions or las
   assert.equal(manual.state, "manual");
   assert.match(workflowScheduleSummary(workflow({ trigger: { type: "manual" } })), /never automatically/);
   assert.match(workflowScheduleSummary(workflow({ trigger: { type: "event", eventType: "provider_health", filters: {} } })), /permissions required/);
+  const conditional = workflowExecutionTruth(workflow({ enabled: true, trigger: { type: "event", eventType: "provider_health", filters: {} } }), undefined);
+  assert.equal(conditional.next, "Event-driven · no fixed due time");
 });
 
 test("actual P9 management route and store atomically check reviewed updatedAt only for these confirmed actions", () => {
