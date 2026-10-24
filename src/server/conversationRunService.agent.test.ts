@@ -121,8 +121,9 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
       },
     });
     const emitted = await eventsOf(requestId, user.id);
-    assert.equal(emitted.at(-1)?.type, "done");
-    assert.equal(emitted.at(-1)?.type === "done" && emitted.at(-1)?.status, "completed");
+    const terminal = emitted.at(-1);
+    assert.ok(terminal && terminal.type === "done");
+    assert.equal(terminal.status, "completed");
     const savedEvent = emitted.find((event) => event.type === "artifact");
     assert.ok(savedEvent && savedEvent.type === "artifact" && savedEvent.persistedArtifact,
       "already-written P4 must be surfaced using the normal saved Chat Artifact event");
