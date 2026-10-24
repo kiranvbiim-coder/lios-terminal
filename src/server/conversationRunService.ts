@@ -84,6 +84,7 @@ import type { TenantContext } from "./tenantContext";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
 import type { RunSummary } from "./conversationRunRegistry";
 import { retainedArtifactMessageRef } from "@shared/conversationArtifactRefs";
+import { savedChatArtifactAnswer } from "./savedChatArtifactAnswer";
 import { deriveWorkingContext, resolveWorkingContextRequest, restoreWorkingContext } from "@shared/workingContext";
 import type { WorkingContextOwner, WorkingContextResolution } from "@shared/workingContext";
 import type { WorkingContextSnapshot } from "@shared/conversationRuntime";
@@ -804,7 +805,7 @@ async function runProjectChat(
           emit({ ...cancelled, workingContext: preRun });
           return;
         }
-        if (!result.cancelled && !result.awaitingApproval) {
+        if (!result.cancelled && !result.awaitingApproval && !held.errored && held.done?.status === "completed") {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
           const refreshSpec = {
@@ -840,7 +841,18 @@ async function runProjectChat(
             emit(retainedEvent);
           }
         }
-        await transcript.recordText(result.text);
+        // A successful tool can produce a canonical P4 Artifact with no
+        // narrative text. Retain a truthful assistant card carrier instead
+        // of leaving its exact saved ID/version unreachable from Chat history.
+        // Partial, cancelled, failed and approval-paused work remains unsaved.
+        const savedAnswer = savedChatArtifactAnswer({
+          text: result.text,
+          persistedArtifactCount: persistedArtifacts.length,
+          cancelled: result.cancelled,
+          awaitingApproval: result.awaitingApproval,
+          failed: held.errored || held.done?.status !== "completed",
+        });
+        await transcript.recordText(savedAnswer ?? result.text);
 
         if (agent && result.awaitingApproval) {
           if (!result.agentPause) throw new Error("Agent approval pause is missing its live continuation state.");
@@ -931,7 +943,7 @@ async function runProjectChat(
         }
 
         // A waiting-for-approval message is transient run state. The same requestId continues after approval.
-        const saved = Boolean(result.text) && !result.cancelled && !result.awaitingApproval;
+        const saved = savedAnswer !== null;
         const workingContext = saved
           ? deriveWorkingContext({
               previous: carried,
@@ -948,7 +960,7 @@ async function runProjectChat(
         if (saved) {
           await addProjectChatMessage(context, chatId, {
             role: "assistant",
-            content: result.text,
+            content: savedAnswer!,
             metadata: {
               runtime: "p2",
               runtimeRequestId: request.requestId,

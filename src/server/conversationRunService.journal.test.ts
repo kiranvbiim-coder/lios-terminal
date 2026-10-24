@@ -9,6 +9,7 @@ import express from "express";
 import { sql } from "drizzle-orm";
 import { conversationRuntimeEventSchema, workingContextSnapshotSchema } from "@shared/conversationRuntime";
 import { artifactContentSchema, artifactRefreshSpecSchema } from "@shared/artifactContracts";
+import { savedMessageArtifactRefs } from "@shared/conversationArtifactRefs";
 import { trustManifestSchema } from "@shared/trustContracts";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 import type { ExecutionJournalRecord } from "./exec/execution-journal";
@@ -137,6 +138,12 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
         const assistant = (await listProjectChatMessages(tenant, target.id)).filter(message => message.role === "assistant").at(-1)!;
         assert.ok(Array.isArray(assistant.metadata.persistedArtifacts));
         assert.ok(assistant.metadata.persistedArtifacts.some(ref => typeof ref === "object" && ref !== null && "id" in ref && "version" in ref && ref.id === artifact.persistedArtifact?.id && ref.version === artifact.persistedArtifact?.version));
+        const reopenedRefs = savedMessageArtifactRefs(assistant.metadata);
+        const savedRef = reopenedRefs.find(ref => ref.id === artifact.persistedArtifact!.id);
+        assert.ok(savedRef, "saved message metadata resolves the exact P4 Artifact identity");
+        assert.equal(savedRef.version, artifact.persistedArtifact.version, "the saved message never advances to a later Artifact head");
+        assert.equal(savedRef.title, artifact.artifact.title);
+        assert.equal(savedRef.kind, artifact.artifact.data.kind);
     }
   });
 
@@ -152,6 +159,10 @@ test("saved Conversation Runtime turns retain encrypted terminal history across 
       assert.equal(terminal?.type === "done" ? terminal.status : null, "failed");
       assert.ok(events.some((event) => event.type === "error"));
       assert.equal(events.some((event) => event.type === "artifact" && event.persistedArtifact !== undefined), false);
+      const failedMessages = await listProjectChatMessages(tenant, chat.id);
+      assert.equal(failedMessages.filter(message =>
+        message.role === "assistant" && message.metadata.runtimeRequestId === requestId).length, 0,
+        "failed Artifact writes must never claim a durable result in Chat history");
     } finally {
       await getDb().execute(sql.raw(`DROP TRIGGER reject_auto_artifact ON project_artifacts`));
       await getDb().execute(sql.raw(`DROP FUNCTION reject_auto_artifact()`));
