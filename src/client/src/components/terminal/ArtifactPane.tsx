@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Archive, Download, FileBarChart, GitCompareArrows, GitFork, History, Link2, Maximize2, RefreshCw, RotateCcw, X } from "lucide-react";
 import {
   compareArtifactVersions, createArtifactReference, createArtifactVersion, decideArtifactProposal, forkArtifact,
-  getArtifactExportPlan, proposeArtifactChange, queryDataArtifact, setArtifactStatus, undoArtifact, useArtifact, useArtifactProposals,
+  getArtifactExportPlan, proposeArtifactChange, queryDataArtifact, setArtifactStatus, useArtifact, useArtifactProposals,
   useArtifactReferences, useArtifactVersions, useInvalidateArtifacts,
   restoreArtifactRevision,
   useOwnedArtifacts, proposeArtifactBranchMerge, type DataArtifactQueryResult,
@@ -23,6 +23,7 @@ import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4ArtifactWorkspace";
+import { artifactHistoryAnchor, canRestoreArtifactHistory, exactArtifactHistoryComparison, exactArtifactHistoryDetail, sameArtifactHistoryAnchor, type ArtifactHistoryAnchor } from "@/lib/artifactHistorySafety";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -607,7 +608,7 @@ export function ArtifactPane(props: ArtifactPaneProps) {
     controlledRevision.current = { artifactId: props.artifactId, version: props.version };
     if (selection !== null) setSelection(null);
   }
-  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId && (props.version == null || selection.version >= props.version) ? selection.version : props.version;
+  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId ? selection.version : props.version;
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
@@ -634,14 +635,19 @@ function ArtifactPaneWorkspace({
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
   const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
-  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? detail.data?.artifact.owningChatId });
+  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? (detail.data?.artifact.id === artifactId ? detail.data.artifact.owningChatId : null) });
   const [mergeBranchId,setMergeBranchId]=useState("");
   const [mergeConflicts,setMergeConflicts]=useState<string[]>([]);
   const [mergePreviews,setMergePreviews]=useState<Record<string,{target:string;branch:string;truncated:boolean}>>({});
   const [mergeResolutions,setMergeResolutions]=useState<Record<string,"target"|"branch">>({});
   const [mergeNotice,setMergeNotice]=useState<string|null>(null);
   const automation=useP9Workflows(projectId),invalidateAutomation=useInvalidateP9Automation();
-  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<string|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<{text:string;anchor:ArtifactHistoryAnchor;from:number}|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [restoreIntent, setRestoreIntent] = useState<{ anchor: ArtifactHistoryAnchor; targetVersion: number; targetHash: string } | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const historyInFlight = useRef(false);
+  const historyRequest = useRef(0);
+  const historyCurrent = useRef<{ anchor: ArtifactHistoryAnchor; left: number | null } | null>(null);
   const [exportPlan, setExportPlan] = useState<ArtifactExportPlan | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ArtifactExportPlan["formats"][number] | null>(null);
@@ -661,7 +667,8 @@ function ArtifactPaneWorkspace({
   const [inspectorTab, setInspectorTab] = useState<"artifact" | "evidence" | "history">("artifact");
   const inspectorId = useId();
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
-  const data=detail.data; useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
+  const data = exactArtifactHistoryDetail(detail.data, artifactId, version, projectId, owningChatId, detail.isPlaceholderData || detail.isError);
+  useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
@@ -679,7 +686,93 @@ function ArtifactPaneWorkspace({
     return () => { active = false; };
   }, [artifactId, data?.version.version, data?.version.contentHash, exportOpen]);
   const run=async(fn:()=>Promise<void>)=>{setError(null);try{await fn()}catch(e){setError(e instanceof Error?e.message:"Artifact action failed.")}};
-  if(!data)return <div className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading?"Loading Artifact…":"Artifact unavailable."}</div>;
+  if(!data)return <div role="status" className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading || detail.isFetching ? "Loading the exact saved Artifact revision…" : "Artifact unavailable or its revision/owner does not match."}</div>;
+  const anchor = artifactHistoryAnchor(data);
+  historyCurrent.current = { anchor, left };
+  const historicalVersions = (versions.data ?? []).filter(entry => entry.artifactId === artifactId);
+  const leftRecord = historicalVersions.find(entry => entry.version === left);
+  const displayedRecord = historicalVersions.find(entry => entry.version === anchor.displayedVersion);
+  const hasUnsavedArtifactEdits = spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying;
+  const canRestore = canRestoreArtifactHistory(anchor, leftRecord, hasUnsavedArtifactEdits, historyBusy || versions.isFetching || historyInFlight.current);
+  const activeRestoreIntent = restoreIntent && leftRecord
+    && restoreIntent.targetVersion === left
+    && restoreIntent.targetHash === leftRecord.contentHash
+    && sameArtifactHistoryAnchor(restoreIntent.anchor, anchor) ? restoreIntent : null;
+  const compareSelectedHistory = async () => {
+    if (historyInFlight.current || !leftRecord || !displayedRecord || leftRecord.version === displayedRecord.version) return;
+    if (displayedRecord.contentHash !== anchor.contentHash) {
+      setError("The version catalog does not match the displayed Artifact. Refresh history before comparing.");
+      return;
+    }
+    const captured = { ...anchor };
+    const from = leftRecord;
+    const to = displayedRecord;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setComparison(null); setError(null);
+    try {
+      const result = await compareArtifactVersions(artifactId, from.version, to.version);
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== from.version
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured)) return;
+      if (!exactArtifactHistoryComparison(result, captured, from, to)) {
+        throw new Error("The comparison response does not match the selected saved revisions or content hashes. Nothing was applied.");
+      }
+      const metadataLabels = metadataDeltaLabels(compareArtifactVersionMetadata(from, to));
+      const contentSummary = result.changed
+        ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
+        : "Content unchanged";
+      const semanticSummary = semanticArtifactComparisonLabel(result.semantic);
+      const summary = metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
+      setComparison({ text: `Compared exact v${from.version} with v${to.version} · ${semanticSummary ? `${summary} · ${semanticSummary}` : summary}`, anchor: captured, from: from.version });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Exact saved Artifact comparison failed.");
+    } finally {
+      historyInFlight.current = false; if (mounted.current) setHistoryBusy(false);
+    }
+  };
+  const prepareRestoreHistory = () => {
+    if (!canRestore || !leftRecord) {
+      setError("Open the current Artifact head, finish unsaved edits and select an earlier recorded revision before restoring.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setError(null);
+    setRestoreIntent({ anchor: { ...anchor }, targetVersion: leftRecord.version, targetHash: leftRecord.contentHash });
+  };
+  const confirmRestoreHistory = async () => {
+    if (!activeRestoreIntent || !canRestore || !leftRecord || historyInFlight.current) return;
+    const captured = activeRestoreIntent;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setRestoreIntent(null); setError(null);
+    try {
+      // P4 enforces optimistic concurrency against this exact head version.
+      // Restoring creates a NEW immutable revision; it never edits history.
+      const saved = await restoreArtifactRevision(artifactId, captured.anchor.headVersion, captured.targetVersion);
+      invalidate(projectId, artifactId);
+      if (saved.artifactId !== captured.anchor.artifactId || saved.version !== captured.anchor.headVersion + 1) {
+        throw new Error("Restore response has an unexpected Artifact ID or revision. Refresh history to verify the saved outcome.");
+      }
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== captured.targetVersion
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured.anchor)) return;
+      onVersionChange?.(saved.version);
+      setComparison({ text: `Restored v${captured.targetVersion} as new v${saved.version}. Original saved revisions remain unchanged.`, anchor: captured.anchor, from: captured.targetVersion });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Restore failed; no successful new revision was confirmed. Refresh and retry.");
+    } finally {
+      historyInFlight.current = false;
+      if (mounted.current) setHistoryBusy(false);
+    }
+  };
+  const changeDisplayedRevision = (next: number | null) => {
+    if (hasUnsavedArtifactEdits || historyInFlight.current) {
+      setError("Save or reset unsaved Artifact edits before switching revisions; your draft has not been discarded.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setRestoreIntent(null); setError(null);
+    onVersionChange?.(next);
+  };
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
@@ -792,7 +885,16 @@ function ArtifactPaneWorkspace({
   const draft=async(d:SpreadsheetCellDiff)=>run(async()=>{await proposeArtifactChange(artifactId,{baseVersion:data.artifact.headVersion,type:"spreadsheet_ai_diff",summary:`Conversation-ready draft ${d.sheetId}!${d.ref}`,diffs:[d],actorType:"conversation"});invalidate(projectId,artifactId)});
   const refreshThesis=async()=>run(async()=>{if(projectId===null)throw new Error("Project evidence refresh requires a Project.");await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
   const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{if(projectId===null)throw new Error("Project thesis postmortems require a Project.");await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{const saved=await undoArtifact(artifactId);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} disabled={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying || data.artifact.headVersion <= 1 || data.version.version !== data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Undo by new version"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
+  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>{
+  const previous=historicalVersions.find(entry=>entry.version===anchor.headVersion-1);
+  setInspectorTab("history");
+  if (!previous || !canRestoreArtifactHistory(anchor, previous, hasUnsavedArtifactEdits, historyBusy || historyInFlight.current)) {
+    setError("Previous saved revision is unavailable or this Artifact has unsaved edits. Refresh history before preparing undo.");
+    return;
+  }
+  historyRequest.current += 1; setLeft(previous.version); setComparison(null); setError(null);
+  setRestoreIntent({anchor:{...anchor},targetVersion:previous.version,targetHash:previous.contentHash});
+}} disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || data.artifact.headVersion <= 1 || data.version.version !== data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Review and confirm restoring the previous version as a new head"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
     <div role="tablist" aria-label="Artifact inspector" className="lios-reference-artifact-tabs">
       {(["artifact", "evidence", "history"] as const).map((tab, index, tabs) => <button key={tab} type="button" role="tab" id={`${inspectorId}-${tab}-tab`} aria-controls={`${inspectorId}-${tab}-panel`} aria-selected={inspectorTab === tab} tabIndex={inspectorTab === tab ? 0 : -1} onClick={() => setInspectorTab(tab)} onKeyDown={(event) => {
         const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -854,18 +956,54 @@ function ArtifactPaneWorkspace({
       })} className="rounded border border-cyan-300/30 px-3 py-2 disabled:opacity-30">Review branch reconciliation</button>
       {mergeNotice&&<p role="status">{mergeNotice}</p>}
     </div>}
-    {inspectorTab==="history"&&<button disabled={!left||left>=data.artifact.headVersion} onClick={()=>void run(async()=>{const saved=await restoreArtifactRevision(artifactId,data.artifact.headVersion,left!);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} className="m-3 rounded border border-amber-300/30 px-3 py-2 disabled:opacity-30">Restore selected revision as new version</button>}
-    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="border-t border-border/50 p-3"><div className="mb-4 space-y-2">{(versions.data??[]).slice().reverse().map(version=><div key={version.id} className="flex items-center justify-between border-b border-border/40 pb-2 text-xs"><span>Revision {version.version}</span><span className="text-muted-foreground">{version.version===data.artifact.headVersion?"Current":"Saved revision"}</span></div>)}</div><div className="flex flex-wrap items-end gap-2"><label className="font-terminal text-[12px] text-muted-foreground">COMPARE FROM<select value={left??""} onChange={(e)=>setLeft(Number(e.target.value))} className="mt-1 block rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">{(versions.data??[]).slice().reverse().map((v)=><option key={v.id} value={v.version}>v{v.version}</option>)}</select></label><button disabled={!left||left===data.artifact.headVersion} onClick={()=>void run(async()=>{
-  const result=await compareArtifactVersions(artifactId,left!,data.artifact.headVersion);
-  const leftRecord=(versions.data??[]).find((version)=>version.version===left);
-  const metadataLabels=leftRecord?metadataDeltaLabels(compareArtifactVersionMetadata(leftRecord,data.version)):[];
-  const contentSummary=result.changed
-    ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
-    : "Content unchanged";
-  const semanticSummary=semanticArtifactComparisonLabel(result.semantic);
-  const summary=metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
-  setComparison(semanticSummary ? `${summary} · ${semanticSummary}` : summary);
-})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px] disabled:opacity-30"><GitCompareArrows className="h-3 w-3"/> Compare</button>{sessions[0]&&<button onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:data.artifact.headVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px]"><Link2 className="h-3 w-3"/> Reference Session</button>}</div>{comparison&&<div className="mt-2 rounded border border-fuchsia-300/15 px-2 py-1.5 font-ui text-[13px] text-fuchsia-100">{comparison}</div>}</div>
+    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="space-y-3 border-t border-border/50 p-3">
+      <p className="font-ui text-[13px] text-muted-foreground">Saved revisions are immutable. Open any exact version for read-only inspection, compare exact version hashes, or deliberately restore an earlier version as a NEW head. The server rejects concurrent head changes.</p>
+      {versions.isError && <p role="alert" className="text-sm text-red-200">Saved version history could not be loaded. Reopen this Artifact to retry.</p>}
+      <div className="max-h-48 space-y-2 overflow-auto" data-testid="artifact-history-version-list">
+        {historicalVersions.slice().reverse().map(savedVersion => <div key={savedVersion.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2 font-ui text-[12px]">
+          <span>v{savedVersion.version} · {savedVersion.version===anchor.headVersion ? "Current head" : "Historical"} · saved {new Date(savedVersion.createdAt).toLocaleString()} · hash {shortHash(savedVersion.contentHash)}</span>
+          <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || savedVersion.version===anchor.displayedVersion}
+            onClick={()=>changeDisplayedRevision(savedVersion.version)} className="min-h-9 rounded border border-border/50 px-3 py-2 disabled:opacity-40">
+            {savedVersion.version===anchor.displayedVersion ? "Viewing" : `View exact v${savedVersion.version}`}
+          </button>
+        </div>)}
+        {!historicalVersions.length && <p role="status">No authorized versions available to inspect.</p>}
+      </div>
+      <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || (version==null && anchor.displayedVersion===anchor.headVersion)} onClick={()=>changeDisplayedRevision(null)}
+        className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">Open current head</button>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="font-terminal text-[12px] text-muted-foreground">COMPARE / RESTORE FROM
+          <select aria-label="Historical Artifact source revision" value={left??""} onChange={(event)=>{
+            historyRequest.current += 1; setComparison(null); setRestoreIntent(null); setLeft(Number(event.target.value)||null);
+          }} disabled={historyBusy || historyInFlight.current || versions.isFetching}
+          className="mt-1 block min-h-9 rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">
+            <option value="">Select revision</option>
+            {historicalVersions.slice().reverse().map(entry=><option key={entry.id} value={entry.version}>v{entry.version} · {shortHash(entry.contentHash)}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!leftRecord || !displayedRecord || displayedRecord.contentHash!==anchor.contentHash || leftRecord.version===anchor.displayedVersion || historyBusy || historyInFlight.current || versions.isFetching}
+          onClick={()=>void compareSelectedHistory()} className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">
+          <GitCompareArrows className="h-3.5 w-3.5"/> Compare with displayed v{anchor.displayedVersion}
+        </button>
+        <button type="button" data-testid="artifact-prepare-restore" disabled={!canRestore} onClick={prepareRestoreHistory}
+          className="min-h-9 rounded border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Prepare restore as new version</button>
+        {sessions[0] && <button type="button" onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:anchor.displayedVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})}
+          className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px]"><Link2 className="h-3.5 w-3.5"/> Reference displayed v{anchor.displayedVersion}</button>}
+      </div>
+      {hasUnsavedArtifactEdits && <p role="status" className="text-sm text-amber-200">Save or reset unsaved Artifact edits before opening another revision or restoring. Your draft remains in the current editor.</p>}
+      {anchor.displayedVersion!==anchor.headVersion && <p role="status" className="text-sm text-amber-200">Viewing historical v{anchor.displayedVersion} read-only. Open the current head before restoring another revision.</p>}
+      {activeRestoreIntent && <section role="group" aria-label="Confirm immutable Artifact restore" data-testid="artifact-restore-confirmation" className="space-y-2 rounded border border-amber-300/30 p-3">
+        <p className="font-ui text-[13px] text-amber-100">Restore exact historical v{activeRestoreIntent.targetVersion} ({shortHash(activeRestoreIntent.targetHash)}) over current head v{anchor.headVersion} ({shortHash(anchor.contentHash)}) by creating new v{anchor.headVersion+1}? Earlier versions will not be changed. Other users' concurrent changes will be rejected.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" data-testid="artifact-confirm-restore" disabled={!canRestore || historyBusy || historyInFlight.current} onClick={()=>void confirmRestoreHistory()}
+            className="min-h-9 rounded border border-amber-300 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Confirm restore as new version</button>
+          <button type="button" onClick={()=>setRestoreIntent(null)} disabled={historyBusy || historyInFlight.current} className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px]">Cancel restore</button>
+        </div>
+      </section>}
+      {comparison && sameArtifactHistoryAnchor(comparison.anchor, anchor) && comparison.from===left
+        && <p role="status" data-testid="artifact-history-comparison" className="rounded border border-fuchsia-300/20 px-3 py-2 font-ui text-[13px] text-fuchsia-100">{comparison.text}</p>}
+      {historyBusy && <p role="status" className="font-ui text-[12px] text-muted-foreground">Checking exact saved revisions…</p>}
+    </div>
     {error&&<div role="alert" className="m-3 border border-red-300/20 px-3 py-2 text-sm text-red-200">{error}</div>}
   </div>;
 }
