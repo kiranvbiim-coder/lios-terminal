@@ -12,6 +12,7 @@ import {
 import type { TrustManifest } from "@shared/trustContracts";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
 import EvidencePrism from "./EvidencePrism";
+import EvidenceExceptionDetails from "./EvidenceExceptionDetails";
 
 interface Props {
   manifest: TrustManifest;
@@ -127,6 +128,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
           </section>
 
           <EvidencePrism key={manifest.trustId} manifest={manifest} />
+          <EvidenceExceptionDetails key={`${manifest.trustId}:exceptions`} manifest={manifest} />
 
           {!!manifest.assumptions.length && (
             <section>
@@ -142,18 +144,12 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </section>
           )}
 
-          {(manifest.conflicts.length > 0 || manifest.missing.length > 0 || manifest.warnings.length > 0) && (
+          {(manifest.missing.length > 0 || manifest.warnings.length > 0) && (
             <section>
               <div className="flex items-center gap-1.5 font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
                 <AlertTriangle className="h-3 w-3" /> Exceptions & recovery
               </div>
               <div className="mt-2 space-y-2">
-                {manifest.conflicts.map((conflict) => (
-                  <div key={`${conflict.field}-${conflict.sourceRefs.join("-")}`} className="rounded border border-amber-300/15 bg-amber-300/[0.02] px-2.5 py-2">
-                    <div className="font-ui text-[12px] font-semibold text-amber-100">{conflict.field} · {conflict.state} conflict</div>
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{conflict.summary}</div>
-                  </div>
-                ))}
                 {manifest.missing.map((missing) => (
                   <div key={missing.field} className="rounded border border-amber-300/15 bg-amber-300/[0.02] px-2.5 py-2">
                     <div className="font-ui text-[12px] font-semibold text-foreground">Missing · {missing.field.replaceAll("_", " ")}</div>
