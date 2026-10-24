@@ -145,7 +145,8 @@ async function assertQuickChatAttachmentProvenance(
     const parsed = conversationAttachmentRefSchema.array().safeParse(manifest);
     return parsed.success ? parsed.data.filter(ref => ref.sourceRef === `quick-attachment:${ref.id}`) : [];
   });
-  if (quickRefs.some(ref => !ownedRefs.some(item => item.sourceRef === ref))) deny();
+  // Recorded immutable base provenance survives clearing the Chat manifest; a NEW reference must still be owned.
+  if (quickRefs.some(ref => !inheritedRefs.includes(ref) && !ownedRefs.some(item => item.sourceRef === ref))) deny();
 }
 
 export function artifactTrustSourceRefs(manifest: TrustManifest | null | undefined): string[] {

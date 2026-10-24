@@ -4811,13 +4811,17 @@ async function executeAgentLoop(
         // Only after the governed registry validated the result AND committed
         // the external dispatch may it become review-eligible, never before.
         if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
-        if (step.toolId === terminalArtifactTool.id && result.output && typeof result.output === "object") {
-          const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string() }).passthrough().parse(result.output);
+        const publishesArtifact = step.toolId === terminalArtifactTool.id
+          || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";
+        if (publishesArtifact && result.output && typeof result.output === "object") {
+          const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string().optional() }).passthrough().parse(result.output);
           const artifact = await getArtifact(input.tenant, updated.artifactId);
           const version = await getArtifactVersion(input.tenant, updated.artifactId, updated.version);
-          if (version.contentHash !== updated.contentHash) throw new Error("Updated terminal revision changed before publication.");
+          if (updated.contentHash !== undefined && version.contentHash !== updated.contentHash) throw new Error("Updated Artifact revision changed before publication.");
+          // The saved Artifact must belong to this conversation owner before it is published to the Chat.
+          if (input.scope !== "project" && artifact.projectId !== null) throw new Error("Saved Artifact is outside this conversation owner.");
           await emit(input, { ...eventBase(request.requestId), type: "artifact",
-            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: "screen", title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
+            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: step.toolId === terminalArtifactTool.id ? "screen" : "research", title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
             persistedArtifact: { id: artifact.id, version: version.version },
           });
         }

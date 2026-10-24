@@ -330,17 +330,23 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
     const { promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat } = await import("./projectChatStore");
     const content = { kind: "report" as const, blocks: [{ id: "p", type: "paragraph" as const, text: "Adopted owned note." }], sections: [] };
     const retained = await createArtifact(ownerContext, { projectId: null, owningChatId: quick.id, title: "Adopted report", content, sourceRefs: [quickRef.sourceRef] });
+    // Still Chat-owned (not yet adopted): clearing the Chat manifest must not make the retained Artifact uneditable.
+    await clearProjectChatMessages(ownerContext, quick.id);
+    const quickEdited = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited while Chat-owned after clear." }] } });
+    assert.equal(quickEdited.version, 2);
+    assert.deepEqual(quickEdited.sourceRefs, [quickRef.sourceRef]);
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
     await promoteQuickChatToProject(ownerContext, quick.id, project.id);
     assert.equal((await getArtifact(ownerContext, retained.artifact.id)).owningChatId, null);
     await clearProjectChatMessages(ownerContext, quick.id);
-    const afterClear = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited after clearing origin Chat." }] } });
-    assert.equal(afterClear.version, 2);
+    const afterClear = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited after clearing origin Chat." }] } });
+    assert.equal(afterClear.version, 3);
     assert.deepEqual(afterClear.sourceRefs, [quickRef.sourceRef]);
     await trashProjectChat(ownerContext, quick.id);
-    const afterTrash = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content });
-    assert.equal(afterTrash.version, 3);
+    const afterTrash = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 3, content });
+    assert.equal(afterTrash.version, 4);
     assert.deepEqual(afterTrash.sourceRefs, [quickRef.sourceRef]);
-    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 3, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 4, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
   });
 });
 
