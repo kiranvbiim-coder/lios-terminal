@@ -49,6 +49,7 @@ export default function DevicesSettings() {
   const [pendingReadCount, setPendingReadCount] = useState(() => pendingNotificationReadCount());
   const [networkReview, setNetworkReview] = useState<{ enabled: boolean; discoverable: boolean; name: string; desiredEnabled: boolean; desiredDiscoverable: boolean; homeId: string | null } | null>(null);
   const [homeReview, setHomeReview] = useState<string | null>(null);
+  const [forgetReview, setForgetReview] = useState<string | null>(null);
   const [pairReview, setPairReview] = useState<string | null>(null);
   const [continuityNotice, setContinuityNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -494,8 +495,21 @@ export default function DevicesSettings() {
                       {savedHomes.activeHomeId !== home.homeId && (
                         <button type="button" className={buttonClass} onClick={() => setHomeReview(home.homeId)}>Make active</button>
                       )}
-                      <button type="button" className={buttonClass} onClick={() => setSavedHomes(forgetDeviceHome(home.homeId))}>Forget local record</button>
+                      <button type="button" className={buttonClass} onClick={() => { setHomeReview(null); setForgetReview(home.homeId); }}>Review forget</button>
                     </div>
+                    {forgetReview === home.homeId && <div data-testid="device-home-forget-review" role="group" aria-label={`Review forgetting saved Home ${home.name}`} className="w-full space-y-1 rounded border border-amber-300/30 p-2">
+                      <p>Forget local Home "{home.name}"? Only this device's saved address and pinned certificate are removed; the remote Home's pairing credential is not revoked. {savedHomes.activeHomeId === home.homeId
+                        ? "This was your locally selected Home. The existing storage policy may select another saved Home, but no TLS connection, rights transfer or pending action is automatically attempted."
+                        : "This is not the locally selected Home."}</p>
+                      <button type="button" className={buttonClass} onClick={() => {
+                        try {
+                          setSavedHomes(forgetDeviceHome(home.homeId));
+                          setContinuityNotice("Local Home record forgotten. This is not server-side pairing revocation or a verified connection change.");
+                          setForgetReview(null);
+                        } catch (cause) { setHomeError(serverErrorText(cause)); }
+                      }}>Confirm forget local record</button>
+                      <button type="button" className={buttonClass} onClick={() => setForgetReview(null)}>Cancel</button>
+                    </div>}
                     {homeReview === home.homeId && <div data-testid="device-home-switch-review" role="group" aria-label={`Review locally selected Home ${home.name}`} className="w-full space-y-1 rounded border border-amber-300/30 p-2">
                       <p>{rememberedHomeChangeReview(home)}</p>
                       <button type="button" className={buttonClass} onClick={() => {
