@@ -305,3 +305,52 @@ test("a structured input gap is rendered once while unrelated source warnings re
   assert.doesNotMatch(markup, /data-testid="trace-error"|REQUEST_FAILED/);
   assert.match(markup, /Independent source is stale/);
 });
+
+
+test("WS-50: actual run receipts are disclosed under Show work but not mistaken for automatic approval", () => {
+  const receipt = {
+    id: "88888888-8888-4888-8888-888888888888",
+    requestId: REQUEST_ID, componentId: "quant.risk", operation: "risk_run", status: "completed",
+    startedAt: "2026-10-24T10:00:00.000Z", completedAt: "2026-10-24T10:00:02.000Z",
+    deterministic: true, aiDerived: false, inputHash: "a".repeat(64), outputHash: "b".repeat(64),
+    sourceRefs: ["private-source-uri:do-not-render"], warnings: ["PRIVATE WARNING"],
+    inputEvidence: { apiKey: "PRIVATE KEY" }, outputEvidence: { raw: "PRIVATE RAW" },
+  };
+  const collapsed = render([event({ type: "receipt", receipt }), doneOk]);
+  assert.match(collapsed, /data-testid="trace-show-work"/);
+  assert.doesNotMatch(collapsed, /trace-agent-receipts|quant.risk|risk_run|88888888/);
+  const open = render([event({ type: "receipt", receipt }), doneOk], { defaultShowWork: true });
+  assert.match(open, /data-testid="trace-agent-receipts"/);
+  assert.match(open, /data-testid="trace-receipt-count"/);
+  assert.match(open, /1 recorded execution receipt/);
+  assert.match(open, /quant.risk · risk run/);
+  assert.match(open, /1 completed · 0 failed · 0 cancelled/);
+  assert.match(open, /Receipts do not grant approval or prove an external action occurred/);
+  assert.match(open, /88888888-8888-4888-8888-888888888888/);
+  assert.match(open, /Input SHA-256/);
+  assert.doesNotMatch(open, /PRIVATE KEY|PRIVATE RAW|PRIVATE WARNING|private-source-uri:do-not-render/);
+});
+
+test("WS-50: failed, cancelled and foreign-run receipts warn even while Show work is collapsed", () => {
+  const makeReceipt = (id: string, status: string, innerRequest = REQUEST_ID) => event({
+    type: "receipt", receipt: {
+      id, requestId: innerRequest, componentId: "risk.engine", operation: "run",
+      status, startedAt: "2026-10-24T10:00:00Z", completedAt: "2026-10-24T10:00:01Z",
+      deterministic: true, aiDerived: false, inputHash: null, outputHash: null,
+      sourceRefs: [], warnings: [], inputEvidence: null, outputEvidence: null,
+    },
+  });
+  const failed = render([
+    makeReceipt("11111111-1111-4111-8111-111111111111", "failed"),
+    makeReceipt("22222222-2222-4222-8222-222222222222", "cancelled"),
+    makeReceipt("33333333-3333-4333-8333-333333333333", "completed", "99999999-9999-4999-8999-999999999999"),
+    doneOk,
+  ]);
+  assert.match(failed, /role="alert"[^>]*data-testid="trace-agent-receipt-warning"/);
+  assert.match(failed, /1 failed, 1 cancelled, 1 ignored/);
+  assert.match(failed, /Do not assume these operations completed/);
+  assert.doesNotMatch(failed, /trace-agent-receipts|risk.engine/);
+  const full = render([makeReceipt("11111111-1111-4111-8111-111111111111", "failed"), doneOk], { defaultShowWork: true });
+  assert.match(full, /1 recorded execution receipt/);
+  assert.match(full, /0 completed · 1 failed · 0 cancelled/);
+});
