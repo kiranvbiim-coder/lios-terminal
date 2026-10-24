@@ -21,6 +21,7 @@ export function exactArtifactHistoryDetail(
   if (!detail || isPlaceholder || detail.artifact.id !== artifactId
     || detail.version.artifactId !== artifactId
     || (requestedVersion !== null && requestedVersion !== undefined && detail.version.version !== requestedVersion)
+    || (requestedVersion == null && detail.version.version !== detail.artifact.headVersion)
     || detail.version.version > detail.artifact.headVersion
     || detail.artifact.kind !== detail.version.content.kind
     || (projectId !== null && detail.artifact.projectId !== projectId)
