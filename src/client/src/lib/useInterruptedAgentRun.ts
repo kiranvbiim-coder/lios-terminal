@@ -53,7 +53,7 @@ export function useInterruptedAgentRun(options: InterruptedAgentRunOptions): {
   requestId: string | null;
   resume: () => void;
   /** Spread onto the runtime trace: the request-bound resume control. */
-  traceProps: { resumableRequestId: string | null; onResume: () => void; checkpointView: ResumableCheckpointView | null };
+  traceProps: { resumableRequestId: string | null; onResume: () => void; checkpointView: ResumableCheckpointView | null; checkpointLookupError: boolean; onRetryCheckpointLookup: () => void };
 } {
   const { gateway, chatId, busy, onEvent, shell } = options;
   const history = useQuery<unknown>({
@@ -106,5 +106,13 @@ export function useInterruptedAgentRun(options: InterruptedAgentRunOptions): {
   // independently rechecks all authority again at the point of execution.
   const offered = busy || !gateway || history.isFetching || history.isError ? null : requestId;
   const checkpointView = resumableCheckpointView(history.data, offered);
-  return { requestId: offered, resume, traceProps: { resumableRequestId: offered, onResume: resume, checkpointView } };
+  return {
+    requestId: offered,
+    resume,
+    traceProps: {
+      resumableRequestId: offered, onResume: resume, checkpointView,
+      checkpointLookupError: !busy && chatId !== null && history.isError,
+      onRetryCheckpointLookup: () => { void refetch(); },
+    },
+  };
 }
