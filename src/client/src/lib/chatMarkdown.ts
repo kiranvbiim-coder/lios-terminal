@@ -622,8 +622,36 @@ export function resolveCitation(cite: Extract<Inline, { t: "cite" }>, sources: r
   return [{ number: matches[0].index ?? sources.indexOf(matches[0]) + 1, source: matches[0] }];
 }
 
-/** Real, user-visible sources of the latest run, in a stable order, for citation matching. */
-export function collectCitationSources(events: readonly ConversationRuntimeEvent[]): ChatCitationSource[] {
+/**
+ * Only recorded absolute http(s) URL IDs may be opened as evidence links.
+ * A provider handle paired with a website or unrelated URL is not a citation.
+ * Shared by the inline Markdown chips and the Show work source inspector.
+ */
+export function inspectableSourceHref(source: ChatCitationSource): string | null {
+  if (!source.href) return null;
+  const original = safeHref(source.id);
+  const recorded = safeHref(source.href);
+  return original && recorded && original === recorded && /^https?:\/\//i.test(original) ? original : null;
+}
+
+/**
+ * Bounded source references observed in the current request's latest plan.
+ * A stale plan, a prior request or another run's trust record must not
+ * become evidence for this answer. Without a plan, the latest source-bearing
+ * request is authoritative; explicit requestId always wins.
+ */
+export function collectCitationSources(events: readonly ConversationRuntimeEvent[], requestId?: string | null): ChatCitationSource[] {
+  const targetRequest = requestId ?? [...events].reverse().find(
+    (event) => event.type === "plan" || event.type === "trust" || event.type === "tool_result",
+  )?.requestId;
+  if (!targetRequest) return [];
+  let latestPlanAt = -1;
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].type === "plan" && events[i].requestId === targetRequest) {
+      latestPlanAt = i;
+      break;
+    }
+  }
   const sources: ChatCitationSource[] = [];
   const add = (id: string, providerLabel: string | null) => {
     if (sources.length >= 50) return;
@@ -632,8 +660,9 @@ export function collectCitationSources(events: readonly ConversationRuntimeEvent
     if (!label || sources.some((source) => source.id === id)) return;
     sources.push({ id, label, href });
   };
-  for (const event of events) {
-    if (event.type === "trust") {
+  for (const event of events.slice(latestPlanAt + 1)) {
+    if (event.requestId !== targetRequest) continue;
+    if (event.type === "trust" && event.manifest.requestId === targetRequest) {
       for (const evidence of event.manifest.evidence) add(evidence.sourceRef, evidence.providerLabel);
     } else if (event.type === "tool_result") {
       for (const ref of event.sourceRefs ?? []) add(ref, null);
