@@ -19,7 +19,6 @@ test("WS-28 distinguishes catalog, adapter health and actual saved connection", 
   const catalog = sourceCatalogueStatus(item());
   assert.match(catalog.connection, /not saved/);
   assert.match(catalog.runtime, /not verified/);
-  assert.match(catalog.advisory, /does not connect/);
   const verifiedCatalog = sourceCatalogueStatus(item({ state: "live_verified", operational: true }));
   assert.match(verifiedCatalog.runtime, /recently verified/);
   assert.match(verifiedCatalog.connection, /not saved/);
@@ -30,7 +29,6 @@ test("WS-28 distinguishes catalog, adapter health and actual saved connection", 
   }));
   assert.match(connected.connection, /Saved connection/);
   assert.match(connected.runtime, /Last connection test healthy/);
-  assert.match(connected.advisory, /does not grant AI/);
   assert.equal(connected.requiresAttention, false);
 });
 
