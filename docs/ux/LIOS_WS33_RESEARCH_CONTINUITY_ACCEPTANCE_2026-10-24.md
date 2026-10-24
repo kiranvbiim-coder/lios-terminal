@@ -8,7 +8,7 @@ Existing `ResearchTray.tsx` in #110 already implements device-local research his
 
 ## Remaining gaps found in code
 
-- `saveResearchTray` called `.sort` on an array derived from the caller and silently accepted SSR's unavailable `window`. A blocked `localStorage.setItem` must never mutate React's caller array or present a successful save.
+- `saveResearchTray` already used `.filter` before sorting (so caller-array mutation was not observed); the defensive clone and regression make that invariant explicit. The actual gap was a silent no-op when `window` was unavailable. A blocked `localStorage.setItem` must never publish a false saved state or modify the input.
 - Device-local `storage` changes from a second tab were not observed: edits and deletions appeared stale until a refresh. Malformed events must not empty the live view.
 - Pinning a *new* context at the `MAX_ITEMS=120` cap silently evicted an earlier pin because `pinResearchContext` slices to the cap. New-note saves could similarly exceed the cap and be truncated without user consent.
 - When a second tab changes an annotation while the first tab's edit form is open, Save must not blindly overwrite it. A rejected write must retain the person's draft. Errors and successes should use appropriate distinct accessibility announcements.
