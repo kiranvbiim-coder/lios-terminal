@@ -3,18 +3,12 @@
 import * as React from "react";
 import { useId, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { safeHref, type ChatCitationSource } from "@/lib/chatMarkdown";
+import { inspectableSourceHref, type ChatCitationSource } from "@/lib/chatMarkdown";
+
+// Preserve the public helper for existing tests/consumers; there is only one policy.
+export { inspectableSourceHref };
 
 const INITIAL_VISIBLE = 6;
-
-export function inspectableSourceHref(source: ChatCitationSource): string | null {
-  // URLs have to be recorded as the source ID itself. A label or inferred provider
-  // homepage does not prove a particular document was viewed or is openable.
-  if (!source.href) return null;
-  const original = safeHref(source.id);
-  const recorded = safeHref(source.href);
-  return original && original === recorded && /^https?:\/\//i.test(original) ? original : null;
-}
 
 export default function ResearchSourceList({ sources }: { sources: readonly ChatCitationSource[] }) {
   const [expanded, setExpanded] = useState(false);
