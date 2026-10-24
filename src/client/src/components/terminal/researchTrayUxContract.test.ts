@@ -67,7 +67,7 @@ test("All original Workbench research actions and offline source operations stay
     "subscribeResearchThread", "loadResearchTray", "loadResearchThread",
     "groupResearchThreadByDay", "getResearchTrayGroups", "saveResearchTray(next)",
   ]) assert.ok(source.includes(required), "missing original research function: " + required);
-  assert.match(source, /role="status"/);
+  assert.match(source, /role=\{noticeIsError \? "alert" : "status"\}/);
 });
 
 test("Research note edits and explicit delete retain unrelated canonical findings", () => {
