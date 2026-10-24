@@ -67,7 +67,14 @@ test("concurrent windows on the SAME saved P4 version cannot discard each other'
   const replaced = { ...input, content: {
     ...input.content, blocks: [{ id: "newer", type: "paragraph", text: "another-window-sensitive-edit" }],
   } };
-  const second = storeProtectedArtifactDraft({ root, safeStorage, input: replaced });
+  assert.throws(
+    () => storeProtectedArtifactDraft({ root, safeStorage, input: replaced }),
+    /changed by another editor/,
+    "a second window cannot silently overwrite a checkpoint at the same base P4 version",
+  );
+  assert.equal(readProtectedArtifactDraft({ root, safeStorage, input }).checkpointId, first.checkpointId);
+  const second = storeProtectedArtifactDraft({ root, safeStorage, input: { ...replaced, expectedCheckpointId: first.checkpointId } });
+  assert.equal(second.protected, true, "the original writer may atomically replace its own generation");
   assert.notEqual(first.checkpointId, second.checkpointId, "same version/hash does not imply same unsaved editor generation");
   assert.deepEqual(removeProtectedArtifactDraft({ root, safeStorage, input: {
     ...input, expectedCheckpoint: { baseVersion: input.baseVersion, contentHash: input.contentHash, checkpointId: firstRead.checkpointId },
