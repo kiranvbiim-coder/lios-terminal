@@ -27,7 +27,7 @@ test("only an interrupted record the Home flagged resumable is offered; every ot
 test("the resume control is request-bound, hidden while busy, explicit-click only, and sends nothing but the requestId", () => {
   const trace = source("components/terminal/ConversationRuntimeTrace.tsx");
   assert.match(trace, /const canResume = !busy && !!resumableRequestId && !!onResume;/);
-  assert.match(trace, /\{canResume && \(/);
+  assert.match(trace, /\{canResume && resumableRequestId && onResume && \(/);
   assert.match(trace, /<ResearchCheckpointCard/);
   const checkpointCard = source("components/terminal/ResearchCheckpointCard.tsx");
   assert.match(checkpointCard, /data-testid="agent-run-resume"/);
