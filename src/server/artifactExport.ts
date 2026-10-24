@@ -7,7 +7,7 @@ import { getDb } from "./db";
 import { loadIntegratedModelArtifactSource } from "./integratedModelArtifact";
 
 function filenameStem(title: string): string {
-  const clean = title.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const clean = title.trim().replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "");
   return (clean || "lios-artifact").slice(0, 180);
 }
 

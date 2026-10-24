@@ -151,6 +151,7 @@ test("An owned saved research comparison becomes an editable P4 report, and only
       "/api/artifacts/" + encodeURIComponent(createdId) + "/report.docx?version=1");
     assert.equal(response.output.pdfDownloadPath,
       "/api/artifacts/" + encodeURIComponent(createdId) + "/report.pdf?version=1");
+    assert.equal(response.output.unicodePdfDesktopRequired, false);
     const artifact = await getArtifact(ctx, createdId);
     assert.equal(artifact.kind, "report");
     assert.equal(artifact.projectId, project.id);
@@ -256,6 +257,23 @@ test("An owned saved research comparison becomes an editable P4 report, and only
     } finally {
       await latestParser.destroy();
     }
+    const v2 = await getArtifactVersion(ctx, createdId, 2);
+    const reportWithTamil = reportArtifactContentSchema.parse({
+      ...v2.content,
+      blocks: [...(v2.content.kind === "report" ? v2.content.blocks : []), {
+        id: "tamil-analysis",
+        type: "paragraph",
+        text: "தமிழ் ஆய்வு முடிவுகள்: சான்றுகள் தொடர்ந்து மதிப்பாய்வு செய்யப்படுகின்றன.",
+      }],
+    });
+    const v3 = await createArtifactVersion(ctx, {
+      artifactId: createdId, baseVersion: 2, content: reportWithTamil,
+      sourceRefs: v2.sourceRefs, dependencyRefs: v2.dependencyRefs,
+      actorType: "user", note: "Preserve native-script Tamil analysis.",
+    });
+    assert.equal(v3.version, 3);
+    await assert.rejects(prepareReportPdfDownload(ctx, createdId, 3),
+      /Cannot render Unicode professional PDF/);
   });
 
   await t.test("refuses cross-Project, revoked, stale, read-only and unapproved-source report attempts", async () => {

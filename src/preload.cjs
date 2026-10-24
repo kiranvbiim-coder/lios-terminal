@@ -27,4 +27,5 @@ contextBridge.exposeInMainWorld("limuriaDesktop", {
   restoreBackup: (passphrase) => invoke("limuria:restore-backup", passphrase),
   configureVoiceRuntimeFile: (kind) => invoke("limuria:voice-runtime-configure", kind),
   openExternal: (url) => invoke("limuria:open-external", url),
+  exportUnicodePdf: (payload) => invoke("limuria:export-unicode-pdf", payload),
 });

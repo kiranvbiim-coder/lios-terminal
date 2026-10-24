@@ -20,6 +20,7 @@ const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
 const { assertTrustedIpcSender } = require("./desktopIpcSecurity.cjs");
+const { normalizeUnicodePdfPayload, buildUnicodeReportHtml } = require("./desktopUnicodePdf.cjs");
 const { redactDesktopLogText } = require("./desktopLogRedaction.cjs");
 const {
   createRestoreWorkerLaunchPlan,
@@ -518,6 +519,62 @@ ipcMain.handle("limuria:artifact-draft-recovery-clear", async (event, identity) 
   assertTrustedIpcSender(event, mainWindow, serverPort);
   await requireCurrentNativeDraftGrant(identity);
   return removeProtectedArtifactDraft({ root: app.getPath("userData"), safeStorage, input: identity });
+});
+
+// Chromium performs Tamil/Indic glyph shaping that jsPDF's standard fonts
+// cannot. This is a local, explicit export action from our trusted top frame.
+// The hidden renderer accepts inert, escaped markup ONLY, no scripts/resources,
+// node access, app credentials, network, filesystem or interactive surfaces.
+ipcMain.handle("limuria:export-unicode-pdf", async (event, raw) => {
+  assertTrustedIpcSender(event, mainWindow, serverPort);
+  const request = normalizeUnicodePdfPayload(raw);
+  const html = buildUnicodeReportHtml(request);
+  const pick = await dialog.showSaveDialog(mainWindow, {
+    title: "Save professional Unicode PDF",
+    defaultPath: request.filename,
+    buttonLabel: "Save PDF",
+    filters: [{ name: "PDF Document", extensions: ["pdf"] }],
+  });
+  if (pick.canceled || !pick.filePath) return { saved: false, cancelled: true };
+  const partition = "lios-unicode-pdf";
+  const printSession = session.fromPartition(partition, { cache: false });
+  // Network egress is never needed: all source excerpts come from the owned
+  // canonical Artifact projection and fonts must be installed locally.
+  printSession.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: !details.url.startsWith("data:") });
+  });
+  let printWindow;
+  try {
+    printWindow = new BrowserWindow({
+      width: 794, height: 1123, show: false, backgroundColor: "#ffffff",
+      webPreferences: {
+        partition,
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        javascript: false,
+        webSecurity: true,
+        navigateOnDragDrop: false,
+      },
+    });
+    printWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    printWindow.webContents.on("will-navigate", (navEvent) => navEvent.preventDefault());
+    await printWindow.loadURL("data:text/html;charset=UTF-8," + encodeURIComponent(html));
+    const bytes = await printWindow.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      pageSize: "A4",
+    });
+    if (!Buffer.isBuffer(bytes) || bytes.length < 100 || bytes.length > 32 * 1024 * 1024
+      || bytes.subarray(0, 5).toString("ascii") !== "%PDF-"
+      || !/%%EOF\s*$/.test(bytes.subarray(Math.max(0, bytes.length - 32)).toString("ascii"))) {
+      throw new Error("Chromium did not produce a valid bounded Unicode PDF.");
+    }
+    await fs.promises.writeFile(pick.filePath, bytes);
+    return { saved: true, filename: path.basename(pick.filePath), bytes: bytes.length };
+  } finally {
+    if (printWindow && !printWindow.isDestroyed()) printWindow.destroy();
+  }
 });
 
 ipcMain.handle("limuria:workspace-info", (event) => {

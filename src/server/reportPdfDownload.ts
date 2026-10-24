@@ -10,6 +10,7 @@ import { getArtifactExportPlan } from "./artifactExport";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
 import type { TenantContext } from "./tenantContext";
 import { buildArtifactPdf } from "../client/src/lib/exportPdf";
+import { requiresChromiumUnicodePdf } from "../client/src/lib/artifactUnicodePdf";
 
 const REPORT_PDF_MIME = "application/pdf" as const;
 const MAX_REPORT_PDF_BYTES = 32 * 1024 * 1024;
@@ -59,6 +60,9 @@ export async function prepareReportPdfDownload(
   const content = artifactContentSchema.parse(saved.content);
   if (content.kind !== "report") {
     throw new Error("The saved Report content no longer matches its Artifact kind.");
+  }
+  if (requiresChromiumUnicodePdf(plan, content)) {
+    throw new Error("Cannot render Unicode professional PDF through the standard HTTP renderer; use the installed LiOS Desktop Artifact Export for native Tamil/Indic shaping.");
   }
   // This is the SAME bound-aware renderer already used in the existing P4
   // desktop UI: pagination, exact source refs and unsupported-glyph failure
