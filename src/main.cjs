@@ -768,12 +768,22 @@ function createWindow() {
 app.whenReady().then(async () => {
   if (nativeUnicodePdfSmokeRequested) {
     // A separate opt-in installed-app renderer test. It does not start the
-    // local server, access a user workspace or write a PDF to disk.
+    // local server or access a user workspace. A PDF may be saved ONLY when
+    // an operator explicitly supplies a new local evidence path.
     // This is a render smoke probe, not automatic font/visual acceptance.
     const reportPath = process.env.LIOS_UNICODE_PDF_SMOKE_REPORT?.trim();
+    const outputPath = process.env.LIOS_UNICODE_PDF_SMOKE_OUTPUT?.trim();
     try {
       if (!app.isPackaged)throw new Error("Native Unicode PDF smoke requires an installed packaged LiOS build.");
-      const result = await runNativeUnicodePdfSmoke({BrowserWindow,session});
+      if (outputPath && (!path.isAbsolute(outputPath) || !/\.pdf$/i.test(outputPath))) {
+        throw new Error("Native Unicode PDF evidence output requires an absolute .pdf file path.");
+      }
+      const onPdf = outputPath ? async bytes => {
+        // No overwrite, no public upload and no user data. The payload is
+        // synthetic, but keep its emitted file private by default.
+        await fs.promises.writeFile(outputPath, bytes, {flag:"wx",mode:0o600});
+      } : undefined;
+      const result = await runNativeUnicodePdfSmoke({BrowserWindow,session,onPdf});
       const report = {version:1,generatedAt:new Date().toISOString(),
         platform:process.platform,arch:process.arch,...result};
       if(reportPath)fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+"\n","utf8");

@@ -330,11 +330,14 @@ function buildUnicodeReportHtml(raw) {
 
 /**
  * Explicit packaged-app smoke probe. Only synthetic content is rendered:
- * no Project, credentials, source documents, network calls or saved file.
+ * no Project, credentials, source documents or network calls.
  * A successful PDF signature proves native Chromium printing ran, not that
  * Tamil font coverage, extraction or page appearance has been accepted.
  */
-async function runNativeUnicodePdfSmoke({BrowserWindow,session}) {
+async function runNativeUnicodePdfSmoke({BrowserWindow,session,onPdf}) {
+  if (onPdf !== undefined && typeof onPdf !== "function") {
+    throw new Error("Native Unicode PDF smoke output must use an explicit local callback.");
+  }
   if (typeof BrowserWindow !== "function" || !session?.fromPartition) {
     throw new Error("Packaged Unicode PDF smoke requires native Electron print services.");
   }
@@ -386,9 +389,15 @@ async function runNativeUnicodePdfSmoke({BrowserWindow,session}) {
       || !/%%EOF\s*$/.test(bytes.subarray(Math.max(0,bytes.length-32)).toString("ascii"))) {
       throw new Error("Native Unicode PDF smoke did not produce a valid bounded PDF.");
     }
+    // Real PDF bytes are exposed ONLY on explicit opt-in. Without onPdf the
+    // smoke remains no-write, synthetic and side-effect free.
+    const pdfSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+    if (onPdf) await onPdf(bytes);
     return {
       status:"native-pdf-rendered",
       pdfBytes:bytes.length,
+      pdfSha256,
+      pdfRetained:Boolean(onPdf),
       source:"synthetic",
       contentCoverage:["Tamil","Devanagari","table","PNG","line chart"],
       visualAcceptance:"not_tested",

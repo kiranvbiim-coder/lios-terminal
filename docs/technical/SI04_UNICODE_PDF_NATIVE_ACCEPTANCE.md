@@ -8,11 +8,24 @@ On a packaged signed/installed LiOS executable, run the executable with argument
 
     "/path/to/LiOS Intelligence Terminal" --unicode-pdf-smoke
 
-Set the environment variable **LIOS_UNICODE_PDF_SMOKE_REPORT** to an absolute local JSON path if a receipt is required. The smoke refuses development/unpackaged Electron.
+Set **LIOS_UNICODE_PDF_SMOKE_REPORT** to an absolute local JSON path to retain the machine-readable receipt. The smoke refuses development/unpackaged Electron.
 
-The test uses no user Project, login, local data, provider, network API or secret. In an isolated sandboxed Chromium process, it renders synthetic Tamil and Hindi text, a typed table, a 1 × 1 PNG with verified SHA-256 and a source-labeled line chart. No PDF is saved on disk. The smoke destroys the temporary window.
+To **retain the actual synthetic PDF for inspection**, explicitly set **LIOS_UNICODE_PDF_SMOKE_OUTPUT** to an absolute path ending in `.pdf` alongside the receipt. The PDF must **not already exist**: the native writer uses exclusive create and private file permissions. If the PDF path is absent, the smoke still discards the PDF bytes. These environment variables are read only in `--unicode-pdf-smoke` mode.
 
-Expected successful JSON receipt: status **native-pdf-rendered**, source **synthetic**, a nonzero byte count, content coverage and **visualAcceptance: not_tested**. Any error or nonzero exit code is a blocker. A PDF envelope proves native print execution, **not** readable Indic glyphs, correct extraction or final layout.
+Example on macOS (replace the application and output paths with real installed paths):
+
+```bash
+LIOS_UNICODE_PDF_SMOKE_REPORT="/tmp/lios-smoke-receipt.json" \
+LIOS_UNICODE_PDF_SMOKE_OUTPUT="/tmp/lios-smoke-synthetic.pdf" \
+"/Applications/LiOS Intelligence Terminal.app/Contents/MacOS/LiOS Intelligence Terminal" --unicode-pdf-smoke
+node script/verify_unicode_pdf_smoke.cjs /tmp/lios-smoke-receipt.json /tmp/lios-smoke-synthetic.pdf
+```
+
+Use corresponding quoted paths to the installed EXE and existing output directory on Windows.
+
+The test uses no user Project, login, local data, provider, network API or secret. In an isolated sandboxed Chromium process, it renders synthetic Tamil and Hindi text, a typed table, a 1 × 1 PNG with verified SHA-256 and a source-labeled line chart. The temporary window is destroyed afterwards.
+
+Expected receipt: status **native-pdf-rendered**, source **synthetic**, PDF byte length, `pdfSha256`, `pdfRetained` and **visualAcceptance: not_tested**. The offline verifier compares the PDF bytes, SHA-256, format envelope and receipt. **Checksum verification does not certify visually readable Indic glyphs or accurate PDF extraction.** An error, hash mismatch or nonzero exit code blocks the release.
 
 ## Manual installed-app acceptance, still required
 

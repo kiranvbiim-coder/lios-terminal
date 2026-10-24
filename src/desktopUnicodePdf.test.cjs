@@ -187,6 +187,8 @@ test("Packaged Chromium smoke probes synthetic Tamil, table, chart and PNG witho
   assert.equal(result.status,"native-pdf-rendered");
   assert.equal(result.visualAcceptance,"not_tested");
   assert.equal(result.pdfBytes,signature.length);
+  assert.equal(result.pdfSha256,require("node:crypto").createHash("sha256").update(signature).digest("hex"));
+  assert.equal(result.pdfRetained,false);
   assert.equal(result.source,"synthetic");
   assert.deepEqual(result.contentCoverage,["Tamil","Devanagari","table","PNG","line chart"]);
   assert.match(printedUrl,/தமிழ் அறிக்கை/);
@@ -214,5 +216,58 @@ test("Native Unicode PDF smoke fails closed on an invalid Chromium result and de
     destroy(){destroyed=true;}
   },session:{fromPartition:()=>({webRequest:{onBeforeRequest(){}}})}};
   await assert.rejects(runNativeUnicodePdfSmoke(options),/valid bounded PDF/);
+  assert.equal(destroyed,true);
+});
+
+
+test("Opt-in native smoke returns checksum evidence for the exact emitted synthetic PDF", async () => {
+  const crypto = require("node:crypto");
+  const bytes = Buffer.from("%PDF-1.7\n" + "synthetic".repeat(20) + "%%EOF\n");
+  let returned = null;
+  let destroyed = false;
+  const options = {
+    BrowserWindow: class {
+      webContents = {
+        setWindowOpenHandler() {},
+        on() {},
+        printToPDF: async () => bytes,
+      };
+      async loadURL() {}
+      isDestroyed() { return destroyed; }
+      destroy() { destroyed = true; }
+    },
+    session: { fromPartition: () => ({webRequest:{onBeforeRequest(){}}}) },
+    onPdf: async pdf => { returned = Buffer.from(pdf); },
+  };
+  const result = await runNativeUnicodePdfSmoke(options);
+  assert.deepEqual(returned,bytes);
+  assert.equal(result.pdfRetained,true);
+  assert.equal(result.pdfBytes,bytes.length);
+  assert.equal(result.pdfSha256,crypto.createHash("sha256").update(bytes).digest("hex"));
+  assert.equal(result.visualAcceptance,"not_tested");
+  assert.equal(destroyed,true);
+  await assert.rejects(
+    runNativeUnicodePdfSmoke({...options,onPdf:"not a callback"}),
+    /explicit local callback/,
+  );
+});
+
+test("Opt-in evidence write failure fails native smoke and releases the print window", async () => {
+  let destroyed = false;
+  const options = {
+    BrowserWindow: class {
+      webContents = {
+        setWindowOpenHandler() {},
+        on() {},
+        printToPDF: async () => Buffer.from("%PDF-1.7\n" + "x".repeat(150) + "%%EOF\n"),
+      };
+      async loadURL() {}
+      isDestroyed() { return destroyed; }
+      destroy() { destroyed = true; }
+    },
+    session: { fromPartition: () => ({webRequest:{onBeforeRequest(){}}}) },
+    onPdf: async () => { throw new Error("Evidence destination already exists"); },
+  };
+  await assert.rejects(runNativeUnicodePdfSmoke(options),/already exists/);
   assert.equal(destroyed,true);
 });
