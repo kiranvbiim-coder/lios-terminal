@@ -68,7 +68,33 @@ export function reconcileOfficeArtifactProvenance(
       }
     }
   }
+  if (original.kind === "decision" && result.kind === "decision"
+      && !equal(original.linkedRefs, result.linkedRefs)) {
+    throw new Error("Office return cannot modify recorded decision source/model references.");
+  }
   if (original.kind === "thesis" && result.kind === "thesis") {
+    for (const key of ["entityRef", "status", "refresh", "postmortems"] as const) {
+      if (!equal(original[key], result[key])) {
+        throw new Error(`Office return cannot modify recorded thesis ${key}.`);
+      }
+    }
+    for (const key of ["expectedOutcomes", "catalysts", "risks", "invalidationConditions", "openQuestions"] as const) {
+      const baseline = new Map(original[key].map(item => [item.id, item]));
+      for (const item of result[key]) {
+        const before = baseline.get(item.id);
+        if (!equal(item.evidenceRefs, before?.evidenceRefs ?? [])) {
+          throw new Error(`Office return cannot modify thesis ${key} evidence references.`);
+        }
+        if ("status" in item) {
+          const priorStatus = before && "status" in before ? before.status : "open";
+          item.status = !before || before.text !== item.text ? "open" : priorStatus;
+        }
+        if ("triggered" in item) {
+          const priorTriggered = before && "triggered" in before ? before.triggered : false;
+          item.triggered = !before || before.text !== item.text ? false : priorTriggered;
+        }
+      }
+    }
     const claims = new Map(original.claims.map(claim => [claim.id, claim]));
     for (const claim of result.claims) {
       const before = claims.get(claim.id);
