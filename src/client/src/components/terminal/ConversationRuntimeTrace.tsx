@@ -83,6 +83,12 @@ export function trustCaveats(manifest: TrustManifest, shownGap?: { field: string
     if (!shownGap || !warning.includes(shownGap.message)) lines.push(warning);
   }
   if (manifest.summary.quality === "low") lines.push("The supporting data is low quality. Treat the figures with caution.");
+  if ((manifest.summary.conflictState === "material" || manifest.summary.conflictState === "minor") && manifest.conflicts.length === 0) {
+    lines.push("A source conflict is recorded in the trust summary, but its detailed comparison is unavailable.");
+  }
+  if (manifest.summary.missingCount > manifest.missing.length) {
+    lines.push("Some missing evidence is recorded in the summary without detailed recovery information.");
+  }
   // P3's recorded claim/access exceptions must remain visible before Show work,
   // without asserting that a past denial or health state was just rechecked.
   lines.push(...sourceExceptionCaveats(reviewEvidenceExceptions(manifest)));
