@@ -110,3 +110,37 @@ test("WS-41 an unchanged claim cannot get an upgraded status in an Office attach
   assert.equal(changed.claims[0].status, "open");
   assert.equal(changed.claims[0].confidence, null);
 });
+
+
+test("WS-41 Office cannot forge linked decision sources or thesis outcome evidence and state", () => {
+  const decision = artifactContentSchema.parse({
+    kind: "decision", objective: "Wait for audit",
+    linkedRefs: { sources: ["filing:source"], models: ["artifact:model:v2"], monitors: [] },
+  });
+  if (decision.kind !== "decision") assert.fail("Decision expected");
+  assert.throws(() => reconcileOfficeArtifactProvenance(decision, artifactContentSchema.parse({
+    ...decision, linkedRefs: { ...decision.linkedRefs, sources: ["filing:forged"] },
+  })), /cannot modify recorded decision source/);
+
+  const thesis = artifactContentSchema.parse({
+    kind: "thesis", summary: "Validated question", status: "active",
+    expectedOutcomes: [{ id: "target", text: "Target growth", status: "occurred", evidenceRefs: ["filing:old"] }],
+    invalidationConditions: [{ id: "stop", text: "Revenue falls", triggered: true, evidenceRefs: ["filing:old"] }],
+  });
+  if (thesis.kind !== "thesis") assert.fail("Thesis expected");
+  assert.throws(() => reconcileOfficeArtifactProvenance(thesis, artifactContentSchema.parse({
+    ...thesis, expectedOutcomes: [{ ...thesis.expectedOutcomes[0], evidenceRefs: ["filing:forged"] }],
+  })), /cannot modify thesis expectedOutcomes evidence references/);
+  assert.throws(() => reconcileOfficeArtifactProvenance(thesis, artifactContentSchema.parse({
+    ...thesis, status: "closed",
+  })), /cannot modify recorded thesis status/);
+  const changes = reconcileOfficeArtifactProvenance(thesis, artifactContentSchema.parse({
+    ...thesis,
+    expectedOutcomes: [{ ...thesis.expectedOutcomes[0], text: "Word-edited target", status: "occurred" }],
+    invalidationConditions: [{ ...thesis.invalidationConditions[0], text: "Word-edited trigger", triggered: true }],
+  }));
+  if (changes.kind !== "thesis") assert.fail("Thesis expected");
+  assert.equal(changes.expectedOutcomes[0].status, "open");
+  assert.equal(changes.invalidationConditions[0].triggered, false);
+  assert.deepEqual(changes.expectedOutcomes[0].evidenceRefs, ["filing:old"]);
+});
