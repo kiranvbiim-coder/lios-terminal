@@ -79,24 +79,40 @@ test("full precision mode shows every stored digit", () => {
   assert.match(markup, />Show formatted numbers</);
 });
 
-test("raw JSON is reachable only behind the explicit Expert view disclosure", () => {
+test("raw valuation JSON is reachable only as read-only recorded evidence", () => {
   const closed = valuation();
   assert.match(closed, /<button[^>]*aria-expanded="false"[^>]*>.*?Expert view/);
   assert.doesNotMatch(closed, /<textarea/);
   const open = valuation({ expertDefaultOpen: true });
   assert.match(open, /aria-expanded="true"/);
-  assert.match(open, /<textarea[^>]*aria-label="Artifact JSON"/);
-  assert.match(open, /&quot;valuePerShare&quot;: 71\.370824940136/);
-  assert.match(open, /You are editing the recorded Artifact data directly/);
+  assert.match(open, /<pre[^>]*aria-label="Recorded valuation JSON"/);
+  assert.match(open, /"valuePerShare": 71\.370824940136/);
+  assert.match(open, /This is recorded calculation evidence, not an input editor/);
+  assert.doesNotMatch(open, /<textarea|Save revision/);
 });
 
 
-test("Expert view panel is hidden when collapsed and visible when open; editor mounts only once opened", () => {
+test("Expert view panel mounts read-only valuation data only on explicit disclosure", () => {
   const closed = valuation();
   assert.match(closed, /<div id="[^"]+" hidden=""[^>]*><\/div>/);
   const open = valuation({ expertDefaultOpen: true });
   assert.doesNotMatch(open, /<div id="[^"]+" hidden=""/);
-  assert.match(open, /<textarea/);
+  assert.match(open, /<pre aria-label="Recorded valuation JSON"/);
+});
+
+test("WACC control stages a proposal without changing stored calculations", () => {
+  const markup = renderToStaticMarkup(createElement(ValuationArtifactView, {
+    content: dcfSensitivityValuation, facts, onSave: save,
+    onRequestRecalculation: () => undefined,
+  }));
+  assert.match(markup, /aria-label="Propose valuation assumption change"/);
+  assert.match(markup, /Recorded value: 10% WACC/);
+  assert.match(markup, /value="10"/);
+  assert.match(markup, /Prepare recalculation in Chat/);
+  assert.match(markup, /disabled=""/);
+  assert.match(markup, /does not update the saved model/);
+  assert.match(markup, /data-exact="71\.370824940136"/);
+  assert.doesNotMatch(valuation(), /aria-label="Propose valuation assumption change"/);
 });
 
 test("unknown Artifact kinds get an honest fallback with export and no JSON", () => {
