@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Clock3, Save, X } from "lucide-react";
 import type { ConversationRequest } from "@shared/conversationRuntime";
 import type { P9AutomationEventType, P9WorkflowTemplate, P9WorkflowTrigger } from "@shared/p9AutomationContracts";
@@ -42,6 +43,7 @@ export function SaveWorkflowDialog({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(() => request.message.slice(0, 80) || "Saved analysis");
+  const nameRef = useRef<HTMLInputElement>(null);
   const [template, setTemplate] = useState<P9WorkflowTemplate>("custom");
   const [triggerMode, setTriggerMode] = useState<"manual" | "interval" | "daily" | "event">("interval");
   const [intervalMinutes, setIntervalMinutes] = useState(60);
@@ -141,21 +143,28 @@ export function SaveWorkflowDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-3" onMouseDown={onClose}>
-      <section className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-[#080808] shadow-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="Save workflow">
+    <Dialog open onOpenChange={(next) => { if (!next && !saving) onClose(); }}>
+      <DialogContent
+        className="z-[95] max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-xl border border-border bg-[#080808] p-0 shadow-2xl [&>button:last-child]:hidden"
+        aria-describedby="lios-save-workflow-description"
+        aria-busy={saving}
+        onOpenAutoFocus={(event) => { event.preventDefault(); nameRef.current?.focus(); }}
+        onEscapeKeyDown={(event) => { if (saving) event.preventDefault(); }}
+        onPointerDownOutside={(event) => { if (saving) event.preventDefault(); }}
+      >
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <Save className="h-4 w-4 text-amber-300" />
           <div className="min-w-0 flex-1">
-            <div className="font-ui text-[10px] font-semibold text-foreground">Save Workflow</div>
-            <div className="mt-0.5 font-ui text-[7px] text-muted-foreground">Run this analysis again on fresh data without changing its permission or AI-sharing policy.</div>
+            <DialogTitle className="font-ui text-sm font-semibold text-foreground">Save Workflow</DialogTitle>
+            <DialogDescription id="lios-save-workflow-description" className="mt-0.5 font-ui text-xs text-muted-foreground">Review the selected Project, trigger and approvals before saving a workflow that may run again on fresh data. Permissions and AI-sharing policy remain enforced.</DialogDescription>
           </div>
-          <button type="button" aria-label="Close Save Workflow" onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-white/5 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label="Close Save Workflow" disabled={saving} onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-white/5 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </header>
 
         <div className="space-y-4 p-4">
           <label className="block">
             <span className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">Workflow name</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="mt-1 w-full rounded border border-border/60 bg-black/25 px-3 py-2 font-ui text-[9px] text-foreground outline-none focus:border-amber-300/35" />
+            <input ref={nameRef} value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="mt-1 w-full rounded border border-border/60 bg-black/25 px-3 py-2 font-ui text-[9px] text-foreground outline-none focus:border-amber-300/35" />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -266,16 +275,16 @@ export function SaveWorkflowDialog({
             Execution: {financeMonitor ? accepted?.version.refreshSpec?.executionMode ?? request.executionMode : request.executionMode} · Project approvals carried by this workflow: {request.approvals.length ? request.approvals.map((item) => item.action).join(", ") : "none"}. Missing high-impact approval stops the background run rather than auto-approving it.
           </div>
 
-          {error && <div className="rounded border border-red-400/25 bg-red-400/[0.04] px-3 py-2 font-ui text-[8px] text-red-200">{error}</div>}
+          {error && <div role="alert" className="rounded border border-red-400/25 bg-red-400/[0.04] px-3 py-2 font-ui text-[8px] text-red-200">{error}</div>}
 
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="rounded px-3 py-2 font-ui text-[8px] text-muted-foreground hover:text-foreground">Cancel</button>
+            <button type="button" disabled={saving} onClick={onClose} className="rounded px-3 py-2 font-ui text-[8px] text-muted-foreground hover:text-foreground disabled:opacity-40">Cancel</button>
             <button disabled={saving || !name.trim() || (financeMonitor && !acceptedCurrent)} onClick={() => void save()} className="rounded border border-amber-400/35 bg-amber-400/[0.08] px-3 py-2 font-ui text-[8px] font-medium text-amber-200 disabled:opacity-40">
               {saving ? "Saving…" : "Save Workflow"}
             </button>
           </div>
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
