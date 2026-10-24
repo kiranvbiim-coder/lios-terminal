@@ -1,4 +1,4 @@
-import type { ExtensionCatalog } from "@shared/p13ExtensionContracts";
+import type { ExtensionCatalog, ExtensionPreview } from "@shared/p13ExtensionContracts";
 
 export type ExtensionAvailability = "registered_session" | "blocked" | "stored_inactive" | "unsupported";
 
@@ -87,5 +87,30 @@ export function summarizeExtensionCapabilities(catalog: ExtensionCatalog): Exten
         ? "Owner-supplied local P13 packages and P11 archives may be submitted for signed review; none is pre-approved or discovered from a public marketplace."
         : "Owner-supplied P13 packages may be submitted for review; P11 import is unavailable on this target."
       : "Extension management is not permitted for the current authenticated owner.",
+  };
+}
+
+/** A local file review is NOT an installed plugin. The P13/P11 server still
+ * verifies the exact package digest, signer, dependency state and rights
+ * consent on every install submission. */
+export function extensionPreviewAvailability(preview: ExtensionPreview): {
+  state: "blocked" | "reviewable_session" | "reviewable_inactive";
+  label: string;
+  explanation: string;
+} {
+  if (!preview.installable || preview.activation === "unavailable") return {
+    state: "blocked",
+    label: "Unavailable to install",
+    explanation: "This local package has unresolved server-reported trust, compatibility or integrity issues. Review reasons below; no installation or execution was attempted.",
+  };
+  if (preview.activation === "inactive_only") return {
+    state: "reviewable_inactive",
+    label: "Available for reviewed inactive storage · not installed",
+    explanation: "The canonical P11 review allows storage only after exact-package rights and consent. This preview does not enable execution.",
+  };
+  return {
+    state: "reviewable_session",
+    label: "Available for reviewed session registration · not installed",
+    explanation: "The canonical P13 review still requires separate verified publisher trust, exact digest, rights acknowledgment and consent; this preview grants no tool or external action permission.",
   };
 }
