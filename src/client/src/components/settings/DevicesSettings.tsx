@@ -35,7 +35,7 @@ interface PairingCode {
 }
 
 const DEVICES_KEY = ["/api/devices"];
-const buttonClass = "border border-border px-3 py-1 font-terminal text-[8px] uppercase tracking-wider text-foreground hover:border-[hsl(38,95%,50%)/40%] disabled:opacity-45";
+const buttonClass = "min-h-10 rounded border border-border px-3 py-2 font-ui text-xs font-medium tracking-wide text-foreground hover:border-[hsl(38,95%,50%)/40%] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-45";
 
 function formatDate(value: string): string {
   const date = new Date(value);
