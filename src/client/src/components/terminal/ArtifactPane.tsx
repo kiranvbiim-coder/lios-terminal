@@ -23,6 +23,7 @@ import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4ArtifactWorkspace";
+import { artifactHistoryAnchor, canRestoreArtifactHistory, exactArtifactHistoryComparison, exactArtifactHistoryDetail, sameArtifactHistoryAnchor, type ArtifactHistoryAnchor } from "@/lib/artifactHistorySafety";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -607,7 +608,7 @@ export function ArtifactPane(props: ArtifactPaneProps) {
     controlledRevision.current = { artifactId: props.artifactId, version: props.version };
     if (selection !== null) setSelection(null);
   }
-  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId && (props.version == null || selection.version >= props.version) ? selection.version : props.version;
+  const selectedVersion = controlledRevision.current.artifactId === props.artifactId && selection?.artifactId === props.artifactId ? selection.version : props.version;
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
@@ -634,14 +635,19 @@ function ArtifactPaneWorkspace({
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
   const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
-  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? detail.data?.artifact.owningChatId });
+  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? (detail.data?.artifact.id === artifactId ? detail.data.artifact.owningChatId : null) });
   const [mergeBranchId,setMergeBranchId]=useState("");
   const [mergeConflicts,setMergeConflicts]=useState<string[]>([]);
   const [mergePreviews,setMergePreviews]=useState<Record<string,{target:string;branch:string;truncated:boolean}>>({});
   const [mergeResolutions,setMergeResolutions]=useState<Record<string,"target"|"branch">>({});
   const [mergeNotice,setMergeNotice]=useState<string|null>(null);
   const automation=useP9Workflows(projectId),invalidateAutomation=useInvalidateP9Automation();
-  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<string|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<{text:string;anchor:ArtifactHistoryAnchor;from:number}|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [restoreIntent, setRestoreIntent] = useState<{ anchor: ArtifactHistoryAnchor; targetVersion: number; targetHash: string } | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const historyInFlight = useRef(false);
+  const historyRequest = useRef(0);
+  const historyCurrent = useRef<{ anchor: ArtifactHistoryAnchor; left: number | null } | null>(null);
   const [exportPlan, setExportPlan] = useState<ArtifactExportPlan | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ArtifactExportPlan["formats"][number] | null>(null);
@@ -661,7 +667,8 @@ function ArtifactPaneWorkspace({
   const [inspectorTab, setInspectorTab] = useState<"artifact" | "evidence" | "history">("artifact");
   const inspectorId = useId();
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
-  const data=detail.data; useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
+  const data = exactArtifactHistoryDetail(detail.data, artifactId, version, projectId, owningChatId, detail.isPlaceholderData || detail.isError);
+  useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
@@ -679,7 +686,27 @@ function ArtifactPaneWorkspace({
     return () => { active = false; };
   }, [artifactId, data?.version.version, data?.version.contentHash, exportOpen]);
   const run=async(fn:()=>Promise<void>)=>{setError(null);try{await fn()}catch(e){setError(e instanceof Error?e.message:"Artifact action failed.")}};
-  if(!data)return <div className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading?"Loading Artifact…":"Artifact unavailable."}</div>;
+  if(!data)return <div role="status" className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading || detail.isFetching ? "Loading the exact saved Artifact revision…" : "Artifact unavailable or its revision/owner does not match."}</div>;
+  const anchor = artifactHistoryAnchor(data);
+  historyCurrent.current = { anchor, left };
+  const historicalVersions = (versions.data ?? []).filter(entry => entry.artifactId === artifactId);
+  const leftRecord = historicalVersions.find(entry => entry.version === left);
+  const displayedRecord = historicalVersions.find(entry => entry.version === anchor.displayedVersion);
+  const hasUnsavedArtifactEdits = spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying;
+  const canRestore = canRestoreArtifactHistory(anchor, leftRecord, hasUnsavedArtifactEdits, historyBusy || versions.isFetching || historyInFlight.current);
+  const activeRestoreIntent = restoreIntent && leftRecord
+    && restoreIntent.targetVersion === left
+    && restoreIntent.targetHash === leftRecord.contentHash
+    && sameArtifactHistoryAnchor(restoreIntent.anchor, anchor) ? restoreIntent : null;
+  const changeDisplayedRevision = (next: number | null) => {
+    if (hasUnsavedArtifactEdits || historyInFlight.current) {
+      setError("Save or reset unsaved Artifact edits before switching revisions; your draft has not been discarded.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setRestoreIntent(null); setError(null);
+    onVersionChange?.(next);
+  };
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
