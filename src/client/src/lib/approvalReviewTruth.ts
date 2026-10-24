@@ -36,7 +36,7 @@ export function legacyReviewFacts(review: LegacyReview) {
   return {
     action: review.action,
     component: review.actionRequest.componentId,
-    target: review.actionRequest.targetRef === null ? "not specified" : String(review.actionRequest.targetRef),
+    target: review.actionRequest.targetRef == null ? "not specified" : String(review.actionRequest.targetRef),
     sideEffect: review.actionRequest.externalSideEffect ? "External side effect" : review.actionRequest.reversible ? "Reversible request" : "Effect not independently verified",
     permission: review.actionRequest.permissionClass,
   };
