@@ -47,7 +47,6 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
       type="button"
       ref={triggerRef}
       disabled={disabled}
-      aria-haspopup="true"
       aria-expanded={open}
       aria-controls={catalogueId}
       onClick={() => setOpen(value => !value)}
