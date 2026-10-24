@@ -264,7 +264,7 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
     if (resolved) chooseSecurity(resolved);
     else setSearchNotice(searchingSecurity
       ? "Searching securities. Choose a returned match after lookup finishes."
-      : "No unique verified ticker matched. Choose an exact security from search results; the current workspace is unchanged.");
+      : "No unique listed ticker matched. Choose an exact security from search results; the current workspace is unchanged.");
   };
 
   const timeStr = clock.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -340,8 +340,7 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
             onBlur={() => setIsFocused(false)}
             className="bg-transparent font-terminal text-[10px] text-[hsl(38,95%,60%)] placeholder:text-muted-foreground/60 focus:outline-none w-24 uppercase"
             data-testid="ticker-search"
-            aria-label="Search verified companies and securities"
-            aria-describedby="lios-topbar-lookup-status"
+            aria-label="Search returned companies and securities"
           />
           {searchVal && (
             <button type="submit" className="font-terminal text-[8px] px-1.5 py-0.5 bg-[hsl(38,95%)] text-black rounded font-bold">
@@ -377,9 +376,10 @@ export default function TopBar({ activeSymbol, view, onNav, onSymbol, onOpenCmd,
                 </div>
               </button>
             ))}
+            {searchNotice && <p role="status" className="px-3 py-2 font-ui text-xs leading-relaxed text-amber-300">{searchNotice}</p>}
           </div>
         )}
-        {(isFocused || searchNotice) && searchVal.trim() && (
+        {(isFocused || searchNotice) && searchVal.trim() && (searchResults.length === 0 || completedSearch?.trim().toUpperCase() !== searchVal.trim().toUpperCase()) && (
           <div id="lios-topbar-lookup-status" role="status" aria-live="polite" className="absolute left-0 top-full z-40 w-72 max-w-[90vw] border border-border bg-[#090909] px-3 py-2 font-ui text-xs leading-relaxed text-muted-foreground">
             {searchNotice ?? (searchingSecurity ? "Searching permitted security listings…" : completedSearch?.trim().toUpperCase() === searchVal.trim().toUpperCase() && searchResults.length === 0 ? "No matching securities returned by the source. Nothing was selected." : "Select a returned security. GO only opens one exact ticker match.")}
           </div>
