@@ -1362,8 +1362,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
               </div>
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
-              <button type="button" onClick={handleReturnToWork} data-testid="connection-return-to-work"
-                className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+              <button type="button" onClick={handleReturnToWork} disabled={saving || aiBusy || masterBusy || runtimeBusy !== null} data-testid="connection-return-to-work"
+                className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
                 Return to previous work
               </button>
               <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
@@ -2012,7 +2012,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
         )}
         <div className="flex items-center justify-between pb-4 pt-2">
           <span className="font-terminal text-[8px] text-muted-foreground">{connectionSummary.statusDetail}</span>
-          <button type="button" onClick={handleReturnToWork} data-testid="connection-return-to-work-footer"
+          <button type="button" onClick={handleReturnToWork} disabled={saving || aiBusy || masterBusy || runtimeBusy !== null} data-testid="connection-return-to-work-footer"
             className="min-h-10 rounded border border-border px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             Return to previous work
           </button>
