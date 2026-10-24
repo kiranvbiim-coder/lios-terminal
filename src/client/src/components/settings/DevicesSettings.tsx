@@ -436,7 +436,7 @@ export default function DevicesSettings() {
                       </button>
                     </div>
                     {pairReview === request.pairingId && <div role="group" aria-label={`Review device pairing for ${request.deviceName}`} data-testid="device-pairing-review" className="w-full space-y-1 rounded border border-amber-300/30 p-2">
-                      <p>Approve ${request.deviceName} (${request.deviceId.slice(0, 8)}) for this Home owner? Requested capabilities and commands are self-advertised only; approval grants the server-capped device scopes, not these command rights.</p>
+                      <p>Approve {request.deviceName} ({request.deviceId.slice(0, 8)}) for this Home owner? Requested capabilities and commands are self-advertised only; approval grants the server-capped device scopes, not these command rights.</p>
                       <button type="button" disabled={decideMutation.isPending} className={buttonClass}
                         onClick={() => decideMutation.mutate({ pairingId: request.pairingId, action: "approve" })}>Confirm pairing approval</button>
                       <button type="button" disabled={decideMutation.isPending} className={buttonClass} onClick={() => setPairReview(null)}>Cancel</button>
