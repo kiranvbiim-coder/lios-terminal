@@ -51,6 +51,7 @@ test("WS-42 native generation is required for explicit Discard and save cleanup;
   assert.match(client, /if \(!removed\) \{/);
   assert.match(client, /status: "error", candidate: null/);
   assert.match(client, /Retry protected recovery to inspect the current state/);
+  assert.match(client, /Another window has a newer protected draft for this Artifact/);
   assert.match(store, /const checkpointId = crypto\.randomUUID\(\)/);
   assert.match(store, /current\.checkpointId !== expected\.checkpointId/);
   assert.match(store, /return \{ protected: true, checkpointId \}/);
