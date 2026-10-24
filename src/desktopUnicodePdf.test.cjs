@@ -57,3 +57,61 @@ test("Publishing boundary rejects oversized, forged and traversal payloads", () 
     Array.from({ length: 4_001 }, () => ({ text: "x", style: "body" })),
   }), /paragraph count/);
 });
+
+
+test("Unicode PDF renders exact typed tables and escapes Tamil source text", () => {
+  const input={ ...payload, items: [
+    { kind:"paragraph",style:"title",text:"தமிழ் அட்டவணை" },
+    { kind:"table", columns:["கிராமம்","வருமானம்"],
+      rows:[["மதுரை","120"],["<img src=x onerror=attack()>","42"]] },
+  ] };
+  const html=buildUnicodeReportHtml(input);
+  assert.match(html, /<table>/);
+  assert.match(html, /கிராமம்/);
+  assert.match(html, /<td>120<\/td>/);
+  assert.match(html, /&lt;img src=x onerror=attack\(\)&gt;/);
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.throws(() => buildUnicodeReportHtml({ ...input,
+    items: [{kind:"table",columns:["one","two"],rows:[["missing"]]}] }), /row shape mismatch/);
+});
+
+test("Native PDF preserves verified captured PNG bytes, dimensions and citation", () => {
+  const crypto=require("node:crypto");
+  const base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l5cAAAAASUVORK5CYII=";
+  const bytes=Buffer.from(base64,"base64");
+  const sha256=crypto.createHash("sha256").update(bytes).digest("hex");
+  const image={ kind:"image",caption:"குளம்: களப் புகைப்படம்",sourceRef:"source:village:2026",
+    mimeType:"image/png",dataBase64:base64,byteLength:bytes.length,width:1,height:1,sha256 };
+  const html=buildUnicodeReportHtml({ ...payload,items:[{kind:"paragraph",style:"title",text:"Tamil report"},image]});
+  assert.match(html, /<img width="1" height="1"/);
+  assert.match(html, /src="data:image\/png;base64,/);
+  assert.match(html, /Source: source:village:2026/);
+  assert.match(html, new RegExp(sha256));
+  assert.match(html,/img-src data:/);
+  assert.throws(() => normalizeUnicodePdfPayload({ ...payload,items:[{...image,sha256:"f".repeat(64)}] }),/checksum/);
+  assert.throws(() => normalizeUnicodePdfPayload({ ...payload,items:[{...image,width:4}] }),/dimensions/);
+  assert.throws(() => normalizeUnicodePdfPayload({ ...payload,items:[{...image,dataBase64:"https://bad.invalid/a"}] }),/Invalid bounded/);
+});
+
+test("SVG plots are source-backed, preserve gaps and negative numbers; never interpolate missing observations", () => {
+  const plot={kind:"chart",caption:"மழை / Yield",sourceRef:"source:metric:1",
+    chartType:"line",xKind:"category",yDomain:[-10,20],windows:[{
+      xValues:["வாரம் 1","வாரம் 2","வாரம் 3"],
+      series:[
+        {label:"மழை",points:[{xIndex:0,y:10},{xIndex:2,y:-5}]},
+        {label:"சாகுபடி",points:[{xIndex:1,y:0}]},
+      ],
+    }]};
+  const html=buildUnicodeReportHtml({ ...payload,items:[{kind:"paragraph",style:"title",text:"Chart report"},plot]});
+  assert.match(html, /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(html,/மழை \/ Yield/);
+  assert.match(html,/வாரம் 1/);
+  assert.match(html,/>-10<\/text>/);
+  assert.match(html,/>20<\/text>/);
+  assert.match(html,/Source: source:metric:1/);
+  assert.equal((html.match(/<circle /g)??[]).length,3);
+  assert.equal((html.match(/<polyline /g)??[]).length,0, "No synthetic line across missing middle observation");
+  assert.throws(() => buildUnicodeReportHtml({...payload,items:[
+    {...plot,windows:[{xValues:[0,1],series:[{label:"bad",points:[{xIndex:2,y:8}]}]}]},
+  ]}), /Invalid or duplicate/);
+});

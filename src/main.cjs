@@ -501,7 +501,9 @@ ipcMain.handle("limuria:export-unicode-pdf", async (event, raw) => {
     filters: [{ name: "PDF Document", extensions: ["pdf"] }],
   });
   if (pick.canceled || !pick.filePath) return { saved: false, cancelled: true };
-  const partition = "lios-unicode-pdf";
+  // Isolated in-memory partition per export: no surviving request interceptor,
+  // cache, cookie or site data from the previous private document.
+  const partition = "lios-unicode-pdf-" + crypto.randomUUID();
   const printSession = session.fromPartition(partition, { cache: false });
   // Network egress is never needed: all source excerpts come from the owned
   // canonical Artifact projection and fonts must be installed locally.
