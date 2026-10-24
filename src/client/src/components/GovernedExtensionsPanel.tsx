@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ExtensionCatalog, ExtensionPreview, LocalExtensionInput } from "@shared/p13ExtensionContracts";
 import { LOCAL_EXTENSION_MAX_BYTES } from "@shared/p13ExtensionContracts";
-import { summarizeExtensionCapabilities } from "@/lib/extensionCapabilityInventory";
+import { extensionPreviewAvailability, summarizeExtensionCapabilities } from "@/lib/extensionCapabilityInventory";
 
 async function extensionRequest<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/extensions${path}`, { method: body === undefined ? "GET" : "POST", credentials: "include", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -112,7 +112,10 @@ export default function GovernedExtensionsPanel() {
       </div>
     </>}
     {preview && <section aria-label="Exact local package review" className="space-y-3 rounded border p-3 text-sm">
-      <h3 className="font-semibold">Review exact local package</h3><p>{preview.manifest?.id ?? "Unrecognized package"} · {preview.kind} · {preview.byteLength} bytes · {preview.trust}</p>
+      <h3 className="font-semibold">Review exact local package</h3>
+      <p role="status" data-testid="extension-preview-availability" data-preview-state={extensionPreviewAvailability(preview).state} className="font-medium">{extensionPreviewAvailability(preview).label}</p>
+      <p className="text-muted-foreground">{extensionPreviewAvailability(preview).explanation}</p>
+      <p>{preview.manifest?.id ?? "Unrecognized package"} · {preview.kind} · {preview.byteLength} bytes · {preview.trust}</p>
       <p className="break-all">Package bytes SHA-256: {preview.packageDigest}</p><p className="break-all">Signed manifest SHA-256: {preview.manifestDigest}</p><p className="break-all">Publisher key: {preview.publisherKeyId ?? "Unsigned"} · fingerprint: {preview.publisherFingerprint ?? "Not trusted"}</p>
       <p>Activation: {preview.activation === "inactive_only" ? "Verified storage only; no executable activation" : preview.activation}. Review expires {preview.expiresAt}.</p>
       <details open><summary>Signed manifest, signature, permissions, tools, dependencies and compatibility</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(preview.manifest, null, 2)}</pre></details>
