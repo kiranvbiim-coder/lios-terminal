@@ -4,6 +4,7 @@ import {
   createP9Workflow,
   deleteP9Workflow,
   markP9NotificationRead,
+  replaceP9Workflow,
   runP9WorkflowNow,
   setP9WorkflowEnabled,
   useInvalidateP9Automation,
@@ -26,7 +27,8 @@ import {
   prepareP9ManualRunAttempt,
   subscribeP9ManualRunAttempts,
 } from "@/lib/p9ManualRunAttemptLedger";
-import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
+import type { P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { quickMonitorDraft, scheduleEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 
@@ -36,16 +38,15 @@ function time(value: string | null): string {
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : "—";
 }
 
-function defaultPolicy(): P9NotificationPolicy {
-  return {
-    enabled: true,
-    channels: ["in_app"],
-    notifyOn: ["failure", "condition_met", "change_detected"],
-    minimumRelevanceScore: 0.5,
-    cooldownMinutes: 60,
-    suppressUnchanged: true,
-  };
-}
+type WorkflowReview = {
+  projectId: number;
+  workflowId: string;
+  expectedUpdatedAt: string;
+  intent: "pause" | "resume" | "edit" | "delete";
+  name: string;
+  trigger: P9WorkflowTrigger;
+  enabled: boolean;
+};
 
 export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const workflowsQuery = useP9Workflows(projectId);
@@ -57,6 +58,16 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
   const [attempts, setAttempts] = useState(() => listP9ManualRunAttempts(projectId));
   const confirming = useRef(false);
+  const [createKind, setCreateKind] = useState<QuickMonitorKind | null>(null);
+  const [createEnabled, setCreateEnabled] = useState(false);
+  const [createMinutes, setCreateMinutes] = useState(60);
+  const [review, setReview] = useState<WorkflowReview | null>(null);
+  const selectedProject = useRef(projectId);
+  selectedProject.current = projectId;
+  const managementInFlight = useRef(false);
+  useEffect(() => {
+    setCreateKind(null); setReview(null); setMessage(null);
+  }, [projectId]);
 
   useEffect(() => {
     const refresh = () => setDrafts(listP9ManualRunDrafts(projectId));
@@ -188,44 +199,80 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     }
   };
 
-  const createTemplate = async (kind: "provider" | "changes") => {
-    setBusyId("create:" + kind);
+  const createTemplate = async () => {
+    if (!createKind || managementInFlight.current) return;
+    managementInFlight.current = true;
+    setBusyId("create");
     setMessage(null);
+    const originalProject = projectId;
     try {
-      const input: P9WorkflowDefinitionInput = kind === "provider"
-        ? {
-            schemaVersion: "1",
-            name: "Provider health monitor",
-            description: "Check configured providers and user-connected source health without exposing credentials.",
-            template: "provider_health",
-            trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 60 } },
-            action: { kind: "provider_health" },
-            notificationPolicy: defaultPolicy(),
-            sourceRefs: [],
-            engineRefs: ["lios.provider-status", "lios.source-connections"],
-            artifactRefs: [],
-            enabled: true,
-          }
-        : {
-            schemaVersion: "1",
-            name: "Project what changed",
-            description: "Compare Project Intelligence against its previous snapshot and surface material source changes.",
-            template: "custom",
-            trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 60 } },
-            action: { kind: "project_what_changed" },
-            notificationPolicy: defaultPolicy(),
-            sourceRefs: [],
-            engineRefs: ["lios.project-intelligence"],
-            artifactRefs: [],
-            enabled: true,
-          };
-      await createP9Workflow(projectId, input);
-      invalidate(projectId);
-      setMessage(kind === "provider" ? "Provider health workflow saved." : "Project change workflow saved.");
+      const saved = await createP9Workflow(projectId, quickMonitorDraft(createKind, createEnabled, createMinutes));
+      invalidate(originalProject);
+      if (selectedProject.current === originalProject) {
+        setMessage(saved.projectId === originalProject && saved.enabled === createEnabled
+          ? createEnabled
+            ? "Workflow saved enabled. Home scheduling still requires current runtime, permissions and a recorded execution receipt."
+            : "Workflow saved paused. Nothing was scheduled until you explicitly enable it."
+          : "The server response did not confirm the reviewed Project and enable state. Reload workflow records.");
+        setCreateKind(null);
+      }
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Unable to save this workflow.");
+      if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Unable to save this reviewed workflow.");
     } finally {
-      setBusyId(null);
+      managementInFlight.current = false;
+      if (selectedProject.current === originalProject) setBusyId(null);
+    }
+  };
+
+  const requestWorkflowReview = (workflow: (typeof workflows)[number], intent: WorkflowReview["intent"]) => {
+    if (busyId || managementInFlight.current || workflow.projectId !== projectId) return;
+    setCreateKind(null);
+    setMessage(null);
+    setReview({ projectId, workflowId: workflow.id, expectedUpdatedAt: workflow.updatedAt,
+      name: workflow.name, intent, trigger: workflow.trigger, enabled: workflow.enabled });
+  };
+
+  const confirmWorkflowReview = async () => {
+    const candidate = review;
+    if (!candidate || managementInFlight.current || candidate.projectId !== projectId) return;
+    const current = workflows.find(item => item.projectId === candidate.projectId && item.id === candidate.workflowId);
+    if (!current || current.updatedAt !== candidate.expectedUpdatedAt || current.name !== candidate.name || current.enabled !== candidate.enabled) {
+      setReview(null);
+      setMessage("The workflow changed since you opened the review. Refresh and inspect it again.");
+      return;
+    }
+    managementInFlight.current = true;
+    setBusyId("review:" + candidate.workflowId);
+    setMessage(null);
+    const originalProject = candidate.projectId;
+    try {
+      if (candidate.intent === "delete") {
+        await deleteP9Workflow(originalProject, candidate.workflowId, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage("The exact reviewed workflow was deleted. This does not undo previously recorded runs or outside-system effects.");
+      } else if (candidate.intent === "edit") {
+        const definition = scheduleEditDefinition(current, candidate.trigger);
+        // Changing a schedule does not create an execution; retain original
+        // enabled state so editing an inactive workflow never starts it.
+        const saved = await replaceP9Workflow(originalProject, candidate.workflowId, definition, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage(saved.projectId === originalProject && saved.enabled === current.enabled
+          ? "Workflow schedule saved at the server. Next execution depends on Home, current rights and scheduler acceptance."
+          : "The server response did not confirm exact workflow scope/state; refresh before relying on this edit.");
+      } else {
+        const enabled = candidate.intent === "resume";
+        const saved = await setP9WorkflowEnabled(originalProject, candidate.workflowId, enabled, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage(saved.projectId === originalProject && saved.enabled === enabled
+          ? enabled
+            ? "Workflow enabled on the server. This is not a run receipt or a promise that an event will occur."
+            : "Workflow paused on the server. Previously claimed or completed runs cannot be rolled back."
+          : "The server did not confirm the exact requested enabled state; refresh this Project.");
+      }
+      invalidate(originalProject);
+      if (selectedProject.current === originalProject) setReview(null);
+    } catch (cause) {
+      if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Workflow update failed. No change is confirmed. Reload the workflow before retrying.");
+    } finally {
+      managementInFlight.current = false;
+      if (selectedProject.current === originalProject) setBusyId(null);
     }
   };
 
