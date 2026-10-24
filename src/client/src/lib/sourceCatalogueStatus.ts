@@ -9,7 +9,6 @@ export interface SourceCatalogueStatus {
   connection: string;
   runtime: string;
   requiresAttention: boolean;
-  advisory: string;
 }
 
 export function sourceCatalogueStatus(item: SourceRegistryItem): SourceCatalogueStatus {
@@ -25,7 +24,6 @@ export function sourceCatalogueStatus(item: SourceRegistryItem): SourceCatalogue
         : item.state === "disabled" ? "Adapter disabled"
         : "Adapter available · not verified",
       requiresAttention: adapterMissing || ["disabled", "degraded", "rate_limited"].includes(item.state),
-      advisory: "Listing a provider does not connect your account or authorize source use.",
     };
   }
   return {
@@ -38,7 +36,6 @@ export function sourceCatalogueStatus(item: SourceRegistryItem): SourceCatalogue
       : item.state === "invalid" ? "Invalid configuration"
       : "Connection status needs review",
     requiresAttention: adapterMissing || !item.operational,
-    advisory: "A saved connection or successful check does not grant AI transmission, export or redistribution rights.",
   };
 }
 
