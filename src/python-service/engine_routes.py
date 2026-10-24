@@ -236,7 +236,7 @@ def runtime_inventory():
 
     packages = {}
     for package in [
-        "fastapi", "uvicorn", "numpy", "scipy", "statsmodels", "pandas",
+        "fastapi", "uvicorn", "numpy", "scipy", "pydantic", "statsmodels", "pandas",
         "linearmodels", "QuantLib", "arch", "ruptures", "scikit-learn",
         "networkx", "pymoo", "SALib", "asteval", "edgartools", "yfinance",
     ]:
