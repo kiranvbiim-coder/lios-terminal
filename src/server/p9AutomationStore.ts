@@ -27,6 +27,7 @@ import { admitP9ApprovedManualRun } from "./p9ManualRunIdempotency";
 import { requireAcceptedP9Workflow, requireSuccessfulP9Recipe } from "./p9AcceptedWorkflow";
 import { requireP9ModelRefreshReview } from "./p9ModelRefresh";
 import { requireP9PortfolioMateriality } from "./p9PortfolioMateriality";
+import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
 import { notifyDataChanged } from "./gatewayRuntime";
 
 const SECRET_KEY = /(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|authorization|cookie|private[_-]?key)/i;
@@ -83,6 +84,7 @@ export async function createP9Workflow(
 ): Promise<ProjectAutomationWorkflow> {
   await getProject(ctx, projectId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
+  assertP9HasNoReplayedGrant(input.action);
   assertSecretFree(input);
   if (input.action.kind === "model_refresh_review") await requireP9ModelRefreshReview(ctx, projectId, input.action);
   if (input.action.kind === "portfolio_materiality") await requireP9PortfolioMateriality(ctx, projectId, input.action);
@@ -92,6 +94,7 @@ export async function createP9Workflow(
   if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
     await requireAcceptedP9Workflow(ctx, projectId, input.action);
   }
+  assertP9HasNoReplayedGrant(input.action);
   const now = new Date();
   const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
   const id = "workflow:" + crypto.randomUUID();
@@ -153,6 +156,7 @@ export async function replaceP9Workflow(
 ): Promise<ProjectAutomationWorkflow> {
   const current = await getP9Workflow(ctx, workflowId);
   const input = p9WorkflowDefinitionInputSchema.parse(raw);
+  assertP9HasNoReplayedGrant(input.action);
   assertSecretFree(input);
   if (input.action.kind === "model_refresh_review") await requireP9ModelRefreshReview(ctx, current.projectId, input.action);
   if (input.action.kind === "portfolio_materiality") await requireP9PortfolioMateriality(ctx, current.projectId, input.action);
@@ -162,6 +166,7 @@ export async function replaceP9Workflow(
   if (input.action.kind === "conversation_rerun" && (input.action.acceptedArtifact || input.action.currentPersonalFinanceResourceId)) {
     await requireAcceptedP9Workflow(ctx, current.projectId, input.action);
   }
+  assertP9HasNoReplayedGrant(input.action);
   const now = new Date();
   const nextRunAt = input.enabled ? nextP9ScheduledRun(input.trigger, now) : null;
   const [row] = await getDb().update(projectAutomationWorkflows).set({
