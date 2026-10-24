@@ -32,8 +32,8 @@ export function browseRegisteredSpecialists(request: SpecialistBrowseRequest): D
   const related = request.activeView
     ? getRelatedToolActions(request.activeView, request.audience === "internal")
     : [];
-  const rank = new Map(related.map((action, index) => [action.view, index]));
-  const reason = new Map(related.map((action) => [action.view, action.reason]));
+  const rank = new Map<ViewMode, number>(related.map((action, index) => [action.view, index]));
+  const reason = new Map<ViewMode, string>(related.map((action) => [action.view, action.reason]));
   const candidates = query
     ? searchTerminalCapabilities(query, request.audience === "internal", TERMINAL_CAPABILITIES.length)
     : TERMINAL_CAPABILITIES;
@@ -55,8 +55,8 @@ export function browseRegisteredSpecialists(request: SpecialistBrowseRequest): D
 
   const limit = request.limit === undefined ? filtered.length
     : Math.max(0, Math.min(filtered.length, Math.floor(request.limit)));
-  return filtered.slice(0, limit).map((capability) => ({
-    capability,
-    ...(reason.has(capability.view) ? { relatedReason: reason.get(capability.view) } : {}),
-  }));
+  return filtered.slice(0, limit).map((capability) => {
+    const relatedReason = reason.get(capability.view);
+    return { capability, ...(relatedReason ? { relatedReason } : {}) };
+  });
 }
