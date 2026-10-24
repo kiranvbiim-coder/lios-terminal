@@ -7,7 +7,8 @@ import {
   p9AutomationEventMatches,
   p9UnseenObservedFilings,
 } from "./p9AutomationEngine";
-import { p9WorkflowDefinitionInputSchema } from "@shared/p9AutomationContracts";
+import { p9WorkflowDefinitionInputSchema, p9WorkflowActionSchema } from "@shared/p9AutomationContracts";
+import { assertP9HasNoReplayedGrant } from "./p9SavedAuthority";
 
 test("P9 interval and daily UTC schedules compute deterministic next run", () => {
   const from = new Date("2026-09-22T12:34:56.000Z");
@@ -239,4 +240,24 @@ test("P9 filing cursor returns every unseen filing without replaying the cursor"
     p9UnseenObservedFilings(filings, "missing-cursor", "2026-09-21").map((item) => item.accessionNumber),
     ["new-2", "new-1"],
   );
+});
+
+test("D4 saved automation never converts an old approval claim into an execution grant", () => {
+  const base = p9WorkflowActionSchema.parse({
+    kind: "conversation_rerun", chatId: 77,
+    request: { message: "Research my connected data", executionMode: "ai_assisted", sourceScope: "my_data" },
+  });
+  assert.doesNotThrow(() => assertP9HasNoReplayedGrant(base));
+  assert.doesNotThrow(() => assertP9HasNoReplayedGrant(
+    p9WorkflowActionSchema.parse({ kind: "provider_health" }),
+  ));
+  if (base.kind !== "conversation_rerun") throw new Error("Unexpected test fixture.");
+  for (const request of [
+    { ...base.request, approvals: [{ action: "AIDirectEstimate", scope: "once" }] },
+    { ...base.request, approvals: [{ action: "RunBacktest", scope: "project" }] },
+    { ...base.request, aiDirectApproved: true },
+  ] as const) {
+    const candidate = p9WorkflowActionSchema.parse({ ...base, request });
+    assert.throws(() => assertP9HasNoReplayedGrant(candidate), /cannot reuse conversation approvals/);
+  }
 });
