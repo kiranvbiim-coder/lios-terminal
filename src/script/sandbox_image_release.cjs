@@ -284,6 +284,7 @@ async function main() {
         fs.writeFileSync(path.join(context, 'docling-models.manifest.json'), JSON.stringify(trusted.docling.models, null, 2) + '\n', { flag: 'w' });
       }
       fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke.py'), path.join(context, 'smoke.py'));
+      fs.copyFileSync(path.join(root, 'sandbox-image', 'quant_smoke.py'), path.join(context, 'quant_smoke.py'));
       fs.copyFileSync(path.join(root, 'sandbox-image', 'smoke-xlsx.cjs'), path.join(context, 'smoke-xlsx.cjs'));
       fs.writeFileSync(path.join(context, 'opencv-headless.lock.txt'), `opencv-python-headless==${headlessWheel[0].version} --hash=sha256:${headlessWheel[0].sha256}\n`, { flag: 'wx' });
       const dockerfile = runtimeBase ? 'Dockerfile.runtime-base' : 'Dockerfile';
