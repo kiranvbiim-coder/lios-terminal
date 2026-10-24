@@ -79,6 +79,8 @@ test("existing device Settings screen is explicit about scope and uses original 
     "device-network-review", "device-home-switch-review", "device-home-forget-review", "device-pairing-review",
   ]) assert.ok(source.includes(`data-testid="${attribute}"`), attribute);
 
+  assert.match(source, /min-h-10 rounded border border-border/);
+  assert.match(source, /focus-visible:outline-2 focus-visible:outline-primary/);
   assert.match(source, /useGatewayState\(\)/);
   assert.match(source, /describeDeviceContinuity\(gatewayState, browserOnline\)/);
   assert.match(source, /pendingNotificationReadCount\(\)/);
