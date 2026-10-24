@@ -92,7 +92,7 @@ test("legacy OS-encrypted checkpoint remains readable, but never silently overwr
   const safeStorage = encryptionFixture();
   const fileDir = path.join(root, "artifact-draft-recovery");
   fs.mkdirSync(fileDir, { recursive: true, mode: 0o700 });
-  const name = crypto.createHash("sha256").update(input.owner.toLowerCase() + "\\0" + input.artifactId).digest("hex") + ".safe";
+  const name = crypto.createHash("sha256").update(input.owner.toLowerCase() + "\0" + input.artifactId).digest("hex") + ".safe";
   const legacy = JSON.stringify({ schemaVersion: 1, owner: input.owner, artifactId: input.artifactId,
     baseVersion: input.baseVersion, contentHash: input.contentHash, content: input.content });
   fs.writeFileSync(path.join(fileDir, name), safeStorage.encryptString(legacy), { mode: 0o600 });
