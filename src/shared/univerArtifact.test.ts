@@ -220,3 +220,17 @@ test("real donor workbook save/reopen preserves canonical source-linked cells wi
     univer.dispose();
   }
 });
+
+test("WS-38 native paste or snapshot cannot save a cell beyond the real sheet dimensions", () => {
+  const input = toUniverWorkbookProjection(content);
+  input.sheets.sources.cellData ??= {};
+  input.sheets.sources.cellData[10] = { 0: { v: "outside row boundary", t: 1 } };
+  assert.throws(() => fromUniverWorkbookSnapshot(input, content, "model"), /exceeds worksheet dimensions/);
+  delete input.sheets.sources.cellData[10];
+  input.sheets.sources.cellData[0] ??= {};
+  input.sheets.sources.cellData[0][5] = { v: "outside column boundary", t: 1 };
+  assert.throws(() => fromUniverWorkbookSnapshot(input, content, "model"), /exceeds worksheet dimensions/);
+  delete input.sheets.sources.cellData[0][5];
+  assert.deepEqual(fromUniverWorkbookSnapshot(input, content, "model"), content,
+    "refusing the out-of-bounds paste must not mutate the source P4 revision");
+});
