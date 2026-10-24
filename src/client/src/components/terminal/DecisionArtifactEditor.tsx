@@ -156,7 +156,7 @@ export default function DecisionArtifactEditor({ artifactId, content: rawIncomin
   };
   return <div className="space-y-4" data-testid="native-decision-artifact-editor">
     <div className="rounded border border-cyan-300/20 p-3"><p className="font-terminal text-xs text-cyan-200">DECISION ARTIFACT · BASE V{baseVersion} · CURRENT V{revision}</p><p className="mt-1 break-all font-terminal text-xs text-muted-foreground">Current canonical content hash: {contentHash}</p><p className="mt-2 text-sm text-muted-foreground">Authored analysis and lifecycle records, not an approval or execution instruction. Saving does not approve a decision, authorize an action, place a trade, or execute anything.</p>{content.caseRef && <p className="mt-2 text-sm">Authored decision case reference: {content.caseRef} · not approval authority</p>}</div>
-    <DecisionReviewSummary content={content} dirty={dirty || pending} conflict={conflict} />
+    <DecisionReviewSummary content={content} dirty={dirty} pending={pending} conflict={conflict} />
     <DecisionApprovalInspector key={`${artifactId}:${revision}:${contentHash}`} artifactId={artifactId} version={revision} contentHash={contentHash} blocked={dirty || conflict || baseVersion !== revision || saving || pending} />
     {conflict && <div role="alert" data-testid="decision-revision-conflict" className="rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was retained; saving and linking are blocked until you reload.<button type="button" className={`${buttonClass} ml-2`} disabled={saving} onClick={reload}>Discard draft and reload canonical revision</button></div>}
     <fieldset disabled={saving || pending || conflict} className="min-w-0 space-y-4">
