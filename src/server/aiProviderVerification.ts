@@ -8,6 +8,7 @@ import {
   invokeAIProvider,
   type AICompletionResult,
 } from "./byoaiTransport";
+import { issueAIConnectionChallenge, acceptsAIConnectionAcknowledgement } from "./aiVerificationChallenge";
 
 export interface AIProviderVerificationResult {
   ok: true;
@@ -39,13 +40,16 @@ export async function verifyAIProviderConnection(
   if (!config) throw new AIProviderError("invalid_provider", "AI provider is not registered.", { provider });
 
   const model = input.model?.trim() || undefined;
+  // Fresh challenge, bound to this exact call. A replayed static placeholder
+  // must never be interpreted as a verified BYOAI provider connection.
+  const challenge = issueAIConnectionChallenge();
   const startedAt = Date.now();
   const result = await invoker({
     provider,
     ...(model ? { model } : {}),
-    system: "You are a connectivity probe for LiOS. Reply with a very short acknowledgement only.",
-    messages: [{ role: "user", content: "Reply exactly with LIOS_AI_OK." }],
-    maxTokens: 16,
+    system: "You are a connectivity probe for LiOS. Repeat the exact requested token only. No other text.",
+    messages: [{ role: "user", content: `Reply exactly with ${challenge}.` }],
+    maxTokens: 48,
     dataClassification: "public",
     enterpriseApproval: true,
   });
@@ -67,12 +71,9 @@ export async function verifyAIProviderConnection(
   if (!result.text.trim()) {
     throw new AIProviderError("empty_completion", config.name + " returned an empty completion.", { provider });
   }
-  // Provider metadata can match while a proxy/model returns arbitrary prose,
-  // a synthetic placeholder, or a response from a different operation.
-  // Require this public, low-cost challenge to succeed before claiming a
-  // live connection. Accept harmless quoting/terminal punctuation only.
-  const acknowledgement = result.text.trim().replace(/^["'`]+|["'`.!]+$/g, "").trim();
-  if (acknowledgement !== "LIOS_AI_OK") {
+  // Metadata and nonempty text do not establish that the provider answered
+  // the current prompt: a proxy or cache can replay an old OK response.
+  if (!acceptsAIConnectionAcknowledgement(result.text, challenge)) {
     throw new AIProviderError(
       "upstream_error",
       config.name + " did not complete the LiOS connection verification challenge.",
