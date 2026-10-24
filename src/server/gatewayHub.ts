@@ -84,6 +84,12 @@ export interface GatewayHubOptions {
   version: string;
   policy?: Partial<typeof GATEWAY_DEFAULT_POLICY>;
   now?: () => number;
+  /**
+   * Optional Home authority bridge. Production supplies the canonical
+   * current account/device check; isolated transport fixtures may inject a
+   * deterministic authority. A connect-time scope is never a durable grant.
+   */
+  authorizeRequest?: (connection: GatewayConnection, scope: GatewayScope) => Promise<void> | void;
 }
 
 class Connection implements GatewayConnection {
@@ -155,7 +161,24 @@ export class GatewayHub {
     return this.connections.has(candidate) && candidate.ready && candidate.socket.readyState === candidate.socket.OPEN;
   }
 
-  /** Server-owned composition on an existing authenticated connection; same scopes/schemas/handlers as wire RPC. */
+  /** Current Home/device grant, checked before and after method execution. */
+  private async assertCurrentRequestAuthority(connection: GatewayConnection, scope: GatewayScope): Promise<void> {
+    if (!this.isReadyConnection(connection)) {
+      throw new GatewayMethodError(gatewayError("UNAVAILABLE", "The exact authenticated Gateway connection is no longer live."));
+    }
+    try {
+      await this.options.authorizeRequest?.(connection, scope);
+    } catch {
+      // Do not disclose provider, DB, device identity or policy detail over
+      // the Gateway merely because a current-authority lookup failed.
+      throw new GatewayMethodError(gatewayError("FORBIDDEN", "Current device authorization is unavailable or revoked."));
+    }
+    if (!this.isReadyConnection(connection)) {
+      throw new GatewayMethodError(gatewayError("UNAVAILABLE", "The authenticated Gateway connection disconnected during authorization."));
+    }
+  }
+
+  /** Server-owned composition: the same current-authority checks as wire RPC. */
   async invokeForConnection(method: string, rawParams: unknown, connection: GatewayConnection): Promise<unknown> {
     if (!this.isReadyConnection(connection)) throw new GatewayMethodError(gatewayError("UNAVAILABLE", "The exact authenticated Gateway connection is no longer live."));
     const handler = this.handlers.get(method);
@@ -163,7 +186,10 @@ export class GatewayHub {
     if (!satisfies(connection.scopes, handler.scope)) throw new GatewayMethodError(gatewayError("FORBIDDEN", "This connection lacks the method's required scope."));
     const params = handler.params.safeParse(rawParams);
     if (!params.success) throw new GatewayMethodError(gatewayError("INVALID_REQUEST", "Parameters do not match the method schema."));
-    return handler.result.parse(await handler.run(params.data, connection));
+    await this.assertCurrentRequestAuthority(connection, handler.scope);
+    const result = handler.result.parse(await handler.run(params.data, connection));
+    await this.assertCurrentRequestAuthority(connection, handler.scope);
+    return result;
   }
 
   register<M extends GatewayMethodName>(method: M, handler: MethodHandler<M>): void {
@@ -181,12 +207,31 @@ export class GatewayHub {
     this.closeListeners.push(listener);
   }
 
-  /** Delivers an event to every ready connection for which `select` returns a payload. */
+  /**
+   * Outbound delivery also needs current authority: revocation must prevent
+   * an already-connected paired device from receiving quote / automation /
+   * decision invalidations. Existing session sockets retain synchronous
+   * delivery; paired devices are checked against Home state before emit.
+   */
   publish<E extends GatewayEventName>(event: E, select: (connection: GatewayConnection) => z.input<(typeof GATEWAY_EVENTS)[E]> | null): void {
     for (const connection of this.connections) {
       if (!connection.ready) continue;
-      const payload = select(connection);
-      if (payload !== null) connection.emit(event, payload);
+      const deliver = () => {
+        if (!this.isReadyConnection(connection)) return;
+        const payload = select(connection);
+        if (payload !== null) connection.emit(event, payload);
+      };
+      if (!connection.identity.deviceId || !this.options.authorizeRequest) {
+        deliver();
+        continue;
+      }
+      // A downgraded paired device must reconnect and obtain fresh scopes,
+      // not silently retain a broader connection's event stream.
+      const scope: GatewayScope = connection.scopes.includes("admin") ? "admin"
+        : connection.scopes.includes("write") ? "write" : "read";
+      void this.assertCurrentRequestAuthority(connection, scope).then(deliver).catch(() => {
+        if (this.isReadyConnection(connection)) connection.socket.close(4001, "Current device authorization revoked");
+      });
     }
   }
 
@@ -293,7 +338,12 @@ export class GatewayHub {
       return;
     }
     try {
+      await this.assertCurrentRequestAuthority(connection, handler.scope);
       const result = handler.result.parse(await handler.run(params.data, connection));
+      // Revocation/role change during an asynchronous read cannot release
+      // that result to an already-connected device. This is a *response*
+      // boundary, not evidence that earlier external effects were undone.
+      await this.assertCurrentRequestAuthority(connection, handler.scope);
       this.reply(connection, frame.id, { payload: result });
     } catch (error) {
       if (error instanceof GatewayMethodError) {

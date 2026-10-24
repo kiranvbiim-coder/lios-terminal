@@ -1,4 +1,5 @@
 import type { ProcessSupervisor } from "./exec/types";
+import type { McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 /**
  * SI-02.02 / SI-02.04 - the single governed tool registry and permission decision.
  *
@@ -67,6 +68,8 @@ export interface GovernedToolCall {
   afterExternalDispatchCommitted?: () => Promise<void>;
   /** Server-owned, bounded progress only; never a permission or dispatch signal. */
   reportExternalDispatchStatus?: (message: string) => Promise<void>;
+  /** Server-only, per-run ephemeral MCP evidence collector; never model/client input. */
+  recordExternalMcpObservation?: (capture: McpAgentEvidenceCapture) => void;
   role?: string;
   /** Server-held canonical authorization. Request/model/body objects cannot manufacture authority. */
   authorization?: unknown;

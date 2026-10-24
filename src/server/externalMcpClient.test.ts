@@ -129,3 +129,21 @@ test("GM/P13 remote MCP failures never echo attacker-controlled or secret respon
   await assert.rejects(() => callExternalMcpTool(config, "quotes.read", {}, remoteError),
     error => error instanceof Error && error.message.includes("-32000") && !error.message.includes(secret));
 });
+
+
+test("GM20 a revoked required MCP credential never dispatches on legacy or injected transport", async () => {
+  let requests = 0;
+  const source = {
+    ...config,
+    policy: { ...config.policy, credentialRef: "vault:gm20-revoked-nonexistent-key-20261023" },
+  };
+  const transport: McpHttpTransport = async (_url, request) => {
+    requests++;
+    return { jsonrpc: "2.0", id: request.id, result: { shouldNotRun: true } };
+  };
+  await assert.rejects(
+    () => callExternalMcpTool(source, "quotes.read", {}, transport),
+    /credential is unavailable or revoked/i,
+  );
+  assert.equal(requests, 0, "neither tools nor prompts leave LiOS when the required key is unavailable");
+});

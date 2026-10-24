@@ -174,7 +174,9 @@ import { deriveAgentToolIdempotencyKey } from "./exec/agent-idempotency";
 import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 
 import { conversationRuns } from "./conversationRunRegistry";
-import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool, preflightGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { listSourceConnections } from "./sourceConnectionService";
+import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, McpAgentReviewEvidenceIndex, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
 import { codingConversationToolDescriptors } from "./acp/coding-tools";
 import { listInstalledSkillAdapters } from "./skillRuntime";
@@ -745,6 +747,8 @@ function registerBuiltinConversationTools(): void {
           projectId,
         },
         signal,
+        undefined,
+        call.recordExternalMcpObservation,
       );
     },
   });
@@ -4488,6 +4492,9 @@ async function executeAgentLoop(
     });
   }
   let assertReviewResearchCurrent: (() => Promise<void>) | undefined;
+  // Never journal, checkpoint or expose raw external MCP observations. They
+  // exist only in the current run and are re-authorized before AI release.
+  const mcpEvidenceByStep = new McpAgentReviewEvidenceIndex();
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
@@ -4562,11 +4569,63 @@ async function executeAgentLoop(
     },
     resolveReviewObservations: async ({ completedSteps, signal: reviewSignal, reviewedSourceRefs }) => {
       assertReviewResearchCurrent = undefined;
-      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
-      assertReviewResearchCurrent = observation?.assertCurrent;
-      return observation ? { text: observation.text, sourceRefs: observation.sourceRefs } : null;
+      const research = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
+      let mcp: ReturnType<typeof renderMcpAgentReviewEvidence> = null;
+      let assertMcpCurrent: (() => Promise<void>) | undefined;
+      if (input.scope === "project" && input.projectId
+        && input.request.transmissionPolicy.allowResourceReferences
+        && sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+        const candidates = mcpEvidenceByStep.fromCompletedSteps(completedSteps.map(step => step.id));
+        if (candidates.length) {
+          const connections = await listSourceConnections(input.tenant.userId);
+          const activePolicy = await activeResearchSourcePolicy(input);
+          const selectedRefs = activePolicy.researchSourcePolicy?.mode === "only_refs"
+            ? new Set(activePolicy.researchSourcePolicy.allowedSourceRefs) : null;
+          mcp = renderMcpAgentReviewEvidence(candidates.filter(candidate =>
+            mcpEvidenceMatchesSelectedRefs(candidate, selectedRefs) && isMcpEvidenceCurrent(
+              candidate, connections.find(connection => connection.id === candidate.connectionId),
+              input.tenant.userId, input.tenant.organizationId, input.projectId!,
+            )), new Set([...reviewedSourceRefs, ...(research?.sourceRefs ?? [])]));
+          if (mcp) {
+            const admitted = mcp.included;
+            assertMcpCurrent = async () => {
+              assertNotAborted(reviewSignal);
+              if (!input.request.transmissionPolicy.allowResourceReferences
+                || !sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+                throw new AIProviderError("policy_denied", "MCP source transmission permission changed.");
+              }
+              const current = await listSourceConnections(input.tenant.userId);
+              const currentPolicy = await activeResearchSourcePolicy(input);
+              const currentRefs = currentPolicy.researchSourcePolicy?.mode === "only_refs"
+                ? new Set(currentPolicy.researchSourcePolicy.allowedSourceRefs) : null;
+              if (JSON.stringify(currentPolicy.researchSourcePolicyBinding ?? null)
+                !== JSON.stringify(activePolicy.researchSourcePolicyBinding ?? null)) {
+                throw new AIProviderError("policy_denied", "Active research source selection changed.");
+              }
+              for (const candidate of admitted) {
+                if (!mcpEvidenceMatchesSelectedRefs(candidate, currentRefs) || !isMcpEvidenceCurrent(
+                  candidate, current.find(connection => connection.id === candidate.connectionId),
+                  input.tenant.userId, input.tenant.organizationId, input.projectId!,
+                )) throw new AIProviderError("policy_denied", "MCP source permission was revoked; refresh before AI review.");
+              }
+              assertNotAborted(reviewSignal);
+            };
+          }
+        }
+      }
+      assertReviewResearchCurrent = research || mcp ? async () => {
+        if (research) await research.assertCurrent();
+        if (assertMcpCurrent) await assertMcpCurrent();
+      } : undefined;
+      return research || mcp ? {
+        text: [research?.text, mcp?.text].filter(Boolean).join("\n\n"),
+        sourceRefs: [...new Set([...(research?.sourceRefs ?? []), ...(mcp?.sourceRefs ?? [])])],
+      } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
+      // Clear a prior attempt before approval or dispatch: if retry fails,
+      // an older success can never reappear in a later AI evidence review.
+      mcpEvidenceByStep.beginAttempt(step.id);
       const descriptor = getConversationTool(step.toolId);
       const externalDispatch = descriptor?.sideEffect === "external";
       let dispatchIntentPersisted = false;
@@ -4597,6 +4656,20 @@ async function executeAgentLoop(
           })).digest("hex")}`;
           let dispatchAttempt = 0;
           beforeExternalDispatch = async () => {
+            // The registry only calls this hook after consuming the exact
+            // owner-issued grant and verifying the current authorization.
+            // A local refusal is PROVEN pre-entry and must not create an L5
+            // dispatch intent or an outcome-unknown record.
+            if (step.toolId === "lios.external-mcp.call") {
+              if (input.scope !== "project" || !input.projectId) {
+                throw new Error("External MCP requires an authenticated Project.");
+              }
+              await preflightGovernedExternalMcpTool(
+                step.input,
+                { userId: input.tenant.userId, organizationId: input.tenant.organizationId, projectId: input.projectId },
+                signal,
+              );
+            }
             if (dispatchAttempt > 0 && (!dispatchNoEffectPersisted || !descriptor?.replaySafe || dispatchAttempt >= 2)) {
               throw new Error("External dispatch retry needs durable no-effect proof, replay-safe policy and remaining attempt budget.");
             }
@@ -4637,8 +4710,12 @@ async function executeAgentLoop(
           };
         }
 
+        let pendingMcpEvidence: McpAgentEvidenceCapture | undefined;
         const callFor = createConversationToolCall(input, "agent", {
           ...await activeResearchSourcePolicy(input),
+          ...(step.toolId === "lios.external-mcp.call" ? {
+            recordExternalMcpObservation: (capture: McpAgentEvidenceCapture) => { pendingMcpEvidence = capture; },
+          } : {}),
           stepId: step.id,
           toolCallId,
           ...(idempotencyKey ? {
@@ -4675,6 +4752,9 @@ async function executeAgentLoop(
             : {}),
         });
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);
+        // Only after the governed registry validated the result AND committed
+        // the external dispatch may it become review-eligible, never before.
+        mcpEvidenceByStep.recordCompleted(step.id, pendingMcpEvidence);
         return { kind: "ok", summary: result.summary, deterministic: result.deterministic, sourceRefs: result.sourceRefs };
       } catch (error) {
         if (dispatchIntentPersisted && !dispatchNoEffectPersisted) return { kind: "outcome_unknown" };
@@ -4686,6 +4766,9 @@ async function executeAgentLoop(
       }
     },
     onPlan: async (steps) => {
+      // New/revised plans may reuse step IDs; evidence from the previous
+      // plan is not current even when the textual tool label is identical.
+      mcpEvidenceByStep.resetForPlan();
       agentPlan = planFromSteps(steps);
       await emit(input, { ...eventBase(request.requestId), type: "plan", plan: agentPlan });
     },
@@ -4731,24 +4814,47 @@ async function executeAgentLoop(
     return { text, label: "manual", plan: agentPlan, receiptIds: [], artifacts: [], cancelled: false, awaitingApproval: true, ...(pause ? { agentPause: pause } : {}) };
   }
   const completed = outcome.status === "completed" && outcome.answer !== null;
+  // An AI "complete" decision does not prove every planned effect occurred.
+  // Anchor user-visible execution truth to the governed step outcomes, not
+  // the model's prose. This is an explicit disclosure, NOT claim verification.
+  const incompleteStatuses = outcome.steps
+    .filter((step) => step.status !== "completed")
+    .reduce<Record<string, number>>((counts, step) => {
+      counts[step.status] = (counts[step.status] ?? 0) + 1;
+      return counts;
+    }, {});
+  const executionDisclosure = completed && Object.keys(incompleteStatuses).length
+    ? `LiOS execution record: ${Object.entries(incompleteStatuses).map(([status, count]) => `${count} ${agentStatusLabel(status as AgentStepOutcome["status"])}`).join(", ")} tool step(s) did not complete. A model completion statement is not proof that those actions ran.`
+    : null;
+  // A model's final prose is not a trusted execution receipt. If any planned
+  // tool failed, was denied or was skipped, do not display the model's possibly
+  // false "saved/completed" assertion at all. Keep the governed status-only
+  // disclosure and exact receipt; users can inspect/retry with fresh authority.
+  const answerAccepted = completed && executionDisclosure === null;
   const text = completed
-    ? outcome.answer!
+    ? answerAccepted
+      ? outcome.answer!
+      : `${executionDisclosure}\n\nThe AI's completion statement was withheld because these tool steps did not complete. Review the execution record before retrying; LiOS has not verified the claimed result.`
     : [
       `Stopped before finishing: the ${outcome.stopReason?.replaceAll("_", " ") ?? "run"} limit was reached.`,
       ...outcome.steps.map((step) => `- ${step.label}: ${step.status === "completed" ? step.summary : agentStatusLabel(step.status)}`),
     ].join("\n");
   const allDeterministic = outcome.steps.length > 0 && outcome.steps.every((step) => step.status !== "completed" || step.deterministic);
-  const label: ConversationRuntimeResult["label"] = completed ? "ai_derived" : allDeterministic ? "deterministic" : "observed_source";
+  const label: ConversationRuntimeResult["label"] = answerAccepted ? "ai_derived" : completed ? "observed_source" : allDeterministic ? "deterministic" : "observed_source";
   const receipt = createReceipt({
     requestId: request.requestId,
     operation: "agent-loop",
     startedAt,
     deterministic: false,
-    aiDerived: completed,
+    aiDerived: answerAccepted,
     input: { message: request.message, budget },
-    output: { text, ...summaryOutput },
+    output: { text, ...summaryOutput, toolExecutionComplete: executionDisclosure === null },
     sourceRefs,
-    warnings: completed ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results."] : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
+    warnings: answerAccepted
+      ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results."]
+      : completed
+        ? [executionDisclosure!, "AI completion prose was withheld; the recorded tool outcomes remain authoritative."]
+        : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
   });
   await emit(input, { ...eventBase(request.requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(request.requestId), type: "text", text, label });

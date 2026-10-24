@@ -388,7 +388,7 @@ export const GATEWAY_METHODS = {
 export type GatewayMethodName = keyof typeof GATEWAY_METHODS;
 
 /** What changed on the Home. A client refetches the queries it holds for these topics instead of polling. */
-export const GATEWAY_INVALIDATION_TOPICS = ["alerts", "backup", "license", "quantlab", "devices"] as const;
+export const GATEWAY_INVALIDATION_TOPICS = ["alerts", "backup", "license", "quantlab", "devices", "notifications"] as const;
 export type GatewayInvalidationTopic = (typeof GATEWAY_INVALIDATION_TOPICS)[number];
 
 export const GATEWAY_EVENTS = {

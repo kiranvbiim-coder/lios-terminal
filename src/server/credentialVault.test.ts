@@ -96,6 +96,36 @@ test("resolveCredential returns null for missing credential", () => {
   assert.equal(resolveCredential("NONEXISTENT_ENV_VAR_XYZ", "nonexistentVaultKey"), null);
 });
 
+test("GM12 hosted organization credential cannot inherit operator env or local machine vault", () => {
+  const previousStore = process.env.LIMURIA_CREDENTIAL_STORE;
+  const previousEnv = process.env.GM12_TENANT_PROVIDER_API_KEY;
+  process.env.LIMURIA_CREDENTIAL_STORE = "organization";
+  process.env.GM12_TENANT_PROVIDER_API_KEY = "operator-funded-secret";
+  setVaultCredential("gm12TenantProviderKey", "local-machine-secret");
+  try {
+    const tenantA = runWithRequestIdentity({
+      userId: 1001, organizationId: 44,
+      credentials: { gm12TenantProviderKey: "tenant-a-secret" },
+    }, () => resolveCredential("GM12_TENANT_PROVIDER_API_KEY", "gm12TenantProviderKey"));
+    const tenantWithoutKey = runWithRequestIdentity({
+      userId: 2002, organizationId: 55, credentials: {},
+    }, () => resolveCredential("GM12_TENANT_PROVIDER_API_KEY", "gm12TenantProviderKey"));
+    assert.equal(tenantA, "tenant-a-secret", "organization-owned secret must outrank operator env");
+    assert.equal(tenantWithoutKey, null, "missing organization credential must fail closed");
+    assert.equal(resolveCredential("GM12_TENANT_PROVIDER_API_KEY", "gm12TenantProviderKey"), "operator-funded-secret",
+      "desktop/operator requests retain their established environment precedence");
+    delete process.env.GM12_TENANT_PROVIDER_API_KEY;
+    assert.equal(resolveCredential("GM12_TENANT_PROVIDER_API_KEY", "gm12TenantProviderKey"), "local-machine-secret",
+      "desktop/operator requests retain their existing encrypted-vault fallback");
+  } finally {
+    deleteVaultCredential("gm12TenantProviderKey");
+    if (previousStore === undefined) delete process.env.LIMURIA_CREDENTIAL_STORE;
+    else process.env.LIMURIA_CREDENTIAL_STORE = previousStore;
+    if (previousEnv === undefined) delete process.env.GM12_TENANT_PROVIDER_API_KEY;
+    else process.env.GM12_TENANT_PROVIDER_API_KEY = previousEnv;
+  }
+});
+
 test("user-scoped credential checks exclude operator environment and legacy fallbacks", () => {
   const previousStore = process.env.LIMURIA_CREDENTIAL_STORE;
   const previousEnvCredential = process.env.TEST_USER_SCOPED_ENV;

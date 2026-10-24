@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { createExecutionJournal } from "./exec/execution-journal";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 import { AIProviderError, createAttribution } from "./byoaiRouter";
 import { currentConversationToolApprovalPolicy, executeConversationRuntime, getConversationTool, registerConversationTool, type ConversationRuntimeInput, type ConversationRuntimeResult } from "./conversationRuntime";
 import type { AgentEventInput } from "./exec/agent-run-events";
 import { z } from "zod";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
+import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 import type { ConversationToolDefinition } from "./conversationRuntime";
 import {
   proposeGovernedToolOperation,
@@ -199,6 +208,50 @@ test("a tool's exception text never reaches the model or the client", async () =
   assert.match(result.summary, /unexpected error/);
 });
 
+test("a model cannot silently turn a failed tool into a verified execution success", async () => {
+  const r = run("c4444444-4444-4444-8444-444444444444", [
+    planJson([step("failed-source", "test.agent.leaky")]),
+    answer("All tasks completed successfully and the result has been saved."),
+  ]);
+  const result = await r.promise;
+  assert.equal(result.label, "observed_source", "A failed tool cannot turn the model's completion claim into accepted AI output");
+  assert.match(result.text, /^LiOS execution record: 1 failed tool step\(s\) did not complete\./);
+  assert.match(result.text, /A model completion statement is not proof that those actions ran\./);
+  assert.match(result.text, /AI's completion statement was withheld/);
+  assert.equal(result.text.includes("All tasks completed successfully and the result has been saved."), false,
+    "the false AI success claim must never reach the user");
+  assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "failed"), true);
+  assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+  const receipt = r.events.find((event) => event.type === "receipt");
+  assert.ok(receipt && receipt.type === "receipt");
+  assert.equal(receipt.receipt.warnings.some((warning) => warning.includes("1 failed tool step(s)")), true);
+  assert.equal(receipt.receipt.aiDerived, false, "a suppressed model claim is not an accepted AI result");
+  assert.match(receipt.receipt.outputHash, /^[a-f0-9]{64}$/, "The receipt fingerprints the server-owned outcome summary.");
+  assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
+});
+
+test("GM-12: a failed prerequisite and skipped dependent step cannot be reported as a finished AI workflow", async () => {
+  seen.length = 0;
+  const r = run("c5555555-5555-4555-8555-555555555555", [
+    planJson([
+      step("source", "test.agent.leaky"),
+      { ...step("dependent", "test.agent.echo"), dependsOn: ["source"] },
+    ]),
+    answer("Both steps ran successfully, and the dependent result was saved."),
+  ]);
+  const result = await r.promise;
+  assert.equal(result.label, "observed_source");
+  assert.match(result.text, /1 failed, 1 skipped tool step\(s\) did not complete/);
+  assert.equal(result.text.includes("Both steps ran successfully"), false);
+  assert.equal(seen.length, 0, "dependent tool must not run after a failed prerequisite");
+  assert.equal(r.ledger.some((event) => event.kind === "step_finished" && event.stepId === "source" && event.status === "failed"), true);
+  assert.equal(r.ledger.some((event) => event.kind === "step_finished" && event.stepId === "dependent" && event.status === "skipped"), true);
+  const receipt = r.events.find((event) => event.type === "receipt");
+  assert.ok(receipt && receipt.type === "receipt");
+  assert.equal(receipt.receipt.aiDerived, false);
+  assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
+});
+
 test("an approval wait leaves the step and call open in the ledger", async () => {
   const r = run("b1111111-1111-4111-8111-111111111111", [planJson([step("ask", "test.agent.confirm")])]);
   await r.promise;
@@ -272,6 +325,125 @@ test("resume with a copied, reused or missing authorization is denied and the ga
   assert.equal(second.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "denied"), true);
 });
 
+test("GM-12: owner-reviewed approval is an exact once-only release in the encrypted durable agent journal", { timeout: 20_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-brain-approved-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const settings = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(settings);
+  const id = crypto.randomUUID();
+  const owner = { userId: 7, projectId: null, chatId: null };
+  const foreignOwner = { ...owner, userId: 8 };
+  const runController = new AbortController();
+  await journal.begin({ id, owner, label: "Synthetic one-step owner-approved agent", agentRun: true });
+
+  gatedRuns.length = 0;
+  const first = run(id, [planJson([step("approved", "test.agent.gated")])], {
+    projectId: null,
+    signal: runController.signal,
+    agentLoop: { ledger: async (event) => { await journal.appendAgentEvent(id, event); } },
+  });
+  const paused = await first.promise;
+  assert.equal(paused.awaitingApproval, true);
+  assert.ok(paused.agentPause);
+  assert.deepEqual(gatedRuns, [], "a model plan and approval pause are never permission to execute");
+  await journal.markWaitingApproval(id);
+  const resumedJournal = await createExecutionJournal(settings);
+  assert.equal((await resumedJournal.read(id, owner))?.status, "waiting_approval");
+  assert.equal(await resumedJournal.read(id, foreignOwner), null, "a different owner must not see the durable record");
+
+  const callId = paused.agentPause.resume.paused.toolCallId;
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, owner, "forged-call-id", "synthetic-approved-review"),
+    /waiting tool call is not the one/,
+  );
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, foreignOwner, callId, "synthetic-approved-review"),
+    /not found/i,
+  );
+  assert.equal((await resumedJournal.read(id, owner))?.status, "waiting_approval");
+  assert.deepEqual(gatedRuns, [], "rejected release attempts must produce no tool effect");
+
+  // L4's real registry-bound, live one-time grant is created only after review.
+  const authorization = await grantPausedStep(id, "test.agent.gated", paused.agentPause, runController.signal);
+  const released = await resumedJournal.resumeAfterApproval(id, owner, callId, "synthetic-approved-review");
+  assert.equal(released.kind, "tool_call_resumed");
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, owner, callId, "synthetic-approved-review"),
+    /not waiting for approval/,
+    "a second release cannot reuse the same L2 approval transition",
+  );
+
+  const second = run(id, [answer("The reviewed step completed.")], {
+    projectId: null, signal: runController.signal,
+    agentLoop: {
+      ledger: async (event) => { await resumedJournal.appendAgentEvent(id, event); },
+      resume: { state: paused.agentPause.resume, authorization },
+    },
+  });
+  const finished = await second.promise;
+  assert.equal(finished.awaitingApproval, false);
+  assert.equal(finished.label, "ai_derived");
+  assert.equal(finished.receiptIds.length, 1);
+  assert.deepEqual(gatedRuns, ["TEST"], "the canonical tool ran exactly once after L4 and L2 release");
+  assert.equal(second.calls(), 1, "the resumed run inspected one result without a new model plan");
+  await resumedJournal.finish(id, "completed", 0);
+
+  const reloaded = await createExecutionJournal(settings);
+  const record = await reloaded.read(id, owner);
+  assert.ok(record && record.version === 2);
+  assert.equal(record.status, "completed");
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_waiting_approval").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_resumed").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "step_finished" && event.status === "completed").length, 1);
+  assert.equal(JSON.stringify(record).includes("synthetic-approved-review"), true, "review reference is audit metadata only");
+  assert.equal(await reloaded.read(id, foreignOwner), null);
+  const storedBytes = await fs.readFile(path.join(settings.directory, id));
+  assert.equal(storedBytes.subarray(0, 8).toString(), "LIOSENC1", "the journal must remain encrypted on disk");
+  assert.equal(storedBytes.includes(Buffer.from("synthetic-approved-review")), false, "audit metadata must not be in plaintext");
+});
+
+test("GM-12: cancelled agent call is durably terminal, never a replay or a model-generated success", { timeout: 15_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-brain-cancelled-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const settings = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(settings);
+  const id = crypto.randomUUID();
+  const owner = { userId: 7, projectId: null, chatId: null };
+  const controller = new AbortController();
+  await journal.begin({ id, owner, label: "Synthetic cancellation receipt", agentRun: true });
+
+  const runOnce = run(id, [planJson([step("cancelled-read", "test.agent.slow")])], {
+    projectId: null, signal: controller.signal,
+    agentLoop: { ledger: async (event) => { await journal.appendAgentEvent(id, event); } },
+  });
+  const timer = setTimeout(() => controller.abort(), 100);
+  let result: ConversationRuntimeResult;
+  try {
+    result = await runOnce.promise;
+  } finally {
+    clearTimeout(timer);
+  }
+  assert.equal(result.cancelled, true);
+  assert.equal(result.receiptIds.length, 0, "no success receipt may be issued for a cancelled run");
+  assert.equal(runOnce.events.some((event) => event.type === "text"), false);
+  assert.equal(runOnce.calls(), 1, "a cancelled tool must not produce a model inspection or a second plan");
+  await journal.finish(id, "cancelled", null);
+
+  const restarted = await createExecutionJournal(settings);
+  await restarted.recoverInterrupted();
+  const record = await restarted.read(id, owner);
+  assert.ok(record && record.version === 2);
+  assert.equal(record.status, "cancelled", "restart cannot silently re-enable a cancelled run");
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_started").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "cancelled").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "step_finished" && event.status === "cancelled").length, 1);
+  assert.equal(record.events?.some((event) => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+  await assert.rejects(restarted.begin({ id, owner, label: "Forbidden reused request ID", agentRun: true }), /already exists/);
+  await assert.rejects(restarted.appendAgentEvent(id, { kind: "step_started", stepId: "replay" }), /finalized/);
+  assert.equal((await restarted.read(id, owner))?.status, "cancelled");
+});
+
 test("the runtime passes the server-set prepareApproval through: confirm-class only, before the wait, no execution", async () => {
   const id = "b3333333-3333-4333-8333-333333333333";
   const prepared: string[] = [];
@@ -286,4 +458,104 @@ test("the runtime passes the server-set prepareApproval through: confirm-class o
   assert.equal(result.awaitingApproval, true);
   assert.deepEqual(prepared, ["ask:ask-call"]);
   assert.equal(gatedRuns.length, 0);
+});
+
+/**
+ * D1 / L4+L5+L10 joined source test: the canonical pause/one-time approval
+ * and durable external dispatch release are connected to the actual official
+ * MCP SDK over a local HTTP socket. It intentionally uses a test-only tool
+ * descriptor: production's Project-owned source lookup and rights policy
+ * retain separate acceptance gates.
+ */
+test("GM20 real L4 owner approval resumes one durable MCP dispatch over the official SDK", { timeout: 20_000 }, async () => {
+  const requests: string[] = [];
+  const server = createServer(async (request, response) => {
+    if (request.url !== "/mcp") { response.writeHead(404).end(); return; }
+    if (request.method === "GET") { response.writeHead(405).end(); return; }
+    if (request.method !== "POST") { response.writeHead(202).end(); return; }
+    const body: Buffer[] = [];
+    for await (const part of request) body.push(Buffer.from(part));
+    const rpc = JSON.parse(Buffer.concat(body).toString("utf8")) as {
+      id?: number | string; method?: string; params?: { name?: string; arguments?: { symbol?: string } };
+    };
+    if (rpc.id === undefined) { response.writeHead(202).end(); return; }
+    if (rpc.method === "tools/call") {
+      requests.push(String(rpc.params?.name));
+      assert.equal(rpc.params?.arguments?.symbol, "TEST");
+    }
+    const result = rpc.method === "initialize"
+      ? { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "joined-offline", version: "1" } }
+      : rpc.method === "tools/call"
+        ? { isError: false, content: [{ type: "text", text: "untrusted local observation" }] }
+        : rpc.method === "tools/list" ? { tools: [] } : null;
+    const payload = result === null
+      ? { jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "Method not found" } }
+      : { jsonrpc: "2.0", id: rpc.id, result };
+    response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(payload));
+  });
+  server.listen(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    const config: ExternalMcpServerConfig = {
+      endpoint: `http://127.0.0.1:${port}/mcp`,
+      policy: {
+        projectId: 77, serverId: "joined-test", allowedToolIds: ["quotes.read"],
+        allowedResourcePrefixes: [], credentialRef: null,
+        requireApprovalForTools: true, healthTimeoutMs: 5_000,
+      },
+    };
+    // The test-only descriptor preserves real GM11a authorization and L5
+    // external-side-effect dispatch. It cannot create a product MCP source.
+    registerConversationTool(governed({
+      id: "test.agent.joined-mcp-sdk",
+      label: "Test joined MCP SDK",
+      kind: "retrieve",
+      permissionClass: "user_confirm",
+      invoke: async (value, signal) => {
+        const output = await callExternalMcpTool(
+          config, "quotes.read", { symbol: String(value.symbol) }, undefined, signal,
+        );
+        return {
+          output, summary: "External MCP transport completed; content withheld from AI review.",
+          deterministic: false, sourceRefs: ["mcp-server:joined-test", "mcp-tool:quotes.read"],
+        };
+      },
+    }, {
+      access: "write", sideEffect: "external", replaySafe: false,
+      inputSchema: z.object({ symbol: z.string().trim().min(1) }).strict(),
+    }));
+
+    const id = "c1111111-1111-4111-8111-111111111111";
+    const controller = new AbortController();
+    const first = run(id, [planJson([step("read", "test.agent.joined-mcp-sdk", { symbol: "TEST" })])], {
+      projectId: null, signal: controller.signal,
+    });
+    const paused = await first.promise;
+    assert.equal(paused.awaitingApproval, true);
+    assert.deepEqual(requests, [], "no MCP traffic before the authenticated L4 owner review");
+    assert.ok(paused.agentPause);
+    assert.equal(first.ledger.at(-1)?.kind, "tool_call_waiting_approval");
+
+    const authorization = await grantPausedStep(id, "test.agent.joined-mcp-sdk", paused.agentPause, controller.signal);
+    const resumed = run(id, [answer("The connected tool completed. Observation was not released to the model.")], {
+      projectId: null, signal: controller.signal,
+      agentLoop: { resume: { state: paused.agentPause.resume, authorization } },
+    });
+    const result = await resumed.promise;
+    assert.equal(result.awaitingApproval, false);
+    assert.equal(result.label, "ai_derived");
+    assert.deepEqual(requests, ["quotes.read"]);
+    assert.equal(resumed.calls(), 1, "one model review with no new plan");
+    assert.equal(resumed.prompts.some(prompt => prompt.includes("untrusted local observation")), false,
+      "tool execution consent must not become observation transmission consent");
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_committed").length, 1);
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_finished"
+      && event.status === "succeeded").length, 1);
+    assert.equal(resumed.events.some(event => event.type === "receipt"), true);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
 });

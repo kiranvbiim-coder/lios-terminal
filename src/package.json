@@ -126,7 +126,8 @@
     "acceptance:sp02-packaged": "tsx script/sp02_packaged_journey.ts",
     "test:sp02-contract": "node --import tsx --test script/sp02_packaged_contract.test.ts script/sp02_resume_reapproval_contract.test.ts",
     "test:sp03-contract": "node --import tsx --test script/sp03_packaged_contract.test.ts script/sp03_packaged_inspection.test.ts",
-    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts"
+    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts",
+    "acceptance:sp06-device-local": "tsx script/sp06_paired_device_journey.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
@@ -138,6 +139,7 @@
     "@google/genai": "^2.17.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
+    "@modelcontextprotocol/client": "2.3.1",
     "@noble/hashes": "2.2.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
@@ -285,7 +287,9 @@
       "category": "public.app-category.finance",
       "icon": "build-resources/icon.icns",
       "hardenedRuntime": true,
-      "signIgnore": [".*/native-runtime-dist/.*"],
+      "signIgnore": [
+        ".*/native-runtime-dist/.*"
+      ],
       "gatekeeperAssess": false,
       "target": [
         "dmg",
