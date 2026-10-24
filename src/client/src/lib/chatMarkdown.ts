@@ -641,9 +641,9 @@ export function inspectableSourceHref(source: ChatCitationSource): string | null
  * request is authoritative; explicit requestId always wins.
  */
 export function collectCitationSources(events: readonly ConversationRuntimeEvent[], requestId?: string | null): ChatCitationSource[] {
-  const targetRequest = requestId ?? [...events].reverse().find(
-    (event) => event.type === "plan" || event.type === "trust" || event.type === "tool_result",
-  )?.requestId;
+  const targetRequest = requestId
+    ?? [...events].reverse().find((event) => event.type === "plan")?.requestId
+    ?? [...events].reverse().find((event) => event.type === "trust" || event.type === "tool_result")?.requestId;
   if (!targetRequest) return [];
   let latestPlanAt = -1;
   for (let i = events.length - 1; i >= 0; i--) {
