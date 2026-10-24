@@ -36,6 +36,10 @@ function storeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs
   // A distinct server-authorized editor may replace a checkpoint for the
   // SAME saved revision. Bind explicit discard to the actual encrypted file
   // generation, not only to the shared P4 baseline version and content hash.
+  const current = readProtectedArtifactDraft({ root, safeStorage, input, fileSystem, platform });
+  if (current && (!input.expectedCheckpointId || current.checkpointId !== input.expectedCheckpointId)) {
+    throw new Error("Protected Artifact checkpoint was changed by another editor. Recover or discard it explicitly before writing.");
+  }
   const checkpointId = crypto.randomUUID();
   const payload = JSON.stringify({ schemaVersion: 1, owner, artifactId, baseVersion: input.baseVersion, contentHash: input.contentHash, checkpointId, content: input.content });
   if (Buffer.byteLength(payload, "utf8") > DRAFT_MAX_BYTES) throw new Error("Artifact draft exceeds the protected-recovery size budget.");
