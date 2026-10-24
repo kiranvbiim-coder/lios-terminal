@@ -1,5 +1,5 @@
 import { GatewayProvider } from "@/lib/gateway/GatewayProvider";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Router, Switch, Route } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -80,6 +80,10 @@ function App() {
   const signOutPending = useRef(false);
   const [activeDomain, setActiveDomain] = useState<DomainInfo | null>(null);
   const [environmentSetupOpen, setEnvironmentSetupOpen] = useState(false);
+  // The workspace stays mounted while Connections is open. Capture the actual
+  // initiating control (not a route string) and restore it after the overlay
+  // unmounts, so the user's Chat draft and keyboard context survive.
+  const environmentReturnFocus = useRef<HTMLElement | null>(null);
   const [domainPickerOpen, setDomainPickerOpen] = useState(false);
   const audience = useAudience();
 
@@ -148,7 +152,26 @@ function App() {
     return () => window.removeEventListener("online", flush);
   }, [session?.authState?.principal?.userId, session?.authState?.principal?.organizationId, session?.authState?.state]);
 
-  useEffect(() => subscribeOpenEnvironmentCenter(() => setEnvironmentSetupOpen(true)), []);
+  const openEnvironmentSetup = useCallback(() => {
+    if (!environmentSetupOpen) {
+      const active = document.activeElement;
+      environmentReturnFocus.current = active instanceof HTMLElement && active.closest("[data-lios-workspace]") ? active : null;
+    }
+    setEnvironmentSetupOpen(true);
+  }, [environmentSetupOpen]);
+
+  useEffect(() => subscribeOpenEnvironmentCenter(openEnvironmentSetup), [openEnvironmentSetup]);
+  useEffect(() => {
+    if (environmentSetupOpen || domainPickerOpen || !session) return;
+    const opener = environmentReturnFocus.current;
+    if (!opener) return;
+    environmentReturnFocus.current = null;
+    if (opener.isConnected && !opener.matches(":disabled,[aria-disabled=true]") && !opener.closest("[hidden]")) {
+      opener.focus();
+    } else {
+      document.querySelector<HTMLElement>('[data-lios-workspace] button:not(:disabled)')?.focus();
+    }
+  }, [environmentSetupOpen, domainPickerOpen, session]);
 
   const handleLogout = async () => {
     if (signOutPending.current) return;
@@ -169,6 +192,7 @@ function App() {
     setActiveDomain(null);
     setDomainPickerOpen(false);
     setEnvironmentSetupOpen(false);
+    environmentReturnFocus.current = null;
     try {
       queryClient.clear();
       for (const clear of [clearTerminalTabs, clearTerminalLinkedContextState, clearActiveWorkspace, clearSessionMemory, clearNotificationReadOutbox, clearP9ManualRunDrafts, clearP9ManualRunAttempts, clearResearchTray, clearTerminalPersonalization]) {
@@ -236,7 +260,7 @@ function App() {
                 onLogout={handleLogout}
                 domain={(activeDomain ?? FALLBACK_FINANCE_DOMAIN).slug as DomainSlug}
                 onSwitchDomain={() => setDomainPickerOpen(true)}
-                onOpenEnvironment={() => setEnvironmentSetupOpen(true)}
+                onOpenEnvironment={openEnvironmentSetup}
               />
             </div>
             {session && environmentSetupOpen && (
