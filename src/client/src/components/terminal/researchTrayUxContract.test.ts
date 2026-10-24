@@ -106,4 +106,9 @@ test("WS-33 concurrent device-local edits never overwrite another tab's saved an
   assert.match(source, /Your draft was not saved/);
   assert.match(source, /setEditingSnapshot\(null\)/);
   assert.doesNotMatch(source, /window.confirm|window.prompt|onBlur=\{/);
+  assert.match(source, /research-removed-draft/);
+  assert.match(source, /Your draft is still here for review/);
+  assert.match(source, /setNewNote\(noteDraft\)/);
+  assert.match(source, /Keep as new note draft/);
+  assert.match(source, /!groups.includes\(group\)\) setGroup\("ALL"\)/);
 });
