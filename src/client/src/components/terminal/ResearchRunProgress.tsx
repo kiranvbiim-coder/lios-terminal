@@ -5,11 +5,12 @@ import { observedResearchProgress } from "@/lib/observedResearchProgress";
 interface Props {
   events: readonly ConversationRuntimeEvent[];
   view: "inline" | "findings";
+  requestId?: string | null;
 }
 
 /** Only observed plan/tool events; no synthetic percentage, ETA, AI claim, or background job. */
-export default function ResearchRunProgress({ events, view }: Props) {
-  const progress = observedResearchProgress(events);
+export default function ResearchRunProgress({ events, view, requestId }: Props) {
+  const progress = observedResearchProgress(events, requestId);
   if (!progress) return null;
 
   if (view === "inline") {
@@ -28,6 +29,21 @@ export default function ResearchRunProgress({ events, view }: Props) {
         <h3 className="font-ui text-[12px] font-semibold text-foreground">Reported results</h3>
         <span className="font-ui text-[12px] text-muted-foreground">{progress.completed} of {progress.total} steps completed</span>
       </div>
+      {progress.runOutcome === "cancelled" && (
+        <p role="status" className="font-ui text-[12px] text-amber-200/90">
+          Run stopped — any results listed below are partial and may need rechecking.
+        </p>
+      )}
+      {progress.runOutcome === "failed" && (
+        <p role="status" className="font-ui text-[12px] text-amber-200/90">
+          Run failed — the recorded results are partial, not a completed research answer.
+        </p>
+      )}
+      {progress.runOutcome === "waiting_approval" && (
+        <p role="status" className="font-ui text-[12px] text-muted-foreground">
+          Waiting for approval — no further steps have been assumed complete.
+        </p>
+      )}
       {progress.results.length > 0 ? (
         <ol className="space-y-2">
           {progress.results.map((result) => (
