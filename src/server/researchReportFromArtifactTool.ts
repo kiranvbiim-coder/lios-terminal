@@ -201,7 +201,8 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
       || (policy?.mode === "only_refs" && !policyRefs.has(ref)))) {
       throw new Error("Research Artifact cites sources excluded by the current request.");
     }
-    const documents = await currentPermittedProjectSearchDocuments(ctx, artifact.projectId, { readOnly: true });
+    if (call.projectId === null) throw new Error("Research report generation requires an authorized Project.");
+    const documents = await currentPermittedProjectSearchDocuments(ctx, call.projectId, { readOnly: true });
     const current = new Map(documents.map(doc => [doc.sourceRef, doc]));
     const selected = report.sourceRefs.map(ref => {
       const doc = current.get(ref);

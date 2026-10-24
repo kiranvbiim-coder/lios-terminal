@@ -58,7 +58,7 @@ export function researchComparisonArtifactContent(
 ) {
   const byDoc = new Map(sources.map(source => [source.documentId, source]));
   const refs = new Set<string>();
-  const blocks: Array<z.infer<typeof researchArtifactContentSchema>["blocks"][number]> = [
+  const blocks: Array<z.input<typeof researchArtifactContentSchema>["blocks"][number]> = [
     { id: "comparison-title", type: "heading", text: "Research evidence comparison" },
     { id: "comparison-scope", type: "paragraph", text: "Research question: " + query },
     { id: "comparison-method", type: "callout", text: RESEARCH_EVIDENCE_COMPARISON_LIMITATION },
