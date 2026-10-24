@@ -214,15 +214,18 @@ test("a model cannot silently turn a failed tool into a verified execution succe
     answer("All tasks completed successfully and the result has been saved."),
   ]);
   const result = await r.promise;
-  assert.equal(result.label, "ai_derived", "The model is still only the source of the explanation");
+  assert.equal(result.label, "observed_source", "A failed tool cannot turn the model's completion claim into accepted AI output");
   assert.match(result.text, /^LiOS execution record: 1 failed tool step\(s\) did not complete\./);
-  assert.match(result.text, /The AI answer below is not proof that those actions ran\./);
-  assert.match(result.text, /All tasks completed successfully and the result has been saved\./);
+  assert.match(result.text, /A model completion statement is not proof that those actions ran\./);
+  assert.match(result.text, /AI's completion statement was withheld/);
+  assert.equal(result.text.includes("All tasks completed successfully and the result has been saved."), false,
+    "the false AI success claim must never reach the user");
   assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "failed"), true);
   assert.equal(r.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
   const receipt = r.events.find((event) => event.type === "receipt");
   assert.ok(receipt && receipt.type === "receipt");
   assert.equal(receipt.receipt.warnings.some((warning) => warning.includes("1 failed tool step(s)")), true);
+  assert.equal(receipt.receipt.aiDerived, false, "a suppressed model claim is not an accepted AI result");
   assert.match(receipt.receipt.outputHash, /^[a-f0-9]{64}$/, "The receipt fingerprints the server-owned outcome summary.");
   assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
 });
