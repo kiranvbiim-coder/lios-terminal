@@ -29,7 +29,7 @@ export function findProjectHomeItems(
     chats: chats.filter(item => item.projectId === projectId && item.scope === "project"
       && item.status === "active" && matches(item.title)),
     resources: resources.filter(item => item.projectId === projectId && item.status === "active"
-      && matches(item.label, item.kind, projectResourceContextOption(item.contextMode).label)),
+      && matches(item.label, item.kind, projectResourceContextOption(item.contextMode).label, item.contextMode.replaceAll("_", " "))),
     sessions: sessions.filter(item => item.projectId === projectId && item.status === "active"
       && matches(item.name)),
   };
