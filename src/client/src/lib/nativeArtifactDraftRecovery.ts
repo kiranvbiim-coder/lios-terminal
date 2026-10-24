@@ -149,7 +149,7 @@ export function useNativeArtifactDraftRecovery<T extends ArtifactContent>(
         if (!lease.active || scheduledEpoch !== epoch(identity)) return;
         const scope = await authorizedScope(context);
         if (!lease.active || scheduledEpoch !== epoch(identity)) return;
-        const written = await native.writeArtifactDraftRecovery!({ ...scope, content: draft });
+        const written = await native.writeArtifactDraftRecovery!({ ...scope, content: draft, expectedCheckpointId: ownedCheckpointIds.get(nativeDraftCheckpointScope(context)) });
         if (written.protected === true && typeof written.checkpointId === "string") {
           ownedCheckpointIds.set(nativeDraftCheckpointScope(context), written.checkpointId);
         }
