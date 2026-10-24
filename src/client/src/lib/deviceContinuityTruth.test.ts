@@ -76,7 +76,7 @@ test("existing device Settings screen is explicit about scope and uses original 
   const outbox = readFileSync(new URL("./p9NotificationReadOutbox.ts", import.meta.url), "utf8");
   for (const attribute of [
     "device-home-continuity-status", "device-read-outbox-count",
-    "device-network-review", "device-home-switch-review", "device-pairing-review",
+    "device-network-review", "device-home-switch-review", "device-home-forget-review", "device-pairing-review",
   ]) assert.ok(source.includes(`data-testid="${attribute}"`), attribute);
 
   assert.match(source, /useGatewayState\(\)/);
@@ -88,6 +88,8 @@ test("existing device Settings screen is explicit about scope and uses original 
   assert.match(source, /requestNetworkReview\(true, !networkDiscoverable\)/);
   assert.match(source, /setHomeReview\(home.homeId\)/);
   assert.match(source, /Confirm local Home selection/);
+  assert.match(source, /Confirm forget local record/);
+  assert.match(source, /remote Home's pairing credential is not revoked/);
   assert.match(source, /Confirm pairing approval/);
   assert.match(source, /pairedDeviceRevocationReview\(device\)/);
   assert.match(source, /Revoking…/);
