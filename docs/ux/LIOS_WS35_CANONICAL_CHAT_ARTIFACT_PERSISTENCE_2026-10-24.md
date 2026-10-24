@@ -19,7 +19,7 @@ Separately, the pending Artifact auto-retention gate did not explicitly exclude 
 
 1. `server/savedChatArtifactAnswer.ts` returns an answer for meaningful successful text unchanged, or a conservative, **non-financial** Chat message when confirmed P4 writes exist without text. The wording promises only that the recorded Artifact was saved, with a link through the existing saved cards; it does not imply data verified, a finished financial calculation, or arbitrary ephemeral drafts.
 2. `conversationRunService.ts` computes the answer **after** actual P4 writes; both the existing encrypted transcript recorder and durable assistant Chat message use the same finalized text, with actual `persistedArtifacts` metadata unmodified. Working Context continues to carry the last real P4 ID only on successful durable saves.
-3. Cancelled, approval-paused, failed and errored turns do not create synthetic success messages, and the pending-draft write gate now also checks observed failures. Existing persisted Artifact events continue to be verified against P4 before being referenced.
+3. Only an explicitly observed **completed** terminal event can retain pending drafts or a durable assistant message. Cancelled, missing-terminal, approval-paused, failed and errored turns do not create synthetic success messages; the pending-draft write gate uses the same strict terminal boundary. Existing persisted Artifact events continue to be verified against P4 before being referenced.
 4. No new Chat DB/store, simulated persistence, provider calls, source entitlement, data transmission, permission grant, artificial Project or retained Temporary Artifact was added.
 
 ## Added tests / targets
