@@ -17,7 +17,7 @@ import {
 } from "@/lib/useArtifacts";
 import type { ArtifactContent, ArtifactExportPlan, ArtifactRefreshSpec, SpreadsheetCellDiff } from "@shared/artifactContracts";
 import type { ProjectSession } from "@/lib/useProjects";
-import { colIndexToLetters, parseCellRef } from "@/lib/spreadsheetEngine";
+import { colIndexToLetters } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
 import { semanticArtifactComparisonLabel } from "@/lib/artifactSemanticComparisonSummary";
 import { exportArtifactLocal } from "@/lib/artifactExport";
@@ -35,6 +35,7 @@ import { ArtifactProposalReview } from "./ArtifactProposalReview";
 import { artifactMaintenancePrompt } from "@/lib/artifactProposalReview";
 import { SpreadsheetCellSourceInspect } from "./SpreadsheetCellSourceInspect";
 import { spreadsheetDraftHasChanges } from "@/lib/artifactSpreadsheetDraft";
+import { checkedSpreadsheetCellRef, prepareSpreadsheetCellReview } from "@/lib/spreadsheetReviewBounds";
 import { openTerminalInspector } from "@/lib/terminalInspector";
 import ArtifactPortfolioMateriality from "./ArtifactPortfolioMateriality";
 import BacktestArtifactView from "./BacktestArtifactView";
@@ -204,6 +205,8 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
   draft.current = { content: draftContent, grid };
   const [conflict, setConflict] = useState(false);
   const [cleanupNotice, setCleanupNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const checkpoint = gridToArtifactSheet(draftContent, grid);
   const isDirty = spreadsheetDraftHasChanges(baseline.current.content, checkpoint);
   const recovery = useNativeArtifactDraftRecovery(baseline.current.recoveryContext ?? null, checkpoint, isDirty, tick, saved => {
@@ -227,7 +230,6 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     onDirtyChange?.(dirty || conflict);
   };
   const sheet = draftContent.sheets.find(s => s.id === draftContent.activeSheetId)!;
-  const canonicalSheet = content.sheets.find(s => s.id === sheet.id);
   const selectSheet = (sheetId: string) => {
     if (disabled || conflict || sheetId === sheet.id) return;
     // Flush the active renderer into the same P4 draft before projecting another worksheet.
@@ -238,9 +240,27 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     setTick(v => v + 1);
   };
   const rows = Math.min(sheet.rowCount, 30), cols = Math.min(sheet.columnCount, 12);
-  const selectedCoordinates = /^[A-Z]{1,4}[1-9][0-9]{0,6}$/.test(selectedRef) ? parseCellRef(selectedRef) : null;
-  const selectedInBounds = selectedCoordinates && selectedCoordinates.row < sheet.rowCount && selectedCoordinates.col < sheet.columnCount;
-  const selectedCell = { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) };
+  const selectedInBounds = checkedSpreadsheetCellRef(sheet, selectedRef) !== null;
+  // Invalid and out-of-bounds user-input refs must never reach the grid
+  // engine: returning an explicit unavailable inspector is safer than a crash.
+  const selectedCell = selectedInBounds
+    ? { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) }
+    : null;
+  const reviewRef = checkedSpreadsheetCellRef(sheet, ref);
+  const persist = async (next: ArtifactContent) => {
+    if (disabled || conflict || recovery.blocked || saving) return;
+    setSaving(true); setSaveError(null);
+    try { await onSave(next); }
+    catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Spreadsheet revision could not be saved. Your local draft was retained."); }
+    finally { setSaving(false); }
+  };
+  const propose = async () => {
+    if (disabled || conflict || recovery.blocked || saving) return;
+    setSaving(true); setSaveError(null);
+    try { await onDraft(prepareSpreadsheetCellReview(baseline.current.content, sheet.id, ref, value)); }
+    catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Spreadsheet review diff could not be created."); }
+    finally { setSaving(false); }
+  };
   return <div>
     <NativeDraftRecoveryNotice recovery={recovery} dirty={isDirty}/>
     {cleanupNotice && <p role="status" className="mb-2 text-sm text-amber-200">{cleanupNotice}</p>}
@@ -250,11 +270,11 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
       baseline.current = { content, revisionKey, recoveryContext }; setDraftContent(content);
       setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1);
     })()} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
-    <fieldset disabled={disabled || conflict || recovery.blocked} className="min-w-0">
+    <fieldset disabled={disabled || saving || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <span className="font-terminal text-[12px] text-muted-foreground">SPREADSHEET · BASIC EDITOR</span>
       <label className="text-[13px] text-muted-foreground">Worksheet <select aria-label="Spreadsheet worksheet" value={sheet.id} onChange={e => selectSheet(e.target.value)} className="ml-1 rounded border border-border/50 bg-[#090909] px-2 py-1">{draftContent.sheets.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
-      <button onClick={() => void onSave({...gridToArtifactSheet(draftContent, grid), rendererPreference: "univer"})} className="ml-auto rounded border border-border px-3 py-1.5 font-ui text-[13px]">Open advanced spreadsheet editor</button>
+      <button onClick={() => void persist({...gridToArtifactSheet(draftContent, grid), rendererPreference: "univer"})} className="ml-auto rounded border border-border px-3 py-1.5 font-ui text-[13px]">Open advanced spreadsheet editor</button>
     </div>
     <div className="max-h-[420px] overflow-auto rounded-lg border border-border/60" data-render-tick={tick}>
       <table className="border-collapse"><thead><tr><th className="sticky left-0 top-0 z-20 bg-[#0a0a0a]"/>{Array.from({length:cols},(_,c) => <th key={c} className="sticky top-0 border border-border/40 bg-[#0a0a0a] px-2 py-1 font-terminal text-[12px] text-muted-foreground">{colIndexToLetters(c)}</th>)}</tr></thead>
@@ -267,14 +287,16 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <label className="text-[13px] text-muted-foreground">Selected cell <input aria-label="Selected cell reference" value={selectedRef} onChange={e => setSelectedRef(e.target.value.trim().toUpperCase())} className="ml-1 w-20 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal"/></label>
-      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
+      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell?.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
     </div>
-    {selectedInBounds ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
+    {selectedInBounds && selectedCell ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <button onClick={() => void onSave(gridToArtifactSheet(draftContent,grid))} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save spreadsheet revision</button>
-      <div className="ml-auto flex gap-1"><input aria-label="Proposed cell reference" value={ref} onChange={e => setRef(e.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><input aria-label="Proposed cell value" value={value} onChange={e => setValue(e.target.value)} placeholder="proposed raw" className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><button onClick={() => void onDraft({sheetId:sheet.id,ref,before:canonicalSheet?.cells[ref] ?? null,after:{...canonicalSheet?.cells[ref],raw:value,format:grid.getFormat(ref)}})} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Create review diff</button></div>
+      <button disabled={!isDirty} onClick={() => { if (isDirty) void persist(gridToArtifactSheet(draftContent,grid)); }} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Save spreadsheet revision</button>
+      <div className="ml-auto flex gap-1"><input aria-label="Proposed cell reference" aria-invalid={!reviewRef} value={ref} onChange={e => setRef(e.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><input aria-label="Proposed cell value" value={value} onChange={e => setValue(e.target.value)} placeholder="proposed raw" className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><button disabled={!reviewRef} onClick={() => void propose()} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Create review diff</button></div>
     </div>
     </fieldset>
+    {saveError && <p role="alert" data-testid="spreadsheet-save-error" className="mt-2 text-[13px] text-red-300">{saveError}</p>}
+    {!reviewRef && <p role="status" className="mt-1 font-ui text-[12px] text-amber-200">Enter a cell within the saved worksheet bounds to create a review diff.</p>}
   </div>;
 }
 function ThesisEditor({content,onSave,onRefresh,onPostmortem}:{content:Extract<ArtifactContent,{kind:"thesis"}>;onSave:(c:ArtifactContent)=>Promise<void>;onRefresh:()=>Promise<void>;onPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>}) {
