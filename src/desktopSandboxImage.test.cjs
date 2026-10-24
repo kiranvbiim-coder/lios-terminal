@@ -189,6 +189,14 @@ test('local Podman socket is paired with Podman while existing Docker socket def
 });
 
 test('packaged Linux bootstrap discovers a real rootless Podman socket without invoking Docker', (t) => {
+  // This integration probe uses the host path module and local socket stat
+  // behavior. Simulating Linux here on Windows would manufacture backslash
+  // paths such as D:\\...\\podman.sock, which are not valid Unix endpoints.
+  // Engine inference and explicit Podman pairing are tested portably above.
+  if (process.platform !== 'linux') {
+    t.skip('Local Unix socket discovery is a Linux-host integration test.');
+    return;
+  }
   const { root } = releaseFixture(t, 'linux/amd64');
   const home = path.join(os.tmpdir(), 'lios-podman-engine-selection');
   const runtimeDir = path.join(home, 'run', '1000');
