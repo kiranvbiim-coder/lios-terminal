@@ -1072,6 +1072,20 @@ export async function createArtifactVersion(
   // do not prove a model ran. Only the audited restore/undo path may restore
   // previously recorded valuation results without a new engine calculation.
   if (input.action !== "undo") assertValuationRevisionIsRecorded(baseContent, content);
+  // An untrusted generic version request cannot mint calculation/source authority
+  // through metadata alone when the recorded valuation content is unchanged.
+  if (content.kind === "valuation" && input.action !== "undo") {
+    const same = (supplied: unknown, recorded: unknown) =>
+      supplied === undefined || hashLedgerValue(supplied) === hashLedgerValue(recorded);
+    if (!same(input.executionReceiptIds, base.executionReceiptIds)
+      || !same(input.assumptionRefs, base.assumptionRefs)
+      || !same(input.sourceRefs, base.sourceRefs)
+      || !same(input.trustManifest, base.trustManifest)
+      || !same(input.dependencyRefs, base.dependencyRefs)
+      || !same(input.refreshSpec, base.refreshSpec)) {
+      throw new Error("Valuation provenance and calculation receipts are immutable without a governed engine run. Generic version metadata cannot mint new calculation/source authority.");
+    }
+  }
   const terminalProof = terminalEngineProof ? terminalEngineWrites.get(terminalEngineProof) : null;
   const nativeWriteAuthorized = Boolean(terminalProof && terminalProof.userId === ctx.userId && terminalProof.artifactId === artifact.id && terminalProof.baseVersion === input.baseVersion && terminalProof.hash === contentHash(content));
   if (content.kind === "screen" && content.state.terminalExecutions !== undefined && (baseContent.kind !== "screen" || baseContent.state.terminal === undefined)) throw new Error("Terminal execution records require an existing original terminal screen and native run.");
