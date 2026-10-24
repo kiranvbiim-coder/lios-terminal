@@ -218,7 +218,7 @@ test("a model cannot silently turn a failed tool into a verified execution succe
   const receipt = r.events.find((event) => event.type === "receipt");
   assert.ok(receipt && receipt.type === "receipt");
   assert.equal(receipt.receipt.warnings.some((warning) => warning.includes("1 failed tool step(s)")), true);
-  assert.equal(receipt.receipt.output && JSON.stringify(receipt.receipt.output).includes('"status":"failed"'), true);
+  assert.match(receipt.receipt.outputHash, /^[a-f0-9]{64}$/, "The receipt fingerprints the server-owned outcome summary.");
   assert.equal(JSON.stringify([r.events, r.prompts]).includes("hunter2"), false);
 });
 
