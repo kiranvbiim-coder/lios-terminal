@@ -11,6 +11,11 @@ from quant_smoke import verify_core_numerical_runtime
 # dependency presence or a separate host-side mocked worker test.
 verify_core_numerical_runtime()
 
+from worker_smoke import verify_worker_smoke
+# Execute the real canonical worker, with fixed financial input and refusal
+# probes, inside this already-rootless network-isolated release container.
+verify_worker_smoke()
+
 models_root = pathlib.Path('/opt/lios/docling-models')
 manifest_path = pathlib.Path('/opt/lios/docling-models.manifest.json')
 models = json.loads(manifest_path.read_text(encoding='utf-8'))
