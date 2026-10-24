@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { createExecutionJournal } from "./exec/execution-journal";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 import { AIProviderError, createAttribution } from "./byoaiRouter";
 import { currentConversationToolApprovalPolicy, executeConversationRuntime, getConversationTool, registerConversationTool, type ConversationRuntimeInput, type ConversationRuntimeResult } from "./conversationRuntime";
@@ -293,6 +298,84 @@ test("resume with a copied, reused or missing authorization is denied and the ga
   assert.equal(gatedRuns.length, 0);
   assert.notEqual(outcome.awaitingApproval, true, "a refused authorization does not loop back into waiting");
   assert.equal(second.ledger.some((event) => event.kind === "tool_call_finished" && event.status === "denied"), true);
+});
+
+test("GM-12: owner-reviewed approval is an exact once-only release in the encrypted durable agent journal", { timeout: 20_000 }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lios-brain-approved-"));
+  t.after(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  const settings = { directory: path.join(root, "journal"), keyDirectory: path.join(root, "keys") };
+  const journal = await createExecutionJournal(settings);
+  const id = crypto.randomUUID();
+  const owner = { userId: 7, projectId: null, chatId: null };
+  const foreignOwner = { ...owner, userId: 8 };
+  const runController = new AbortController();
+  await journal.begin({ id, owner, label: "Synthetic one-step owner-approved agent", agentRun: true });
+
+  gatedRuns.length = 0;
+  const first = run(id, [planJson([step("approved", "test.agent.gated")])], {
+    projectId: null,
+    signal: runController.signal,
+    agentLoop: { ledger: async (event) => { await journal.appendAgentEvent(id, event); } },
+  });
+  const paused = await first.promise;
+  assert.equal(paused.awaitingApproval, true);
+  assert.ok(paused.agentPause);
+  assert.deepEqual(gatedRuns, [], "a model plan and approval pause are never permission to execute");
+  await journal.markWaitingApproval(id);
+  const resumedJournal = await createExecutionJournal(settings);
+  assert.equal((await resumedJournal.read(id, owner))?.status, "waiting_approval");
+  assert.equal(await resumedJournal.read(id, foreignOwner), null, "a different owner must not see the durable record");
+
+  const callId = paused.agentPause.resume.paused.toolCallId;
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, owner, "forged-call-id", "synthetic-approved-review"),
+    /waiting tool call is not the one/,
+  );
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, foreignOwner, callId, "synthetic-approved-review"),
+    /not found/i,
+  );
+  assert.equal((await resumedJournal.read(id, owner))?.status, "waiting_approval");
+  assert.deepEqual(gatedRuns, [], "rejected release attempts must produce no tool effect");
+
+  // L4's real registry-bound, live one-time grant is created only after review.
+  const authorization = await grantPausedStep(id, "test.agent.gated", paused.agentPause, runController.signal);
+  const released = await resumedJournal.resumeAfterApproval(id, owner, callId, "synthetic-approved-review");
+  assert.equal(released.kind, "tool_call_resumed");
+  await assert.rejects(
+    resumedJournal.resumeAfterApproval(id, owner, callId, "synthetic-approved-review"),
+    /not waiting for approval/,
+    "a second release cannot reuse the same L2 approval transition",
+  );
+
+  const second = run(id, [answer("The reviewed step completed.")], {
+    projectId: null, signal: runController.signal,
+    agentLoop: {
+      ledger: async (event) => { await resumedJournal.appendAgentEvent(id, event); },
+      resume: { state: paused.agentPause.resume, authorization },
+    },
+  });
+  const finished = await second.promise;
+  assert.equal(finished.awaitingApproval, false);
+  assert.equal(finished.label, "ai_derived");
+  assert.equal(finished.receiptIds.length, 1);
+  assert.deepEqual(gatedRuns, ["TEST"], "the canonical tool ran exactly once after L4 and L2 release");
+  assert.equal(second.calls(), 1, "the resumed run inspected one result without a new model plan");
+  await resumedJournal.finish(id, "completed", 0);
+
+  const reloaded = await createExecutionJournal(settings);
+  const record = await reloaded.read(id, owner);
+  assert.ok(record && record.version === 2);
+  assert.equal(record.status, "completed");
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_waiting_approval").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_resumed").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+  assert.equal(record.events?.filter((event) => event.kind === "step_finished" && event.status === "completed").length, 1);
+  assert.equal(JSON.stringify(record).includes("synthetic-approved-review"), true, "review reference is audit metadata only");
+  assert.equal(await reloaded.read(id, foreignOwner), null);
+  const storedBytes = await fs.readFile(path.join(settings.directory, id));
+  assert.equal(storedBytes.subarray(0, 8).toString(), "LIOSENC1", "the journal must remain encrypted on disk");
+  assert.equal(storedBytes.includes(Buffer.from("synthetic-approved-review")), false, "audit metadata must not be in plaintext");
 });
 
 test("the runtime passes the server-set prepareApproval through: confirm-class only, before the wait, no execution", async () => {
