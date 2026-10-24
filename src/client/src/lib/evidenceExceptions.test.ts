@@ -154,3 +154,17 @@ test("WS-31 a trust record with material conflicts is not shown as an all-green 
   assert.match(cleanHtml, />Trust</);
   assert.doesNotMatch(cleanHtml, /Evidence needs review/);
 });
+
+test("WS-31 summary-only material conflict and missing evidence remain visible without detailed rows", () => {
+  const source = fixture();
+  const summaryOnly: TrustManifest = {
+    ...source,
+    conflicts: [], claims: [], evidence: [], missing: [],
+    summary: { ...source.summary, conflictState: "material", missingCount: 2 },
+  };
+  const issues = trustCaveats(summaryOnly);
+  assert.match((issues?.lines ?? []).join(" "), /conflict is recorded in the trust summary/);
+  assert.match((issues?.lines ?? []).join(" "), /missing evidence is recorded in the summary/);
+  const header = renderToStaticMarkup(React.createElement(ConversationTrustPanel, { manifest: summaryOnly }));
+  assert.match(header, /Evidence needs review/);
+});
