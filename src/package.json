@@ -329,6 +329,7 @@
       "preload.cjs",
       "desktopSecretCustody.cjs",
       "desktopIpcSecurity.cjs",
+      "desktopUnicodePdf.cjs",
       "desktopLogRedaction.cjs",
       "desktopBackupRestore.cjs",
       "desktopPythonSidecar.cjs",

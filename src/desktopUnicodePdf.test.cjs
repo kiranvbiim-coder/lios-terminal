@@ -135,3 +135,17 @@ test("Structured Unicode print payload counts the flattened and native views ind
   assert.throws(()=>normalizeUnicodePdfPayload({...payload,paragraphs,items:inflated}),/text budget/);
   assert.throws(()=>normalizeUnicodePdfPayload({...payload,paragraphs:inflated,items}),/text budget/);
 });
+
+
+test("Packaged LiOS Electron app includes the local native Unicode printer", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const files = manifest.build?.files;
+  assert.ok(Array.isArray(files), "electron-builder must declare a package contents allowlist");
+  assert.ok(files.includes("desktopUnicodePdf.cjs"),
+    "Native Unicode PDF exports need desktopUnicodePdf.cjs inside the installed app.asar");
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  assert.match(main, /require\("\.\/desktopUnicodePdf\.cjs"\)/,
+    "Main process must resolve the same packaged module");
+});
