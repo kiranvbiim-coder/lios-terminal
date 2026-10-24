@@ -49,7 +49,7 @@ function storeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs
     fileSystem.renameSync(temporary, filename);
   } finally { try { fileSystem.rmSync(temporary, { force: true }); } catch {} }
   try { fileSystem.chmodSync(filename, 0o600); } catch { /* Windows uses ACLs. */ }
-  return { protected: true };
+  return { protected: true, checkpointId };
 }
 function readProtectedArtifactDraft({ root, safeStorage, input, fileSystem = fs, platform = process.platform }) {
   requireEncryption(safeStorage, platform);
@@ -72,7 +72,7 @@ function removeProtectedArtifactDraft({ root, safeStorage, input, fileSystem = f
   if (!Number.isSafeInteger(expected.baseVersion) || expected.baseVersion < 1 || typeof expected.contentHash !== "string" || !/^[a-f0-9]{64}$/i.test(expected.contentHash)) throw new Error("Invalid checkpoint retirement identity.");
   const current = readProtectedArtifactDraft({ root, safeStorage, input, fileSystem, platform });
   if (!current || current.baseVersion !== expected.baseVersion || current.contentHash !== expected.contentHash
-    || (expected.checkpointId !== undefined && current.checkpointId !== expected.checkpointId)) return { removed: false };
+    || (current.checkpointId !== undefined && current.checkpointId !== expected.checkpointId)) return { removed: false };
   fileSystem.rmSync(draftFile(root, input), { force: true });
   return { removed: true };
 }
