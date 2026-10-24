@@ -71,3 +71,65 @@ function requireSource(): string {
   // Source-contract assertion complements SSR without a browser or new test runner.
   return fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "ResearchSourceList.tsx"), "utf8");
 }
+
+test("WS-29: the inline citation safety policy is identical to the inspector policy", () => {
+  const forged: ChatCitationSource = {
+    id: "provider:sec_edgar", label: "SEC EDGAR", href: "https://www.sec.gov/",
+    index: 2,
+  };
+  assert.equal(inspectableSourceHref(forged), null);
+  const altered: ChatCitationSource = {
+    id: "https://example.org/research/actual", label: "Wrong destination",
+    href: "https://example.org/research/other", index: 3,
+  };
+  assert.equal(inspectableSourceHref(altered), null);
+  const exact: ChatCitationSource = {
+    id: "https://example.org/research/actual", label: "Recorded document",
+    href: "https://example.org/research/actual", index: 4,
+  };
+  assert.equal(inspectableSourceHref(exact), "https://example.org/research/actual");
+  const markup = renderToStaticMarkup(createElement(ResearchSourceList, { sources: [forged, altered, exact] }));
+  assert.equal((markup.match(/<a\b/g) ?? []).length, 1);
+  assert.match(markup, /Reference only · no verified link/);
+});
+
+test("WS-29: source evidence is request-bound, not inherited from another run or an earlier plan", () => {
+  const OTHER_ID = "22222222-2222-4222-8222-222222222222";
+  const plan = (id: string) => ({
+    type: "plan", requestId: id, at: "2026-10-24T10:00:00Z",
+    plan: { schemaVersion: "1", requestId: id, capabilities: [], steps: [] },
+  }) as unknown as ConversationRuntimeEvent;
+  const foreign = {
+    ...toolResult(["https://example.org/foreign"]), requestId: OTHER_ID,
+  };
+  const events = [
+    plan(REQUEST_ID),
+    toolResult(["https://example.org/old"]),
+    foreign,
+    plan(REQUEST_ID),
+    toolResult(["provider:fred", "https://example.org/latest"]),
+    foreign,
+  ];
+  assert.deepEqual(collectCitationSources(events, REQUEST_ID).map(source => source.id), [
+    "provider:fred", "https://example.org/latest",
+  ]);
+  assert.deepEqual(collectCitationSources(events, OTHER_ID).map(source => source.id), [
+    "https://example.org/foreign",
+  ]);
+  assert.deepEqual(collectCitationSources(events, "33333333-3333-4333-8333-333333333333"), []);
+  assert.deepEqual(collectCitationSources(events).map(source => source.id), [
+    "provider:fred", "https://example.org/latest",
+  ]);
+});
+
+test("WS-29: a trust record from a mismatched manifest cannot launder foreign document references", () => {
+  const OTHER_ID = "22222222-2222-4222-8222-222222222222";
+  const trust = ({
+    type: "trust", requestId: REQUEST_ID, at: "2026-10-24T10:00:00Z",
+    manifest: {
+      requestId: OTHER_ID,
+      evidence: [{ sourceRef: "https://example.org/foreign-trust", providerLabel: "Foreign" }],
+    },
+  }) as unknown as ConversationRuntimeEvent;
+  assert.deepEqual(collectCitationSources([toolResult(["provider:fred"]), trust], REQUEST_ID).map(s => s.id), ["provider:fred"]);
+});
