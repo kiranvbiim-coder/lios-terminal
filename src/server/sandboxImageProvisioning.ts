@@ -191,7 +191,7 @@ export function repairSandboxImage(): Promise<SandboxImageReadiness> {
       ], { stdio: ["pipe", "pipe", "pipe"] });
       // Drain engine diagnostics without buffering or logging them; otherwise a
       // full stdout pipe can stall the import and incorrectly time it out.
-      await streamSandboxImageArchive(bundle.archive, child);
+      await streamSandboxImageArchive(bundle.archive, child, bundle.release.archiveSha256);
       const after = await inspectSandboxImageReadiness();
       return after.state === "ready" ? after : status("repair_failed", bundle.release.image, `Image load completed but verification returned ${after.state}: ${after.reason}`, "retry");
     } catch (error) {
