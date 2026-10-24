@@ -34,6 +34,8 @@ export interface ProtectedArtifactDraftAuthorizedScope {
 export interface ProtectedArtifactDraftSnapshot {
   baseVersion: number;
   contentHash: string;
+  /** Native-generated encrypted checkpoint generation; not P4 data authority. */
+  checkpointId?: string;
   content: unknown;
 }
 
@@ -43,7 +45,7 @@ interface DesktopWorkspaceBridge {
   artifactDraftRecoveryAvailable?: () => Promise<boolean>;
   readArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope) => Promise<ProtectedArtifactDraftSnapshot | null>;
   writeArtifactDraftRecovery?: (input: ProtectedArtifactDraftAuthorizedScope & { content: unknown }) => Promise<{ protected: boolean }>;
-  clearArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope & { expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> }) => Promise<{ removed: boolean }>;
+  clearArtifactDraftRecovery?: (identity: ProtectedArtifactDraftAuthorizedScope & { expectedCheckpoint?: Pick<ProtectedArtifactDraftSnapshot, "baseVersion" | "contentHash"> & { checkpointId?: string } }) => Promise<{ removed: boolean }>;
   chooseFolder?: (purpose: DesktopFolderPurpose) => Promise<string | null>;
   getDataFolder?: () => Promise<DesktopDataFolder>;
   moveDataFolder?: (target: string) => Promise<{ relaunching: boolean } | void>;
