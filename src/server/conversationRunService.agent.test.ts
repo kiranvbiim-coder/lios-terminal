@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import express from "express";
+import { createServer } from "node:http";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 
 // DB-dependent modules load after the data directory is set, because db.ts binds it at module evaluation.
@@ -20,6 +22,7 @@ const { getArtifactVersion, getArtifact, listProjectArtifacts } = await import("
 const { createAttribution } = await import("./byoaiRouter");
 const { artifactContentSchema } = await import("@shared/artifactContracts");
 const { savedMessageArtifactRefs } = await import("@shared/conversationArtifactRefs");
+const { registerArtifactRoutes } = await import("./artifactRoutes");
 const { startProjectChatRun, ConversationStartError } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("./exec/execution-scope");
@@ -177,6 +180,38 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
       "an unrelated account cannot read saved Chat references");
     await assert.rejects(() => getArtifactVersion(foreignTenant, saved.id, saved.version),
       "an unrelated account cannot resolve the referenced P4 version");
+
+    // Exercise the actual access-checked HTTP route the existing Workbench
+    // useArtifact hook calls. A saved card must open the exact recorded v1,
+    // not a model-generated copy, an unspecified head, or another tenant's P4.
+    const app = express();
+    let httpUser = user;
+    app.use((req, _res, next) => {
+      req.user = httpUser;
+      req.isAuthenticated = (() => true) as typeof req.isAuthenticated;
+      next();
+    });
+    registerArtifactRoutes(app);
+    const server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const url = `http://127.0.0.1:${address.port}/api/artifacts/${encodeURIComponent(saved.id)}?version=${saved.version}`;
+      const opened = await fetch(url);
+      assert.equal(opened.status, 200, "Workbench's canonical GET must open the saved card's exact version");
+      const detail = await opened.json() as { artifact: { id: string; projectId: number | null }; version: { version: number; contentHash: string } };
+      assert.equal(detail.artifact.id, saved.id);
+      assert.equal(detail.artifact.projectId, project.id);
+      assert.equal(detail.version.version, saved.version);
+      assert.equal(detail.version.contentHash, immutable.contentHash);
+      httpUser = foreign;
+      const denied = await fetch(url);
+      assert.equal(denied.status, 404, "the same saved card URL cannot disclose another tenant's P4");
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
     const finished = (await journal.read(requestId, owner));
     assert.equal(finished?.status, "completed");
     assert.equal(finished?.events?.filter((event) => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
