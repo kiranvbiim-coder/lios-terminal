@@ -8,6 +8,7 @@ export interface ChartRecordedContext {
   yUnit: string | null;
   period: string | null;
   evidenceRefs: string[];
+  totalRecordedSourceRefs: number;
   sourceBasis: "artifact_version" | "chart_options" | "none";
 }
 
@@ -31,9 +32,10 @@ export function chartRecordedContext(chart: ChartContent, versionSourceRefs?: re
   // are only a display-level fallback for read-only derived charts without
   // version metadata; never blend the two scopes or infer validation.
   const sourceRefs = versionSourceRefs ?? options.sourceRefs;
-  const evidenceRefs = Array.isArray(sourceRefs) && sourceRefs.length <= 100
+  const recorded = Array.isArray(sourceRefs)
     && sourceRefs.every(v => typeof v === "string" && v.trim().length > 0 && v.length <= 1_000)
     ? [...new Set(sourceRefs as string[])] : [];
+  const evidenceRefs = recorded.slice(0, 100); // bounded DOM, not a bounded source count
   return {
     xLabel: label("xAxisLabel") ?? "X (label not recorded)",
     yLabel: label("yAxisLabel") ?? "Y (label not recorded)",
@@ -41,6 +43,7 @@ export function chartRecordedContext(chart: ChartContent, versionSourceRefs?: re
     yUnit: label("yUnit"),
     period: label("periodLabel", 200),
     evidenceRefs,
+    totalRecordedSourceRefs: recorded.length,
     sourceBasis: versionSourceRefs !== undefined ? "artifact_version" : evidenceRefs.length ? "chart_options" : "none",
   };
 }
@@ -55,7 +58,7 @@ export function chartSourceCaveat(context: ChartRecordedContext): string {
     ...(!context.xUnit ? ["X unit"] : []),
     ...(!context.yUnit ? ["Y unit"] : []),
     ...(!context.period ? ["period"] : []),
-    ...(!context.evidenceRefs.length ? ["source references"] : []),
+    ...(!context.totalRecordedSourceRefs ? ["source references"] : []),
   ];
   return missing.length
     ? `Not recorded in the displayed chart or saved version: ${missing.join(", ")}. Values shown are saved Artifact observations, not independently verified data.`
