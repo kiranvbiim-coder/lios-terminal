@@ -40,6 +40,7 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
     [registry.data, search, connectedOnly],
   );
   const total = registry.data?.groups.reduce((count, group) => count + group.items.length, 0) ?? 0;
+  const groupTitles = useMemo(() => new Map((registry.data?.groups ?? []).map(group => [group.id, group.title])), [registry.data]);
   const unavailableTemporaryScope = !projectAvailable && (scope === "my_data" || scope === "files");
 
   return <div className="relative">
@@ -117,13 +118,12 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
           {matches.map(item => {
             const status = sourceCatalogueStatus(item);
             const coverage = sourceCatalogueCoverage(item);
-            const group = registry.data.groups.find(value => value.id === item.group);
             return <li key={item.id} className="rounded-md border border-border/60 p-2">
               <div className="flex items-start justify-between gap-2">
                 <span className="min-w-0 break-words font-ui text-sm font-medium">{item.name}</span>
                 <span className={`shrink-0 font-ui text-[11px] ${status.requiresAttention ? "text-amber-200" : "text-muted-foreground"}`}>{status.runtime}</span>
               </div>
-              <p className="mt-1 font-ui text-[11px] text-muted-foreground">{group?.title ?? item.group} · {status.connection}</p>
+              <p className="mt-1 font-ui text-[11px] text-muted-foreground">{groupTitles.get(item.group) ?? item.group} · {status.connection}</p>
               <p className="mt-1 break-words text-xs text-muted-foreground">{item.detail}</p>
               {coverage && <p className="mt-1 break-words text-xs text-muted-foreground">Registered coverage: {coverage}</p>}
               {item.lastCheckedAt && <p className="mt-1 text-[11px] text-muted-foreground">Last recorded check: {item.lastCheckedAt.slice(0, 10)} (not a live availability guarantee)</p>}
