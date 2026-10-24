@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { ProjectChat, ProjectResource, ProjectSession } from "./useProjects";
 import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, projectResourceContextOption } from "./projectHomeKnowledge";
+import { assertProjectContinuitySnapshot } from "./useP6Continuity";
 
 const chat = (id: number, projectId: number | null, title: string, status = "active"): ProjectChat =>
   ({ id, projectId, title, status, scope: "project" }) as ProjectChat;
@@ -96,4 +97,25 @@ test("canonical Project Continuity retrieval and refresh reject cross-Project or
   assert.match(component, /does not change other Projects or resume agents/);
   assert.match(component, /snapshot \? snapshot\.counts\.decisions : "—"/);
   assert.match(component, /could not be loaded or did not match its identity/);
+});
+
+test("continuity snapshot validation fails closed for foreign graph, dependencies or top-level Project ID", () => {
+  const valid = {
+    schemaVersion: "1",
+    projectId: 12,
+    generatedAt: "2026-10-24T12:00:00.000Z",
+    fingerprint: "a".repeat(64),
+    dependencies: { projectId: 12, projectName: "Owned Project", chats: 0, resources: 0, sessions: 0, artifacts: 0, total: 0 },
+    graph: { projectId: 12, nodes: [], edges: [] },
+    sessions: [], decisions: [], automations: [], changeSummary: null, continuationQueue: [],
+    counts: { graphNodes: 0, graphEdges: 0, sessions: 0, branchedSessions: 0, decisions: 0, unresolvedDecisions: 0, activeAutomations: 0, failedAutomations: 0, continuationItems: 0 },
+  };
+  const parsed = assertProjectContinuitySnapshot(valid, 12);
+  assert.equal(parsed.projectId, 12);
+  assert.throws(() => assertProjectContinuitySnapshot(valid, 13), /another Project/);
+  assert.throws(() => assertProjectContinuitySnapshot({ ...valid, graph: { projectId: 13, nodes: [], edges: [] } }, 12), /another Project/);
+  assert.throws(() => assertProjectContinuitySnapshot({ ...valid, dependencies: { ...valid.dependencies, projectId: 13 } }, 12), /another Project/);
+  assert.throws(() => assertProjectContinuitySnapshot({ ...valid, counts: { ...valid.counts, decisions: -1 } }, 12));
+  assert.throws(() => assertProjectContinuitySnapshot(valid, 0), /current Project/);
+  assert.throws(() => assertProjectContinuitySnapshot(undefined, 12));
 });
