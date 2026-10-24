@@ -5,6 +5,12 @@ import pathlib
 import subprocess
 import tempfile
 
+from quant_smoke import verify_core_numerical_runtime
+
+# The release image must pass actual compiled numerical computation, not only
+# dependency presence or a separate host-side mocked worker test.
+verify_core_numerical_runtime()
+
 models_root = pathlib.Path('/opt/lios/docling-models')
 manifest_path = pathlib.Path('/opt/lios/docling-models.manifest.json')
 models = json.loads(manifest_path.read_text(encoding='utf-8'))
