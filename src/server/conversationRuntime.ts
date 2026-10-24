@@ -4826,26 +4826,35 @@ async function executeAgentLoop(
   const executionDisclosure = completed && Object.keys(incompleteStatuses).length
     ? `LiOS execution record: ${Object.entries(incompleteStatuses).map(([status, count]) => `${count} ${agentStatusLabel(status as AgentStepOutcome["status"])}`).join(", ")} tool step(s) did not complete. The AI answer below is not proof that those actions ran.`
     : null;
+  // A model's final prose is not a trusted execution receipt. If any planned
+  // tool failed, was denied or was skipped, do not display the model's possibly
+  // false "saved/completed" assertion at all. Keep the governed status-only
+  // disclosure and exact receipt; users can inspect/retry with fresh authority.
+  const answerAccepted = completed && executionDisclosure === null;
   const text = completed
-    ? [executionDisclosure, outcome.answer!].filter(Boolean).join("\n\n")
+    ? answerAccepted
+      ? outcome.answer!
+      : `${executionDisclosure}\n\nThe AI's completion statement was withheld because these tool steps did not complete. Review the execution record before retrying; LiOS has not verified the claimed result.`
     : [
       `Stopped before finishing: the ${outcome.stopReason?.replaceAll("_", " ") ?? "run"} limit was reached.`,
       ...outcome.steps.map((step) => `- ${step.label}: ${step.status === "completed" ? step.summary : agentStatusLabel(step.status)}`),
     ].join("\n");
   const allDeterministic = outcome.steps.length > 0 && outcome.steps.every((step) => step.status !== "completed" || step.deterministic);
-  const label: ConversationRuntimeResult["label"] = completed ? "ai_derived" : allDeterministic ? "deterministic" : "observed_source";
+  const label: ConversationRuntimeResult["label"] = answerAccepted ? "ai_derived" : completed ? "observed_source" : allDeterministic ? "deterministic" : "observed_source";
   const receipt = createReceipt({
     requestId: request.requestId,
     operation: "agent-loop",
     startedAt,
     deterministic: false,
-    aiDerived: completed,
+    aiDerived: answerAccepted,
     input: { message: request.message, budget },
-    output: { text, ...summaryOutput },
+    output: { text, ...summaryOutput, toolExecutionComplete: executionDisclosure === null },
     sourceRefs,
-    warnings: completed
-      ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results.", ...(executionDisclosure ? [executionDisclosure] : [])]
-      : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
+    warnings: answerAccepted
+      ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results."]
+      : completed
+        ? [executionDisclosure!, "AI completion prose was withheld; the recorded tool outcomes remain authoritative."]
+        : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
   });
   await emit(input, { ...eventBase(request.requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(request.requestId), type: "text", text, label });
