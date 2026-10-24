@@ -19,6 +19,8 @@ const tabBar = read("client/src/components/terminal/TerminalTabBar.tsx");
 const projectShell = read("client/src/components/terminal/ProjectExperienceShell.tsx");
 const projectShellUx = read("client/src/terminal-shell.css") + "\n" + read("client/src/components/terminal/project-conversation-shell.css");
 const dockviewWorkspace = read("client/src/components/terminal/DockviewWorkspaceGrid.tsx");
+const workSearch = read("client/src/components/terminal/WorkSearchDialog.tsx");
+const saveWorkflow = read("client/src/components/terminal/SaveWorkflowDialog.tsx");
 
 requireMatch(
   immersive,
@@ -60,7 +62,14 @@ requireMatch(tabBar, /aria-label="New terminal tab"/, "New-tab control needs an 
 requireMatch(projectShell, /aria-label="Send"/, "Project chat composer send action needs an accessible label.");
 requireMatch(projectShell, /title="New Project"/, "Project creation action needs a stable accessible name.");
 requireMatch(projectShell, /title="Save Session"/, "Session Vault save action needs a stable accessible name.");
-requireMatch(read("client/src/components/terminal/WorkSearchDialog.tsx"), /aria-label="Search LiOS work"/, "Project search must have a stable accessible name.");
+requireMatch(workSearch, /aria-label="Search LiOS work"/, "Project search must have a stable accessible name.");
+requireMatch(workSearch, /role="combobox"/, "Project work search must expose a combobox.");
+requireMatch(workSearch, /role="listbox"/, "Project work search must expose an accessible results listbox.");
+requireMatch(workSearch, /aria-activedescendant=/, "Keyboard-highlighted work search results must be announced.");
+requireMatch(workSearch, /aria-selected=\{selected === index\}/, "Work search result selection must be exposed.");
+requireMatch(saveWorkflow, /<Dialog open onOpenChange=/, "Save Workflow must use the shared accessible modal and focus trap.");
+requireMatch(saveWorkflow, /<DialogTitle/, "Save Workflow needs a programmatic accessible title.");
+requireMatch(saveWorkflow, /onEscapeKeyDown=/, "Save Workflow needs guarded Escape dismissal during in-flight saves.");
 requireMatch(projectShell, /aria-label="Example prompts"/, "First-use prompt suggestions must be grouped for assistive technology.");
 requireMatch(projectShell, /aria-labelledby="lios-chat-empty-title"/, "The empty conversation state needs a semantic heading relationship.");
 requireMatch(projectShellUx, /\[class~="text-\[8px\]"\][\s\S]{0,180}font-size:\s*max\(0?\.75rem/, "Project shell microtype must be raised to a readable minimum.");
@@ -77,6 +86,8 @@ console.log(JSON.stringify({
   omniboxKeyboardNavigation: true,
   semanticCoreControls: true,
   projectChatAccessibleControls: true,
+  keyboardSearchCompositeSourceContract: true,
+  saveWorkflowModalSourceContract: true,
   dockviewUsesLiOSAccessiblePaneChrome: true,
   dockAccessibleLabels: dockLabels,
   externalEvidenceStillRequired: ["macOS VoiceOver", "Windows Narrator", "keyboard-only packaged app walkthrough"],
