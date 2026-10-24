@@ -286,9 +286,31 @@ export function ProjectHome({
                     }`}>{resource.contextMode.toUpperCase()}</span>
                   </div>
                   <div className="mt-1 font-terminal text-[11px] uppercase tracking-wider text-muted-foreground">{resource.kind}</div>
+                  <button type="button" disabled={contextBusy} onClick={() => { setContextNotice(null); setPendingContext({ projectId: project.id, resourceId: resource.id, from: resource.contextMode, to: resource.contextMode === "project" ? "on_demand" : "project" }); }}
+                    className="mt-2 rounded border border-border/70 px-2.5 py-1.5 font-ui text-xs text-cyan-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">Review context inclusion</button>
                 </div>
               ))}
               {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-[13px] text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
+              <p className="font-ui text-xs leading-5 text-muted-foreground">Project = eligible for automatic context; on demand = only when requested; excluded = retained but not routinely retrieved. These modes never override server data rights.</p>
+              {pendingContext?.projectId === project.id && (() => {
+                const resource = found.resources.find(row => row.id === pendingContext.resourceId);
+                if (!resource) return <p role="alert" className="font-ui text-xs text-amber-200">The selected resource is no longer visible in this Project. Cancel and reopen its context.</p>;
+                return <section aria-label="Review exact Project resource context change" data-testid="project-context-review" className="space-y-2 rounded border border-amber-300/30 p-3">
+                  <label className="block font-ui text-sm">Resource inclusion mode
+                    <select value={pendingContext.to} disabled={contextBusy} onChange={event => setPendingContext(current => current ? { ...current, to: event.target.value as ProjectResourceContextMode } : null)}
+                      className="mt-1 min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm">
+                      {PROJECT_RESOURCE_CONTEXT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <p className="font-ui text-xs leading-5 text-muted-foreground">{contextChangeConfirmation(resource.label, pendingContext.from, pendingContext.to)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={contextBusy || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)}
+                      onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm text-amber-200 disabled:opacity-40">Save this resource's context mode</button>
+                    <button type="button" disabled={contextBusy} onClick={() => setPendingContext(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
+                  </div>
+                </section>;
+              })()}
+              {contextNotice && <p role="status" data-testid="project-context-save-status" className="font-ui text-xs text-amber-200">{contextNotice}</p>}
             </div>
           </section>
         </div>
