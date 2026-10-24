@@ -489,19 +489,20 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const handleReturnToChat = useCallback((context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => {
     const handoff = artifactHandoffRef.current;
     if (!handoff) {
-      if (dirty || workbenchDirtyRef.current) return;
+      if (dirty || workbenchDirtyRef.current) return false;
       setWorkbenchReturn(current => ({ context, request: (current?.request ?? 0) + 1, prompt }));
       handleSurface("projects");
-      return;
+      return true;
     }
     const result = returnFromArtifactWorkbench(tabsState, handoff, context, dirty || workbenchDirtyRef.current);
-    if (!result) return;
+    if (!result) return false;
     setTabsState(() => result.state);
     setMaximizedPane(handoff.priorMaximizedPane);
     setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
     requestDockviewLayoutRestore(handoff.priorLayout);
     artifactHandoffRef.current = null;
     handleSurface("projects");
+    return true;
   }, [tabsState, handleSurface, setTabsState]);
   const handleWorkbenchVersion = useCallback((paneId: PaneId, version: number) => {
     setTabsStateRaw(current => {
