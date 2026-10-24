@@ -8,7 +8,9 @@ import { z } from "zod";
 import { researchArtifactContentSchema, reportArtifactContentSchema } from "@shared/artifactContracts";
 import type { ConversationToolDefinition, ConversationToolResult } from "./conversationRuntime";
 import { assertNotAborted, sourceScopeAllowsProjectData } from "./conversationRuntimeCore";
-import { getArtifact, getArtifactVersion, createArtifact } from "./artifactStore";
+ import { getArtifact, getArtifactVersion, createArtifact } from "./artifactStore";
+import { getArtifactExportPlan } from "./artifactExport";
+import { requiresChromiumUnicodePdf } from "../client/src/lib/artifactUnicodePdf";
 import { currentPermittedProjectSearchDocuments } from "./p7ProjectIntelligenceStore";
 import { composeResearchSources } from "./researchSourceComposition";
 import { matchesRecordedExcerptFingerprint } from "./langalphaExcerptProvenance";
@@ -38,7 +40,8 @@ export const researchReportFromArtifactOutputSchema = z.object({
     excerptCount: z.number().int().positive().max(100),
     editorPreference: z.literal("tiptap"),
     docxDownloadPath: z.string().startsWith("/api/artifacts/").max(400),
-    pdfDownloadPath: z.string().startsWith("/api/artifacts/").max(400),
+    pdfDownloadPath: z.string().startsWith("/api/artifacts/").max(400).nullable(),
+    unicodePdfDesktopRequired: z.boolean(),
   }).strict(),
   summary: z.string().trim().max(2_000),
   deterministic: z.literal(true),
@@ -244,6 +247,8 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
       dependencyRefs: [report.sourceArtifactVersionRef, ...report.sourceRefs],
       note: "Editable extractive Research Report from exact P7 Research Artifact version; source revisions and AI-use rights rechecked.",
     });
+    const savedExportPlan = await getArtifactExportPlan(ctx, created.artifact.id, created.version.version);
+    const unicodePdfDesktopRequired = requiresChromiumUnicodePdf(savedExportPlan, report.content);
     return {
       output: {
         artifactId: created.artifact.id,
@@ -255,8 +260,10 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
         editorPreference: "tiptap",
         docxDownloadPath: "/api/artifacts/" + encodeURIComponent(created.artifact.id)
           + "/report.docx?version=" + created.version.version,
-        pdfDownloadPath: "/api/artifacts/" + encodeURIComponent(created.artifact.id)
-          + "/report.pdf?version=" + created.version.version,
+        pdfDownloadPath: unicodePdfDesktopRequired ? null
+          : "/api/artifacts/" + encodeURIComponent(created.artifact.id)
+            + "/report.pdf?version=" + created.version.version,
+        unicodePdfDesktopRequired,
       },
       summary: "Saved editable report " + created.artifact.id + "@v" + created.version.version
         + " from " + report.sourceArtifactVersionRef + " with " + report.sourceRefs.length
