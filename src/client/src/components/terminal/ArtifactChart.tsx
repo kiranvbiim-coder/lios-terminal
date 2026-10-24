@@ -24,6 +24,17 @@ function coordinateLabel(value: string | number) {
   return typeof value === "string" ? JSON.stringify(value) : exact(value);
 }
 
+/** A renderer failure must not erase the independently available exact table. */
+class ChartPlotBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed
+      ? <p role="alert" data-testid="artifact-chart-plot-failed" className="rounded border border-amber-300/30 p-3 font-ui text-[13px] text-amber-200">The chart drawing failed. Use the exact recorded comparison table below; the saved data is unchanged.</p>
+      : this.props.children;
+  }
+}
+
 export default function ArtifactChart({ content, ...mode }: {
   content: ChartContent;
 } & ({ readOnly: true; onSave?: never } | { readOnly?: false; onSave: (content: ArtifactContent) => Promise<void> })) {
@@ -108,7 +119,7 @@ export default function ArtifactChart({ content, ...mode }: {
           <button type="button" aria-label="Previous chart window" disabled={!viewport.hasPrevious} onClick={() => page(Math.max(0, viewport.offset - WINDOW_SIZE))} className={CONTROL}>Previous window</button>
           <button type="button" aria-label="Next chart window" disabled={!viewport.hasNext} onClick={() => page(viewport.endExclusive)} className={CONTROL}>Next window</button>
         </nav>
-        {!visibleSeries.length ? <p role="status" className="p-3 text-sm text-muted-foreground">All series are hidden. Select a series above to display it; exact recorded points remain available below.</p> : <div className="h-[320px] min-w-0 rounded border border-border/50 bg-[#0a0a0a] p-2" data-testid="artifact-chart-plot" role="img" aria-label={`${chartType} chart, ${visibleSeries.length} visible series. Use the exact point inspector below for keyboard access.`}>
+        {!visibleSeries.length ? <p role="status" className="p-3 text-sm text-muted-foreground">All series are hidden. Select a series above to display it; exact recorded points remain available below.</p> : <ChartPlotBoundary key={`${chartType}:${content.rendererPreference}`}><div className="h-[320px] min-w-0 rounded border border-border/50 bg-[#0a0a0a] p-2" data-testid="artifact-chart-plot" role="img" aria-label={`${chartType} chart, ${visibleSeries.length} visible series. Use the exact point inspector below for keyboard access.`}>
           {content.rendererPreference === "echarts" ? <Suspense fallback={<p role="status" className="p-3 text-sm">Loading chart…</p>}><EChartsArtifactPlot projection={prepared} viewport={viewport} chartType={chartType as "line"|"area"|"bar"|"scatter"} visibleIndices={visibleIndices}/></Suspense> : <><ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={viewport.rows} margin={{ top: 12, right: 16, left: 12, bottom: 12 }}>
               <CartesianGrid stroke="#222" strokeDasharray="3 3"/>
@@ -131,7 +142,7 @@ export default function ArtifactChart({ content, ...mode }: {
               })}
             </ComposedChart>
           </ResponsiveContainer></>}
-        </div>}
+        </div></ChartPlotBoundary>}
         <ArtifactChartRecordedTable projection={prepared} content={content}/>
         <section aria-label="Exact chart point inspector" data-testid="artifact-chart-inspector" className="space-y-3 rounded border border-border/50 p-3">
           <h3 className="font-ui text-[14px] font-semibold">Exact recorded point</h3>
