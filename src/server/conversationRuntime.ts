@@ -4,6 +4,7 @@ import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/executi
 import { deadlineSignal } from "./deadlineSignal";
 import { checkClaims } from "./claimChecker";
 import { looksLikeNamedSecurityRequest, parsePlannerChoice, PLANNER_CATALOG, plannerMessages, routedRequest } from "./aiPlannerFallback";
+import { naturalResearchEntry } from "./naturalResearchEntry";
 import crypto from "crypto";
 import { userSafeErrorMessage } from "./safeErrorMessage";
 import {
@@ -1260,12 +1261,13 @@ async function invokeGovernedAi(
       if (invokeAI !== invokeAIRoutedCompletion) await content.beforeTransmission();
     }
     const policy = input.request.transmissionPolicy;
+    const boundedResearch = plan.intent.parameters.workflow === "ws26_natural_research";
     const answered = await invokeAI({
       ...request,
       maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
-      maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
+      maxAttempts: privateReason || boundedResearch ? 1 : policy.maxProviderAttempts ?? 2,
       ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
-      fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
+      fallback: privateReason || boundedResearch || policy.maxProviderAttempts === 1 ? "none" : "configured",
       ...(content.containsPrivateResearch ? { beforeTransmission: content.beforeTransmission } : {}),
     });
     if (answered.fallback?.attempts.length) {
@@ -1467,6 +1469,7 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
 
   const artifactId = activeArtifactId(request.context);
   const artifactEdit = artifactId ? parseArtifactEditInstruction(request.message) : null;
+  const naturalResearch = naturalResearchEntry(request.message);
 
   const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
   if (request.context?.nodeFinancePolicy) {
@@ -1887,6 +1890,26 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
     } else {
       steps.push({ id: "deterministic-engine", kind: "calculate", label: delegation.engineLabel, componentId: `lios.engine.${legacyIntent.engineId}`, permissionClass: "safe_auto", dependsOn: [] });
     }
+  } else if (naturalResearch && resolvedCapabilities.length === 1 && resolvedCapabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct") {
+    // Use the existing governed BYOAI execution and Chat event stream, not an
+    // invented web browser, source provider, second runtime or autonomous loop.
+    capabilities = resolvedCapabilities;
+    intent = {
+      action: "research",
+      confidence: 0.94,
+      entityRefs: [],
+      parameters: { workflow: "ws26_natural_research", objective: naturalResearch.objective },
+      requiresAI: true,
+      requiresDeterministicCompute: false,
+    };
+    steps.push({
+      id: "ai-assist",
+      kind: "ai",
+      label: "Synthesize preliminary research from permitted context (no automatic source retrieval)",
+      componentId: "lios.byoai",
+      permissionClass: "safe_auto",
+      dependsOn: [],
+    });
   } else {
     capabilities = resolvedCapabilities.filter((item) => item.id === "ai.answer");
     intent = {
@@ -1907,9 +1930,9 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
     capabilities,
     steps,
     budget: {
-      maxSteps: Math.min(50, Math.max(12, steps.length + 2)),
-      maxDurationMs: 90_000,
-      maxAiCalls: request.executionMode === "ai_direct" ? 1 : 2,
+      maxSteps: intent.parameters.workflow === "ws26_natural_research" ? 1 : Math.min(50, Math.max(12, steps.length + 2)),
+      maxDurationMs: intent.parameters.workflow === "ws26_natural_research" ? 60_000 : 90_000,
+      maxAiCalls: intent.parameters.workflow === "ws26_natural_research" ? 1 : request.executionMode === "ai_direct" ? 1 : 2,
     },
   });
 }
@@ -2059,7 +2082,7 @@ function createReceipt(input: {
   });
 }
 
-function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationContextEnvelope): string {
+function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationContextEnvelope, plan?: WorkflowPlan): string {
   const policy = input.request.transmissionPolicy;
   // ConversationRequest defaults are parsed for planning, but the caller's
   // original object is retained on ConversationRuntimeInput. Mirror the
@@ -2086,6 +2109,15 @@ function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationCo
           : "- Auto source scope may combine governed Project and connected/external sources as the runtime permits.",
     `- Active workspace: ${context.workspace.symbol ?? "no symbol"} · ${context.workspace.view ?? "conversation"}.`,
   ];
+  if (plan?.intent.parameters.workflow === "ws26_natural_research") {
+    parts.push(
+      "This is a bounded preliminary research request, not an autonomous investigation.",
+      "No browser or connected provider retrieval is executed by this plan. Do not claim to have searched the web or read live pages, filings, or Project resources that were not actually provided.",
+      "Distinguish preliminary synthesis from documented findings. Never fabricate citations, publication dates, source access, or verification.",
+      "State the scoped research question, what can be discussed from available context, important evidence gaps, and actionable source/connection steps to verify further.",
+      "Respect the selected source scope, Project transmission policy and attachment extraction limits; do not monitor, take external action or silently broaden consent.",
+    );
+  }
   if (input.scope === "project" && policy.allowProjectInstructions && input.projectInstructions?.trim()) {
     parts.push(`Project instructions: ${input.projectInstructions.trim()}`);
   }
@@ -4099,7 +4131,7 @@ async function executeAI(
   await emit(input, { ...eventBase(request.requestId), type: "tool_start", stepId: request.executionMode === "ai_direct" ? "ai-direct-estimate" : "ai-assist", label: "Invoke governed BYOAI", componentId: "lios.byoai" });
   const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
   const result = await invokeGovernedAi(input, plan, invokeAI, {
-    system: aiSystemPrompt(input, context),
+    system: aiSystemPrompt(input, context, plan),
     messages: [...input.history.slice(-20), aiAttachmentUserMessage(input)],
     maxTokens: 1800,
     preferredProvider: input.preferredProvider,
@@ -4115,7 +4147,10 @@ async function executeAI(
   });
   assertNotAborted(signal);
   const aiDirect = request.executionMode === "ai_direct";
-  const text = aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}` : result.text;
+  const text = aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}`
+    : plan.intent.parameters.workflow === "ws26_natural_research"
+      ? `Research scope: configured AI synthesis only. No external sources were retrieved by this workflow; factual claims require independently recorded evidence.\n\n${result.text}`
+      : result.text;
   const attachmentWarnings = request.transmissionPolicy.allowResourceReferences
     ? attachmentTextTruncationWarnings(input.resolvedAttachments ?? [])
     : [];
@@ -4130,6 +4165,7 @@ async function executeAI(
     sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])],
     warnings: [
       ...(aiDirect ? ["AI-direct estimate: user-authorized and not a deterministic LiOS engine result."] : []),
+      ...(plan.intent.parameters.workflow === "ws26_natural_research" ? ["WS-26 preliminary AI research: no automatic source retrieval or independent claim verification."] : []),
       ...attachmentWarnings,
     ],
   });
@@ -5099,7 +5135,7 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
   if (input.agentLoop) plan = agentLoopPlanBudget(plan, input.agentLoop);
   let plannerNote: string | null = null;
   // AI planner fallback: only when nothing deterministic matched and the request names a company.
-  if (!input.agentLoop && !controller.signal.aborted && plan.capabilities.length === 1 && plan.capabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct"
+  if (!input.agentLoop && !controller.signal.aborted && plan.intent.action === "chat" && plan.capabilities.length === 1 && plan.capabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct"
     && request.transmissionPolicy.mode !== "local_only" && looksLikeNamedSecurityRequest(request.message)
     && !privateAiContentReason(runtimeInput, plan) && !request.attachments.length) {
     const plannerDeadline = deadlineSignal(controller.signal, 8_000);
