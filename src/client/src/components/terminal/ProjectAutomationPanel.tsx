@@ -30,6 +30,7 @@ import {
 import type { P9WorkflowTrigger } from "@shared/p9AutomationContracts";
 import { quickMonitorDraft, scheduleEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
+import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 
 function time(value: string | null): string {
@@ -89,7 +90,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     for (const run of runs) if (!map.has(run.workflowId)) map.set(run.workflowId, run);
     return map;
   }, [runs]);
-  const unread = notifications.filter((item) => item.status === "delivered" && !item.readAt);
+  const unread = notifications.filter((item) => item.projectId === projectId && item.status === "delivered" && !item.readAt);
 
   const run = async (id: string, updatedAt: string) => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -536,6 +537,10 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           {!unread.length && <div className="font-ui text-[13px] text-muted-foreground">No unread material workflow notifications.</div>}
         </div>
       </div>
+
+      <P9NotificationHistory key={projectId} projectId={projectId} notifications={notifications}
+        busy={Boolean(busyId)} onRead={notificationId => void markNotificationRead(notificationId)}
+        onRefetch={() => { void notificationsQuery.refetch(); }} />
 
       <div className="mt-3 font-terminal text-[12px] leading-3 text-muted-foreground/70">
         Workflows use the selected Project's existing P9 sources and permissions. Reviewed schedule edits are available for interval and daily UTC schedules; conditional event filter authoring and the full visual editor remain under the existing P9 service, not a separate automation engine.
