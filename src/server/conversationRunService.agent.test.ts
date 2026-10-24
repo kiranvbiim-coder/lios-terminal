@@ -139,7 +139,11 @@ test("agent runs are opt-in, need AI-assisted mode, and are journaled as version
     const content = artifactContentSchema.parse(immutable.content);
     assert.equal(content.kind, "research");
     if (content.kind !== "research") assert.fail("Research content expected.");
-    assert.deepEqual(content.evidence.map((item) => item.sourceRef), [sourceRef]);
+    assert.equal(content.evidence.some((item) => item.sourceRef === sourceRef), true,
+      "the cited synthetic source must survive even when the searchable Project index includes ledger/Chat provenance");
+    assert.equal(content.evidence.every((item) => item.sourceRef === sourceRef ||
+      item.sourceRef.startsWith("ledger:") || item.sourceRef.startsWith(`chat:${chat.id}:message:`)), true,
+      "only this Project's indexed provenance and the cited survey may appear in this synthetic digest");
     assert.equal(content.claims.length, 0);
 
     const messages = await listProjectChatMessages(tenant, chat.id);
