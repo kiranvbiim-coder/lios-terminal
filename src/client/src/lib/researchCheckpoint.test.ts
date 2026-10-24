@@ -73,8 +73,8 @@ test("WS-32: recorded pending and interrupted steps are never misrepresented as 
   const markup = html(summary);
   assert.match(markup, /Interrupted research checkpoint/);
   assert.match(markup, /Last saved checkpoint: 1 of 4 steps recorded complete/);
-  assert.match(markup, /1 step\(s\) were waiting for review when saved/);
-  assert.match(markup, /2 reference\(s\) recorded, not independently verified/);
+  assert.match(markup, /1 step was waiting for review when saved/);
+  assert.match(markup, /2 references recorded, not independently verified/);
   assert.match(markup, /Any previous results are partial/);
   assert.match(markup, /Resume can be refused/);
   assert.match(markup, /data-testid="agent-run-resume"/);
