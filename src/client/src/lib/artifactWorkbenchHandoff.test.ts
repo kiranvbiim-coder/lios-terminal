@@ -37,7 +37,7 @@ test("Chat → registered Workbench Artifact → same Chat restores the exact pr
   const returned = returnFromArtifactWorkbench(opened.state, opened.handoff, context, false)!;
   assert.deepEqual(returned.context, context);
   assert.deepEqual(returned.state, before);
-  assert.equal(returned.state.tabs[0].workspace, before.tabs[0].workspace);
+  assert.deepEqual(returned.state.tabs[0].workspace, before.tabs[0].workspace);
   assert.equal(opened.handoff.priorLayout, geometry);
   assert.equal(opened.handoff.priorMaximizedPane, "tertiary");
 });
@@ -68,7 +68,59 @@ test("a saved Workbench revision returns to the original Chat without undoing ca
   assert.equal(returned.context.artifactId, context.artifactId);
   assert.equal(returned.state.activeTabId, before.activeTabId);
   assert.equal(returned.state.tabs[2], anotherTab);
-  assert.equal(returned.state.tabs[0].workspace, before.tabs[0].workspace);
+  assert.deepEqual(returned.state.tabs[0].workspace, before.tabs[0].workspace);
+});
+
+test("return restores only the projected pane, preserving live Workbench entity, source panels and tab metadata", () => {
+  const before = state();
+  const opened = openArtifactWorkbench(before, context, null, null, false)!;
+  const existingTab = opened.state.tabs[0];
+  const modifiedTab = {
+    ...existingTab,
+    entity: "NVDA",
+    title: "Current NVDA analysis",
+    workspace: {
+      ...existingTab.workspace,
+      primary: { view: "chart" as const, symbol: "NVDA" },
+      tertiary: { view: "news" as const, symbol: "NVDA" },
+      focusedPane: "primary" as const,
+    },
+  };
+  const changed = { ...opened.state, tabs: [modifiedTab, opened.state.tabs[1]] };
+  const returned = returnFromArtifactWorkbench(changed, opened.handoff, { ...context, version: 4 }, false)!;
+  assert.equal(returned.state.tabs[0].entity, "NVDA");
+  assert.equal(returned.state.tabs[0].title, "Current NVDA analysis");
+  assert.deepEqual(returned.state.tabs[0].workspace.primary, modifiedTab.workspace.primary);
+  assert.deepEqual(returned.state.tabs[0].workspace.tertiary, modifiedTab.workspace.tertiary);
+  assert.deepEqual(returned.state.tabs[0].workspace.secondary, before.tabs[0].workspace.secondary);
+  assert.equal(returned.state.tabs[0].workspace.focusedPane, "secondary");
+  assert.deepEqual(returned.context, { ...context, version: 4 });
+  assert.equal(returned.state.tabs[1], before.tabs[1]);
+});
+
+test("return fails closed if the origin tab or projected Artifact pane no longer exists", () => {
+  const opened = openArtifactWorkbench(state(), context, null, null, false)!;
+  const closedTab = { ...opened.state, tabs: [opened.state.tabs[1]], activeTabId: "other" };
+  assert.equal(returnFromArtifactWorkbench(closedTab, opened.handoff, context, false), null);
+  const replacedTab = {
+    ...opened.state,
+    tabs: opened.state.tabs.map(tab => tab.id !== "original" ? tab : {
+      ...tab,
+      workspace: { ...tab.workspace, secondary: { view: "chart" as const, symbol: "AAPL" } },
+    }),
+  };
+  assert.equal(returnFromArtifactWorkbench(replacedTab, opened.handoff, context, false), null);
+  const differentArtifact = {
+    ...opened.state,
+    tabs: opened.state.tabs.map(tab => tab.id !== "original" ? tab : {
+      ...tab,
+      workspace: {
+        ...tab.workspace,
+        secondary: { view: "artifact" as const, symbol: "", artifact: { ...context, chatId: 999 } },
+      },
+    }),
+  };
+  assert.equal(returnFromArtifactWorkbench(differentArtifact, opened.handoff, context, false), null);
 });
 
 test("unsaved drafts block both directions without mutating identity, revision, or layout", () => {
