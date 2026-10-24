@@ -204,7 +204,7 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
       || (policy?.mode === "only_refs" && !policyRefs.has(ref)))) {
       throw new Error("Research Artifact cites sources excluded by the current request.");
     }
-    const documents = await currentPermittedProjectSearchDocuments(ctx, artifact.projectId, { readOnly: true });
+    const documents = await currentPermittedProjectSearchDocuments(ctx, call.projectId!, { readOnly: true });
     const current = new Map(documents.map(doc => [doc.sourceRef, doc]));
     const selected = report.sourceRefs.map(ref => {
       const doc = current.get(ref);
@@ -237,7 +237,7 @@ export const researchReportFromArtifactTool: ConversationToolDefinition = {
       throw new Error("Research Artifact changed during report preparation; reopen the latest version.");
     }
     const created = await createArtifact(ctx, {
-      projectId: artifact.projectId,
+      projectId: call.projectId!,
       title: parsed.title,
       content: report.content,
       origin: "conversation",

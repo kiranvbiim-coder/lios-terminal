@@ -190,7 +190,9 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
     const permittedDocuments = composition.included.map(item => documents.get(item.documentId)!);
     const facetSearches = parsed.facets.map(facet => ({
       facet,
-      hits: searchProjectDocuments(permittedDocuments, { ...searchRequest, query: facet, limit: 50 }),
+      hits: searchProjectDocuments(permittedDocuments, { ...searchRequest, query: facet, limit: 50 })
+        .filter(hit => typeof hit.contentHash === "string")
+        .map(hit => ({ documentId: hit.documentId, contentHash: hit.contentHash!, excerpt: hit.excerpt })),
     }));
     const comparison = comparePermittedResearchEvidence(parsed.facets, composition.included, facetSearches);
     assertNotAborted(signal);
