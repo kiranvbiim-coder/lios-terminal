@@ -4814,8 +4814,20 @@ async function executeAgentLoop(
     return { text, label: "manual", plan: agentPlan, receiptIds: [], artifacts: [], cancelled: false, awaitingApproval: true, ...(pause ? { agentPause: pause } : {}) };
   }
   const completed = outcome.status === "completed" && outcome.answer !== null;
+  // An AI "complete" decision does not prove every planned effect occurred.
+  // Anchor user-visible execution truth to the governed step outcomes, not
+  // the model's prose. This is an explicit disclosure, NOT claim verification.
+  const incompleteStatuses = outcome.steps
+    .filter((step) => step.status !== "completed")
+    .reduce<Record<string, number>>((counts, step) => {
+      counts[step.status] = (counts[step.status] ?? 0) + 1;
+      return counts;
+    }, {});
+  const executionDisclosure = completed && Object.keys(incompleteStatuses).length
+    ? `LiOS execution record: ${Object.entries(incompleteStatuses).map(([status, count]) => `${count} ${agentStatusLabel(status as AgentStepOutcome["status"])}`).join(", ")} tool step(s) did not complete. The AI answer below is not proof that those actions ran.`
+    : null;
   const text = completed
-    ? outcome.answer!
+    ? [executionDisclosure, outcome.answer!].filter(Boolean).join("\n\n")
     : [
       `Stopped before finishing: the ${outcome.stopReason?.replaceAll("_", " ") ?? "run"} limit was reached.`,
       ...outcome.steps.map((step) => `- ${step.label}: ${step.status === "completed" ? step.summary : agentStatusLabel(step.status)}`),
@@ -4831,7 +4843,9 @@ async function executeAgentLoop(
     input: { message: request.message, budget },
     output: { text, ...summaryOutput },
     sourceRefs,
-    warnings: completed ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results."] : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
+    warnings: completed
+      ? ["Agent answer is AI-derived; numbers come from the listed deterministic tool results.", ...(executionDisclosure ? [executionDisclosure] : [])]
+      : [`Agent run stopped early (${outcome.stopReason ?? "limit"}).`],
   });
   await emit(input, { ...eventBase(request.requestId), type: "receipt", receipt });
   await emit(input, { ...eventBase(request.requestId), type: "text", text, label });
