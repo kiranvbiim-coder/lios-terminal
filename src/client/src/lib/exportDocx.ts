@@ -67,8 +67,9 @@ export function downloadDocxFile(file: GeneratedDocx): void {
   const anchor = document.createElement("a");
   anchor.href = href;
   anchor.download = file.filename;
-  anchor.click();
-  URL.revokeObjectURL(href);
+  // Keep the actual native DOCX bytes available through browser download dispatch.
+  try { anchor.click(); }
+  finally { setTimeout(() => URL.revokeObjectURL(href), 1_500); }
 }
 
 export function exportArtifactDocx(plan: ArtifactExportPlan, content: ArtifactContent): void {

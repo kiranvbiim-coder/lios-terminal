@@ -26,7 +26,8 @@ function downloadBytes(filename: string, bytes: Uint8Array, type: string): void 
     anchor.download = filename;
     anchor.click();
   } finally {
-    setTimeout(() => URL.revokeObjectURL(href), 0);
+    // The browser can consume its Blob URL asynchronously after click().
+    setTimeout(() => URL.revokeObjectURL(href), 1_500);
   }
 }
 

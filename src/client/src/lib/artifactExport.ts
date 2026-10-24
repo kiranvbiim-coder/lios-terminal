@@ -9,7 +9,11 @@ import { isDocumentArtifact } from "./artifactDocumentExport";
 
 function downloadText(filename: string, body: string, type: string) {
   const blob = new Blob([body], { type }); const href = URL.createObjectURL(blob); const anchor = document.createElement("a");
-  anchor.href = href; anchor.download = filename; anchor.click(); URL.revokeObjectURL(href);
+  anchor.href = href; anchor.download = filename;
+  // A synchronous revoke can invalidate downloads before the browser consumes
+  // the Blob URL. Release it after the download navigation has been dispatched.
+  try { anchor.click(); }
+  finally { setTimeout(() => URL.revokeObjectURL(href), 1_500); }
 }
 function rowsFor(content: ArtifactContent): ExportSheet {
   if (content.kind === "table") return { name: "Artifact", rows: [content.columns.map((c) => c.label), ...content.rows.map((row) => content.columns.map((c) => String(row[c.key] ?? "")))] };
