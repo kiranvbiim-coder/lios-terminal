@@ -117,9 +117,9 @@ test("auditInstalledPackages normalizes pip's name casing/separators before comp
   assert.deepEqual(warnings, []);
 });
 
-test("auditInstalledPackages does not enforce range pins it cannot re-derive", () => {
-  // pandas is pinned "<3.0" in the manifest -- any 2.x satisfies it and
-  // must not be reported as drift.
+test("auditInstalledPackages accepts versions inside approved manifest ranges", () => {
+  // pandas is pinned "<3.0" and numpy to "2.x" -- supported 2.x stays admitted
+  // while the same shared parser guards both post-install audit and release bundle.
   const warnings = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], {
     fastapi: "0.141.1", starlette: "1.6.0", uvicorn: "0.34.0", numpy: "2.3.1", pandas: "2.0.0", scipy: "1.14.1", statsmodels: "0.14.4",
   });
@@ -185,4 +185,32 @@ test("research-docs managed runtime remains opt-in and pins Docling without ente
   assert.equal(docling?.ciSuperset, false);
   assert.deepEqual(resolveSelectedPacks(MANAGED_RUNTIME_MANIFEST, []).map((item) => item.id), ["core"]);
   assert.ok(resolveSelectedPacks(MANAGED_RUNTIME_MANIFEST, ["research-docs"]).some((item) => item.id === "research-docs"));
+});
+
+test("managed Python audit rejects out-of-range versions before release activation", () => {
+  const packages = {
+    fastapi: "0.141.1", starlette: "1.6.0", uvicorn: "0.34.0",
+    numpy: "2.3.1", pandas: "2.2.3", scipy: "1.14.1", statsmodels: "0.14.4",
+  };
+  assert.deepEqual(auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], packages), []);
+  const badNumpy = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], { ...packages, numpy: "3.0.0" });
+  assert.equal(badNumpy.length, 1);
+  assert.match(badNumpy[0], /numpy requires 2\.x.*3\.0\.0 is installed/);
+  const badPandas = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], { ...packages, pandas: "3.0.0" });
+  assert.equal(badPandas.length, 1);
+  assert.match(badPandas[0], /pandas requires <3\.0.*3\.0\.0 is installed/);
+  const malformed = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], { ...packages, numpy: "2.3.0rc1" });
+  assert.equal(malformed.length, 1);
+  assert.match(malformed[0], /numpy requires/);
+});
+
+test("managed Python audit refuses ambiguously named installed packages", () => {
+  const installed = {
+    fastapi: "0.141.1", starlette: "1.6.0", uvicorn: "0.34.0",
+    numpy: "2.3.1", NumPy: "3.0.0", pandas: "2.2.3",
+    scipy: "1.14.1", statsmodels: "0.14.4",
+  };
+  const warnings = auditInstalledPackages(MANAGED_RUNTIME_MANIFEST, ["core"], installed);
+  assert.ok(warnings.some(w => /duplicate canonical package name numpy/.test(w)));
+  assert.ok(warnings.some(w => /numpy requires/.test(w)));
 });
