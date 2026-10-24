@@ -947,18 +947,54 @@ function ArtifactPaneWorkspace({
       })} className="rounded border border-cyan-300/30 px-3 py-2 disabled:opacity-30">Review branch reconciliation</button>
       {mergeNotice&&<p role="status">{mergeNotice}</p>}
     </div>}
-    {inspectorTab==="history"&&<button disabled={!left||left>=data.artifact.headVersion} onClick={()=>void run(async()=>{const saved=await restoreArtifactRevision(artifactId,data.artifact.headVersion,left!);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} className="m-3 rounded border border-amber-300/30 px-3 py-2 disabled:opacity-30">Restore selected revision as new version</button>}
-    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="border-t border-border/50 p-3"><div className="mb-4 space-y-2">{(versions.data??[]).slice().reverse().map(version=><div key={version.id} className="flex items-center justify-between border-b border-border/40 pb-2 text-xs"><span>Revision {version.version}</span><span className="text-muted-foreground">{version.version===data.artifact.headVersion?"Current":"Saved revision"}</span></div>)}</div><div className="flex flex-wrap items-end gap-2"><label className="font-terminal text-[12px] text-muted-foreground">COMPARE FROM<select value={left??""} onChange={(e)=>setLeft(Number(e.target.value))} className="mt-1 block rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">{(versions.data??[]).slice().reverse().map((v)=><option key={v.id} value={v.version}>v{v.version}</option>)}</select></label><button disabled={!left||left===data.artifact.headVersion} onClick={()=>void run(async()=>{
-  const result=await compareArtifactVersions(artifactId,left!,data.artifact.headVersion);
-  const leftRecord=(versions.data??[]).find((version)=>version.version===left);
-  const metadataLabels=leftRecord?metadataDeltaLabels(compareArtifactVersionMetadata(leftRecord,data.version)):[];
-  const contentSummary=result.changed
-    ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
-    : "Content unchanged";
-  const semanticSummary=semanticArtifactComparisonLabel(result.semantic);
-  const summary=metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
-  setComparison(semanticSummary ? `${summary} · ${semanticSummary}` : summary);
-})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px] disabled:opacity-30"><GitCompareArrows className="h-3 w-3"/> Compare</button>{sessions[0]&&<button onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:data.artifact.headVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px]"><Link2 className="h-3 w-3"/> Reference Session</button>}</div>{comparison&&<div className="mt-2 rounded border border-fuchsia-300/15 px-2 py-1.5 font-ui text-[13px] text-fuchsia-100">{comparison}</div>}</div>
+    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="space-y-3 border-t border-border/50 p-3">
+      <p className="font-ui text-[13px] text-muted-foreground">Saved revisions are immutable. Open any exact version for read-only inspection, compare exact version hashes, or deliberately restore an earlier version as a NEW head. The server rejects concurrent head changes.</p>
+      {versions.isError && <p role="alert" className="text-sm text-red-200">Saved version history could not be loaded. Reopen this Artifact to retry.</p>}
+      <div className="max-h-48 space-y-2 overflow-auto" data-testid="artifact-history-version-list">
+        {historicalVersions.slice().reverse().map(savedVersion => <div key={savedVersion.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2 font-ui text-[12px]">
+          <span>v{savedVersion.version} · {savedVersion.version===anchor.headVersion ? "Current head" : "Historical"} · saved {new Date(savedVersion.createdAt).toLocaleString()} · hash {shortHash(savedVersion.contentHash)}</span>
+          <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || savedVersion.version===anchor.displayedVersion}
+            onClick={()=>changeDisplayedRevision(savedVersion.version)} className="min-h-9 rounded border border-border/50 px-3 py-2 disabled:opacity-40">
+            {savedVersion.version===anchor.displayedVersion ? "Viewing" : `View exact v${savedVersion.version}`}
+          </button>
+        </div>)}
+        {!historicalVersions.length && <p role="status">No authorized versions available to inspect.</p>}
+      </div>
+      <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || (version==null && anchor.displayedVersion===anchor.headVersion)} onClick={()=>changeDisplayedRevision(null)}
+        className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">Open current head</button>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="font-terminal text-[12px] text-muted-foreground">COMPARE / RESTORE FROM
+          <select aria-label="Historical Artifact source revision" value={left??""} onChange={(event)=>{
+            historyRequest.current += 1; setComparison(null); setRestoreIntent(null); setLeft(Number(event.target.value)||null);
+          }} disabled={historyBusy || historyInFlight.current || versions.isFetching}
+          className="mt-1 block min-h-9 rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">
+            <option value="">Select revision</option>
+            {historicalVersions.slice().reverse().map(entry=><option key={entry.id} value={entry.version}>v{entry.version} · {shortHash(entry.contentHash)}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!leftRecord || !displayedRecord || displayedRecord.contentHash!==anchor.contentHash || leftRecord.version===anchor.displayedVersion || historyBusy || historyInFlight.current || versions.isFetching}
+          onClick={()=>void compareSelectedHistory()} className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">
+          <GitCompareArrows className="h-3.5 w-3.5"/> Compare with displayed v{anchor.displayedVersion}
+        </button>
+        <button type="button" data-testid="artifact-prepare-restore" disabled={!canRestore} onClick={prepareRestoreHistory}
+          className="min-h-9 rounded border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Prepare restore as new version</button>
+        {sessions[0] && <button type="button" onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:anchor.displayedVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})}
+          className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px]"><Link2 className="h-3.5 w-3.5"/> Reference displayed v{anchor.displayedVersion}</button>}
+      </div>
+      {hasUnsavedArtifactEdits && <p role="status" className="text-sm text-amber-200">Save or reset unsaved Artifact edits before opening another revision or restoring. Your draft remains in the current editor.</p>}
+      {anchor.displayedVersion!==anchor.headVersion && <p role="status" className="text-sm text-amber-200">Viewing historical v{anchor.displayedVersion} read-only. Open the current head before restoring another revision.</p>}
+      {activeRestoreIntent && <section role="group" aria-label="Confirm immutable Artifact restore" data-testid="artifact-restore-confirmation" className="space-y-2 rounded border border-amber-300/30 p-3">
+        <p className="font-ui text-[13px] text-amber-100">Restore exact historical v{activeRestoreIntent.targetVersion} ({shortHash(activeRestoreIntent.targetHash)}) over current head v{anchor.headVersion} ({shortHash(anchor.contentHash)}) by creating new v{anchor.headVersion+1}? Earlier versions will not be changed. Other users' concurrent changes will be rejected.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" data-testid="artifact-confirm-restore" disabled={!canRestore || historyBusy || historyInFlight.current} onClick={()=>void confirmRestoreHistory()}
+            className="min-h-9 rounded border border-amber-300 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Confirm restore as new version</button>
+          <button type="button" onClick={()=>setRestoreIntent(null)} disabled={historyBusy || historyInFlight.current} className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px]">Cancel restore</button>
+        </div>
+      </section>}
+      {comparison && sameArtifactHistoryAnchor(comparison.anchor, anchor) && comparison.from===left
+        && <p role="status" data-testid="artifact-history-comparison" className="rounded border border-fuchsia-300/20 px-3 py-2 font-ui text-[13px] text-fuchsia-100">{comparison.text}</p>}
+      {historyBusy && <p role="status" className="font-ui text-[12px] text-muted-foreground">Checking exact saved revisions…</p>}
+    </div>
     {error&&<div role="alert" className="m-3 border border-red-300/20 px-3 py-2 text-sm text-red-200">{error}</div>}
   </div>;
 }
