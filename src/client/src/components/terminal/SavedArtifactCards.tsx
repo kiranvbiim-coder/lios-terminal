@@ -39,10 +39,10 @@ export interface SavedArtifactCardModel {
  * Live list metadata is used only for availability and legacy display fallback.
  * Nothing is rerun or advanced to a newer head implicitly.
  */
-export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, exactLookup: "pending" | "found" | "missing" = "pending", recordedPreview: string | null = null): SavedArtifactCardModel {
+export function describeSavedArtifactCard(ref: SavedMessageArtifactRef, live: Pick<ProjectArtifactRecord, "title" | "kind" | "headVersion"> | undefined, exactLookup: "pending" | "found" | "missing" = "pending", recordedPreview: string | null = null, exactKind: ProjectArtifactRecord["kind"] | null = null): SavedArtifactCardModel {
   const unavailable = !live && exactLookup === "missing";
   const title = ref.title ?? live?.title ?? "Saved Artifact";
-  const kind = ref.kind ?? live?.kind;
+  const kind = exactKind ?? ref.kind ?? live?.kind;
   const kindLabel = kind ? (KIND_LABEL[kind] ?? kind) : null;
   const version = ref.version;
   return {
@@ -158,7 +158,7 @@ export default function SavedArtifactCards({ metadata, projectId, chatId = null,
     const wrongIdentityOrScope = Boolean(query?.data) && Boolean(query?.isFetchedAfterMount) && !query?.isFetching && !detail;
     const lookup = live ? "found" : wrongIdentityOrScope || query?.isError ? "missing" : "pending";
     const preview = detail ? recordedArtifactPreview(detail.version.content) : null;
-    return describeSavedArtifactCard(ref, live, lookup, preview);
+    return describeSavedArtifactCard(ref, live, lookup, preview, detail?.artifact.kind ?? null);
   });
   return <SavedArtifactCardList cards={cards} activeId={activeId} onOpen={onOpen} />;
 }
