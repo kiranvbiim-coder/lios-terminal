@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, t
 import { useQuery } from "@tanstack/react-query";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 import type { GatewayClient } from "./gateway/gatewayClient";
-import { resumeConversationRun, type GatewayRunResult } from "./gateway/conversationRun";
+import { resumeConversationRun } from "./gateway/conversationRun";
+import { resumableCheckpointView, type ResumableCheckpointView } from "./researchCheckpoint";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -52,7 +53,7 @@ export function useInterruptedAgentRun(options: InterruptedAgentRunOptions): {
   requestId: string | null;
   resume: () => void;
   /** Spread onto the runtime trace: the request-bound resume control. */
-  traceProps: { resumableRequestId: string | null; onResume: () => void };
+  traceProps: { resumableRequestId: string | null; onResume: () => void; checkpointView: ResumableCheckpointView | null };
 } {
   const { gateway, chatId, busy, onEvent, shell } = options;
   const history = useQuery<unknown>({
@@ -84,18 +85,26 @@ export function useInterruptedAgentRun(options: InterruptedAgentRunOptions): {
     shell.setRuntimeRequestId(requestId);
     void resumeConversationRun(gateway, requestId, onEvent)
       .then((result) => {
+        if (!result.ok) shell.setLifecycleNotice(result.error ?? "The Home refused to resume this checkpoint.");
+      })
+      .catch((error: unknown) => {
+        shell.setLifecycleNotice(error instanceof Error ? error.message : "Checkpoint resume failed. No second run was started.");
+      })
+      .finally(() => {
+        // Even a transport/consumer exception must release Chat's busy state.
         shell.busyRef.current = false;
         shell.setStreaming("");
         shell.setBusy(false);
         shell.onSettled();
-        if (!result.ok && result.error) shell.setLifecycleNotice(result.error);
-      })
-      .finally(() => {
         resuming.current = false;
         void refetch();
       });
   }, [gateway, requestId, busy, chatId, shell, onEvent, refetch]);
 
-  const offered = busy ? null : requestId;
-  return { requestId: offered, resume, traceProps: { resumableRequestId: offered, onResume: resume } };
+  // The server flag can become stale after policy or owner changes. Hide the action while
+  // history is being revalidated or the Home is unreachable; the resume RPC
+  // independently rechecks all authority again at the point of execution.
+  const offered = busy || !gateway || history.isFetching || history.isError ? null : requestId;
+  const checkpointView = resumableCheckpointView(history.data, offered);
+  return { requestId: offered, resume, traceProps: { resumableRequestId: offered, onResume: resume, checkpointView } };
 }
