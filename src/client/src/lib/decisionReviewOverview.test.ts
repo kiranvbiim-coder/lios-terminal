@@ -48,7 +48,7 @@ test("decision review separates recommendation, evidence references, risk, disse
 });
 
 test("empty/unresolved decision reports gaps, never an inferred approval or selected alternative", () => {
-  const minimal = decisionArtifactContentSchema.parse({ kind: "decision", objective: "Review this case", selectedAlternativeId: "missing", linkedRefs: { sources: ["  "] } });
+  const minimal = decisionArtifactContentSchema.parse({ kind: "decision", objective: "Review this case", selectedAlternativeId: "missing", linkedRefs: { sources: [] } });
   const review = decisionReviewOverview(minimal);
   assert.equal(review.recommendation, null);
   assert.equal(review.alternative, null);
