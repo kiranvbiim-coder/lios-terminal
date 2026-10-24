@@ -280,10 +280,13 @@ test("source limitation rows have unique keys even when two limitations read the
   assert.equal(errors.some((args) => JSON.stringify(args).includes("same key")), false);
 });
 
-test("a stopped run that can resume shows a Resume control, and nothing renders for an empty idle chat", () => {
+test("an eligible interrupted run shows the guarded checkpoint resume card, not an invented live status", () => {
   const stopped = render([], { resumableRequestId: REQUEST_ID, onResume: noop });
-  assert.match(stopped, /Stopped/);
+  assert.match(stopped, /Interrupted research checkpoint/);
+  assert.match(stopped, /trace-resumable-checkpoint/);
+  assert.match(stopped, /Detailed checkpoint step counts are unavailable/);
   assert.match(stopped, /data-testid="agent-run-resume"/);
+  assert.match(stopped, /Resume can be refused/);
   assert.equal(render([]), "");
 });
 

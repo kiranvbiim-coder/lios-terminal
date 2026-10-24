@@ -8,7 +8,6 @@ import {
   Database,
   FileBarChart,
   Loader2,
-  Play,
   ShieldAlert,
   Square,
   Workflow,
@@ -16,8 +15,10 @@ import {
 } from "lucide-react";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import ResearchSourceList from "./ResearchSourceList";
+import ResearchRunProgress from "./ResearchRunProgress";
+import ResearchCheckpointCard from "./ResearchCheckpointCard";
+import type { ResumableCheckpointView } from "@/lib/researchCheckpoint";
 import { collectCitationSources } from "@/lib/chatMarkdown";
-import { observedResearchProgress } from "@/lib/observedResearchProgress";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
@@ -58,6 +59,11 @@ interface Props {
   resumableRequestId?: string | null;
   /** Explicit person-initiated resume of `resumableRequestId`; it carries no other input. */
   onResume?: () => void;
+  /** Display-only snapshot of server-exposed checkpoint counts, never local resume authority. */
+  checkpointView?: ResumableCheckpointView | null;
+  /** Authenticated Home execution history could not be checked; no Resume is offered. */
+  checkpointLookupError?: boolean;
+  onRetryCheckpointLookup?: () => void;
   /** Start with the Show work disclosure open. Defaults to closed so ordinary chats stay quiet. */
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
@@ -161,6 +167,9 @@ export default function ConversationRuntimeTrace({
   onOpenTerminal,
   resumableRequestId,
   onResume,
+  checkpointView,
+  checkpointLookupError = false,
+  onRetryCheckpointLookup,
   defaultShowWork = false,
   onSubmitAssumptions,
 }: Props) {
@@ -171,7 +180,7 @@ export default function ConversationRuntimeTrace({
   const [guidedDismissedKey, setGuidedDismissedKey] = useState<string | null>(null);
   const workPanelId = useId();
   events = requestId ? events.filter(event => event.requestId === requestId) : [];
-  if (!events.length && !busy && !resumableRequestId) return null;
+  if (!events.length && !busy && !resumableRequestId && !checkpointLookupError) return null;
   const plan = [...events].reverse().find((event) => event.type === "plan");
   const approval = [...events].reverse().find((event) => event.type === "approval_required");
   const latestGovernedApproval = [...events].reverse().find((event) => event.type === "governed_tool_approval_required");
@@ -183,7 +192,6 @@ export default function ConversationRuntimeTrace({
   const summary = summarizeRuntimeTrace(events, busy);
   const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
   const recordedSources = collectCitationSources(events);
-  const progress = observedResearchProgress(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -239,7 +247,7 @@ export default function ConversationRuntimeTrace({
             <span role="status" className="inline-flex items-center gap-1.5 px-1">
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" aria-hidden="true" />
               {waitingForApproval ? "Waiting for your approval" : "Working"}
-              {!waitingForApproval && progress && <span className="ml-1">{progress.completed} of {progress.total} steps completed{progress.activeLabels.length ? ` · ${progress.activeLabels.join(", ")}` : ""}</span>}
+              {!waitingForApproval && <ResearchRunProgress events={events} requestId={requestId} view="inline" />}
             </span>
           )}
           {working && (
@@ -256,21 +264,7 @@ export default function ConversationRuntimeTrace({
               {stopRequested ? "Stop requested" : cancelPending ? "Requesting Stop…" : "Stop"}
             </button>
           )}
-          {canResume && (
-            <>
-              <span className="px-1">Stopped</span>
-              <button
-                type="button"
-                onClick={onResume}
-                data-testid="agent-run-resume"
-                data-request-id={resumableRequestId}
-                className="inline-flex min-h-7 items-center gap-1 rounded-md border border-cyan-300/30 px-2 py-1 font-ui text-[12px] text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
-              >
-                <Play className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-                Resume
-              </button>
-            </>
-          )}
+
           {canShowWork && (
             <button
               type="button"
@@ -285,6 +279,24 @@ export default function ConversationRuntimeTrace({
             </button>
           )}
         </div>
+      )}
+
+      {checkpointLookupError && !busy && (
+        <div role="alert" data-testid="trace-checkpoint-lookup-error" className="my-2 rounded border border-amber-300/25 px-3 py-2 font-ui text-[12px] text-amber-100">
+          Saved checkpoint eligibility could not be checked. Resume is unavailable until the Home responds.
+          {onRetryCheckpointLookup && (
+            <button type="button" onClick={onRetryCheckpointLookup} className="ml-2 min-h-8 rounded px-2 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+              Retry checkpoint check
+            </button>
+          )}
+        </div>
+      )}
+      {canResume && resumableRequestId && onResume && (
+        <ResearchCheckpointCard
+          requestId={resumableRequestId}
+          checkpoint={checkpointView ?? null}
+          onResume={onResume}
+        />
       )}
 
       <div id={workPanelId} className={workVisible ? "mb-2 space-y-2 rounded-xl border border-border/50 bg-[#080808] p-3" : undefined}>
@@ -307,19 +319,8 @@ export default function ConversationRuntimeTrace({
           </div>
         )}
 
-        {workVisible && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
-        {workVisible && !!progress?.results.length && (
-          <section aria-label="Recent observed results" className="space-y-2 border-t border-border/45 pt-2.5">
-            <h3 className="font-ui text-sm font-semibold">Reported results</h3>
-            <ol className="space-y-2">{progress.results.map(result => (
-              <li key={result.stepId} className="font-ui text-sm">
-                <strong>{result.label}</strong>
-                <p className="break-words text-muted-foreground">{result.summary}</p>
-              </li>
-            ))}</ol>
-            <p className="font-ui text-sm text-muted-foreground">Tool-reported summaries, not independently verified conclusions. Inspect Sources and Trust for evidence.</p>
-          </section>
-        )}
+        {workVisible && recordedSources.length > 0 && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
+        {workVisible && !!steps.length && <ResearchRunProgress events={events} requestId={requestId} view="findings" />}
 
         {workVisible && !!capabilities.length && (
           <div className="border-t border-border/45 pt-2.5" data-p2-capability-resolution="true">
