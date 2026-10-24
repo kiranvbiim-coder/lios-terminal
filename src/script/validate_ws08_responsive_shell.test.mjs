@@ -31,7 +31,7 @@ test("WS-08 uses remaining conversation width, not only browser mobile breakpoin
 test("WS-08 narrow screen keeps saved Artifact mounted but not occupying narrow Chat width", () => {
   const rule = sliceFrom(conversationCss, "@container conversation (max-width: 899px)");
   has(rule, /\.lios-artifact-sidecar\s*\{\s*display:\s*none\s*!important/);
-  has(sidecar, /focus\s*\?\s*"flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto/);
+  has(sidecar, /focus\s*\?\s*"(?:relative )?flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto/);
   has(sidecar, /:\s*"lios-artifact-sidecar block min-h-0/);
   assert.equal((projectShell.match(/<ConversationArtifactSidecar/g) ?? []).length, 1,
     "Do not add duplicate Artifact runtimes");
@@ -43,7 +43,7 @@ test("WS-08 narrow screen keeps saved Artifact mounted but not occupying narrow 
 test("WS-08 large containers retain useful adjustable Chat+Artifact space without fixed 348px", () => {
   const rule = sliceFrom(conversationCss, "@container conversation (min-width: 900px)");
   has(rule, /\.lios-artifact-sidecar\s*\{/);
-  has(rule, /width:\s*clamp\(20rem,\s*36%,\s*28rem\)\s*!important/);
+  has(rule, /width:\s*var\(--lios-sidecar-width,\s*clamp\(20rem,\s*36%,\s*28rem\)\)\s*!important/);
   has(rule, /max-width:\s*45%/);
   assert.ok(!rule.includes("width:348px"), "Do not add another rigid Artifact width");
 });
