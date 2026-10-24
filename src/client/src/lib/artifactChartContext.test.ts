@@ -26,7 +26,7 @@ test("WS-39 absent units, period and sources stay explicitly unknown, never gues
   const result = chartRecordedContext(chart());
   assert.deepEqual(result, {
     xLabel: "X (label not recorded)", yLabel: "Y (label not recorded)",
-    xUnit: null, yUnit: null, period: null, evidenceRefs: [], sourceBasis: "none",
+    xUnit: null, yUnit: null, period: null, evidenceRefs: [], totalRecordedSourceRefs: 0, sourceBasis: "none",
   });
   assert.match(chartSourceCaveat(result), /Not recorded in the displayed chart or saved version: X unit, Y unit, period, source references/);
   assert.match(chartSourceCaveat(result), /not independently verified/);
@@ -42,6 +42,7 @@ test("WS-39 copied labels and source refs are saved metadata, not verified entit
     xLabel: "Fiscal year", yLabel: "Revenue",
     xUnit: "FY", yUnit: "USD millions", period: "FY2025–FY2027",
     evidenceRefs: ["filing:v1", "manual:observation"],
+    totalRecordedSourceRefs: 2,
     sourceBasis: "chart_options",
   });
   assert.match(chartSourceCaveat(chartRecordedContext(input)), /not independently verified/);
@@ -60,6 +61,17 @@ test("WS-39 P4 version-level provenance takes precedence over editable chart-opt
   assert.deepEqual(chartRecordedContext(input, []).evidenceRefs, [],
     "an exact version with zero source refs must not inherit unverified option refs");
   assert.match(chartSourceCaveat(view), /not independently verified/);
+});
+
+test("WS-39 long saved P4 source inventory retains exact count without unbounded DOM", () => {
+  const refs = Array.from({ length: 125 }, (_, i) => `filing:version:${i}`);
+  const display = chartRecordedContext(chart(), refs);
+  assert.equal(display.totalRecordedSourceRefs, 125);
+  assert.equal(display.evidenceRefs.length, 100);
+  assert.equal(display.evidenceRefs[0], refs[0]);
+  assert.equal(display.evidenceRefs[99], refs[99]);
+  assert.equal(display.sourceBasis, "artifact_version");
+  assert.doesNotMatch(chartSourceCaveat({ ...display, xUnit: "FY", yUnit: "USD", period: "FY2025" }), /Not recorded/);
 });
 
 test("WS-39 SSR fallback is a fully labelled exact 2-series table; gaps are not zeros", () => {
