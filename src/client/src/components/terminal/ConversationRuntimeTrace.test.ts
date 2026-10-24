@@ -287,3 +287,33 @@ test("a structured input gap is rendered once while unrelated source warnings re
   assert.doesNotMatch(markup, /data-testid="trace-error"|REQUEST_FAILED/);
   assert.match(markup, /Independent source is stale/);
 });
+
+test("WS-29: Show work only exposes recorded evidence for this request's latest plan", () => {
+  const foreign = {
+    ...sourceResult,
+    requestId: "99999999-9999-4999-8999-999999999999",
+    sourceRefs: ["https://example.org/foreign"],
+  } as ConversationRuntimeEvent;
+  const latestPlan = event({
+    type: "plan",
+    plan: {
+      schemaVersion: "1",
+      requestId: REQUEST_ID,
+      capabilities: [],
+      steps: [{ id: "step-2", label: "Updated research", kind: "data", permissionClass: "safe_auto" }],
+    },
+  });
+  const fresh = event({
+    type: "tool_result",
+    stepId: "step-2",
+    label: "Updated research",
+    summary: "Recorded source",
+    deterministic: true,
+    sourceRefs: ["https://example.org/current"],
+  });
+  const html = render([planEvent, sourceResult, foreign, latestPlan, fresh, doneOk], { defaultShowWork: true });
+  assert.match(html, /data-testid="trace-sources"/);
+  assert.match(html, /example.org\/current/);
+  assert.doesNotMatch(html, /example.org\/foreign|SEC EDGAR/);
+  assert.match(html, /Open recorded source/);
+});

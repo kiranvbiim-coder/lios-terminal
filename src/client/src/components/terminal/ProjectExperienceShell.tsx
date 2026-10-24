@@ -1544,7 +1544,7 @@ export default function ProjectExperienceShell({
   };
 
   const displayMessages: Array<ProjectChatMessage | LocalMessage> = chatMode === "temporary" ? temporaryMessages : persistedMessages;
-  const citationSources = useMemo(() => collectCitationSources(runtimeEvents), [runtimeEvents]);
+  const citationSources = useMemo(() => collectCitationSources(runtimeEvents, runtimeRequestId), [runtimeEvents, runtimeRequestId]);
   const visibleExecutionSessionId = sandboxSessionId ?? runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
   const visibleExecutionSessionProjectId = sandboxSessionId ? selection.projectId : (chatMode === "project" ? selection.projectId : null);
   const visibleExecutionSessionChatId = sandboxSessionId
