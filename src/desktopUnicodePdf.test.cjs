@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeUnicodePdfPayload, buildUnicodeReportHtml } = require("./desktopUnicodePdf.cjs");
+const { normalizeUnicodePdfPayload, buildUnicodeReportHtml, runNativeUnicodePdfSmoke } = require("./desktopUnicodePdf.cjs");
 
 const payload = {
   artifactId: "artifact:owner-report", version: 3,
@@ -148,4 +148,71 @@ test("Packaged LiOS Electron app includes the local native Unicode printer", () 
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
   assert.match(main, /require\("\.\/desktopUnicodePdf\.cjs"\)/,
     "Main process must resolve the same packaged module");
+});
+
+
+test("Packaged Chromium smoke probes synthetic Tamil, table, chart and PNG without using a workspace", async () => {
+  let windowDestroyed = false;
+  let printedUrl = "";
+  let intercepted = null;
+  let popupAction = "";
+  const signature = Buffer.from("%PDF-1.7\n" + "x".repeat(140) + "%%EOF\n");
+  const options = {BrowserWindow: class {
+    constructor(settings) {
+      assert.equal(settings.show,false);
+      assert.equal(settings.webPreferences.sandbox,true);
+      assert.equal(settings.webPreferences.javascript,false);
+      assert.equal(settings.webPreferences.nodeIntegration,false);
+      assert.equal(settings.webPreferences.contextIsolation,true);
+      assert.equal(settings.webPreferences.webSecurity,true);
+      assert.match(settings.webPreferences.partition,/^lios-unicode-pdf-smoke-/);
+      this.webContents={
+        setWindowOpenHandler:(callback)=>{popupAction=callback().action;},
+        on:(name,callback)=>{if(name==="will-navigate"){const event={preventDefault(){}};callback(event);}},
+        printToPDF:async settings=>{
+          assert.equal(settings.pageSize,"A4");
+          return signature;
+        },
+      };
+    }
+    async loadURL(value){ printedUrl=decodeURIComponent(value); }
+    isDestroyed(){return windowDestroyed;}
+    destroy(){windowDestroyed=true;}
+  },session:{fromPartition:(partition,options)=>{
+    assert.match(partition,/^lios-unicode-pdf-smoke-/);
+    assert.equal(options.cache,false);
+    return {webRequest:{onBeforeRequest: callback=>{intercepted=callback;}}};
+  }}};
+  const result=await runNativeUnicodePdfSmoke(options);
+  assert.equal(result.status,"native-pdf-rendered");
+  assert.equal(result.visualAcceptance,"not_tested");
+  assert.equal(result.pdfBytes,signature.length);
+  assert.equal(result.source,"synthetic");
+  assert.deepEqual(result.contentCoverage,["Tamil","Devanagari","table","PNG","line chart"]);
+  assert.match(printedUrl,/தமிழ் அறிக்கை/);
+  assert.match(printedUrl,/हिंदी परीक्षण/);
+  assert.match(printedUrl,/<table>/);
+  assert.match(printedUrl,/<svg /);
+  assert.match(printedUrl,/data:image\/png;base64,/);
+  assert.equal(popupAction,"deny");
+  assert.equal(windowDestroyed,true);
+  assert.ok(intercepted);
+  intercepted({url:"https://malicious.invalid/"}, result=>assert.deepEqual(result,{cancel:true}));
+  intercepted({url:"data:image/png;base64,YQ=="}, result=>assert.deepEqual(result,{cancel:false}));
+});
+
+test("Native Unicode PDF smoke fails closed on an invalid Chromium result and destroys its window", async () => {
+  let destroyed=false;
+  const options={BrowserWindow:class {
+    webContents={
+      setWindowOpenHandler() {},
+      on() {},
+      printToPDF:async()=>Buffer.from("not a PDF"),
+    };
+    async loadURL() {}
+    isDestroyed(){return destroyed;}
+    destroy(){destroyed=true;}
+  },session:{fromPartition:()=>({webRequest:{onBeforeRequest(){}}})}};
+  await assert.rejects(runNativeUnicodePdfSmoke(options),/valid bounded PDF/);
+  assert.equal(destroyed,true);
 });

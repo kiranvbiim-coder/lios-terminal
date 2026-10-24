@@ -18,7 +18,7 @@ const { runPackagedDesktopSelfTest } = require("./desktopSelfTest.cjs");
 const { bundledPythonSidecarPath } = require("./desktopPythonSidecar.cjs");
 const { requirePackagedSandboxEnvironment } = require("./desktopSandboxImage.cjs");
 const { assertTrustedIpcSender } = require("./desktopIpcSecurity.cjs");
-const { normalizeUnicodePdfPayload, buildUnicodeReportHtml } = require("./desktopUnicodePdf.cjs");
+const { normalizeUnicodePdfPayload, buildUnicodeReportHtml, runNativeUnicodePdfSmoke } = require("./desktopUnicodePdf.cjs");
 const { redactDesktopLogText } = require("./desktopLogRedaction.cjs");
 const {
   createRestoreWorkerLaunchPlan,
@@ -29,6 +29,7 @@ const {
 app.setName("LiOS Intelligence Terminal");
 
 const desktopSelfTestRequested = process.argv.includes("--desktop-self-test");
+const nativeUnicodePdfSmokeRequested = process.argv.includes("--unicode-pdf-smoke");
 
 // One desktop profile owns one Home process. A second launch must not compete for its database.
 if (!app.requestSingleInstanceLock()) app.exit(0);
@@ -765,6 +766,31 @@ function createWindow() {
 
 // Initialize Electron lifecycle
 app.whenReady().then(async () => {
+  if (nativeUnicodePdfSmokeRequested) {
+    // A separate opt-in installed-app renderer test. It does not start the
+    // local server, access a user workspace or write a PDF to disk.
+    // This is a render smoke probe, not automatic font/visual acceptance.
+    const reportPath = process.env.LIOS_UNICODE_PDF_SMOKE_REPORT?.trim();
+    try {
+      if (!app.isPackaged)throw new Error("Native Unicode PDF smoke requires an installed packaged LiOS build.");
+      const result = await runNativeUnicodePdfSmoke({BrowserWindow,session});
+      const report = {version:1,generatedAt:new Date().toISOString(),
+        platform:process.platform,arch:process.arch,...result};
+      if(reportPath)fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+"\n","utf8");
+      console.log(JSON.stringify(report,null,2));
+      app.exit(0);
+    } catch(error) {
+      const report={version:1,generatedAt:new Date().toISOString(),
+        platform:process.platform,arch:process.arch,status:"failed",
+        error:error?.message??String(error)};
+      if(reportPath) {
+        try{fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+"\n","utf8");}catch{}
+      }
+      console.error(JSON.stringify(report,null,2));
+      app.exit(1);
+    }
+    return;
+  }
   if (desktopSelfTestRequested) {
     const reportPath = process.env.LIOS_DESKTOP_SELF_TEST_REPORT?.trim();
     try {

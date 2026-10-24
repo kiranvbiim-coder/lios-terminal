@@ -327,4 +327,75 @@ function buildUnicodeReportHtml(raw) {
     +'figcaption{font-size:8pt;color:#475569;margin-top:5pt;overflow-wrap:anywhere;}'
     +'</style></head><body>'+blocks+'</body></html>';
 }
-module.exports={normalizeUnicodePdfPayload,buildUnicodeReportHtml};
+
+/**
+ * Explicit packaged-app smoke probe. Only synthetic content is rendered:
+ * no Project, credentials, source documents, network calls or saved file.
+ * A successful PDF signature proves native Chromium printing ran, not that
+ * Tamil font coverage, extraction or page appearance has been accepted.
+ */
+async function runNativeUnicodePdfSmoke({BrowserWindow,session}) {
+  if (typeof BrowserWindow !== "function" || !session?.fromPartition) {
+    throw new Error("Packaged Unicode PDF smoke requires native Electron print services.");
+  }
+  const sampleImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l5cAAAAASUVORK5CYII=";
+  const imageBytes = Buffer.from(sampleImageBase64, "base64");
+  const payload = {
+    artifactId:"artifact:synthetic-unicode-pdf-smoke",
+    version:1,contentHash:"a".repeat(64),filename:"LiOS-Tamil-PDF-Smoke.pdf",
+    paragraphs:[
+      {style:"title",text:"தமிழ் அறிக்கை · Native PDF smoke"},
+      {style:"body",text:"हिंदी परीक्षण · ₹450 · source:synthetic:test"},
+    ],
+    items:[
+      {kind:"paragraph",style:"title",text:"தமிழ் அறிக்கை · Native PDF smoke"},
+      {kind:"paragraph",style:"body",text:"हिंदी परीक्षण · ₹450 · source:synthetic:test"},
+      {kind:"table",columns:["கிராமம்","எண்ணிக்கை"],rows:[["கடலை", "3"]]},
+      {kind:"image",caption:"Synthetic PNG",sourceRef:"source:synthetic:image",
+        mimeType:"image/png",dataBase64:sampleImageBase64,
+        byteLength:imageBytes.length,width:1,height:1,
+        sha256:crypto.createHash("sha256").update(imageBytes).digest("hex")},
+      {kind:"chart",caption:"சான்று · Synthetic plot",sourceRef:"source:synthetic:chart",
+        chartType:"line",xKind:"category",yDomain:[0,8],
+        windows:[{xValues:["முதல்","இரண்டாம்"],series:[
+          {label:"எண்ணிக்கை",points:[{xIndex:0,y:2},{xIndex:1,y:5}]}
+        ]}]},
+    ],
+  };
+  const html = buildUnicodeReportHtml(payload);
+  const partition = "lios-unicode-pdf-smoke-" + crypto.randomUUID();
+  const isolatedSession = session.fromPartition(partition,{cache:false});
+  isolatedSession.webRequest.onBeforeRequest((details,callback)=>{
+    callback({cancel:!details.url.startsWith("data:")});
+  });
+  let win;
+  try {
+    win = new BrowserWindow({
+      width:794,height:1123,show:false,backgroundColor:"#ffffff",
+      webPreferences:{partition,nodeIntegration:false,contextIsolation:true,
+        sandbox:true,javascript:false,webSecurity:true,navigateOnDragDrop:false},
+    });
+    win.webContents.setWindowOpenHandler(()=>({action:"deny"}));
+    win.webContents.on("will-navigate",event=>event.preventDefault());
+    await win.loadURL("data:text/html;charset=UTF-8,"+encodeURIComponent(html));
+    const bytes = await win.webContents.printToPDF({
+      printBackground:true,preferCSSPageSize:true,pageSize:"A4",
+    });
+    if (!Buffer.isBuffer(bytes) || bytes.length < 100 || bytes.length > 32*1024*1024
+      || bytes.subarray(0,5).toString("ascii")!=="%PDF-"
+      || !/%%EOF\s*$/.test(bytes.subarray(Math.max(0,bytes.length-32)).toString("ascii"))) {
+      throw new Error("Native Unicode PDF smoke did not produce a valid bounded PDF.");
+    }
+    return {
+      status:"native-pdf-rendered",
+      pdfBytes:bytes.length,
+      source:"synthetic",
+      contentCoverage:["Tamil","Devanagari","table","PNG","line chart"],
+      visualAcceptance:"not_tested",
+    };
+  } finally {
+    if (win && !win.isDestroyed())win.destroy();
+  }
+}
+
+module.exports={normalizeUnicodePdfPayload,buildUnicodeReportHtml,runNativeUnicodePdfSmoke};
