@@ -128,7 +128,6 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
               {coverage && <p className="mt-1 break-words text-xs text-muted-foreground">Registered coverage: {coverage}</p>}
               {item.lastCheckedAt && <p className="mt-1 text-[11px] text-muted-foreground">Last recorded check: {item.lastCheckedAt.slice(0, 10)} (not a live availability guarantee)</p>}
               {item.licenseCaveat && <p className="mt-1 break-words text-xs text-amber-200">Rights note: {item.licenseCaveat}</p>}
-              <p className="mt-1 text-[11px] text-muted-foreground">{status.advisory}</p>
             </li>;
           })}
         </ul> : <p role="status" className="rounded-md border border-border/60 p-3 text-xs text-muted-foreground">
