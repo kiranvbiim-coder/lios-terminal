@@ -63,7 +63,7 @@ export function prepareValuationRecalculationPrompt(
     `Artifact ID: ${target.artifactId}; version: ${target.version}; content SHA-256: ${target.contentHash}.`,
     `Recorded model: ${content.modelId}; recorded security: ${content.symbol || "no ticker attached"}.`,
     `Proposed WACC: ${proposedWaccPct}% (recorded WACC: ${String(content.assumptions.waccPct)}%).`,
-    "Before executing, verify that this exact saved version is still the current head, the model is supported, the original inputs/source references and permitted data are available, and the user has approved any required consent.",
+    "Before executing, verify that this exact saved version is still the current head, the model is supported, the original inputs/source references, data rights, entitlement policies and permitted data are available, and the user has approved any required consent.",
     "Use only an authorized deterministic model calculation. Recompute outputs and sensitivity from the approved changed inputs; do not rewrite recorded outputs/summary, claim that a rerun happened, or fabricate missing data. If no governed recalculation workflow is available, explain the blocker and preserve the existing revision unchanged.",
     "Only after a real verified engine run may a new canonical revision be saved with the engine receipt, exact input/output hashes, source lineage, and the before/after WACC and result change; otherwise leave this as a proposal.",
   ].join("\n");
