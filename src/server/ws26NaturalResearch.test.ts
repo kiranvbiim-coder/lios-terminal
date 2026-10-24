@@ -60,7 +60,9 @@ test("WS-26 emits the real run plan and keeps one observed BYOAI call separate f
     request: baseline,
     aiCompletion: async (input) => {
       aiCalls += 1;
-      systemPrompt = input.system;
+      systemPrompt = input.system ?? "";
+      assert.equal(input.maxAttempts, 1);
+      assert.equal(input.fallback, "none");
       return {
         provider: "openai",
         model: "configured-test-model",
