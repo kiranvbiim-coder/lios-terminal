@@ -8,6 +8,7 @@ const {
   bootstrapPackagedSandboxEnvironment,
   containerPlatformForHost,
   defaultLocalDockerTarget,
+  inferLocalContainerEngine,
   packagedSandboxEnvironment,
   validLocalEngineTarget,
   verifyPackagedSandboxRelease,
@@ -160,6 +161,54 @@ test('Unix target discovery prefers real socket files and keeps deterministic lo
   assert.equal(defaultLocalDockerTarget({ platform: 'darwin', home }), `unix://${desktop}`);
   sockets.clear();
   assert.equal(defaultLocalDockerTarget({ platform: 'linux', home, env: {} }), 'unix:///var/run/docker.sock');
+});
+
+test('local Podman socket is paired with Podman while existing Docker socket defaults are unchanged', (t) => {
+  assert.equal(inferLocalContainerEngine('unix:///run/user/1000/podman/podman.sock', 'linux'), 'podman');
+  assert.equal(inferLocalContainerEngine('unix:///home/user/.docker/run/docker.sock', 'linux'), 'docker');
+  assert.equal(inferLocalContainerEngine('unix:///home/user/.colima/default/docker.sock', 'darwin'), 'docker');
+  assert.equal(inferLocalContainerEngine('npipe:////./pipe/docker_engine', 'win32'), 'docker');
+
+  const { root } = releaseFixture(t, 'linux/amd64');
+  const endpoint = 'unix:///run/user/1000/podman/podman.sock';
+  const selected = packagedSandboxEnvironment(root, { LIOS_EXECUTION_SANDBOX_TARGET: endpoint }, {
+    platform: 'linux', arch: 'x64',
+  });
+  assert.equal(selected.LIOS_EXECUTION_ISOLATION, 'strict');
+  assert.equal(selected.LIOS_EXECUTION_SANDBOX_ENGINE, 'podman');
+  assert.equal(selected.LIOS_EXECUTION_SANDBOX_TARGET, endpoint);
+  assert.equal(selected.LIOS_EXECUTION_SANDBOX_IMAGE, 'sha256:' + 'b'.repeat(64));
+  assert.equal(packagedSandboxEnvironment(root, UNIX_ENV, { platform: 'linux', arch: 'x64' })
+    .LIOS_EXECUTION_SANDBOX_ENGINE, 'docker');
+  assert.throws(() => packagedSandboxEnvironment(root, {
+    LIOS_EXECUTION_SANDBOX_TARGET: endpoint, LIOS_EXECUTION_SANDBOX_ENGINE: 'docker',
+  }, { platform: 'linux', arch: 'x64' }), /Podman socket must be paired/);
+  assert.throws(() => packagedSandboxEnvironment(root, {
+    LIOS_EXECUTION_SANDBOX_ENGINE: 'podman', LIOS_EXECUTION_SANDBOX_TARGET: 'npipe:////./pipe/docker_engine',
+  }, { platform: 'win32', arch: 'x64' }), /Windows named-pipe execution is supported only with Docker/);
+});
+
+test('packaged Linux bootstrap discovers a real rootless Podman socket without invoking Docker', (t) => {
+  const { root } = releaseFixture(t, 'linux/amd64');
+  const home = path.join(os.tmpdir(), 'lios-podman-engine-selection');
+  const runtimeDir = path.join(home, 'run', '1000');
+  const socket = path.join(runtimeDir, 'podman', 'podman.sock');
+  const original = fs.statSync;
+  t.mock.method(fs, 'statSync', (filename, ...args) => {
+    if (filename === socket) return { isSocket: () => true };
+    if (filename === path.join(home, '.docker', 'run', 'docker.sock') ||
+        filename === path.join(home, '.colima', 'default', 'docker.sock') ||
+        filename === '/var/run/docker.sock' ||
+        filename === `/run/user/${typeof process.getuid === 'function' ? process.getuid() : 1000}/podman/podman.sock`) {
+      return { isSocket: () => false };
+    }
+    return original(filename, ...args);
+  });
+  const env = { XDG_RUNTIME_DIR: runtimeDir };
+  const resolved = packagedSandboxEnvironment(root, env, { platform: 'linux', arch: 'x64', home });
+  assert.equal(resolved.LIOS_EXECUTION_SANDBOX_ENGINE, 'podman');
+  assert.equal(resolved.LIOS_EXECUTION_SANDBOX_TARGET, `unix://${socket}`);
+  assert.equal(env.LIOS_EXECUTION_SANDBOX_ENGINE, undefined, 'resolution is read-only');
 });
 
 test('packaged image pins exact digest and rejects downgrade, image substitution and altered archive', (t) => {
