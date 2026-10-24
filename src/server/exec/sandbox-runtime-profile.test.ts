@@ -62,6 +62,22 @@ test("strict sandbox profile requires engine, explicit local target and immutabl
   );
 });
 
+test("strict profile rejects engine/socket mismatch before any numerical worker can launch", () => {
+  for (const [engine, target, explanation] of [
+    ["docker", PODMAN_TARGET, /Podman socket must be paired/],
+    ["podman", WINDOWS_DOCKER_TARGET, /Podman execution cannot use a Windows Docker named-pipe/],
+  ] as const) {
+    assert.throws(() => resolveSandboxRuntimeProfile({
+      LIOS_EXECUTION_ISOLATION: "strict",
+      LIOS_EXECUTION_SANDBOX_ENGINE: engine,
+      LIOS_EXECUTION_SANDBOX_TARGET: target,
+      LIOS_EXECUTION_SANDBOX_IMAGE: IMAGE,
+    }), (error: unknown) =>
+      error instanceof SandboxRuntimeConfigurationError &&
+      explanation.test(error.message));
+  }
+});
+
 test("strict profile accepts the explicit local Windows Docker named pipe", () => {
   const profile = resolveSandboxRuntimeProfile({
     LIOS_EXECUTION_ISOLATION: "strict",
