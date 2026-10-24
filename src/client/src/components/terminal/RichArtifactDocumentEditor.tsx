@@ -6,7 +6,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Plugin } from "@tiptap/pm/state";
 import type { ArtifactContent } from "@shared/artifactContracts";
-import { fromTiptapDocumentProjection, readRecordedDocumentTable, recordedDocumentTablePreview, recordedDocumentValue, safeRichDocumentHref, toTiptapDocumentProjection } from "@shared/richArtifactDocument";
+import { fromTiptapDocumentProjection, reconcileReportBlockSections, readRecordedDocumentTable, recordedDocumentTablePreview, recordedDocumentValue, safeRichDocumentHref, toTiptapDocumentProjection } from "@shared/richArtifactDocument";
 import { chartArtifactContentSchema } from "@shared/artifactContracts";
 import { artifactImageDataUri, readArtifactImage } from "@shared/artifactImage";
 import ArtifactChart from "./ArtifactChart";
@@ -161,6 +161,7 @@ export default function RichArtifactDocumentEditor({ content, onChange, onError,
   const [undoMetadata] = useState(() => ({ blocks: new Map(content.blocks.map(block => [block.id, block])), sections: content.kind === "report" ? content.sections : [] }));
   const knownBlocks = useRef(undoMetadata.blocks);
   const knownSections = useRef(undoMetadata.sections);
+  const savedBlockIds = useRef(content.blocks.map(block => block.id));
   for (const block of content.blocks) knownBlocks.current.set(block.id, block);
   const editor = useEditor({
     extensions,
@@ -191,8 +192,12 @@ export default function RichArtifactDocumentEditor({ content, onChange, onError,
           blocks: (projection.content ?? []).flatMap(node => { const block = knownBlocks.current.get(node.attrs?.canonicalId); return block ? [block] : []; }),
           ...(current.kind === "report" ? { sections: knownSections.current.map(section => ({ ...section, blockIds: section.blockIds.filter(id => !knownBlocks.current.has(id) || liveIds.has(id)) })) } : {}),
         };
-        const next = fromTiptapDocumentProjection(projection, canonical);
+        const decoded = fromTiptapDocumentProjection(projection, canonical);
+        const next = decoded.kind === "report"
+          ? { ...decoded, sections: reconcileReportBlockSections(knownSections.current, savedBlockIds.current, decoded.blocks.map(block => block.id)) }
+          : decoded;
         for (const block of next.blocks) knownBlocks.current.set(block.id, block);
+        if (next.kind === "report") knownSections.current = next.sections;
         contentRef.current = next;
         emittedBlocks.current = JSON.stringify(next.blocks);
         onChange(next);
@@ -214,11 +219,18 @@ export default function RichArtifactDocumentEditor({ content, onChange, onError,
   }, [editor, disabled]);
   useEffect(() => {
     const incoming = JSON.stringify(content.blocks);
-    if (!editor || incoming === emittedBlocks.current) return;
+    if (!editor) return;
+    // Sections can change without block text/order changing (e.g. a newly
+    // reviewed report outline). Never project edits using stale sections.
+    if (incoming === emittedBlocks.current) {
+      knownSections.current = content.kind === "report" ? content.sections : [];
+      return;
+    }
     try {
       editor.commands.setContent(editableProjection(content), { emitUpdate: false, errorOnInvalidContent: true });
       knownBlocks.current = new Map(content.blocks.map(block => [block.id, block]));
       knownSections.current = content.kind === "report" ? content.sections : [];
+      savedBlockIds.current = content.blocks.map(block => block.id);
       emittedBlocks.current = incoming;
     } catch (cause) { onError(cause instanceof Error ? cause.message : "Rich document could not be loaded. Canonical draft retained."); }
   }, [editor, content, onError]);
