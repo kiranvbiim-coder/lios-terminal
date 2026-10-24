@@ -10,14 +10,14 @@ import { resolveSandboxRuntimeProfile } from "./exec/sandbox-runtime-profile";
 
 export interface SandboxImageRelease {
   schemaVersion: 1;
-  platform: "linux/arm64";
+  platform: "linux/arm64" | "linux/amd64";
   image: string;
   archive: "sandbox-image.tar.gz";
   archiveSha256: string;
   provenance: {
     sourceLock: "source-lock.json";
     sourceLockSha256: string;
-    baseImage: { reference: string; platform: "linux/arm64" };
+    baseImage: { reference: string; platform: "linux/arm64" | "linux/amd64" };
     node: { version: string };
     xlsx: { version: string };
     docling: { version: string };
@@ -40,14 +40,14 @@ export interface SandboxImageReadiness {
 }
 const releaseSchema = z.object({
   schemaVersion: z.literal(1),
-  platform: z.literal("linux/arm64"),
+  platform: z.enum(["linux/arm64", "linux/amd64"]),
   image: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   archive: z.literal("sandbox-image.tar.gz"),
   archiveSha256: z.string().regex(/^[a-f0-9]{64}$/),
   provenance: z.object({
     sourceLock: z.literal("source-lock.json"),
     sourceLockSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    baseImage: z.object({ reference: z.string(), platform: z.literal("linux/arm64") }),
+    baseImage: z.object({ reference: z.string(), platform: z.enum(["linux/arm64", "linux/amd64"]) }),
     node: z.object({ version: z.string() }),
     xlsx: z.object({ version: z.string() }),
     docling: z.object({ version: z.string() }),
@@ -61,6 +61,33 @@ const releaseSchema = z.object({
     }),
   }),
 }).strict();
+/** Same host-to-OCI architecture contract used by the packaged desktop bootstrap.
+ * This maps a candidate platform only; it never qualifies a release image.
+ * Support is limited to signed desktop target families with a Linux OCI sandbox.
+ */
+export function requiredSandboxReleasePlatform(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): "linux/arm64" | "linux/amd64" {
+  if (platform !== "darwin" && platform !== "win32" && platform !== "linux") {
+    throw new Error("Sandbox repair is unsupported for this host operating system.");
+  }
+  if (arch === "arm64") return "linux/arm64";
+  if (arch === "x64") return "linux/amd64";
+  throw new Error("Sandbox repair is unsupported for this host architecture.");
+}
+
+export function requireSandboxReleasePlatform(
+  releasePlatform: SandboxImageRelease["platform"],
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): void {
+  const expected = requiredSandboxReleasePlatform(platform, arch);
+  if (releasePlatform !== expected) {
+    throw new Error(`Packaged sandbox is incompatible with host ${platform}/${arch}: expected ${expected}, found ${releasePlatform}.`);
+  }
+}
+
 const ARCHIVE = "sandbox-image.tar.gz";
 const MANIFEST = "sandbox-image.json";
 function releaseDirectory(): string | null {
@@ -77,7 +104,7 @@ function readRelease(): { release: SandboxImageRelease; archive: string; lock: s
   const manifestStat = fs.lstatSync(releasePath);
   if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error("The packaged sandbox manifest is not a regular file.");
   const release = releaseSchema.parse(JSON.parse(fs.readFileSync(releasePath, "utf8")));
-  if (process.arch !== "arm64") throw new Error("The packaged sandbox is qualified only for macOS arm64.");
+  requireSandboxReleasePlatform(release.platform);
   const archive = path.join(directory, ARCHIVE);
   const archiveStat = fs.lstatSync(archive);
   if (!archiveStat.isFile() || archiveStat.isSymbolicLink()) throw new Error("The packaged sandbox archive is not a regular file.");
