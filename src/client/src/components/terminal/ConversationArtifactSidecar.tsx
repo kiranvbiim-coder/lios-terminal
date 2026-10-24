@@ -55,11 +55,23 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
     }
   }, [focus]);
 
-  useEffect(() => () => {
-    if (drag.current && separatorRef.current?.hasPointerCapture(drag.current.pointerId)) {
-      separatorRef.current.releasePointerCapture(drag.current.pointerId);
-    }
-    drag.current = null;
+  useEffect(() => {
+    const cancelWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !drag.current) return;
+      event.preventDefault();
+      const current = drag.current;
+      drag.current = null;
+      setWidth(current.startWidth);
+      if (separatorRef.current?.hasPointerCapture(current.pointerId)) separatorRef.current.releasePointerCapture(current.pointerId);
+    };
+    window.addEventListener("keydown", cancelWithEscape);
+    return () => {
+      window.removeEventListener("keydown", cancelWithEscape);
+      if (drag.current && separatorRef.current?.hasPointerCapture(drag.current.pointerId)) {
+        separatorRef.current.releasePointerCapture(drag.current.pointerId);
+      }
+      drag.current = null;
+    };
   }, []);
 
   // Reset stale load/dirty indications if a different object is selected. The
