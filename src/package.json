@@ -37,6 +37,7 @@
     "coding:runtime": "tsx script/acp_runtime_capabilities.ts",
     "acceptance:si01-isolation-v2": "tsx script/si01_isolation_v2.ts",
     "acceptance:sp01-packaged": "tsx script/sp01_packaged_journey.ts",
+    "acceptance:sp01-python-strict": "node --import tsx script/sp01_strict_python_valuation.mjs",
     "audit:prod": "node script/audit_production_dependencies.mjs",
     "audit:quant": "tsx script/audit_quant_capabilities.ts",
     "release:preflight": "tsx script/release_preflight.ts --mode=desktop",
