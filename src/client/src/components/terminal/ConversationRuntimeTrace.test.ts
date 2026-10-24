@@ -401,13 +401,13 @@ test("WS-51: expired or missing exact bindings fail closed, but denial remains p
   const missing = render([event(base)], { busy: true, onGovernedToolReview: async () => true });
   assert.match(missing, /lacks a current exact server binding or has expired/);
   assert.match(missing, /data-testid="governed-tool-allow-once"[^>]*disabled/);
-  assert.match(missing, />Deny</);
+  assert.match(missing, /\bDeny<\/button>/);
   assert.doesNotMatch(missing, /Allow for Project/);
   const validBinding = { toolId: "email.send", stepId: "s1", toolCallId: "c1",
     inputSha256: "a".repeat(64), planSha256: "b".repeat(64), chatId: 7, projectId: null };
   const expired = render([event({ ...base, reviewBinding: validBinding })], { busy: true, onGovernedToolReview: async () => true });
   assert.match(expired, /expired: allow disabled/);
-  assert.match(expired, />Deny</);
+  assert.match(expired, /\bDeny<\/button>/);
 });
 
 test("WS-51: legacy action review shows exact target, offered scope and hides approvals after terminal result", () => {
