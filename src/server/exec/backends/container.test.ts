@@ -269,6 +269,31 @@ test("immutable image, explicit local target and non-root user are required", ()
   }), Error);
 });
 
+test("core strict backend rejects mismatched local engine/socket pairs at construction", () => {
+  const base = {
+    image: IMAGE,
+    user: "10001:10001",
+    maxMemoryBytes: 512 * 1024 * 1024,
+    maxProcesses: 64,
+  };
+  assert.throws(() => createContainerExecutionBackend({
+    ...base, engine: "docker", engineTarget: PODMAN_TARGET,
+  }), /Podman socket must be paired with the Podman execution engine/);
+  assert.throws(() => createContainerExecutionBackend({
+    ...base, engine: "podman", engineTarget: "npipe:////./pipe/docker_engine",
+  }), /Podman execution cannot use a Windows Docker named-pipe/);
+
+  assert.equal(createContainerExecutionBackend({
+    ...base, engine: "docker", engineTarget: "npipe:////./pipe/docker_engine",
+  }).id, "lios.execution.docker");
+  assert.equal(createContainerExecutionBackend({
+    ...base, engine: "podman", engineTarget: PODMAN_TARGET,
+  }).id, "lios.execution.podman");
+  assert.equal(createContainerExecutionBackend({
+    ...base, engine: "docker", engineTarget: DOCKER_TARGET,
+  }).id, "lios.execution.docker");
+});
+
 test("option-shaped image references are rejected", () => {
   assert.throws(() => createContainerExecutionBackend({
     engine: "docker",

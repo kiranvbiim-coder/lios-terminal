@@ -1378,3 +1378,16 @@
   font-size: 12px;
 }
 .rich-artifact-editor .rich-document-metadata > .rich-document-evidence-note { margin-top: 10px; }
+
+/* Radix portals mount outside terminal-root; OS motion preference must reach them. */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within { scroll-behavior: auto !important; }
+  body :is([role="dialog"], [role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper], [data-state="open"], [data-state="closed"]),
+  body :is([role="dialog"], [role="menu"], [data-radix-popper-content-wrapper], [data-state="open"], [data-state="closed"])::before,
+  body :is([role="dialog"], [role="menu"], [data-radix-popper-content-wrapper], [data-state="open"], [data-state="closed"])::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

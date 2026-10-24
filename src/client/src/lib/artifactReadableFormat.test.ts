@@ -110,3 +110,12 @@ test("currencies sharing a dollar symbol retain distinct ISO identities", () => 
   assert.equal(new Set(labels).size, 4);
   for (const [index, currency] of ["USD", "CAD", "AUD", "SGD"].entries()) assert.ok(labels[index].includes(currency));
 });
+
+test("exact recorded-run tables preserve copyable identifiers and source hashes verbatim", () => {
+  const runId = "aqr_11879e18-4f59-4543-8e66-f3e754de6601";
+  const contentHash = "0123456789abcdef".repeat(4);
+  const rows = readableRows({ receipt: { runId, inputSnapshotHash: contentHash, modelPath: "portfolio/hrp" } }, { showExact: true });
+  assert.equal(rows.find(row => row.label.endsWith("Run ID"))?.text, runId);
+  assert.equal(rows.find(row => row.label.endsWith("Input snapshot hash"))?.text, contentHash);
+  assert.equal(formatReadableScalar("modelPath", "portfolio/hrp", { showExact: true }).text, "portfolio/hrp");
+});

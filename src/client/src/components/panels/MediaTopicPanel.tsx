@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Megaphone } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -22,7 +23,7 @@ function toneClass(n: number | null) {
 
 export default function MediaTopicPanel() {
   const { data: topics, isLoading: listLoading } = useMediaTopics();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("MediaTopicPanel.selected", null);
   const activeTopicId = selected ?? topics?.[0]?.topicId ?? "";
   const { data: detail, isLoading: detailLoading } = useMediaTopicDetail(activeTopicId);
   const { data: pageviews, isLoading: pageviewsLoading } = useWikipediaPageviews(detail?.wikipediaArticle ?? null);

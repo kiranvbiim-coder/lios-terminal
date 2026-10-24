@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -5,7 +6,7 @@ import {
   GitCompareArrows, Plus, RefreshCw, Save, ShieldCheck, Target,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ReceiptSummary, runAdvancedManual, type AdvancedReceipt } from "./advancedMacroForecastResearch";
+import { ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 
 type Metric = "revenue" | "ebitda" | "ebit" | "eps" | "free_cash_flow" | "gross_margin" | "operating_margin" | "net_margin" | "capex" | "price_target" | "recommendation_score";
 type View = "overview" | "revisions" | "benchmarks" | "blind_spots" | "divergence" | "input";
@@ -74,10 +75,11 @@ function formatNumber(value: number | null | undefined, unit?: string, currency?
 // history), not a fabricated per-analyst breakdown. internalEstimate and
 // marketPrice remain explicit analyst-supplied inputs.
 function ConsensusDivergenceRunner({ series }: { series: Analysis["series"] }) {
-  const [selectedKey, setSelectedKey] = useState("");
-  const [internalEstimate, setInternalEstimate] = useState("");
-  const [marketPrice, setMarketPrice] = useState("");
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const [selectedKey, setSelectedKey] = useTerminalArtifactState("ConsensusDivergenceRunner.selectedKey", "");
+  const [internalEstimate, setInternalEstimate] = useTerminalArtifactState("ConsensusDivergenceRunner.internalEstimate", "");
+  const [marketPrice, setMarketPrice] = useTerminalArtifactState("ConsensusDivergenceRunner.marketPrice", "");
+  const nativeWorkflow = useAdvancedWorkflow("research", "consensus-divergence");
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const item = series.find((entry) => entry.key === selectedKey) ?? null;
@@ -89,9 +91,9 @@ function ConsensusDivergenceRunner({ series }: { series: Analysis["series"] }) {
     if (!Number.isFinite(internal)) { setError("Provide a finite internal estimate."); return; }
     const marketValue = marketPrice.trim() === "" ? undefined : Number(marketPrice);
     if (marketValue !== undefined && !Number.isFinite(marketValue)) { setError("Market price must be finite, or left blank."); return; }
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setError(null); 
     try {
-      setResult(await runAdvancedManual("research", "consensus-divergence", { analystEstimates, internalEstimate: internal, ...(marketValue !== undefined ? { marketPrice: marketValue } : {}) }));
+      await nativeWorkflow.run({ analystEstimates, internalEstimate: internal, ...(marketValue !== undefined ? { marketPrice: marketValue } : {}) });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Consensus divergence unavailable."); }
     finally { setLoading(false); }
   };
@@ -116,38 +118,38 @@ function signedPct(value: number | null | undefined) { return value == null ? "U
 
 export default function ConsensusIntelligencePanel({ symbol, role }: { symbol: string; role: string }) {
   const canAuthor = role === "internal_admin" || role === "internal_analyst";
-  const [activeSymbol, setActiveSymbol] = useState((symbol || "AAPL").toUpperCase());
-  const [symbolInput, setSymbolInput] = useState(activeSymbol);
-  const [view, setView] = useState<View>("overview");
+  const [activeSymbol, setActiveSymbol] = useTerminalArtifactSymbol((symbol || "AAPL").toUpperCase());
+  const [symbolInput, setSymbolInput] = useTerminalArtifactState("ConsensusIntelligencePanel.symbolInput", activeSymbol);
+  const [view, setView] = useTerminalArtifactState<View>("ConsensusIntelligencePanel.view", "overview");
   const [message, setMessage] = useState("");
-  const [metric, setMetric] = useState<Metric>("eps");
-  const [fiscalPeriod, setFiscalPeriod] = useState("FY2027");
-  const [unit, setUnit] = useState("per_share");
-  const [currency, setCurrency] = useState("USD");
-  const [estimateAsOf, setEstimateAsOf] = useState(new Date().toISOString().slice(0, 10));
-  const [sourceType, setSourceType] = useState("user_supplied");
-  const [provider, setProvider] = useState("User supplied");
-  const [sourceName, setSourceName] = useState("Analyst-provided estimate set");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [observations, setObservations] = useState("");
-  const [mean, setMean] = useState("");
-  const [median, setMedian] = useState("");
-  const [high, setHigh] = useState("");
-  const [low, setLow] = useState("");
-  const [contributors, setContributors] = useState("");
-  const [upward, setUpward] = useState("");
-  const [downward, setDownward] = useState("");
-  const [unchanged, setUnchanged] = useState("");
-  const [benchmarkKind, setBenchmarkKind] = useState("company_guidance");
-  const [benchmarkValue, setBenchmarkValue] = useState("");
-  const [benchmarkLow, setBenchmarkLow] = useState("");
-  const [benchmarkHigh, setBenchmarkHigh] = useState("");
-  const [effectiveAt, setEffectiveAt] = useState(new Date().toISOString().slice(0, 10));
-  const [modelName, setModelName] = useState("");
-  const [modelVersion, setModelVersion] = useState("");
-  const [assumption, setAssumption] = useState("");
-  const [investigationId, setInvestigationId] = useState("");
-  const [evidenceIds, setEvidenceIds] = useState("");
+  const [metric, setMetric] = useTerminalArtifactState<Metric>("ConsensusIntelligencePanel.metric", "eps");
+  const [fiscalPeriod, setFiscalPeriod] = useTerminalArtifactState("ConsensusIntelligencePanel.fiscalPeriod", "FY2027");
+  const [unit, setUnit] = useTerminalArtifactState("ConsensusIntelligencePanel.unit", "per_share");
+  const [currency, setCurrency] = useTerminalArtifactState("ConsensusIntelligencePanel.currency", "USD");
+  const [estimateAsOf, setEstimateAsOf] = useTerminalArtifactState("ConsensusIntelligencePanel.estimateAsOf", new Date().toISOString().slice(0, 10));
+  const [sourceType, setSourceType] = useTerminalArtifactState("ConsensusIntelligencePanel.sourceType", "user_supplied");
+  const [provider, setProvider] = useTerminalArtifactState("ConsensusIntelligencePanel.provider", "User supplied");
+  const [sourceName, setSourceName] = useTerminalArtifactState("ConsensusIntelligencePanel.sourceName", "Analyst-provided estimate set");
+  const [sourceUrl, setSourceUrl] = useTerminalArtifactState("ConsensusIntelligencePanel.sourceUrl", "");
+  const [observations, setObservations] = useTerminalArtifactState("ConsensusIntelligencePanel.observations", "");
+  const [mean, setMean] = useTerminalArtifactState("ConsensusIntelligencePanel.mean", "");
+  const [median, setMedian] = useTerminalArtifactState("ConsensusIntelligencePanel.median", "");
+  const [high, setHigh] = useTerminalArtifactState("ConsensusIntelligencePanel.high", "");
+  const [low, setLow] = useTerminalArtifactState("ConsensusIntelligencePanel.low", "");
+  const [contributors, setContributors] = useTerminalArtifactState("ConsensusIntelligencePanel.contributors", "");
+  const [upward, setUpward] = useTerminalArtifactState("ConsensusIntelligencePanel.upward", "");
+  const [downward, setDownward] = useTerminalArtifactState("ConsensusIntelligencePanel.downward", "");
+  const [unchanged, setUnchanged] = useTerminalArtifactState("ConsensusIntelligencePanel.unchanged", "");
+  const [benchmarkKind, setBenchmarkKind] = useTerminalArtifactState("ConsensusIntelligencePanel.benchmarkKind", "company_guidance");
+  const [benchmarkValue, setBenchmarkValue] = useTerminalArtifactState("ConsensusIntelligencePanel.benchmarkValue", "");
+  const [benchmarkLow, setBenchmarkLow] = useTerminalArtifactState("ConsensusIntelligencePanel.benchmarkLow", "");
+  const [benchmarkHigh, setBenchmarkHigh] = useTerminalArtifactState("ConsensusIntelligencePanel.benchmarkHigh", "");
+  const [effectiveAt, setEffectiveAt] = useTerminalArtifactState("ConsensusIntelligencePanel.effectiveAt", new Date().toISOString().slice(0, 10));
+  const [modelName, setModelName] = useTerminalArtifactState("ConsensusIntelligencePanel.modelName", "");
+  const [modelVersion, setModelVersion] = useTerminalArtifactState("ConsensusIntelligencePanel.modelVersion", "");
+  const [assumption, setAssumption] = useTerminalArtifactState("ConsensusIntelligencePanel.assumption", "");
+  const [investigationId, setInvestigationId] = useTerminalArtifactState("ConsensusIntelligencePanel.investigationId", "");
+  const [evidenceIds, setEvidenceIds] = useTerminalArtifactState("ConsensusIntelligencePanel.evidenceIds", "");
 
   useEffect(() => { if (symbol) { setActiveSymbol(symbol.toUpperCase()); setSymbolInput(symbol.toUpperCase()); } }, [symbol]);
   const query = `/api/consensus/analysis?symbol=${encodeURIComponent(activeSymbol)}`;

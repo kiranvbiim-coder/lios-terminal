@@ -236,7 +236,7 @@ def runtime_inventory():
 
     packages = {}
     for package in [
-        "fastapi", "uvicorn", "numpy", "scipy", "statsmodels", "pandas",
+        "fastapi", "uvicorn", "numpy", "scipy", "pydantic", "statsmodels", "pandas",
         "linearmodels", "QuantLib", "arch", "ruptures", "scikit-learn",
         "networkx", "pymoo", "SALib", "asteval", "edgartools", "yfinance",
     ]:
@@ -261,6 +261,19 @@ def resolve_route(route: EngineRoute):
         raise EngineUnavailableError(
             f"Numerical engine {route.module} is unavailable: required pack {missing} is not installed or loadable."
         ) from exc
+
+
+def input_contract(body):
+    """Resolve only the canonical allowlisted request model; never execute it."""
+    if not isinstance(body, dict) or set(body) != {"route"}:
+        raise EngineInputError("Input contract requires exactly a canonical route.")
+    route = ROUTES_BY_PATH.get(body["route"]) if isinstance(body["route"], str) else None
+    if route is None:
+        raise EngineInputError("Unknown numerical route.")
+    request_model, _, _ = resolve_route(route)
+    schema = request_model.model_json_schema()
+    return {"route": body["route"], "fields": list(schema.get("properties", {})),
+            "required": schema.get("required", [])}
 
 
 def _require_finite(value):

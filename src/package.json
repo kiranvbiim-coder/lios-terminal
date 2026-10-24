@@ -37,6 +37,7 @@
     "coding:runtime": "tsx script/acp_runtime_capabilities.ts",
     "acceptance:si01-isolation-v2": "tsx script/si01_isolation_v2.ts",
     "acceptance:sp01-packaged": "tsx script/sp01_packaged_journey.ts",
+    "acceptance:sp01-python-strict": "node --import tsx script/sp01_strict_python_valuation.mjs",
     "audit:prod": "node script/audit_production_dependencies.mjs",
     "audit:quant": "tsx script/audit_quant_capabilities.ts",
     "release:preflight": "tsx script/release_preflight.ts --mode=desktop",
@@ -104,7 +105,7 @@
     "test:p12": "node --import tsx --test shared/multimodalContracts.test.ts server/p12VoiceRuntime.test.ts server/voiceProviderSetup.test.ts server/p12VoicePack.test.ts server/p12Multimodal.test.ts server/projectAttachmentContent.test.ts server/projectAttachmentService.test.ts server/projectAttachmentRestart.test.ts server/projectAttachmentRoutes.test.ts server/runtimeFoundation.test.ts server/runtimeProviders.test.ts server/runtimeMode.test.ts",
     "acceptance:p12": "tsx script/validate_p12_voice_multimodal_acceptance.ts",
     "benchmark:p12:whisper": "tsx script/benchmark_p12_whisper_cpp.ts",
-    "test:ux": "node --import tsx --test client/src/lib/visualEnvironment.test.ts client/src/lib/terminalUxPreferences.test.ts client/src/lib/terminalThemeLock.test.ts client/src/lib/signatureEntryContract.test.ts client/src/lib/firstUseJourney.test.ts client/src/lib/dockviewWorkspaceState.test.ts client/src/lib/workspaceShellConvergence.test.ts client/src/lib/terminalConvergenceContract.test.ts shared/projectContracts.test.ts shared/conversationRuntime.test.ts",
+    "test:ux": "node --import tsx --test client/src/lib/visualEnvironment.test.ts client/src/lib/terminalUxPreferences.test.ts client/src/lib/terminalThemeLock.test.ts client/src/lib/firstUseJourney.test.ts client/src/lib/dockviewWorkspaceState.test.ts client/src/lib/workspaceShellConvergence.test.ts client/src/lib/terminalConvergenceContract.test.ts shared/projectContracts.test.ts shared/conversationRuntime.test.ts",
     "acceptance:ux": "npm run validate:visual-environments && tsx script/validate_ux_flagship_acceptance.ts",
     "test:p13": "node --import tsx --test shared/pluginSdk.test.ts server/p13PluginManager.test.ts server/p13PluginHost.test.ts server/p13PluginBroker.test.ts server/p13PluginNetworkBroker.test.ts server/p13McpServer.test.ts server/p13PluginRuntime.test.ts",
     "acceptance:p13": "tsx script/validate_p13_plugin_sdk_acceptance.ts",
@@ -123,10 +124,12 @@
     "acceptance:flagship:packaged": "tsx script/validate_packaged_flagship_evidence.ts",
     "test:si01-offline": "node --import tsx --test server/si01OfflineBaseline.test.ts server/si01OfflineBaseline.contract.test.ts server/si01-offline-evidence.test.ts server/sessionRestoration.test.ts server/exec/execution-journal.test.ts server/backupArchive.test.ts server/backupService.test.ts",
     "acceptance:si01-offline-v2": "tsx script/si01_offline_v2.ts",
+    "test:sandbox-quant-smoke": "python -m unittest discover -s sandbox-image -p test_*_smoke.py",
     "acceptance:sp02-packaged": "tsx script/sp02_packaged_journey.ts",
     "test:sp02-contract": "node --import tsx --test script/sp02_packaged_contract.test.ts script/sp02_resume_reapproval_contract.test.ts",
     "test:sp03-contract": "node --import tsx --test script/sp03_packaged_contract.test.ts script/sp03_packaged_inspection.test.ts",
-    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts"
+    "acceptance:sp03-packaged": "tsx script/sp03_packaged_journey.ts",
+    "acceptance:si04-packaged": "node script/si04_packaged_acceptance.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
@@ -139,6 +142,7 @@
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@noble/hashes": "2.2.0",
+    "@modelcontextprotocol/client": "2.3.1",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.3",
@@ -225,6 +229,7 @@
     "ws": "^8.21.3",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz",
     "zod": "^3.24.2",
+    "zod-to-json-schema": "3.24.6",
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
@@ -285,7 +290,9 @@
       "category": "public.app-category.finance",
       "icon": "build-resources/icon.icns",
       "hardenedRuntime": true,
-      "signIgnore": [".*/native-runtime-dist/.*"],
+      "signIgnore": [
+        ".*/native-runtime-dist/.*"
+      ],
       "gatekeeperAssess": false,
       "target": [
         "dmg",
@@ -328,7 +335,10 @@
       "desktopRequestTrust.cjs",
       "preload.cjs",
       "desktopSecretCustody.cjs",
+      "desktopArtifactDraftRecovery.cjs",
+      "nativeDraftGrant.cjs",
       "desktopIpcSecurity.cjs",
+      "desktopUnicodePdf.cjs",
       "desktopLogRedaction.cjs",
       "desktopBackupRestore.cjs",
       "desktopPythonSidecar.cjs",

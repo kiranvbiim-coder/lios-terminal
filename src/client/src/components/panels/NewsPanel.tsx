@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -18,13 +19,13 @@ function relativeTime(iso: string) {
 }
 
 export default function NewsPanel({ symbol }: Props) {
-  const [sourceFilter, setSourceFilter] = useState("ALL");
-  const [sentimentFilter, setSentimentFilter] = useState("ALL");
-  const [query, setQuery] = useState("");
-  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [sourceFilter, setSourceFilter] = useTerminalArtifactState("NewsPanel.sourceFilter", "ALL");
+  const [sentimentFilter, setSentimentFilter] = useTerminalArtifactState("NewsPanel.sentimentFilter", "ALL");
+  const [query, setQuery] = useTerminalArtifactState("NewsPanel.query", "");
+  const [selectedUrl, setSelectedUrl] = useTerminalArtifactState<string | null>("NewsPanel.selectedUrl", null);
+  const [page, setPage] = useTerminalArtifactState("NewsPanel.page", 1);
+  const [from, setFrom] = useTerminalArtifactState("NewsPanel.from", "");
+  const [to, setTo] = useTerminalArtifactState("NewsPanel.to", "");
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
     queryKey: ["/api/finance/news", symbol ?? "market", query, page, from, to],
@@ -61,20 +62,15 @@ export default function NewsPanel({ symbol }: Props) {
   }, [news, sentimentFilter, sourceFilter]);
 
   useEffect(() => {
-    if (!filtered.length) {
-      setSelectedUrl(null);
-      return;
-    }
-
-    if (!selectedUrl || !filtered.some((item) => item.url === selectedUrl)) {
-      setSelectedUrl(filtered[0].url);
-    }
-  }, [filtered, selectedUrl]);
+    if (!newsQuery.isSuccess || newsQuery.isFetching || newsQuery.isError || selectedUrl || !filtered.length) return;
+    setSelectedUrl(filtered[0].url);
+  }, [filtered, selectedUrl, newsQuery.isSuccess, newsQuery.isFetching, newsQuery.isError]);
 
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
 
+  const missingSelection = selectedUrl !== null && !selectedItem && newsQuery.isSuccess && !newsQuery.isFetching;
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border bg-[#070707]">
@@ -182,7 +178,7 @@ export default function NewsPanel({ symbol }: Props) {
         <div className="min-h-0 min-w-0 overflow-hidden">
           <div className="h-full min-w-0 overflow-y-auto scrollbar-thin bg-[#050505]" data-analytical-role="evidence">
             {!selectedItem ? (
-              <div className="h-full flex items-center justify-center font-terminal text-xs text-muted-foreground">SELECT A STORY TO READ THROUGH</div>
+              <div role="status" className="h-full flex items-center justify-center font-terminal text-xs text-muted-foreground">{missingSelection ? "The saved story is unavailable in the current source/filter results. Its reference is preserved; choose another story explicitly." : newsQuery.isError ? "News source unavailable. Saved story selection is unchanged." : "SELECT A STORY TO READ THROUGH"}</div>
             ) : articleLoading ? (
               <div className="p-5 space-y-3">
                 <Skeleton className="h-7 w-2/3 bg-border" />

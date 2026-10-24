@@ -1,3 +1,4 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { Plus, X, Bell } from "lucide-react";
@@ -62,27 +63,28 @@ function getAllowedRanges(interval: ChartInterval): ReadonlyArray<(typeof RANGES
 
 
 function ChartPanel({ symbol, onSymbol }: Props) {
+  const terminal = useTerminalArtifactContext();
   const symbolIsCryptoCandidate = symbol.toUpperCase().endsWith("-USD");
-  const [range, setRange] = useState<typeof RANGES[number]>(symbolIsCryptoCandidate ? "1D" : "1Y");
-  const [interval, setInterval] = useState<ChartInterval>(symbolIsCryptoCandidate ? "5m" : "1d");
-  const [overlays, setOverlays] = useState<Set<(typeof OVERLAYS)[number]>>(new Set<(typeof OVERLAYS)[number]>(["SMA20"]));
-  const [oscillator, setOscillator] = useState<(typeof OSCILLATORS)[number]>("none");
-  const [chartType, setChartType] = useState<typeof CHART_TYPES[number]>("LINE");
-  const [symInput, setSymInput] = useState(symbol);
-  const [compareInput, setCompareInput] = useState("");
-  const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
-  const [indicatorParams, setIndicatorParams] = useState<Record<string, number>>({ ...CHART_INDICATOR_DEFAULTS });
+  const [range, setRange] = useTerminalArtifactState<typeof RANGES[number]>("chart.range", symbolIsCryptoCandidate ? "1D" : "1Y");
+  const [interval, setInterval] = useTerminalArtifactState<ChartInterval>("chart.interval", symbolIsCryptoCandidate ? "5m" : "1d");
+  const [overlays, setOverlays] = useTerminalArtifactState<Set<(typeof OVERLAYS)[number]>>("chart.overlays", new Set<(typeof OVERLAYS)[number]>(["SMA20"]));
+  const [oscillator, setOscillator] = useTerminalArtifactState<(typeof OSCILLATORS)[number]>("chart.oscillator", "none");
+  const [chartType, setChartType] = useTerminalArtifactState<typeof CHART_TYPES[number]>("chart.chartType", "LINE");
+  const [symInput, setSymInput] = useTerminalArtifactState("chart.symInput", symbol);
+  const [compareInput, setCompareInput] = useTerminalArtifactState("chart.compareInput", "");
+  const [compareSymbols, setCompareSymbols] = useTerminalArtifactState<string[]>("chart.compareSymbols", []);
+  const [indicatorParams, setIndicatorParams] = useTerminalArtifactState<Record<string, number>>("chart.indicatorParams", { ...CHART_INDICATOR_DEFAULTS });
   const [indicatorSettingsOpen, setIndicatorSettingsOpen] = useState(false);
-  const [chartLayout, setChartLayout] = useState<1 | 2 | 4>(1);
-  const [activeScenario, setActiveScenario] = useState<TerminalScenario | null>(() => getActiveScenario());
+  const [chartLayout, setChartLayout] = useTerminalArtifactState<1 | 2 | 4>("chart.chartLayout", 1);
+  const [activeScenario, setActiveScenario] = useState<TerminalScenario | null>(() => terminal ? null : getActiveScenario());
   const [chartDrawings, setChartDrawings] = useState<ChartDrawing[]>([]);
-  const [chartAlerts, setChartAlerts] = useState<ChartAlert[]>(() => loadChartAlerts());
+  const [chartAlerts, setChartAlerts] = useTerminalArtifactState<ChartAlert[]>("chart.alerts", () => terminal ? [] : loadChartAlerts());
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
-  const [alertPrice, setAlertPrice] = useState("");
-  const [alertOperator, setAlertOperator] = useState<ChartAlertOperator>("above");
-  const [dynamicSeriesId, setDynamicSeriesId] = useState(DYNAMIC_CHART_FIELDS[0]?.id ?? "");
-  const [dynamicSeriesIds, setDynamicSeriesIds] = useState<string[]>(() => loadDynamicSeries(symbol));
-  useEffect(() => subscribeScenarioUniverse((_scenarios, active) => setActiveScenario(active)), []);
+  const [alertPrice, setAlertPrice] = useTerminalArtifactState("chart.alertPrice", "");
+  const [alertOperator, setAlertOperator] = useTerminalArtifactState<ChartAlertOperator>("chart.alertOperator", "above");
+  const [dynamicSeriesId, setDynamicSeriesId] = useTerminalArtifactState("chart.dynamicSeriesId", DYNAMIC_CHART_FIELDS[0]?.id ?? "");
+  const [dynamicSeriesIds, setDynamicSeriesIds] = useTerminalArtifactState<string[]>("chart.dynamicSeriesIds", () => terminal ? [] : loadDynamicSeries(symbol));
+  useEffect(() => { if (!terminal) return subscribeScenarioUniverse((_scenarios, active) => setActiveScenario(active)); }, []);
   const presetLoadedRef = useRef(false);
 
   const localIndexSymbol = useMemo(() => {
@@ -98,8 +100,9 @@ function ChartPanel({ symbol, onSymbol }: Props) {
   const { data: quote } = useQuote(symbol);
   const { data: news = [] } = useNews(symbol);
   const isCrypto = quote?.exchange === "CRYPTO" || symbolIsCryptoCandidate;
-  useEffect(() => { saveChartAlerts(chartAlerts); }, [chartAlerts]);
+  useEffect(() => { if (!terminal) saveChartAlerts(chartAlerts); }, [chartAlerts]);
   useEffect(() => {
+    if (terminal?.readOnly) return;
     const currentPrice = quote?.price;
     if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice)) return;
     const pending = chartAlerts.filter(alert => alert.symbol === symbol.toUpperCase() && !alert.lastTriggeredAt && chartAlertTriggered(alert, currentPrice));
@@ -120,9 +123,10 @@ function ChartPanel({ symbol, onSymbol }: Props) {
   useEffect(() => {
     setSymInput(symbol);
     setCompareSymbols((current) => current.filter((entry) => entry !== symbol));
-    setDynamicSeriesIds(loadDynamicSeries(symbol));
+    if (!terminal) setDynamicSeriesIds(loadDynamicSeries(symbol));
   }, [symbol]);
   useEffect(() => {
+    if (terminal) return;
     presetLoadedRef.current = false;
     const preset = loadChartWorkspacePreset(symbol);
     if (preset) {
@@ -130,6 +134,7 @@ function ChartPanel({ symbol, onSymbol }: Props) {
       setInterval(preset.interval);
       setOverlays(new Set(OVERLAYS.filter(item => preset.overlays.includes(item))));
       setOscillator(preset.oscillator);
+      setChartType(preset.chartType);
       setCompareSymbols(preset.compareSymbols.slice(0, 3));
       setDynamicSeriesIds(preset.dataFabricSeriesIds.slice(0, 24));
       setIndicatorParams({ ...CHART_INDICATOR_DEFAULTS, ...preset.indicatorParams });
@@ -139,7 +144,7 @@ function ChartPanel({ symbol, onSymbol }: Props) {
   }, [symbol]);
 
   useEffect(() => {
-    if (!presetLoadedRef.current) return;
+    if (terminal || !presetLoadedRef.current) return;
     saveChartWorkspacePreset(symbol, { range, interval, overlays: Array.from(overlays), oscillator, chartType, compareSymbols, dataFabricSeriesIds: dynamicSeriesIds, indicatorParams, chartLayout });
   }, [chartLayout, chartType, compareSymbols, dynamicSeriesIds, indicatorParams, interval, overlays, oscillator, range, symbol]);
 
@@ -273,13 +278,13 @@ function ChartPanel({ symbol, onSymbol }: Props) {
     if (!series || dynamicSeriesIds.includes(series.fieldId)) return;
     const next = [...dynamicSeriesIds, series.fieldId];
     setDynamicSeriesIds(next);
-    window.localStorage.setItem(`lios.chart.fields.${symbol.toUpperCase()}`, JSON.stringify(next));
+    if (!terminal) window.localStorage.setItem(`lios.chart.fields.${symbol.toUpperCase()}`, JSON.stringify(next));
   };
 
   const removeDynamicSeries = (fieldId: string) => {
     const next = dynamicSeriesIds.filter((id) => id !== fieldId);
     setDynamicSeriesIds(next);
-    window.localStorage.setItem(`lios.chart.fields.${symbol.toUpperCase()}`, JSON.stringify(next));
+    if (!terminal) window.localStorage.setItem(`lios.chart.fields.${symbol.toUpperCase()}`, JSON.stringify(next));
   };
 
   const allowedRanges = getAllowedRanges(effectiveInterval);

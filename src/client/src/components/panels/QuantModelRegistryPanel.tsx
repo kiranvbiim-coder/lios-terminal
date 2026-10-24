@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, Database, FlaskConical, Search } from "lucide-react";
@@ -31,11 +32,11 @@ function label(value: string) {
 }
 
 export default function QuantModelRegistryPanel() {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"all" | QuantModelStatus>("all");
-  const [program, setProgram] = useState("all");
-  const [category, setCategory] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [search, setSearch] = useTerminalArtifactState("QuantModelRegistryPanel.search", "");
+  const [status, setStatus] = useTerminalArtifactState<"all" | QuantModelStatus>("QuantModelRegistryPanel.status", "all");
+  const [program, setProgram] = useTerminalArtifactState("QuantModelRegistryPanel.program", "all");
+  const [category, setCategory] = useTerminalArtifactState("QuantModelRegistryPanel.category", "all");
+  const [expanded, setExpanded] = useTerminalArtifactState<string | null>("QuantModelRegistryPanel.expanded", null);
   const { data, isLoading, error } = useQuery<RegistryResponse>({ queryKey: ["/api/quant/registry"] });
 
   const categories = useMemo(() => Object.keys(data?.summary.byCategory ?? {}).sort(), [data]);

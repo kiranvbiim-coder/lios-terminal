@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useMarketGainers, useQuotes } from "@/lib/useFinance";
 import { BarChart2, AlertTriangle, Plus, X } from "lucide-react";
@@ -40,8 +41,8 @@ function squeezeScore(sf: number, dtc: number, br: number, trend: string, chgPct
 }
 
 export default function ShortInterestPanel({ onSymbol }: Props) {
-  const [customSyms, setCustomSyms] = useState<string[]>([]);
-  const [tickerInput, setTickerInput] = useState("");
+  const [customSyms, setCustomSyms] = useTerminalArtifactState<string[]>("ShortInterestPanel.customSyms", []);
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("ShortInterestPanel.tickerInput", "");
   const ALL_SYMS = useMemo(() => [...BASE_SYMS, ...customSyms], [customSyms]);
 
   const addTicker = () => {
@@ -54,7 +55,7 @@ export default function ShortInterestPanel({ onSymbol }: Props) {
   const removeTicker = (sym: string) => setCustomSyms((prev) => prev.filter((s) => s !== sym));
 
   const { data: quotes = [] } = useQuotes(ALL_SYMS);
-  const [sortBy, setSortBy] = useState<"squeeze"|"shortFloat"|"dtc">("squeeze");
+  const [sortBy, setSortBy] = useTerminalArtifactState<"squeeze"|"shortFloat"|"dtc">("ShortInterestPanel.sortBy", "squeeze");
 
   const qMap = useMemo(() => new Map(quotes.map(q => [q.symbol, q])), [quotes]);
 

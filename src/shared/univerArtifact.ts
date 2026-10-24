@@ -133,6 +133,9 @@ export function fromUniverWorkbookSnapshot(snapshot: IWorkbookData, original: Sp
         if (!cell) continue;
         const column = Number(columnText);
         if (!Number.isInteger(column) || column < 0) throw new Error("Invalid worksheet column index.");
+        if (row >= (sheet.rowCount ?? prior?.rowCount ?? 100) || column >= (sheet.columnCount ?? prior?.columnCount ?? 26)) {
+          throw new Error(`Univer cell at row ${row + 1}, column ${column + 1} exceeds worksheet dimensions; no P4 revision was saved.`);
+        }
         const ref = reference(row, column);
         const priorCell = prior?.cells[ref];
         const style = typeof cell.s === "string" ? snapshot.styles[cell.s] : cell.s;

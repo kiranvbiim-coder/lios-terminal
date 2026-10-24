@@ -285,6 +285,11 @@ export const conversationRequestSchema = z.object({
     selection: conversationSelectionSchema.nullable().optional(),
     personalFinance: p6PersonalFinanceRequestSchema.optional(),
     nodeFinancePolicy: remoteNodePlacementPolicySchema.options[1].optional(),
+    terminalArtifact: z.object({
+      artifactId: z.string().regex(/^artifact:[0-9a-f-]{36}$/i),
+      version: z.number().int().positive(),
+      contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict().optional(),
   }).strict().optional(),
 }).strict();
 export type ConversationRequest = z.infer<typeof conversationRequestSchema>;
@@ -381,6 +386,17 @@ export const conversationRuntimeEventSchema = z.discriminatedUnion("type", [
     replaySafe: z.boolean().optional(),
     externalSideEffect: z.boolean().optional(),
     blastRadius: z.string().trim().min(1).max(500).optional(),
+    /** Safe exact binding identities from the canonical server-owned pending grant.
+     * Never include raw tool arguments, credentials, provider URLs or target payloads. */
+    reviewBinding: z.object({
+      toolId: z.string().trim().min(1).max(300),
+      stepId: z.string().trim().min(1).max(300),
+      toolCallId: z.string().trim().min(1).max(300),
+      inputSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      planSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      chatId: z.number().int().positive().nullable(),
+      projectId: z.number().int().positive().nullable(),
+    }).strict().optional(),
     choices: z.array(governedToolReviewDecisionSchema).min(1).max(3),
     expiresAt: z.string().datetime().nullable(),
     message: z.string().max(1_000),

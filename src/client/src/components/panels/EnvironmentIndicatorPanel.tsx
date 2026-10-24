@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Leaf } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -22,7 +23,7 @@ function pctClass(n: number | null) {
 
 export default function EnvironmentIndicatorPanel() {
   const { data: indicators, isLoading: listLoading } = useEnvironmentIndicators();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("EnvironmentIndicatorPanel.selected", null);
   const activeSeriesId = selected ?? indicators?.[0]?.seriesId ?? "";
   const { data: detail, isLoading: detailLoading } = useEnvironmentIndicatorDetail(activeSeriesId);
 

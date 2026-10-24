@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, type ReactNode } from "react";
 import type { ViewMode } from "@/lib/terminalTypes";
 import FixedIncomeLegacyPanel from "./FixedIncomeLegacyPanel";
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function FixedIncomePanel({ onSymbol, onNav }: Props) {
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useTerminalArtifactState<Section>("FixedIncomePanel.section", "overview");
   const definition = WORKSTATION_DEFINITIONS.fixedIncome;
   const navigate = onNav ?? (() => undefined);
 

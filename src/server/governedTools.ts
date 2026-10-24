@@ -1,4 +1,5 @@
 import type { ProcessSupervisor } from "./exec/types";
+import type { McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 /**
  * SI-02.02 / SI-02.04 - the single governed tool registry and permission decision.
  *
@@ -13,6 +14,7 @@ import type { ProcessSupervisor } from "./exec/types";
  * - The canonical grant authority consumes authorization atomically before invocation.
  */
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ConversationSourceScope } from "@shared/sourceScope";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
 import type { ArtifactContent } from "@shared/artifactContracts";
@@ -25,6 +27,17 @@ import type { ConsumedGovernedToolAuthorization } from "./conversationGrantStore
 
 export type ToolAccessClass = "read" | "write";
 export type ToolSideEffect = "none" | "internal_write" | "external";
+
+const planningSchemas = new WeakMap<z.ZodTypeAny, string>();
+
+/** Project the existing validator, never a separately maintained planner schema. */
+export function governedToolPlanningSchema(schema: z.ZodTypeAny): string {
+  const cached = planningSchemas.get(schema);
+  if (cached !== undefined) return cached;
+  const serialized = JSON.stringify(zodToJsonSchema(schema, { target: "jsonSchema7", effectStrategy: "input", pipeStrategy: "input" }));
+  planningSchemas.set(schema, serialized);
+  return serialized;
+}
 
 export interface GovernedToolCall {
   /** Origin is server-owned. Model/request content must never choose its permission path. */
@@ -47,6 +60,7 @@ export interface GovernedToolCall {
   researchReadDocuments?: P7ProjectDocument[];
   /** Selected P4 targets from the user's Working Context; ownership/version is resolved by P4, never model arguments. */
   activeArtifactRefs?: string[];
+  terminalArtifact?: { artifactId: string; version: number; contentHash: string };
   /** Server-owned Project resource transmission posture; false means resource content must not be disclosed. */
   resourceTransmissionAllowed?: boolean;
   stepId?: string;
@@ -67,6 +81,8 @@ export interface GovernedToolCall {
   afterExternalDispatchCommitted?: () => Promise<void>;
   /** Server-owned, bounded progress only; never a permission or dispatch signal. */
   reportExternalDispatchStatus?: (message: string) => Promise<void>;
+  /** Server-only, per-run ephemeral MCP evidence collector; never model/client input. */
+  recordExternalMcpObservation?: (capture: McpAgentEvidenceCapture) => void;
   role?: string;
   /** Server-held canonical authorization. Request/model/body objects cannot manufacture authority. */
   authorization?: unknown;

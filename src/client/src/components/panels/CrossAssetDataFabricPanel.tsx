@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Database, FileSearch, RefreshCw, TriangleAlert, Upload } from "lucide-react";
 
@@ -14,8 +15,10 @@ const CLASSES: Array<{ value: DataClass; label: string }> = [
 ];
 
 export default function CrossAssetDataFabricPanel({ symbol }: { symbol?: string }) {
-  const [dataClass, setDataClass] = useState<DataClass>("estimates"); const [entityKey, setEntityKey] = useState((symbol || "AAPL").toUpperCase()); const [organizationId, setOrganizationId] = useState("");
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]); const [selectedId, setSelectedId] = useState<string | null>(null); const [artifacts, setArtifacts] = useState<Artifact[]>([]); const [scan, setScan] = useState<unknown>(null);
+  const [dataClass, setDataClass] = useTerminalArtifactState<DataClass>("CrossAssetDataFabricPanel.dataClass", "estimates");
+  const [entityKey, setEntityKey] = useTerminalArtifactState("CrossAssetDataFabricPanel.entityKey", (symbol || "AAPL").toUpperCase());
+  const [organizationId, setOrganizationId] = useTerminalArtifactState("CrossAssetDataFabricPanel.organizationId", "");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]); const [selectedId, setSelectedId] = useTerminalArtifactState<string | null>("CrossAssetDataFabricPanel.selectedId", null); const [artifacts, setArtifacts] = useState<Artifact[]>([]); const [scan, setScan] = useState<unknown>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const fileRef = useRef<HTMLInputElement>(null); const selected = snapshots.find((row) => row.id === selectedId) ?? snapshots[0] ?? null;
   const scope = organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : "";
   const load = useCallback(async () => { try { setError(null); const [rows, files] = await Promise.all([json<Snapshot[]>(`/api/alternative-data/${dataClass}?limit=100${scope}`), json<Artifact[]>("/api/columnar-artifacts")]); setSnapshots(rows); setArtifacts(files); setSelectedId((current) => rows.some((row) => row.id === current) ? current : rows[0]?.id ?? null); } catch (cause) { setError(cause instanceof Error ? cause.message : "Cross-asset fabric unavailable."); } }, [dataClass, scope]);

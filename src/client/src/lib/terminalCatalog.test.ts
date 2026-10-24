@@ -16,6 +16,12 @@ test("catalog respects internal and client audience boundaries", () => {
   assert.equal(searchTerminalCapabilities("my data", false).some((item) => item.view === "clientdata"), true);
 });
 
+test("core ranking never makes an unrelated tool appear as a search result", () => {
+  assert.deepEqual(searchTerminalCapabilities("nonexistent-super-tool", false), []);
+  assert.deepEqual(searchTerminalCapabilities("nonexistent-super-tool", true), []);
+  assert.ok(searchTerminalCapabilities("intrinsic value", false).some(item => item.view === "valuation"));
+});
+
 test("empty search returns hero capabilities instead of the full catalog", () => {
   const results = searchTerminalCapabilities("", false);
   assert.ok(results.length > 0);

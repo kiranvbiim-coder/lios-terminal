@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Database, FileSearch, RefreshCw, ShieldCheck, TriangleAlert, Upload } from "lucide-react";
 import type { UniverseMember, UniversePayload } from "@shared/pointInTimeUniverse";
@@ -14,9 +15,13 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function UniverseDataFabricPanel() {
   const [snapshots, setSnapshots] = useState<UniverseSnapshot[]>([]); const [artifacts, setArtifacts] = useState<Artifact[]>([]); const [policies, setPolicies] = useState<Policy[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null); const [members, setMembers] = useState<UniverseMember[] | null>(null); const [memberTotal, setMemberTotal] = useState(0);
-  const [membershipAsOf, setMembershipAsOf] = useState(new Date().toISOString().slice(0, 10)); const [metric, setMetric] = useState("weight"); const [scan, setScan] = useState<Scan | null>(null);
-  const [tab, setTab] = useState<"members" | "versions" | "columnar" | "rights">("members"); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useTerminalArtifactState<string | null>("UniverseDataFabricPanel.selectedId", null); const [members, setMembers] = useState<UniverseMember[] | null>(null); const [memberTotal, setMemberTotal] = useState(0);
+  const [membershipAsOf, setMembershipAsOf] = useTerminalArtifactState("UniverseDataFabricPanel.membershipAsOf", new Date().toISOString().slice(0, 10));
+  const [metric, setMetric] = useTerminalArtifactState("UniverseDataFabricPanel.metric", "weight");
+  const [scan, setScan] = useState<Scan | null>(null);
+  const [tab, setTab] = useTerminalArtifactState<"members" | "versions" | "columnar" | "rights">("UniverseDataFabricPanel.tab", "members");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null); const selected = snapshots.find((row) => row.id === selectedId) ?? snapshots[0] ?? null;
   const load = useCallback(async () => { try { setError(null); const [u, a, p] = await Promise.all([json<UniverseSnapshot[]>("/api/data-universes?summary=true"), json<Artifact[]>("/api/columnar-artifacts"), json<Policy[]>("/api/data-entitlements")]); setSnapshots(u); setArtifacts(a); setPolicies(p); setSelectedId((current) => current ?? u[0]?.id ?? null); } catch (cause) { setError(cause instanceof Error ? cause.message : "Data fabric unavailable."); } }, []);
   useEffect(() => { void load(); }, [load]); useEffect(() => { setMembers(null); setScan(null); }, [selectedId]);

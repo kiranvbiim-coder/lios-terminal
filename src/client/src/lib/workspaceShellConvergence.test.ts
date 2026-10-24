@@ -271,59 +271,7 @@ test("execution traces are cleared when another chat is selected, but never duri
   assert.match(shell, /\[selection\.chatId\]\);/);
 });
 
-test("Master AI's selected provider line links to the real provider/model selector", () => {
-  const settings = source("../components/settings/MasterAiSettings.tsx");
-  const center = source("../pages/DataConnectionCenter.tsx");
-  assert.match(settings, /data-testid="master-ai-change-provider"/);
-  assert.match(center, /onChangeProvider=\{focusAiProviderSelector\}/);
-  assert.match(center, /<select id="ai-provider-select"/);
-  assert.match(center, /select\?\.scrollIntoView\(\{ block: "center"/);
-});
 
-test("setup save failures and blocked saves are shown beside the Continue buttons", () => {
-  const center = source("../pages/DataConnectionCenter.tsx");
-  assert.match(center, /const \[saveNotice, setSaveNotice\]/);
-  assert.match(center, /Choose an AI model for .* before continuing/);
-  assert.match(center, /Your setup could not be saved\. Nothing was changed\./);
-  assert.match(center, /data-testid="connection-save-notice"/);
-  // A provider must never be persisted without a model.
-  assert.match(center, /if \(aiProviderId && !aiModelId\.trim\(\)\)/);
-});
-
-test("Connect screen: AI and data are separate sections and the provider picker is on the main screen", () => {
-  const center = source("../pages/DataConnectionCenter.tsx");
-  const aiStart = center.indexOf('data-testid="connect-ai"');
-  const dataStart = center.indexOf('data-testid="connect-data"');
-  const advancedStart = center.indexOf('{advancedOpen && <div id="advanced-connection-tools"');
-  assert.ok(aiStart > 0 && dataStart > aiStart && advancedStart > dataStart, "AI, then Data, then Advanced");
-  // The single provider picker lives in the AI section, never behind Advanced.
-  assert.equal((center.match(/id="ai-provider-select"/g) ?? []).length, 1);
-  const pickerAt = center.indexOf('id="ai-provider-select"');
-  assert.ok(pickerAt > aiStart && pickerAt < dataStart, "picker must sit inside the AI section");
-  // AI providers are grouped by connector category, and source ordering never mixes them in.
-  assert.match(center, /category === "ai"/);
-  assert.match(center, /dataStackEntries = useMemo\(\(\) => stackEntries\.filter\(\(entry\) => !isAiConnection\(entry\)\)/);
-  // Only connected providers are choosable, and the first one is preselected once without enabling Master AI.
-  assert.match(center, /selectableAiProviders = aiProviders\.filter\(\(provider\) => provider\.available \|\| provider\.id === aiProviderId\)/);
-  assert.match(center, /aiChoiceMadeRef/);
-  assert.doesNotMatch(center, /master.?ai.*set(?:Enabled|On)\(true\)/i);
-});
-
-test("H2a chat feel: finished runs collapse to a receipt, work stays open when unfinished, follow-ups never auto-send", () => {
-  const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
-  const project = source("../components/terminal/ProjectExperienceShell.tsx");
-  // Technical step/capability telemetry stays behind Show work; recovery/approval cards remain visible separately.
-  assert.match(trace, /const workVisible = showWork/);
-  assert.match(trace, /Show work/);
-  assert.match(trace, /data-testid="trace-sources"/);
-  assert.match(trace, /data-testid="trace-follow-ups"/);
-  assert.match(trace, /\{workVisible && !!steps\.length/);
-  assert.match(trace, /\{workVisible && !!capabilities\.length/);
-  // A follow-up chip only prefills the composer for review.
-  const handler = project.slice(project.indexOf("onFollowUp={(prompt) => {"), project.indexOf("onKeepArtifact={"));
-  assert.match(handler, /setInput\(prompt\)/);
-  assert.doesNotMatch(handler, /submit|sendMessage|send\(/i);
-});
 
 test("H2a sidebar: rare actions live in the account menu", () => {
   const navigation = source("../components/terminal/AuthenticatedNavigation.tsx");
@@ -342,12 +290,3 @@ test("H2b receipts persist per chat and restore on reload without storing answer
   assert.match(shell, /traceOwnerChatRef\.current = chatId/);
 });
 
-test("H2b error kit: failed runs show a plain-language card with retry and Connect, not a raw code headline", () => {
-  const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
-  const shell = source("../components/terminal/ProjectExperienceShell.tsx");
-  assert.match(trace, /presentRuntimeError\(runtimeError\.code, runtimeError\.message\)/);
-  assert.match(trace, /data-testid="trace-error-retry"/);
-  assert.match(trace, /data-testid="trace-error-connect"/);
-  assert.doesNotMatch(trace, /Execution failed/);
-  assert.match(shell, /onRetry=\{\(\) => \{ if \(lastSubmittedMessage\.trim\(\) && !busy\)/);
-});

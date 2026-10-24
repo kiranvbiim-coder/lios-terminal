@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { Download, Telescope } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -43,17 +44,17 @@ function provenanceCard(data: { provider?: string; source?: string; asOf?: strin
 export default function GlobalIndicatorExplorerPanel() {
   const { data: status } = useLseStatus();
   const configured = status?.configured ?? false;
-  const [mode, setMode] = useState<"explorer" | "browser">("explorer");
-  const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("");
-  const [category, setCategory] = useState("");
-  const [dataset, setDataset] = useState<DatasetKind>("economics");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [browserPage, setBrowserPage] = useState(1);
-  const [browserLimit, setBrowserLimit] = useState(50);
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [seriesLimit, setSeriesLimit] = useState(100);
+  const [mode, setMode] = useTerminalArtifactState<"explorer" | "browser">("GlobalIndicatorExplorerPanel.mode", "explorer");
+  const [query, setQuery] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.query", "");
+  const [country, setCountry] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.country", "");
+  const [category, setCategory] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.category", "");
+  const [dataset, setDataset] = useTerminalArtifactState<DatasetKind>("GlobalIndicatorExplorerPanel.dataset", "economics");
+  const [selected, setSelected] = useTerminalArtifactState<string | null>("GlobalIndicatorExplorerPanel.selected", null);
+  const [browserPage, setBrowserPage] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.browserPage", 1);
+  const [browserLimit, setBrowserLimit] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.browserLimit", 50);
+  const [start, setStart] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.start", "");
+  const [end, setEnd] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.end", "");
+  const [seriesLimit, setSeriesLimit] = useTerminalArtifactState("GlobalIndicatorExplorerPanel.seriesLimit", 100);
 
   const { data: economicsCountries } = useLseEconomicsCountries();
   const datasetCountries = useQuery<{ code: string; name: string }[]>({

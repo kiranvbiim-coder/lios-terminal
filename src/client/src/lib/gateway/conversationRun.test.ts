@@ -229,8 +229,9 @@ test("after a reconnect to the same Home the run is re-subscribed from the last 
   client.stop();
 });
 
-test("a restarted Home ends the run with a clear message instead of hanging", async () => {
+test("a restarted Home ends the run with a clear message instead of hanging", async (t) => {
   const client = await readyClient("boot-1");
+  t.after(() => client.stop());
   const first = FakeWebSocket.last;
   const pending = runConversation(client, { chatId: 9, body: { requestId: ID }, onEvent: () => {} });
   await sleep(0);
@@ -241,7 +242,10 @@ test("a restarted Home ends the run with a clear message instead of hanging", as
   await accept("boot-2");
   const result = await pending;
   assert.match(result.error ?? "", /Home restarted/);
-  client.stop();
+  assert.equal(result.ok, false, "Home restart is not successful completion");
+  assert.equal(result.status, 503);
+  assert.equal(result.errorCode, "run_interrupted");
+  assert.equal(result.events.some(event => event.type === "done"), false);
 });
 
 test("a connection that drops while starting is reconciled: a run that never started is reported, not duplicated", async () => {

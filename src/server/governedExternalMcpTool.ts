@@ -6,6 +6,8 @@ import {
   type ExternalMcpServerConfig,
 } from "./externalMcpClient";
 import { listSourceConnections } from "./sourceConnectionService";
+import { captureMcpAgentEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
+import { resolveCredential } from "./credentialVault";
 
 const MAX_ARGUMENT_BYTES = 64 * 1024;
 
@@ -69,38 +71,86 @@ function assertNotCancelled(signal: AbortSignal): void {
 }
 
 /**
- * L10 external MCP activation. Permission/approval/idempotency are owned by
- * GovernedToolRegistry and the agent run ledger. This adapter only resolves
- * the authenticated Project-owned source connection and performs the bounded
- * MCP transport call.
+ * Non-effecting live source-policy admission. This checks locally persisted
+ * authority, never contacts the MCP server, never creates a durable L5 intent,
+ * and does NOT consume or replace the canonical owner approval. Run it inside
+ * the registry's beforeExternalDispatch hook (after grant consumption).
+ *
+ * Re-run it again when the transport is entered. A revocation race *after*
+ * the durable intent is still outcome-unknown unless transport can prove
+ * that no remote effect occurred; never misclassify that race as no effect.
  */
+async function resolveGovernedExternalMcpDispatch(
+  rawInput: unknown,
+  context: GovernedExternalMcpContext,
+  signal: AbortSignal,
+  dependencies: GovernedExternalMcpDependencies,
+): Promise<{ input: GovernedExternalMcpInput; connection: SourceConnection; config: ExternalMcpServerConfig }> {
+  const input = governedExternalMcpInputSchema.parse(rawInput);
+  assertNotCancelled(signal);
+  const connection = (await dependencies.listConnections(context.userId))
+    .find((candidate) => candidate.id === input.connectionId);
+  if (
+    !connection
+    || connection.userId !== context.userId
+    || connection.sourceType !== "mcp"
+    || connection.organizationId !== context.organizationId
+  ) throw new Error("External MCP connection is unavailable in this tenant.");
+  if (connection.status === "invalid") {
+    throw new Error("External MCP connection is invalid or no longer authorized.");
+  }
+  const config = dependencies.configForConnection(connection);
+  if (config.policy.projectId !== context.projectId) {
+    throw new Error("External MCP connection is unavailable in this Project.");
+  }
+  // Source policy has to be admitted *before* a durable dispatch intent.
+  // Do not rely solely on the later SDK/transport deny for wrong tool ids.
+  if (!config.policy.allowedToolIds.includes(input.toolId)) {
+    throw new Error("External MCP tool is outside Project policy.");
+  }
+  // Match the official SDK's current source vault lookup locally, before
+  // creating an L5 intent. Unavailable/revoked credentials have provably not
+  // caused a tool side effect; never turn that refusal into outcome_unknown.
+  // No credential values enter the ledger, model prompt or error message.
+  if (config.policy.credentialRef && !resolveCredential("", config.policy.credentialRef)) {
+    throw new Error("External MCP source credential is unavailable or revoked.");
+  }
+  assertNotCancelled(signal);
+  return { input, connection, config };
+}
+
+/**
+ * Call only after the canonical L4 approval is consumed by GovernedToolRegistry.
+ * On refusal, the tool hasn't started and there is no external effect to
+ * reconcile or mark committed. The actual invoke revalidates separately.
+ */
+export async function preflightGovernedExternalMcpTool(
+  rawInput: unknown,
+  context: GovernedExternalMcpContext,
+  signal: AbortSignal,
+  dependencies: GovernedExternalMcpDependencies = DEFAULT_DEPENDENCIES,
+): Promise<void> {
+  await resolveGovernedExternalMcpDispatch(rawInput, context, signal, dependencies);
+}
+
+/** L10 authenticated Project-owned source dispatch through the governed SDK. */
 export async function invokeGovernedExternalMcpTool(
   rawInput: unknown,
   context: GovernedExternalMcpContext,
   signal: AbortSignal,
   dependencies: GovernedExternalMcpDependencies = DEFAULT_DEPENDENCIES,
+  onEvidence?: (capture: McpAgentEvidenceCapture) => void,
 ): Promise<GovernedExternalMcpResult> {
-  const input = governedExternalMcpInputSchema.parse(rawInput);
-  assertNotCancelled(signal);
-
-  const connection = (await dependencies.listConnections(context.userId))
-    .find((candidate) => candidate.id === input.connectionId);
-  if (
-    !connection
-    || connection.sourceType !== "mcp"
-    || connection.organizationId !== context.organizationId
-  ) {
-    throw new Error("External MCP connection is unavailable in this tenant.");
-  }
-
-  const config = dependencies.configForConnection(connection);
-  if (config.policy.projectId !== context.projectId) {
-    throw new Error("External MCP connection is unavailable in this Project.");
-  }
-
-  assertNotCancelled(signal);
+  const { input, connection, config } = await resolveGovernedExternalMcpDispatch(
+    rawInput, context, signal, dependencies,
+  );
+  // Any unknown transport exception after L5 intent remains outcome-unknown.
   const output = await dependencies.callTool(config, input.toolId, input.arguments, signal);
   assertNotCancelled(signal);
+  if (onEvidence) {
+    const capture = captureMcpAgentEvidence(connection, context.projectId, input.toolId, output);
+    if (capture) onEvidence(capture);
+  }
 
   return {
     output,

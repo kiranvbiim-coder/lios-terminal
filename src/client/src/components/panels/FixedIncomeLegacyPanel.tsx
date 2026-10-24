@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Globe, Calculator, ShieldAlert, Sliders, Settings } from "lucide-react";
@@ -14,19 +15,19 @@ const IN_BASE_YIELDS = [6.8, 6.9, 7.0, 7.1, 7.2, 7.2, 7.4]; // Sloped IN curve
 
 export default function FixedIncomePanel({ onSymbol }: { onSymbol: (sym: string) => void }) {
   // Sovereign yield shifts
-  const [usShift, setUsShift] = useState(0.0); // % parallel shift
-  const [inShift, setInShift] = useState(0.0); // % parallel shift
-  const [steepnessShift, setSteepnessShift] = useState(0.0); // tilt
+  const [usShift, setUsShift] = useTerminalArtifactState("FixedIncomePanel.usShift", 0.0);
+  const [inShift, setInShift] = useTerminalArtifactState("FixedIncomePanel.inShift", 0.0);
+  const [steepnessShift, setSteepnessShift] = useTerminalArtifactState("FixedIncomePanel.steepnessShift", 0.0);
 
   // Bond pricing calculator states
-  const [couponRate, setCouponRate] = useState(5.0); // %
-  const [maturityYears, setMaturityYears] = useState(10); // years
-  const [yieldToMaturity, setYieldToMaturity] = useState(4.0); // %
-  const [semiAnnual, setSemiAnnual] = useState(true);
+  const [couponRate, setCouponRate] = useTerminalArtifactState("FixedIncomePanel.couponRate", 5.0);
+  const [maturityYears, setMaturityYears] = useTerminalArtifactState("FixedIncomePanel.maturityYears", 10);
+  const [yieldToMaturity, setYieldToMaturity] = useTerminalArtifactState("FixedIncomePanel.yieldToMaturity", 4.0);
+  const [semiAnnual, setSemiAnnual] = useTerminalArtifactState("FixedIncomePanel.semiAnnual", true);
 
   // CDS States
-  const [hazardRate, setHazardRate] = useState(2.0); // Annual default probability %
-  const [recoveryRate, setRecoveryRate] = useState(40.0); // %
+  const [hazardRate, setHazardRate] = useTerminalArtifactState("FixedIncomePanel.hazardRate", 2.0);
+  const [recoveryRate, setRecoveryRate] = useTerminalArtifactState("FixedIncomePanel.recoveryRate", 40.0);
 
   // Sovereign yields solver
   const yieldCurvesData = useMemo(() => {

@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useEffect } from "react";
 import { Plus, Circle, CheckCircle2, Calendar, User, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,17 +58,19 @@ export default function DecisionMemoryPanel() {
   const [records, setRecords] = useState<DecisionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLogModal, setShowLogModal] = useState(false);
-  const [resolveTarget, setResolveTarget] = useState<DecisionRecord | null>(null);
+  const [resolveTargetId, setResolveTargetId] = useTerminalArtifactState<number | null>("DecisionMemoryPanel.resolveTargetId", null);
+  const resolveTarget = records.find(record => record.id === resolveTargetId && record.status === "open") ?? null;
+  const setResolveTarget = (record: DecisionRecord | null) => setResolveTargetId(record?.id ?? null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [question, setQuestion] = useState("");
-  const [assumptions, setAssumptions] = useState("");
-  const [forecast, setForecast] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [metric, setMetric] = useState("");
-  const [forecastValue, setForecastValue] = useState("");
-  const [actualOutcome, setActualOutcome] = useState("");
-  const [actualValue, setActualValue] = useState("");
+  const [question, setQuestion] = useTerminalArtifactState("DecisionMemoryPanel.question", "");
+  const [assumptions, setAssumptions] = useTerminalArtifactState("DecisionMemoryPanel.assumptions", "");
+  const [forecast, setForecast] = useTerminalArtifactState("DecisionMemoryPanel.forecast", "");
+  const [targetDate, setTargetDate] = useTerminalArtifactState("DecisionMemoryPanel.targetDate", "");
+  const [metric, setMetric] = useTerminalArtifactState("DecisionMemoryPanel.metric", "");
+  const [forecastValue, setForecastValue] = useTerminalArtifactState("DecisionMemoryPanel.forecastValue", "");
+  const [actualOutcome, setActualOutcome] = useTerminalArtifactState("DecisionMemoryPanel.actualOutcome", "");
+  const [actualValue, setActualValue] = useTerminalArtifactState("DecisionMemoryPanel.actualValue", "");
   const [scorecard, setScorecard] = useState<AccuracyScorecard | null>(null);
 
   const load = () => {

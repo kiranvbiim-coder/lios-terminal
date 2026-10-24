@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import type { TrustManifest } from "@shared/trustContracts";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
+import EvidencePrism from "./EvidencePrism";
+import EvidenceExceptionDetails from "./EvidenceExceptionDetails";
+import { reviewEvidenceExceptions } from "@/lib/evidenceExceptions";
 
 interface Props {
   manifest: TrustManifest;
@@ -35,12 +38,22 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
     if (next) recordP3TrustInteraction("show_work_opened");
   };
   const summary = manifest.summary;
+  const exceptions = reviewEvidenceExceptions(manifest);
+  const needsReview = exceptions.conflicts.length > 0
+    || exceptions.unknown.length > 0
+    || exceptions.access.some(item => item.assessment.level === "blocked" || item.assessment.level === "restricted")
+    || manifest.missing.length > 0
+    || summary.missingCount > 0
+    || summary.quality === "low"
+    || summary.conflictState === "minor"
+    || summary.conflictState === "material"
+    || manifest.warnings.length > 0;
 
   return (
-    <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-emerald-300/15 bg-emerald-300/[0.018]" data-p3-trust-manifest="true">
+    <div className={`mx-3 mb-3 overflow-hidden rounded-lg border ${needsReview ? "border-amber-300/25 bg-amber-300/[0.025]" : "border-emerald-300/15 bg-emerald-300/[0.018]"}`} data-p3-trust-manifest="true">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-        <span className="font-terminal text-[12px] uppercase tracking-[0.18em] text-muted-foreground">Trust</span>
+        {needsReview ? <AlertTriangle className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" /> : <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />}
+        <span className="font-terminal text-[12px] uppercase tracking-[0.18em] text-muted-foreground">{needsReview ? "Evidence needs review" : "Trust"}</span>
         <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
           {titleCase(summary.freshness)}
         </span>
@@ -125,31 +138,8 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </ol>
           </section>
 
-          {!!manifest.claims.length && (
-            <section>
-              <div className="font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">Claims & calculations</div>
-              <div className="mt-2 space-y-1.5">
-                {manifest.claims.map((claim) => (
-                  <div key={claim.claimId} className="rounded border border-border/40 bg-black/20 px-2.5 py-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-ui text-[12px] font-semibold text-foreground">{claim.label}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.status}</span>
-                      <span className="font-terminal text-[12px] uppercase text-muted-foreground">{claim.confidence} confidence</span>
-                    </div>
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{claim.explanation}</div>
-                    {!!claim.formulaRefs.length && (
-                      <div className="mt-1 font-terminal text-[12px] leading-3 text-cyan-200/80">
-                        {claim.formulaRefs.join(" · ")}
-                      </div>
-                    )}
-                    {!!claim.receiptIds.length && (
-                      <div className="mt-1 font-terminal text-[12px] text-muted-foreground">Receipts: {claim.receiptIds.join(" · ")}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <EvidencePrism key={manifest.trustId} manifest={manifest} />
+          <EvidenceExceptionDetails key={`${manifest.trustId}:exceptions`} manifest={manifest} />
 
           {!!manifest.assumptions.length && (
             <section>
@@ -165,18 +155,12 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             </section>
           )}
 
-          {(manifest.conflicts.length > 0 || manifest.missing.length > 0 || manifest.warnings.length > 0) && (
+          {(manifest.missing.length > 0 || manifest.warnings.length > 0) && (
             <section>
               <div className="flex items-center gap-1.5 font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
                 <AlertTriangle className="h-3 w-3" /> Exceptions & recovery
               </div>
               <div className="mt-2 space-y-2">
-                {manifest.conflicts.map((conflict) => (
-                  <div key={`${conflict.field}-${conflict.sourceRefs.join("-")}`} className="rounded border border-amber-300/15 bg-amber-300/[0.02] px-2.5 py-2">
-                    <div className="font-ui text-[12px] font-semibold text-amber-100">{conflict.field} · {conflict.state} conflict</div>
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{conflict.summary}</div>
-                  </div>
-                ))}
                 {manifest.missing.map((missing) => (
                   <div key={missing.field} className="rounded border border-amber-300/15 bg-amber-300/[0.02] px-2.5 py-2">
                     <div className="font-ui text-[12px] font-semibold text-foreground">Missing · {missing.field.replaceAll("_", " ")}</div>

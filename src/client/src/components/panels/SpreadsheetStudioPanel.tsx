@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileSpreadsheet, Save, FolderOpen, Upload, Download, FilePlus2, X, LayoutTemplate, ArrowDown, ArrowRight, Tag, Search, Undo2, Redo2, Percent, DollarSign, Hash, RefreshCw, Layers, Sliders, Plus, Blocks, History, FileDown, BarChart3, LayoutDashboard, Trash2, Library } from "lucide-react";
 import {
@@ -191,11 +192,22 @@ interface InternalClipboard {
 
 export default function SpreadsheetStudioPanel({ symbol }: Props) {
   const [activeWorkspaceId] = useActiveWorkspaceId();
-  const gridRef = useRef(new SpreadsheetGrid());
+  const terminal = useTerminalArtifactContext();
+  const readOnlyRef = useRef(terminal?.readOnly ?? false);
+  readOnlyRef.current = terminal?.readOnly ?? false;
+  const [retainedGrid, setRetainedGrid] = useTerminalArtifactState<GridSnapshot>("SpreadsheetStudioPanel.grid", { cells: {}, names: {}, formats: {} });
+  const gridRef = useRef<SpreadsheetGrid | null>(null) as React.MutableRefObject<SpreadsheetGrid>;
+  if (gridRef.current === null) gridRef.current = terminal ? restoreSnapshot(retainedGrid) : new SpreadsheetGrid();
   const [version, setVersion] = useState(0);
-  const bump = () => setVersion((v) => v + 1);
+  const bump = () => { if (terminal) setRetainedGrid(snapshotGrid(gridRef.current)); setVersion((v) => v + 1); };
+  const restoredGrid = useRef(retainedGrid);
+  useEffect(() => {
+    if (terminal && restoredGrid.current !== retainedGrid) {
+      restoredGrid.current = retainedGrid; gridRef.current = restoreSnapshot(retainedGrid); setVersion(value => value + 1);
+    }
+  }, [retainedGrid]);
 
-  const [selected, setSelected] = useState("A1");
+  const [selected, setSelected] = useTerminalArtifactState("SpreadsheetStudioPanel.selected", "A1");
   // Shift+click extends a rectangular range from `selected` (the anchor, and
   // fill source) to `rangeEnd` -- enough for fill-down/fill-right without
   // building a full drag-select interaction model the panel doesn't
@@ -203,10 +215,14 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
   const [rangeEnd, setRangeEnd] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  useEffect(() => {
+    terminal?.setEditing("SpreadsheetStudioPanel.cell", isEditing);
+    return () => terminal?.setEditing("SpreadsheetStudioPanel.cell", false);
+  }, [isEditing, terminal?.setEditing]);
   const formulaBarRef = useRef<HTMLInputElement>(null);
 
-  const [modelId, setModelId] = useState<string | null>(null);
-  const [modelName, setModelName] = useState("Untitled Model");
+  const [modelId, setModelId] = useTerminalArtifactState<string | null>("SpreadsheetStudioPanel.modelId", null);
+  const [modelName, setModelName] = useTerminalArtifactState("SpreadsheetStudioPanel.modelName", "Untitled Model");
   const [showOpen, setShowOpen] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [models, setModels] = useState<ModelSummary[]>([]);
@@ -214,38 +230,38 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showNames, setShowNames] = useState(false);
-  const [newNameInput, setNewNameInput] = useState("");
-  const [newNameTarget, setNewNameTarget] = useState("");
+  const [newNameInput, setNewNameInput] = useTerminalArtifactState("SpreadsheetStudioPanel.newNameInput", "");
+  const [newNameTarget, setNewNameTarget] = useTerminalArtifactState("SpreadsheetStudioPanel.newNameTarget", "");
   const [nameError, setNameError] = useState<string | null>(null);
 
   const [showAudit, setShowAudit] = useState(false);
 
   const [showAssumptions, setShowAssumptions] = useState(false);
-  const [newAssumptionName, setNewAssumptionName] = useState("");
-  const [newAssumptionValue, setNewAssumptionValue] = useState("");
+  const [newAssumptionName, setNewAssumptionName] = useTerminalArtifactState("SpreadsheetStudioPanel.newAssumptionName", "");
+  const [newAssumptionValue, setNewAssumptionValue] = useTerminalArtifactState("SpreadsheetStudioPanel.newAssumptionValue", "");
   const [assumptionError, setAssumptionError] = useState<string | null>(null);
   const { data: sharedAssumptions } = useAssumptions(activeWorkspaceId);
   const invalidateAssumptions = useInvalidateAssumptions();
 
-  const [newScenarioName, setNewScenarioName] = useState("");
+  const [newScenarioName, setNewScenarioName] = useTerminalArtifactState("SpreadsheetStudioPanel.newScenarioName", "");
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const { data: scenarios } = useScenarios(activeWorkspaceId);
   const invalidateScenarios = useInvalidateScenarios();
 
   const [showSensitivity, setShowSensitivity] = useState(false);
-  const [sensMode, setSensMode] = useState<"one" | "two" | "tornado">("one");
-  const [sensOutputRef, setSensOutputRef] = useState("");
-  const [sensInputRef, setSensInputRef] = useState("");
-  const [sensMin, setSensMin] = useState("");
-  const [sensMax, setSensMax] = useState("");
-  const [sensSteps, setSensSteps] = useState("5");
-  const [sensInputRef2, setSensInputRef2] = useState("");
-  const [sensMin2, setSensMin2] = useState("");
-  const [sensMax2, setSensMax2] = useState("");
-  const [sensSteps2, setSensSteps2] = useState("5");
+  const [sensMode, setSensMode] = useTerminalArtifactState<"one" | "two" | "tornado">("SpreadsheetStudioPanel.sensMode", "one");
+  const [sensOutputRef, setSensOutputRef] = useTerminalArtifactState("SpreadsheetStudioPanel.sensOutputRef", "");
+  const [sensInputRef, setSensInputRef] = useTerminalArtifactState("SpreadsheetStudioPanel.sensInputRef", "");
+  const [sensMin, setSensMin] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMin", "");
+  const [sensMax, setSensMax] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMax", "");
+  const [sensSteps, setSensSteps] = useTerminalArtifactState("SpreadsheetStudioPanel.sensSteps", "5");
+  const [sensInputRef2, setSensInputRef2] = useTerminalArtifactState("SpreadsheetStudioPanel.sensInputRef2", "");
+  const [sensMin2, setSensMin2] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMin2", "");
+  const [sensMax2, setSensMax2] = useTerminalArtifactState("SpreadsheetStudioPanel.sensMax2", "");
+  const [sensSteps2, setSensSteps2] = useTerminalArtifactState("SpreadsheetStudioPanel.sensSteps2", "5");
   const [oneWayResult, setOneWayResult] = useState<OneWaySensitivityResult | null>(null);
   const [twoWayResult, setTwoWayResult] = useState<TwoWaySensitivityResult | null>(null);
-  const [tornadoRows, setTornadoRows] = useState<{ ref: string; label: string; low: string; high: string }[]>([
+  const [tornadoRows, setTornadoRows] = useTerminalArtifactState<{ ref: string; label: string; low: string; high: string }[]>("SpreadsheetStudioPanel.tornadoRows", [
     { ref: "", label: "", low: "", high: "" },
     { ref: "", label: "", low: "", high: "" },
   ]);
@@ -255,37 +271,37 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
   const [perfReport, setPerfReport] = useState<PerformanceReport | null>(null);
 
   const [showBlocks, setShowBlocks] = useState(false);
-  const [selectedBlockId, setSelectedBlockId] = useState(BLOCK_REGISTRY[0]?.id ?? "");
-  const [blockFieldValues, setBlockFieldValues] = useState<Record<string, string>>({});
+  const [selectedBlockId, setSelectedBlockId] = useTerminalArtifactState("SpreadsheetStudioPanel.selectedBlockId", BLOCK_REGISTRY[0]?.id ?? "");
+  const [blockFieldValues, setBlockFieldValues] = useTerminalArtifactState<Record<string, string>>("SpreadsheetStudioPanel.blockFieldValues", {});
   const [blockError, setBlockError] = useState<string | null>(null);
 
   const [showHistory, setShowHistory] = useState(false);
   const { data: modelVersions } = useModelVersions(modelId);
   const invalidateModelVersions = useInvalidateModelVersions();
 
-  const [charts, setCharts] = useState<ChartConfig[]>([]);
+  const [charts, setCharts] = useTerminalArtifactState<ChartConfig[]>("SpreadsheetStudioPanel.charts", []);
   // Template Versioning -- which template (and version of it) built the
   // CURRENT sheet, if any; stamped onto the model at creation time and
   // cleared by NEW/OPEN/applying a different template, since it describes
   // this specific sheet's origin, not a standing preference.
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null);
   const [appliedTemplateVersion, setAppliedTemplateVersion] = useState<number | null>(null);
-  const [selectedIndustryPackId, setSelectedIndustryPackId] = useState<string>("");
+  const [selectedIndustryPackId, setSelectedIndustryPackId] = useTerminalArtifactState<string>("SpreadsheetStudioPanel.selectedIndustryPackId", "");
 
   const [showLibrary, setShowLibrary] = useState(false);
-  const [libraryTab, setLibraryTab] = useState<"browse" | "publish">("browse");
+  const [libraryTab, setLibraryTab] = useTerminalArtifactState<"browse" | "publish">("SpreadsheetStudioPanel.libraryTab", "browse");
   const { data: libraryComponents } = useComponentLibrary();
   const invalidateLibrary = useInvalidateComponentLibrary();
-  const [publishName, setPublishName] = useState("");
-  const [publishDescription, setPublishDescription] = useState("");
-  const [publishCategory, setPublishCategory] = useState("");
+  const [publishName, setPublishName] = useTerminalArtifactState("SpreadsheetStudioPanel.publishName", "");
+  const [publishDescription, setPublishDescription] = useTerminalArtifactState("SpreadsheetStudioPanel.publishDescription", "");
+  const [publishCategory, setPublishCategory] = useTerminalArtifactState("SpreadsheetStudioPanel.publishCategory", "");
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [showChartBuilder, setShowChartBuilder] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
-  const [chartRangeInput, setChartRangeInput] = useState("");
-  const [chartTitleInput, setChartTitleInput] = useState("");
-  const [chartTypeInput, setChartTypeInput] = useState<ChartType>("bar");
+  const [chartRangeInput, setChartRangeInput] = useTerminalArtifactState("SpreadsheetStudioPanel.chartRangeInput", "");
+  const [chartTitleInput, setChartTitleInput] = useTerminalArtifactState("SpreadsheetStudioPanel.chartTitleInput", "");
+  const [chartTypeInput, setChartTypeInput] = useTerminalArtifactState<ChartType>("SpreadsheetStudioPanel.chartTypeInput", "bar");
   const [chartError, setChartError] = useState<string | null>(null);
 
   const undoStackRef = useRef<GridSnapshot[]>([]);
@@ -518,6 +534,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
     }
 
     function handleKeyDown(e: KeyboardEvent) {
+      if (readOnlyRef.current) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && !isEditableTarget(document.activeElement)) {
         if (e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
@@ -655,6 +672,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
     }
 
     function handleCut(e: ClipboardEvent) {
+      if (readOnlyRef.current) return;
       if (isEditableTarget(document.activeElement)) return;
       const result = copySelection(true);
       if (!result) return;
@@ -663,6 +681,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
     }
 
     function handlePaste(e: ClipboardEvent) {
+      if (readOnlyRef.current) return;
       if (isEditableTarget(document.activeElement)) return;
       const a = parseCellRef(selected);
       if (!a) return;
@@ -1293,7 +1312,7 @@ export default function SpreadsheetStudioPanel({ symbol }: Props) {
             {charts.length > 0 && <span className="ml-0.5 px-1 bg-[hsl(38,95%,50%)]/20 text-[hsl(38,95%,55%)] rounded-sm">{charts.length}</span>}
           </button>
           <button
-            onClick={() => { setSensOutputRef(selected); setShowSensitivity(true); }}
+            onClick={() => { if (!sensOutputRef) setSensOutputRef(selected); setShowSensitivity(true); }}
             title="Sensitivity / Data Table -- sweep one or two input cells across a range of values and see how an output cell responds, or rank several inputs by their impact on an output (tornado)"
             className="flex items-center gap-1 font-terminal text-[8px] tracking-widest px-2 py-1 border border-border/60 text-muted-foreground hover:text-foreground hover:border-[hsl(38,95%,50%)/50%]"
           >

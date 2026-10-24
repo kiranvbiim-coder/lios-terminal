@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Network, Activity, ShieldAlert, Sliders, Info, Zap } from "lucide-react";
 import { getCurrencySymbol, formatPrice } from "@/lib/finance";
@@ -31,15 +32,15 @@ const SUPPLY_NODES = [
 
 export default function RiskNetworkPanel({ onSymbol }: { onSymbol: (sym: string) => void }) {
   // Tab toggle: "volatility", "supplychain", "orderbook"
-  const [activeTab, setActiveTab] = useState<"volatility" | "supplychain" | "orderbook">("volatility");
+  const [activeTab, setActiveTab] = useTerminalArtifactState<"volatility" | "supplychain" | "orderbook">("RiskNetworkPanel.activeTab", "volatility");
 
   // Volatility shock state
-  const [shockedNode, setShockedNode] = useState<string | null>("BTC-USD");
-  const [shockSize, setShockSize] = useState(50); // % volatility increase
+  const [shockedNode, setShockedNode] = useTerminalArtifactState<string | null>("RiskNetworkPanel.shockedNode", "BTC-USD");
+  const [shockSize, setShockSize] = useTerminalArtifactState("RiskNetworkPanel.shockSize", 50);
 
   // Supply chain disruption state
-  const [disruptedNode, setDisruptedNode] = useState<string>("TSMC");
-  const [disruptionLevel, setDisruptionLevel] = useState(40); // % output cut
+  const [disruptedNode, setDisruptedNode] = useTerminalArtifactState<string>("RiskNetworkPanel.disruptedNode", "TSMC");
+  const [disruptionLevel, setDisruptionLevel] = useTerminalArtifactState("RiskNetworkPanel.disruptionLevel", 40);
 
   // Live order book depth simulator data
   const spotPrice = 240.0;

@@ -4,7 +4,7 @@ import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
  * Pure summary of a Conversation Runtime run for the chat: what state it ended in, how much work it
  * did, which data sources it used, and which follow-up requests are safe to offer. No rendering here.
  */
-export type TraceStatus = "idle" | "running" | "completed" | "needs_input" | "failed" | "cancelled";
+export type TraceStatus = "idle" | "running" | "interrupted" | "completed" | "needs_input" | "failed" | "cancelled";
 
 export interface TraceSummary {
   status: TraceStatus;
@@ -69,7 +69,7 @@ export function summarizeRuntimeTrace(events: readonly ConversationRuntimeEvent[
     else if (done.status === "failed") status = "failed";
     else status = "needs_input";
   } else {
-    status = busy ? "running" : events.length ? "running" : "idle";
+    status = busy ? "running" : events.length ? "interrupted" : "idle";
   }
 
   const times = events.map((event) => Date.parse(event.at)).filter((value) => Number.isFinite(value));

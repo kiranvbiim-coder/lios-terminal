@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Activity, AlertTriangle, Zap, Play, Pause, RefreshCw } from "lucide-react";
@@ -20,9 +21,9 @@ interface VpinBucket {
 
 export default function HawkesProcessPanel({ onUpdateIntensity }: { onUpdateIntensity?: (intensity: number) => void }) {
   const [isPlaying, setIsPlaying] = useState(true);
-  const [mu, setMu] = useState(0.4); // Background arrival rate (trades/sec)
-  const [alpha, setAlpha] = useState(0.5); // Social contagion excitation factor
-  const [beta, setBeta] = useState(0.85); // Decay rate of excitement
+  const [mu, setMu] = useTerminalArtifactState("HawkesProcessPanel.mu", 0.4);
+  const [alpha, setAlpha] = useTerminalArtifactState("HawkesProcessPanel.alpha", 0.5);
+  const [beta, setBeta] = useTerminalArtifactState("HawkesProcessPanel.beta", 0.85); // Decay rate of excitement
 
   // Simulation states
   const [intensity, setIntensity] = useState(0.4);

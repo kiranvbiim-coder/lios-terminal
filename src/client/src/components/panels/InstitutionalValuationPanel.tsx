@@ -1,3 +1,4 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, Calculator, Database, Gauge, RefreshCw, ShieldCheck } from "lucide-react";
 import { useFundamentals, useQuote, useQuoteStatic } from "@/lib/useFinance";
@@ -114,7 +115,7 @@ function NumInput({ value, onChange, suffix, width = "w-20" }: { value: number; 
 }
 
 export default function InstitutionalValuationPanel({ symbol }: Props) {
-  const [section, setSection] = useState<WorkspaceSection>("dcf");
+  const [section, setSection] = useTerminalArtifactState<WorkspaceSection>("InstitutionalValuationPanel.section", "dcf");
   const { data: quote } = useQuote(symbol);
   const { data: quoteStatic } = useQuoteStatic(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
@@ -200,27 +201,27 @@ export default function InstitutionalValuationPanel({ symbol }: Props) {
     };
   });
 
-  const [years, setYears] = useState<DcfYearAssumption[]>(makeSeedYears);
-  const [cashFlowMode, setCashFlowMode] = useState<DcfCashFlowMode>("fcff");
-  const [discountTiming, setDiscountTiming] = useState<DcfDiscountTiming>("mid-year");
-  const [stubFractionYears, setStubFractionYears] = useState(0.5);
-  const [terminalMethod, setTerminalMethod] = useState<TerminalValueMethod>("gordon");
-  const [terminalGrowthPct, setTerminalGrowthPct] = useState(2.5);
-  const [exitMultiple, setExitMultiple] = useState(10);
-  const [terminalFadeYears, setTerminalFadeYears] = useState(5);
-  const [activeScenario, setActiveScenario] = useState<DcfScenarioKey>("base");
-  const [costCapitalMethod, setCostCapitalMethod] = useState<CostCapitalMethod>("long-treasury-capm");
-  const [manualRiskFreePct, setManualRiskFreePct] = useState(4.5);
-  const [erpPct, setErpPct] = useState(5.0);
-  const [manualBeta, setManualBeta] = useState(1.0);
-  const [manualCostDebtPct, setManualCostDebtPct] = useState(6.0);
-  const [terminalWaccSpreadPct, setTerminalWaccSpreadPct] = useState(-0.25);
-  const [baseRevenueOverride, setBaseRevenueOverride] = useState("");
-  const [sharesOverride, setSharesOverride] = useState("");
-  const [netDebtOverride, setNetDebtOverride] = useState("");
-  const [investedCapitalOverride, setInvestedCapitalOverride] = useState("");
-  const [dilutionPct, setDilutionPct] = useState(0);
-  const [bridge, setBridge] = useState({
+  const [years, setYears] = useTerminalArtifactState<DcfYearAssumption[]>("InstitutionalValuationPanel.years", makeSeedYears);
+  const [cashFlowMode, setCashFlowMode] = useTerminalArtifactState<DcfCashFlowMode>("InstitutionalValuationPanel.cashFlowMode", "fcff");
+  const [discountTiming, setDiscountTiming] = useTerminalArtifactState<DcfDiscountTiming>("InstitutionalValuationPanel.discountTiming", "mid-year");
+  const [stubFractionYears, setStubFractionYears] = useTerminalArtifactState("InstitutionalValuationPanel.stubFractionYears", 0.5);
+  const [terminalMethod, setTerminalMethod] = useTerminalArtifactState<TerminalValueMethod>("InstitutionalValuationPanel.terminalMethod", "gordon");
+  const [terminalGrowthPct, setTerminalGrowthPct] = useTerminalArtifactState("InstitutionalValuationPanel.terminalGrowthPct", 2.5);
+  const [exitMultiple, setExitMultiple] = useTerminalArtifactState("InstitutionalValuationPanel.exitMultiple", 10);
+  const [terminalFadeYears, setTerminalFadeYears] = useTerminalArtifactState("InstitutionalValuationPanel.terminalFadeYears", 5);
+  const [activeScenario, setActiveScenario] = useTerminalArtifactState<DcfScenarioKey>("InstitutionalValuationPanel.activeScenario", "base");
+  const [costCapitalMethod, setCostCapitalMethod] = useTerminalArtifactState<CostCapitalMethod>("InstitutionalValuationPanel.costCapitalMethod", "long-treasury-capm");
+  const [manualRiskFreePct, setManualRiskFreePct] = useTerminalArtifactState("InstitutionalValuationPanel.manualRiskFreePct", 4.5);
+  const [erpPct, setErpPct] = useTerminalArtifactState("InstitutionalValuationPanel.erpPct", 5.0);
+  const [manualBeta, setManualBeta] = useTerminalArtifactState("InstitutionalValuationPanel.manualBeta", 1.0);
+  const [manualCostDebtPct, setManualCostDebtPct] = useTerminalArtifactState("InstitutionalValuationPanel.manualCostDebtPct", 6.0);
+  const [terminalWaccSpreadPct, setTerminalWaccSpreadPct] = useTerminalArtifactState("InstitutionalValuationPanel.terminalWaccSpreadPct", -0.25);
+  const [baseRevenueOverride, setBaseRevenueOverride] = useTerminalArtifactState("InstitutionalValuationPanel.baseRevenueOverride", "");
+  const [sharesOverride, setSharesOverride] = useTerminalArtifactState("InstitutionalValuationPanel.sharesOverride", "");
+  const [netDebtOverride, setNetDebtOverride] = useTerminalArtifactState("InstitutionalValuationPanel.netDebtOverride", "");
+  const [investedCapitalOverride, setInvestedCapitalOverride] = useTerminalArtifactState("InstitutionalValuationPanel.investedCapitalOverride", "");
+  const [dilutionPct, setDilutionPct] = useTerminalArtifactState("InstitutionalValuationPanel.dilutionPct", 0);
+  const [bridge, setBridge] = useTerminalArtifactState("InstitutionalValuationPanel.bridge", {
     preferredEquity: 0,
     minorityInterest: 0,
     pensionLiabilities: 0,
@@ -234,9 +235,11 @@ export default function InstitutionalValuationPanel({ symbol }: Props) {
   });
   const [probabilistic, setProbabilistic] = useState<DcfProbabilisticResult | null>(null);
   const initializedSymbol = useRef<string | null>(null);
+  const terminal = useTerminalArtifactContext();
 
   useEffect(() => {
     if (initializedSymbol.current === symbol) return;
+    if (initializedSymbol.current === null && terminal) { initializedSymbol.current = symbol; return; }
     initializedSymbol.current = symbol;
     setYears(makeSeedYears());
     setBaseRevenueOverride("");

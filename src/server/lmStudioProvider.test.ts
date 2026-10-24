@@ -42,11 +42,12 @@ test("BYOAI: LM Studio uses the local OpenAI-compatible endpoint without auth", 
   process.env.LM_STUDIO_BASE_URL = "http://127.0.0.1:1234/v1";
   process.env.LM_STUDIO_MODEL = "qwen3-local";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (inputUrl(input).endsWith("/api/v1/models")) return new Response(JSON.stringify({ models: [{ key: "qwen3-local", type: "llm", format: "gguf", size_bytes: 2_000_000, loaded_instances: [{ id: "qwen3-local" }] }] }));
     capturedUrl = inputUrl(input);
     capturedAuthorization = new Headers(init?.headers).get("authorization");
     const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
     capturedModel = body.model ?? "";
-    return new Response(JSON.stringify({ choices: [{ message: { content: "local answer" } }] }), {
+    return new Response(JSON.stringify({ model: "qwen3-local", choices: [{ message: { content: "local answer" } }] }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });

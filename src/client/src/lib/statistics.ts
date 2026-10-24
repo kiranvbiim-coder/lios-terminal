@@ -115,6 +115,17 @@ export function zScoreSeries(values: number[]): (number | null)[] {
 // (unlike the parametric tests in python-service/statistics_econometrics.py,
 // which genuinely need scipy/statsmodels' distribution machinery).
 
+export function resamplingRandom(seed: number): () => number {
+  if (!Number.isInteger(seed) || seed < 0 || seed > 2_147_483_647) throw new Error("Resampling requires an integer seed in [0, 2147483647].");
+  let state = seed;
+  return () => {
+    state |= 0; state = (state + 0x6d2b79f5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export interface BootstrapCIResult {
   estimate: number; // the statistic computed on the real (unresampled) data
   ciLow: number;
@@ -124,14 +135,15 @@ export interface BootstrapCIResult {
 // Percentile bootstrap CI for the sample mean: resample with replacement
 // `nBoot` times, take the 2.5th/97.5th percentile of the resampled means
 // (for a 95% CI; `confidence` controls the width generally).
-export function bootstrapMeanCI(data: number[], nBoot = 2000, confidence = 95): BootstrapCIResult {
+export function bootstrapMeanCI(data: number[], nBoot = 2000, confidence = 95, seed = 42): BootstrapCIResult {
+  if (!data.length || !data.every(Number.isFinite) || !Number.isInteger(nBoot) || nBoot < 1 || !Number.isFinite(confidence) || confidence <= 0 || confidence >= 100) throw new Error("Bootstrap requires finite observations, positive iterations and confidence in (0, 100).");
+  const random = resamplingRandom(seed);
   const n = data.length;
   const estimate = data.reduce((s, v) => s + v, 0) / n;
-  if (n === 0) return { estimate: 0, ciLow: 0, ciHigh: 0 };
   const bootMeans: number[] = [];
   for (let b = 0; b < nBoot; b++) {
     let sum = 0;
-    for (let i = 0; i < n; i++) sum += data[Math.floor(Math.random() * n)];
+    for (let i = 0; i < n; i++) sum += data[Math.floor(random() * n)];
     bootMeans.push(sum / n);
   }
   bootMeans.sort((a, b) => a - b);
@@ -150,7 +162,9 @@ export interface PermutationTestResult {
 // between the two groups `nPerm` times, and count how often the shuffled
 // difference is at least as extreme as the real one -- a distribution-free
 // significance test, no normality assumption needed (unlike the t-test).
-export function permutationTestMeanDiff(group1: number[], group2: number[], nPerm = 5000): PermutationTestResult {
+export function permutationTestMeanDiff(group1: number[], group2: number[], nPerm = 5000, seed = 42): PermutationTestResult {
+  if (!group1.length || !group2.length || !group1.every(Number.isFinite) || !group2.every(Number.isFinite) || !Number.isInteger(nPerm) || nPerm < 1) throw new Error("Permutation inference requires two finite nonempty groups and positive iterations.");
+  const random = resamplingRandom(seed);
   const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
   const observedDifference = mean(group1) - mean(group2);
   const pooled = [...group1, ...group2];
@@ -159,7 +173,7 @@ export function permutationTestMeanDiff(group1: number[], group2: number[], nPer
   for (let p = 0; p < nPerm; p++) {
     const shuffled = [...pooled];
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     const permDiff = mean(shuffled.slice(0, n1)) - mean(shuffled.slice(n1));

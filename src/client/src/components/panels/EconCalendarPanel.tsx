@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { CalendarDays, Database, ShieldCheck } from "lucide-react";
 import { useEconomicCalendar } from "@/lib/useFinance";
@@ -32,7 +33,7 @@ function formatEventValue(value: unknown) {
 
 export default function EconCalendarPanel(_props: Props) {
   const { data: events = [], isLoading } = useEconomicCalendar();
-  const [filter, setFilter] = useState<ImpactFilter>("ALL");
+  const [filter, setFilter] = useTerminalArtifactState<ImpactFilter>("EconCalendarPanel.filter", "ALL");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const filtered = useMemo(() => {

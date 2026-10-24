@@ -20,9 +20,14 @@ import TerminalTimeContextControl from "@/components/terminal/TerminalTimeContex
 import WaveCExperienceShell from "@/components/terminal/WaveCExperienceShell";
 import ProjectExperienceShell from "@/components/terminal/ProjectExperienceShell";
 import WorkbenchArtifactPane from "@/components/terminal/WorkbenchArtifactPane";
-import { openArtifactWorkbench, returnFromArtifactWorkbench } from "@/lib/artifactWorkbenchHandoff";
+import { openArtifactWorkbench, returnFromArtifactWorkbench, loadArtifactWorkbenchRecovery, saveArtifactWorkbenchRecovery, clearArtifactWorkbenchRecovery } from "@/lib/artifactWorkbenchHandoff";
 import type { ArtifactWorkbenchHandoff } from "@/lib/artifactWorkbenchHandoff";
+import { workbenchQuestionDraft, type UniversalChatHandoff } from "@/lib/universalChatHandoff";
 import { loadDockviewLayoutState, requestDockviewLayoutRestore } from "@/lib/dockviewWorkspaceState";
+import { TerminalArtifactRendererProvider } from "@/lib/terminalArtifactState";
+import { NativeArtifactDraftOwnerContext } from "@/lib/nativeArtifactDraftRecovery";
+import { returnToChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
+import type { ChatTerminalControls } from "@/lib/chatTerminalContext";
 import VisualCanvas from "@/components/terminal/VisualCanvas";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { subscribeDecisionReview } from "@/lib/decisionReviewNavigation";
@@ -263,10 +268,14 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   const audience: WorkspaceAudience = isInternal ? "internal" : isTrial ? "trial" : "client";
   const isMobile = useIsMobile();
   const [tabsState, setTabsStateRaw] = useState<TerminalTabsState>(() => loadTerminalTabs(audience));
-  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(null);
+  const [recoveredHandoff] = useState(() => loadArtifactWorkbenchRecovery(session.email, tabsState, audience));
+  const artifactHandoffRef = useRef<ArtifactWorkbenchHandoff | null>(recoveredHandoff);
   const workbenchDirtyRef = useRef(false);
   const [workbenchDirty, setWorkbenchDirty] = useState(false);
   const [workbenchReturn, setWorkbenchReturn] = useState<{ context: ArtifactWorkbenchContext; request: number; prompt?: string } | null>(null);
+  const [universalChatHandoff, setUniversalChatHandoff] = useState<UniversalChatHandoff | null>(null);
+  const chatWorkbenchOriginRef = useRef<ChatWorkbenchOrigin | null>(null);
+  const [chatWorkbenchReturn, setChatWorkbenchReturn] = useState<{ origin: ChatWorkbenchOrigin; request: number } | null>(null);
   const setTabsState = useCallback((update: TerminalTabsState | ((current: TerminalTabsState) => TerminalTabsState)) => {
     setTabsStateRaw(current => {
       const next = typeof update === "function" ? update(current) : update;
@@ -396,8 +405,15 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, []);
 
   const applyWorkspace = useCallback((nextWorkspace: WorkspaceState, label = "Apply workspace") => {
-    setWorkspace(() => sanitizeWorkspaceForAudience(nextWorkspace, audience), label);
-  }, [audience, setWorkspace]);
+    const next = sanitizeWorkspaceForAudience(nextWorkspace, audience);
+    if (workbenchDirtyRef.current) {
+      const current = activeTerminalTab(tabsState).workspace;
+      const artifactPane = getWorkspacePanes(current).find(({ pane }) => pane.view === "artifact");
+      if (!artifactPane || current.focusedPane !== next.focusedPane || getWorkspacePane(next, artifactPane.id) !== artifactPane.pane) return false;
+    }
+    setWorkspace(() => next, label);
+    return true;
+  }, [audience, setWorkspace, tabsState]);
 
   const handleHistoryBack = useCallback(() => {
     setTabsState((current) => {
@@ -450,36 +466,48 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
 
   useEffect(() => subscribeExperienceSurface(surface => {
     if (workbenchDirtyRef.current && surface !== "workbench") { setExperienceSurface("workbench"); return; }
+    if (surface !== "workbench") chatWorkbenchOriginRef.current = null;
     setExperienceSurfaceState(surface);
   }), []);
-  const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext) => {
+  const handleOpenWorkbench = useCallback((context?: ArtifactWorkbenchContext, chatOrigin?: ChatWorkbenchOrigin) => {
+    if (workbenchDirtyRef.current) return;
     if (context) {
-      const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(), maximizedPane, workbenchDirtyRef.current);
+      const result = openArtifactWorkbench(tabsState, context, loadDockviewLayoutState(tabsState.activeTabId), maximizedPane, workbenchDirtyRef.current);
       if (!result) return;
       artifactHandoffRef.current = artifactHandoffRef.current?.priorTab.id === result.handoff.priorTab.id
         ? { ...result.handoff, priorTab: artifactHandoffRef.current.priorTab, priorLayout: artifactHandoffRef.current.priorLayout, priorMaximizedPane: artifactHandoffRef.current.priorMaximizedPane }
         : result.handoff;
+      if (artifactHandoffRef.current) saveArtifactWorkbenchRecovery(session.email, artifactHandoffRef.current);
       setTabsState(() => result.state);
       setMaximizedPane(null);
+      chatWorkbenchOriginRef.current = null;
+    } else if (chatOrigin) {
+      // Only a validated unique symbol from this Chat may select company context.
+      // It opens an existing entity tab; all earlier professional tabs remain intact.
+      // P5/source entitlements still govern data in the resulting panels.
+      if (chatOrigin.symbol) setTabsState(current => openEntityTab(current, chatOrigin.symbol!));
+      chatWorkbenchOriginRef.current = chatOrigin;
     }
     handleSurface("workbench");
   }, [tabsState, maximizedPane, handleSurface, setTabsState]);
   const handleReturnToChat = useCallback((context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => {
     const handoff = artifactHandoffRef.current;
     if (!handoff) {
-      if (dirty || workbenchDirtyRef.current) return;
+      if (dirty || workbenchDirtyRef.current) return false;
       setWorkbenchReturn(current => ({ context, request: (current?.request ?? 0) + 1, prompt }));
       handleSurface("projects");
-      return;
+      return true;
     }
     const result = returnFromArtifactWorkbench(tabsState, handoff, context, dirty || workbenchDirtyRef.current);
-    if (!result) return;
+    if (!result) return false;
     setTabsState(() => result.state);
     setMaximizedPane(handoff.priorMaximizedPane);
     setWorkbenchReturn(current => ({ context: result.context, request: (current?.request ?? 0) + 1, prompt }));
-    requestDockviewLayoutRestore(handoff.priorLayout);
+    requestDockviewLayoutRestore(handoff.priorLayout, handoff.priorTab.id);
     artifactHandoffRef.current = null;
+    clearArtifactWorkbenchRecovery();
     handleSurface("projects");
+    return true;
   }, [tabsState, handleSurface, setTabsState]);
   const handleWorkbenchVersion = useCallback((paneId: PaneId, version: number) => {
     setTabsStateRaw(current => {
@@ -489,6 +517,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     });
   }, []);
   const handleWorkbenchDirty = useCallback((dirty: boolean) => { workbenchDirtyRef.current = dirty; setWorkbenchDirty(dirty); }, []);
+  const returnFromGeneralWorkbench = () => {
+    const origin = returnToChatWorkbenchOrigin(chatWorkbenchOriginRef.current, workbenchDirtyRef.current);
+    if (!origin) return;
+    chatWorkbenchOriginRef.current = null;
+    setChatWorkbenchReturn(current => ({ origin, request: (current?.request ?? 0) + 1 }));
+    handleSurface("projects");
+  };
 
   useEffect(() => subscribeProjectSessionRestore(() => {
     const restoredTabs = loadTerminalTabs(audience);
@@ -515,6 +550,24 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, [canOpenView, handleSurface, onOpenEnvironment, setWorkspace]);
 
   const handleAskLios = useCallback((initialQuestion?: string) => {
+    if (isClient) {
+      if (workbenchDirtyRef.current) return;
+      const capability = getTerminalCapability(activePane.view);
+      const prompt = workbenchQuestionDraft(initialQuestion, activePane.view, capability.symbolAware ? activePane.symbol : null, timeContext.enabled ? timeContext.asOfDate : null);
+      const handoff = artifactHandoffRef.current;
+      if (handoff) {
+        const exact = getWorkspacePanes(workspace).find(({ pane }) => pane.artifact?.artifactId === handoff.context.artifactId)?.pane.artifact;
+        handleReturnToChat(exact ?? handoff.context, false);
+      } else if (chatWorkbenchOriginRef.current) {
+        const origin = returnToChatWorkbenchOrigin(chatWorkbenchOriginRef.current, false);
+        if (!origin) return;
+        chatWorkbenchOriginRef.current = null;
+        setChatWorkbenchReturn(current => ({ origin, request: (current?.request ?? 0) + 1 }));
+        handleSurface("projects");
+      } else handleSurface("projects");
+      setUniversalChatHandoff(current => ({ request: (current?.request ?? 0) + 1, prompt }));
+      return;
+    }
     if (activePane.view === "agent") {
       if (initialQuestion?.trim()) setAskLiosPrompt(initialQuestion.trim());
       return;
@@ -529,16 +582,6 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     });
     setAskLiosPrompt(initialQuestion?.trim() || null);
 
-    if (isClient) {
-      handleSurface("workbench");
-      setWorkspace(
-        (current) => openViewInNewPane(current, "agent", contextSymbol || current.primary.symbol),
-        "Open Ask LiOS beside analysis",
-      );
-      prefetchPanelData("agent");
-      recordCapabilityLaunch("agent", "other");
-      return;
-    }
 
     handleNav("agent");
   }, [
@@ -549,6 +592,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     setWorkspace,
     timeContext.asOfDate,
     timeContext.enabled,
+    isClient, workspace, handleReturnToChat,
   ]);
 
   const handleExploreField = useCallback((fieldId: string) => {
@@ -723,25 +767,25 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
     else handleNav(recent.view);
   }, [handleNav, openAnalyticalSurface]);
 
-  const renderPaneContent = useCallback((paneId: PaneId, pane: PaneState) => {
-    const onSymbol = (symbol: string) => handlePaneSymbol(paneId, symbol);
-    const onNav = (view: ViewMode) => handlePaneNav(paneId, view);
+  const renderPaneContent = useCallback((paneId: PaneId, pane: PaneState, chatControls?: ChatTerminalControls) => {
+    const onSymbol = chatControls?.onSymbol ?? ((symbol: string) => handlePaneSymbol(paneId, symbol));
+    const onNav = chatControls?.onNav ?? ((view: ViewMode) => handlePaneNav(paneId, view));
     let content: React.ReactNode;
 
     switch (pane.view) {
       case "missioncontrol": content = <MissionControlPanel tabs={tabsState.tabs} activeTabId={activeTab.id} activeSymbol={activePane.symbol} onResearchStarter={handleResearchStarter} onNav={handleNav} onSymbol={handleSymbol} onNewEntity={() => handleSymbol(activePane.symbol)} />; break;
       case "entity": content = <EntityWorkspacePanel symbol={pane.symbol} onNav={onNav} onSymbol={onSymbol} role={session.role} />; break;
-      case "market": content = <MarketOverview activeSymbol={activePane.symbol} onSymbol={onSymbol} onNav={onNav} />; break;
+      case "market": content = <MarketOverview activeSymbol={pane.symbol} onSymbol={onSymbol} onNav={onNav} />; break;
       case "quote": content = <QuotePanel symbol={pane.symbol} onNav={onNav} />; break;
-      case "chart": content = <ChartPanel symbol={pane.symbol} onSymbol={(nextSymbol) => updatePaneSymbolAndView(paneId, nextSymbol, "chart")} />; break;
+      case "chart": content = <ChartPanel symbol={pane.symbol} onSymbol={chatControls ? onSymbol : (nextSymbol) => updatePaneSymbolAndView(paneId, nextSymbol, "chart")} />; break;
       case "news": content = <NewsPanel symbol={pane.symbol} />; break;
       case "agent": content = <AgentPanel magnetization={magnetization} onSymbol={onSymbol} onNav={onNav} context={askLiosContext ?? undefined} initialPrompt={askLiosPrompt ?? undefined} />; break;
       case "artifact": content = pane.artifact ? <WorkbenchArtifactPane key={pane.artifact.artifactId} context={pane.artifact} onVersionChange={(version) => handleWorkbenchVersion(paneId, version)} onDirtyChange={handleWorkbenchDirty} onReturn={handleReturnToChat} /> : <p role="alert">Choose an Artifact from Chat to open it in Workbench.</p>; break;
       case "screener": content = <ScreenerPanel onSymbol={onSymbol} />; break;
-      case "watchlist": content = <WatchlistPanel activeSymbol={activePane.symbol} onSymbol={onSymbol} role={session.role} />; break;
+      case "watchlist": content = <WatchlistPanel activeSymbol={pane.symbol} onSymbol={onSymbol} role={session.role} />; break;
       case "alerts": content = <AlertsPanel onSymbol={onSymbol} role={session.role} />; break;
       case "economics": content = <EconomicsPanel />; break;
-      case "portfolio": content = <PortfolioPanel onSymbol={onSymbol} />; break;
+      case "portfolio": content = <PortfolioPanel symbol={pane.symbol} onSymbol={onSymbol} onNav={onNav} />; break;
       case "personalfinance": content = <PersonalFinancePanel />; break;
       case "montecarlo": content = <MonteCarloPanel symbol={pane.symbol} onSymbol={onSymbol} />; break;
       case "correlation": content = <CorrelationPanel onSymbol={onSymbol} />; break;
@@ -760,7 +804,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
       case "hawkes":
       case "entropy":
       case "flow":
-        content = <QuantDeskPanel view={pane.view} symbol={pane.symbol} magnetization={magnetization} setMagnetization={setMagnetization} orderIntensity={orderIntensity} setOrderIntensity={setOrderIntensity} linkIsingToQuantum={linkIsingToQuantum} setLinkIsingToQuantum={setLinkIsingToQuantum} linkHawkesToOptimizer={linkHawkesToOptimizer} setLinkHawkesToOptimizer={setLinkHawkesToOptimizer} onSymbol={(symbol) => handlePaneSymbol(paneId, symbol)} onNav={(view) => handlePaneNav(paneId, view)} />;
+        content = <QuantDeskPanel view={pane.view} symbol={pane.symbol} magnetization={magnetization} setMagnetization={setMagnetization} orderIntensity={orderIntensity} setOrderIntensity={setOrderIntensity} linkIsingToQuantum={linkIsingToQuantum} setLinkIsingToQuantum={setLinkIsingToQuantum} linkHawkesToOptimizer={linkHawkesToOptimizer} setLinkHawkesToOptimizer={setLinkHawkesToOptimizer} onSymbol={onSymbol} onNav={onNav} />;
         break;
       case "macrostress": content = <MacroStressPanel onSymbol={onSymbol} onNav={onNav} />; break;
       case "sentiment": content = <SentimentPanel onSymbol={onSymbol} onNav={onNav} />; break;
@@ -944,6 +988,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
   }, [updatePreferences, uxPreferences]);
 
   return (
+    <TerminalArtifactRendererProvider value={{ audience, render: (context, controls) => renderPaneContent("primary", { view: context.view, symbol: context.symbol ?? "" }, controls) }}>
+    <NativeArtifactDraftOwnerContext.Provider value={session.email ?? null}>
     <div
       className="terminal-root flex h-screen flex-col overflow-hidden bg-background"
       data-density={uxPreferences.density}
@@ -1036,6 +1082,9 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               workspaceAdapter={livingWorkspaceAdapter}
               onOpenWorkbench={handleOpenWorkbench}
               workbenchReturn={workbenchReturn}
+              universalChatHandoff={universalChatHandoff}
+              renderTerminalPanel={(context, controls) => renderPaneContent("primary", { view: context.view, symbol: context.symbol ?? "" }, controls)}
+              chatWorkbenchReturn={chatWorkbenchReturn}
               onOpenEnvironment={onOpenEnvironment}
             />
           </div>
@@ -1051,9 +1100,12 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
             />
           ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-testid="workbench-canvas">
+            {chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" data-testid="workbench-return-chat-general" disabled={workbenchDirty} onClick={returnFromGeneralWorkbench} className="shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}
+            {isClient && !chatWorkbenchOriginRef.current && !artifactHandoffRef.current && <button type="button" disabled={workbenchDirty} onClick={() => handleAskLios()} className="min-h-10 shrink-0 border-b border-border p-2 text-left text-sm">Return to Chat</button>}
             {workbenchDirty && <p role="status" className="shrink-0 border-b border-amber-300/30 p-2 text-sm text-amber-200">Unsaved Artifact edits · save or reset in the Artifact pane before leaving this workspace.</p>}
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               <DockviewWorkspaceGrid
+                layoutScope={activeTab.id}
                 workspace={workspace}
                 isMobile={isMobile}
                 preserveArtifactDraft={workbenchDirty}
@@ -1075,7 +1127,7 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         )}
       </div>
 
-      {cmdOpen && <CommandBar audience={audience} navigationContext={isProjectsSurface ? navigationContext : `Workspace · ${activePane.symbol ?? "no security selected"}; saved Project/Chat retained`} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
+      {cmdOpen && <CommandBar audience={audience} activeView={isProjectsSurface ? undefined : activePane.view} navigationContext={isProjectsSurface ? navigationContext : `Workspace · ${activePane.symbol ?? "no security selected"}; saved Project/Chat retained`} onClose={() => setCmdOpen(false)} onExecute={handleCommand} onAskLios={handleAskLios} onExploreField={handleExploreField} />}
 
       {switcherOpen && <QuickSwitcher tabs={tabsState.tabs} activeTabId={tabsState.activeTabId} favorites={loadTerminalFavorites()} recents={recentContexts} onActivateTab={(tabId) => setTabsState((current) => activateTerminalTab(current, tabId))} onOpenView={handleNav} onOpenRecent={handleOpenRecent} onClose={() => setSwitcherOpen(false)} />}
 
@@ -1103,6 +1155,8 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
 
       <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onApplyWorkspace={applyWorkspace} />
     </div>
+    </NativeArtifactDraftOwnerContext.Provider>
+    </TerminalArtifactRendererProvider>
   );
 }
 

@@ -19,7 +19,7 @@ const { users, domains, conversationActionGrants } = await import("@shared/schem
 const store = await import("./conversationGrantStore");
 const { createProject } = await import("./projectStore");
 const { createProjectChat } = await import("./projectChatStore");
-const { upsertPersonaPreferences } = await import("./personaPreferenceService");
+const { authorizeInjectedAiForTest } = await import("./fixtures/injectedAiAuthorization");
 const { startTemporaryRun } = await import("./conversationRunService");
 const { conversationRuns } = await import("./conversationRunRegistry");
 const { proposeSandboxTerminalSession, reviewSandboxTerminalSession } = await import("./governedSandboxSession");
@@ -638,10 +638,10 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
     await assert.rejects(() => store.recordConversationGrant({ user: owner, action: "RunBacktest", scope: "once" }), store.ConversationGrantError);
   });
 
-  await t.test("a request that merely claims approval is refused; a server-recorded approval is honoured once", async () => {
+  await t.test("a request that merely claims approval is refused; a server-recorded approval is honoured once", async (t) => {
     store.clearOnceApprovals();
     await getDb().insert(domains).values({ slug: "finance", name: "Finance", active: true }).onConflictDoNothing();
-    await upsertPersonaPreferences(owner, { preferences: { waveCMasterAi: { state: "on", mode: "manual" } } });
+    await authorizeInjectedAiForTest(owner, t);
     const ask = { message: "What might higher rates do to bank margins?", executionMode: "ai_direct", sourceScope: "my_data", history: [] } as const;
     const claimed = crypto.randomUUID();
     await startTemporaryRun(owner, {
@@ -740,4 +740,271 @@ test("server-side conversation grants (GM-11a)", { timeout: 90_000 }, async (t) 
       else process.env.LIOS_EXECUTION_SANDBOX_BASE64 = old.base64;
     }
   });
+  await t.test("GM20 owner-scoped Project/Chat MCP approval, real saved source, release receipt and live revocation", { timeout: 60_000 }, async () => {
+    store.clearOnceApprovals();
+    const { eq } = await import("drizzle-orm");
+    const { createServer } = await import("node:http");
+    const { once } = await import("node:events");
+    const { sourceConnections } = await import("@shared/schema");
+    const { conversationRequestSchema } = await import("@shared/conversationRuntime");
+    const { executeConversationRuntime, getConversationTool, currentConversationToolApprovalPolicy } = await import("./conversationRuntime");
+    const { createAttribution } = await import("./byoaiRouter");
+    const { createExecutionJournal } = await import("./exec/execution-journal");
+    type PersistedLedger = Awaited<ReturnType<typeof createExecutionJournal>>;
+    const wireCalls: string[] = [];
+    let cancelAfterRemoteToolEntered: (() => void) | null = null;
+    const server = createServer(async (request, response) => {
+      if (request.url !== "/mcp") { response.writeHead(404).end(); return; }
+      if (request.method === "GET") { response.writeHead(405).end(); return; }
+      if (request.method !== "POST") { response.writeHead(202).end(); return; }
+      const body: Buffer[] = [];
+      for await (const chunk of request) body.push(Buffer.from(chunk));
+      const rpc = JSON.parse(Buffer.concat(body).toString("utf8")) as {
+        id?: number | string; method?: string; params?: { name?: string; arguments?: { symbol?: string } };
+      };
+      if (rpc.method === "tools/call") {
+        wireCalls.push(String(rpc.params?.name));
+        assert.equal(rpc.params?.arguments?.symbol, "TEST");
+        cancelAfterRemoteToolEntered?.();
+      }
+      if (rpc.id === undefined) { response.writeHead(202).end(); return; }
+      const result = rpc.method === "initialize"
+        ? { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "mcp-project-fixture", version: "1" } }
+        : rpc.method === "tools/list" ? { tools: [{ name: "quotes.read", inputSchema: { type: "object", properties: {} } }] }
+        : rpc.method === "tools/call" ? { isError: false, content: [{ type: "text", text: "OWNER_APPROVED_MCP_QUOTE_127" }] }
+        : null;
+      const envelope = result === null
+        ? { jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "Method not found" } }
+        : { jsonrpc: "2.0", id: rpc.id, result };
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(envelope));
+    });
+    server.listen(0, "127.0.0.1");
+    try {
+      await once(server, "listening");
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const [connection] = await getDb().insert(sourceConnections).values({
+        userId: owner.id, organizationId: null, connectorId: "mcp",
+        name: "GM20 owner-backed fixture", sourceType: "mcp",
+        config: {
+          endpoint: "http://127.0.0.1:" + address.port + "/mcp",
+          projectId: projectA.id, allowedToolIds: "quotes.read",
+          aiTransmission: "allow", aiUsageRights: "cleared", requireApprovalForTools: true,
+        },
+        credentialRef: null, status: "configured",
+      }).returning();
+      assert.ok(connection);
+      const descriptor = getConversationTool("lios.external-mcp.call");
+      assert.ok(descriptor, "the real product MCP tool must be registered");
+      const plannedInput = { connectionId: connection.id, toolId: "quotes.read", arguments: { symbol: "TEST" } };
+      const plan = JSON.stringify({ steps: [{
+        id: "mcp", toolId: "lios.external-mcp.call", label: "Read connected source",
+        input: plannedInput, dependsOn: [],
+      }] });
+      const reply = JSON.stringify({ decision: "complete", answer: "The connected source supplied a test observation." });
+      const run = (requestId: string, controller: AbortController, answers: string[], resume?: {
+        state: import("./agentLoop").AgentLoopResumeState; authorization: unknown;
+      }, onLedger?: (event: import("./exec/agent-run-events").AgentEventInput) => void | Promise<void>,
+      persisted?: PersistedLedger) => {
+        const ledger: import("./exec/agent-run-events").AgentEventInput[] = [];
+        const events: ConversationRuntimeEvent[] = [];
+        const prompts: string[] = [];
+        const queue = [...answers];
+        const request = conversationRequestSchema.parse({
+          requestId, message: "Read TEST through my connected MCP",
+          sourceScope: "my_data", executionMode: "ai_assisted",
+          transmissionPolicy: { allowResourceReferences: true },
+        });
+        const promise = executeConversationRuntime({
+          tenant: ownerCtx, scope: "project", chatId: chatA.id,
+          projectId: projectA.id, resources: [], history: [], request,
+          signal: controller.signal,
+          agentLoop: { ledger: async event => {
+            ledger.push(event);
+            await persisted?.appendAgentEvent(requestId, event);
+            await onLedger?.(event);
+          }, ...(resume ? { resume } : {}) },
+          aiCompletion: async completion => {
+            const prompt = completion.messages.map(msg => msg.content).join("\n");
+            prompts.push(prompt);
+            const text = queue.shift();
+            if (!text) throw new Error("The fixture model was called unexpectedly.");
+            return { provider: "openai", model: "offline", text,
+              attribution: createAttribution({ provider: "openai", model: "offline", prompt, output: text }) };
+          },
+          emit: event => { events.push(event); },
+        });
+        return { promise, ledger, events, prompts };
+      };
+      const reviewOwner = async (
+        requestId: string, controller: AbortController,
+        pause: NonNullable<Awaited<ReturnType<typeof executeConversationRuntime>>["agentPause"]>,
+        allow: boolean,
+      ) => {
+        const policy = currentConversationToolApprovalPolicy("lios.external-mcp.call");
+        const proposal = await store.proposeGovernedToolOperation({
+          user: owner, projectId: projectA.id, chatId: chatA.id, requestId,
+          stepId: pause.stepId, toolCallId: pause.resume.paused.toolCallId,
+          toolId: "lios.external-mcp.call", input: plannedInput, descriptor,
+          planHash: pause.planSha256, policy, runSignal: controller.signal,
+          currentPolicy: () => currentConversationToolApprovalPolicy("lios.external-mcp.call"),
+        });
+        await assert.rejects(
+          store.reviewGovernedToolOperation({
+            user: stranger, requestId, reviewId: proposal.reviewId, allow: true, scope: "once",
+          }),
+          /not found/i,
+        );
+        await store.reviewGovernedToolOperation({
+          user: owner, requestId, reviewId: proposal.reviewId, allow, scope: "once",
+        });
+        if (!allow) {
+          await assert.rejects(store.resolveGovernedToolOperation({
+            user: owner, requestId, reviewId: proposal.reviewId,
+          }), /unavailable/i);
+          return null;
+        }
+        return store.resolveGovernedToolOperation({ user: owner, requestId, reviewId: proposal.reviewId });
+      };
+      const noId = crypto.randomUUID();
+      const noController = new AbortController();
+      const denied = await run(noId, noController, [plan]).promise;
+      assert.equal(denied.awaitingApproval, true);
+      assert.ok(denied.agentPause);
+      assert.equal(await reviewOwner(noId, noController, denied.agentPause, false), null);
+      assert.deepEqual(wireCalls, [], "denied L4 review cannot reach the source");
+
+      const approvedId = crypto.randomUUID();
+      const approvedController = new AbortController();
+      const savedOwner = { userId: owner.id, projectId: projectA.id, chatId: chatA.id };
+      const journalOptions = {
+        directory: path.join(dataDir, "gm20-mcp-journal"),
+        keyDirectory: path.join(dataDir, "gm20-mcp-keys"),
+      };
+      const persisted = await createExecutionJournal(journalOptions);
+      await persisted.begin({ id: approvedId, owner: savedOwner, label: "Approved MCP", agentRun: true });
+      const pending = await run(approvedId, approvedController, [plan], undefined, undefined, persisted).promise;
+      assert.equal(pending.awaitingApproval, true);
+      assert.ok(pending.agentPause);
+      assert.deepEqual(wireCalls, []);
+      await persisted.markWaitingApproval(approvedId);
+      assert.equal((await persisted.read(approvedId, savedOwner))?.status, "waiting_approval");
+      const authorization = await reviewOwner(approvedId, approvedController, pending.agentPause, true);
+      await persisted.resumeAfterApproval(
+        approvedId, savedOwner, pending.agentPause.resume.paused.toolCallId,
+        "owner-approved:" + crypto.createHash("sha256").update(approvedId).digest("hex"),
+      );
+      assert.ok(authorization);
+      const resumed = run(approvedId, approvedController, [reply], {
+        state: pending.agentPause.resume, authorization,
+      }, undefined, persisted);
+      const outcome = await resumed.promise;
+      assert.equal(outcome.awaitingApproval, false);
+      assert.equal(outcome.cancelled, false);
+      assert.deepEqual(wireCalls, ["quotes.read"]);
+      assert.equal(resumed.prompts.length, 1, "the resumed agent does not re-plan");
+      assert.match(resumed.prompts[0]!, /BEGIN_UNTRUSTED_MCP_EVIDENCE/);
+      assert.match(resumed.prompts[0]!, /OWNER_APPROVED_MCP_QUOTE_127/);
+      assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+      assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_committed").length, 1);
+      assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_finished" && event.status === "succeeded").length, 1);
+      assert.ok(resumed.events.some(event => event.type === "receipt"));
+      assert.equal(JSON.stringify(resumed.ledger).includes("OWNER_APPROVED_MCP_QUOTE_127"), false, "L2 stores refs, not raw MCP passages");
+      await persisted.finish(approvedId, "completed", 0);
+      // Reinstantiate storage to force a real encrypted-disk read instead
+      // of inspecting only live JS objects or callback-local event arrays.
+      const coldJournal = await createExecutionJournal(journalOptions);
+      const durable = await coldJournal.read(approvedId, savedOwner);
+      assert.ok(durable);
+      assert.equal(durable.version, 2);
+      assert.equal(durable.status, "completed");
+      assert.deepEqual(durable.events?.map(event => event.kind), [
+        "step_started", "tool_call_started", "tool_call_waiting_approval",
+        "tool_call_resumed", "tool_call_dispatch_intent", "tool_call_dispatch_committed",
+        "tool_call_finished", "step_finished",
+      ]);
+      assert.equal(durable.events?.filter(event => event.kind === "tool_call_dispatch_committed").length, 1);
+      assert.equal(await coldJournal.read(approvedId, { ...savedOwner, userId: stranger.id }), null,
+        "unrelated signed-in users cannot read an execution record");
+      const encryptedBytes = fs.readFileSync(path.join(journalOptions.directory, approvedId));
+      for (const forbidden of ["OWNER_APPROVED_MCP_QUOTE_127", "quotes.read", "aiUsageRights", "cleared", "read_mcp"]) {
+        assert.equal(encryptedBytes.includes(Buffer.from(forbidden)), false,
+          "encrypted journal must not contain plaintext input, content or release consent");
+      }
+      assert.equal(JSON.stringify(durable.events).includes("OWNER_APPROVED_MCP_QUOTE_127"), false,
+        "decrypted durable dispatch events contain hashes and refs, never the MCP excerpt");
+
+      const revokedId = crypto.randomUUID();
+      const revokedController = new AbortController();
+      const revokedPending = await run(revokedId, revokedController, [plan]).promise;
+      assert.ok(revokedPending.agentPause);
+      const revokedGrant = await reviewOwner(revokedId, revokedController, revokedPending.agentPause, true);
+      assert.ok(revokedGrant);
+      await getDb().update(sourceConnections).set({ status: "invalid" }).where(eq(sourceConnections.id, connection.id));
+      const revokedRun = run(revokedId, revokedController, [reply], {
+        state: revokedPending.agentPause.resume, authorization: revokedGrant,
+      });
+      const revokedOutcome = await revokedRun.promise;
+      assert.equal(revokedOutcome.awaitingApproval, false);
+      assert.deepEqual(wireCalls, ["quotes.read"], "revoked source cannot dispatch a second MCP request");
+      assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_dispatch_intent"), false,
+        "refusal must precede L5 intent: no remote effect was possible");
+      assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
+      assert.equal(revokedRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+      assert.ok(!revokedRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
+
+      // Stop is signalled after L5 acknowledged the intent but BEFORE the
+      // registry enters tool.invoke. The registry alone can prove zero effect
+      // and append a no_effect proof without any remote tools/call.
+      await getDb().update(sourceConnections).set({ status: "configured" }).where(eq(sourceConnections.id, connection.id));
+      const noEffectId = crypto.randomUUID();
+      const noEffectController = new AbortController();
+      const noEffectPending = await run(noEffectId, noEffectController, [plan]).promise;
+      assert.ok(noEffectPending.agentPause);
+      const noEffectAuth = await reviewOwner(noEffectId, noEffectController, noEffectPending.agentPause, true);
+      assert.ok(noEffectAuth);
+      const noEffectRun = run(noEffectId, noEffectController, [reply], {
+        state: noEffectPending.agentPause.resume, authorization: noEffectAuth,
+      }, event => { if (event.kind === "tool_call_dispatch_intent") noEffectController.abort(); });
+      await noEffectRun.promise.catch(() => undefined);
+      assert.deepEqual(wireCalls, ["quotes.read"], "stopping after intent acknowledgement must not invoke the MCP SDK");
+      assert.equal(noEffectRun.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+      assert.equal(noEffectRun.ledger.filter(event => event.kind === "tool_call_dispatch_no_effect").length, 1,
+        "a pre-entry stop has a durable zero-effect reconciliation proof");
+      assert.equal(noEffectRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
+      assert.equal(noEffectRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+      assert.equal(noEffectRun.prompts.length, 0, "cancelled runs do not synthesize results");
+
+      // In contrast, after the MCP server has received tools/call, even a
+      // client-side abort cannot prove the server did not perform the effect.
+      // The L5 intent remains unresolved, NEVER a no_effect proof or commit.
+      const unknownId = crypto.randomUUID();
+      const unknownController = new AbortController();
+      const unknownPending = await run(unknownId, unknownController, [plan]).promise;
+      assert.ok(unknownPending.agentPause);
+      const unknownAuth = await reviewOwner(unknownId, unknownController, unknownPending.agentPause, true);
+      assert.ok(unknownAuth);
+      cancelAfterRemoteToolEntered = () => unknownController.abort();
+      try {
+        const unknownRun = run(unknownId, unknownController, [reply], {
+          state: unknownPending.agentPause.resume, authorization: unknownAuth,
+        });
+        await unknownRun.promise.catch(() => undefined);
+        assert.deepEqual(wireCalls, ["quotes.read", "quotes.read"],
+          "only one additional remote effect attempt may begin");
+        assert.equal(unknownRun.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_dispatch_no_effect"), false,
+          "an already received remote call is never falsely reconciled as no effect");
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_dispatch_committed"), false);
+        assert.equal(unknownRun.ledger.some(event => event.kind === "tool_call_finished" && event.status === "succeeded"), false);
+        assert.ok(!unknownRun.prompts.some(prompt => prompt.includes("OWNER_APPROVED_MCP_QUOTE_127")));
+      } finally {
+        cancelAfterRemoteToolEntered = null;
+      }
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  });
+
 });

@@ -1,8 +1,10 @@
+import { terminalArtifactTool } from "./terminalArtifactTool";
 import { z } from "zod";
 import { bindConversationExecutionSignal, linkAbortSignal } from "./exec/execution-scope";
 import { deadlineSignal } from "./deadlineSignal";
 import { checkClaims } from "./claimChecker";
 import { looksLikeNamedSecurityRequest, parsePlannerChoice, PLANNER_CATALOG, plannerMessages, routedRequest } from "./aiPlannerFallback";
+import { naturalResearchEntry } from "./naturalResearchEntry";
 import crypto from "crypto";
 import { userSafeErrorMessage } from "./safeErrorMessage";
 import {
@@ -48,6 +50,8 @@ import { invokeAIRoutedCompletion, type AICompletionResult, type AIRoutedComplet
 import { AIProviderError } from "./byoaiRouter";
 import { createArtifactProposal, getArtifact, getArtifactVersion } from "./artifactStore";
 import { projectEvidenceArtifactTool } from "./projectEvidenceArtifactTool";
+import { saveResearchComparisonTool } from "./researchComparisonArtifactTool";
+import { researchReportFromArtifactTool } from "./researchReportFromArtifactTool";
 import { artifactInspectTool, artifactMaintenanceTool, buildArtifactMaintenancePrompt, isCredentialBearingOutboundText } from "./artifactMaintenance";
 import { webResearchArtifactTool } from "./webResearchArtifactTool";
 import { createMemoryReflectionTool } from "./memoryReflectionTool";
@@ -125,23 +129,23 @@ import type {
   UniversalDataPlan,
 } from "@shared/trustContracts";
 import { universalDataPlanSchema } from "@shared/trustContracts";
+import { ambiguousMentionTokens, normalizedMentionToken, userMentionTokens } from "@shared/mentionContext";
 import {
   assertNotAborted,
   eventBase,
   hashPayload,
   isAbortLike,
   nowIso,
-  normalizedMentionToken,
   sourceScopeAllowsExternalData,
   sourceScopeAllowsFiles,
   sourceScopeAllowsProjectData,
-  userMentionTokens,
 } from "./conversationRuntimeCore";
 import {
   GovernedToolApprovalRequiredError,
   GovernedToolDeniedError,
   GovernedToolRegistry,
   decidePermission,
+  governedToolPlanningSchema,
   type GovernedToolCall,
   type GovernedToolDescriptor,
   type ToolSideEffect,
@@ -174,7 +178,9 @@ import { deriveAgentToolIdempotencyKey } from "./exec/agent-idempotency";
 import type { CurrentExecutionPolicy } from "./exec/execution-authorization";
 
 import { conversationRuns } from "./conversationRunRegistry";
-import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { governedExternalMcpInputSchema, invokeGovernedExternalMcpTool, preflightGovernedExternalMcpTool } from "./governedExternalMcpTool";
+import { listSourceConnections } from "./sourceConnectionService";
+import { isMcpEvidenceCurrent, mcpEvidenceMatchesSelectedRefs, renderMcpAgentReviewEvidence, type McpAgentEvidenceCapture } from "./mcpAgentEvidence";
 import { browserConversationToolDescriptor } from "./governedBrowserTool";
 import { codingConversationToolDescriptors } from "./acp/coding-tools";
 import { listInstalledSkillAdapters } from "./skillRuntime";
@@ -435,7 +441,9 @@ const instrumentToolInputSchema = z.object({
   symbol: z.string().trim().max(120).optional(),
   name: z.string().trim().max(300).optional(),
   query: z.string().trim().max(300).optional(),
-}).strict().refine((input) => Boolean(input.symbol || input.name || input.query));
+}).strict().refine((input) => Boolean(input.symbol || input.name || input.query), {
+  message: "Provide at least one non-empty symbol, name or query copied from the user's explicit identity request; do not invent an instrument.",
+});
 const marketDataToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const companyToolInputSchema = z.object({ symbol: z.string().trim().min(1).max(120) }).strict();
 const technicalToolInputSchema = z.object({
@@ -490,6 +498,7 @@ export function createConversationToolCall(
     sourceScope: input.request.sourceScope ?? "auto",
     resourceTransmissionAllowed: input.request.transmissionPolicy.allowResourceReferences,
     activeArtifactRefs: (input.request.context?.activeObjectRefs ?? []).filter(ref => /^artifact:[0-9a-f-]{36}$/i.test(ref)).slice(0, 20),
+    terminalArtifact: input.request.context?.terminalArtifact,
     tenant: input.tenant,
     nodeFinanceGateway: input.nodeFinanceGateway,
   };
@@ -745,6 +754,8 @@ function registerBuiltinConversationTools(): void {
           projectId,
         },
         signal,
+        undefined,
+        call.recordExternalMcpObservation,
       );
     },
   });
@@ -752,6 +763,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool({
     id: "lios.instrument-master",
     label: "Global Instrument Master",
+    planningHint: "Resolve an explicitly requested instrument identity. Input requires at least one non-empty field: symbol, name, or query. For an explicit MSFT request use {\"symbol\":\"MSFT\"}; for a company name use name or query. Empty input is invalid. Do not guess a ticker from unrelated prose.",
     kind: "resolve",
     permissionClass: "safe_auto",
     access: "read",
@@ -1122,8 +1134,11 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(browserConversationToolDescriptor());
   for (const tool of codingConversationToolDescriptors) registerConversationTool(tool);
   registerConversationTool(projectEvidenceArtifactTool);
+  registerConversationTool(saveResearchComparisonTool);
+  registerConversationTool(researchReportFromArtifactTool);
   registerConversationTool(artifactInspectTool);
   registerConversationTool(artifactMaintenanceTool);
+  registerConversationTool(terminalArtifactTool);
   registerConversationTool(webResearchArtifactTool);
   registerConversationTool(entityIntelligenceTool);
   registerConversationTool(privateEntityResearchTool);
@@ -1178,6 +1193,7 @@ export function includedResourceRefs(
 ): ProjectRuntimeResource[] {
   if (sourceScope === "web") return [];
   const mentions = userMentionTokens(message);
+  const ambiguous = new Set(ambiguousMentionTokens(resources, message));
   const selectedAttachments = new Set(attachments.map((attachment) => attachment.sourceRef));
   return resources.filter((resource) => {
     if (resource.contextMode === "excluded") return false;
@@ -1185,7 +1201,8 @@ export function includedResourceRefs(
     if (sourceScope === "files") return explicitlyAttached;
     if (explicitlyAttached) return true;
     if (resource.contextMode === "project") return true;
-    return mentions.has(normalizedMentionToken(resource.label));
+    const token = normalizedMentionToken(resource.label);
+    return !ambiguous.has(token) && mentions.has(token);
   }).slice(0, 30);
 }
 
@@ -1248,12 +1265,13 @@ async function invokeGovernedAi(
       if (invokeAI !== invokeAIRoutedCompletion) await content.beforeTransmission();
     }
     const policy = input.request.transmissionPolicy;
+    const boundedResearch = plan.intent.parameters.workflow === "ws26_natural_research";
     const answered = await invokeAI({
       ...request,
       maxTokens: Math.min(request.maxTokens ?? 1_800, policy.maxAiOutputTokens ?? 1_800),
-      maxAttempts: privateReason ? 1 : policy.maxProviderAttempts ?? 2,
+      maxAttempts: privateReason || boundedResearch ? 1 : policy.maxProviderAttempts ?? 2,
       ...(content.containsPrivateResearch || privateReason === "Project Artifacts" ? { dataClassification: "organization" as const } : {}),
-      fallback: privateReason || policy.maxProviderAttempts === 1 ? "none" : "configured",
+      fallback: privateReason || boundedResearch || policy.maxProviderAttempts === 1 ? "none" : "configured",
       ...(content.containsPrivateResearch ? { beforeTransmission: content.beforeTransmission } : {}),
     });
     if (answered.fallback?.attempts.length) {
@@ -1455,6 +1473,7 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
 
   const artifactId = activeArtifactId(request.context);
   const artifactEdit = artifactId ? parseArtifactEditInstruction(request.message) : null;
+  const naturalResearch = naturalResearchEntry(request.message);
 
   const runtimeDiagnosis = /^(?:please\s+)?(?:run\s+)?(?:lios\s+doctor|(?:check|diagnose|inspect)\s+(?:the\s+|my\s+)?(?:lios\s+)?(?:runtime|python(?:\s+runtime)?|core(?:\s+runtime)?)(?:\s+(?:health|readiness|status))?)[.!?]?\s*$/i.test(request.message.trim());
   if (request.context?.nodeFinancePolicy) {
@@ -1875,6 +1894,26 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
     } else {
       steps.push({ id: "deterministic-engine", kind: "calculate", label: delegation.engineLabel, componentId: `lios.engine.${legacyIntent.engineId}`, permissionClass: "safe_auto", dependsOn: [] });
     }
+  } else if (naturalResearch && resolvedCapabilities.length === 1 && resolvedCapabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct") {
+    // Use the existing governed BYOAI execution and Chat event stream, not an
+    // invented web browser, source provider, second runtime or autonomous loop.
+    capabilities = resolvedCapabilities;
+    intent = {
+      action: "research",
+      confidence: 0.94,
+      entityRefs: [],
+      parameters: { workflow: "ws26_natural_research", objective: naturalResearch.objective },
+      requiresAI: true,
+      requiresDeterministicCompute: false,
+    };
+    steps.push({
+      id: "ai-assist",
+      kind: "ai",
+      label: "Synthesize preliminary research from permitted context (no automatic source retrieval)",
+      componentId: "lios.byoai",
+      permissionClass: "safe_auto",
+      dependsOn: [],
+    });
   } else {
     capabilities = resolvedCapabilities.filter((item) => item.id === "ai.answer");
     intent = {
@@ -1895,9 +1934,9 @@ export function planConversationWorkflow(requestInput: ConversationRequest): Wor
     capabilities,
     steps,
     budget: {
-      maxSteps: Math.min(50, Math.max(12, steps.length + 2)),
-      maxDurationMs: 90_000,
-      maxAiCalls: request.executionMode === "ai_direct" ? 1 : 2,
+      maxSteps: intent.parameters.workflow === "ws26_natural_research" ? 1 : Math.min(50, Math.max(12, steps.length + 2)),
+      maxDurationMs: intent.parameters.workflow === "ws26_natural_research" ? 60_000 : 90_000,
+      maxAiCalls: intent.parameters.workflow === "ws26_natural_research" ? 1 : request.executionMode === "ai_direct" ? 1 : 2,
     },
   });
 }
@@ -2047,7 +2086,7 @@ function createReceipt(input: {
   });
 }
 
-function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationContextEnvelope): string {
+function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationContextEnvelope, plan?: WorkflowPlan): string {
   const policy = input.request.transmissionPolicy;
   // ConversationRequest defaults are parsed for planning, but the caller's
   // original object is retained on ConversationRuntimeInput. Mirror the
@@ -2074,6 +2113,15 @@ function aiSystemPrompt(input: ConversationRuntimeInput, context: ConversationCo
           : "- Auto source scope may combine governed Project and connected/external sources as the runtime permits.",
     `- Active workspace: ${context.workspace.symbol ?? "no symbol"} · ${context.workspace.view ?? "conversation"}.`,
   ];
+  if (plan?.intent.parameters.workflow === "ws26_natural_research") {
+    parts.push(
+      "This is a bounded preliminary research request, not an autonomous investigation.",
+      "No browser or connected provider retrieval is executed by this plan. Do not claim to have searched the web or read live pages, filings, or Project resources that were not actually provided.",
+      "Distinguish preliminary synthesis from documented findings. Never fabricate citations, publication dates, source access, or verification.",
+      "State the scoped research question, what can be discussed from available context, important evidence gaps, and actionable source/connection steps to verify further.",
+      "Respect the selected source scope, Project transmission policy and attachment extraction limits; do not monitor, take external action or silently broaden consent.",
+    );
+  }
   if (input.scope === "project" && policy.allowProjectInstructions && input.projectInstructions?.trim()) {
     parts.push(`Project instructions: ${input.projectInstructions.trim()}`);
   }
@@ -2316,7 +2364,7 @@ async function executeNodeFinanceSnapshot(input: ConversationRuntimeInput, plan:
   return { text, label: "deterministic", plan, receiptIds: [receipt.id], artifacts: [draft], cancelled: false, awaitingApproval: false };
 }
 function evidenceKindForSourceRef(sourceRef: string): EvidenceObservation["kind"] {
-  if (sourceRef.startsWith("ai-provider:")) return "ai";
+  if (sourceRef.startsWith("ai-provider:") || sourceRef.startsWith("ai-output:")) return "ai";
   if (sourceRef.startsWith("provider:") || sourceRef.startsWith("dataset:")) return "provider";
   if (sourceRef.startsWith("project-attachment:") || sourceRef.startsWith("file:")) return "file";
   if (sourceRef.startsWith("project:") || sourceRef.startsWith("artifact:")) return "project";
@@ -2764,6 +2812,7 @@ async function executeP2CapabilityBundle(
       sourceRefs,
       executionReceiptIds: [technicalReceipt.id],
       data: {
+        sourceScope: input.request.sourceScope,
         symbol,
         name: match.name ?? quote.name ?? null,
         identity: match,
@@ -3290,6 +3339,7 @@ async function executeTechnical(
     sourceRefs,
     executionReceiptIds: [receipt.id],
     data: {
+      sourceScope: input.request.sourceScope,
       symbol,
       quote: { price: quote.price, changePercent: quote.changePercent, currency: quote.currency, provider: quote.quoteSource },
       snapshot,
@@ -4085,7 +4135,7 @@ async function executeAI(
   await emit(input, { ...eventBase(request.requestId), type: "tool_start", stepId: request.executionMode === "ai_direct" ? "ai-direct-estimate" : "ai-assist", label: "Invoke governed BYOAI", componentId: "lios.byoai" });
   const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
   const result = await invokeGovernedAi(input, plan, invokeAI, {
-    system: aiSystemPrompt(input, context),
+    system: aiSystemPrompt(input, context, plan),
     messages: [...input.history.slice(-20), aiAttachmentUserMessage(input)],
     maxTokens: 1800,
     preferredProvider: input.preferredProvider,
@@ -4101,7 +4151,10 @@ async function executeAI(
   });
   assertNotAborted(signal);
   const aiDirect = request.executionMode === "ai_direct";
-  const text = aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}` : result.text;
+  const text = aiDirect ? `[AI-derived estimate — not deterministic]\n\n${result.text}`
+    : plan.intent.parameters.workflow === "ws26_natural_research"
+      ? `Research scope: configured AI synthesis only. No external sources were retrieved by this workflow; factual claims require independently recorded evidence.\n\n${result.text}`
+      : result.text;
   const attachmentWarnings = request.transmissionPolicy.allowResourceReferences
     ? attachmentTextTruncationWarnings(input.resolvedAttachments ?? [])
     : [];
@@ -4116,6 +4169,7 @@ async function executeAI(
     sourceRefs: [...new Set([`ai-provider:${result.attribution.provider}`, ...transmittedAttachmentSourceRefs(input)])],
     warnings: [
       ...(aiDirect ? ["AI-direct estimate: user-authorized and not a deterministic LiOS engine result."] : []),
+      ...(plan.intent.parameters.workflow === "ws26_natural_research" ? ["WS-26 preliminary AI research: no automatic source retrieval or independent claim verification."] : []),
       ...attachmentWarnings,
     ],
   });
@@ -4193,6 +4247,7 @@ interface AgentLoopCatalogue {
     id: string;
     label: string;
     planningHint?: string;
+    inputJsonSchema: string;
     kind: string;
     permissionClass: GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["permissionClass"];
     sideEffect: NonNullable<GovernedToolDescriptor<ConversationToolKind, ConversationToolResult>["sideEffect"]>;
@@ -4209,6 +4264,7 @@ function offeredAgentLoopCatalogue(role: string): AgentLoopCatalogue {
     id: tool.id,
     label: tool.label,
     ...(tool.planningHint ? { planningHint: tool.planningHint } : {}),
+    inputJsonSchema: governedToolPlanningSchema(tool.inputSchema),
     kind: tool.kind,
     permissionClass: tool.permissionClass,
     sideEffect: tool.sideEffect ?? "none",
@@ -4236,7 +4292,7 @@ function agentLoopFactsFor(
   const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => a.id.localeCompare(b.id));
   const toolSetSha256 = sha256Json({
     version: 1,
-    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
+    tools: byId(tools).map((tool) => ({ id: tool.id, label: tool.label, planningHint: tool.planningHint ?? null, inputJsonSchema: tool.inputJsonSchema, kind: tool.kind, permissionClass: tool.permissionClass, sideEffect: tool.sideEffect })),
     skills: byId(skills).map((skill) => ({ id: skill.id, toolIds: [...skill.toolIds].sort() })),
   });
   const policySha256 = sha256Json({
@@ -4488,11 +4544,21 @@ async function executeAgentLoop(
     });
   }
   let assertReviewResearchCurrent: (() => Promise<void>) | undefined;
+  // Never journal, checkpoint or expose raw external MCP observations. They
+  // exist only in the current run and are re-authorized before AI release.
+  const mcpEvidenceByStep = new Map<string, McpAgentEvidenceCapture>();
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
   const invokeAI = input.aiCompletion ?? invokeAIRoutedCompletion;
-  const maintenancePrompt = input.scope === "project" && request.transmissionPolicy.allowResourceReferences && /\b(update|maintain|revise|edit|improve|append)\b/i.test(request.message)
+  const terminalBinding = request.context?.terminalArtifact;
+  let terminalPrompt: string | null = null;
+  if (terminalBinding && input.chatId !== null && request.transmissionPolicy.allowResourceReferences && request.transmissionPolicy.allowToolCalling) {
+    const { validateTerminalArtifactTarget } = await import("./terminalArtifactTool");
+    await validateTerminalArtifactTarget(input.tenant, input.chatId, terminalBinding, signal);
+    terminalPrompt = `Selected existing financial terminal Artifact (identity only, no source-data disclosure): ${JSON.stringify(terminalBinding)}. Use lios.artifact.terminal_update with artifactId, baseVersion=version, baseHash=contentHash and typed operations. State changes are not numerical calculations. Rejection/conflict requires reinspection; never guess another head.`;
+  }
+  const maintenancePrompt = !terminalPrompt && input.scope === "project" && request.transmissionPolicy.allowResourceReferences && /\b(update|maintain|revise|edit|improve|append)\b/i.test(request.message)
     ? await buildArtifactMaintenancePrompt(createConversationToolCall(input, "agent", await activeResearchSourcePolicy(input)), signal)
     : null;
   const providers = new Set<string>();
@@ -4530,7 +4596,7 @@ async function executeAgentLoop(
       let answered: AICompletionResult;
       try {
         answered = await invokeGovernedAi(input, plan, invokeAI, {
-          system: `${system}\n\n${aiSystemPrompt(input, context)}${maintenancePrompt ? `\n\n${maintenancePrompt}` : ""}`,
+          system: `${system}\n\n${aiSystemPrompt(input, context)}${maintenancePrompt ? `\n\n${maintenancePrompt}` : ""}${terminalPrompt ? `\n\n${terminalPrompt}` : ""}`,
           messages: [{ role: "user", content: user }],
           maxTokens: 1800,
           preferredProvider: input.preferredProvider,
@@ -4562,9 +4628,58 @@ async function executeAgentLoop(
     },
     resolveReviewObservations: async ({ completedSteps, signal: reviewSignal, reviewedSourceRefs }) => {
       assertReviewResearchCurrent = undefined;
-      const observation = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
-      assertReviewResearchCurrent = observation?.assertCurrent;
-      return observation ? { text: observation.text, sourceRefs: observation.sourceRefs } : null;
+      const research = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
+      let mcp: ReturnType<typeof renderMcpAgentReviewEvidence> = null;
+      let assertMcpCurrent: (() => Promise<void>) | undefined;
+      if (input.scope === "project" && input.projectId
+        && input.request.transmissionPolicy.allowResourceReferences
+        && sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+        const candidates = completedSteps.map(step => mcpEvidenceByStep.get(step.id)).filter((value): value is McpAgentEvidenceCapture => value !== undefined);
+        if (candidates.length) {
+          const connections = await listSourceConnections(input.tenant.userId);
+          const activePolicy = await activeResearchSourcePolicy(input);
+          const selectedRefs = activePolicy.researchSourcePolicy?.mode === "only_refs"
+            ? new Set(activePolicy.researchSourcePolicy.allowedSourceRefs) : null;
+          mcp = renderMcpAgentReviewEvidence(candidates.filter(candidate =>
+            mcpEvidenceMatchesSelectedRefs(candidate, selectedRefs) && isMcpEvidenceCurrent(
+              candidate, connections.find(connection => connection.id === candidate.connectionId),
+              input.tenant.userId, input.tenant.organizationId, input.projectId!,
+            )), new Set([...reviewedSourceRefs, ...(research?.sourceRefs ?? [])]));
+          if (mcp) {
+            const admitted = mcp.included;
+            assertMcpCurrent = async () => {
+              assertNotAborted(reviewSignal);
+              if (!input.request.transmissionPolicy.allowResourceReferences
+                || !sourceScopeAllowsProjectData(input.request.sourceScope ?? "auto")) {
+                throw new AIProviderError("policy_denied", "MCP source transmission permission changed.");
+              }
+              const current = await listSourceConnections(input.tenant.userId);
+              const currentPolicy = await activeResearchSourcePolicy(input);
+              const currentRefs = currentPolicy.researchSourcePolicy?.mode === "only_refs"
+                ? new Set(currentPolicy.researchSourcePolicy.allowedSourceRefs) : null;
+              if (JSON.stringify(currentPolicy.researchSourcePolicyBinding ?? null)
+                !== JSON.stringify(activePolicy.researchSourcePolicyBinding ?? null)) {
+                throw new AIProviderError("policy_denied", "Active research source selection changed.");
+              }
+              for (const candidate of admitted) {
+                if (!mcpEvidenceMatchesSelectedRefs(candidate, currentRefs) || !isMcpEvidenceCurrent(
+                  candidate, current.find(connection => connection.id === candidate.connectionId),
+                  input.tenant.userId, input.tenant.organizationId, input.projectId!,
+                )) throw new AIProviderError("policy_denied", "MCP source permission was revoked; refresh before AI review.");
+              }
+              assertNotAborted(reviewSignal);
+            };
+          }
+        }
+      }
+      assertReviewResearchCurrent = research || mcp ? async () => {
+        if (research) await research.assertCurrent();
+        if (assertMcpCurrent) await assertMcpCurrent();
+      } : undefined;
+      return research || mcp ? {
+        text: [research?.text, mcp?.text].filter(Boolean).join("\n\n"),
+        sourceRefs: [...new Set([...(research?.sourceRefs ?? []), ...(mcp?.sourceRefs ?? [])])],
+      } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
       const descriptor = getConversationTool(step.toolId);
@@ -4597,6 +4712,20 @@ async function executeAgentLoop(
           })).digest("hex")}`;
           let dispatchAttempt = 0;
           beforeExternalDispatch = async () => {
+            // The registry only calls this hook after consuming the exact
+            // owner-issued grant and verifying the current authorization.
+            // A local refusal is PROVEN pre-entry and must not create an L5
+            // dispatch intent or an outcome-unknown record.
+            if (step.toolId === "lios.external-mcp.call") {
+              if (input.scope !== "project" || !input.projectId) {
+                throw new Error("External MCP requires an authenticated Project.");
+              }
+              await preflightGovernedExternalMcpTool(
+                step.input,
+                { userId: input.tenant.userId, organizationId: input.tenant.organizationId, projectId: input.projectId },
+                signal,
+              );
+            }
             if (dispatchAttempt > 0 && (!dispatchNoEffectPersisted || !descriptor?.replaySafe || dispatchAttempt >= 2)) {
               throw new Error("External dispatch retry needs durable no-effect proof, replay-safe policy and remaining attempt budget.");
             }
@@ -4637,8 +4766,12 @@ async function executeAgentLoop(
           };
         }
 
+        let pendingMcpEvidence: McpAgentEvidenceCapture | undefined;
         const callFor = createConversationToolCall(input, "agent", {
           ...await activeResearchSourcePolicy(input),
+          ...(step.toolId === "lios.external-mcp.call" ? {
+            recordExternalMcpObservation: (capture: McpAgentEvidenceCapture) => { pendingMcpEvidence = capture; },
+          } : {}),
           stepId: step.id,
           toolCallId,
           ...(idempotencyKey ? {
@@ -4675,6 +4808,23 @@ async function executeAgentLoop(
             : {}),
         });
         const result = await invokeConversationTool(step.toolId, step.input, signal, callFor);
+        // Only after the governed registry validated the result AND committed
+        // the external dispatch may it become review-eligible, never before.
+        if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
+        const publishesArtifact = step.toolId === terminalArtifactTool.id
+          || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";
+        if (publishesArtifact && result.output && typeof result.output === "object") {
+          const updated = z.object({ artifactId: z.string(), version: z.number().int().positive(), contentHash: z.string().optional() }).passthrough().parse(result.output);
+          const artifact = await getArtifact(input.tenant, updated.artifactId);
+          const version = await getArtifactVersion(input.tenant, updated.artifactId, updated.version);
+          if (updated.contentHash !== undefined && version.contentHash !== updated.contentHash) throw new Error("Updated Artifact revision changed before publication.");
+          // The saved Artifact must belong to this conversation owner before it is published to the Chat.
+          if (input.scope !== "project" && artifact.projectId !== null) throw new Error("Saved Artifact is outside this conversation owner.");
+          await emit(input, { ...eventBase(request.requestId), type: "artifact",
+            artifact: { schemaVersion: "1", artifactId: crypto.randomUUID(), artifactType: step.toolId === terminalArtifactTool.id ? "screen" : "research", title: artifact.title, projectId: artifact.projectId, sourceRefs: version.sourceRefs, executionReceiptIds: version.executionReceiptIds, data: artifactContentSchema.parse(version.content) as unknown as Record<string, unknown>, persistence: input.scope === "project" ? "project_candidate" : "chat_candidate" },
+            persistedArtifact: { id: artifact.id, version: version.version },
+          });
+        }
         return { kind: "ok", summary: result.summary, deterministic: result.deterministic, sourceRefs: result.sourceRefs };
       } catch (error) {
         if (dispatchIntentPersisted && !dispatchNoEffectPersisted) return { kind: "outcome_unknown" };
@@ -4993,7 +5143,7 @@ export async function executeConversationRuntime(input: ConversationRuntimeInput
   if (input.agentLoop) plan = agentLoopPlanBudget(plan, input.agentLoop);
   let plannerNote: string | null = null;
   // AI planner fallback: only when nothing deterministic matched and the request names a company.
-  if (!input.agentLoop && !controller.signal.aborted && plan.capabilities.length === 1 && plan.capabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct"
+  if (!input.agentLoop && !controller.signal.aborted && plan.intent.action === "chat" && plan.capabilities.length === 1 && plan.capabilities[0].id === "ai.answer" && request.executionMode !== "ai_direct"
     && request.transmissionPolicy.mode !== "local_only" && looksLikeNamedSecurityRequest(request.message)
     && !privateAiContentReason(runtimeInput, plan) && !request.attachments.length) {
     const plannerDeadline = deadlineSignal(controller.signal, 8_000);

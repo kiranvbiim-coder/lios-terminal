@@ -26,6 +26,78 @@ export interface ConnectorVerification {
   at: string;
 }
 
+export interface AIChatVerificationIdentity {
+  userId: number;
+  organizationId: number | null;
+  provider: string;
+  credentialName?: string;
+}
+
+export interface AIChatVerificationAttempt extends AIChatVerificationIdentity {
+  readonly attemptId: number;
+}
+
+interface AIChatProof {
+  attempt: AIChatVerificationAttempt;
+  model: string;
+  credentialFingerprint: string;
+  localModelIdentity?: string;
+}
+
+// Explicit account authorization is independent of shared passive connector health.
+const chatAttempts = new Map<string, AIChatVerificationAttempt>();
+const chatProofs = new Map<string, AIChatProof>();
+let nextChatAttempt = 0;
+function chatKey(identity: AIChatVerificationIdentity): string {
+  return JSON.stringify([identity.organizationId, identity.userId, identity.provider]);
+}
+
+export function beginAIChatVerification(identity: AIChatVerificationIdentity): AIChatVerificationAttempt {
+  const attempt = { ...identity, attemptId: ++nextChatAttempt };
+  const key = chatKey(identity);
+  chatAttempts.set(key, attempt);
+  chatProofs.delete(key);
+  return attempt;
+}
+
+export function publishAIChatVerification(attempt: AIChatVerificationAttempt, model: string, credentialFingerprint: string, localModelIdentity?: string): boolean {
+  const key = chatKey(attempt);
+  if (chatAttempts.get(key) !== attempt) return false;
+  chatProofs.set(key, { attempt, model, credentialFingerprint, localModelIdentity });
+  return true;
+}
+
+export function hasAIChatVerification(identity: AIChatVerificationIdentity, model: string, credentialFingerprint: string, localModelIdentity?: string): boolean {
+  const proof = chatProofs.get(chatKey(identity));
+  return Boolean(proof && chatAttempts.get(chatKey(identity)) === proof.attempt
+    && proof.model === model && proof.credentialFingerprint === credentialFingerprint
+    && (localModelIdentity === undefined || proof.localModelIdentity === localModelIdentity));
+}
+
+export function aiChatVerificationAttemptId(identity: AIChatVerificationIdentity): number | null {
+  const proof = chatProofs.get(chatKey(identity));
+  return proof && chatAttempts.get(chatKey(identity)) === proof.attempt ? proof.attempt.attemptId : null;
+}
+
+export function invalidateAIChatCredential(credentialName: string, organizationId: number | null | undefined): void {
+  for (const [key, attempt] of chatAttempts) {
+    if (attempt.credentialName === credentialName && (organizationId === undefined || attempt.organizationId === organizationId)) {
+      chatAttempts.delete(key);
+      chatProofs.delete(key);
+    }
+  }
+}
+
+export function invalidateAIChatVerification(provider: string, organizationId: number | null | undefined, userId?: number): void {
+  for (const [key, attempt] of chatAttempts) {
+    if (attempt.provider === provider && (organizationId === undefined || attempt.organizationId === organizationId)
+      && (userId === undefined || attempt.userId === userId)) {
+      chatAttempts.delete(key);
+      chatProofs.delete(key);
+    }
+  }
+}
+
 const verifications = new Map<string, ConnectorVerification>();
 
 export function recordConnectorVerification(connectorId: string, ok: boolean, detail: string): void {
@@ -39,6 +111,8 @@ export function getConnectorVerification(connectorId: string): ConnectorVerifica
 /** Test-only state reset; not used by runtime code. */
 export function resetConnectorVerificationsForTests(): void {
   verifications.clear();
+  chatAttempts.clear();
+  chatProofs.clear();
 }
 
 export type ConnectorProbe = () => Promise<{ ok: boolean; detail: string }>;

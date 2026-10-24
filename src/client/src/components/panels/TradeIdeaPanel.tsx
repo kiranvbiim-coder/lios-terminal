@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { useQuotes, useNews, useMarketSentiment, useMarketGainers, useMarketLosers } from "@/lib/useFinance";
 import type { Quote, NewsItem } from "@/lib/finance";
@@ -132,8 +133,8 @@ function generateIdea(q: Quote, news: NewsItem[], sentiment: { score: number } |
 }
 
 export default function TradeIdeaPanel({ onSymbol }: Props) {
-  const [WATCHLIST, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
-  const [tickerInput, setTickerInput] = useState("");
+  const [WATCHLIST, setWatchlist] = useTerminalArtifactState<string[]>("TradeIdeaPanel.WATCHLIST", DEFAULT_WATCHLIST);
+  const [tickerInput, setTickerInput] = useTerminalArtifactState("TradeIdeaPanel.tickerInput", "");
   const addTicker = () => {
     const t = tickerInput.trim().toUpperCase();
     if (t && !WATCHLIST.includes(t) && WATCHLIST.length < MAX_WATCHLIST) {

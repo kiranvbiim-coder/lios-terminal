@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { Gauge } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -57,9 +58,9 @@ export default function EconomicSignalsPanel() {
   // Taylor Rule inputs -- textbook defaults, user-adjustable, same pattern
   // as the WACC builder in Finance's ValuationPanel: real Fed/BLS data in,
   // clearly-labeled policy assumptions adjustable, not hidden as if fetched.
-  const [neutralRealRate, setNeutralRealRate] = useState(2.0);
-  const [targetInflation, setTargetInflation] = useState(2.0);
-  const [naturalUnemployment, setNaturalUnemployment] = useState(4.4);
+  const [neutralRealRate, setNeutralRealRate] = useTerminalArtifactState("EconomicSignalsPanel.neutralRealRate", 2.0);
+  const [targetInflation, setTargetInflation] = useTerminalArtifactState("EconomicSignalsPanel.targetInflation", 2.0);
+  const [naturalUnemployment, setNaturalUnemployment] = useTerminalArtifactState("EconomicSignalsPanel.naturalUnemployment", 4.4);
 
   const sahmSeries = useMemo(() => {
     if (!unrateDetail?.history.length) return [];

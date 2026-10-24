@@ -32,6 +32,8 @@ import {
 } from "@/lib/dockviewWorkspaceState";
 
 interface Props {
+  /** Original Terminal tab owns geometry, not just the currently rendered pane set. */
+  layoutScope: string;
   workspace: WorkspaceState;
   isMobile: boolean;
   preserveArtifactDraft?: boolean;
@@ -146,7 +148,8 @@ export default function DockviewWorkspaceGrid(props: Props) {
   const suppressSyncRef = useRef(false);
   const disposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const layoutSaveTimer = useRef<number | null>(null);
-  const pendingLayout = useRef<DockviewLayoutState | null>(null);
+  const pendingLayout = useRef<{ layout: DockviewLayoutState; scope: string } | null>(null);
+  const currentLayoutScope = useRef(props.layoutScope);
   const rendererState = useRef({ isMobile: props.isMobile, maximizedPane: props.maximizedPane });
   rendererState.current = resolveWorkspaceRendererState(rendererState.current, props.isMobile, props.maximizedPane, props.preserveArtifactDraft ?? false);
   const runtimeValue = useMemo<RuntimeContextValue>(() => props, [props]);
@@ -156,24 +159,29 @@ export default function DockviewWorkspaceGrid(props: Props) {
     if (suppressSyncRef.current || typeof window === "undefined") return;
     const layout = api.toJSON() as unknown;
     if (!layout || typeof layout !== "object" || Array.isArray(layout)) return;
-    pendingLayout.current = layout as DockviewLayoutState;
+    const pending = { layout: layout as DockviewLayoutState, scope: currentLayoutScope.current };
+    pendingLayout.current = pending;
     if (layoutSaveTimer.current !== null) window.clearTimeout(layoutSaveTimer.current);
     layoutSaveTimer.current = window.setTimeout(() => {
-      saveDockviewLayoutState(pendingLayout.current);
+      if (pendingLayout.current === pending) {
+        saveDockviewLayoutState(pending.layout, pending.scope);
+        pendingLayout.current = null;
+      }
       layoutSaveTimer.current = null;
     }, 120);
   }, []);
 
   const onReady = useCallback((event: DockviewReadyEvent) => {
     apiRef.current = event.api;
+    currentLayoutScope.current = latestPropsRef.current.layoutScope;
     suppressSyncRef.current = true;
     try {
-      const saved = loadDockviewLayoutState();
+      const saved = loadDockviewLayoutState(currentLayoutScope.current);
       if (saved) {
         try {
           event.api.fromJSON(saved as any);
         } catch {
-          saveDockviewLayoutState(null);
+          saveDockviewLayoutState(null, currentLayoutScope.current);
           event.api.clear();
         }
       }
@@ -192,16 +200,58 @@ export default function DockviewWorkspaceGrid(props: Props) {
     ];
   }, [persistLayout]);
 
+  // A tab switch retains the outgoing geometry *before* projecting the next
+  // tab's semantic panes. A late debounced drag can never overwrite the new tab.
+  useEffect(() => {
+    if (currentLayoutScope.current === props.layoutScope) return;
+    const previousScope = currentLayoutScope.current;
+    const api = apiRef.current;
+    if (layoutSaveTimer.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(layoutSaveTimer.current);
+      layoutSaveTimer.current = null;
+    }
+    if (api) {
+      try {
+        const outgoing = api.toJSON() as unknown;
+        if (outgoing && typeof outgoing === "object" && !Array.isArray(outgoing)) {
+          saveDockviewLayoutState(outgoing as DockviewLayoutState, previousScope);
+        }
+      } catch {
+        if (pendingLayout.current?.scope === previousScope) {
+          saveDockviewLayoutState(pendingLayout.current.layout, previousScope);
+        }
+      }
+    }
+    pendingLayout.current = null;
+    currentLayoutScope.current = props.layoutScope;
+    if (!api) return;
+    suppressSyncRef.current = true;
+    try {
+      api.clear();
+      const layout = loadDockviewLayoutState(props.layoutScope);
+      if (layout) api.fromJSON(layout as any);
+      syncWorkspace(api, latestPropsRef.current.workspace, suppressSyncRef);
+    } catch {
+      api.clear();
+      saveDockviewLayoutState(null, props.layoutScope);
+      syncWorkspace(api, latestPropsRef.current.workspace, suppressSyncRef);
+    } finally {
+      suppressSyncRef.current = false;
+    }
+  }, [props.layoutScope]);
+
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
     syncWorkspace(api, props.workspace, suppressSyncRef);
   }, [props.workspace]);
 
-  useEffect(() => subscribeDockviewLayoutRestore((layout) => {
+  useEffect(() => subscribeDockviewLayoutRestore((layout, scope) => {
+    if (scope !== undefined && scope !== currentLayoutScope.current) return;
     const api = apiRef.current;
     if (!api) return;
     if (layoutSaveTimer.current !== null) { window.clearTimeout(layoutSaveTimer.current); layoutSaveTimer.current = null; }
+    pendingLayout.current = null;
     suppressSyncRef.current = true;
     try {
       api.clear();
@@ -209,7 +259,7 @@ export default function DockviewWorkspaceGrid(props: Props) {
       syncWorkspace(api, latestPropsRef.current.workspace, suppressSyncRef);
     } catch {
       api.clear();
-      saveDockviewLayoutState(null);
+      saveDockviewLayoutState(null, currentLayoutScope.current);
       syncWorkspace(api, latestPropsRef.current.workspace, suppressSyncRef);
     } finally {
       suppressSyncRef.current = false;
@@ -222,7 +272,10 @@ export default function DockviewWorkspaceGrid(props: Props) {
     if (layoutSaveTimer.current !== null && typeof window !== "undefined") {
       window.clearTimeout(layoutSaveTimer.current);
       // Leaving Chat/Workbench must retain the last drag, even inside the debounce window.
-      if (pendingLayout.current) saveDockviewLayoutState(pendingLayout.current);
+      if (pendingLayout.current) {
+        saveDockviewLayoutState(pendingLayout.current.layout, pendingLayout.current.scope);
+        pendingLayout.current = null;
+      }
     }
   }, []);
 

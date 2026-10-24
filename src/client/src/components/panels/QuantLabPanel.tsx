@@ -1,16 +1,18 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useGatewayEvent, useGatewayReady } from "@/lib/gateway/GatewayProvider";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, CheckCircle2, Clock, Copy, FlaskConical, GitCompareArrows, Link, Loader2, Play, Plus, RefreshCw, Save, Square, XCircle } from "lucide-react";
 import type { QuantModelRegistryEntry } from "@shared/quantModelRegistry";
-import type { QuantWorkspace } from "@shared/quantLab";
+import type { QuantWorkspace, QuantDatasetInputBinding } from "@shared/quantLab";
 import { apiRequest } from "@/lib/queryClient";
 import { ADVANCED_QUANT_EXAMPLES } from "@/lib/advancedQuantExamples";
-import { StructuredJsonEditor, applySchemaDefaults } from "@/components/ui/StructuredJsonEditor";
+import { StructuredJsonEditor, applySchemaDefaults, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 import { QUANT_LAB_MODEL_SCHEMAS } from "@/lib/quantLabModelSchemas";
 import { buildDynamicAnalyticsCatalog, buildQuantSeries } from "@shared/waveCContracts";
 
 type LabModel = QuantModelRegistryEntry & { workspace: QuantWorkspace; executable: boolean };
-type Experiment = { id: string; name: string; description: string; workspace: QuantWorkspace; status: "active" | "archived"; modelId: string; modelVersion: string; parameters: Record<string, unknown>; datasetSnapshotIds: string[]; seed: number | null; timeoutMs: number; investigationId: number | null; organizationId: number | null; parentExperimentId: string | null; updatedAt: string };
+type Experiment = { id: string; name: string; description: string; workspace: QuantWorkspace; status: "active" | "archived"; modelId: string; modelVersion: string; parameters: Record<string, unknown>; datasetSnapshotIds: string[]; datasetInputBindings: QuantDatasetInputBinding[]; seed: number | null; timeoutMs: number; investigationId: number | null; organizationId: number | null; parentExperimentId: string | null; updatedAt: string };
 type Run = { id: string; experimentId: string; sequence: number; status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timed_out"; progressPct: number; modelId: string; modelVersion: string; seed: number | null; inputHash: string; outputHash: string | null; cachedFromRunId: string | null; output: unknown; diagnostics: Record<string, unknown>; warnings: string[]; error: string | null; queuedAt: string; durationMs: number | null };
 type Runtime = { version: string; concurrency: number; active: number; queued: number; executableModels: number; limits: Record<string, number> };
 type Snapshot = { id: string; entityKey: string; dataClass: string; provider: string; contentHash: string; availableAt: string };
@@ -42,6 +44,13 @@ const EXAMPLES: Record<string, Record<string, unknown>> = {
 };
 
 const QUANT_NUMERIC_FIELDS = buildDynamicAnalyticsCatalog().filter((field) => field.numeric);
+const DATASET_BINDING_FIELDS: JsonFieldSchema[] = [{ kind: "objectArray", key: "bindings", label: "SOURCE FIELD → ENGINE INPUT", default: [], itemFields: [
+  { kind: "string", key: "snapshotId", label: "Snapshot ID" },
+  { kind: "string", key: "field", label: "Canonical numeric field", help: "Exact existing snapshot numeric column, for example value or close." },
+  { kind: "string", key: "parameter", label: "Engine parameter", help: "Exact selected model input, for example data, series, x or y." },
+  { kind: "select", key: "selection", label: "Selection", options: ["values", "last"], default: "values" },
+  { kind: "number", key: "scale", label: "Explicit scale", default: 1 },
+] }];
 const QUANT_NUMERIC_FIELD_IDS = new Set(QUANT_NUMERIC_FIELDS.map((field) => field.id));
 
 function loadDataFabricFields(key: string): string[] {
@@ -75,35 +84,47 @@ function QuantResultReceipt({ value }: { value: unknown }) {
 }
 
 export default function QuantLabPanel() {
-  const [workspace, setWorkspace] = useState<QuantWorkspace>("statistics");
+  const queryClient = useQueryClient();
+  const [workspace, setWorkspace] = useTerminalArtifactState<QuantWorkspace>("QuantLabPanel.workspace", "statistics");
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [models, setModels] = useState<LabModel[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [selectedExperimentId, setSelectedExperimentId] = useTerminalArtifactState<string | null>("QuantLabPanel.selectedExperimentId", null);
+  const [selectedRunId, setSelectedRunId] = useTerminalArtifactState<string | null>("QuantLabPanel.selectedRunId", null);
+  const [compareIds, setCompareIds] = useTerminalArtifactState<string[]>("QuantLabPanel.compareIds", []);
   const [comparison, setComparison] = useState<CompareResult | null>(null);
-  const [name, setName] = useState("Untitled Quant Experiment");
-  const [description, setDescription] = useState("");
-  const [modelId, setModelId] = useState("");
-  const [parameters, setParameters] = useState<Record<string, unknown>>({});
-  const [rawParameters, setRawParameters] = useState("{}");
-  const [datasetIds, setDatasetIds] = useState("");
-  const [dataFabricFieldIds, setDataFabricFieldIds] = useState<string[]>(() => loadDataFabricFields("lios.waveC.selectedFields"));
-  const [dataFabricFieldId, setDataFabricFieldId] = useState(QUANT_NUMERIC_FIELDS[0]?.id ?? "");
-  const [seed, setSeed] = useState("42");
-  const [timeoutMs, setTimeoutMs] = useState("30000");
-  const [investigationId, setInvestigationId] = useState("");
-  const [organizationId, setOrganizationId] = useState("");
+  const [name, setName] = useTerminalArtifactState("QuantLabPanel.name", "Untitled Quant Experiment");
+  const [description, setDescription] = useTerminalArtifactState("QuantLabPanel.description", "");
+  const [modelId, setModelId] = useTerminalArtifactState("QuantLabPanel.modelId", "");
+  const [parameters, setParameters] = useTerminalArtifactState<Record<string, unknown>>("QuantLabPanel.parameters", {});
+  const [rawParameters, setRawParameters] = useTerminalArtifactState("QuantLabPanel.rawParameters", "{}");
+  const [datasetIds, setDatasetIds] = useTerminalArtifactState("QuantLabPanel.datasetIds", "");
+  const [datasetBindings, setDatasetBindings] = useTerminalArtifactState<QuantDatasetInputBinding[]>("QuantLabPanel.datasetBindings", []);
+  const [dataFabricFieldIds, setDataFabricFieldIds] = useTerminalArtifactState<string[]>("QuantLabPanel.dataFabricFieldIds", () => loadDataFabricFields("lios.waveC.selectedFields"));
+  const [dataFabricFieldId, setDataFabricFieldId] = useTerminalArtifactState("QuantLabPanel.dataFabricFieldId", QUANT_NUMERIC_FIELDS[0]?.id ?? "");
+  const [seed, setSeed] = useTerminalArtifactState("QuantLabPanel.seed", "42");
+  const [timeoutMs, setTimeoutMs] = useTerminalArtifactState("QuantLabPanel.timeoutMs", "30000");
+  const [investigationId, setInvestigationId] = useTerminalArtifactState("QuantLabPanel.investigationId", "");
+  const [organizationId, setOrganizationId] = useTerminalArtifactState("QuantLabPanel.organizationId", "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const workspaceModels = useMemo(() => models.filter((model) => model.workspace === workspace && model.executable), [models, workspace]);
   const selectedModel = models.find((item) => item.id === modelId) ?? null;
   const selectedExperiment = experiments.find((item) => item.id === selectedExperimentId) ?? null;
-  const selectedRun = runs.find((item) => item.id === selectedRunId) ?? null;
+  const recentRun = runs.find((item) => item.id === selectedRunId) ?? null;
+  const selectedRunDetail = useQuery<{ run: Run }>({
+    queryKey: ["/api/quant-lab/runs", selectedRunId],
+    enabled: selectedRunId !== null && recentRun === null,
+    staleTime: 0,
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quant-lab/runs/${encodeURIComponent(selectedRunId!)}`);
+      return response.json();
+    },
+  });
+  const selectedRun = recentRun ?? selectedRunDetail.data?.run ?? null;
   const workspaceExperiments = experiments.filter((item) => item.workspace === workspace || workspace === "results");
 
   async function load() {
@@ -118,8 +139,8 @@ export default function QuantLabPanel() {
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : "Quant Lab unavailable.")); }, []);
   // Run state changes are pushed by the Home (Gateway `data.invalidate`), so the panel reloads on them, not on a timer.
-  useGatewayEvent("data.invalidate", (payload) => { if (payload.topics.includes("quantlab")) load().catch(() => undefined); });
-  useGatewayReady(() => { load().catch(() => undefined); });
+  useGatewayEvent("data.invalidate", (payload) => { if (payload.topics.includes("quantlab")) { load().catch(() => undefined); void queryClient.invalidateQueries({ queryKey: ["/api/quant-lab/runs"] }); } });
+  useGatewayReady(() => { load().catch(() => undefined); void queryClient.invalidateQueries({ queryKey: ["/api/quant-lab/runs"] }); });
   useEffect(() => {
     const first = workspaceModels[0]; if (!first || workspace === "results" || workspace === "dataset" || workspace === "registry") return;
     if (!workspaceModels.some((model) => model.id === modelId)) selectModel(first.id);
@@ -139,6 +160,7 @@ export default function QuantLabPanel() {
 
   function newExperiment() {
     setSelectedExperimentId(null); setName("Untitled Quant Experiment"); setDescription(""); setDatasetIds("");
+    setDatasetBindings([]);
     setInvestigationId(""); setOrganizationId(""); setTimeoutMs("30000"); setSeed("42");
     const first = workspaceModels[0]; setModelId(first?.id ?? ""); seedParameters(first?.id ?? "", first ? EXAMPLES[first.id] ?? {} : {});
     setDataFabricFieldIds([]);
@@ -149,6 +171,7 @@ export default function QuantLabPanel() {
     setModelId(experiment.modelId); seedParameters(experiment.modelId, experiment.parameters); setDatasetIds(experiment.datasetSnapshotIds.join(", "));
     setSeed(experiment.seed === null ? "" : String(experiment.seed)); setTimeoutMs(String(experiment.timeoutMs));
     setInvestigationId(experiment.investigationId ? String(experiment.investigationId) : ""); setOrganizationId(experiment.organizationId ? String(experiment.organizationId) : "");
+    setDatasetBindings(experiment.datasetInputBindings ?? []);
     setDataFabricFieldIds(loadDataFabricFields(`lios.quantlab.fields.${experiment.id}`));
   }
 
@@ -171,6 +194,7 @@ export default function QuantLabPanel() {
     return {
       name, description, workspace, modelId, parameters: schema ? parameters : JSON.parse(rawParameters),
       datasetSnapshotIds: datasetIds.split(",").map((value) => value.trim()).filter(Boolean),
+      datasetInputBindings: datasetBindings,
       seed: seed ? Number(seed) : null, timeoutMs: Number(timeoutMs),
       investigationId: investigationId ? Number(investigationId) : null, organizationId: organizationId ? Number(organizationId) : null,
     };
@@ -211,6 +235,8 @@ export default function QuantLabPanel() {
         {WORKSPACES.map((item) => <button key={item.id} onClick={() => setWorkspace(item.id)} className={`h-9 shrink-0 px-3 border-r border-border font-terminal text-[7px] ${workspace === item.id ? "bg-amber-400/7 text-amber-300 border-b border-b-amber-400" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}
       </nav>
       {error && <div className="shrink-0 border-b border-red-400/25 bg-red-400/5 px-3 py-2 font-mono text-[7px] text-red-300">{error}</div>}
+      {selectedRunId && !recentRun && selectedRunDetail.isFetching && <p role="status" className="px-3 py-2 text-xs">Loading selected saved run…</p>}
+      {selectedRunId && !recentRun && selectedRunDetail.error && <p role="alert" className="px-3 py-2 text-xs text-red-300">Selected saved run is unavailable: {selectedRunDetail.error.message}</p>}
 
       {workspace === "dataset" ? (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -255,6 +281,8 @@ export default function QuantLabPanel() {
               <textarea aria-label="Parameters JSON" value={rawParameters} onChange={(event) => setRawParameters(event.target.value)} className="mt-1 h-52 w-full resize-y border border-border bg-black p-2 font-mono text-[7px] leading-relaxed outline-none focus:border-amber-400/50" />
             )}
             <div className="mt-2 font-terminal text-[7px] text-muted-foreground">DATASET SNAPSHOT IDS</div><input aria-label="Dataset snapshot IDs" value={datasetIds} onChange={(event) => setDatasetIds(event.target.value)} placeholder="UUID, UUID" className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[7px] outline-none" />
+            <StructuredJsonEditor schema={DATASET_BINDING_FIELDS} value={{ bindings: datasetBindings }} onChange={next => setDatasetBindings(next.bindings as QuantDatasetInputBinding[])} className="mt-2" />
+            <p className="mt-1 text-xs text-muted-foreground">Attached snapshots require explicit field bindings. Original canonical numeric columns are read in recorded row order; values are never filled or silently dropped. Scale is an explicit unit conversion. The engine's request schema, current owner, immutable hashes and source rights are checked before execution and result persistence.</p>
             <div className="mt-3 border border-cyan-400/20 bg-cyan-400/[0.025] p-2.5">
               <div className="font-terminal text-[7px] text-cyan-200">DATA FABRIC NUMERIC INPUTS</div>
               <div className="mt-1 font-mono text-[6.5px] leading-relaxed text-muted-foreground">Select canonical numeric fields for this experiment. Values are only computed after an attributed snapshot is attached; unavailable observations are never synthesized.</div>
@@ -262,7 +290,8 @@ export default function QuantLabPanel() {
               {dataFabricFieldIds.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dataFabricFieldIds.map((fieldId) => <span key={fieldId} className="flex items-center gap-1 rounded-full border border-cyan-400/25 px-2 py-1 font-mono text-[6.5px] text-cyan-200">{QUANT_NUMERIC_FIELDS.find((field) => field.id === fieldId)?.label ?? fieldId}<button type="button" onClick={() => removeDataFabricField(fieldId)} aria-label={`Remove Data Fabric field ${fieldId}`}><XCircle className="h-2.5 w-2.5" /></button></span>)}</div> : <div className="mt-2 font-mono text-[6.5px] text-muted-foreground">No dynamic fields selected.</div>}
             </div>
             <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2"><label className="font-terminal text-[6px] text-muted-foreground">SEED<input aria-label="Seed" value={seed} onChange={(event) => setSeed(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">TIMEOUT MS<input aria-label="Timeout milliseconds" value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">INVESTIGATION<input aria-label="Investigation ID" value={investigationId} onChange={(event) => setInvestigationId(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label><label className="font-terminal text-[6px] text-muted-foreground">ORGANIZATION<input aria-label="Organization ID" value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} className="mt-1 h-8 w-full border border-border bg-black px-2 font-mono text-[8px] text-foreground" /></label></div>
-            <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy || !modelId} onClick={saveExperiment} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[7px] disabled:opacity-40"><Save className="inline w-3.5 h-3.5 mr-2" />{selectedExperimentId ? "SAVE VERSION" : "SAVE EXPERIMENT"}</button><button disabled={busy || !selectedExperimentId} onClick={() => runExperiment()} className="h-8 px-3 border border-emerald-400/35 text-emerald-300 font-terminal text-[7px] disabled:opacity-40">{busy ? <Loader2 className="inline w-3.5 h-3.5 mr-2 animate-spin" /> : <Play className="inline w-3.5 h-3.5 mr-2" />}QUEUE RUN</button></div>
+            <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy || !modelId} onClick={saveExperiment} className="h-8 px-3 border border-amber-400/40 text-amber-300 font-terminal text-[7px] disabled:opacity-40"><Save className="inline w-3.5 h-3.5 mr-2" />{selectedExperimentId ? "SAVE VERSION" : "SAVE EXPERIMENT"}</button><button disabled={busy || !selectedExperimentId} onClick={() => runExperiment()} className="h-8 px-3 border border-emerald-400/35 text-emerald-300 font-terminal text-[7px] disabled:opacity-40">{busy ? <Loader2 className="inline w-3.5 h-3.5 mr-2 animate-spin" /> : <Play className="inline w-3.5 h-3.5 mr-2" />}QUEUE SAVED EXPERIMENT</button></div>
+            <p className="mt-2 text-xs text-muted-foreground">Queue uses the saved experiment's parameters, datasets and seed. Save Version first to include edits shown here.</p>
           </div>
           <div className="min-h-0 overflow-auto">
             <div className="border-b border-border px-3 py-2 font-terminal text-[7px] text-muted-foreground">EXPERIMENT CONTROL</div>

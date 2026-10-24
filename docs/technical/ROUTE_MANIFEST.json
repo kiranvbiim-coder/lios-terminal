@@ -1049,6 +1049,18 @@
   },
   {
    "method": "POST",
+   "path": "/api/artifacts/:artifactId/native-draft-grant",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/artifacts/:artifactId/office-return",
    "reachableBy": [
     "client_user",
@@ -1110,6 +1122,30 @@
   {
    "method": "POST",
    "path": "/api/artifacts/:artifactId/references",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/report.docx",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/artifacts/:artifactId/report.pdf",
    "reachableBy": [
     "client_user",
     "client_admin",
@@ -1620,6 +1656,30 @@
   {
    "method": "POST",
    "path": "/api/chats/:chatId/artifacts/keep-draft",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/open-terminal",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/chats/:chatId/artifacts/terminal-operation",
    "reachableBy": [
     "client_user",
     "client_admin",
@@ -2651,6 +2711,15 @@
    "path": "/api/data-snapshots/:id",
    "reachableBy": [
     "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/data-snapshots/:id/entitlement",
+   "reachableBy": [
     "internal_compliance",
     "internal_admin"
    ],
@@ -3836,6 +3905,15 @@
    "reachableBy": [
     "internal_analyst",
     "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/financial-models/integrated/runs/:runId",
+   "reachableBy": [
+    "internal_analyst",
     "internal_admin"
    ],
    "unprobed": false
@@ -6534,6 +6612,24 @@
   },
   {
    "method": "POST",
+   "path": "/api/quant/risk/manual-original",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quant/statistics/resampling",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/quant/stats/autocorrelation-tests",
    "reachableBy": [
     "client_user",
@@ -6847,6 +6943,30 @@
   {
    "method": "POST",
    "path": "/api/quick-chats",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/quick-chats/:chatId/attachments",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/quick-chats/:chatId/attachments/:attachmentId/download",
    "reachableBy": [
     "client_user",
     "client_admin",
@@ -7197,6 +7317,18 @@
   },
   {
    "method": "POST",
+   "path": "/api/setup/ai/models",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
    "path": "/api/setup/ai/test",
    "reachableBy": [
     "client_user",
@@ -7405,6 +7537,30 @@
   {
    "method": "POST",
    "path": "/api/setup/source-connections/api/map",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/analysis/actions",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/setup/source-connections/database/analysis/run",
    "reachableBy": [
     "client_user",
     "client_admin",

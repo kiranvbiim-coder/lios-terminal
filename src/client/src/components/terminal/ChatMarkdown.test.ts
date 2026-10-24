@@ -12,6 +12,20 @@ function render(text: string, options: { streaming?: boolean; sources?: ChatCita
 
 const TABLE = ["| Metric | FY23 | FY24 |", "| :--- | ---: | ---: |", "| Revenue | 1,200 | 1,450 |", "| Margin | 21.5% | 23.1% |"].join("\n");
 
+test("AI execution metadata never becomes live or retained research citations", () => {
+  const refs = ["ai-provider:ollama", "ai-output:11111111-1111-4111-8111-111111111111", "engine:dcf", "execution-receipt:receipt", "file:owned-note"];
+  const events = [{
+    type: "trust",
+    manifest: { evidence: refs.map(sourceRef => ({ sourceRef, providerLabel: sourceRef === "file:owned-note" ? "Owned note" : "Configured BYOAI" })) },
+  }] as unknown as ConversationRuntimeEvent[];
+  const live = collectCitationSources(events);
+  assert.deepEqual(live.map(source => source.id), ["file:owned-note"]);
+  const saved = savedMessageCitationSources({ citationSources: refs.map(id => ({ id, label: "Recorded reference" })) });
+  assert.deepEqual(saved.map(source => source.id), ["file:owned-note"]);
+  const sourceFree = collectCitationSources(events.map(event => ({ ...event, manifest: { evidence: refs.slice(0, 2).map(sourceRef => ({ sourceRef, providerLabel: "Configured BYOAI" })) } })) as unknown as ConversationRuntimeEvent[]);
+  assert.equal(resolveCitation({ t: "cite", raw: "[Configured BYOAI]", nums: [], name: "Configured BYOAI" }, sourceFree), null);
+});
+
 test("a Markdown table renders as a real, accessible <table>", () => {
   const markup = render(`Here is the summary.\n\n${TABLE}\n\nDone.`);
   assert.match(markup, /<table\b/);

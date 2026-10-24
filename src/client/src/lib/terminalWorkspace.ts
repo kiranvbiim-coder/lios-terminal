@@ -225,10 +225,28 @@ export function serializeWorkspace(workspace: WorkspaceState): string {
 }
 
 
+/** Public navigation preview only; never serialize saved/private pane payloads. */
+export function workspaceForShare(workspace: WorkspaceState): WorkspaceState {
+  const sharePane = (pane: PaneState | null | undefined): PaneState | null =>
+    pane ? { view: pane.view === "artifact" ? "market" : pane.view, symbol: pane.symbol } : null;
+  const shared: WorkspaceState = {
+    primary: sharePane(workspace.primary)!,
+    secondary: sharePane(workspace.secondary),
+    focusedPane: workspace.focusedPane,
+  };
+  if ("tertiary" in workspace) shared.tertiary = sharePane(workspace.tertiary);
+  if ("quaternary" in workspace) shared.quaternary = sharePane(workspace.quaternary);
+  return shared;
+}
+
 export function buildWorkspaceShareUrl(workspace: WorkspaceState, currentUrl?: string): string {
   const base = currentUrl ?? (typeof window !== "undefined" ? window.location.href : "http://localhost/");
   const url = new URL(base);
-  url.searchParams.set("ws", serializeWorkspace(workspace));
+  url.username = "";
+  url.password = "";
+  url.search = "";
+  url.hash = "#/";
+  url.searchParams.set("ws", serializeWorkspace(workspaceForShare(workspace)));
   return url.toString();
 }
 

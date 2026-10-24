@@ -158,6 +158,33 @@ test("missing, extra, oversized and inconsistent result files fail closed", asyn
   }
 });
 
+test("isolated worker never interprets results whose returned bytes fail GM-11 digest identity", async (t) => {
+  const f = fixture(t);
+  for (const variant of ["mutated-bytes", "forged-digest", "invalid-digest"] as const) {
+    let stagingRoot = "";
+    await assert.rejects(callIsolatedPythonService(ROUTE, { secret: "private-body" }, {
+      serviceDir: f.serviceDir,
+      runner: async (_backend, request) => {
+        stagingRoot = request.workspaceTransfer!.root;
+        const response = result(request, { ok: true, result: 10 });
+        const returned = response.finalization.workspaceOutputs![0]!;
+        if (variant === "mutated-bytes") {
+          returned.data = Buffer.from(JSON.stringify({ ok: true, result: 11 }));
+          returned.size = returned.data.length;
+        } else if (variant === "forged-digest") {
+          returned.sha256 = "f".repeat(64);
+        } else {
+          returned.sha256 = "PRIVATE-DIGEST";
+        }
+        return response;
+      },
+    }), (error: unknown) => error instanceof Error &&
+      /worker result file digest did not match/.test(error.message) &&
+      !error.message.includes("private-body"));
+    assert.equal(fs.existsSync(stagingRoot), false, `staging must be cleared after ${variant}`);
+  }
+});
+
 test("private backend errors, diagnostics and caller cancellation reasons never escape", async (t) => {
   const f = fixture(t);
   for (const variant of ["throw", "exit", "timeout"] as const) {

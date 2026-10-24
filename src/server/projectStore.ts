@@ -242,6 +242,7 @@ export async function permanentlyDeleteProject(ctx: TenantContext, id: number): 
   const project = await getProjectIncludingTrash(ctx, id);
   if (!project.trashedAt) throw new Error("Project must be in Trash before permanent deletion.");
   const db: any = getDb();
+  let quickAttachmentChats: Array<{ id: number; attachmentManifest: unknown[] }> = [];
   let attachmentResources: Array<{
     ownerUserId: number;
     projectId: number;
@@ -257,6 +258,10 @@ export async function permanentlyDeleteProject(ctx: TenantContext, id: number): 
     ]);
     const activeDependencies = chats.length + resources.length + sessions.length + artifacts.length;
     if (activeDependencies) throw new Error("Project dependencies must be in Trash before permanent deletion.");
+    // Includes trashed Chats: a promoted Quick Chat still owns its old private file blobs.
+    quickAttachmentChats = await tx.select({
+      id: projectChats.id, attachmentManifest: projectChats.attachmentManifest,
+    }).from(projectChats).where(and(eq(projectChats.projectId, id), eq(projectChats.ownerUserId, ctx.userId)));
     attachmentResources = await tx.select({
       ownerUserId: projectResources.ownerUserId,
       projectId: projectResources.projectId,
@@ -271,6 +276,15 @@ export async function permanentlyDeleteProject(ctx: TenantContext, id: number): 
       await deleteProjectAttachmentResourceBlob(resource);
     } catch {
       console.error("[project-attachments] Blob cleanup failed after permanent Project removal.");
+    }
+  }
+  // Database cascade removed the owning Chat records. Clean old Quick Chat blobs as well,
+  // including Chats that were in Trash; unreachable blobs are not a retention policy.
+  for (const chat of quickAttachmentChats) {
+    try {
+      await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chat.id, chat.attachmentManifest);
+    } catch {
+      console.error("[quick-chat-attachments] Blob cleanup failed after permanent Project removal.");
     }
   }
 }

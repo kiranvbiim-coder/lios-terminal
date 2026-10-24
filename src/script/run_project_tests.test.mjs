@@ -29,3 +29,12 @@ test("argument batches preserve every spaced path and stay below Windows command
   assert.deepEqual(partitionTestFiles([]), []);
   assert.throws(() => partitionTestFiles(["x".repeat(24_000)]), /portable argument limit/);
 });
+
+
+test("macOS and other CI hosts isolate at most 75 test files per batch without dropping any", () => {
+  const files = Array.from({ length: 226 }, (_, index) => `client/src/example-${index}.test.ts`);
+  const batches = partitionTestFiles(files);
+  assert.deepEqual(batches.map(batch => batch.length), [75, 75, 75, 1]);
+  assert.deepEqual(batches.flat(), files);
+  assert.ok(batches.every(batch => batch.length <= 75));
+});

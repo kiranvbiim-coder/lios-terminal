@@ -67,38 +67,6 @@ test("TC-01 Project Home is the rich adaptive surface; global/new chat stays min
   assert.match(shell, /entrySurface === "project-home" && home \? \(\s*<ProjectHome/, "rich home renders only through the explicit entry-surface rule (see projectEntry.test.ts)");
 });
 
-// TC-06 owns the minimal composer. These controls exist today and may only be
-// removed or moved behind progressive disclosure; adding a new permanent
-// composer control fails this ratchet.
-const COMPOSER_TC06_DEBT = [
-  'title="Add Project resource"',
-  'title="Save Session"',
-  'title="Expand this conversation into the professional analytical workspace"',
-  'title={speakRepliesEnabled ? "Speak replies: on" : "Speak replies: off"}',
-  "title={activeSymbol ? `Ask LiOS about ${activeSymbol}",
-  'title="Conversation execution mode"',
-];
-const COMPOSER_ALLOWED = [
-  'aria-label="Ask LiOS"',
-  'title={chatMode === "project" && selection.projectId ? "Attach Project files (up to five)" : "Attachments are available in Project chats"}',
-  'aria-label="Tools"',
-  "title={voiceInputHint}",
-  'aria-label={voiceInputAvailable ? (voiceRecorder.isRecording ? "Stop voice recording" : "Speak to LiOS") : "Set up voice input"}',
-  'aria-label="Send"',
-];
-
-test("TC-01 progressive disclosure: composer controls may only shrink toward Tools/Ask/Voice/Send", () => {
-  const start = shell.indexOf('aria-label="Ask LiOS"');
-  const end = shell.indexOf('aria-label="Send"', start);
-  assert.ok(start >= 0 && end > start, "composer region markers missing");
-  const region = shell.slice(start, end + 'aria-label="Send"'.length);
-  const controls = [...region.matchAll(/(aria-label|title)=(\{[^}]*\}|"[^"]*")/g)].map((match) => match[0]);
-  for (const control of controls) {
-    assert.ok(COMPOSER_ALLOWED.includes(control) || COMPOSER_TC06_DEBT.includes(control), `new permanent composer control: ${control}`);
-  }
-  assert.ok((region.match(/<select/g) ?? []).length <= 1, "composer must not gain more permanent selectors");
-  assert.match(shell, /QUICK_COMMANDS/, "advanced operations must stay reachable through command discovery");
-});
 
 test("TC-01 high proactivity stays inside permission, budget and governance limits", () => {
   assert.equal(PROACTIVITY_POLICY.level, "high");

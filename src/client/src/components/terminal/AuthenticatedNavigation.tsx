@@ -32,7 +32,7 @@ export function AuthenticatedNavigation(props: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const act = (action: () => void) => { action(); setOpen(false); };
   const content = (drawer = false) => <>
-    <header className="lios-reference-navigation-brand"><span className="font-terminal">{props.section === "conversation" ? "PROJECTS" : props.section.toUpperCase()}</span>{!drawer && <button type="button" aria-label="Collapse project sidebar" onClick={() => setCollapsed(true)}><ChevronLeft size={14} /></button>}</header>
+    <header className="lios-reference-navigation-brand"><span className="font-terminal">{props.section === "conversation" ? "LiOS" : props.section.toUpperCase()}</span>{!drawer && <button type="button" aria-label="Collapse project sidebar" onClick={() => setCollapsed(true)}><ChevronLeft size={14} /></button>}</header>
     <nav className="lios-primary-navigation" aria-label="LiOS navigation">
       <button className="lios-new-chat" disabled={props.busy} onClick={() => act(props.onNewChat)}><Plus size={16} />New Chat</button>
       <button onClick={() => act(props.onSearch)}><Search size={16} />Search<span className="lios-shortcut" aria-hidden="true">⌘ K</span></button>

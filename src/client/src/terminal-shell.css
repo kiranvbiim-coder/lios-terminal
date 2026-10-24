@@ -119,6 +119,19 @@ body,
   color: var(--lios-text-primary);
 }
 
+/* Recovery mounts outside the terminal root but shares its palette and focus contract. */
+.lios-root-recovery-action {
+  border-color: color-mix(in srgb, var(--lios-brand) 35%, transparent);
+  color: var(--lios-brand);
+}
+.lios-root-recovery-action:hover {
+  background: color-mix(in srgb, var(--lios-brand) 8%, transparent);
+}
+.lios-root-recovery-action:focus-visible {
+  outline: 2px solid var(--lios-brand);
+  outline-offset: 2px;
+}
+
 /* Typography is semantic and terminal-scoped: Inter for interface/conversation, mono for data. */
 .terminal-root :where(.font-ui, .font-sans) {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
@@ -1385,3 +1398,80 @@ body,
 .lios-reference-titlebar-brand .font-display { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:400; }
 
 .lios-reference-navigation-rail, .lios-reference-expand-sidebar { box-sizing:border-box; }
+
+/* WS-07: retain analytical glyph density; raise only interactive shell chrome. */
+.terminal-root {
+  --lios-ux-control-type: .875rem;
+  --lios-ux-caption-type: .6875rem;
+}
+.terminal-root .lios-project-experience-shell
+  :is(button, a, label, input, textarea, select, [role='button']):is(
+    [class~="text-[5px]"], [class~="text-[6px]"], [class~="text-[6.5px]"],
+    [class~="text-[7px]"], [class~="text-[7.5px]"], [class~="text-[8px]"],
+    [class~="text-[8.5px]"], [class~="text-[9px]"], [class~="text-[10px]"]
+  ),
+.terminal-root .lios-project-experience-shell
+  :is(button, a, label, [role='button']) :is(
+    [class~="text-[5px]"], [class~="text-[6px]"], [class~="text-[6.5px]"],
+    [class~="text-[7px]"], [class~="text-[7.5px]"], [class~="text-[8px]"],
+    [class~="text-[8.5px]"], [class~="text-[9px]"], [class~="text-[10px]"]
+  ) {
+  font-size: max(var(--lios-ux-control-type), calc(var(--lios-ux-control-type) * var(--lios-type-scale))) !important;
+  line-height: 1.4;
+}
+.terminal-root .lios-reference-navigation-projects :is(.lios-primary-navigation button, .lios-account-trigger, .lios-account-trigger small),
+.terminal-root .lios-reference-artifact-tabs button,
+.terminal-root .lios-reference-titlebar button {
+  font-size: var(--lios-ux-control-type) !important;
+}
+.terminal-root .lios-reference-navigation-brand,
+.terminal-root .lios-reference-titlebar-brand .lios-reference-brand {
+  font-size: var(--lios-ux-caption-type) !important;
+}
+.terminal-root .lios-dockview-workspace.dockview-theme-dark,
+.terminal-root .lios-dockview-workspace .dockview-theme-dark {
+  --dv-tabs-and-actions-container-font-size: .875rem;
+  --dv-tab-font-size: .875rem;
+}
+.terminal-root [data-testid^='workspace-pane-'] > .lios-pane-header .lios-pane-title {
+  font-size: var(--lios-ux-control-type) !important;
+}
+.terminal-root [data-testid^='workspace-pane-'] > .lios-pane-header :is(.lios-pane-code, .lios-symbol) {
+  font-size: var(--lios-ux-caption-type) !important;
+}
+/* Connections lives outside .terminal-root; its active marker also scopes its portals. */
+body:has([data-testid='connect-data']) :is(
+  [class~="text-[5px]"], [class~="text-[6px]"], [class~="text-[6.5px]"],
+  [class~="text-[7px]"], [class~="text-[7.5px]"], [class~="text-[8px]"],
+  [class~="text-[8.5px]"], [class~="text-[9px]"], [class~="text-[10px]"]
+) {
+  font-size: .875rem !important;
+  line-height: 1.4;
+}
+
+/* WS-08: actual pane width governs header overflow; no pane or command is evicted. */
+.terminal-root [data-testid^='workspace-pane-'] {
+  container-type: inline-size;
+  container-name: lios-workspace-chrome;
+}
+@container lios-workspace-chrome (max-width: 480px) {
+  .terminal-root .lios-pane-header {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 8px;
+  }
+  .terminal-root .lios-pane-header > :last-child { flex: 0 0 auto; }
+  .terminal-root .lios-pane-header .lios-pane-title { min-width: 72px; }
+}
+.terminal-root .lios-mobile-pane-switcher {
+  min-width: 0;
+  max-width: 100%;
+  scroll-padding-inline: 8px;
+  overscroll-behavior-inline: contain;
+}
+.terminal-root .lios-mobile-pane-switcher button {
+  min-height: 40px;
+  flex-shrink: 0;
+  font-size: var(--lios-ux-control-type);
+}

@@ -162,11 +162,11 @@ const CLIENT_ENTRIES: QuantModelRegistryEntry[] = [
   {
     id: "typescript.asset-pricing-risk", label: "Asset Pricing And Risk Library", category: "asset_pricing_and_risk",
     program: "quant_acceleration", engine: "typescript", status: "experimental", validationLevel: "benchmark_required",
-    determinism: "seeded_stochastic", dataMode: "mixed", version: "1.0.0", surfaces: ["Asset Pricing", "Advanced Risk", "Quant Workbench"],
+    determinism: "seeded_stochastic", dataMode: "mixed", version: "1.0.1", apiEndpoint: "/api/quant/risk/manual-original", surfaces: ["Asset Pricing", "Advanced Risk", "Quant Workbench"],
     components: ["olsRegression", "capmExpectedReturn", "jensensAlpha", "treynorRatio", "sortinoRatio", "informationRatio", "calmarRatio", "parametricVaR", "historicalVaR", "expectedShortfall", "cornishFisherVaR", "monteCarloVaR", "counterpartyCVA", "riskDecomposition", "liquidityCostEstimate", "ewmaVolatility", "computeCovarianceMatrix", "pca", "engleGrangerTest", "kalmanDynamicBeta", "rollingVolatility", "rollingBeta", "rollingCorrelation", "brinsonAttribution", "cagr", "maxDrawdownPct", "blackLitterman", "detectHiddenRelationships"],
     sourceFiles: ["client/src/lib/quantModels.ts"], references: [{ label: "Black-Litterman", url: "https://rpc.cfainstitute.org/research/financial-analysts-journal/1992/faj-v48-n5-28" }],
-    limitations: ["Broad client library with incomplete direct known-answer coverage and both deterministic and stochastic calculations."],
-    nextValidation: "Split by domain, require explicit seeds and add cross-library golden tests.",
+    limitations: ["Broad client library with incomplete direct known-answer coverage. Original Monte Carlo VaR now takes an explicit seed; automatic browser calculations are not retained native runs."],
+    nextValidation: "Split by domain and add cross-library golden tests plus explicit original-run custody.",
   },
   {
     id: "typescript.financial-diagnostics", label: "Financial Quality And Distress Diagnostics", category: "financial_statement_analysis",
@@ -209,11 +209,11 @@ const CLIENT_ENTRIES: QuantModelRegistryEntry[] = [
   {
     id: "typescript.descriptive-resampling", label: "Descriptive And Resampling Statistics", category: "statistics",
     program: "quant_acceleration", engine: "typescript", status: "experimental", validationLevel: "benchmark_required",
-    determinism: "seeded_stochastic", dataMode: "user_supplied", version: "1.0.0", surfaces: ["Data And Statistics Explorer"],
-    components: ["computeDescriptiveStats", "computeHistogram", "computeDailyReturns", "zScoreSeries", "bootstrapMeanCI", "permutationTestMeanDiff"],
+    determinism: "seeded_stochastic", dataMode: "user_supplied", version: "1.0.1", apiEndpoint: "/api/quant/statistics/resampling", surfaces: ["Data And Statistics Explorer", "Quant Workbench"],
+    components: ["computeDescriptiveStats", "computeHistogram", "computeDailyReturns", "zScoreSeries", "bootstrapMeanCI", "permutationTestMeanDiff", "resamplingRandom"],
     sourceFiles: ["client/src/lib/statistics.ts"], references: [],
-    limitations: ["Bootstrap and permutation routines currently use browser randomness without a caller-supplied seed."],
-    nextValidation: "Introduce seeded sampling and compare confidence coverage and p-values with SciPy.",
+    limitations: ["Percentile bootstrap and two-sided Monte Carlo permutation use explicit recorded seeds; finite-simulation error and inference assumptions remain."],
+    nextValidation: "Compare interval coverage and permutation p-values independently across population shapes and group sizes.",
   },
   {
     id: "ai.quant-consensus", label: "Quant Consensus Interpretation", category: "ai_interpretation",

@@ -8,7 +8,7 @@ import type { ArtifactWorkbenchRevisionSelection } from "@/lib/artifactWorkbench
 interface Props {
   context: ArtifactWorkbenchContext;
   onVersionChange: (version: number) => void;
-  onReturn: (context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => void;
+  onReturn: (context: ArtifactWorkbenchContext, dirty: boolean, prompt?: string) => boolean;
   onDirtyChange: (dirty: boolean) => void;
 }
 
@@ -28,10 +28,10 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
   const selectVersion = useCallback((version: number | null) => {
     setRevision(current => advanceArtifactWorkbenchRevision(current, { type: "select", version }));
   }, []);
-  const reportVersion = useCallback((version: number, artifactId: string) => {
+  const reportVersion = useCallback((version: number, artifactId: string, requestedVersion: number | null) => {
     if (artifactId !== context.artifactId) return;
     const current = revisionRef.current;
-    const next = advanceArtifactWorkbenchRevision(current, { type: "loaded", version });
+    const next = advanceArtifactWorkbenchRevision(current, { type: "loaded", version, requestedVersion });
     if (next === current) return;
     revisionRef.current = next;
     setRevision(next);
@@ -41,7 +41,9 @@ export default function WorkbenchArtifactPane({ context, onVersionChange, onDirt
   const returnToChat = (prompt?: string) => {
     if (dirty.current) { setNotice("Save or reset the unsaved Artifact edits before returning to Chat. Your draft remains here."); return; }
     if (revisionRef.current.loading) { setNotice("Wait for the selected saved revision to finish loading before returning to Chat."); return; }
-    onReturn({ ...context, version: revisionRef.current.displayedVersion }, false, prompt);
+    if (!onReturn({ ...context, version: revisionRef.current.displayedVersion }, false, prompt)) {
+      setNotice("Workbench navigation changed before return. No tabs or saved revisions were overwritten. Reopen this Chat from your conversation list.");
+    }
   };
   return <section className="h-full overflow-auto p-3" data-testid="workbench-artifact-pane">
     <div className="mb-3 flex items-center justify-between gap-3">

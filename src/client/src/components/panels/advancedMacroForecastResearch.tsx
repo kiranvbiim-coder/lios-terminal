@@ -1,5 +1,6 @@
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 
 export interface AdvancedReceipt {
   dataClassification?: string;
@@ -25,22 +26,18 @@ export function manualProvenance(parameters: Record<string, unknown>) {
   return { dataClassification: "manual", manualInputs: parameters };
 }
 
-export async function runAdvancedManual(family: string, model: string, parameters: Record<string, unknown>) {
-  const response = await apiRequest("POST", `/api/quant/advanced/${family}/${model}`, {
-    ...parameters,
-    inputProvenance: manualProvenance(parameters),
-  });
-  return response.json() as Promise<Record<string, unknown> & { receipt?: AdvancedReceipt }>;
-}
-
-export async function runAdvancedSourced(
-  family: string,
-  model: string,
-  parameters: Record<string, unknown>,
-  inputProvenance: Record<string, unknown>,
-) {
-  const response = await apiRequest("POST", `/api/quant/advanced/${family}/${model}`, { ...parameters, inputProvenance });
-  return response.json() as Promise<Record<string, unknown> & { receipt?: AdvancedReceipt }>;
+export function useAdvancedWorkflow(family: string, model: string) {
+  const terminal = useTerminalArtifactContext();
+  const quant = useTerminalQuantRun();
+  const slot = `workflow.${terminal?.symbol ?? "manual"}.${family}.${model}`;
+  const [localResult, setLocalResult] = useState<{ slot: string; output: Record<string, unknown> & { receipt?: AdvancedReceipt } } | null>(null);
+  const result = terminal?.target ? quant.stored?.[slot] as (Record<string, unknown> & { receipt?: AdvancedReceipt }) | undefined : localResult?.slot === slot ? localResult.output : null;
+  const run = async (parameters: Record<string, unknown>, inputProvenance: Record<string, unknown> = manualProvenance(parameters)) => {
+    const next = await quant.run<Record<string, unknown> & { receipt?: AdvancedReceipt }>(`${family}/${model}`, { ...parameters, inputProvenance }, slot);
+    if (!terminal?.target) setLocalResult({ slot, output: next });
+    return next;
+  };
+  return { result: result ?? null, run, loading: quant.running };
 }
 
 export function ReceiptSummary({ receipt }: { receipt?: AdvancedReceipt }) {
@@ -60,12 +57,15 @@ export function ReceiptSummary({ receipt }: { receipt?: AdvancedReceipt }) {
 
 /** A deliberate manual-import path: it never presents JSON as live data. */
 export function AdvancedManualWorkflow({ spec }: { spec: AdvancedWorkflowSpec }) {
-  const [parameters, setParameters] = useState("");
-  const [result, setResult] = useState<(Record<string, unknown> & { receipt?: AdvancedReceipt }) | null>(null);
+  const terminal = useTerminalArtifactContext();
+  const [parameters, setParameters] = useTerminalArtifactState(`AdvancedManualWorkflow.${spec.family}.${spec.model}.parameters`, "");
+  const legacyParameters = typeof terminal?.state["AdvancedManualWorkflow.parameters"] === "string" ? terminal.state["AdvancedManualWorkflow.parameters"] : null;
+  const nativeWorkflow = useAdvancedWorkflow(spec.family, spec.model);
+  const result = nativeWorkflow.result;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const run = async () => {
-    setError(null); setResult(null);
+    setError(null);
     let parsed: Record<string, unknown>;
     try {
       const candidate: unknown = JSON.parse(parameters);
@@ -75,16 +75,18 @@ export function AdvancedManualWorkflow({ spec }: { spec: AdvancedWorkflowSpec })
       setError(cause instanceof Error ? cause.message : "Enter a JSON object."); return;
     }
     setLoading(true);
-    try { setResult(await runAdvancedManual(spec.family, spec.model, parsed)); }
+    try { await nativeWorkflow.run(parsed); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Advanced model unavailable."); }
     finally { setLoading(false); }
   };
   return <section className="space-y-2 border border-border p-3">
     <div className="font-terminal text-[9px] text-foreground">{spec.label}</div>
     <div className="font-mono text-[7px] leading-relaxed text-muted-foreground">MANUAL IMPORT — {spec.instructions}</div>
+    {legacyParameters && <details className="text-xs text-muted-foreground"><summary>Earlier shared manual draft · model assignment was not recorded</summary><pre className="whitespace-pre-wrap">{legacyParameters}</pre><button type="button" onClick={()=>setParameters(legacyParameters)}>Use this reviewed draft for {spec.label}</button></details>}
     <textarea aria-label={`${spec.label} manual parameters`} value={parameters} onChange={(event) => setParameters(event.target.value)} rows={6} placeholder="Paste the exact request fields as JSON…" className="w-full resize-y border border-border bg-black p-2 font-mono text-[8px] outline-none focus:border-amber-400/50" />
     <button type="button" onClick={() => void run()} disabled={loading || !parameters.trim()} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-[8px] text-amber-300 disabled:opacity-40">{loading ? "RUNNING…" : "RUN MANUAL IMPORT"}</button>
     {error && <div role="alert" className="font-mono text-[8px] text-red-300">{error}</div>}
+    {result && <p className="text-xs text-muted-foreground">Recorded native result · input edits do not automatically recalculate this saved run.</p>}
     {result && <><pre className="max-h-44 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-[7px] text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={result.receipt} /></>}
   </section>;
 }

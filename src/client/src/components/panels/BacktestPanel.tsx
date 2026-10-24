@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { PlayCircle, ShieldCheck, TrendingUp } from "lucide-react";
 import type {
@@ -71,13 +72,13 @@ function numeric(value: string, fallback: number): number {
 }
 
 export default function BacktestPanel({ symbol, onNav }: Props) {
-  const [range, setRange] = useState<Range>("5Y");
-  const [strategy, setStrategy] = useState<P6StrategyDefinition>(() => strategyPreset("rsi_mean_reversion"));
-  const [startingCapital, setStartingCapital] = useState(100_000);
-  const [feesBps, setFeesBps] = useState(5);
-  const [slippageBps, setSlippageBps] = useState(5);
-  const [maxParticipationRate, setMaxParticipationRate] = useState(0.05);
-  const [view, setView] = useState<View>("strategy");
+  const [range, setRange] = useTerminalArtifactState<Range>("BacktestPanel.range", "5Y");
+  const [strategy, setStrategy] = useTerminalArtifactState<P6StrategyDefinition>("BacktestPanel.strategy", () => strategyPreset("rsi_mean_reversion"));
+  const [startingCapital, setStartingCapital] = useTerminalArtifactState("BacktestPanel.startingCapital", 100_000);
+  const [feesBps, setFeesBps] = useTerminalArtifactState("BacktestPanel.feesBps", 5);
+  const [slippageBps, setSlippageBps] = useTerminalArtifactState("BacktestPanel.slippageBps", 5);
+  const [maxParticipationRate, setMaxParticipationRate] = useTerminalArtifactState("BacktestPanel.maxParticipationRate", 0.05);
+  const [view, setView] = useTerminalArtifactState<View>("BacktestPanel.view", "strategy");
   const [result, setResult] = useState<P6BacktestResult | null>(null);
   const [barsUsed, setBarsUsed] = useState<number | null>(null);
   const [lastRunKey, setLastRunKey] = useState<string | null>(null);

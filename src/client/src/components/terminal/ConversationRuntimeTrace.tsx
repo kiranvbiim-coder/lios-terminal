@@ -8,17 +8,24 @@ import {
   Database,
   FileBarChart,
   Loader2,
-  Play,
   ShieldAlert,
   Square,
   Workflow,
   X,
 } from "lucide-react";
 import ConversationTrustPanel from "./ConversationTrustPanel";
+import ResearchSourceList from "./ResearchSourceList";
+import ResearchRunProgress from "./ResearchRunProgress";
+import ResearchCheckpointCard from "./ResearchCheckpointCard";
+import type { ResumableCheckpointView } from "@/lib/researchCheckpoint";
+import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
 import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
+import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
+import { inspectAgentReceiptActivity, receiptPresentation } from "@/lib/agentReceiptActivity";
+import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
 import type {
   ApprovalGrant,
   ConversationActionName,
@@ -32,6 +39,8 @@ interface Props {
   events: ConversationRuntimeEvent[];
   requestId: string | null;
   busy: boolean;
+  cancelPending?: boolean;
+  stopRequested?: boolean;
   onCancel: () => void;
   onApprove: (action: ConversationActionName, scope: ApprovalGrant["scope"]) => void;
   onDeny: (action: ConversationActionName) => void;
@@ -52,6 +61,11 @@ interface Props {
   resumableRequestId?: string | null;
   /** Explicit person-initiated resume of `resumableRequestId`; it carries no other input. */
   onResume?: () => void;
+  /** Display-only snapshot of server-exposed checkpoint counts, never local resume authority. */
+  checkpointView?: ResumableCheckpointView | null;
+  /** Authenticated Home execution history could not be checked; no Resume is offered. */
+  checkpointLookupError?: boolean;
+  onRetryCheckpointLookup?: () => void;
   /** Start with the Show work disclosure open. Defaults to closed so ordinary chats stay quiet. */
   defaultShowWork?: boolean;
   /** Sends the plain-language assumptions confirmed in the guided inputs form through the normal chat path. */
@@ -81,8 +95,18 @@ export function trustCaveats(manifest: TrustManifest, shownGap?: { field: string
   for (const warning of manifest.warnings) {
     if (!shownGap || !warning.includes(shownGap.message)) lines.push(warning);
   }
-  if (manifest.summary.quality === "low") lines.push("The supporting data is low quality. Treat the figures with caution.");
-  return lines.length ? { lines, recoveryActions } : null;
+  if (manifest.summary.quality === "low" && manifest.evidence.some(item => item.kind !== "ai")) lines.push("Supporting evidence is marked low quality. Review its sources and limitations before relying on it.");
+  if ((manifest.summary.conflictState === "material" || manifest.summary.conflictState === "minor") && manifest.conflicts.length === 0) {
+    lines.push("A source conflict is recorded in the trust summary, but its detailed comparison is unavailable.");
+  }
+  if (manifest.summary.missingCount > manifest.missing.length) {
+    lines.push("Some missing evidence is recorded in the summary without detailed recovery information.");
+  }
+  // P3's recorded claim/access exceptions must remain visible before Show work,
+  // without asserting that a past denial or health state was just rechecked.
+  lines.push(...sourceExceptionCaveats(reviewEvidenceExceptions(manifest)));
+  const distinct = [...new Set(lines)];
+  return distinct.length ? { lines: distinct, recoveryActions } : null;
 }
 
 function readableValue(value: unknown): string {
@@ -129,6 +153,8 @@ export default function ConversationRuntimeTrace({
   events,
   requestId,
   busy,
+  cancelPending = false,
+  stopRequested = false,
   onCancel,
   onApprove,
   onDeny,
@@ -143,16 +169,23 @@ export default function ConversationRuntimeTrace({
   onOpenTerminal,
   resumableRequestId,
   onResume,
+  checkpointView,
+  checkpointLookupError = false,
+  onRetryCheckpointLookup,
   defaultShowWork = false,
   onSubmitAssumptions,
 }: Props) {
   const [showWork, setShowWork] = useState(defaultShowWork);
   const [appliedReviewKey, setAppliedReviewKey] = useState<string | null>(null);
   const [pendingReviewKey, setPendingReviewKey] = useState<string | null>(null);
+  const [acknowledgedRiskKey, setAcknowledgedRiskKey] = useState<string | null>(null);
+  const [reviewOutcome, setReviewOutcome] = useState<{ key: string; decision: GovernedToolReviewDecision } | null>(null);
+  const [reviewError, setReviewError] = useState<{ key: string; message: string } | null>(null);
   const reviewInFlight = useRef(false);
   const [guidedDismissedKey, setGuidedDismissedKey] = useState<string | null>(null);
   const workPanelId = useId();
-  if (!events.length && !busy && !resumableRequestId) return null;
+  events = requestId ? events.filter(event => event.requestId === requestId) : [];
+  if (!events.length && !busy && !resumableRequestId && !checkpointLookupError) return null;
   const plan = [...events].reverse().find((event) => event.type === "plan");
   const approval = [...events].reverse().find((event) => event.type === "approval_required");
   const latestGovernedApproval = [...events].reverse().find((event) => event.type === "governed_tool_approval_required");
@@ -162,6 +195,9 @@ export default function ConversationRuntimeTrace({
   const dataGap = [...events].reverse().find((event) => event.type === "data_gap");
   const trust = [...events].reverse().find((event) => event.type === "trust");
   const summary = summarizeRuntimeTrace(events, busy);
+  const observedReceipt = [...events].reverse().find(event => event.type === "receipt");
+  const recordedSources = collectCitationSources(events);
+  const activity = inspectAgentReceiptActivity(events, requestId);
   // Quiet by default: ordinary runs show only Working + Stop. Technical execution detail is progressive
   // disclosure; approvals, errors, data gaps, source caveats and review-required items are never hidden.
   const workVisible = showWork;
@@ -175,13 +211,25 @@ export default function ConversationRuntimeTrace({
   const reviewIndex = latestGovernedApproval ? events.lastIndexOf(latestGovernedApproval) : -1;
   const continued = reviewIndex >= 0 && events.some((event, index) => index > reviewIndex && (event.type === "plan" || event.type === "tool_start"));
   const governedApproval = !terminal && !continued && reviewKey !== appliedReviewKey ? latestGovernedApproval : undefined;
+  const reviewRisk = governedApproval?.type === "governed_tool_approval_required"
+    ? governedReviewRisk(governedApproval, Date.now()) : null;
+  const legacyApproval = !terminal && approval?.type === "approval_required" ? approval : null;
   const reviewing = pendingReviewKey === reviewKey;
   const reviewTool = async (decision: GovernedToolReviewDecision) => {
-    if (!onGovernedToolReview || governedApproval?.type !== "governed_tool_approval_required" || reviewInFlight.current || !reviewKey) return;
+    if (!onGovernedToolReview || governedApproval?.type !== "governed_tool_approval_required" || reviewInFlight.current || !reviewKey || !reviewRisk) return;
+    if (!governedApproval.choices.includes(decision)) return;
+    if (decision === "allow_project" && (!allowProjectApproval || !reviewRisk.projectScope)) return;
+    if (decision !== "deny" && (reviewRisk.blockAllow || (reviewRisk.highRisk && acknowledgedRiskKey !== reviewKey))) return;
     reviewInFlight.current = true;
     setPendingReviewKey(reviewKey);
+    setReviewError(null);
     try {
-      if (await onGovernedToolReview(governedApproval.reviewId, decision)) setAppliedReviewKey(reviewKey);
+      if (await onGovernedToolReview(governedApproval.reviewId, decision)) {
+        setAppliedReviewKey(reviewKey);
+        setReviewOutcome({ key: reviewKey, decision });
+      } else setReviewError({ key: reviewKey, message: "The server has not accepted this review. It remains unresolved." });
+    } catch {
+      setReviewError({ key: reviewKey, message: "Review submission failed. No approval or denial is confirmed. Refresh the run before trying again." });
     } finally {
       reviewInFlight.current = false;
       setPendingReviewKey(null);
@@ -198,8 +246,8 @@ export default function ConversationRuntimeTrace({
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
   const working = busy && !terminal;
-  const waitingForApproval = Boolean(approval || governedApproval);
-  const canShowWork = !!plan || trust?.type === "trust" || summary.sources.length > 0;
+  const waitingForApproval = Boolean(legacyApproval || governedApproval);
+  const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
@@ -210,42 +258,31 @@ export default function ConversationRuntimeTrace({
       {(working || canResume || canShowWork) && (
         <div
           className="flex flex-wrap items-center gap-1.5 px-1 py-0.5 font-ui text-[12px] text-muted-foreground"
-          data-testid={summary.status === "completed" ? "trace-receipt" : undefined}
+          data-testid={summary.status === "completed" && observedReceipt ? "trace-receipt" : undefined}
           data-request-id={requestId ?? undefined}
         >
           {working && (
             <span role="status" className="inline-flex items-center gap-1.5 px-1">
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" aria-hidden="true" />
               {waitingForApproval ? "Waiting for your approval" : "Working"}
+              {!waitingForApproval && <ResearchRunProgress events={events} requestId={requestId} view="inline" />}
             </span>
           )}
           {working && (
             <button
               type="button"
               onClick={onCancel}
+              disabled={cancelPending || stopRequested}
+              aria-label={stopRequested ? "Stop requested" : cancelPending ? "Requesting Stop" : "Stop this exact run"}
               data-testid="agent-run-cancel"
               data-request-id={requestId ?? undefined}
               className={`${quietControlClass} hover:text-red-200`}
             >
               <Square className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-              Stop
+              {stopRequested ? "Stop requested" : cancelPending ? "Requesting Stop…" : "Stop"}
             </button>
           )}
-          {canResume && (
-            <>
-              <span className="px-1">Stopped</span>
-              <button
-                type="button"
-                onClick={onResume}
-                data-testid="agent-run-resume"
-                data-request-id={resumableRequestId}
-                className="inline-flex min-h-7 items-center gap-1 rounded-md border border-cyan-300/30 px-2 py-1 font-ui text-[12px] text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
-              >
-                <Play className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
-                Resume
-              </button>
-            </>
-          )}
+
           {canShowWork && (
             <button
               type="button"
@@ -262,11 +299,31 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
+      {checkpointLookupError && !busy && (
+        <div role="alert" data-testid="trace-checkpoint-lookup-error" className="my-2 rounded border border-amber-300/25 px-3 py-2 font-ui text-[12px] text-amber-100">
+          Saved checkpoint eligibility could not be checked. Resume is unavailable until the Home responds.
+          {onRetryCheckpointLookup && (
+            <button type="button" onClick={onRetryCheckpointLookup} className="ml-2 min-h-8 rounded px-2 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+              Retry checkpoint check
+            </button>
+          )}
+        </div>
+      )}
+      {canResume && resumableRequestId && onResume && (
+        <ResearchCheckpointCard
+          requestId={resumableRequestId}
+          checkpoint={checkpointView ?? null}
+          onResume={onResume}
+        />
+      )}
+
       <div id={workPanelId} className={workVisible ? "mb-2 space-y-2 rounded-xl border border-border/50 bg-[#080808] p-3" : undefined}>
         {workVisible && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-[12px] text-muted-foreground" data-testid="trace-work-summary">
             {stepCount > 0 && <span>{stepCount} step{stepCount === 1 ? "" : "s"}</span>}
-            {summary.sources.length > 0 && <span>{summary.sources.length} source{summary.sources.length === 1 ? "" : "s"}</span>}
+            {activity.observedSteps > 0 && <span>{activity.observedSteps} observed activity step{activity.observedSteps === 1 ? "" : "s"}</span>}
+            {activity.receipts.length > 0 && <span data-testid="trace-receipt-count">{activity.receipts.length} recorded execution receipt{activity.receipts.length === 1 ? "" : "s"}</span>}
+            {recordedSources.length > 0 && <span>{recordedSources.length} source{recordedSources.length === 1 ? "" : "s"}</span>}
             {duration && <span>{duration}</span>}
             {requestId && <span className="font-terminal">Run {requestId}</span>}
             {onOpenTerminal && (
@@ -282,14 +339,42 @@ export default function ConversationRuntimeTrace({
           </div>
         )}
 
-        {workVisible && summary.sources.length > 0 && (
-          <div className="flex flex-wrap gap-1.5" data-testid="trace-sources" aria-label="Sources used">
-            {summary.sources.slice(0, 6).map((source) => (
-              <span key={source} className="rounded-full border border-border/55 bg-white/[0.02] px-2.5 py-1 font-ui text-[12px] text-foreground/85">{source}</span>
-            ))}
-            {summary.sources.length > 6 && <span className="px-1 py-1 font-ui text-[12px] text-muted-foreground">+{summary.sources.length - 6} more</span>}
-          </div>
+        {workVisible && recordedSources.length > 0 && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
+        {workVisible && !!steps.length && <ResearchRunProgress events={events} requestId={requestId} view="findings" />}
+        {workVisible && activity.receipts.length > 0 && (
+          <section aria-label="Observed execution receipts" data-testid="trace-agent-receipts" className="space-y-2 rounded-lg border border-border/45 p-3">
+            <div className="font-ui text-[13px] font-semibold text-foreground">Recorded execution receipts · {activity.receipts.length}</div>
+            <p className="font-ui text-[12px] text-muted-foreground">Observed from this exact runtime request: {activity.completed} completed · {activity.failed} failed · {activity.cancelled} cancelled. Step reports, model plans and text are not execution receipts. Receipts do not grant approval or prove an external action occurred; check the original governed review and external system before relying on side effects.</p>
+            <ol className="space-y-2">
+              {activity.receipts.map(receipt => {
+                const info = receiptPresentation(receipt);
+                return <li key={receipt.id} className="space-y-1 rounded border border-border/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 font-ui text-[12px]">
+                    <span className="font-semibold text-foreground">{info.component} · {info.operation}</span>
+                    <span className={receipt.status === "completed" ? "text-emerald-200" : "text-amber-200"}>{receipt.status}</span>
+                    <span className="text-muted-foreground">{info.kind}</span>
+                  </div>
+                  <div className="font-ui text-[12px] text-muted-foreground">
+                    {info.sourceCount} recorded source ref{info.sourceCount === 1 ? "" : "s"} · input hash {info.hasInputHash ? "recorded" : "absent"} · output hash {info.hasOutputHash ? "recorded" : "absent"} · {info.warnings} warning{info.warnings === 1 ? "" : "s"}
+                  </div>
+                  <details className="font-ui text-[12px] text-muted-foreground">
+                    <summary className="cursor-pointer text-foreground">Exact receipt identity and hashes</summary>
+                    <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
+                      <div><dt className="inline">Receipt</dt><dd className="ml-2 inline">{receipt.id}</dd></div>
+                      <div><dt className="inline">Run</dt><dd className="ml-2 inline">{receipt.requestId}</dd></div>
+                      <div><dt className="inline">Started</dt><dd className="ml-2 inline">{receipt.startedAt}</dd></div>
+                      <div><dt className="inline">Finished</dt><dd className="ml-2 inline">{receipt.completedAt}</dd></div>
+                      <div><dt className="inline">Input SHA-256</dt><dd className="ml-2 inline">{receipt.inputHash ?? "not recorded"}</dd></div>
+                      <div><dt className="inline">Output SHA-256</dt><dd className="ml-2 inline">{receipt.outputHash ?? "not recorded"}</dd></div>
+                    </dl>
+                    <p className="mt-1">Raw request/response evidence, provider credentials, and source URI values are not exposed by this summary.</p>
+                  </details>
+                </li>;
+              })}
+            </ol>
+          </section>
         )}
+
 
         {workVisible && !!capabilities.length && (
           <div className="border-t border-border/45 pt-2.5" data-p2-capability-resolution="true">
@@ -392,6 +477,12 @@ export default function ConversationRuntimeTrace({
         )}
       </div>
 
+      {activity.hasReceiptProblems && (
+        <div role="alert" data-testid="trace-agent-receipt-warning" className="mb-2 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200">
+          Recorded run receipts require review: {activity.failed} failed, {activity.cancelled} cancelled, {activity.mismatched} ignored because their run identity did not match. Do not assume these operations completed or that an external action succeeded. Open Show work to inspect matching receipts.
+        </div>
+      )}
+
       {caveats && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.025] px-3 py-2.5" role="note" data-testid="trace-source-caveats">
           <div className="font-ui text-[13px] font-semibold text-foreground">Source limitations</div>
@@ -469,7 +560,7 @@ export default function ConversationRuntimeTrace({
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
               {view.recoveries.includes("retry") && onRetry && !busy && (
-                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Try again</button>
+                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="min-h-10 rounded-full border border-border/55 px-3 py-2 font-ui text-sm text-foreground hover:border-red-300/30">Review request</button>
               )}
               {showWork && <span className="ml-auto font-terminal text-[12px] uppercase tracking-wider text-red-200/50">{runtimeError.code}</span>}
             </div>
@@ -477,10 +568,21 @@ export default function ConversationRuntimeTrace({
         );
       })()}
 
-      {!runtimeError && !dataGap && !approval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (
+      {summary.status === "interrupted" && (
+        <div role="alert" data-testid="trace-interrupted" className="mb-2 rounded-lg border border-amber-300/25 px-3 py-2.5 font-ui text-sm">
+          <p className="font-semibold">This run has no confirmed final status.</p>
+          <p className="mt-1 text-muted-foreground">Partial text is not a completed answer or execution receipt. Inspect the original run before considering a retry.</p>
+          {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-10 rounded border px-3">Review previous request</button>}
+        </div>
+      )}
+      {summary.status === "completed" && !observedReceipt && (
+        <p role="status" data-testid="trace-receipt-missing" className="mb-2 px-2 font-ui text-sm text-muted-foreground">Home reported completion; a separate execution receipt was not received in this view.</p>
+      )}
+
+      {!runtimeError && !dataGap && !legacyApproval && !governedApproval && done?.type === "done" && (done.status === "failed" || (done.status === "cancelled" && !canResume)) && (
         <div className="mb-2 rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2 font-ui text-[13px] text-muted-foreground" role="status" data-testid="trace-run-status" data-run-status={done.status}>
           {done.status === "failed"
-            ? "This run didn’t complete and produced no result. Nothing was changed. You can try again."
+            ? "This run did not complete. Inspect its partial work and receipts before deciding whether to retry."
             : "This run was stopped before it finished. Any partial answer above may be incomplete."}
         </div>
       )}
@@ -533,6 +635,13 @@ export default function ConversationRuntimeTrace({
         );
       })()}
 
+      {reviewOutcome?.key === reviewKey && !governedApproval && (
+        <div role="status" data-testid="governed-review-submitted" className="mb-2 rounded-lg border border-border/60 p-3 font-ui text-[13px] text-muted-foreground">
+          {reviewOutcome.decision === "deny"
+            ? "Denial accepted by the server for this review. The original run's cancellation and outside-system state must still be checked."
+            : `${reviewOutcome.decision === "allow_project" ? "Project-scoped" : "One-time"} review accepted by the server. This is not an execution receipt; inspect the run results and reconcile any external side effect.`}
+        </div>
+      )}
       {governedApproval?.type === "governed_tool_approval_required" && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" data-testid="governed-tool-approval" data-request-id={governedApproval.requestId} data-review-id={governedApproval.reviewId}>
           <div className="flex items-start gap-2">
@@ -540,6 +649,29 @@ export default function ConversationRuntimeTrace({
             <div className="min-w-0 flex-1">
               <div className="font-ui text-[13px] font-semibold text-foreground">Approval required · {governedApproval.label}</div>
               <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{governedApproval.message}</div>
+              {reviewRisk && <div aria-label="Governed action scope and side-effect risk" data-testid="governed-review-risk" className="mt-2 space-y-2 rounded border border-amber-300/25 p-2 font-ui text-[12px]">
+                <p><strong>Impact:</strong> {reviewRisk.risk} · <strong>Permission:</strong> {governedApproval.permissionClass.replace("_", " ")} · <strong>Retry safe:</strong> {governedApproval.replaySafe === undefined ? "not recorded" : governedApproval.replaySafe ? "declared yes" : "no"}</p>
+                <p><strong>Target scope:</strong> {reviewRisk.scopeLabel}</p>
+                <p><strong>Review expiry:</strong> {governedApproval.expiresAt ?? "not recorded"} {reviewRisk.expired ? "· expired: allow disabled" : ""}</p>
+                {governedApproval.blastRadius && <p><strong>Potential effects:</strong> {governedApproval.blastRadius}</p>}
+                <p>{reviewRisk.inputDisclosure}</p>
+                {governedApproval.reviewBinding && <details><summary className="cursor-pointer underline underline-offset-2">Exact server-bound tool call and SHA-256 fingerprints</summary>
+                  <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
+                    <div>Tool: {governedApproval.reviewBinding.toolId}</div>
+                    <div>Step: {governedApproval.reviewBinding.stepId}</div>
+                    <div>Call: {governedApproval.reviewBinding.toolCallId}</div>
+                    <div>Input SHA-256: {governedApproval.reviewBinding.inputSha256}</div>
+                    <div>Plan SHA-256: {governedApproval.reviewBinding.planSha256}</div>
+                    <div>Run: {governedApproval.requestId} · Review: {governedApproval.reviewId}</div>
+                  </dl>
+                </details>}
+                {reviewRisk.blockAllow && <p role="alert" className="text-amber-200">This privileged review lacks a current exact server binding or has expired. Allow is unavailable; deny or refresh the run.</p>}
+                {reviewRisk.highRisk && !reviewRisk.blockAllow && <label className="flex cursor-pointer items-start gap-2">
+                  <input type="checkbox" data-testid="governed-review-risk-ack" checked={acknowledgedRiskKey === reviewKey} disabled={reviewing} onChange={event => setAcknowledgedRiskKey(event.target.checked ? reviewKey : null)} />
+                  <span>I reviewed the recorded scope and impact. The raw external target is not verified by this card; I will reconcile any side effects separately.</span>
+                </label>}
+              </div>}
+              {reviewError?.key === reviewKey && <p role="alert" data-testid="governed-review-error" className="mt-2 text-amber-200">{reviewError.message}</p>}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -560,17 +692,17 @@ export default function ConversationRuntimeTrace({
                 data-testid="governed-tool-allow-once"
                 data-request-id={governedApproval.requestId}
                 data-review-id={governedApproval.reviewId}
-                disabled={!onGovernedToolReview || reviewing}
+                disabled={!onGovernedToolReview || reviewing || !!reviewRisk?.blockAllow || (!!reviewRisk?.highRisk && acknowledgedRiskKey !== reviewKey)}
                 className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50"
               >
                 Allow once
               </button>
             )}
-            {allowProjectApproval && governedApproval.choices.includes("allow_project") && (
+            {allowProjectApproval && !!reviewRisk?.projectScope && governedApproval.choices.includes("allow_project") && (
               <button
                 type="button"
                 onClick={() => void reviewTool("allow_project")}
-                disabled={!onGovernedToolReview || reviewing}
+                disabled={!onGovernedToolReview || reviewing || !!reviewRisk?.blockAllow || (!!reviewRisk?.highRisk && acknowledgedRiskKey !== reviewKey)}
                 className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200 disabled:opacity-50"
               >
                 Allow for Project
@@ -581,24 +713,29 @@ export default function ConversationRuntimeTrace({
         </div>
       )}
 
-      {approval?.type === "approval_required" && (
+      {legacyApproval && (
         <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" data-testid="trace-approval">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <div className="font-ui text-[13px] font-semibold text-foreground">Approval required</div>
-              <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{approval.message}</div>
+              <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{legacyApproval.message}</div>
+              <div aria-label="Legacy approval scope and impact" data-testid="legacy-approval-risk" className="mt-2 space-y-1 rounded border border-border/50 p-2 font-ui text-[12px] text-muted-foreground">
+                <p>Action: {legacyReviewFacts(legacyApproval).action} · Component: {legacyReviewFacts(legacyApproval).component} · Target: {legacyReviewFacts(legacyApproval).target}</p>
+                <p>Permission: {legacyReviewFacts(legacyApproval).permission} · {legacyReviewFacts(legacyApproval).sideEffect}</p>
+                <p>Legacy review; exact server input fingerprint is not included. Verify operation inputs and target before allowing; authorizations are not execution receipts.</p>
+              </div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => onDeny(approval.action)} className="flex items-center gap-1 rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
+            <button type="button" onClick={() => onDeny(legacyApproval.action)} className="flex items-center gap-1 rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
               <X className="h-2.5 w-2.5" aria-hidden="true" /> Deny
             </button>
-            <button type="button" onClick={() => onApprove(approval.action, "once")} className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06]">
+            <button type="button" onClick={() => onApprove(legacyApproval.action, "once")} disabled={!legacyApproval.choices.includes("allow_once")} className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06]">
               Allow once
             </button>
-            {allowProjectApproval && (
-              <button type="button" onClick={() => onApprove(approval.action, "project")} className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200">
+            {allowProjectApproval && legacyApproval.choices.includes("allow_project") && (
+              <button type="button" onClick={() => onApprove(legacyApproval.action, "project")} className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200">
                 Allow for Project
               </button>
             )}

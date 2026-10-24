@@ -5,11 +5,16 @@ export const P1_SOURCE_SCOPES: ReadonlyArray<{
   label: string;
   description: string;
 }> = Object.freeze([
-  { id: "auto", label: "Auto", description: "Let LiOS choose governed Project and connected sources." },
-  { id: "my_data", label: "My Data", description: "Use Project/user-owned context; do not bypass it with external market retrieval." },
-  { id: "web", label: "Web", description: "Use connected/external sources without silently including Project files or resources." },
-  { id: "files", label: "Files", description: "Use only explicitly attached files as Project source material." },
+  { id: "auto", label: "Auto", description: "Let LiOS choose permitted Chat, Project (when selected) and connected sources." },
+  { id: "my_data", label: "My Data", description: "Use only permitted user-owned data and the active Chat; Projects are not required." },
+  { id: "web", label: "Web", description: "Use connected/external sources without silently sending attached or Project files." },
+  { id: "files", label: "Files", description: "Use only files explicitly attached to this Chat." },
 ]);
+
+/** PR #102: Temporary posture is live-only; never overwrite saved Chat preferences. */
+export function sourceScopeForChatMode(mode: "quick" | "project" | "temporary", preferred: ConversationSourceScope): ConversationSourceScope {
+  return mode === "temporary" && (preferred === "files" || preferred === "my_data") ? "auto" : preferred;
+}
 
 const SOURCE_SCOPE_KEY = "lios.p1.composer-source-scope.v1";
 const TELEMETRY_KEY = "lios.p1.shell-telemetry.v1";

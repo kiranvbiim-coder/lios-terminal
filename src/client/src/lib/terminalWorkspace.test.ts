@@ -283,3 +283,18 @@ test("internal deserialization rejects unknown persisted views", () => {
 
   assert.equal(deserializeWorkspace(encoded, "internal"), null);
 });
+
+test("public layout sharing excludes origin credentials, saved Artifact custody and extra fields", () => {
+  const workspace = {
+    primary: { view: "artifact" as const, symbol: "AAPL", artifact: { projectId: 123, chatId: 456, artifactId: "artifact:private", version: 17 }, privateNote: "PRIVATE_NOTE" },
+    secondary: { view: "chart" as const, symbol: "MSFT", providerKey: "PRIVATE_KEY" },
+    focusedPane: "primary" as const,
+  };
+  const url = new URL(buildWorkspaceShareUrl(workspace, "https://user:secret@lios.example/?access_token=PRIVATE_TOKEN#/p/123/c/456"));
+  assert.equal(url.username, "");
+  assert.equal(url.password, "");
+  assert.equal(url.hash, "#/");
+  assert.deepEqual([...url.searchParams.keys()], ["ws"]);
+  assert.deepEqual(loadWorkspaceFromUrl(url.search), { primary: { view: "market", symbol: "AAPL" }, secondary: { view: "chart", symbol: "MSFT" }, focusedPane: "primary" });
+  assert.equal(workspace.primary.artifact.version, 17);
+});

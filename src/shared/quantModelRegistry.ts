@@ -38,6 +38,17 @@ export const quantInputDataClassificationSchema = z.enum([
   "live", "delayed", "historical", "cached", "manual", "synthetic", "model_derived", "fallback",
 ]);
 
+/** Explicit adapter over existing canonical snapshot numeric columns, recorded in the native receipt. */
+export const canonicalSnapshotColumnSchema = z.object({
+  field: z.string().trim().min(1).max(160),
+  selection: z.enum(["values", "last"]),
+  scale: z.number().finite().refine(value => value !== 0),
+  rowsWhereFinite: z.string().trim().min(1).max(160).optional(),
+}).strict();
+export function canonicalSnapshotColumnTransform(input: z.infer<typeof canonicalSnapshotColumnSchema>): string {
+  return `canonical-column:${JSON.stringify(canonicalSnapshotColumnSchema.parse(input))}`;
+}
+
 export const quantInputSourceBindingSchema = z.object({
   contractFamily: z.string().trim().min(1).max(160),
   field: z.string().trim().min(1).max(200),

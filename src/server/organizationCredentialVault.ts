@@ -2,12 +2,25 @@ import crypto from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "./db";
 import { organizationCredentials } from "@shared/schema";
+import { invalidateAIChatCredential } from "./connectorVerification";
 
 const ALGORITHM = "aes-256-gcm" as const;
 const KEY_LENGTH = 32;
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const VERSION = "v1";
+
+const snapshotVersions = new WeakMap<object, { organizationId: number; versions: Map<string, string> }>();
+const credentialRevisions = new Map<number, number>();
+function credentialRevision(organizationId: number): number {
+  return credentialRevisions.get(organizationId) ?? 0;
+}
+function advanceCredentialRevision(organizationId: number): void {
+  credentialRevisions.set(organizationId, credentialRevision(organizationId) + 1);
+}
+function encryptedVersion(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
 
 function hostedVaultSecret(): string | null {
   const secret = process.env.LIMURIA_HOSTED_VAULT_SECRET?.trim();
@@ -76,20 +89,27 @@ export async function setOrganizationCredential(
   }
   const db = getDb();
   const encryptedValue = encryptOrganizationCredential(organizationId, name, value);
-  await db.insert(organizationCredentials).values({
-    organizationId,
-    name,
-    encryptedValue,
-    label,
-    createdByUserId: actorUserId,
-    updatedAt: new Date(),
-  }).onConflictDoUpdate({
-    target: [organizationCredentials.organizationId, organizationCredentials.name],
-    set: { encryptedValue, label, updatedAt: new Date(), disabledAt: null },
-  });
+  advanceCredentialRevision(organizationId);
+  invalidateAIChatCredential(name, organizationId);
+  try {
+    await db.insert(organizationCredentials).values({
+      organizationId,
+      name,
+      encryptedValue,
+      label,
+      createdByUserId: actorUserId,
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [organizationCredentials.organizationId, organizationCredentials.name],
+      set: { encryptedValue, label, updatedAt: new Date(), disabledAt: null },
+    });
+  } finally {
+    advanceCredentialRevision(organizationId);
+    invalidateAIChatCredential(name, organizationId);
+  }
 }
 
-export async function getOrganizationCredential(organizationId: number, name: string): Promise<string | null> {
+async function readEncryptedOrganizationCredential(organizationId: number, name: string): Promise<string | null> {
   if (!organizationCredentialStoreConfigured()) return null;
   const [entry] = await getDb().select({ encryptedValue: organizationCredentials.encryptedValue })
     .from(organizationCredentials)
@@ -99,7 +119,29 @@ export async function getOrganizationCredential(organizationId: number, name: st
       isNull(organizationCredentials.disabledAt),
     ))
     .limit(1);
-  return entry ? decryptOrganizationCredential(organizationId, name, entry.encryptedValue) : null;
+  return entry?.encryptedValue ?? null;
+}
+
+export async function getOrganizationCredential(organizationId: number, name: string): Promise<string | null> {
+  const encrypted = await readEncryptedOrganizationCredential(organizationId, name);
+  return encrypted === null ? null : decryptOrganizationCredential(organizationId, name, encrypted);
+}
+
+/** Bind a request's credential snapshot to the current ciphertext version, including same-value re-saves. */
+export async function assertOrganizationCredentialSnapshotCurrent(
+  organizationId: number, credentials: Readonly<Record<string, string>> | undefined, name: string,
+): Promise<() => void> {
+  const snapshot = credentials ? snapshotVersions.get(credentials) : undefined;
+  const expected = snapshot?.organizationId === organizationId ? snapshot.versions.get(name) : undefined;
+  if (!expected) throw new Error("The organization credential snapshot is unavailable. Reload the current connection.");
+  const revision = credentialRevision(organizationId);
+  const encrypted = await readEncryptedOrganizationCredential(organizationId, name);
+  if (!encrypted || encryptedVersion(encrypted) !== expected || revision !== credentialRevision(organizationId)) {
+    throw new Error("The organization credential changed or was revoked. Reload the current connection.");
+  }
+  return () => {
+    if (revision !== credentialRevision(organizationId)) throw new Error("The organization credential changed before dispatch.");
+  };
 }
 
 export async function loadOrganizationCredentials(organizationId: number): Promise<Record<string, string>> {
@@ -112,29 +154,41 @@ export async function loadOrganizationCredentials(organizationId: number): Promi
     isNull(organizationCredentials.disabledAt),
   )).orderBy(asc(organizationCredentials.name));
   const values: Record<string, string> = {};
+  const versions = new Map<string, string>();
   for (const row of rows) {
     const value = decryptOrganizationCredential(organizationId, row.name, row.encryptedValue);
-    if (value !== null) values[row.name] = value;
+    if (value !== null) {
+      values[row.name] = value;
+      versions.set(row.name, encryptedVersion(row.encryptedValue));
+    }
   }
+  snapshotVersions.set(values, { organizationId, versions });
   return values;
 }
 
 export async function deleteOrganizationCredential(organizationId: number, name: string): Promise<boolean> {
   if (!organizationCredentialStoreConfigured()) return false;
-  const predicate = and(
-    eq(organizationCredentials.organizationId, organizationId),
-    eq(organizationCredentials.name, name),
-    isNull(organizationCredentials.disabledAt),
-  );
-  const [entry] = await getDb().select({ id: organizationCredentials.id })
-    .from(organizationCredentials)
-    .where(predicate)
-    .limit(1);
-  if (!entry) return false;
-  await getDb().update(organizationCredentials)
-    .set({ disabledAt: new Date(), updatedAt: new Date() })
-    .where(eq(organizationCredentials.id, entry.id));
-  return true;
+  advanceCredentialRevision(organizationId);
+  invalidateAIChatCredential(name, organizationId);
+  try {
+    const predicate = and(
+      eq(organizationCredentials.organizationId, organizationId),
+      eq(organizationCredentials.name, name),
+      isNull(organizationCredentials.disabledAt),
+    );
+    const [entry] = await getDb().select({ id: organizationCredentials.id })
+      .from(organizationCredentials)
+      .where(predicate)
+      .limit(1);
+    if (!entry) return false;
+    await getDb().update(organizationCredentials)
+      .set({ disabledAt: new Date(), updatedAt: new Date() })
+      .where(eq(organizationCredentials.id, entry.id));
+    return true;
+  } finally {
+    advanceCredentialRevision(organizationId);
+    invalidateAIChatCredential(name, organizationId);
+  }
 }
 
 export async function listOrganizationCredentials(organizationId: number): Promise<Array<{ name: string; label: string; updatedAt: string }>> {

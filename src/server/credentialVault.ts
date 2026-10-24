@@ -11,10 +11,11 @@
  * the legacy config.json path, which this module reads as a migration
  * fallback but never writes to).
  *
- * Env vars always take precedence: if FRED_API_KEY is set in the
- * environment, the vault is not consulted for that credential. This
- * preserves the existing operator workflow (env vars in dev, vault in
- * packaged desktop app).
+ * For desktop/operator requests, env vars take precedence over the
+ * machine-local vault (env vars in development, vault in packaged desktop).
+ * In explicitly enabled hosted-organization mode, an authenticated tenant
+ * request MUST use only its organization-scoped credential namespace; it
+ * never inherits operator environment variables or the machine-local vault.
  */
 import crypto from "crypto";
 import fs from "fs";
@@ -22,9 +23,10 @@ import path from "path";
 import os from "node:os";
 import { dataPath, dataRoot } from "./dataRoot";
 import { getRequestIdentity } from "./requestContext";
-import { organizationCredentialStoreEnabled } from "./organizationCredentialVault";
+import { assertOrganizationCredentialSnapshotCurrent, organizationCredentialStoreEnabled } from "./organizationCredentialVault";
 import { parseSecretRef, type SecretRef } from "@shared/secretRef";
 import { PrivateSecretFileError, readPrivateSecretFile } from "./privateSecretFile";
+import { invalidateAIChatCredential } from "./connectorVerification";
 
 const ALGORITHM = "aes-256-gcm" as const;
 const KEY_LENGTH = 32;
@@ -362,6 +364,7 @@ export function invalidateVaultCache(): void {
  * `label` is a human-readable description shown in admin UIs.
  */
 export function setVaultCredential(name: string, value: string, label?: string): void {
+  invalidateAIChatCredential(name, organizationCredentialStoreEnabled() ? null : undefined);
   const store = { ...readVaultStore() };
   store[name] = { encrypted: encrypt(value), label: label ?? name, updatedAt: new Date().toISOString() };
   writeVaultStore(store);
@@ -386,6 +389,7 @@ export function getVaultCredential(name: string): string | null {
 
 /** Delete a credential from the vault. */
 export function deleteVaultCredential(name: string): boolean {
+  invalidateAIChatCredential(name, organizationCredentialStoreEnabled() ? null : undefined);
   const store = { ...readVaultStore() };
   if (!(name in store)) return false;
   delete store[name];
@@ -503,27 +507,45 @@ export function migrateLegacyConfigCredentials(): number {
 /**
  * Canonical credential resolver. A `vaultName` may also be a SecretRef (`env:LIOS_SECRET_X`, `file:/run/secrets/x`,
  * `vault:name`). Priority:
- * 1. Environment variable (operator-managed, e.g. FRED_API_KEY)
- * 2. Request-scoped organization credential in hosted mode
- * 3. Encrypted machine-local vault (plaintext config.json credentials are migrated into it at startup)
+ * 1. Organization request in explicitly enabled hosted mode: ONLY the
+ *    request-scoped organization credential, never operator env or local vault
+ * 2. Desktop/operator request: environment variable if present
+ * 3. Otherwise encrypted machine-local vault (legacy credentials migrate on startup)
  *
  * A hosted organization request never falls back to the machine-local vault.
  * That boundary prevents one customer's provider credential from being used
  * for another customer's request.
  */
 export function resolveCredential(envName: string, vaultName: string): string | null {
-  const envValue = process.env[envName];
-  if (typeof envValue === "string" && envValue.trim().length > 0) return envValue.trim();
-
+  // A hosted organization's credentials are the ONLY permissible credential
+  // source for that request. Checking process.env first would silently grant
+  // a tenant access to the operator's provider API key, even when the tenant
+  // has not connected that provider. Desktop/operator requests still use
+  // their established env-over-local-vault precedence below.
   const identity = getRequestIdentity();
   if (organizationCredentialStoreEnabled() && identity?.organizationId != null) {
     const organizationValue = identity.credentials?.[vaultName];
-    return organizationValue && organizationValue.length > 0 ? organizationValue : null;
+    return organizationValue && organizationValue.trim().length > 0 ? organizationValue : null;
   }
+
+  const envValue = process.env[envName];
+  if (typeof envValue === "string" && envValue.trim().length > 0) return envValue.trim();
 
   const ref = parseSecretRef(vaultName);
   if (ref && ref.source !== "vault") return resolveExternalSecretRef(ref);
   return getVaultCredential(ref?.id ?? vaultName);
+}
+
+/** Revalidate an organization request snapshot against the current encrypted vault version. */
+export async function assertCurrentCredentialSnapshot(envName: string, vaultName: string): Promise<() => void> {
+  const identity = getRequestIdentity();
+  if (!process.env[envName]?.trim() && organizationCredentialStoreEnabled() && identity?.organizationId != null) {
+    return assertOrganizationCredentialSnapshotCurrent(identity.organizationId, identity.credentials, vaultName);
+  }
+  const credential = resolveCredential(envName, vaultName);
+  return () => {
+    if (resolveCredential(envName, vaultName) !== credential) throw new Error("The provider credential changed before dispatch.");
+  };
 }
 
 /** Check if a credential is available from any source. */

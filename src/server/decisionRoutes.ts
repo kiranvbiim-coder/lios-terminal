@@ -1,3 +1,8 @@
+import { tenantContext } from "./tenantContext";
+import { terminalExecutionTargetSchema } from "@shared/terminalArtifact";
+import { validateTerminalExecutionTarget } from "./terminalArtifactTool";
+import { createTerminalArtifactEngineVersion } from "./artifactStore";
+import { executeOriginalDecisionAnalysis, executeOriginalDecisionReverseDcf } from "./advancedQuantExecution";
 import { randomUUID } from "node:crypto";
 import type { DeviceReviewBinding } from "@shared/deviceOutbox";
 import type { Express, Request, Response } from "express";
@@ -961,10 +966,20 @@ export function registerDecisionRoutes(app: Express): void {
     res.json(updated);
   });
 
-  app.post("/api/decision-analysis", requireDecisionPermission("read_decisions"), (req, res) => {
+  app.post("/api/decision-analysis", requireDecisionPermission("read_decisions"), async (req, res) => {
     const parsed = analysisSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const input = parsed.data;
+    if (req.body?.terminalArtifact !== undefined) {
+      try {
+        const target = terminalExecutionTargetSchema.parse(req.body.terminalArtifact); const ctx = tenantContext(req.user!);
+        await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+        const execution = await executeOriginalDecisionAnalysis(input, ctx.userId);
+        const version = await createTerminalArtifactEngineVersion(ctx, target, execution);
+        res.json({ ...execution.response, terminalArtifact: { artifactId: version.artifactId, baseVersion: target.baseVersion, version: version.version, contentHash: version.contentHash } });
+      } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original decision result could not be retained." }); }
+      return;
+    }
     res.json({
       tournament: runModelTournament(input.models),
       thesisStress: stressThesis(input),
@@ -972,12 +987,22 @@ export function registerDecisionRoutes(app: Express): void {
     });
   });
 
-  app.post("/api/decision-analysis/reverse-dcf", requireDecisionPermission("read_decisions"), (req, res) => {
+  app.post("/api/decision-analysis/reverse-dcf", requireDecisionPermission("read_decisions"), async (req, res) => {
     const parsed = z.object({
       enterpriseValue: finite.positive(), currentFreeCashFlow: finite.positive(), forecastYears: z.number().int().min(1).max(30),
       discountRate: finite.gt(-1).lt(5), terminalGrowthRate: finite.gt(-1).lt(1),
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (req.body?.terminalArtifact !== undefined) {
+      try {
+        const target = terminalExecutionTargetSchema.parse(req.body.terminalArtifact); const ctx = tenantContext(req.user!);
+        await validateTerminalExecutionTarget(ctx, target, new AbortController().signal);
+        const execution = await executeOriginalDecisionReverseDcf(parsed.data, ctx.userId);
+        const version = await createTerminalArtifactEngineVersion(ctx, target, execution);
+        res.json({ ...execution.response, terminalArtifact: { artifactId: version.artifactId, baseVersion: target.baseVersion, version: version.version, contentHash: version.contentHash } });
+      } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Original reverse DCF result could not be retained." }); }
+      return;
+    }
     try { res.json(calculateReverseDcf(parsed.data)); }
     catch (error) { res.status(422).json({ error: error instanceof Error ? error.message : "Reverse DCF failed." }); }
   });

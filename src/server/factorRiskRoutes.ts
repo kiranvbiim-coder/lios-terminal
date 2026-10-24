@@ -6,7 +6,6 @@ import {
   getFactorRiskSnapshot,
 } from "./factorRiskModel";
 import { calculateFactorAttribution, FactorAttributionValidationError } from "@shared/factorAttribution";
-import type { FactorScenario, FactorAttributionInput, FactorDefinition, SecurityFactorExposure } from "@shared/factorAttribution";
 import { requireRole } from "./auth";
 import { getRequestIdentity } from "./requestContext";
 import {
@@ -16,6 +15,13 @@ import {
   type FactorRiskSnapshotListOptions,
   type FactorRiskSnapshotMetadataPage,
 } from "./factorRiskSnapshotStore";
+import { buildFactorAttributionInput, validateDecomposeWeights, factorRiskDecomposeRequestSchema } from "./factorRiskModel";
+import { tenantContext } from "./tenantContext";
+import { validateTerminalExecutionTarget } from "./terminalArtifactTool";
+import { createTerminalArtifactEngineVersion } from "./artifactStore";
+import { executeOriginalFactorDecomposition } from "./advancedQuantExecution";
+import type { FactorRiskSnapshot } from "./factorRiskModel";
+type SnapshotShape = Parameters<typeof buildFactorAttributionInput>[0];
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
 
@@ -47,71 +53,8 @@ export const factorRiskSnapshotListQuerySchema = z.object({
 }).strict();
 
 
-const finiteNumber = z.number().finite();
-const weightsSchema = z.record(z.string().min(1), finiteNumber);
-const factorScenarioSchema = z.object({
-  id: z.string().min(1).max(200).optional(),
-  label: z.string().min(1).max(200).optional(),
-  factorShocks: z.union([weightsSchema, z.array(finiteNumber)]),
-  specificShocks: weightsSchema.optional(),
-  provenance: z.object({
-    source: z.string().min(1), asOf: z.string().min(1), units: z.string().min(1),
-    status: z.string().optional(), period: z.string().optional(), currency: z.string().optional(),
-    sourceRef: z.string().optional(), snapshotId: z.string().optional(),
-  }).optional(),
-}).strict();
-
-export const factorRiskDecomposeRequestSchema = z.object({
-  snapshotId: z.string().trim().min(1).max(256),
-  portfolioWeights: weightsSchema,
-  benchmarkWeights: weightsSchema.optional(),
-  scenario: factorScenarioSchema.optional(),
-}).strict();
 
 export type FactorRiskSnapshotRequest = z.infer<typeof factorRiskSnapshotRequestSchema>;
-export type FactorRiskDecomposeRequest = z.infer<typeof factorRiskDecomposeRequestSchema>;
-
-type EstimationShape = {
-  factorReturnSeries?: readonly { periodEnd: string; returns: Readonly<Record<string, number>> }[];
-  factorCovariance?: readonly (readonly number[])[];
-  specificVariances?: Readonly<Record<string, number>>;
-};
-
-type SnapshotShape = {
-  snapshotId?: string;
-  contentHash?: string;
-  request?: {
-    symbols: readonly string[];
-    benchmarkSymbol: string;
-    range: string;
-    asOf: string;
-    scope?: string;
-  };
-  capturedAt?: string;
-  factors?: readonly FactorDefinition[];
-  securities?: readonly SecurityFactorExposure[];
-  estimation?: EstimationShape;
-  estimator?: EstimationShape;
-  factorReturnSeries?: EstimationShape["factorReturnSeries"];
-  factorCovariance?: EstimationShape["factorCovariance"];
-  specificVariances?: EstimationShape["specificVariances"];
-  provenance?: unknown;
-  sources?: unknown;
-  excluded?: Array<{ securityId: string; reason: string }>;
-};
-export function validateDecomposeWeights(
-  weights: Readonly<Record<string, number>>,
-  securityIds: readonly string[],
-  fieldName: string,
-): string | null {
-  const expected = new Set(securityIds);
-  const actual = Object.keys(weights);
-  const unknown = actual.filter((id) => !expected.has(id));
-  if (unknown.length) return `${fieldName} contains unknown security weight(s): ${unknown.join(", ")}.`;
-  const missing = securityIds.filter((id) => !Object.prototype.hasOwnProperty.call(weights, id));
-  if (missing.length) return `${fieldName} is missing security weight(s): ${missing.join(", ")}.`;
-  return null;
-}
 
 type CaptureResult = { snapshot: SnapshotShape; cache: "hit" | "miss" } | SnapshotShape;
 export function normalizeCaptureResult(result: CaptureResult): { snapshot: SnapshotShape; cache: "hit" | "miss" } {
@@ -120,31 +63,6 @@ export function normalizeCaptureResult(result: CaptureResult): { snapshot: Snaps
 }
 
 
-export function buildFactorAttributionInput(snapshot: SnapshotShape, request: FactorRiskDecomposeRequest): FactorAttributionInput {
-  const factors = snapshot.factors ?? [];
-  const securities = snapshot.securities ?? [];
-  const estimate = snapshot.estimation ?? snapshot.estimator ?? snapshot;
-  const series = estimate.factorReturnSeries ?? [];
-  if (!series.length) throw new Error("Snapshot contains no estimated factor-return period.");
-  if (!estimate.factorCovariance) throw new Error("Snapshot contains no factor covariance.");
-  // Arithmetic average of estimated periods is selected deliberately so the
-  // decomposition is not driven by one noisy latest month; covariance and
-  // specific variance remain estimated over the full retained history.
-  const factorReturns = Object.fromEntries(factors.map((factor) => [
-    factor.id,
-    series.reduce((sum, period) => sum + (period.returns[factor.id] ?? 0), 0) / series.length,
-  ]));
-  return {
-    factors,
-    factorReturns,
-    factorCovariance: estimate.factorCovariance,
-    securities,
-    portfolioWeights: request.portfolioWeights,
-    benchmarkWeights: request.benchmarkWeights,
-    specificVariances: estimate.specificVariances,
-    scenario: request.scenario as FactorScenario | undefined,
-  };
-}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -263,6 +181,20 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
     try {
       const snapshot = await service.getFactorRiskSnapshot(parsed.data.snapshotId) as SnapshotShape | null;
       if (!snapshot) { res.status(404).json({ error: "Factor risk snapshot not found or expired." }); return; }
+      if (parsed.data.expectedSnapshotHash && snapshot.contentHash !== parsed.data.expectedSnapshotHash) { res.status(409).json({ error: "Selected factor snapshot hash changed; no replacement was selected." }); return; }
+      if (parsed.data.terminalArtifact) {
+        try {
+          if (!req.user) throw new Error("Current authenticated factor model author is required.");
+          const ctx = tenantContext(req.user);
+          await validateTerminalExecutionTarget(ctx, parsed.data.terminalArtifact, new AbortController().signal);
+          const execution = await executeOriginalFactorDecomposition(snapshot as FactorRiskSnapshot, parsed.data, ctx);
+          const saved = await createTerminalArtifactEngineVersion(ctx, parsed.data.terminalArtifact, execution);
+          res.json({ ...execution.response, terminalArtifact: { artifactId: saved.artifactId, baseVersion: parsed.data.terminalArtifact.baseVersion, version: saved.version, contentHash: saved.contentHash } });
+        } catch (error) {
+          res.status(409).json({ error: `Provider decomposition was not retained: ${errorMessage(error, "source or target admission failed")}` });
+        }
+        return;
+      }
       const securityIds = (snapshot.securities ?? []).map((security) => security.securityId);
       const portfolioError = validateDecomposeWeights(parsed.data.portfolioWeights, securityIds, "portfolioWeights");
       if (portfolioError) { res.status(400).json({ error: portfolioError }); return; }
@@ -276,6 +208,7 @@ export function createFactorRiskRouteHandlers(service: FactorRiskRouteService = 
         contentHash: snapshot.contentHash,
         provenance: snapshot.provenance ?? snapshot.sources ?? { source: "factor-risk-model", status: "derived", asOf: new Date().toISOString(), units: "return" },
         factorReturnSelection: "arithmetic-average-of-estimated-period-returns",
+        portfolioWeights: parsed.data.portfolioWeights,
         result,
       });
     } catch (error) {

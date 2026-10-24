@@ -164,6 +164,13 @@ export async function permanentlyDeleteProjectChat(ctx: TenantContext, chatId: n
     const deleted = await tx.delete(projectChats).where(and(ownedChatFilter(ctx, chatId), isNotNull(projectChats.trashedAt))).returning();
     if (!deleted.length) throw new ProjectChatAccessDeniedError();
   });
+  // Same post-commit cleanup semantics as permanent Project resource deletion:
+  // the removed chat cannot authorize orphaned blobs even if storage deletion fails.
+  try {
+    await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chatId, chat.attachmentManifest);
+  } catch {
+    console.error("[quick-chat-attachments] Private blob cleanup failed after permanent Chat deletion.");
+  }
 }
 
 export async function promoteQuickChatToProject(ctx: TenantContext, chatId: number, projectId: number): Promise<ProjectChat> {
@@ -216,9 +223,34 @@ export async function addProjectChatMessage(
   return row;
 }
 
-export async function clearProjectChatMessages(ctx: TenantContext, chatId: number): Promise<void> {
+/** Retain a navigation request and its canonical Artifact card atomically under the existing Chat owner. */
+export async function retainTerminalNavigationMessages(ctx: TenantContext, chatId: number, requestId: string, input: {
+  user: string; assistant: string; artifactRef: { id: string; version: number; title: string; kind: string };
+}): Promise<void> {
   await getProjectChat(ctx, chatId);
-  await getDb().delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+  await getDb().transaction(async tx => {
+    // Updating the owned Chat acquires its row lock before inspecting retry markers.
+    const now = new Date();
+    const owned = await tx.update(projectChats).set({ lastActivityAt: now, updatedAt: now }).where(ownedChatFilter(ctx, chatId)).returning();
+    if (!owned.length) throw new ProjectChatAccessDeniedError();
+    const messages = await tx.select().from(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+    const existing = messages.filter(message => message.metadata.terminalNavigationRequestId === requestId);
+    if (!existing.some(message => message.role === "user")) await tx.insert(projectChatMessages).values({ chatId, role: "user", content: input.user, metadata: { terminalNavigationRequestId: requestId } });
+    if (!existing.some(message => message.role === "assistant")) await tx.insert(projectChatMessages).values({ chatId, role: "assistant", content: input.assistant, metadata: { terminalNavigationRequestId: requestId, persistedArtifacts: [input.artifactRef] } });
+  });
+}
+
+export async function clearProjectChatMessages(ctx: TenantContext, chatId: number): Promise<void> {
+  const chat = await getProjectChat(ctx, chatId);
+  await getDb().transaction(async (tx) => {
+    await tx.delete(projectChatMessages).where(eq(projectChatMessages.chatId, chatId));
+    await tx.update(projectChats).set({ attachmentManifest: [] }).where(ownedChatFilter(ctx, chatId));
+  });
+  try {
+    await (await import("./projectAttachmentService")).cleanupQuickChatAttachmentBlobs(ctx, chatId, chat.attachmentManifest);
+  } catch {
+    console.error("[quick-chat-attachments] Private blob cleanup failed after clearing Chat.");
+  }
 }
 
 export async function autoTitleProjectChat(ctx: TenantContext, chatId: number, firstUserMessage: string): Promise<void> {

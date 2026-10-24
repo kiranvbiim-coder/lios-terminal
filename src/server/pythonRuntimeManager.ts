@@ -6,6 +6,7 @@ import path from "node:path";
 import { MANAGED_RUNTIME_MANIFEST, type ManagedRuntimeManifest } from "./runtimeManifest";
 import { dataRoot } from "./dataRoot";
 import { effectiveSandboxIsolationMode } from "./exec/sandbox-runtime-profile";
+import { satisfiesRuntimePackageVersion } from "./runtimePackageVersion";
 import { acquireManagedRuntimeLifecycleLock } from "./managedRuntimeLifecycleLock";
 
 const INSTALL_TIMEOUT_MS = 15 * 60 * 1_000;
@@ -300,18 +301,30 @@ export function auditInstalledPackages(
   installed: Record<string, string>,
 ): string[] {
   const warnings: string[] = [];
-  const normalized = new Map(Object.entries(installed).map(([name, version]) => [name.toLowerCase().replace(/[_.]+/g, "-"), version]));
+  const normalized = new Map<string, string>();
+  const duplicateNames = new Set<string>();
+  for (const [name, version] of Object.entries(installed)) {
+    const key = name.toLowerCase().replace(/[_.]+/g, "-");
+    if (normalized.has(key)) duplicateNames.add(key);
+    normalized.set(key, version);
+  }
+  for (const key of duplicateNames) {
+    warnings.push(`Python runtime inventory contains duplicate canonical package name ${key}.`);
+  }
   for (const pack of resolveSelectedPacks(manifest, packIds)) {
     for (const pkg of pack.packages) {
-      if (classifyManifestVersion(pkg.version) === "not-pip-installable") continue;
+      const kind = classifyManifestVersion(pkg.version);
+      if (kind === "not-pip-installable") continue;
       const key = pkg.name.toLowerCase().replace(/[_.]+/g, "-");
       const actual = normalized.get(key);
       if (!actual) {
         warnings.push(`${pkg.name} (pack ${pack.id}) is in the signed manifest but is not installed in the runtime.`);
         continue;
       }
-      if (classifyManifestVersion(pkg.version) === "exact" && actual !== pkg.version) {
-        warnings.push(`${pkg.name} is pinned to ${pkg.version} in the signed manifest but ${actual} is installed.`);
+      if (!satisfiesRuntimePackageVersion(actual, pkg.version)) {
+        warnings.push(kind === "exact"
+          ? `${pkg.name} is pinned to ${pkg.version} in the signed manifest but ${actual} is installed.`
+          : `${pkg.name} requires ${pkg.version} in the signed manifest but ${actual} is installed.`);
       }
     }
   }

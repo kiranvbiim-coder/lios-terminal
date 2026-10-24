@@ -1,4 +1,5 @@
-import { useState, useMemo, Fragment } from "react";
+import { useTerminalArtifactState, useTerminalArtifactSymbol } from "@/lib/terminalArtifactState";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { FileSpreadsheet, X, Upload } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -53,11 +54,16 @@ function formatMetric(metric: FinancialMetric, curr: string): string {
 export default function FinancialStatementsPanel({ symbol: initialSymbol }: Props) {
   const { data: status } = useLseStatus();
   const queryClient = useQueryClient();
-  const [symbol, setSymbol] = useState(initialSymbol ?? "AAPL");
-  const [statement, setStatement] = useState<Statement>("balance");
-  const [viewMode, setViewMode] = useState<ViewMode>("values");
-  const [period, setPeriod] = useState<"FY" | "Q1" | "Q2" | "Q3" | "Q4">("FY");
-  const [depth, setDepth] = useState<number>(5);
+  const [symbol, setSymbol] = useTerminalArtifactSymbol(initialSymbol ?? "AAPL");
+  const [symbolDraft, setSymbolDraft] = useTerminalArtifactState(`FinancialStatementsPanel.symbolDraft.${symbol}`, symbol);
+  const commitSymbol = () => {
+    const next = symbolDraft.trim().toUpperCase();
+    if (/^[A-Z^][A-Z0-9.^=_-]{0,24}$/.test(next) && next !== symbol) setSymbol(next);
+  };
+  const [statement, setStatement] = useTerminalArtifactState<Statement>("FinancialStatementsPanel.statement", "balance");
+  const [viewMode, setViewMode] = useTerminalArtifactState<ViewMode>("FinancialStatementsPanel.viewMode", "values");
+  const [period, setPeriod] = useTerminalArtifactState<"FY" | "Q1" | "Q2" | "Q3" | "Q4">("FinancialStatementsPanel.period", "FY");
+  const [depth, setDepth] = useTerminalArtifactState<number>("FinancialStatementsPanel.depth", 5);
   const [showImportModal, setShowImportModal] = useState(false);
   const configured = status?.configured ?? false;
   const curr = getCurrencySymbol(symbol);
@@ -147,9 +153,9 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
   // whole session regardless of which ticker is being viewed, since a
   // formula like "Adjusted EBITDA = EBITDA - Stock Comp" is often reusable
   // across companies, not tied to one.
-  const balanceCustom = useCustomLineItems();
-  const incomeCustom = useCustomLineItems();
-  const cashflowCustom = useCustomLineItems();
+  const balanceCustom = useCustomLineItems("FinancialStatementsPanel.balanceCustom");
+  const incomeCustom = useCustomLineItems("FinancialStatementsPanel.incomeCustom");
+  const cashflowCustom = useCustomLineItems("FinancialStatementsPanel.cashflowCustom");
   const customState = statement === "balance" ? balanceCustom : statement === "income" ? incomeCustom : cashflowCustom;
   const customItems = customState.items;
 
@@ -229,8 +235,11 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
         <FileSpreadsheet className="w-4 h-4 text-[hsl(38,95%,55%)]" />
         <span className="panel-label">FINANCIAL STATEMENTS</span>
         <input
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          aria-label="Financial statements stock symbol"
+          value={symbolDraft}
+          onChange={(e) => setSymbolDraft(e.target.value.toUpperCase())}
+          onBlur={commitSymbol}
+          onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commitSymbol(); } }}
           placeholder="TICKER..."
           className="ml-2 bg-transparent border border-border px-2 py-1 font-terminal text-[9px] text-foreground w-24 focus:outline-none focus:border-[hsl(38,95%,50%)]/40"
         />
@@ -338,10 +347,10 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
         </span>
       </div>
 
-      {!configured ? (
+      {!configured && !years.length && !analysisPeriods.length ? (
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md text-center font-terminal text-[10px] text-muted-foreground border border-border px-4 py-3">
-            NO LSE_API_KEY CONFIGURED — GET A FREE KEY AT LONDONSTRATEGICEDGE.COM/DATA. VALUES BELOW WILL POPULATE ONCE ONE IS SET. HONEST STATE, NOT A BUG.
+            Provider observations and imported statements are unavailable for this selection. Connect an authorized source or explicitly import and review a statement; missing figures are not filled.
           </div>
         </div>
       ) : activeLoading ? (
@@ -386,6 +395,7 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
           ) : (
             <>
               <CustomLineItemBuilder
+                stateKey={`FinancialStatementsPanel.builder.${symbol}.${statement}.${period}`}
                 availableRefs={availableRefs}
                 periodLabels={years.map(periodLabel)}
                 onAddManual={customState.addManual}
@@ -464,7 +474,7 @@ export default function FinancialStatementsPanel({ symbol: initialSymbol }: Prop
 
       <div className="px-4 py-1.5 border-t border-border bg-[#060606] shrink-0">
         <span className="font-terminal text-[7.5px] text-muted-foreground/70">
-          Real filed figures via London Strategic Edge (SEC-sourced). VALUES shows figures as reported; % view is vertical common-size analysis; YoY GROWTH is horizontal analysis vs. the prior fiscal year.
+          Figures follow their recorded per-field source and status. Imported statements and manual corrections are not provider observations. VALUES shows retained figures; % view is common-size analysis; YoY GROWTH compares the prior fiscal year.
         </span>
       </div>
     </div>

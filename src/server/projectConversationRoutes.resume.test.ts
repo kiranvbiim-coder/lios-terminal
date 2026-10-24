@@ -25,7 +25,6 @@ const { conversationRuns } = await import("./conversationRunRegistry");
 const { getConversationExecutionJournal } = await import("./exec/execution-scope");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
 const { registerConversationTool } = await import("./conversationRuntime");
-const { getPersonaPreferences, upsertPersonaPreferences } = await import("./personaPreferenceService");
 
 type Tool = Parameters<typeof registerConversationTool>[0];
 let slowCalls = 0;
@@ -86,8 +85,7 @@ test("execution history hides the continuation and marks only a resumable interr
   const runOwner = { userId: owner.id, projectId: project.id, chatId: chat.id };
   const journal = await getConversationExecutionJournal();
   const personaUser = { id: owner.id, email: owner.email, role: owner.role as "internal_analyst", organizationId: null };
-  const current = await getPersonaPreferences(personaUser);
-  await upsertPersonaPreferences(personaUser, { preferences: { ...current.preferences.preferences, waveCMasterAi: { state: "on", mode: "ai_assist", updatedAt: new Date().toISOString() } } });
+  await (await import("./fixtures/injectedAiAuthorization")).authorizeInjectedAiForTest(personaUser, t);
 
   const app = express();
   app.use(express.json());

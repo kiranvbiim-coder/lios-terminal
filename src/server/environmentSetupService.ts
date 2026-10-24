@@ -30,14 +30,6 @@ export function normalizeSetupAiProviderId(value: string | null | undefined): st
   return normalized;
 }
 
-export function requiresInitialAiVerification(
-  existing: Pick<EnvironmentSetup, "completedAt"> | null,
-  input: Pick<UpdateEnvironmentSetup, "complete" | "aiProviderId">,
-): boolean {
-  if (!input.complete || existing?.completedAt) return false;
-  return normalizeSetupAiProviderId(input.aiProviderId) !== null;
-}
-
 export async function getEnvironmentSetupStatus(userId: number): Promise<EnvironmentSetupStatus> {
   const db = getDb();
   const [setup] = await db.select().from(environmentSetups).where(eq(environmentSetups.userId, userId)).orderBy(desc(environmentSetups.updatedAt)).limit(1);
@@ -72,6 +64,7 @@ export async function updateEnvironmentSetup(
     pythonPackIds: input.pythonPackIds,
     aiProviderId,
     aiModelId: input.aiModelId ?? null,
+    completedAt,
     updatedAt: now,
   }).onConflictDoUpdate({
     target: environmentSetups.userId,

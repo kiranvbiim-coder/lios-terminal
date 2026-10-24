@@ -15,7 +15,7 @@ import { useOHLCV } from "@/lib/useFinance";
 import { useRiskFreeRate } from "@/lib/useEconomics";
 import ModelConsensus, { type ConsensusMethod } from "@/components/quant/ModelConsensus";
 import type { AnalysisTabProps, FullBalanceSheetData, FullIncomeData, FullCashflowData } from "./types";
-import { AdvancedReceiptFooter, runAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
+import { AdvancedReceiptFooter, useAdvancedModel, type AdvancedReceipt } from "@/lib/advancedValuationCredit";
 
 // Balance-sheet fields needed in BOTH years for the ratios below.
 type BalKey = "currentAssets" | "cash" | "currentLiabilities" | "shortTermDebt" | "totalAssets" | "netReceivables";
@@ -125,9 +125,10 @@ function computeReferenceScores(p: AnalysisTabProps) {
 
 export default function EarningsQualityTab(props: AnalysisTabProps) {
   const { symbol, curr, marketCap, balCurrent, balPrior, incCurrent, incPrior, cfCurrent, incomeReportsFull, balanceReportsFull } = props;
-  const curOv = useOverridable<CurKey>();
-  const priorOv = useOverridable<BalKey>();
-  const [advancedMerton, setAdvancedMerton] = useState<{ assetValue: number; assetVolPct: number; distanceToDefault: number; riskNeutralDefaultProbabilityPct: number; equityRepricingError: number; volatilityRepricingErrorPct: number; receipt: AdvancedReceipt } | null>(null);
+  const curOv = useOverridable<CurKey>("EarningsQualityTab.curOv");
+  const priorOv = useOverridable<BalKey>("EarningsQualityTab.priorOv");
+  const nativeModel = useAdvancedModel<{ assetValue: number; assetVolPct: number; distanceToDefault: number; riskNeutralDefaultProbabilityPct: number; equityRepricingError: number; volatilityRepricingErrorPct: number; receipt: AdvancedReceipt }>("credit/merton");
+  const advancedMerton = nativeModel.result;
   const [mertonError, setMertonError] = useState<string | null>(null);
   const [mertonRunning, setMertonRunning] = useState(false);
 
@@ -214,7 +215,7 @@ export default function EarningsQualityTab(props: AnalysisTabProps) {
   async function runCanonicalMerton() {
     if (!mertonParameters) return;
     setMertonRunning(true); setMertonError(null);
-    try { setAdvancedMerton(await runAdvancedModel("credit/merton", mertonParameters)); }
+    try { await nativeModel.run(mertonParameters); }
     catch (error) { setMertonError(error instanceof Error ? error.message : "Merton structural-model run failed."); }
     finally { setMertonRunning(false); }
   }

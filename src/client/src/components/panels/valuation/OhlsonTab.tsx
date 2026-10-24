@@ -34,8 +34,8 @@ function resolve(ov: Overridable<OKey>, d: OhlsonYearInputs): OhlsonYearInputs {
 }
 
 export default function OhlsonTab({ symbol, curr, balCurrent, balPrior, incCurrent, incPrior, cfCurrent, cfPrior }: AnalysisTabProps) {
-  const curOv = useOverridable<OKey>();
-  const priorOv = useOverridable<OKey>();
+  const curOv = useOverridable<OKey>("OhlsonTab.curOv");
+  const priorOv = useOverridable<OKey>("OhlsonTab.priorOv");
   const curInputs = resolve(curOv, buildDefaults(balCurrent, incCurrent, cfCurrent));
   const priorInputs = resolve(priorOv, buildDefaults(balPrior, incPrior, cfPrior));
   const result = useMemo(() => ohlsonOScore(curInputs, priorInputs), [curInputs, priorInputs]);

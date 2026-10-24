@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Compass, Database } from "lucide-react";
@@ -140,7 +141,7 @@ function ProviderCoverageMap() {
 }
 
 export default function CoverageMapPanel() {
-  const [mode, setMode] = useState<"providers" | "finance">("finance");
+  const [mode, setMode] = useTerminalArtifactState<"providers" | "finance">("CoverageMapPanel.mode", "finance");
   return (
     <div className="h-full flex flex-col bg-[#050505]">
       <div className="shrink-0 flex items-center border-b border-border bg-[#040404] px-2 py-1 gap-1">

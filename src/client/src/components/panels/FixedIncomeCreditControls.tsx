@@ -1,5 +1,6 @@
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { useTerminalQuantRun } from "@/lib/useTerminalQuantRun";
 import { ReceiptSummary } from "@/lib/advancedRatesDerivatives";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
@@ -296,17 +297,21 @@ export function formatFixedIncomeCreditResult(path: FixedIncomeCreditRoute, resu
 function routeId(path: string): string { return path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase(); }
 
 export function FixedIncomeCreditRouteGroup({ paths, title = "INSTITUTIONAL FI / CREDIT" }: { paths: FixedIncomeCreditRoute[]; title?: string }) {
+  const terminal = useTerminalArtifactContext();
   const models = useMemo(() => paths.map((path) => FIXED_INCOME_CREDIT_WORKFLOWS.find((spec) => spec.path === path)).filter((spec): spec is WorkflowSpec => Boolean(spec)), [paths]);
-  const [path, setPath] = useState(models[0]?.path ?? "fixed-income/spread-analytics");
+  const [path, setPath] = useTerminalArtifactState("FixedIncomeCreditRouteGroup.path", models[0]?.path ?? "fixed-income/spread-analytics");
   const selected = models.find((spec) => spec.path === path) ?? models[0];
-  const [parameters, setParameters] = useState<Record<string, unknown>>(() => (selected ? (JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>) : {}));
-  const [mode, setMode] = useState<DataMode>("manual");
-  const [privateImport, setPrivateImport] = useState<PrivateImportMetadata>({ sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" });
-  const [result, setResult] = useState<Result | null>(null);
+  const [parameters, setParameters] = useTerminalArtifactState<Record<string, unknown>>("FixedIncomeCreditRouteGroup.parameters", () => (selected ? (JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>) : {}));
+  const [mode, setMode] = useTerminalArtifactState<DataMode>("FixedIncomeCreditRouteGroup.mode", "manual");
+  const [privateImport, setPrivateImport] = useTerminalArtifactState<PrivateImportMetadata>("FixedIncomeCreditRouteGroup.privateImport", { sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" });
+  const quant = useTerminalQuantRun();
+  const slot = `fixedIncomeCredit.${title}.${path}`;
+  const [localResult, setResult] = useState<Result | null>(null);
+  const result = terminal?.target ? quant.stored?.[slot] as Result | undefined : localResult;
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const running = quant.running;
 
-  useEffect(() => { if (selected) { setParameters(JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>); setResult(null); setError(null); setMode("manual"); setPrivateImport({ sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" }); } }, [selected?.path]);
+  useEffect(() => { if (selected) { if (!terminal) { setParameters(JSON.parse(JSON.stringify(selected.example)) as Record<string, unknown>); setMode("manual"); setPrivateImport({ sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" }); } setResult(null); setError(null); } }, [selected?.path]);
   if (!selected) return null;
   const id = routeId(selected.path);
   const run = async () => {
@@ -315,21 +320,24 @@ export function FixedIncomeCreditRouteGroup({ paths, title = "INSTITUTIONAL FI /
       if ("inputProvenance" in parameters) throw new Error("Do not add inputProvenance; source classification is sealed by this control.");
       validateFixedIncomeCreditRequest(selected.path, parameters);
       const payload = buildFixedIncomeCreditRequest(parameters, mode, privateImport);
-      setRunning(true);
-      const response = await apiRequest("POST", `/api/quant/advanced/${selected.path}`, payload);
-      setResult(await response.json() as Result);
+      setResult(await quant.run<Result>(selected.path, payload, slot));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Analysis request failed."); }
-    finally { setRunning(false); }
   };
   return <section className="border border-border bg-[#080808] p-3 space-y-2" data-testid={`fixed-income-credit-group-${id}`}>
     <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-terminal text-[9px] tracking-widest text-foreground">{title}</span><span className="font-terminal text-[7px] text-amber-300">MANUAL / PRIVATE CACHED SNAPSHOT · LIVE SOURCE NOT BOUND</span></div>
     <div className="font-terminal text-[7px] leading-relaxed text-muted-foreground">Every value below is an illustrative term unless replaced by an explicit client/private import. Source status, provider, as-of date and period are not inferred.</div>
-    {models.length > 1 && <select aria-label="Institutional FI or credit model" data-testid="fixed-income-credit-model-select" value={selected.path} onChange={(event) => setPath(event.target.value as FixedIncomeCreditRoute)} className="w-full border border-border bg-[#090909] px-2 py-1 font-terminal text-[8px] text-foreground">{models.map((model) => <option key={model.path} value={model.path}>{model.label}</option>)}</select>}
+    {models.length > 1 && <select aria-label="Institutional FI or credit model" disabled={running} data-testid="fixed-income-credit-model-select" value={selected.path} onChange={(event) => {
+      const model = models.find(item => item.path === event.target.value);
+      if (!model) return;
+      setPath(model.path); setParameters(structuredClone(model.example)); setMode("manual");
+      setPrivateImport({ sourceReference: "", provider: "", asOf: "", retrievedAt: "", snapshotId: "", contentHash: "" });
+    }} className="w-full border border-border bg-[#090909] px-2 py-1 font-terminal text-[8px] text-foreground">{models.map((model) => <option key={model.path} value={model.path}>{model.label}</option>)}</select>}
     <div className="font-terminal text-[8px] text-muted-foreground">{selected.description} Exact Pydantic fields shown: {Object.keys(selected.example).join(", ")}. Fields with server defaults may be omitted; no value is treated as live.</div>
     <div className="font-terminal text-[8px] text-muted-foreground">MANUAL PARAMETERS (STRUCTURED FORM · ILLUSTRATIVE ONLY)</div>
-    <div data-testid={`fixed-income-credit-input-${id}`}><StructuredJsonEditor schema={selected.schema} value={parameters} onChange={setParameters} /></div>
+    <fieldset disabled={running}><div data-testid={`fixed-income-credit-input-${id}`}><StructuredJsonEditor schema={selected.schema} value={parameters} onChange={setParameters} /></div></fieldset>
     <div className="flex flex-wrap items-center gap-2 font-terminal text-[8px] text-muted-foreground"><label>SOURCE STATUS <select aria-label={`${selected.label} source status`} data-testid={`fixed-income-credit-source-${id}`} value={mode} onChange={(event) => setMode(event.target.value as DataMode)} className="ml-1 border border-border bg-black px-1 py-0.5 text-foreground"><option value="manual">MANUAL</option><option value="private">PRIVATE IMPORT (CACHED SNAPSHOT)</option></select></label>{mode === "private" && <><label>PROVIDER <input aria-label={`${selected.label} private provider`} value={privateImport.provider} onChange={(event) => setPrivateImport((current) => ({ ...current, provider: event.target.value }))} placeholder="private provider" className="ml-1 w-28 border border-border bg-black px-1 py-0.5 text-foreground" /></label><label>SOURCE REF <input aria-label={`${selected.label} private source reference`} value={privateImport.sourceReference} onChange={(event) => setPrivateImport((current) => ({ ...current, sourceReference: event.target.value }))} placeholder="vault://snapshot-id" className="ml-1 w-36 border border-border bg-black px-1 py-0.5 text-foreground" /></label><label>AS-OF <input aria-label={`${selected.label} private as-of`} value={privateImport.asOf} onChange={(event) => setPrivateImport((current) => ({ ...current, asOf: event.target.value }))} placeholder="2026-08-31T00:00:00Z" className="ml-1 w-36 border border-border bg-black px-1 py-0.5 text-foreground" /></label><label>RETRIEVED <input aria-label={`${selected.label} private retrieved-at`} value={privateImport.retrievedAt} onChange={(event) => setPrivateImport((current) => ({ ...current, retrievedAt: event.target.value }))} placeholder="2026-08-31T00:00:00Z" className="ml-1 w-36 border border-border bg-black px-1 py-0.5 text-foreground" /></label><label>SNAPSHOT ID <input aria-label={`${selected.label} private snapshot id`} value={privateImport.snapshotId} onChange={(event) => setPrivateImport((current) => ({ ...current, snapshotId: event.target.value }))} placeholder="immutable-id" className="ml-1 w-28 border border-border bg-black px-1 py-0.5 text-foreground" /></label><label>SHA-256 <input aria-label={`${selected.label} private content hash`} value={privateImport.contentHash} onChange={(event) => setPrivateImport((current) => ({ ...current, contentHash: event.target.value }))} placeholder="64 hex chars" className="ml-1 w-36 border border-border bg-black px-1 py-0.5 text-foreground" /></label></>}<span>PROVIDER: {mode === "private" ? (privateImport.provider || "required") : "none"} · AS-OF: {mode === "private" ? (privateImport.asOf || "required") : "unbound"} · PERIOD: unbound</span></div>
     <button type="button" data-testid={`fixed-income-credit-run-${id}`} onClick={() => void run()} disabled={running} className="border border-amber-400/50 px-2 py-1 font-terminal text-[8px] text-amber-200 disabled:opacity-40">{running ? "RUNNING…" : "RUN ANALYTIC"}</button>
+    {result && <p className="text-xs text-muted-foreground">Recorded native result · editable terms are retained separately. Explicit Run Analytic creates a new native calculation on this same terminal Artifact.</p>}
     {result && <div data-testid={`fixed-income-credit-result-${id}`} className="space-y-2"><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">{formatFixedIncomeCreditResult(selected.path, result).map((field) => <div key={field.label} className="border border-border/60 bg-black/30 p-1.5 font-terminal"><div className="text-[7px] text-muted-foreground">{field.label}</div><div className="text-[9px] text-foreground">{field.value} <span className="text-[7px] text-amber-200">{field.unit}</span></div></div>)}</div><ReceiptSummary receipt={result.receipt as ReceiptView} /></div>}
   </section>;
 }

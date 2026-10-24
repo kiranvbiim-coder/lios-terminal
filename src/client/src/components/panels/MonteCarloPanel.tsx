@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Shuffle, TrendingUp, Sliders } from "lucide-react";
@@ -21,11 +22,11 @@ function scenarioParameters(preset: ScenarioPreset, historicalVol: number) {
 }
 
 export default function MonteCarloPanel({ symbol }: Props) {
-  const [numDays, setNumDays] = useState<30 | 90 | 180>(90);
-  const [mode, setMode] = useState<ParameterMode>("historical");
-  const [scenarioPreset, setScenarioPreset] = useState<ScenarioPreset>("neutral");
-  const [customDrift, setCustomDrift] = useState(0.08);
-  const [customVol, setCustomVol] = useState(0.25);
+  const [numDays, setNumDays] = useTerminalArtifactState<30 | 90 | 180>("MonteCarloPanel.numDays", 90);
+  const [mode, setMode] = useTerminalArtifactState<ParameterMode>("MonteCarloPanel.mode", "historical");
+  const [scenarioPreset, setScenarioPreset] = useTerminalArtifactState<ScenarioPreset>("MonteCarloPanel.scenarioPreset", "neutral");
+  const [customDrift, setCustomDrift] = useTerminalArtifactState("MonteCarloPanel.customDrift", 0.08);
+  const [customVol, setCustomVol] = useTerminalArtifactState("MonteCarloPanel.customVol", 0.25);
   const [simulationRevision, setSimulationRevision] = useState(0);
 
   const { data, isLoading, dataUpdatedAt } = useOHLCV(symbol, "1Y", "1d");

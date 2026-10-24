@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOverridable } from "@/lib/useOverridable";
 import { EditableValue, OverrideStatusBadge } from "@/components/panels/EditableValue";
@@ -69,10 +70,10 @@ export default function CompsTab({
    * buildValuationBridge() call. */
   onMethodsChange?: (methods: ValuationMethodResult[]) => void;
 }) {
-  const [customColumns, setCustomColumns] = useState<MultipleColumn[]>([]);
+  const [customColumns, setCustomColumns] = useTerminalArtifactState<MultipleColumn[]>("CompsTab.customColumns", []);
   const columns = useMemo(() => [...BUILTIN_COLUMNS, ...customColumns], [customColumns]);
-  const [peers, setPeers] = useState<PeerRow[]>(DEFAULT_PEERS);
-  const targetOv = useOverridable<string>();
+  const [peers, setPeers] = useTerminalArtifactState<PeerRow[]>("CompsTab.peers", DEFAULT_PEERS);
+  const targetOv = useOverridable<string>("CompsTab.targetOv");
 
   // Real sector/industry-matched peers with their real P/E and P/S (market
   // cap / revenue, both from the same live quote) -- EV/EBITDA has no real
@@ -127,9 +128,9 @@ export default function CompsTab({
     columns.map(col => [col.id, targetOv.getValue(col.id, targetDefault(col.id))]),
   );
 
-  const [addingColumn, setAddingColumn] = useState(false);
-  const [newColLabel, setNewColLabel] = useState("");
-  const [newColTargetLabel, setNewColTargetLabel] = useState("");
+  const [addingColumn, setAddingColumn] = useTerminalArtifactState("CompsTab.addingColumn", false);
+  const [newColLabel, setNewColLabel] = useTerminalArtifactState("CompsTab.newColLabel", "");
+  const [newColTargetLabel, setNewColTargetLabel] = useTerminalArtifactState("CompsTab.newColTargetLabel", "");
   const addColumn = () => {
     if (!newColLabel.trim()) return;
     const id = `custom_${Date.now()}`;
@@ -203,7 +204,7 @@ export default function CompsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compsAsResults, onMethodsChange]);
 
-  const [blendMethods, setBlendMethods] = useState(false);
+  const [blendMethods, setBlendMethods] = useTerminalArtifactState("CompsTab.blendMethods", false);
   const hasExternalMethods = !!externalMethods?.length;
   const combinedBridge = useMemo(() => {
     if (!blendMethods || !hasExternalMethods) return null;

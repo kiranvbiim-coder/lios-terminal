@@ -10,7 +10,7 @@ export function advancedInputProvenance(parameters: Record<string, unknown>, sou
   if (sourceMode === "synthetic") {
     return {
       dataClassification: "synthetic",
-      syntheticContext: "Labeled sample input for model exploration; not operational, issuer, or live-source data.",
+      syntheticContext: "sample",
       transformations: ["Labeled synthetic sample submitted directly to the model", ...(sourceTransformation ? [sourceTransformation] : [])],
     };
   }

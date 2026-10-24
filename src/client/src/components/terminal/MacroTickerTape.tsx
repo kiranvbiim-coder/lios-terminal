@@ -25,12 +25,13 @@ const MACRO_LABELS: Record<string, string> = {
 };
 
 export default function MacroTickerTape({ onSymbol }: Props) {
-  const { data: quotes } = useQuotes(MACRO_SYMBOLS);
+  const { data: quotes, isLoading, isError } = useQuotes(MACRO_SYMBOLS);
   const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let pos = 0;
     const speed = 0.55; // scrolling speed
     let raf: number;
@@ -44,17 +45,18 @@ export default function MacroTickerTape({ onSymbol }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [quotes]);
 
-  const items = quotes || MACRO_SYMBOLS.map(s => ({ symbol: s, price: 0, changePercent: 0, change: 0 }));
+  const items = quotes ?? [];
   const doubled = [...items, ...items];
 
   return (
     <div data-testid="macro-ticker-tape" className="h-6 bg-[#040404] border-t border-border/80 overflow-hidden relative shrink-0 flex items-center">
+      {!items.length && <p role="status" className="px-3 text-xs">{isLoading ? "Loading macro ticker…" : isError ? "Macro ticker unavailable. Check connected sources." : "No macro ticker observations available."}</p>}
       <div
         ref={trackRef}
         className="flex items-center gap-0 whitespace-nowrap will-change-transform"
         style={{ width: "max-content" }}
       >
-        {doubled.map((q: any, i) => {
+        {doubled.map((q, i) => {
           const isUp = q.changePercent >= 0;
           const label = MACRO_LABELS[q.symbol] || q.symbol;
           const currencySymbol = getCurrencySymbol(q.symbol);
@@ -65,14 +67,14 @@ export default function MacroTickerTape({ onSymbol }: Props) {
               onClick={() => onSymbol(q.symbol)}
               className="flex items-center gap-1.5 px-4 h-6 border-r border-border/40 hover:bg-white/5 group cursor-pointer"
             >
-              <span className="font-terminal text-[8.5px] font-bold text-[hsl(186,80%,55%)] group-hover:text-[hsl(186,80%,65%)] tracking-wider">
+              <span className="font-terminal text-[12px] font-bold text-[hsl(186,80%,55%)] group-hover:text-[hsl(186,80%,65%)] tracking-wider">
                 {label}
               </span>
-              <span className="font-terminal text-[8.5px] text-foreground font-semibold tabular-nums">
+              <span className="font-terminal text-[12px] text-foreground font-semibold tabular-nums">
                 {q.price ? `${currencySymbol}${formatPrice(q.price)}` : "—"}
               </span>
-              {q.changePercent !== undefined && (
-                <span className={`font-terminal text-[8px] tabular-nums font-bold ${isUp ? "text-up" : "text-down"}`}>
+              {q.changePercent != null && Number.isFinite(q.changePercent) && (
+                <span className={`font-terminal text-[12px] tabular-nums font-bold ${isUp ? "text-up" : "text-down"}`}>
                   {isUp ? "▲" : "▼"}{Math.abs(q.changePercent).toFixed(2)}%
                 </span>
               )}

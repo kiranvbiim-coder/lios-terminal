@@ -22,10 +22,24 @@ test("Office edits require owned immutable source custody and explicit P4 accept
   const content = artifactContentSchema.parse({ kind: "report", blocks: [{ id: "authored", type: "paragraph", text: "Authored source", attrs: { sourceRef: "source:authored" } }], sections: [], templateId: null });
   const original = await store.createArtifact(ctx, { projectId: project.id, title: "Authored work", content, sourceRefs: ["source:authored"] });
   const input = { sourceArtifactId: original.artifact.id, sourceVersion: 1, sourceHash: original.version.contentHash, sourceContent: content, content: artifactContentSchema.parse({ ...content, blocks: [{ id: "authored", type: "paragraph", text: "Actual edited Office text", attrs: { sourceRef: "source:authored", officeEdited: true } }] }), format: "docx" as const, fileHash: "a".repeat(64), warnings: [] };
+  if (input.content.kind !== "report") throw new Error("Expected report input.");
   const staged = await proposeOfficeArtifactReturn(ctx, original.artifact.id, input);
   assert.ok(staged.proposal);
   assert.equal((await store.getArtifact(ctx, original.artifact.id)).headVersion, 1);
   assert.deepEqual(await store.getArtifactVersion(ctx, original.artifact.id, 1), original.version);
+  // End-to-end server gate: even an authenticated user cannot re-label the
+  // original P4 evidence via a file-derived proposal payload.
+  const forgedSource = artifactContentSchema.parse({
+    ...input.content, blocks: [{ ...input.content.blocks[0], attrs: {
+      ...input.content.blocks[0].attrs, sourceRef: "filing:forged-return",
+    } }],
+  });
+  await assert.rejects(
+    proposeOfficeArtifactReturn(ctx, original.artifact.id, { ...input, content: forgedSource }),
+    /cannot change recorded source provenance/,
+  );
+  assert.equal((await store.getArtifact(ctx, original.artifact.id)).headVersion, 1);
+
   assert.equal((await proposeOfficeArtifactReturn(ctx, original.artifact.id, input)).proposal?.id, staged.proposal.id);
   await assert.rejects(proposeOfficeArtifactReturn({ ...ctx, userId: foreign.id }, original.artifact.id, input), /not found|owned/);
   await assert.rejects(proposeOfficeArtifactReturn(ctx, original.artifact.id, { ...input, sourceContent: input.content }), /custody/);
@@ -46,6 +60,15 @@ test("Office edits require owned immutable source custody and explicit P4 accept
   const research = await store.createArtifact(ctx, { projectId: project.id, title: "Cited source", content: cited, sourceRefs: ["source:authored"] });
   if (cited.kind !== "research") throw new Error("Expected research.");
   const forged = artifactContentSchema.parse({ ...cited, blocks: [{ ...cited.blocks[0], text: "Edited unsupported quote" }], claims: [{ ...cited.claims[0], text: "Edited unsupported claim" }] });
+  await assert.rejects(
+    proposeOfficeArtifactReturn(ctx, research.artifact.id, {
+      ...input, sourceArtifactId: research.artifact.id, sourceHash: research.version.contentHash,
+      sourceContent: cited, content: artifactContentSchema.parse({
+        ...cited, claims: [{ ...cited.claims[0], sourceRefs: ["filing:invented"] }],
+      }),
+    }),
+    /cannot add or modify a research claim/,
+  );
   const provenanceReview = await proposeOfficeArtifactReturn(ctx, research.artifact.id, { ...input, sourceArtifactId: research.artifact.id, sourceHash: research.version.contentHash, sourceContent: cited, content: forged });
   assert.ok(provenanceReview.proposal);
   const provenanceAccepted = await store.decideArtifactProposal(ctx, provenanceReview.proposal.id, "accept");

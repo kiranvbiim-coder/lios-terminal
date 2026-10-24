@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
  loadUniversalDonorAdoptionSources,
  validateUniversalDonorAdoption,
+ verifyBundledDonorDestinations,
 } from "./validate_universal_donor_adoption.mjs";
 const copy=()=>structuredClone(loadUniversalDonorAdoptionSources());
 test("every one of 92 donors, 10 forks and 93 registered subsystems is reconciled with source registers",()=>{
@@ -130,4 +134,23 @@ test("LangAlpha GM bounded parser remains a subcomponent of an existing approved
  const d=copy();
  d.ledger.selectedBaselineSourceAdoptions[0].baselineDonorId="not-a-donor";
  assert.throws(()=>validateUniversalDonorAdoption(d));
+});
+test("bundled source admission checks actual regular files and exact package locks without following linked parents",t=>{
+ const fixture=mkdtempSync(path.join(os.tmpdir(),"lios-bundled-donor-"));
+ t.after(()=>rmSync(fixture,{recursive:true,force:true}));
+ const checkout=path.join(fixture,"checkout");
+ mkdirSync(path.join(checkout,"src/server"),{recursive:true});
+ mkdirSync(path.join(fixture,"outside"),{recursive:true});
+ writeFileSync(path.join(checkout,"src/server/reused.ts"),"export const owned = true;\n");
+ writeFileSync(path.join(fixture,"outside/escape.ts"),"outside source root\n");
+ const options={root:checkout,npmPackages:{"node_modules/example":{version:"1.0.0"}}};
+ const manifest=destinationPaths=>({components:[{id:"fixture-donor",bundled:true,destinationPaths}]});
+ assert.deepEqual(verifyBundledDonorDestinations(manifest(["server/reused.ts","npm:example@1.0.0"]),options),{sourcePaths:1,npmReferences:1});
+ assert.throws(()=>verifyBundledDonorDestinations(manifest(["server/missing.ts"]),options),/missing, linked or not a regular file/);
+ assert.throws(()=>verifyBundledDonorDestinations(manifest(["../outside/escape.ts"]),options),/unsafe bundled destination/);
+ assert.throws(()=>verifyBundledDonorDestinations(manifest(["server"]),options),/not a regular file/);
+ assert.throws(()=>verifyBundledDonorDestinations(manifest(["npm:example@2.0.0"]),options),/no longer matches/);
+ symlinkSync(path.join(fixture,"outside"),path.join(checkout,"src/linked"),"junction");
+ assert.throws(()=>verifyBundledDonorDestinations(manifest(["linked/escape.ts"]),options),/linked/);
+ assert.deepEqual(verifyBundledDonorDestinations({components:[{id:"reference",bundled:false,destinationPaths:["server/missing.ts"]}]},options),{sourcePaths:0,npmReferences:0});
 });

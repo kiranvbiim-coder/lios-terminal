@@ -13,6 +13,7 @@ import {
 } from "./p7ProjectIntelligenceStore";
 import { searchProjectDocuments } from "./p7ProjectIntelligence";
 import { composeResearchSources } from "./researchSourceComposition";
+import { comparePermittedResearchEvidence, researchComparisonFacetsSchema, researchEvidenceComparisonFacetSchema, RESEARCH_EVIDENCE_COMPARISON_LIMITATION } from "./researchEvidenceComparison";
 import { tenantContext } from "./tenantContext";
 import {
   permittedEvidenceLinkSchema, permittedEvidenceNeighborhoodSchema,
@@ -29,6 +30,7 @@ export const researchSourceCompositionToolInputSchema = z.object({
   query: z.string().trim().min(1).max(2_000),
   limit: z.number().int().min(1).max(50).default(20),
   sourceClasses: z.array(researchSourceClassSchema).max(5).default([]),
+  facets: researchComparisonFacetsSchema,
 }).strict();
 
 const blockedAggregateSchema = z.object({
@@ -45,6 +47,8 @@ export const researchSourceCompositionToolOutputSchema = z.object({
     blocked: z.array(blockedAggregateSchema).max(100),
     graphLinks: z.array(permittedEvidenceLinkSchema).max(50),
     graphNeighborhoods: z.array(permittedEvidenceNeighborhoodSchema).max(50),
+    comparison: z.array(researchEvidenceComparisonFacetSchema).max(6),
+    comparisonLimitations: z.literal(RESEARCH_EVIDENCE_COMPARISON_LIMITATION),
     sourceCount: z.number().int().nonnegative(),
     blockedCount: z.number().int().nonnegative(),
   }).strict(),
@@ -76,10 +80,11 @@ function aggregateBlocked(
  */
 export const researchSourceCompositionTool: ConversationToolDefinition = {
   id: "lios.research.compose_sources",
-  label: "Compose permitted broker, expert, internal, public and user research without flattening source rights",
+  label: "Compose and compare permitted broker, expert, internal, public and user research with source rights preserved",
   planningHint: [
-    'Input must be exactly {"query":"<research query>"} unless a bounded limit or source-class filter is truly needed.',
-    "Allowed keys are query, limit, sourceClasses only; never add sourceRefs, providers, urls, entity, ticker, entitlement, or targetUse.",
+    'Input should be {"query":"<research query>"}; optionally supply "facets":["<exact phrase>", ...] for a source-by-source comparison (maximum 6).',
+    "Allowed keys are query, limit, sourceClasses, facets only; never add sourceRefs, providers, urls, entity, ticker, entitlement, or targetUse.",
+    "A facet match is a cited excerpt for review, not verified agreement, contradiction or missing coverage.",
     "limit is an integer from 1 to 50.",
     'sourceClasses, when used, may contain only: "public_external", "broker_research", "expert_content", "internal_research", "user_file".',
     "For a broad Project research lookup, omit sourceClasses and let the server enforce rights and allowed-source scope.",
@@ -178,6 +183,19 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
     // never raw project index documents or blocked source identities.
     const graphLinks = rankPermittedEvidenceLinks(composition.included, { maxLinks: 50 });
     const graphNeighborhoods = buildPermittedEvidenceNeighborhoods(composition.included, graphLinks);
+    // Re-query only ALREADY entitlement-composed P7 documents for each requested
+    // facet, retaining the original source/provider scope. A second search
+    // recovers passage-level matches beyond the main-query excerpt without
+    // admitting blocked-source metadata or starting an ungoverned search.
+    const permittedDocuments = composition.included.map(item => documents.get(item.documentId)!);
+    const facetSearches = parsed.facets.map(facet => ({
+      facet,
+      hits: searchProjectDocuments(permittedDocuments, { ...searchRequest, query: facet, limit: 50 })
+        .filter(hit => typeof hit.contentHash === "string")
+        .map(hit => ({ documentId: hit.documentId, contentHash: hit.contentHash!, excerpt: hit.excerpt })),
+    }));
+    const comparison = comparePermittedResearchEvidence(parsed.facets, composition.included, facetSearches);
+    assertNotAborted(signal);
     const sourceRefs = [...new Set(composition.included.flatMap((item) => [item.sourceRef, ...item.sourceRefs]))].slice(0, 500);
     return {
       output: {
@@ -186,6 +204,8 @@ export const researchSourceCompositionTool: ConversationToolDefinition = {
         sources: composition.included,
         graphLinks,
         graphNeighborhoods,
+        comparison,
+        comparisonLimitations: RESEARCH_EVIDENCE_COMPARISON_LIMITATION,
         blocked,
         sourceCount: composition.included.length,
         blockedCount: composition.blocked.length,

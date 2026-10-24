@@ -1,5 +1,8 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { createProject, type Project } from "@/lib/useProjects";
 
 /** Ask for a destination before saved work gains access to Project context. */
@@ -15,6 +18,8 @@ export function ProjectDestinationDialog({ projects, description, onConfirm, onC
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef(false);
+  const fieldId = useId();
+  const opener = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const submit = async () => {
     if (pendingRef.current) return;
     pendingRef.current = true;
@@ -38,25 +43,30 @@ export function ProjectDestinationDialog({ projects, description, onConfirm, onC
     }
   };
   return <Dialog open onOpenChange={(open) => { if (!open && !pendingRef.current) onClose(); }}>
-    <DialogContent>
+    <DialogContent onCloseAutoFocus={event => {
+      if (opener.current?.isConnected) {
+        event.preventDefault();
+        opener.current.focus();
+      }
+    }}>
       <DialogTitle>Choose a Project</DialogTitle>
       <DialogDescription>{description}</DialogDescription>
       <form onSubmit={(event) => { event.preventDefault(); void submit(); }} className="space-y-4">
-        <label className="block text-sm">Destination
-          <select autoFocus value={destination} disabled={pending} onChange={(event) => { setDestination(event.target.value); setError(null); }} className="mt-2 w-full rounded border border-border bg-background p-3">
+        <Label htmlFor={`${fieldId}-destination`}>Destination</Label>
+          <select id={`${fieldId}-destination`} autoFocus value={destination} disabled={pending} aria-describedby={`${fieldId}-help`} onChange={(event) => { setDestination(event.target.value); setError(null); }} className="mt-2 min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
             <option value="" disabled>Choose a Project…</option>
             {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             <option value="new">Create a new Project</option>
           </select>
-        </label>
-        {destination === "new" && <label className="block text-sm">Project name
-          <input value={created?.name ?? name} disabled={pending || Boolean(created)} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded border border-border bg-background p-3" />
-        </label>}
-        <p className="text-sm text-muted-foreground">{destination === "new" ? "The new Project starts with its own isolated context." : "The selected Project keeps its own sources, permissions and memory."}</p>
-        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" disabled={pending} onClick={onClose} className="lios-section-action">Cancel</button>
-          <button type="submit" disabled={pending || !destination || (destination === "new" && !created && !name.trim())} aria-busy={pending} className="lios-section-action">{pending ? "Saving…" : "Confirm destination"}</button>
+        {destination === "new" && <div>
+          <Label htmlFor={`${fieldId}-name`}>Project name</Label>
+          <Input id={`${fieldId}-name`} value={created?.name ?? name} disabled={pending || Boolean(created)} aria-invalid={Boolean(error)} aria-describedby={`${fieldId}-${error ? "error" : "help"}`} onChange={(event) => { setName(event.target.value); setError(null); }} className="mt-2" />
+        </div>}
+        <p id={`${fieldId}-help`} className="text-sm text-muted-foreground">{destination === "new" ? "The new Project starts with its own isolated context." : "The selected Project keeps its own sources, permissions and memory."}</p>
+        {error && <p id={`${fieldId}-error`} role="alert" className="text-sm text-red-300">{error}</p>}
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button type="button" variant="outline" disabled={pending} onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={pending || !destination || (destination === "new" && !created && !name.trim())} aria-busy={pending}>{pending ? "Saving…" : "Confirm destination"}</Button>
         </div>
       </form>
     </DialogContent>

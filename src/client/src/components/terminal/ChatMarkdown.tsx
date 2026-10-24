@@ -1,6 +1,8 @@
 // Direct node:tsx/server-rendered tests use the classic JSX transform.
 import * as React from "react";
 import { useMemo, useState } from "react";
+import ChatTableBlock from "./ChatTableBlock";
+import ChatCodeBlock from "./ChatCodeBlock";
 import {
   parseChatMarkdown,
   resolveCitation,
@@ -99,7 +101,7 @@ function renderInline(nodes: readonly Inline[], sources: readonly ChatCitationSo
 
 const ALIGN_CLASS: Record<Exclude<Align, null>, string> = { left: "text-left", center: "text-center", right: "text-right" };
 
-function renderBlocks(blocks: readonly Block[], sources: readonly ChatCitationSource[], onSelect: ((source: ChatCitationSource) => void) | undefined, tight = false): React.ReactNode[] {
+function renderBlocks(blocks: readonly Block[], sources: readonly ChatCitationSource[], onSelect: ((source: ChatCitationSource) => void) | undefined, tight = false, streaming = false): React.ReactNode[] {
   return blocks.map((block, index) => {
     switch (block.t) {
       case "heading": {
@@ -111,42 +113,17 @@ function renderBlocks(blocks: readonly Block[], sources: readonly ChatCitationSo
           ? <span key={index} className="block">{renderInline(block.c, sources, onSelect)}</span>
           : <p key={index} className="my-2 first:mt-0 last:mb-0">{renderInline(block.c, sources, onSelect)}</p>;
       case "code":
-        return (
-          <pre key={index} tabIndex={0} aria-label={block.lang ? `${block.lang} code` : "Code"} className="my-2 overflow-x-auto rounded-lg border border-border/50 bg-black/40 p-3 font-terminal text-[13px] leading-5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50">
-            <code data-language={block.lang ?? undefined}>{block.v}</code>
-          </pre>
-        );
+        return <ChatCodeBlock key={index} code={block.v} language={block.lang} streaming={streaming} />;
       case "list": {
-        const items = block.items.map((item, itemIndex) => <li key={itemIndex} className="pl-1">{renderBlocks(item, sources, onSelect, true)}</li>);
+        const items = block.items.map((item, itemIndex) => <li key={itemIndex} className="pl-1">{renderBlocks(item, sources, onSelect, true, streaming)}</li>);
         return block.ordered
           ? <ol key={index} start={block.start} className="my-2 list-decimal space-y-1 pl-6">{items}</ol>
           : <ul key={index} className="my-2 list-disc space-y-1 pl-6">{items}</ul>;
       }
       case "quote":
-        return <blockquote key={index} className="my-2 border-l-2 border-amber-300/40 pl-3 text-muted-foreground">{renderBlocks(block.c, sources, onSelect)}</blockquote>;
+        return <blockquote key={index} className="my-2 border-l-2 border-amber-300/40 pl-3 text-muted-foreground">{renderBlocks(block.c, sources, onSelect, false, streaming)}</blockquote>;
       case "table":
-        return (
-          <div key={index} role="region" tabIndex={0} aria-label="Table" className="my-3 max-w-full overflow-x-auto rounded-lg border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50">
-            <table className="w-full border-collapse font-ui text-[13px] leading-5">
-              <thead className="bg-white/[0.04]">
-                <tr>
-                  {block.head.map((cell, column) => (
-                    <th key={column} scope="col" className={`border-b border-border/60 px-3 py-2 font-semibold text-foreground ${ALIGN_CLASS[block.align[column] ?? "left"]}`}>{renderInline(cell, sources, onSelect)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {block.rows.map((row, rowIndex) => (
-                  <tr key={rowIndex} className="border-b border-border/30 last:border-b-0">
-                    {row.map((cell, column) => (
-                      <td key={column} className={`px-3 py-2 align-top tabular-nums ${ALIGN_CLASS[block.align[column] ?? "left"]}`}>{renderInline(cell, sources, onSelect)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
+        return <ChatTableBlock key={index} table={block} streaming={streaming} renderCell={(nodes) => renderInline(nodes, sources, onSelect)} />;
       case "hr":
         return <hr key={index} className="my-3 border-border/50" />;
     }
@@ -164,7 +141,7 @@ export default function ChatMarkdown({ text, streaming = false, sources = NO_SOU
   if (!blocks.length) return null;
   return (
     <div className="lios-chat-markdown break-words font-ui text-[14px] leading-6 text-foreground" data-chat-markdown="true" aria-busy={streaming || undefined}>
-      {renderBlocks(blocks, sources, onCitationSelect)}
+      {renderBlocks(blocks, sources, onCitationSelect, false, streaming)}
     </div>
   );
 }

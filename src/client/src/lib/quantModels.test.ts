@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectHiddenRelationships } from "./quantModels";
+import { detectHiddenRelationships, monteCarloVaR } from "./quantModels";
 
 // ─── Hidden Relationship Detector (residual correlation + Fisher z-test) ───
 
@@ -121,4 +121,13 @@ test("hidden relationship detector: flags the sub-dominant D-E shock the top-2 P
 test("hidden relationship detector: validates inputs", () => {
   assert.throws(() => detectHiddenRelationships(["A", "B"], [[1, 2, 3], [1, 2, 3]], 1, 0.05));
   assert.throws(() => detectHiddenRelationships(["A", "B", "C"], [[1, 2], [1, 2]], 1, 0.05));
+});
+
+test("original Monte Carlo VaR replays its seed and scales with stated notional", () => {
+  const value = monteCarloVaR(1_000_000, 2, 0, 95, 1, 3000, 17);
+  assert.equal(monteCarloVaR(1_000_000, 2, 0, 95, 1, 3000, 17), value);
+  assert.ok(Math.abs(monteCarloVaR(2_000_000, 2, 0, 95, 1, 3000, 17) - 2 * value) < 1e-6);
+  const lognormalQuantile = 1_000_000 * (1 - Math.exp(-0.5 * 0.02 ** 2 - 1.6448536269514722 * 0.02));
+  assert.ok(Math.abs(value - lognormalQuantile) < 3000, "Fixed-seed GBM loss quantile reconciles its independent analytic lognormal percentile.");
+  assert.throws(() => monteCarloVaR(100, 2, 0, 95, 1, 100, -1));
 });

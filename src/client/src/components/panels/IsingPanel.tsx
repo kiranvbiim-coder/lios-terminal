@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Flame, Play, Pause, RefreshCw, Sliders, Info } from "lucide-react";
@@ -9,9 +10,9 @@ const GRID_SIZE = 40; // 40x40 = 1600 traders
 const COOP_CRITICAL = 0.44; // Critical coupling threshold (social contagion)
 
 export default function IsingPanel({ symbol, onUpdateMagnetization }: { symbol: string; onUpdateMagnetization?: (mag: number) => void }) {
-  const [coupling, setCoupling] = useState(0.35); // social copying J
-  const [externalField, setExternalField] = useState(0.0); // news sentiment B
-  const [temperature, setTemperature] = useState(1.0); // random noise T
+  const [coupling, setCoupling] = useTerminalArtifactState("IsingPanel.coupling", 0.35);
+  const [externalField, setExternalField] = useTerminalArtifactState("IsingPanel.externalField", 0.0);
+  const [temperature, setTemperature] = useTerminalArtifactState("IsingPanel.temperature", 1.0);
   const [isPlaying, setIsPlaying] = useState(true);
   
   const canvasRef = useRef<HTMLCanvasElement | null>(null);

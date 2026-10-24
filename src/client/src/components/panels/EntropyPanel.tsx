@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Brain, ArrowRightLeft, Info, Activity } from "lucide-react";
@@ -188,7 +189,7 @@ function calculateTransferEntropy(x: number[], y: number[]): { xToY: number; yTo
 }
 
 export default function EntropyPanel({ symbol }: { symbol: string }) {
-  const [partnerAsset, setPartnerAsset] = useState("BTC-USD");
+  const [partnerAsset, setPartnerAsset] = useTerminalArtifactState("EntropyPanel.partnerAsset", "BTC-USD");
 
   // Fetch target active asset ohlcv
   const { data: primaryData, isLoading: isPrimaryLoading } = useOHLCV(symbol, "1Y", "1d");

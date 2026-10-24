@@ -62,7 +62,6 @@ test("an ordinary finished run is quiet: no Terminal button, no plan, no counts,
   assert.doesNotMatch(markup, /Fetch filings|Resolved capabilities|Company research/);
   assert.doesNotMatch(markup, /\b1 step\b|\b1 source\b|SEC EDGAR|Run 2222/);
   assert.doesNotMatch(markup, /border-border\/60 bg-\[#080808\]/, "no per-run diagnostic card chrome");
-  assert.match(markup, /data-testid="trace-receipt"/, "the compact receipt anchor survives for restore checks");
   assert.match(markup, /data-testid="trace-show-work"[^>]*>Show work/);
   assert.match(markup, /aria-expanded="false"/);
 });
@@ -156,6 +155,24 @@ test("source limitations from the trust manifest are visible by default; the ful
   assert.match(opened, /data-p3-trust-manifest/);
 });
 
+test("source-free interpretation does not invent a supporting-data warning or hide actual missing evidence", () => {
+  const generated = manifest({
+    summary: { freshness: "ai_generated", quality: "low", confidence: "low", conflictState: "not_evaluated_single_source", evidenceCoveragePct: 0, sourceCount: 0, receiptCount: 1, missingCount: 0 },
+    evidence: [{ sourceRef: `ai-output:${REQUEST_ID}`, providerLabel: "Configured BYOAI", kind: "ai" }] as TrustManifest["evidence"],
+    warnings: ["Generated interpretation has not been verified as an observed fact."],
+  });
+  assert.deepEqual(trustCaveats(generated), { lines: generated.warnings, recoveryActions: [] });
+  const rendered = render([event({ type: "trust", manifest: generated })]);
+  assert.doesNotMatch(rendered, /Supporting evidence is marked low quality|Review.*figures/i);
+  assert.match(rendered, /Generated interpretation has not been verified/);
+  const incomplete = { ...generated, missing: [{ field: "source_document", reason: "The selected file was revoked.", recoveryActions: ["Select a permitted file"] }] };
+  const caveats = trustCaveats(incomplete);
+  assert.deepEqual(caveats?.recoveryActions, ["Select a permitted file"]);
+  assert.ok(caveats?.lines.some(line => line.includes("The selected file was revoked.")));
+  const revokedMarkup = render([event({ type: "trust", manifest: incomplete })]);
+  assert.match(revokedMarkup, /The selected file was revoked/);
+});
+
 test("a proposed change needing review shows readable rows, never raw JSON", () => {
   const markup = render([event({
     type: "mutation_review",
@@ -247,7 +264,6 @@ test("Quick Chat candidate offers retention in the same Chat and Temporary resul
 test("a failed or stopped run with no error card still shows a visible status line", () => {
   const failed = render([planEvent, event({ type: "done", status: "failed" })]);
   assert.match(failed, /role="status"[^>]*data-testid="trace-run-status"[^>]*data-run-status="failed"/);
-  assert.match(failed, /didn’t complete/);
   const cancelled = render([planEvent, event({ type: "done", status: "cancelled" })]);
   assert.match(cancelled, /data-run-status="cancelled"/);
   assert.match(cancelled, /stopped before it finished/);
@@ -264,10 +280,13 @@ test("source limitation rows have unique keys even when two limitations read the
   assert.equal(errors.some((args) => JSON.stringify(args).includes("same key")), false);
 });
 
-test("a stopped run that can resume shows a Resume control, and nothing renders for an empty idle chat", () => {
+test("an eligible interrupted run shows the guarded checkpoint resume card, not an invented live status", () => {
   const stopped = render([], { resumableRequestId: REQUEST_ID, onResume: noop });
-  assert.match(stopped, /Stopped/);
+  assert.match(stopped, /Interrupted research checkpoint/);
+  assert.match(stopped, /trace-resumable-checkpoint/);
+  assert.match(stopped, /Detailed checkpoint step counts are unavailable/);
   assert.match(stopped, /data-testid="agent-run-resume"/);
+  assert.match(stopped, /Resume can be refused/);
   assert.equal(render([]), "");
 });
 
@@ -286,4 +305,141 @@ test("a structured input gap is rendered once while unrelated source warnings re
   assert.equal((markup.match(/Valuation requires explicit deterministic/g) ?? []).length, 1);
   assert.doesNotMatch(markup, /data-testid="trace-error"|REQUEST_FAILED/);
   assert.match(markup, /Independent source is stale/);
+});
+
+test("completion without a receipt cannot borrow another request's receipt", () => {
+  const foreign = event({ type: "receipt", requestId: "99999999-9999-4999-8999-999999999999", receipt: {} });
+  const missing = render([foreign, planEvent, doneOk]);
+  assert.doesNotMatch(missing, /data-testid="trace-receipt"/);
+  assert.match(missing, /data-testid="trace-receipt-missing"/);
+  const actual = render([planEvent, event({ type: "receipt", receipt: {} }), doneOk]);
+  assert.match(actual, /data-testid="trace-receipt"/);
+  assert.doesNotMatch(actual, /trace-receipt-missing/);
+});
+
+test("unsettled idle observation stays visibly interrupted and pending Stop cannot be repeated", () => {
+  assert.match(render([planEvent, sourceResult]), /role="alert" data-testid="trace-interrupted"/);
+  const pending = render([planEvent], { busy: true, cancelPending: true });
+  assert.match(pending, /disabled="" aria-label="Requesting Stop"/);
+  const acknowledged = render([planEvent], { busy: true, stopRequested: true });
+  assert.match(acknowledged, /disabled="" aria-label="Stop requested"/);
+});
+
+test("WS-50: actual run receipts are disclosed under Show work but not mistaken for automatic approval", () => {
+  const receipt = {
+    id: "88888888-8888-4888-8888-888888888888",
+    requestId: REQUEST_ID, componentId: "quant.risk", operation: "risk_run", status: "completed",
+    startedAt: "2026-10-24T10:00:00.000Z", completedAt: "2026-10-24T10:00:02.000Z",
+    deterministic: true, aiDerived: false, inputHash: "a".repeat(64), outputHash: "b".repeat(64),
+    sourceRefs: ["private-source-uri:do-not-render"], warnings: ["PRIVATE WARNING"],
+    inputEvidence: { apiKey: "PRIVATE KEY" }, outputEvidence: { raw: "PRIVATE RAW" },
+  };
+  const collapsed = render([event({ type: "receipt", receipt }), doneOk]);
+  assert.match(collapsed, /data-testid="trace-show-work"/);
+  assert.doesNotMatch(collapsed, /trace-agent-receipts|quant.risk|risk_run|88888888/);
+  const open = render([event({ type: "receipt", receipt }), doneOk], { defaultShowWork: true });
+  assert.match(open, /data-testid="trace-agent-receipts"/);
+  assert.match(open, /data-testid="trace-receipt-count"/);
+  assert.match(open, /1 recorded execution receipt/);
+  assert.match(open, /quant.risk · risk run/);
+  assert.match(open, /1 completed · 0 failed · 0 cancelled/);
+  assert.match(open, /Receipts do not grant approval or prove an external action occurred/);
+  assert.match(open, /88888888-8888-4888-8888-888888888888/);
+  assert.match(open, /Input SHA-256/);
+  assert.doesNotMatch(open, /PRIVATE KEY|PRIVATE RAW|PRIVATE WARNING|private-source-uri:do-not-render/);
+});
+
+test("WS-50: failed, cancelled and foreign-run receipts warn even while Show work is collapsed", () => {
+  const makeReceipt = (id: string, status: string, innerRequest = REQUEST_ID) => event({
+    type: "receipt", receipt: {
+      id, requestId: innerRequest, componentId: "risk.engine", operation: "run",
+      status, startedAt: "2026-10-24T10:00:00Z", completedAt: "2026-10-24T10:00:01Z",
+      deterministic: true, aiDerived: false, inputHash: null, outputHash: null,
+      sourceRefs: [], warnings: [], inputEvidence: null, outputEvidence: null,
+    },
+  });
+  const failed = render([
+    makeReceipt("11111111-1111-4111-8111-111111111111", "failed"),
+    makeReceipt("22222222-2222-4222-8222-222222222222", "cancelled"),
+    makeReceipt("33333333-3333-4333-8333-333333333333", "completed", "99999999-9999-4999-8999-999999999999"),
+    doneOk,
+  ]);
+  assert.match(failed, /role="alert"[^>]*data-testid="trace-agent-receipt-warning"/);
+  assert.match(failed, /1 failed, 1 cancelled, 1 ignored/);
+  assert.match(failed, /Do not assume these operations completed/);
+  assert.doesNotMatch(failed, /trace-agent-receipts|risk.engine/);
+  const full = render([makeReceipt("11111111-1111-4111-8111-111111111111", "failed"), doneOk], { defaultShowWork: true });
+  assert.match(full, /1 recorded execution receipt/);
+  assert.match(full, /0 completed · 1 failed · 0 cancelled/);
+});
+
+
+test("WS-51: privileged approval displays exact run-bound hashed input, side effect, scope and no secret arguments", () => {
+  const review = event({
+    type: "governed_tool_approval_required",
+    reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Email send",
+    permissionClass: "user_confirm",
+    sideEffect: "external",
+    replaySafe: false,
+    externalSideEffect: true,
+    blastRadius: "May send a message to another provider.",
+    choices: ["allow_once", "allow_project", "deny"],
+    expiresAt: "2099-10-25T12:00:00.000Z",
+    message: "Send this message?",
+    reviewBinding: {
+      toolId: "email.send", stepId: "step-1", toolCallId: "call-1",
+      inputSha256: "a".repeat(64), planSha256: "b".repeat(64),
+      chatId: 15, projectId: 4,
+    },
+  });
+  const markup = render([review], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(markup, /data-testid="governed-review-risk"/);
+  assert.match(markup, /External side effect/);
+  assert.match(markup, /Project 4 · Chat 15/);
+  assert.match(markup, /Input SHA-256/);
+  assert.match(markup, /Plan SHA-256/);
+  assert.match(markup, /May send a message to another provider/);
+  assert.match(markup, /data-testid="governed-review-risk-ack"/);
+  assert.match(markup, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+  assert.match(markup, /Allow for Project/);
+  assert.match(markup, /Raw input and external target are NOT exposed/);
+  assert.doesNotMatch(markup, /secretToken|apiKey|accessKey/);
+});
+
+test("WS-51: expired or missing exact bindings fail closed, but denial remains possible", () => {
+  const base = {
+    type: "governed_tool_approval_required",
+    reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Send email", permissionClass: "admin_confirm",
+    sideEffect: "external", externalSideEffect: true, replaySafe: false,
+    choices: ["allow_once", "deny"],
+    expiresAt: "2020-01-01T00:00:00.000Z", message: "Review this external write.",
+  };
+  const missing = render([event(base)], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(missing, /lacks a current exact server binding or has expired/);
+  assert.match(missing, /data-testid="governed-tool-allow-once"[^>]*disabled/);
+  assert.match(missing, /\bDeny<\/button>/);
+  assert.doesNotMatch(missing, /Allow for Project/);
+  const validBinding = { toolId: "email.send", stepId: "s1", toolCallId: "c1",
+    inputSha256: "a".repeat(64), planSha256: "b".repeat(64), chatId: 7, projectId: null };
+  const expired = render([event({ ...base, reviewBinding: validBinding })], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(expired, /expired: allow disabled/);
+  assert.match(expired, /\bDeny<\/button>/);
+});
+
+test("WS-51: legacy action review shows exact target, offered scope and hides approvals after terminal result", () => {
+  const action = event({
+    type: "approval_required", action: "RunBacktest",
+    actionRequest: { componentId: "finance.backtest", targetRef: "portfolio:15",
+      externalSideEffect: false, reversible: true, permissionClass: "user_confirm" },
+    choices: ["allow_once", "deny"], message: "Run the model?",
+  });
+  const open = render([action], { busy: true });
+  assert.match(open, /data-testid="legacy-approval-risk"/);
+  assert.match(open, /Target: portfolio:15/);
+  assert.match(open, /Legacy review; exact server input fingerprint is not included/);
+  assert.doesNotMatch(open, /Allow for Project/);
+  const completed = render([action, doneOk]);
+  assert.doesNotMatch(completed, /data-testid="trace-approval"/);
 });

@@ -1,40 +1,44 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { PieChart as PieIcon } from "lucide-react";
 import { useQuotes } from "@/lib/useFinance";
 import { useFamaFrench3 } from "@/lib/useFamaFrench";
 import type { OHLCVSeries } from "@/lib/finance";
-import { brinsonAttribution, olsRegression, type BrinsonRow } from "@/lib/quantModels";
+import { olsRegression } from "@/lib/quantModels";
+import { computeObservedBrinsonAttribution, parseAttributionHoldings } from "@/lib/portfolioAttributionObservations";
 
 type Tab = "brinson" | "style";
 
-interface WeightedHolding { symbol: string; weight: number }
-
-function parseHoldings(input: string): WeightedHolding[] {
-  return input.split(",").map((s) => s.trim()).filter(Boolean).map((tok) => {
-    const [symbol, w] = tok.split(":");
-    return { symbol: symbol.trim().toUpperCase(), weight: Number(w) || 0 };
-  }).filter((h) => h.symbol && h.weight > 0);
-}
-
-function normalizeWeights(holdings: WeightedHolding[]): WeightedHolding[] {
-  const total = holdings.reduce((s, h) => s + h.weight, 0) || 1;
-  return holdings.map((h) => ({ ...h, weight: h.weight / total }));
-}
-
-function fmt(v: number, digits = 2): string {
-  return Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%` : "—";
+function fmtEffect(v: number, digits = 2): string {
+  return Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(digits)} pp` : "—";
 }
 
 function BrinsonTab() {
-  const [inputA, setInputA] = useState("AAPL:30,JPM:25,XOM:20,JNJ:25");
-  const [inputB, setInputB] = useState("AAPL:20,JPM:20,XOM:30,JNJ:30");
-  const [holdingsA, setHoldingsA] = useState(normalizeWeights(parseHoldings(inputA)));
-  const [holdingsB, setHoldingsB] = useState(normalizeWeights(parseHoldings(inputB)));
-  const [range, setRange] = useState("6M");
+  const [inputA, setInputA] = useTerminalArtifactState("BrinsonTab.inputA", "AAPL:30,JPM:25,XOM:20,JNJ:25");
+  const [inputB, setInputB] = useTerminalArtifactState("BrinsonTab.inputB", "AAPL:20,JPM:20,XOM:30,JNJ:30");
+  const [holdingsA, setHoldingsA] = useTerminalArtifactState("BrinsonTab.holdingsA", parseAttributionHoldings(inputA).holdings);
+  const [holdingsB, setHoldingsB] = useTerminalArtifactState("BrinsonTab.holdingsB", parseAttributionHoldings(inputB).holdings);
+  const [range, setRange] = useTerminalArtifactState("BrinsonTab.range", "6M");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [appliedA, setAppliedA] = useState(inputA);
+  const [appliedB, setAppliedB] = useState(inputB);
+  const inputsPending = inputA !== appliedA || inputB !== appliedB;
+  const applyHoldings = () => {
+    const actual = parseAttributionHoldings(inputA);
+    const benchmark = parseAttributionHoldings(inputB);
+    const problem = actual.error ?? benchmark.error;
+    if (problem) { setValidationError(problem); return; }
+    setHoldingsA(actual.holdings);
+    setHoldingsB(benchmark.holdings);
+    setAppliedA(inputA);
+    setAppliedB(inputB);
+    setValidationError(null);
+  };
 
   const allSymbols = useMemo(() => Array.from(new Set([...holdingsA, ...holdingsB].map((h) => h.symbol))), [holdingsA, holdingsB]);
-  const { data: quotes } = useQuotes(allSymbols);
+  const quoteQuery = useQuotes(allSymbols);
+  const { data: quotes } = quoteQuery;
   const ohlcvResults = useQueries({
     queries: allSymbols.map((symbol) => ({
       queryKey: ["/api/finance/ohlcv", symbol, range, "1d"],
@@ -47,67 +51,40 @@ function BrinsonTab() {
       staleTime: 60000,
     })),
   });
-  const isLoading = ohlcvResults.some((r) => r.isLoading) || !quotes;
-
-  const rows: BrinsonRow[] | null = useMemo(() => {
-    if (isLoading) return null;
-    const sectorOf = new Map((quotes ?? []).map((q) => [q.symbol, q.sector || "Other"]));
-    const periodReturnOf = new Map<string, number>();
-    allSymbols.forEach((symbol, i) => {
-      const bars = ohlcvResults[i].data?.bars ?? [];
-      if (bars.length > 1) periodReturnOf.set(symbol, ((bars[bars.length - 1].close - bars[0].close) / bars[0].close) * 100);
-    });
-
-    const bySector = new Map<string, { wp: number; wb: number; wpRetSum: number; wbRetSum: number }>();
-    for (const h of holdingsA) {
-      const sector = sectorOf.get(h.symbol) ?? "Other";
-      const ret = periodReturnOf.get(h.symbol) ?? 0;
-      const e = bySector.get(sector) ?? { wp: 0, wb: 0, wpRetSum: 0, wbRetSum: 0 };
-      e.wp += h.weight; e.wpRetSum += h.weight * ret;
-      bySector.set(sector, e);
-    }
-    for (const h of holdingsB) {
-      const sector = sectorOf.get(h.symbol) ?? "Other";
-      const ret = periodReturnOf.get(h.symbol) ?? 0;
-      const e = bySector.get(sector) ?? { wp: 0, wb: 0, wpRetSum: 0, wbRetSum: 0 };
-      e.wb += h.weight; e.wbRetSum += h.weight * ret;
-      bySector.set(sector, e);
-    }
-
-    const inputs = Array.from(bySector.entries()).map(([segment, e]) => ({
-      segment,
-      wp: e.wp, wb: e.wb,
-      rp: e.wp > 0 ? e.wpRetSum / e.wp : 0,
-      rb: e.wb > 0 ? e.wbRetSum / e.wb : 0,
-    }));
-    return brinsonAttribution(inputs);
-  }, [isLoading, quotes, ohlcvResults, allSymbols, holdingsA, holdingsB]);
-
-  const totals = useMemo(() => {
-    if (!rows) return null;
-    return rows.reduce((acc, r) => ({
-      allocation: acc.allocation + r.allocationEffect,
-      selection: acc.selection + r.selectionEffect,
-      interaction: acc.interaction + r.interactionEffect,
-      total: acc.total + r.totalEffect,
-    }), { allocation: 0, selection: 0, interaction: 0, total: 0 });
-  }, [rows]);
+  const isLoading = quoteQuery.isLoading || ohlcvResults.some((result) => result.isLoading);
+  const queryFailed = quoteQuery.isError || ohlcvResults.some((result) => result.isError);
+  const calculation = useMemo(() => {
+    if (isLoading || queryFailed || !quotes) return null;
+    const histories = Object.fromEntries(allSymbols.map((symbol, index) => [symbol, ohlcvResults[index].data]));
+    return computeObservedBrinsonAttribution(holdingsA, holdingsB, quotes, histories);
+  }, [allSymbols, holdingsA, holdingsB, isLoading, queryFailed, ohlcvResults, quotes]);
+  const rows = !inputsPending && !validationError && calculation?.state === "ready" ? calculation.rows : null;
+  const totals = rows ? rows.reduce((acc, row) => ({
+    allocation: acc.allocation + row.allocationEffect,
+    selection: acc.selection + row.selectionEffect,
+    interaction: acc.interaction + row.interactionEffect,
+    total: acc.total + row.totalEffect,
+  }), { allocation: 0, selection: 0, interaction: 0, total: 0 }) : null;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="font-terminal text-[7.5px] text-muted-foreground mb-1">PORTFOLIO A (ACTUAL) — SYMBOL:WEIGHT, COMMA-SEPARATED</div>
-          <form onSubmit={(e) => { e.preventDefault(); setHoldingsA(normalizeWeights(parseHoldings(inputA))); }}>
-            <input value={inputA} onChange={(e) => setInputA(e.target.value)} className="w-full bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
+          <form onSubmit={(e) => { e.preventDefault(); applyHoldings(); }}>
+            <input aria-label="Actual portfolio symbols and relative weights" value={inputA} onChange={(e) => { setInputA(e.target.value); setValidationError(null); }} className="w-full bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
           </form>
         </div>
         <div>
           <div className="font-terminal text-[7.5px] text-muted-foreground mb-1">PORTFOLIO B (BENCHMARK) — SYMBOL:WEIGHT</div>
-          <form onSubmit={(e) => { e.preventDefault(); setHoldingsB(normalizeWeights(parseHoldings(inputB))); }}>
-            <input value={inputB} onChange={(e) => setInputB(e.target.value)} className="w-full bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
+          <form onSubmit={(e) => { e.preventDefault(); applyHoldings(); }}>
+            <input aria-label="Benchmark portfolio symbols and relative weights" value={inputB} onChange={(e) => { setInputB(e.target.value); setValidationError(null); }} className="w-full bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
           </form>
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={applyHoldings} className="rounded border border-cyan-300/30 px-3 py-1.5 font-terminal text-[9px] text-cyan-200">Apply both portfolio weights</button>
+        <span className="font-ui text-[11px] text-muted-foreground">Weights are relative positive units, normalized separately within each portfolio.</span>
       </div>
       <div className="flex border border-border w-fit">
         {["1M", "3M", "6M", "1Y"].map((r) => (
@@ -115,29 +92,34 @@ function BrinsonTab() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="font-terminal text-[9px] text-muted-foreground">LOADING...</div>
+      {validationError && <p role="alert" className="rounded border border-red-300/30 p-3 font-ui text-[12px] text-red-200">{validationError} No attribution has been updated.</p>}
+      {inputsPending && <p role="status" className="font-ui text-[12px] text-amber-200">Portfolio weights changed. Apply both lists to recalculate; prior attribution is hidden to avoid a stale result.</p>}
+      {queryFailed && <div role="alert" className="rounded border border-red-300/30 p-3 font-ui text-[12px] text-red-200">Quote or historical price source unavailable. No attribution has been calculated. Check source access or retry loading this panel.</div>}
+      {!queryFailed && calculation?.state === "unavailable" && !inputsPending && !validationError &&
+        <div role="status" className="rounded border border-amber-300/30 p-3 font-ui text-[12px] text-amber-200">{calculation.message} {calculation.symbols.length > 0 ? `Affected: ${calculation.symbols.join(", ")}.` : ""}</div>}
+      {isLoading && !queryFailed ? (
+        <div role="status" className="font-terminal text-[9px] text-muted-foreground">LOADING OBSERVED QUOTES AND DAILY CLOSES...</div>
       ) : !rows?.length ? (
-        <div className="font-terminal text-[9px] text-muted-foreground">ENTER HOLDINGS FOR BOTH PORTFOLIOS TO RUN ATTRIBUTION.</div>
+        !validationError && !inputsPending && !queryFailed && calculation?.state !== "unavailable" && <div role="status" className="font-terminal text-[9px] text-muted-foreground">ENTER VALID HOLDINGS FOR BOTH PORTFOLIOS TO RUN ATTRIBUTION.</div>
       ) : (
         <>
           {totals && (
             <div className="grid grid-cols-4 gap-1.5">
               <div className="border border-border bg-[#0a0a0a] p-2.5">
                 <div className="font-terminal text-[7px] text-muted-foreground tracking-widest mb-1">ALLOCATION EFFECT</div>
-                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.allocation >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(totals.allocation)}</div>
+                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.allocation >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(totals.allocation)}</div>
               </div>
               <div className="border border-border bg-[#0a0a0a] p-2.5">
                 <div className="font-terminal text-[7px] text-muted-foreground tracking-widest mb-1">SELECTION EFFECT</div>
-                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.selection >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(totals.selection)}</div>
+                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.selection >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(totals.selection)}</div>
               </div>
               <div className="border border-border bg-[#0a0a0a] p-2.5">
                 <div className="font-terminal text-[7px] text-muted-foreground tracking-widest mb-1">INTERACTION EFFECT</div>
-                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.interaction >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(totals.interaction)}</div>
+                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.interaction >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(totals.interaction)}</div>
               </div>
               <div className="border border-[hsl(38,95%,55%)] bg-[#0a0a0a] p-2.5">
                 <div className="font-terminal text-[7px] text-muted-foreground tracking-widest mb-1">TOTAL ACTIVE RETURN</div>
-                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.total >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(totals.total)}</div>
+                <div className={`font-terminal text-[14px] font-bold tabular-nums ${totals.total >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(totals.total)}</div>
               </div>
             </div>
           )}
@@ -157,15 +139,19 @@ function BrinsonTab() {
                     <td className="px-3 py-2 font-terminal text-[9px] font-bold text-foreground">{r.segment}</td>
                     <td className="px-3 py-2 font-terminal text-[9px] tabular-nums text-right text-muted-foreground">{(r.portfolioWeight * 100).toFixed(0)}% / {(r.benchmarkWeight * 100).toFixed(0)}%</td>
                     <td className="px-3 py-2 font-terminal text-[9px] tabular-nums text-right text-muted-foreground">{r.portfolioReturn.toFixed(1)}% / {r.benchmarkReturn.toFixed(1)}%</td>
-                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right ${r.allocationEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(r.allocationEffect)}</td>
-                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right ${r.selectionEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(r.selectionEffect)}</td>
-                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right font-bold ${r.totalEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmt(r.totalEffect)}</td>
+                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right ${r.allocationEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(r.allocationEffect)}</td>
+                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right ${r.selectionEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(r.selectionEffect)}</td>
+                    <td className={`px-3 py-2 font-terminal text-[9px] tabular-nums text-right font-bold ${r.totalEffect >= 0 ? "text-[hsl(142,71%,55%)]" : "text-[hsl(0,80%,60%)]"}`}>{fmtEffect(r.totalEffect)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="font-terminal text-[7.5px] text-muted-foreground/70">Sectors and returns are real (live quote sector classification + actual OHLCV period returns). "Benchmark" here is whatever you define as Portfolio B — enter real index-fund/ETF proxies for a true benchmark comparison.</div>
+          <div role="note" data-testid="attribution-observation-window" className="space-y-1 border border-border/60 p-2 font-ui text-[11px] text-muted-foreground">
+            {calculation?.state === "ready" && <p>Observed common daily close window: {calculation.startDate} → {calculation.endDate} ({calculation.commonObservations} common observations). History classification: {calculation.priceSources.join(" · ") || "source timestamp unavailable"}. {calculation.fallbackSymbols.length > 0 && `Fallback-marked sources: ${calculation.fallbackSymbols.join(", ")}.`}</p>}
+            <p>Price-only returns (%) omit dividends/distributions, costs, FX and rebalancing. Allocation, selection, interaction and active-return effects are in <strong>percentage points (pp)</strong>, not standalone return %. Quote sector classifications and daily price observations are fetched data, not an immutable signed source snapshot or a total-return benchmark. Portfolio B is analyst-defined. Missing observations or classifications block the calculation; no 0% substitutions.</p>
+            <p>For sectors absent from one side, the present side's observed segment return is the comparison reference, so missing sectors do not become fabricated 0% returns.</p>
+          </div>
         </>
       )}
     </div>
@@ -173,9 +159,9 @@ function BrinsonTab() {
 }
 
 function StyleTab() {
-  const [inputSym, setInputSym] = useState("AAPL");
-  const [symbol, setSymbol] = useState("AAPL");
-  const [range] = useState({ start: "2025-07-01", end: "2026-05-29" });
+  const [inputSym, setInputSym] = useTerminalArtifactState("StyleTab.inputSym", "AAPL");
+  const [symbol, setSymbol] = useTerminalArtifactState("StyleTab.symbol", "AAPL");
+  const [range] = useTerminalArtifactState("StyleTab.range", { start: "2025-07-01", end: "2026-05-29" });
   const ohlcv = useQueries({
     queries: [{
       queryKey: ["/api/finance/ohlcv", symbol, "2Y", "1d"],
@@ -190,7 +176,8 @@ function StyleTab() {
   const bars = ohlcv.data?.bars ?? [];
   const startDate = bars[0]?.date ?? range.start;
   const endDate = bars[bars.length - 1]?.date ?? range.end;
-  const { data: ff3 = [], isLoading: ffLoading } = useFamaFrench3(startDate, endDate);
+  const factors = useFamaFrench3(startDate, endDate);
+  const { data: ff3 = [], isLoading: ffLoading } = factors;
 
   const exposure = useMemo(() => {
     if (!bars.length || !ff3.length) return null;
@@ -199,11 +186,15 @@ function StyleTab() {
     for (let i = 1; i < bars.length; i++) {
       const f = factorMap.get(bars[i].date);
       if (!f) continue;
+      if (!Number.isFinite(bars[i].close) || !Number.isFinite(bars[i - 1].close) || bars[i].close <= 0 || bars[i - 1].close <= 0
+        || ![f.RF, f.MktRF, f.SMB, f.HML].every(Number.isFinite)) continue;
       const ret = ((bars[i].close - bars[i - 1].close) / bars[i - 1].close) * 100;
+      if (!Number.isFinite(ret)) continue;
       matched.push({ ret: ret - f.RF, mktRf: f.MktRF, smb: f.SMB, hml: f.HML });
     }
     if (matched.length < 20) return null;
     const reg = olsRegression(matched.map((m) => m.ret), [matched.map((m) => m.mktRf), matched.map((m) => m.smb), matched.map((m) => m.hml)]);
+    if (!Number.isFinite(reg.rSquared) || reg.betas.some((beta) => !Number.isFinite(beta))) return null;
     // Normalize |betas| to sum to 100% as an approximate style-tilt readout
     // (a true Sharpe-style analysis solves a constrained QP; this is the
     // unconstrained OLS loadings re-scaled for readability, not the exact
@@ -219,14 +210,16 @@ function StyleTab() {
         <input value={inputSym} onChange={(e) => setInputSym(e.target.value)} placeholder="TICKER..." className="bg-transparent border border-border px-2 py-1.5 font-terminal text-[9px] text-foreground w-28 focus:outline-none focus:border-[hsl(38,95%,50%)]/40" />
       </form>
 
-      {ohlcv.isLoading || ffLoading ? (
-        <div className="font-terminal text-[9px] text-muted-foreground">LOADING...</div>
+      {ohlcv.isError || factors.isError ? (
+        <div role="alert" className="border border-red-300/30 p-3 font-ui text-[12px] text-red-200">Security history or Fama-French factor source failed. No style exposure is calculated from missing observations.</div>
+      ) : ohlcv.isLoading || ffLoading ? (
+        <div role="status" className="font-terminal text-[9px] text-muted-foreground">LOADING PRICE AND FACTOR OBSERVATIONS...</div>
       ) : !exposure ? (
         <div className="font-terminal text-[9px] text-muted-foreground">NOT ENOUGH OVERLAPPING DATA FOR {symbol}.</div>
       ) : (
         <>
           <div className="font-terminal text-[8px] text-muted-foreground/80 border border-border bg-[#0a0a0a] p-2.5">
-            Approximate factor-style tilt (Market / Size / Value), derived by re-scaling the Fama-French 3-factor regression loadings — <span className="text-foreground">not</span> a fully constrained (non-negative, sum-to-1) Sharpe-style analysis. R² = {exposure.rSquared.toFixed(3)} on {exposure.n} days.
+            Price-only returns (%) aligned by observation date with Fama-French factor observations (%). Missing/invalid prices and factors are omitted; the regression requires 20+ matched days. Factor source is fetched, not an immutable signed snapshot. Approximate factor-style tilt (Market / Size / Value), derived by re-scaling the Fama-French 3-factor regression loadings — <span className="text-foreground">not</span> a fully constrained (non-negative, sum-to-1) Sharpe-style analysis. R² = {exposure.rSquared.toFixed(3)} on {exposure.n} days.
           </div>
           <div className="space-y-1.5">
             {[
@@ -251,7 +244,7 @@ function StyleTab() {
 }
 
 export default function PortfolioAttributionPanel() {
-  const [tab, setTab] = useState<Tab>("brinson");
+  const [tab, setTab] = useTerminalArtifactState<Tab>("PortfolioAttributionPanel.tab", "brinson");
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-[#070707] shrink-0">

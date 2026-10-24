@@ -8,7 +8,7 @@ import {
   listProjectChatMessages,
 } from "./projectChatStore";
 import { getProject } from "./projectStore";
-import { getArtifact, persistConversationDraft } from "./artifactStore";
+import { getArtifact, getArtifactVersion, persistConversationDraft } from "./artifactStore";
 import { listProjectResources } from "./projectResourceStore";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
 import { requireMasterAiOn } from "./masterAiGate";
@@ -52,10 +52,11 @@ import {
   ProjectAttachmentNotFoundError,
   publicAttachmentRefsFromResources,
   resolveProjectConversationAttachments,
+  resolveQuickChatConversationAttachments,
 } from "./projectAttachmentService";
 import { ProjectAttachmentContentError } from "./projectAttachmentContent";
 import type { ResolvedConversationAttachment } from "./projectAttachmentContent";
-import { ProjectAttachmentStorageUnavailableError } from "./projectAttachmentStore";
+import { PROJECT_ATTACHMENT_MAX_PER_MESSAGE, ProjectAttachmentStorageUnavailableError } from "./projectAttachmentStore";
 import { ConversationRunConflictError, conversationRuns } from "./conversationRunRegistry";
 import {
   AgentCheckpointBindingMismatchError,
@@ -83,6 +84,7 @@ import type { TenantContext } from "./tenantContext";
 import type { ConversationContextEnvelope } from "@shared/conversationRuntime";
 import type { RunSummary } from "./conversationRunRegistry";
 import { retainedArtifactMessageRef } from "@shared/conversationArtifactRefs";
+import { savedChatArtifactAnswer } from "./savedChatArtifactAnswer";
 import { deriveWorkingContext, resolveWorkingContextRequest, restoreWorkingContext } from "@shared/workingContext";
 import type { WorkingContextOwner, WorkingContextResolution } from "@shared/workingContext";
 import type { WorkingContextSnapshot } from "@shared/conversationRuntime";
@@ -479,8 +481,8 @@ async function runProjectChat(
   try {
     const context = tenantContext(user);
     const chat = early?.chat ?? await getProjectChat(context, chatId);
-    if (request.attachments.length && (chat.scope !== "project" || !chat.projectId)) {
-      throw new ConversationStartError(400, { error: "File attachments are currently supported in Project chats only. Move this chat into a Project to use saved attachments." });
+    if (request.attachments.length > PROJECT_ATTACHMENT_MAX_PER_MESSAGE) {
+      throw new ProjectAttachmentLimitError("A message can include at most five attachments.");
     }
 
     let projectName: string | null = null;
@@ -508,16 +510,18 @@ async function runProjectChat(
         contextMode: resource.contextMode,
       }));
       const sourceScopedAttachments = request.sourceScope === "web" ? [] : request.attachments;
+      const projectScopedAttachments = sourceScopedAttachments.filter((attachment) => !attachment.sourceRef.startsWith("quick-attachment:"));
+      const quickScopedAttachments = sourceScopedAttachments.filter((attachment) => attachment.sourceRef.startsWith("quick-attachment:"));
       const selectedResources = includedResourceRefs(
         projectRuntimeResources,
         request.message,
-        sourceScopedAttachments,
+        projectScopedAttachments,
         request.sourceScope,
       ).filter((resource) => resource.kind === "chat_attachment");
       const selectedResourceIds = new Set(selectedResources.map((resource) => resource.id));
       const selectedProjectResources = resources.filter((resource) => selectedResourceIds.has(resource.id));
       const canonicalById = new Map([
-        ...sourceScopedAttachments.map((attachment) => [attachment.id, attachment] as const),
+        ...projectScopedAttachments.map((attachment) => [attachment.id, attachment] as const),
         ...publicAttachmentRefsFromResources(selectedProjectResources).map((attachment) => [attachment.id, attachment] as const),
       ]);
       resolvedAttachments = await resolveProjectConversationAttachments(
@@ -527,8 +531,22 @@ async function runProjectChat(
         Array.from(canonicalById.values()),
         request.transmissionPolicy.allowResourceReferences,
       );
-      runtimeRequest = conversationRequestSchema.parse({ ...approvedRequest, attachments: resolvedAttachments.map((item) => item.reference) });
+      if (quickScopedAttachments.length) {
+        // An explicitly promoted Quick Chat retains the original chat-owned files; no Project resource is fabricated.
+        resolvedAttachments.push(...await resolveQuickChatConversationAttachments(
+          context, chatId, quickScopedAttachments, request.transmissionPolicy.allowResourceReferences,
+        ));
+      }
+    } else if (chat.scope === "quick") {
+      resolvedAttachments = await resolveQuickChatConversationAttachments(
+        context, chatId, request.sourceScope === "web" ? [] : request.attachments,
+        request.transmissionPolicy.allowResourceReferences,
+      );
     }
+    if (resolvedAttachments.length > PROJECT_ATTACHMENT_MAX_PER_MESSAGE || new Set(resolvedAttachments.map((item) => item.reference.id)).size !== resolvedAttachments.length) {
+      throw new ProjectAttachmentLimitError("A message contains too many or duplicate attachment references.");
+    }
+    runtimeRequest = conversationRequestSchema.parse({ ...approvedRequest, attachments: resolvedAttachments.map((item) => item.reference) });
     if (restart) assertRestartAttachmentsUnchanged(restart.source.attachments, runtimeRequest.attachments, request.requestId);
 
     const priorHistory = early?.history ?? await listProjectChatMessages(context, chatId);
@@ -759,18 +777,35 @@ async function runProjectChat(
             const event = runtimeEvent;
             if (event.type === "artifact") {
               pendingArtifacts.push(event);
+              if (event.persistedArtifact) {
+                const artifact = await getArtifact(context, event.persistedArtifact.id);
+                const version = await getArtifactVersion(context, artifact.id, event.persistedArtifact.version);
+                if (artifact.projectId !== chat.projectId || (artifact.projectId === null && artifact.owningChatId !== chatId)) throw new Error("Updated Artifact is outside this conversation owner.");
+                persistedArtifacts.push(retainedArtifactMessageRef({ artifact, version }));
+                pendingArtifacts.pop();
+                await ledger.recordRuntimeEvent(event); await transcript.recordEvent(event); emit(event);
+              }
               return;
             }
+            if (event.type === "done") { held.done = event; return; }
             await ledger.recordRuntimeEvent(event);
             await transcript.recordEvent(event);
-            if (event.type === "done") held.done = event;
-            else {
-              if (event.type === "error") held.errored = true;
-              emit(event);
-            }
+            if (event.type === "error") held.errored = true;
+            emit(event);
           },
         }));
-        if (!result.cancelled && !result.awaitingApproval) {
+        if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
+          // Stop won before durable output commit. Do not save a completed
+          // assistant answer or pending Artifact after acknowledging cancellation.
+          const cancelled: Extract<ConversationRuntimeEvent, { type: "done" }> = { type: "done", requestId: request.requestId, at: new Date().toISOString(), status: "cancelled" };
+          await ledger.recordRuntimeEvent(cancelled);
+          await transcript.recordEvent(cancelled);
+          if (agent) await transcript.finishCancelled(runOwner);
+          else await transcript.finish("cancelled");
+          emit({ ...cancelled, workingContext: preRun });
+          return;
+        }
+        if (!result.cancelled && !result.awaitingApproval && !held.errored && held.done?.status === "completed") {
           const capabilityIds = result.plan.capabilities.map((capability) => capability.id);
           const selection = runtimeRequest.context?.selection;
           const refreshSpec = {
@@ -791,7 +826,7 @@ async function runProjectChat(
           for (const event of pendingArtifacts) {
             const savedArtifact = await persistConversationDraft(context, {
               projectId: chat.projectId,
-              owningChatId: chat.projectId === null ? chatId : null,
+              owningChatId: chatId,
               requestId: request.requestId,
               draft: event.artifact,
               trustManifest: result.trustManifest ?? null,
@@ -806,7 +841,18 @@ async function runProjectChat(
             emit(retainedEvent);
           }
         }
-        await transcript.recordText(result.text);
+        // A successful tool can produce a canonical P4 Artifact with no
+        // narrative text. Retain a truthful assistant card carrier instead
+        // of leaving its exact saved ID/version unreachable from Chat history.
+        // Partial, cancelled, failed and approval-paused work remains unsaved.
+        const savedAnswer = savedChatArtifactAnswer({
+          text: result.text,
+          persistedArtifactCount: persistedArtifacts.length,
+          cancelled: result.cancelled,
+          awaitingApproval: result.awaitingApproval,
+          failed: held.errored || held.done?.status !== "completed",
+        });
+        await transcript.recordText(savedAnswer ?? result.text);
 
         if (agent && result.awaitingApproval) {
           if (!result.agentPause) throw new Error("Agent approval pause is missing its live continuation state.");
@@ -888,6 +934,17 @@ async function runProjectChat(
             replaySafe: descriptor.replaySafe,
             externalSideEffect: descriptor.sideEffect === "external",
             blastRadius,
+            // Only the canonical pending grant's immutable identifiers/hashes cross
+            // the wire. Never send the tool arguments or credential-bearing target.
+            reviewBinding: {
+              toolId: proposal.binding.toolId,
+              stepId: proposal.binding.stepId,
+              toolCallId: proposal.binding.toolCallId,
+              inputSha256: proposal.binding.inputSha256,
+              planSha256: proposal.binding.planHash,
+              chatId: proposal.binding.chatId,
+              projectId: proposal.binding.projectId,
+            },
             choices: chat.projectId === null || descriptor.allowProjectApproval === false
               ? ["allow_once", "deny"]
               : ["allow_once", "allow_project", "deny"],
@@ -897,7 +954,7 @@ async function runProjectChat(
         }
 
         // A waiting-for-approval message is transient run state. The same requestId continues after approval.
-        const saved = Boolean(result.text) && !result.cancelled && !result.awaitingApproval;
+        const saved = savedAnswer !== null;
         const workingContext = saved
           ? deriveWorkingContext({
               previous: carried,
@@ -914,7 +971,7 @@ async function runProjectChat(
         if (saved) {
           await addProjectChatMessage(context, chatId, {
             role: "assistant",
-            content: result.text,
+            content: savedAnswer!,
             metadata: {
               runtime: "p2",
               runtimeRequestId: request.requestId,
@@ -936,6 +993,8 @@ async function runProjectChat(
           at: new Date().toISOString(),
           status: "failed" as const,
         };
+        await ledger.recordRuntimeEvent(terminal);
+        await transcript.recordEvent(terminal);
         if (terminal.status === "waiting_approval" && agent) {
           await transcript.pauseForApproval();
           emit({ ...terminal, workingContext });
@@ -1231,6 +1290,10 @@ export async function startTemporaryRun(user: ConversationUser, rawBody: unknown
         return null;
       });
       if (!result) return;
+      if (!result.cancelled && !result.awaitingApproval && !conversationRuns.claimCompletion(request.requestId, user.id)) {
+        emit({ type: "done", requestId: request.requestId, at: new Date().toISOString(), status: "cancelled", workingContext: preRun });
+        return;
+      }
       const workingContext = result.text && !result.cancelled
         ? deriveWorkingContext({ previous: carried, owner, resolution: { ...resolution, request }, plan: result.plan, result, providerId: aiSetup?.aiProviderId ?? null })
         : preRun;

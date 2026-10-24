@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { type ReactNode, useMemo, useState } from "react";
 import { AlertTriangle, Calculator, Plus, ShieldCheck, Trash2, WalletCards } from "lucide-react";
 import {
@@ -97,16 +98,16 @@ function Section({ title, description, children }: { title: string; description:
 }
 
 export default function PersonalFinancePanel() {
-  const [asOf, setAsOf] = useState(today);
-  const [accounts, setAccounts] = useState<AccountDraft[]>([
+  const [asOf, setAsOf] = useTerminalArtifactState("PersonalFinancePanel.asOf", today);
+  const [accounts, setAccounts] = useTerminalArtifactState<AccountDraft[]>("PersonalFinancePanel.accounts", [
     { key: key("account"), id: "primary-bank", kind: "bank", balance: "0", currency: "INR" },
   ]);
-  const [monthlyIncome, setMonthlyIncome] = useState("0");
-  const [monthlyExpenses, setMonthlyExpenses] = useState("0");
-  const [debts, setDebts] = useState<DebtDraft[]>([]);
-  const [goals, setGoals] = useState<GoalDraft[]>([]);
-  const [retirementEnabled, setRetirementEnabled] = useState(false);
-  const [retirement, setRetirement] = useState({
+  const [monthlyIncome, setMonthlyIncome] = useTerminalArtifactState("PersonalFinancePanel.monthlyIncome", "0");
+  const [monthlyExpenses, setMonthlyExpenses] = useTerminalArtifactState("PersonalFinancePanel.monthlyExpenses", "0");
+  const [debts, setDebts] = useTerminalArtifactState<DebtDraft[]>("PersonalFinancePanel.debts", []);
+  const [goals, setGoals] = useTerminalArtifactState<GoalDraft[]>("PersonalFinancePanel.goals", []);
+  const [retirementEnabled, setRetirementEnabled] = useTerminalArtifactState("PersonalFinancePanel.retirementEnabled", false);
+  const [retirement, setRetirement] = useTerminalArtifactState("PersonalFinancePanel.retirement", {
     currentAge: "35",
     retirementAge: "60",
     currentPortfolio: "0",

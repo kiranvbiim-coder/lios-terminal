@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useTerminalArtifactContext, useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Activity, Info, RefreshCw, Scale, ShieldCheck, Sliders, Target } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrencyInfo, inferCurrencyFromSymbol } from "@/lib/finance";
+import { isObservedQuote } from "@/lib/quoteObservation";
 import { useFundamentals, useOHLCV, useQuote } from "@/lib/useFinance";
 import { useYieldCurve } from "@/lib/useEconomics";
 import {
@@ -61,45 +62,63 @@ function signedLabel(value: number, digits = 2) {
 
 export default function OptionsRiskHedgePanel({ symbol }: Props) {
   const { data: quote, isLoading } = useQuote(symbol);
+  const [mode, setMode] = useTerminalArtifactState<"live" | "manual">("OptionsRiskHedgePanel.inputMode", "live");
+  const [manualSpot, setManualSpot] = useTerminalArtifactState("OptionsRiskHedgePanel.manualSpot", "");
+  const [manualCurrency, setManualCurrency] = useTerminalArtifactState("OptionsRiskHedgePanel.manualCurrency", "USD");
+  const manual = mode === "manual";
+  const spot = manual ? Number(manualSpot) : quote?.price;
+  const available = manual ? manualSpot.trim() !== "" && Number.isFinite(spot) && spot! > 0 : isObservedQuote(quote);
+  return <div className="h-full overflow-auto">
+    <div className="flex flex-wrap gap-3 border-b border-border p-3 text-xs">
+      <label>Input basis <select aria-label="Hedge input basis" value={mode} onChange={event => setMode(event.target.value as "live" | "manual")}><option value="live">Observed live spot</option><option value="manual">Explicit manual scenario</option></select></label>
+      {manual && <><label>Manual spot <input aria-label="Manual hedge spot" type="number" min="0.000001" value={manualSpot} onChange={event => setManualSpot(event.target.value)}/></label>
+      <label>Currency <input aria-label="Manual hedge currency" value={manualCurrency} maxLength={3} onChange={event => setManualCurrency(event.target.value.toUpperCase())}/></label></>}
+    </div>
+    {!available || manual && !/^[A-Z]{3}$/.test(manualCurrency) ? <p role="status" className="p-4 text-sm">{manual ? "Enter an explicit positive manual spot and ISO currency. No market observation or native receipt is claimed." : isLoading ? "Loading observed spot…" : "SPOT PRICE UNAVAILABLE · Existing hedge calculations require an observed underlying price or explicitly entered manual scenario. No fallback spot or hedge result has been substituted. Retained authored terms are unchanged."}</p>
+      : <ObservedOptionsRiskHedgePanel key={mode} symbol={symbol} spot={spot!} currencyCode={manual ? manualCurrency : quote?.currency || inferCurrencyFromSymbol(symbol)} manual={manual}/>}
+  </div>;
+}
+
+function ObservedOptionsRiskHedgePanel({ symbol, spot, currencyCode, manual }: Props & { spot: number; currencyCode: string; manual: boolean }) {
+  const terminal = useTerminalArtifactContext();
+  const initializedSymbol = useRef(symbol);
   const { data: fundamentals } = useFundamentals(symbol);
   const { data: history } = useOHLCV(symbol, "6M", "1d");
   const { data: yieldCurveData } = useYieldCurve();
 
-  const spot = quote?.price ?? 100;
-  const currencyCode = quote?.currency || inferCurrencyFromSymbol(symbol);
   const currencySymbol = getCurrencyInfo(currencyCode).symbol;
   const strikes = useMemo(() => buildStrikeLadder(spot), [spot]);
 
-  const [expiryDays, setExpiryDays] = useState(30);
-  const [volatilityPct, setVolatilityPct] = useState(25);
-  const [riskFreeRatePct, setRiskFreeRatePct] = useState(5);
-  const [dividendYieldPct, setDividendYieldPct] = useState(0);
-  const [exerciseStyle, setExerciseStyle] = useState<ExerciseStyle>("european");
-  const [optionSide, setOptionSide] = useState<OptionSide>("call");
-  const [strike, setStrike] = useState(100);
-  const [signedDirection, setSignedDirection] = useState<1 | -1>(1);
-  const [contracts, setContracts] = useState(10);
-  const [contractMultiplier, setContractMultiplier] = useState(DEFAULT_MULTIPLIER);
+  const [expiryDays, setExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.expiryDays", 30);
+  const [volatilityPct, setVolatilityPct] = useTerminalArtifactState("OptionsRiskHedgePanel.volatilityPct", 25);
+  const [riskFreeRatePct, setRiskFreeRatePct] = useTerminalArtifactState("OptionsRiskHedgePanel.riskFreeRatePct", 5);
+  const [dividendYieldPct, setDividendYieldPct] = useTerminalArtifactState("OptionsRiskHedgePanel.dividendYieldPct", 0);
+  const [exerciseStyle, setExerciseStyle] = useTerminalArtifactState<ExerciseStyle>("OptionsRiskHedgePanel.exerciseStyle", "european");
+  const [optionSide, setOptionSide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.optionSide", "call");
+  const [strike, setStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.strike", 100);
+  const [signedDirection, setSignedDirection] = useTerminalArtifactState<1 | -1>("OptionsRiskHedgePanel.signedDirection", 1);
+  const [contracts, setContracts] = useTerminalArtifactState("OptionsRiskHedgePanel.contracts", 10);
+  const [contractMultiplier, setContractMultiplier] = useTerminalArtifactState("OptionsRiskHedgePanel.contractMultiplier", DEFAULT_MULTIPLIER);
 
-  const [hedgeMode, setHedgeMode] = useState<HedgeMode>("delta");
-  const [hedgeASide, setHedgeASide] = useState<OptionSide>("call");
-  const [hedgeAStrike, setHedgeAStrike] = useState(100);
-  const [hedgeAExpiryDays, setHedgeAExpiryDays] = useState(45);
-  const [hedgeBSide, setHedgeBSide] = useState<OptionSide>("put");
-  const [hedgeBStrike, setHedgeBStrike] = useState(100);
-  const [hedgeBExpiryDays, setHedgeBExpiryDays] = useState(90);
+  const [hedgeMode, setHedgeMode] = useTerminalArtifactState<HedgeMode>("OptionsRiskHedgePanel.hedgeMode", "delta");
+  const [hedgeASide, setHedgeASide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.hedgeASide", "call");
+  const [hedgeAStrike, setHedgeAStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeAStrike", 100);
+  const [hedgeAExpiryDays, setHedgeAExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeAExpiryDays", 45);
+  const [hedgeBSide, setHedgeBSide] = useTerminalArtifactState<OptionSide>("OptionsRiskHedgePanel.hedgeBSide", "put");
+  const [hedgeBStrike, setHedgeBStrike] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeBStrike", 100);
+  const [hedgeBExpiryDays, setHedgeBExpiryDays] = useTerminalArtifactState("OptionsRiskHedgePanel.hedgeBExpiryDays", 90);
 
-  const [spotShockPct, setSpotShockPct] = useState(2);
-  const [volShockPoints, setVolShockPoints] = useState(2);
-  const [daysElapsed, setDaysElapsed] = useState(1);
-  const [rateShockBps, setRateShockBps] = useState(25);
-  const [cashDividendAmount, setCashDividendAmount] = useState(0);
-  const [cashDividendDays, setCashDividendDays] = useState(15);
-  const [marketCallText, setMarketCallText] = useState("");
-  const [marketPutText, setMarketPutText] = useState("");
-  const [volTouched, setVolTouched] = useState(false);
-  const [rateTouched, setRateTouched] = useState(false);
-  const [qTouched, setQTouched] = useState(false);
+  const [spotShockPct, setSpotShockPct] = useTerminalArtifactState("OptionsRiskHedgePanel.spotShockPct", 2);
+  const [volShockPoints, setVolShockPoints] = useTerminalArtifactState("OptionsRiskHedgePanel.volShockPoints", 2);
+  const [daysElapsed, setDaysElapsed] = useTerminalArtifactState("OptionsRiskHedgePanel.daysElapsed", 1);
+  const [rateShockBps, setRateShockBps] = useTerminalArtifactState("OptionsRiskHedgePanel.rateShockBps", 25);
+  const [cashDividendAmount, setCashDividendAmount] = useTerminalArtifactState("OptionsRiskHedgePanel.cashDividendAmount", 0);
+  const [cashDividendDays, setCashDividendDays] = useTerminalArtifactState("OptionsRiskHedgePanel.cashDividendDays", 15);
+  const [marketCallText, setMarketCallText] = useTerminalArtifactState("OptionsRiskHedgePanel.marketCallText", "");
+  const [marketPutText, setMarketPutText] = useTerminalArtifactState("OptionsRiskHedgePanel.marketPutText", "");
+  const [volTouched, setVolTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.volTouched", false);
+  const [rateTouched, setRateTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.rateTouched", false);
+  const [qTouched, setQTouched] = useTerminalArtifactState("OptionsRiskHedgePanel.qTouched", false);
 
   const T = expiryDays / 365;
   const r = riskFreeRatePct / 100;
@@ -107,6 +126,8 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   const v = volatilityPct / 100;
 
   useEffect(() => {
+    if (terminal && initializedSymbol.current === symbol) return;
+    initializedSymbol.current = symbol;
     if (strikes.length === 0) return;
     const mid = Math.floor(strikes.length / 2);
     setStrike(strikes[mid]);
@@ -122,19 +143,19 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   }, [history]);
 
   useEffect(() => {
-    if (volTouched) return;
+    if (manual || volTouched) return;
     if (realizedVolPct != null && Number.isFinite(realizedVolPct)) {
       setVolatilityPct(Math.max(5, Math.min(150, Number(realizedVolPct.toFixed(2)))));
     } else {
       setVolatilityPct(25);
     }
-  }, [realizedVolPct, volTouched, symbol]);
+  }, [realizedVolPct, volTouched, symbol, manual]);
 
   useEffect(() => {
-    if (qTouched) return;
+    if (manual || qTouched) return;
     const liveYield = fundamentals?.dividendYield;
     setDividendYieldPct(liveYield != null && Number.isFinite(liveYield) ? Math.max(0, Number(liveYield.toFixed(2))) : 0);
-  }, [fundamentals, qTouched, symbol]);
+  }, [fundamentals, qTouched, symbol, manual]);
 
   const interpolatedRate = useMemo(() => {
     if (currencyCode !== "USD") return null;
@@ -142,13 +163,13 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   }, [currencyCode, expiryDays, yieldCurveData]);
 
   useEffect(() => {
-    if (rateTouched) return;
+    if (manual || rateTouched) return;
     if (currencyCode === "USD" && interpolatedRate?.ratePercent != null) {
       setRiskFreeRatePct(Number(interpolatedRate.ratePercent.toFixed(3)));
     } else if (currencyCode !== "USD") {
       setRiskFreeRatePct(0);
     }
-  }, [currencyCode, interpolatedRate, rateTouched, symbol]);
+  }, [currencyCode, interpolatedRate, rateTouched, symbol, manual]);
 
   const configuredDividends = useMemo<DiscreteDividend[]>(() => {
     if (!(cashDividendAmount > 0) || !(cashDividendDays > 0)) return [];
@@ -158,7 +179,7 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
   const dividendsForDays = (days: number) => configuredDividends.filter((dividend) => dividend.timeYears <= Math.max(1, days) / 365);
 
   const rateForDays = (days: number) => {
-    if (rateTouched || currencyCode !== "USD") return r;
+    if (manual || rateTouched || currencyCode !== "USD") return r;
     const point = interpolateYieldCurveRate(yieldCurveData?.curve ?? [], Math.max(1, days));
     return point?.ratePercent != null ? point.ratePercent / 100 : r;
   };
@@ -256,9 +277,6 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
     });
   }, [strikes, strike, spot, T, r, q, v, configuredDividends, rateTouched, currencyCode, yieldCurveData]);
 
-  if (isLoading) {
-    return <div className="h-full p-4 bg-[#050505] flex flex-col justify-center gap-4"><Skeleton className="h-8 w-1/3 bg-border" /><Skeleton className="h-64 w-full bg-border" /></div>;
-  }
 
   const earlyExercisePremium = exerciseStyle === "american" ? primaryGreeks.price - europeanPrimary.price : 0;
   const deltaDriftOnePctBefore = primaryRisk.gamma * spot * 0.01;
@@ -278,6 +296,7 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
         </div>
         <button onClick={() => { setVolTouched(false); setRateTouched(false); setQTouched(false); }} className="flex items-center gap-1 border border-border/60 px-2 py-1 font-terminal text-[8px] text-muted-foreground hover:text-amber-400"><RefreshCw className="w-3 h-3" /> RESET SOURCES</button>
       </div>
+      <p className="border-b border-amber-400/25 px-4 py-2 text-xs text-amber-200">{manual ? "Reproducible manual scenario · explicit spot/currency and saved authored terms drive the original local hedge calculation; live sources do not replace these inputs." : "Local model illustration using the displayed observed spot and editable assumptions; live inputs can change the result."} Default volatility, rates, yields and contract terms are assumptions, not observed option quotes or a native execution receipt.</p>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[350px_minmax(0,1fr)] gap-4 p-4">
         <aside className="space-y-3">
@@ -289,7 +308,7 @@ export default function OptionsRiskHedgePanel({ symbol }: Props) {
               <Field label="DIV YIELD %" value={dividendYieldPct} onChange={(n) => { setDividendYieldPct(Math.max(0, n)); setQTouched(true); }} min={0} step={0.01} />
             </div>
             <div className="font-terminal text-[7px] text-muted-foreground leading-relaxed">
-              Vol source: {volTouched ? "custom" : realizedVolPct != null ? `6M realized ${realizedVolPct.toFixed(2)}%` : "25% fallback"}. Rate source: {currencyCode === "USD" && interpolatedRate?.ratePercent != null && !rateTouched ? `USD curve ${interpolatedRate.ratePercent.toFixed(3)}% @ ${expiryDays}d` : "manual/local"}.
+              Vol source: {manual ? `manual scenario ${volatilityPct}%` : volTouched ? "custom" : realizedVolPct != null ? `6M realized ${realizedVolPct.toFixed(2)}%` : "illustrative assumption 25%"}. Rate source: {!manual && currencyCode === "USD" && interpolatedRate?.ratePercent != null && !rateTouched ? `USD curve ${interpolatedRate.ratePercent.toFixed(3)}% @ ${expiryDays}d` : "manual/local assumption"}.
             </div>
             <ToggleRow labels={["EUROPEAN", "AMERICAN"]} active={exerciseStyle === "european" ? 0 : 1} onSelect={(index) => setExerciseStyle(index === 0 ? "european" : "american")} />
             <div className="grid grid-cols-2 gap-2">

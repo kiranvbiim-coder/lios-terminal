@@ -1,11 +1,11 @@
 // Direct node:tsx/server-rendered tests use the classic JSX transform.
 import * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import {
   formatReadableNumber, humanizeKey, modelDisplayName, omitKeys, recordOrNull, RUN_METADATA_KEYS, type ReadableFormatOptions,
 } from "@/lib/artifactReadableFormat";
-import { ExpertJsonView } from "./ArtifactExpertView";
+import { ExpertViewDisclosure } from "./ArtifactExpertView";
 import { ReadableChart } from "./ArtifactReadableChart";
 import { ArtifactFootnote, ArtifactTrustBadges, type ArtifactProvenanceFacts } from "./ArtifactTrustSummary";
 import { ReadableCell, ReadableValueTable, ScenarioComparisonTable } from "./ReadableValueTable";
@@ -21,7 +21,7 @@ export function ExactValuesToggle({ showExact, onChange }: { showExact: boolean;
   </button>;
 }
 
-export default function ValuationArtifactView({ content, facts = {}, onSave, onDirtyChange, disabled = false, expertDefaultOpen = false, initialShowExact = false }: {
+export default function ValuationArtifactView({ content, facts = {}, disabled = false, expertDefaultOpen = false, initialShowExact = false, onRequestRecalculation }: {
   content: ValuationContent;
   facts?: ArtifactProvenanceFacts;
   onSave: (content: ArtifactContent) => Promise<void>;
@@ -29,8 +29,17 @@ export default function ValuationArtifactView({ content, facts = {}, onSave, onD
   disabled?: boolean;
   expertDefaultOpen?: boolean;
   initialShowExact?: boolean;
+  /** Stages a review request in the original owned Chat, never recalculates locally. */
+  onRequestRecalculation?: (waccPct: number) => void;
 }) {
   const [showExact, setShowExact] = useState(initialShowExact);
+  const recordedWacc = typeof content.assumptions.waccPct === "number" && Number.isFinite(content.assumptions.waccPct)
+    ? content.assumptions.waccPct : null;
+  const [draftWacc, setDraftWacc] = useState(recordedWacc === null ? "" : String(recordedWacc));
+  const proposedWacc = draftWacc.trim() === "" ? NaN : Number(draftWacc);
+  const changedWacc = recordedWacc !== null && Number.isFinite(proposedWacc) && proposedWacc > 0
+    && proposedWacc <= 100 && proposedWacc !== recordedWacc;
+  useEffect(() => { setDraftWacc(recordedWacc === null ? "" : String(recordedWacc)); }, [recordedWacc]);
   const currency = typeof content.assumptions.currency === "string" ? content.assumptions.currency : null;
   const options: ReadableFormatOptions = { showExact, currency };
   const summary = content.summary;
@@ -87,10 +96,25 @@ export default function ValuationArtifactView({ content, facts = {}, onSave, onD
         points: grid.rowValues.map((row, rowIndex) => ({ x: row, y: grid.matrix[rowIndex][columnIndex] })),
       }))} />}
     <ReadableValueTable title="Assumptions" values={content.assumptions} options={options} emptyText="No assumptions were recorded." note="Inputs used for this calculation." />
+    {onRequestRecalculation && recordedWacc !== null && <section aria-label="Propose valuation assumption change" data-testid="valuation-assumption-proposal" className="space-y-2 rounded-lg border border-cyan-300/20 p-3">
+      <h3 className="font-ui text-[14px] font-semibold">Change WACC · request a new calculation</h3>
+      <p className="font-ui text-[13px] leading-relaxed text-muted-foreground">Recorded value: {recordedWacc}% WACC. Editing this proposal does not update the saved model or displayed value per share. Review it in the original Chat before using a governed deterministic calculation. Data rights, inputs and model availability must be checked at execution.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 font-ui text-[13px]">Proposed WACC (%)
+          <input aria-label="Proposed valuation WACC percentage" type="number" min="0.000001" max="100" step="any" disabled={disabled} value={draftWacc} onChange={event => setDraftWacc(event.target.value)} className="w-36 rounded border border-border bg-background px-3 py-2 text-foreground disabled:opacity-50" />
+        </label>
+        <button type="button" disabled={disabled || !changedWacc} onClick={() => onRequestRecalculation(proposedWacc)} className="rounded border border-cyan-300/35 px-3 py-2 font-ui text-[13px] text-cyan-200 disabled:opacity-40">Prepare recalculation in Chat</button>
+      </div>
+      {draftWacc.trim() && !changedWacc && proposedWacc !== recordedWacc && <p role="alert" className="font-ui text-[12px] text-amber-200">Enter a finite WACC greater than 0% and at most 100%. No result has been changed.</p>}
+      {changedWacc && <p role="status" className="font-ui text-[12px] text-cyan-200">Proposed WACC: {proposedWacc}% · recorded WACC: {recordedWacc}% · current saved results remain unchanged until an approved calculation returns.</p>}
+    </section>}
     {Object.keys(leftover).length > 0 && <ReadableValueTable title={grid || base || scenarios ? "Other results" : "Results"} values={leftover} options={options} />}
     {conventions && <ReadableValueTable title="Calculation conventions" values={conventions} options={options} />}
     {Object.keys(extraSummary).length > 0 && <ReadableValueTable title="Recorded details" values={extraSummary} options={options} />}
     <ArtifactFootnote facts={facts} model={modelVersion} fingerprint={outputHash} units={unitsNote} />
-    <ExpertJsonView content={content} onSave={onSave} onDirtyChange={onDirtyChange} disabled={disabled} defaultOpen={expertDefaultOpen} />
+    <ExpertViewDisclosure defaultOpen={expertDefaultOpen} summary="Expert view" hint="Recorded valuation inputs and outputs · read only">
+      <p className="mb-2 font-ui text-[12px] text-amber-200">This is recorded calculation evidence, not an input editor. Saving edited JSON would not recalculate a model. Use a governed recalculation to create new values and a new receipt.</p>
+      <pre aria-label="Recorded valuation JSON" className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-border/50 p-3 font-terminal text-[12px] text-muted-foreground">{JSON.stringify(content, null, 2)}</pre>
+    </ExpertViewDisclosure>
   </section>;
 }

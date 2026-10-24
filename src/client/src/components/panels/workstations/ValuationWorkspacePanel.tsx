@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -23,7 +24,7 @@ interface Props {
 const positive = (value: number | null | undefined): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
 
 export default function ValuationWorkspacePanel({ symbol, onSymbol, onNav }: Props) {
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useTerminalArtifactState<Section>("ValuationWorkspacePanel.section", "overview");
   const quote = useQuote(symbol);
   const quoteStatic = useQuoteStatic(symbol);
   const fundamentals = useFundamentals(symbol);

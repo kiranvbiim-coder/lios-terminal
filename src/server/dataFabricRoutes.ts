@@ -14,8 +14,8 @@ import {
 } from "./pointInTimeDatasetStore";
 import { getForecastActualVariance, listFinancialModelRuns, saveFinancialModelRun } from "./financialModelRunStore";
 import { entitlementPolicyInputSchema, universePayloadSchema } from "@shared/pointInTimeUniverse";
-import { createColumnarArtifact, listColumnarArtifacts, scanColumnarArtifact } from "./columnarArtifactStore";
-import { createEntitlementPolicy, listEntitlementPolicies } from "./dataEntitlementStore";
+import { createColumnarArtifact, listColumnarArtifacts, scanColumnarArtifact, canAccessDatasetSnapshot } from "./columnarArtifactStore";
+import { createEntitlementPolicy, listEntitlementPolicies, getEntitlementPolicyById } from "./dataEntitlementStore";
 import {
   captureFinancialStatementsConflictSnapshot,
   getFinancialStatementsConflictSnapshot,
@@ -52,8 +52,10 @@ import {
 import { createModelInputLineage } from "./modelInputLineage";
 import { createValuationLineage } from "./valuationLineage";
 import { tenantContext } from "./tenantContext";
-import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact } from "./integratedModelArtifact";
+import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loadIntegratedModelDatasetSource, assertIntegratedModelDatasetSourceCurrent, retainIntegratedModelArtifact, readIntegratedModelRun } from "./integratedModelArtifact";
 import { getDb } from "./db";
+import { and, eq, isNull } from "drizzle-orm";
+import { datasetSnapshots, users } from "@shared/schema";
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -267,6 +269,30 @@ export function registerDataFabricRoutes(app: Express): void {
     res.status(result.created ? 201 : 200).json(result);
   });
 
+  app.post("/api/data-snapshots/:id/entitlement", requireRole("internal_admin", "internal_compliance"), async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.id);
+    const input = z.object({ contentHash: z.string().regex(/^[a-f0-9]{64}$/), policyId: z.string().trim().min(1).max(240) }).strict().safeParse(req.body);
+    if (!id.success || !input.success) return res.status(400).json({ error: "An exact snapshot hash and explicit existing policy are required." });
+    const ctx = tenantContext(req.user!);
+    try {
+      const linked = await getDb().transaction(async tx => {
+        const [actor] = await tx.select({ id: users.id }).from(users).where(and(eq(users.id, ctx.userId), eq(users.active, true), eq(users.role, ctx.role),
+          ctx.organizationId === null ? isNull(users.organizationId) : eq(users.organizationId, ctx.organizationId))).for("share").limit(1);
+        if (!actor) throw new Error("Current policy-reviewer access changed.");
+        const [source] = await tx.select({ id: datasetSnapshots.id, contentHash: datasetSnapshots.contentHash, provider: datasetSnapshots.provider, dataClass: datasetSnapshots.dataClass,
+          organizationId: datasetSnapshots.organizationId, createdByUserId: datasetSnapshots.createdByUserId }).from(datasetSnapshots).where(eq(datasetSnapshots.id, id.data)).for("update").limit(1);
+        if (!source || !canAccessDatasetSnapshot(source, ctx) || source.contentHash !== input.data.contentHash) throw new Error("Owned source snapshot revision is no longer available.");
+        const policy = await getEntitlementPolicyById(input.data.policyId, tx, true);
+        const now = new Date();
+        if (!policy || policy.licenseType === "unknown" || policy.provider !== source.provider || policy.dataClass !== source.dataClass || policy.effectiveFrom > now || policy.effectiveTo !== null && policy.effectiveTo <= now) throw new Error("Selected policy does not currently match this provider and data class with established rights.");
+        await tx.update(datasetSnapshots).set({ entitlementPolicyId: policy.id }).where(eq(datasetSnapshots.id, source.id));
+        return { snapshotId: source.id, contentHash: source.contentHash, policyId: policy.id };
+      });
+      await recordAuditEvent(req.user!.id, "dataset_entitlement_explicitly_linked", { ...linked, ...auditActor(req.user!) });
+      res.json(linked);
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : "Source policy linkage failed." }); }
+  });
+
   app.get("/api/columnar-artifacts", requireRole(...READ_ROLES), async (req, res) => {
     res.json(await listColumnarArtifacts(req.query.datasetSnapshotId ? String(req.query.datasetSnapshotId) : undefined, Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)));
   });
@@ -300,6 +326,16 @@ export function registerDataFabricRoutes(app: Express): void {
     const symbol = symbolSchema.safeParse(req.query.symbol);
     if (!symbol.success) return res.status(400).json({ error: "A valid symbol is required." });
     res.json(await getForecastActualVariance(symbol.data));
+  });
+
+  app.get("/api/financial-models/integrated/runs/:runId", requireRole(...AUTHOR_ROLES), async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.runId);
+    if (!id.success) return res.status(400).json({ error: "A valid model run ID is required." });
+    try { res.json(await readIntegratedModelRun(tenantContext(req.user!), id.data)); }
+    catch (error) {
+      if (error instanceof IntegratedModelArtifactError) return res.status(error.status).json({ error: error.message });
+      res.status(422).json({ error: "Persisted model run could not be reopened." });
+    }
   });
 
   app.post("/api/financial-models/integrated/runs/:runId/artifact", requireRole(...AUTHOR_ROLES), async (req, res) => {

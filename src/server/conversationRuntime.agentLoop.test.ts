@@ -5,6 +5,10 @@ import { AIProviderError, createAttribution } from "./byoaiRouter";
 import { currentConversationToolApprovalPolicy, executeConversationRuntime, getConversationTool, registerConversationTool, type ConversationRuntimeInput, type ConversationRuntimeResult } from "./conversationRuntime";
 import type { AgentEventInput } from "./exec/agent-run-events";
 import { z } from "zod";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
+import { callExternalMcpTool, type ExternalMcpServerConfig } from "./externalMcpClient";
 import type { ConversationToolDefinition } from "./conversationRuntime";
 import {
   proposeGovernedToolOperation,
@@ -286,4 +290,104 @@ test("the runtime passes the server-set prepareApproval through: confirm-class o
   assert.equal(result.awaitingApproval, true);
   assert.deepEqual(prepared, ["ask:ask-call"]);
   assert.equal(gatedRuns.length, 0);
+});
+
+/**
+ * D1 / L4+L5+L10 joined source test: the canonical pause/one-time approval
+ * and durable external dispatch release are connected to the actual official
+ * MCP SDK over a local HTTP socket. It intentionally uses a test-only tool
+ * descriptor: production's Project-owned source lookup and rights policy
+ * retain separate acceptance gates.
+ */
+test("GM20 real L4 owner approval resumes one durable MCP dispatch over the official SDK", { timeout: 20_000 }, async () => {
+  const requests: string[] = [];
+  const server = createServer(async (request, response) => {
+    if (request.url !== "/mcp") { response.writeHead(404).end(); return; }
+    if (request.method === "GET") { response.writeHead(405).end(); return; }
+    if (request.method !== "POST") { response.writeHead(202).end(); return; }
+    const body: Buffer[] = [];
+    for await (const part of request) body.push(Buffer.from(part));
+    const rpc = JSON.parse(Buffer.concat(body).toString("utf8")) as {
+      id?: number | string; method?: string; params?: { name?: string; arguments?: { symbol?: string } };
+    };
+    if (rpc.id === undefined) { response.writeHead(202).end(); return; }
+    if (rpc.method === "tools/call") {
+      requests.push(String(rpc.params?.name));
+      assert.equal(rpc.params?.arguments?.symbol, "TEST");
+    }
+    const result = rpc.method === "initialize"
+      ? { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "joined-offline", version: "1" } }
+      : rpc.method === "tools/call"
+        ? { isError: false, content: [{ type: "text", text: "untrusted local observation" }] }
+        : rpc.method === "tools/list" ? { tools: [] } : null;
+    const payload = result === null
+      ? { jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "Method not found" } }
+      : { jsonrpc: "2.0", id: rpc.id, result };
+    response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(payload));
+  });
+  server.listen(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    const config: ExternalMcpServerConfig = {
+      endpoint: `http://127.0.0.1:${port}/mcp`,
+      policy: {
+        projectId: 77, serverId: "joined-test", allowedToolIds: ["quotes.read"],
+        allowedResourcePrefixes: [], credentialRef: null,
+        requireApprovalForTools: true, healthTimeoutMs: 5_000,
+      },
+    };
+    // The test-only descriptor preserves real GM11a authorization and L5
+    // external-side-effect dispatch. It cannot create a product MCP source.
+    registerConversationTool(governed({
+      id: "test.agent.joined-mcp-sdk",
+      label: "Test joined MCP SDK",
+      kind: "retrieve",
+      permissionClass: "user_confirm",
+      invoke: async (value, signal) => {
+        const output = await callExternalMcpTool(
+          config, "quotes.read", { symbol: String(value.symbol) }, undefined, signal,
+        );
+        return {
+          output, summary: "External MCP transport completed; content withheld from AI review.",
+          deterministic: false, sourceRefs: ["mcp-server:joined-test", "mcp-tool:quotes.read"],
+        };
+      },
+    }, {
+      access: "write", sideEffect: "external", replaySafe: false,
+      inputSchema: z.object({ symbol: z.string().trim().min(1) }).strict(),
+    }));
+
+    const id = "c1111111-1111-4111-8111-111111111111";
+    const controller = new AbortController();
+    const first = run(id, [planJson([step("read", "test.agent.joined-mcp-sdk", { symbol: "TEST" })])], {
+      projectId: null, signal: controller.signal,
+    });
+    const paused = await first.promise;
+    assert.equal(paused.awaitingApproval, true);
+    assert.deepEqual(requests, [], "no MCP traffic before the authenticated L4 owner review");
+    assert.ok(paused.agentPause);
+    assert.equal(first.ledger.at(-1)?.kind, "tool_call_waiting_approval");
+
+    const authorization = await grantPausedStep(id, "test.agent.joined-mcp-sdk", paused.agentPause, controller.signal);
+    const resumed = run(id, [answer("The connected tool completed. Observation was not released to the model.")], {
+      projectId: null, signal: controller.signal,
+      agentLoop: { resume: { state: paused.agentPause.resume, authorization } },
+    });
+    const result = await resumed.promise;
+    assert.equal(result.awaitingApproval, false);
+    assert.equal(result.label, "ai_derived");
+    assert.deepEqual(requests, ["quotes.read"]);
+    assert.equal(resumed.calls(), 1, "one model review with no new plan");
+    assert.equal(resumed.prompts.some(prompt => prompt.includes("untrusted local observation")), false,
+      "tool execution consent must not become observation transmission consent");
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_intent").length, 1);
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_dispatch_committed").length, 1);
+    assert.equal(resumed.ledger.filter(event => event.kind === "tool_call_finished"
+      && event.status === "succeeded").length, 1);
+    assert.equal(resumed.events.some(event => event.type === "receipt"), true);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
 });

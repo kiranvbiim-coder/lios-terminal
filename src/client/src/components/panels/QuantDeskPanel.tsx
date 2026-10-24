@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState, type FormEvent } from "react";
 import type { ViewMode } from "@/lib/terminalTypes";
 import IsingPanel from "./IsingPanel";
@@ -58,7 +59,7 @@ export default function QuantDeskPanel({
 }: Props) {
   const routedViews = QUANT_VIEWS.filter((item) => item.id !== "quantworkbench");
   const activeView = routedViews.some((qv) => qv.id === view) ? view : "flow";
-  const [searchVal, setSearchVal] = useState("");
+  const [searchVal, setSearchVal] = useTerminalArtifactState("QuantDeskPanel.searchVal", "");
 
   const handleSearch = (event: FormEvent) => {
     event.preventDefault();

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 
 export interface ArtifactViewState { artifactId: string | null; focus: boolean; revision?: number | null }
 const EMPTY: ArtifactViewState = { artifactId: null, focus: false };
@@ -17,12 +17,28 @@ function readView(key: string | null): ArtifactViewState {
 export function conversationArtifactViewKey(ownerId: number | undefined, projectId: number | null, chatId: number | null): string | null {
   return ownerId && chatId ? `lios.artifact-view.v1.${ownerId}.${projectId ?? "quick"}.${chatId}` : null;
 }
+const VIEW_SELECTED = "lios:conversation-artifact-selected";
+/** Resolve first-Chat/owner transitions using the server-returned owner, never a stale render closure. */
+export function rememberConversationArtifactView(ownerId: number, projectId: number | null, chatId: number, value: ArtifactViewState): void {
+  const key = conversationArtifactViewKey(ownerId, projectId, chatId);
+  if (!key || typeof window === "undefined" || !value.artifactId || !UUID.test(value.artifactId)) return;
+  try { localStorage.setItem(key, JSON.stringify({ version: 1, ...value })); } catch { /* UI storage unavailable. */ }
+  window.dispatchEvent(new CustomEvent(VIEW_SELECTED, { detail: { key, value } }));
+}
 /** Only UI references are remembered. P4 still authorizes and loads the actual Artifact. */
 export function useConversationArtifactView(ownerId: number | undefined, projectId: number | null, chatId: number | null) {
   const key = conversationArtifactViewKey(ownerId, projectId, chatId);
   const restored = useMemo(() => readView(key), [key]);
   const [current, setCurrent] = useState<{ key: string | null; value: ArtifactViewState }>({ key, value: restored });
   const state = current.key === key ? current.value : restored;
+  useEffect(() => {
+    const select = (event: Event) => {
+      const detail = (event as CustomEvent<{key:string;value:ArtifactViewState}>).detail;
+      if (detail?.key === key) setCurrent({ key, value: parseArtifactView({ version: 1, ...detail.value }) });
+    };
+    window.addEventListener(VIEW_SELECTED, select);
+    return () => window.removeEventListener(VIEW_SELECTED, select);
+  }, [key]);
   const update = useCallback((change: Partial<ArtifactViewState>) => {
     setCurrent(previous => {
       const value = { ...(previous.key === key ? previous.value : restored), ...change };

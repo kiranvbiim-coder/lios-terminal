@@ -1,3 +1,4 @@
+import { initialTerminalScreenState } from "@shared/terminalArtifact";
 import {
   artifactContentSchema,
   artifactComparisonSchema,
@@ -395,6 +396,14 @@ export function normalizeConversationDraft(draft: ConversationArtifactDraft): Ar
   const data = cloneJson(draft.data);
   const canonical = artifactContentSchema.safeParse(data);
   if (canonical.success) return canonical.data;
+  if (type === "analysis.technical" || type === "analysis.security-overview") {
+    const symbol = typeof data.symbol === "string" ? data.symbol : null;
+    const scope = data.sourceScope === "web" ? "web" : data.sourceScope === "my_data" ? "my_data" : data.sourceScope === "files" ? "files" : "auto";
+    return artifactContentSchema.parse({
+      kind: "screen", view: type === "analysis.technical" ? "chart" : "entity", symbol,
+      state: { terminal: initialTerminalScreenState(symbol, scope), recordedAnalysis: data },
+    });
+  }
   if (type.includes("valuation")) {
     return artifactContentSchema.parse({
       kind: "valuation",

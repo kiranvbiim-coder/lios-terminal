@@ -312,6 +312,12 @@
       "commitSha": "9e40cba825ca0997a01cab9f60a0b15ffb976af2",
       "license": "Python-2.0 AND CNRI-Python",
       "notes": "Local release-built CPython3.13.16 macOSarm64candidate; originalbuildsystemMPL2source notimported. Exactarchive/fullcomponentlegalmetadata hashes retained by nativebundlebuilder; no publicbinaryclearance or Windowsqualification."
+    },
+    {
+      "id": "mcp-typescript-sdk-v2-client",
+      "repository": "modelcontextprotocol/typescript-sdk",
+      "commitSha": "fcef852f6cdafea07f36cf6fae69b37c8adf85be",
+      "license": "Apache-2.0"
     }
   ]
 }

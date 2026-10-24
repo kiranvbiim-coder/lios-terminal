@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useMemo, useState } from "react";
 import { FolderKanban, Plus, X, Star, ArrowUpRight, FileText, Trash2, Pin, Archive, ArchiveRestore, Copy, Search, Tag, Camera } from "lucide-react";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -27,36 +28,36 @@ function relativeTime(iso: string): string {
 
 export default function WorkspacePanel({ onSymbol, onNav }: Props) {
   const { data: workspaces, isLoading } = useWorkspaces();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useTerminalArtifactState<string | null>("WorkspacePanel.selectedId", null);
   const [activeId, setActiveId] = useActiveWorkspaceId();
   const invalidate = useInvalidateWorkspaces();
 
   const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newClient, setNewClient] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newTags, setNewTags] = useState("");
+  const [newName, setNewName] = useTerminalArtifactState("WorkspacePanel.newName", "");
+  const [newClient, setNewClient] = useTerminalArtifactState("WorkspacePanel.newClient", "");
+  const [newDescription, setNewDescription] = useTerminalArtifactState("WorkspacePanel.newDescription", "");
+  const [newTags, setNewTags] = useTerminalArtifactState("WorkspacePanel.newTags", "");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
-  const [tagInput, setTagInput] = useState("");
+  const [searchQuery, setSearchQuery] = useTerminalArtifactState("WorkspacePanel.searchQuery", "");
+  const [showArchived, setShowArchived] = useTerminalArtifactState("WorkspacePanel.showArchived", false);
   const [duplicating, setDuplicating] = useState(false);
 
   // Selecting a workspace in the list also views it; falls back to the
   // active workspace (if any) on first render so returning to this panel
   // lands somewhere useful instead of an empty state.
   const effectiveSelectedId = selectedId ?? activeId ?? workspaces?.[0]?.id ?? null;
+  const [tagInput, setTagInput] = useTerminalArtifactState(`WorkspacePanel.tagInput.${effectiveSelectedId}`, "");
 
   const { data: selected } = useWorkspace(effectiveSelectedId);
   const { data: imports } = useWorkspaceImports(effectiveSelectedId);
 
-  const [symbolInput, setSymbolInput] = useState("");
+  const [symbolInput, setSymbolInput] = useTerminalArtifactState(`WorkspacePanel.symbolInput.${effectiveSelectedId}`, "");
 
   const { data: snapshots } = useWorkspaceSnapshots(effectiveSelectedId);
   const invalidateSnapshots = useInvalidateWorkspaceSnapshots();
-  const [snapshotLabel, setSnapshotLabel] = useState("");
+  const [snapshotLabel, setSnapshotLabel] = useTerminalArtifactState(`WorkspacePanel.snapshotLabel.${effectiveSelectedId}`, "");
   const [snapshotBusy, setSnapshotBusy] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
 

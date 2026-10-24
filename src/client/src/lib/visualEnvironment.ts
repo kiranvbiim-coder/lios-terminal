@@ -147,6 +147,21 @@ export const VISUAL_CONTEXT_EVENT = "lios:visual-context";
 export const VISUAL_ENVIRONMENT_CHANGED_EVENT = "lios:visual-environment-changed";
 const PROJECT_PIN_STORAGE_KEY = "lios-visual-environment-project-pins-v1";
 const RUNTIME_STORAGE_KEY = "lios-visual-environment-runtime-v1";
+// Storage may be denied in private/hardened desktop webviews. Keep only
+// ephemeral display preferences in memory; never treat persistence as an auth
+// prerequisite or claim a disk-saved choice when storage is unavailable.
+const volatileProjectPins = new Map<string, VisualEnvironmentId | null>();
+let volatileRuntimeOverride: { state: PersistedVisualEnvironmentState | null } | null = null;
+
+function storeRuntimeState(state: PersistedVisualEnvironmentState | null): void {
+  try {
+    if (state) localStorage.setItem(RUNTIME_STORAGE_KEY, JSON.stringify(state));
+    else localStorage.removeItem(RUNTIME_STORAGE_KEY);
+    volatileRuntimeOverride = null;
+  } catch {
+    volatileRuntimeOverride = { state };
+  }
+}
 
 function isEnvironmentId(value: unknown): value is VisualEnvironmentId {
   return typeof value === "string" && (VISUAL_ENVIRONMENT_IDS as readonly string[]).includes(value);
@@ -165,12 +180,22 @@ function isSemanticContext(value: unknown): value is VisualSemanticContext {
 
 function readPins(): Record<string, VisualEnvironmentId> {
   if (typeof window === "undefined") return {};
+  let persisted: Record<string, VisualEnvironmentId> = {};
   try {
-    const parsed = JSON.parse(localStorage.getItem(PROJECT_PIN_STORAGE_KEY) || "{}") as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => isEnvironmentId(value))) as Record<string, VisualEnvironmentId>;
+    const parsed: unknown = JSON.parse(localStorage.getItem(PROJECT_PIN_STORAGE_KEY) || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      persisted = Object.fromEntries(
+        Object.entries(parsed).filter(([, value]) => isEnvironmentId(value)),
+      ) as Record<string, VisualEnvironmentId>;
+    }
   } catch {
-    return {};
+    // A failed optional storage read does not invalidate the current session.
   }
+  for (const [key, value] of volatileProjectPins) {
+    if (value === null) delete persisted[key];
+    else persisted[key] = value;
+  }
+  return persisted;
 }
 
 export function getProjectVisualEnvironmentPin(projectId: string | number | null | undefined): VisualEnvironmentId | null {
@@ -189,14 +214,16 @@ export function setProjectVisualEnvironmentPin(
     pins[key] = environmentId;
   } else {
     delete pins[key];
-    try {
-      const runtime = JSON.parse(localStorage.getItem(RUNTIME_STORAGE_KEY) || "null") as PersistedVisualEnvironmentState | null;
-      if (runtime?.projectId === key) localStorage.removeItem(RUNTIME_STORAGE_KEY);
-    } catch {
-      localStorage.removeItem(RUNTIME_STORAGE_KEY);
-    }
+    // Unpinning must invalidate same-Project runtime continuity, even when
+    // the backing storage denies writes/removals.
+    if (loadVisualEnvironmentRuntimeState()?.projectId === key) storeRuntimeState(null);
   }
-  localStorage.setItem(PROJECT_PIN_STORAGE_KEY, JSON.stringify(pins));
+  try {
+    localStorage.setItem(PROJECT_PIN_STORAGE_KEY, JSON.stringify(pins));
+    volatileProjectPins.delete(key);
+  } catch {
+    volatileProjectPins.set(key, environmentId);
+  }
   window.dispatchEvent(new CustomEvent(VISUAL_ENVIRONMENT_CHANGED_EVENT, {
     detail: { projectId: key, environmentId },
   }));
@@ -291,12 +318,13 @@ export function dispatchVisualContext(detail: VisualContextDetail): void {
     intensity: normalized.intensity,
     semanticContext: normalized.semanticContext,
   };
-  localStorage.setItem(RUNTIME_STORAGE_KEY, JSON.stringify(runtime));
+  storeRuntimeState(runtime);
   window.dispatchEvent(new CustomEvent(VISUAL_CONTEXT_EVENT, { detail: normalized }));
 }
 
 export function loadVisualEnvironmentRuntimeState(): PersistedVisualEnvironmentState | null {
   if (typeof window === "undefined") return null;
+  if (volatileRuntimeOverride !== null) return volatileRuntimeOverride.state;
   try {
     const value = JSON.parse(localStorage.getItem(RUNTIME_STORAGE_KEY) || "null") as Partial<PersistedVisualEnvironmentState> | null;
     if (!value || !isEnvironmentId(value.environmentId) || !isIntensity(value.intensity) || !isSemanticContext(value.semanticContext)) return null;
@@ -325,7 +353,7 @@ export function restoreVisualEnvironmentState(value: unknown): boolean {
     intensity: candidate.intensity,
     semanticContext: candidate.semanticContext,
   };
-  localStorage.setItem(RUNTIME_STORAGE_KEY, JSON.stringify(restored));
+  storeRuntimeState(restored);
   window.dispatchEvent(new CustomEvent(VISUAL_ENVIRONMENT_CHANGED_EVENT, {
     detail: { projectId: restored.projectId, environmentId: restored.environmentId, restored: true },
   }));

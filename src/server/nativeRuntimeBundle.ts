@@ -10,6 +10,7 @@ import {
   type StrictProvisioningRequest,
 } from "./pythonRuntimeManager";
 import { MANAGED_RUNTIME_MANIFEST } from "./runtimeManifest";
+import { satisfiesRuntimePackageVersion as satisfies } from "./runtimePackageVersion";
 
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 100_000;
@@ -177,38 +178,6 @@ function relativeFile(value: unknown): string {
   return value;
 }
 
-function compareVersion(actual: string, expected: string): number {
-  const a = actual.split(".").map(Number);
-  const b = expected.split(".").map(Number);
-  for (let index = 0; index < Math.max(a.length, b.length); index++) {
-    const comparison = (a[index] ?? 0) - (b[index] ?? 0);
-    if (comparison) return comparison;
-  }
-  return 0;
-}
-
-// Only the canonical manifest's numeric pins, major series and comma-separated
-// comparisons are supported. Unknown constraint syntax fails closed, not open.
-function satisfies(actual: string, requirement: string): boolean {
-  if (!/^\d+(?:\.\d+)*$/.test(actual)) return false;
-  if (/^\d+(?:\.\d+)*$/.test(requirement)) return actual === requirement;
-  const series = /^(\d+)\.x$/i.exec(requirement);
-  if (series) return actual.split(".")[0] === series[1];
-  return requirement.split(",").every((part) => {
-    const match = /^(>=|<=|==|!=|>|<)(\d+(?:\.\d+)*)$/.exec(part);
-    if (!match) return false;
-    const comparison = compareVersion(actual, match[2]);
-    switch (match[1]) {
-      case ">=": return comparison >= 0;
-      case "<=": return comparison <= 0;
-      case ">": return comparison > 0;
-      case "<": return comparison < 0;
-      case "==": return comparison === 0;
-      case "!=": return comparison !== 0;
-      default: return false;
-    }
-  });
-}
 
 function parseManifest(raw: unknown, target: string): BundleManifest {
   const manifest = record(raw);

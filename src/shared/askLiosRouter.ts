@@ -1,4 +1,5 @@
 import { DETERMINISTIC_ENGINE_REGISTRY } from "./waveCContracts";
+import type { StructuredConversationIntent } from "./conversationRuntime";
 
 export type AskLiosIntent =
   | { kind: "compute"; engineId: (typeof DETERMINISTIC_ENGINE_REGISTRY)[number]["id"]; view: string }
@@ -15,10 +16,32 @@ const ENGINE_HINTS: Array<{ engineId: (typeof DETERMINISTIC_ENGINE_REGISTRY)[num
   { engineId: "simulations.monte-carlo", view: "montecarlo", pattern: /\b(monte carlo|simulation)\b/i },
 ];
 
+/** Decide the requested action before matching domain/model nouns; numbers and an active Artifact are not actions. */
+export function classifyAskLiosAction(message: string): Pick<StructuredConversationIntent, "action" | "requiresDeterministicCompute"> | null {
+  const text = message.trim().replaceAll("’", "'");
+  // A calculation clause retains execution even when the person also asks for an explanation.
+  if (/(?:^|[,:;.!?]\s*|\b(?:and|then)\s+)(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:run|calculate|compute|estimate|solve|build|evaluate|optimi[sz]e|price)\b/i.test(text)) {
+    return { action: "calculate", requiresDeterministicCompute: true };
+  }
+  if (/\b(?:explain|define|describe|teach|why|what (?:does|do)|how (?:does|do|can|is|are|to)|difference between|meaning of|tell me about)\b/i.test(text)) {
+    return { action: "explain", requiresDeterministicCompute: false };
+  }
+  const question = text.match(/\bwhat(?:'s| is| are| was)\s+([^?]+)/i)?.[1];
+  if (question) {
+    if (/\b(?:definition|meaning|difference|relationship|concept|intuition|formula|purpose|types?|kinds?|examples?)\b/i.test(question)) {
+      return { action: "explain", requiresDeterministicCompute: false };
+    }
+    // Particular targets retain the governed quantity/input-gap path even with no figures supplied.
+    if (/\b(?:for|of)\s+\S|'s\s+\S/i.test(question)) return null;
+    return { action: "explain", requiresDeterministicCompute: false };
+  }
+  return null;
+}
+
 export function classifyAskLiosIntent(message: string): AskLiosIntent {
   const trimmed = message.trim();
   if (!trimmed) return { kind: "chat" };
-  if (/^(explain|define|teach|what does|how does)\b/i.test(trimmed)) return { kind: "chat" };
+  if (classifyAskLiosAction(trimmed)?.action === "explain") return { kind: "chat" };
   for (const hint of ENGINE_HINTS) {
     if (hint.pattern.test(trimmed)) return { kind: "compute", engineId: hint.engineId, view: hint.view };
   }

@@ -413,9 +413,10 @@ test("BYOAI transport routes Ollama base URLs to the local chat endpoint without
   let capturedAuthorization: string | null = null;
   process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434/";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (inputUrl(input).endsWith("/api/tags")) return new Response(JSON.stringify({ models: [{ name: "llama3.1", size: 2_000_000, digest: "a".repeat(64), details: { format: "gguf" } }] }));
     capturedUrl = inputUrl(input);
     capturedAuthorization = new Headers(init?.headers).get("authorization");
-    return new Response(JSON.stringify({ message: { content: "Local response" } }), { status: 200 });
+    return new Response(JSON.stringify({ model: "llama3.1", message: { content: "Local response" } }), { status: 200 });
   }) as typeof fetch;
 
   try {
@@ -633,7 +634,7 @@ test("provider failures are classified into actionable reasons without echoing p
     await assert.rejects(
       () => invokeAIProvider({ provider: "openai", messages: [{ role: "user", content: "Question" }] }),
       (error: unknown) => {
-        const failure = assertProviderError(error, "rate_limited");
+        const failure = assertProviderError(error, "quota_exhausted");
         return /no available quota/.test(failure.message) && !/SECRET PROMPT ECHO/.test(failure.message) && failure.status === 429;
       },
     );
@@ -644,6 +645,8 @@ test("provider failures are classified into actionable reasons without echoing p
   }
 });
 
+// Ordinary 429 rate pressure can use a permitted fallback. Billing/quota
+// exhaustion is tested separately as a permanent entitlement refusal.
 async function withProviderKeys<T>(run: (contacted: string[]) => Promise<T>, geminiWorks = true): Promise<T> {
   const previous = { openai: process.env.OPENAI_API_KEY, gemini: process.env.GEMINI_API_KEY };
   const previousFetch = globalThis.fetch;
@@ -655,7 +658,7 @@ async function withProviderKeys<T>(run: (contacted: string[]) => Promise<T>, gem
     contacted.push(url.includes("googleapis") ? "gemini" : "openai");
     return url.includes("googleapis") && geminiWorks
       ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "from gemini" }] } }] }), { status: 200 })
-      : new Response(JSON.stringify({ error: { code: "insufficient_quota" } }), { status: 429 });
+      : new Response(JSON.stringify({ error: { code: "rate_limit_exceeded" } }), { status: 429 });
   }) as typeof fetch;
   try {
     return await run(contacted);
@@ -726,7 +729,8 @@ test("BYOAI Ollama requests bound output and context through native options inst
   const previousFetch = globalThis.fetch;
   process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434";
   let requestBody: Record<string, unknown> | null = null;
-  globalThis.fetch = (async (_input, init) => {
+  globalThis.fetch = (async (input, init) => {
+    if (inputUrl(input).endsWith("/api/tags")) return new Response(JSON.stringify({ models: [{ name: "llama3.2:3b", size: 2_000_000, digest: "a".repeat(64), details: { format: "gguf" } }] }));
     requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response(JSON.stringify({ model: "llama3.2:3b", message: { content: "ok" } }), { status: 200 });
   }) as typeof fetch;

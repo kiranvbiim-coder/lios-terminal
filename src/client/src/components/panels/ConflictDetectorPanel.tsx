@@ -1,3 +1,4 @@
+import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, GitCompareArrows, RefreshCw, Save, XCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -42,9 +43,9 @@ function formatValue(value: unknown): string {
 }
 
 export default function ConflictDetectorPanel({ symbol: initialSymbol }: Props) {
-  const [symbol, setSymbol] = useState(initialSymbol ?? "AAPL");
-  const [reportType, setReportType] = useState<(typeof REPORT_TYPES)[number]>("income");
-  const [period, setPeriod] = useState("FY");
+  const [symbol, setSymbol] = useTerminalArtifactState("ConflictDetectorPanel.symbol", initialSymbol ?? "AAPL");
+  const [reportType, setReportType] = useTerminalArtifactState<(typeof REPORT_TYPES)[number]>("ConflictDetectorPanel.reportType", "income");
+  const [period, setPeriod] = useTerminalArtifactState("ConflictDetectorPanel.period", "FY");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<Resolution | null>(null);

@@ -25,6 +25,14 @@ test("local retrieval applies current permissions before generation and never mi
   let malformed = false;
   let largeFinite = false;
   const server = http.createServer(async (req, res) => {
+    if (req.url === "/api/tags") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ models: [
+        { name: "explicit-fixture-space-v1", size: 2_000_000, digest: "a".repeat(64), details: { format: "gguf" } },
+        { name: "explicit-fixture-space-v2", size: 2_000_000, digest: "b".repeat(64), details: { format: "gguf" } },
+      ] }));
+      return;
+    }
     let body = "";
     for await (const chunk of req) body += chunk;
     const parsed = JSON.parse(body) as { model: string; input: string[] };

@@ -1,0 +1,10 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogClose } from "./components/ui/dialog";
+import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetClose } from "./components/ui/sheet";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "./components/ui/dropdown-menu";
+import { Input } from "./components/ui/input";
+import ChatMarkdown from "./components/terminal/ChatMarkdown";
+import "./terminalStyles";
+const fields = Array.from({length:12},(_,i)=><label key={i} className="block my-4">Field {i+1}<Input aria-label={`Field ${i+1}`} aria-invalid={i===0} /></label>);
+createRoot(document.getElementById("root")!).render(<main className="dark p-4"><Dialog><DialogTrigger>Open long form</DialogTrigger><DialogContent><DialogTitle>Shared long form</DialogTitle><DialogDescription>Viewport and keyboard qualification with synthetic fields.</DialogDescription>{fields}<DialogClose>Save form</DialogClose></DialogContent></Dialog><Sheet><SheetTrigger>Open panel</SheetTrigger><SheetContent><SheetTitle>Shared panel</SheetTitle><SheetDescription>Synthetic long panel.</SheetDescription>{fields}<SheetClose>Save panel</SheetClose></SheetContent></Sheet><DropdownMenu><DropdownMenuTrigger>Open menu</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuSub><DropdownMenuSubTrigger>Nested options</DropdownMenuSubTrigger><DropdownMenuSubContent>{Array.from({length:20},(_,i)=><DropdownMenuItem key={i}>Option {i+1}</DropdownMenuItem>)}</DropdownMenuSubContent></DropdownMenuSub>{Array.from({length:15},(_,i)=><DropdownMenuItem key={i}>Choice {i+1}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><ChatMarkdown text={'```sql\nselect 1 < 2;\n-- <script>inert</script>\n```'}/></main>);

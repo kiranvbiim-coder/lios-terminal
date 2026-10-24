@@ -13,6 +13,7 @@ import {
   upsertSourceConnection,
 } from "./sourceConnectionService";
 import { discoverApiConnection, discoverDatabaseConnection } from "./sourceDiscoveryService";
+import { suggestDatabaseAnalysisActions } from "./databaseAnalysisActions";
 import { listSourceSnapshots } from "./sourceSnapshotStore";
 import { normalizeUniversalFinanceRecords } from "@shared/universalIngestion";
 import { upsertFinancialMetricOverride } from "./financialMetricStore";
@@ -65,6 +66,9 @@ const databaseProfileSchema = z.object({
   connectionId: z.number().int().positive(),
   schema: z.string().trim().min(1).max(63),
   table: z.string().trim().min(1).max(63),
+});
+const databaseAnalysisRunSchema = databaseProfileSchema.extend({
+  actionId: z.string().trim().min(1).max(200),
 });
 const apiConnectionSchema = z.object({
   connectionId: z.number().int().positive(),
@@ -316,4 +320,47 @@ export function registerSourceConnectionRoutes(app: Express): void {
       next(error);
     }
   });
+
+  // P5: a connected database immediately offers real, read-only analysis.
+  // All actions are derived server-side from the CURRENT owned schema.
+  app.post("/api/setup/source-connections/database/analysis/actions", requireAuth, async (req, res) => {
+    const parsed = databaseProfileSchema.strict().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const { connectionId, schema, table } = parsed.data;
+      const catalog = await discoverDatabaseConnection(req.user!.id, connectionId, req.user!);
+      res.json({ connectionId, ...suggestDatabaseAnalysisActions(catalog, schema, table) });
+    } catch (error) {
+      res.status(422).json({ error: error instanceof Error ? error.message : "Database analysis discovery unavailable." });
+    }
+  });
+
+  app.post("/api/setup/source-connections/database/analysis/run", requireAuth, async (req, res) => {
+    const parsed = databaseAnalysisRunSchema.strict().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const { connectionId, schema, table, actionId } = parsed.data;
+      // Client-provided SQL is never accepted. Re-read owned schema/rights
+      // before rendering a generated SELECT, then use the existing read-only
+      // query adapter with its current owner/credential and audit checks.
+      const catalog = await discoverDatabaseConnection(req.user!.id, connectionId, req.user!);
+      const actionSet = suggestDatabaseAnalysisActions(catalog, schema, table);
+      const action = actionSet.actions.find(item => item.id === actionId);
+      if (!action) { res.status(422).json({ error: "This analysis action is not available for the current database table." }); return; }
+      const result = await queryDatabaseSource(req.user!.id, connectionId, action.sql, [], req.user!);
+      res.json({
+        connectionId,
+        dataset: actionSet.dataset,
+        sourceRef: "source-connection:" + connectionId,
+        action,
+        result,
+        observedAt: new Date().toISOString(),
+        evidenceStatus: "unverified_user_connected_data",
+        limitation: "Results come from the current owner-connected database. Units, semantics, coverage and freshness are not independently verified; this read does not save a snapshot or start monitoring.",
+      });
+    } catch (error) {
+      res.status(422).json({ error: error instanceof Error ? error.message : "Database analysis unavailable." });
+    }
+  });
+
 }

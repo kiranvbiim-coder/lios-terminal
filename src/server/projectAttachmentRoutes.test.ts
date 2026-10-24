@@ -13,8 +13,9 @@ process.env.LIOS_ATTACHMENT_STORAGE_DIR = path.join(dataDir, "blobs");
 const { closeDb, getDb, initDb } = await import("./db");
 const { users } = await import("@shared/schema");
 const { PROJECT_ATTACHMENT_MAX_FILE_BYTES } = await import("./projectAttachmentStore");
+const { conversationAttachmentRefSchema } = await import("@shared/conversationRuntime");
 const { createProject } = await import("./projectStore");
-const { createProjectChat, listProjectChatMessages } = await import("./projectChatStore");
+const { createProjectChat, getProjectChat, listProjectChatMessages } = await import("./projectChatStore");
 const { listProjectResources, setProjectResourceContextMode } = await import("./projectResourceStore");
 const { registerProjectRoutes } = await import("./projectRoutes");
 const { registerProjectConversationRoutes } = await import("./projectConversationRoutes");
@@ -229,6 +230,85 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   assert.equal(afterTypedProjectRequest.length, beforeVoiceReview.length + 2);
   assert.equal(afterTypedProjectRequest.at(-1)?.metadata?.voiceReview, undefined);
 
+
+  // A normal user must be able to upload in a regular Quick Chat without any Project.
+  const quick = await createProjectChat(ownerContext, { scope: "quick" });
+  const otherQuick = await createProjectChat(ownerContext, { scope: "quick" });
+  const quickEndpoint = `http://127.0.0.1:${address.port}/api/quick-chats/${quick.id}/attachments`;
+  const privatePayload = "Quick private report: verified water-quality reading.";
+  assert.equal((await fetch(quickEndpoint, { method: "POST", body: attachmentForm("notes.txt", privatePayload) })).status, 401);
+  assert.equal((await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(other.id) }, body: attachmentForm("notes.txt", privatePayload),
+  })).status, 404);
+  const invalidQuickForm = attachmentForm("notes.txt", privatePayload);
+  invalidQuickForm.append("projectId", String(project.id));
+  assert.equal((await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(owner.id) }, body: invalidQuickForm,
+  })).status, 400, "upload cannot smuggle a Project or other fields");
+  const quickUpload = await fetch(quickEndpoint, {
+    method: "POST", headers: { "x-test-user-id": String(owner.id) }, body: attachmentForm("notes.txt", privatePayload),
+  });
+  const quickBody = await quickUpload.text();
+  assert.equal(quickUpload.status, 201, quickBody);
+  const quickRef = conversationAttachmentRefSchema.parse((JSON.parse(quickBody) as { attachment: unknown }).attachment);
+  assert.equal(quickRef.sourceRef, "quick-attachment:" + quickRef.id);
+  assert.equal((await getProjectChat(ownerContext, quick.id)).projectId, null);
+  const quickDownload = `http://127.0.0.1:${address.port}/api/quick-chats/${quick.id}/attachments/${quickRef.id}/download`;
+  assert.equal((await fetch(quickDownload)).status, 401);
+  assert.equal((await fetch(quickDownload, { headers: { "x-test-user-id": String(other.id) } })).status, 404);
+  const siblingDownload = `http://127.0.0.1:${address.port}/api/quick-chats/${otherQuick.id}/attachments/${quickRef.id}/download`;
+  assert.equal((await fetch(siblingDownload, { headers: { "x-test-user-id": String(owner.id) } })).status, 404);
+  const quickDownloaded = await fetch(quickDownload, { headers: { "x-test-user-id": String(owner.id) } });
+  assert.equal(quickDownloaded.status, 200);
+  assert.equal(quickDownloaded.headers.get("cache-control"), "private, no-store");
+  assert.equal(quickDownloaded.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(await quickDownloaded.text(), privatePayload);
+
+  await t.test("Artifact file provenance cannot borrow a sibling Chat's uploaded source or dependency reference", async () => {
+    const { createArtifact, createArtifactVersion } = await import("./artifactStore");
+    const content = { kind: "report" as const, blocks: [{ id: "summary", type: "paragraph" as const, text: "Owned uploaded note." }], sections: [] };
+    const owned = await createArtifact(ownerContext, { projectId: null, owningChatId: quick.id, title: "Owned note report", content, sourceRefs: [quickRef.sourceRef] });
+    assert.deepEqual(owned.version.sourceRefs, [quickRef.sourceRef]);
+    const revision = await createArtifactVersion(ownerContext, { artifactId: owned.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "summary", type: "paragraph", text: "Revised owned note report." }] } });
+    assert.equal(revision.version, 2);
+    assert.deepEqual(revision.sourceRefs, [quickRef.sourceRef]);
+    for (const references of [{ sourceRefs: [quickRef.sourceRef] }, { dependencyRefs: [quickRef.sourceRef] }]) {
+      await assert.rejects(createArtifact(ownerContext, { projectId: null, owningChatId: otherQuick.id, title: "Forged sibling report", content, ...references }), /provenance/);
+    }
+    const sibling = await createArtifact(ownerContext, { projectId: null, owningChatId: otherQuick.id, title: "Unrelated report", content });
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: sibling.artifact.id, baseVersion: 1, content, dependencyRefs: [quickRef.sourceRef] }), /provenance/);
+    await assert.rejects(createArtifact(ownerContext, { projectId: project.id, owningChatId: chat.id, title: "Borrowed into Project", content, sourceRefs: [quickRef.sourceRef] }), /provenance/);
+  });
+
+  // A legitimate owner can use this exact file in the same Quick Chat, with a normal governed action path.
+  const ownerQuickRun = await fetch(conversationUrlFor(address.port, quick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "Backtest AAPL",
+      context: { symbol: "AAPL" }, sourceScope: "files", attachments: [quickRef],
+      transmissionPolicy: { allowResourceReferences: true },
+    }),
+  });
+  const ownerRunBody = await ownerQuickRun.text();
+  assert.equal(ownerQuickRun.status, 200, ownerRunBody);
+  const quickMessages = await listProjectChatMessages(ownerContext, quick.id);
+  assert.equal(quickMessages.some(m => m.role === "user" && Array.isArray(m.metadata.attachments)
+    && m.metadata.attachments.some((ref: unknown) => !!ref && typeof ref === "object" && "id" in ref && ref.id === quickRef.id)), true);
+
+  // The runtime must reject another Chat's reference before saving a user message.
+  const beforeQuickCrossScope = await listProjectChatMessages(ownerContext, otherQuick.id);
+  const crossQuickRun = await fetch(conversationUrlFor(address.port, otherQuick.id), {
+    method: "POST",
+    headers: { "x-test-user-id": String(owner.id), "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(), message: "What does my private note say?",
+      sourceScope: "files", attachments: [quickRef],
+    }),
+  });
+  assert.equal(crossQuickRun.status, 404, await crossQuickRun.text());
+  assert.equal((await listProjectChatMessages(ownerContext, otherQuick.id)).length, beforeQuickCrossScope.length);
+
   const temporaryUrl = `http://127.0.0.1:${address.port}/api/project-chat/temporary/respond`;
   const unreviewedTemporaryVoice = await fetch(temporaryUrl, {
     method: "POST",
@@ -244,6 +324,30 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
   const reviewedTemporaryVoiceStream = await reviewedTemporaryVoice.text();
   assert.equal(reviewedTemporaryVoice.status, 200, reviewedTemporaryVoiceStream);
   assert.match(reviewedTemporaryVoiceStream, /approval_required/, "Temporary chat must keep the normal action approval gate");
+
+  await t.test("Project-adopted file provenance survives origin Chat clear and trash but never admits a sibling reference", async () => {
+    const { createArtifact, createArtifactVersion, getArtifact } = await import("./artifactStore");
+    const { promoteQuickChatToProject, clearProjectChatMessages, trashProjectChat } = await import("./projectChatStore");
+    const content = { kind: "report" as const, blocks: [{ id: "p", type: "paragraph" as const, text: "Adopted owned note." }], sections: [] };
+    const retained = await createArtifact(ownerContext, { projectId: null, owningChatId: quick.id, title: "Adopted report", content, sourceRefs: [quickRef.sourceRef] });
+    // Still Chat-owned (not yet adopted): clearing the Chat manifest must not make the retained Artifact uneditable.
+    await clearProjectChatMessages(ownerContext, quick.id);
+    const quickEdited = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 1, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited while Chat-owned after clear." }] } });
+    assert.equal(quickEdited.version, 2);
+    assert.deepEqual(quickEdited.sourceRefs, [quickRef.sourceRef]);
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
+    await promoteQuickChatToProject(ownerContext, quick.id, project.id);
+    assert.equal((await getArtifact(ownerContext, retained.artifact.id)).owningChatId, null);
+    await clearProjectChatMessages(ownerContext, quick.id);
+    const afterClear = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 2, content: { ...content, blocks: [{ id: "p", type: "paragraph", text: "Edited after clearing origin Chat." }] } });
+    assert.equal(afterClear.version, 3);
+    assert.deepEqual(afterClear.sourceRefs, [quickRef.sourceRef]);
+    await trashProjectChat(ownerContext, quick.id);
+    const afterTrash = await createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 3, content });
+    assert.equal(afterTrash.version, 4);
+    assert.deepEqual(afterTrash.sourceRefs, [quickRef.sourceRef]);
+    await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 4, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
+  });
 });
 
 function attachmentForm(fileName: string, text: string): FormData {

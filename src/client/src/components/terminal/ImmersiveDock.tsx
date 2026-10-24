@@ -19,6 +19,7 @@ export default function ImmersiveDock({ activeView, activeSymbol, preferences, o
   const capability = getTerminalCapability(activeView);
   const [trayCount, setTrayCount] = useState(() => loadResearchTray().length);
   const [justPinned, setJustPinned] = useState(false);
+  const [pinError, setPinError] = useState(false);
   const hasActiveObject = Boolean(activeSymbol && capability.symbolAware);
 
   useEffect(() => subscribeResearchTray((items) => setTrayCount(items.length)), []);
@@ -28,10 +29,13 @@ export default function ImmersiveDock({ activeView, activeSymbol, preferences, o
   const pinCurrent = () => {
     const current = loadResearchTray();
     const next = pinResearchContext(current, { view: activeView, symbol: activeSymbol });
-    saveResearchTray(next);
-    setTrayCount(next.length);
-    setJustPinned(true);
-    window.setTimeout(() => setJustPinned(false), 900);
+    try {
+      saveResearchTray(next);
+      setTrayCount(next.length);
+      setPinError(false);
+      setJustPinned(true);
+      window.setTimeout(() => setJustPinned(false), 900);
+    } catch { setPinError(true); setJustPinned(false); }
   };
 
   return (
@@ -77,6 +81,7 @@ export default function ImmersiveDock({ activeView, activeSymbol, preferences, o
 
       <button className="lios-dock-action" onClick={() => onOpenSurface("workspace-composer")} title="Compose a multi-pane workspace from intelligence objects" aria-label="Workspace composer"><LayoutGrid className="h-3 w-3" /> <span className="hidden 2xl:inline">Compose</span></button>
       <button className={`lios-dock-action ${justPinned ? "text-amber-200" : ""}`} onClick={pinCurrent} title="Pin current analysis to Research Tray" aria-label={justPinned ? "Analysis pinned" : "Pin current analysis"}><Pin className="h-3 w-3" /> <span className="hidden lg:inline">{justPinned ? "Pinned" : "Pin"}</span></button>
+      {pinError && <span role="alert" className="max-w-48 text-sm text-amber-200">Could not save this pin. Check local storage and retry.</span>}
       <button className="lios-dock-action" onClick={() => onOpenSurface("research-tray")} title="Open Research Tray" aria-label={`Open research tray${trayCount > 0 ? `, ${trayCount} pinned items` : ""}`}><BookMarked className="h-3 w-3 text-amber-300/85" /> <span className="hidden lg:inline">Research</span>{trayCount > 0 && <span className="lios-pane-code rounded-full border border-border/60 bg-black/20 px-1.5 py-0.5 text-[6px] text-muted-foreground">{trayCount}</span>}</button>
       <button className="lios-dock-action" onClick={() => onOpenSurface("innovation-studio")} title="Storyline, compare, thesis, canvas and replay" aria-label="Innovation studio"><BrainCircuit className="h-3 w-3 text-fuchsia-300/85" /> <span className="hidden 2xl:inline">Studio</span></button>
       <button className="lios-dock-action" onClick={() => onOpenSurface("evidence")} title="Evidence and calculation receipts" aria-label="Evidence and calculation receipts"><Database className="h-3 w-3 text-cyan-300/80" /> <span className="hidden 2xl:inline">Evidence</span></button>

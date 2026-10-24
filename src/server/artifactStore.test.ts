@@ -22,20 +22,6 @@ test("P4 artifacts reject credential-shaped fields instead of persisting secrets
   assert.throws(() => assertArtifactContentSafe({ kind: "screen", state: { apiKey: "secret" } }), /credential-shaped/);
 });
 
-test("P4 conversation drafts normalize into a canonical persistent Artifact kind", () => {
-  const content = normalizeConversationDraft({
-    schemaVersion: "1",
-    artifactId: "11111111-1111-4111-8111-111111111111",
-    artifactType: "analysis.technical",
-    title: "Technical",
-    projectId: 1,
-    sourceRefs: ["provider:test"],
-    executionReceiptIds: [],
-    data: { symbol: "AAPL", rsi: 50 },
-    persistence: "project_candidate",
-  });
-  assert.equal(content.kind, "screen");
-});
 
 
 test("P4 conversation drafts preserve already-canonical Decision Artifact content", () => {

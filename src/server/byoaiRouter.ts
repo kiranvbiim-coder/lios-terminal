@@ -15,6 +15,7 @@
  */
 import crypto from "crypto";
 import { resolveCredential } from "./credentialVault";
+import { classifyLiOSAIProviderAccess, type LiOSAIProviderAccessContract } from "./openclawAiAccessMethod";
 
 // ─── Provider Registry ────────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ export interface AIProviderConfig {
   modelEnvKey?: string;
   /** Allows callers to provide model IDs not present in the curated models list. */
   allowCustomModel?: boolean;
+  /** Suggested loopback endpoint; never connected or scanned without user action. */
+  defaultEndpoint?: string;
 }
 export type AIProviderErrorCode =
   | "invalid_provider"
@@ -54,6 +57,7 @@ export type AIProviderErrorCode =
   | "not_configured"
   | "unavailable"
   | "rate_limited"
+  | "quota_exhausted"
   | "timeout"
   | "upstream_error"
   | "empty_completion"
@@ -202,6 +206,7 @@ export const AI_PROVIDERS: AIProviderConfig[] = [
     isLocal: true,
     modelEnvKey: "OLLAMA_MODEL",
     allowCustomModel: true,
+    defaultEndpoint: "http://127.0.0.1:11434",
   },
   {
     id: "lm_studio",
@@ -214,6 +219,7 @@ export const AI_PROVIDERS: AIProviderConfig[] = [
     isLocal: true,
     modelEnvKey: "LM_STUDIO_MODEL",
     allowCustomModel: true,
+    defaultEndpoint: "http://127.0.0.1:1234/v1",
   },
   {
     id: "azure_openai",
@@ -239,11 +245,15 @@ export interface ProviderAvailability {
 }
 
 export interface AIProviderSetupOption extends ProviderAvailability {
+  /** Executable access only. A consumer chat subscription is not an API credential. */
+  access: LiOSAIProviderAccessContract;
   /** Safe credential slot identifier; never a credential value. */
   credentialName: string;
   requiresExternalConfig: boolean;
   defaultModel: string;
   allowCustomModel: boolean;
+  defaultEndpoint?: string;
+  endpointEnvironmentManaged?: boolean;
 }
 
 function hasRequiredProviderConfig(provider: AIProviderConfig): boolean {
@@ -298,9 +308,14 @@ export function getProviderSetupOptions(): AIProviderSetupOption[] {
   return AI_PROVIDERS.map((provider) => ({
     ...availability.get(provider.id)!,
     credentialName: provider.vaultKey,
+    access: classifyLiOSAIProviderAccess(provider.id),
     requiresExternalConfig: (provider.requiredEnvKeys?.length ?? 0) > 0,
     defaultModel: provider.defaultModel,
     allowCustomModel: provider.allowCustomModel === true,
+    ...(provider.defaultEndpoint ? {
+      defaultEndpoint: provider.defaultEndpoint,
+      endpointEnvironmentManaged: Boolean(process.env[provider.envKey]?.trim()),
+    } : {}),
   }));
 }
 

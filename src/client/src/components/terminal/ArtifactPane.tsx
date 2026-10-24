@@ -1,3 +1,6 @@
+import { resolveArtifactPaneRequestedVersion } from "@/lib/artifactWorkbenchHandoff";
+import AsyncSurfaceNotice from "./AsyncSurfaceNotice";
+import { resolveAsyncSurfaceState } from "@/lib/asyncSurfaceState";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { JsonEditor } from "./ArtifactExpertView";
 import type { ReactNode } from "react";
@@ -5,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Archive, Download, FileBarChart, GitCompareArrows, GitFork, History, Link2, Maximize2, RefreshCw, RotateCcw, X } from "lucide-react";
 import {
   compareArtifactVersions, createArtifactReference, createArtifactVersion, decideArtifactProposal, forkArtifact,
-  getArtifactExportPlan, proposeArtifactChange, queryDataArtifact, setArtifactStatus, undoArtifact, useArtifact, useArtifactProposals,
+  getArtifactExportPlan, proposeArtifactChange, queryDataArtifact, setArtifactStatus, useArtifact, useArtifactProposals,
   useArtifactReferences, useArtifactVersions, useInvalidateArtifacts,
   restoreArtifactRevision,
   useOwnedArtifacts, proposeArtifactBranchMerge, type DataArtifactQueryResult,
@@ -13,8 +16,9 @@ import {
   type ArtifactDetail, type IntegratedModelArtifactRunResult,
 } from "@/lib/useArtifacts";
 import type { ArtifactContent, ArtifactExportPlan, ArtifactRefreshSpec, SpreadsheetCellDiff } from "@shared/artifactContracts";
+import { prepareValuationRecalculationPrompt } from "@shared/valuationRevisionPolicy";
 import type { ProjectSession } from "@/lib/useProjects";
-import { colIndexToLetters, parseCellRef } from "@/lib/spreadsheetEngine";
+import { colIndexToLetters } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
 import { semanticArtifactComparisonLabel } from "@/lib/artifactSemanticComparisonSummary";
 import { exportArtifactLocal } from "@/lib/artifactExport";
@@ -23,6 +27,7 @@ import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
 import ConversationTrustPanel from "./ConversationTrustPanel";
 import { compareArtifactVersionMetadata, metadataDeltaLabels } from "@/lib/p4ArtifactWorkspace";
+import { artifactHistoryAnchor, canRestoreArtifactHistory, exactArtifactHistoryComparison, exactArtifactHistoryDetail, sameArtifactHistoryAnchor, type ArtifactHistoryAnchor } from "@/lib/artifactHistorySafety";
 import { ArtifactEngineInputReviewSession, initialEngineInputReviewState, isIntegratedModelWorkbook } from "@/lib/artifactEngineInputReview";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -32,6 +37,7 @@ import { ArtifactProposalReview } from "./ArtifactProposalReview";
 import { artifactMaintenancePrompt } from "@/lib/artifactProposalReview";
 import { SpreadsheetCellSourceInspect } from "./SpreadsheetCellSourceInspect";
 import { spreadsheetDraftHasChanges } from "@/lib/artifactSpreadsheetDraft";
+import { checkedSpreadsheetCellRef, prepareSpreadsheetCellReview } from "@/lib/spreadsheetReviewBounds";
 import { openTerminalInspector } from "@/lib/terminalInspector";
 import ArtifactPortfolioMateriality from "./ArtifactPortfolioMateriality";
 import BacktestArtifactView from "./BacktestArtifactView";
@@ -39,6 +45,11 @@ import PortfolioArtifactView from "./PortfolioArtifactView";
 import ValuationArtifactView from "./ValuationArtifactView";
 import ArtifactViewerFallback from "./ArtifactViewerFallback";
 import type { ArtifactProvenanceFacts } from "./ArtifactTrustSummary";
+import TerminalScreenArtifact from "./TerminalScreenArtifact";
+import { clearNativeArtifactDraft, useNativeArtifactDraftOwner, useNativeArtifactDraftRecovery, useNativeDraftLifetime, type NativeArtifactDraftContext } from "@/lib/nativeArtifactDraftRecovery";
+import NativeDraftRecoveryNotice from "./NativeDraftRecoveryNotice";
+import { stableSerialize } from "@/lib/analyticalCore";
+import { reconcileTerminalDraft } from "@/lib/terminalDraftReconciliation";
 
 const UniverSpreadsheetEditor = lazy(() => import("./UniverSpreadsheetEditor"));
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
@@ -69,13 +80,13 @@ class ArtifactChartBoundary extends Component<{ children: ReactNode }, { failed:
 }
 const shortHash = (value: string) => `${value.slice(0, 10)}…${value.slice(-6)}`;
 
-function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean }) {
+function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyChange, disabled = false, recoveryContext }: { content: Extract<ArtifactContent, {kind:"research"|"report"}>; revision: number; onSave:(content:ArtifactContent)=>Promise<void>; onDirtyChange?:(dirty:boolean)=>void; disabled?:boolean; recoveryContext?: NativeArtifactDraftContext | null }) {
   const [content, setContent] = useState(incomingContent);
   const [question, setQuestion] = useState(incomingContent.kind === "research" ? incomingContent.question : "");
   const [sourceMode, setSourceMode] = useState<"connected_sources" | "only_refs">(incomingContent.kind === "research" ? incomingContent.sourcePolicy.mode : "connected_sources");
   const [allowedRefs, setAllowedRefs] = useState(incomingContent.kind === "research" ? incomingContent.sourcePolicy.allowedSourceRefs.join("\n") : "");
   const [baseRevision, setBaseRevision] = useState(revision);
-  const [baseline, setBaseline] = useState(() => JSON.stringify(incomingContent));
+  const [baseline, setBaseline] = useState(() => stableSerialize(incomingContent));
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pending, setPending] = useState(false);
@@ -87,32 +98,50 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
   const draftRef = useRef(content);
   const baselineRef = useRef(baseline);
   const pendingContent = useRef<string | null>(null);
+  const baselineRecovery = useRef(recoveryContext ?? null);
+  if (!baselineRecovery.current && revision === baseRevision) baselineRecovery.current = recoveryContext ?? null;
   const draftContent = useMemo(() => content.kind === "research" ? { ...content, question, sourcePolicy: { ...content.sourcePolicy, mode: sourceMode, allowedSourceRefs: [...new Set(allowedRefs.split(/\n+/).map(value => value.trim()).filter(Boolean))] } } : content, [content, question, sourceMode, allowedRefs]);
   draftRef.current = draftContent;
   baselineRef.current = baseline;
-  const dirty = advancedDirty || JSON.stringify(draftContent) !== baseline;
+  const dirty = advancedDirty || stableSerialize(draftContent) !== baseline;
+  const recovery = useNativeArtifactDraftRecovery(baselineRecovery.current, draftContent, dirty && !advancedDirty, draftContent, saved => {
+    setContent(saved);
+    if (saved.kind === "research") {
+      setQuestion(saved.question); setSourceMode(saved.sourcePolicy.mode);
+      setAllowedRefs(saved.sourcePolicy.allowedSourceRefs.join("\n"));
+    }
+    setAdvancedDirty(false);
+  });
   useEffect(() => { onDirtyChange?.(dirty || saving || pending); }, [dirty, saving, pending, onDirtyChange]);
   useEffect(() => { if (dirty && notice?.startsWith("Document revision saved.")) setNotice(null); }, [dirty, notice]);
   useEffect(() => {
-    const incoming = JSON.stringify(incomingContent);
+    const incoming = stableSerialize(incomingContent);
     if (revision === baseRevision && incoming === baselineRef.current) return;
-    if (incoming === pendingContent.current || (!advancedDirty && JSON.stringify(draftRef.current) === baselineRef.current && pendingContent.current === null)) {
-      setContent(incomingContent); setBaseline(incoming); setBaseRevision(revision);
-      if (incomingContent.kind === "research") { setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode); setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n")); }
-      saveRef.current = onSave; pendingContent.current = null;
-      setPending(false); setConflict(false);
-    } else {
-      setConflict(true);
+    const transition = reconcileTerminalDraft(incomingContent, draftRef.current, baselineRef.current, pendingContent.current);
+    if (transition.conflict || (advancedDirty && !transition.acknowledged)) { setConflict(true); return; }
+    if (transition.replaceDraft) {
+      setContent(incomingContent);
+      if (incomingContent.kind === "research") {
+        setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode);
+        setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));
+      }
     }
+    setBaseline(transition.baseline); setBaseRevision(revision);
+    baselineRecovery.current = recoveryContext ?? null;
+    saveRef.current = onSave; pendingContent.current = null;
+    setPending(false); setConflict(false);
   }, [incomingContent, revision, baseRevision, onSave, advancedDirty]);
   const saveDocument = async (next = draftRef.current) => {
-    if (saving || pending || conflict || pendingContent.current !== null) throw new Error("Document saving is unavailable while saving, refreshing, or resolving a revision conflict.");
+    if (disabled || recovery.blocked || saving || pending || conflict || pendingContent.current !== null) throw new Error("Document saving is unavailable while read-only, saving, refreshing, or resolving a revision conflict.");
     setSaving(true); setNotice(null);
-    const submitted = JSON.stringify(next);
+    const submitted = stableSerialize(next);
     pendingContent.current = submitted;
     try {
       await saveRef.current(next);
-      setContent(next); setBaseline(submitted); setPending(pendingContent.current !== null);
+      // The canonical response can arrive before native cleanup finishes.
+      // Do not overwrite a baseline/draft already reconciled by that response.
+      if (pendingContent.current !== null) setBaseline(submitted);
+      setPending(pendingContent.current !== null);
       setNotice("Document revision saved. Canonical revision refresh requested.");
     } catch (cause) {
       pendingContent.current = null;
@@ -120,13 +149,30 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       throw cause;
     } finally { setSaving(false); }
   };
+  const reloadDocument = async () => {
+    setSaving(true);
+    let cleanupNotice: string | null = null;
+    try { await recovery.clear(); }
+    catch { cleanupNotice = "Saved revision reloaded, but encrypted checkpoint cleanup needs review."; }
+    baselineRecovery.current = recoveryContext ?? null;
+    setContent(incomingContent);
+    if (incomingContent.kind === "research") {
+      setQuestion(incomingContent.question); setSourceMode(incomingContent.sourcePolicy.mode);
+      setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));
+    }
+    setBaseline(stableSerialize(incomingContent)); setBaseRevision(revision); saveRef.current = onSave;
+    pendingContent.current = null; setConflict(false); setPending(false); setNotice(cleanupNotice);
+    setRichError(null); setAdvancedDirty(false); setSaving(false);
+  };
   const fallback = <div data-testid="builtin-artifact-document">
     <p role="alert" className="mb-2 text-sm text-amber-200">{richError ?? "Built-in text editor active. Recorded blocks and metadata, including unsaved rich edits, are retained."}</p>
-    <div className="space-y-3">{content.blocks.map((block,index)=><label key={block.id} className="block"><span className="mb-1 block font-terminal text-[12px] text-muted-foreground">{block.type} · {block.id}</span><textarea aria-label={`Document block ${index+1}`} disabled={saving || pending} value={block.text} onChange={(event)=>{const text=event.target.value;setContent(current=>({...current,blocks:current.blocks.map((item,i)=>i===index?{...item,text}:item)}));}} className="min-h-[100px] w-full rounded-lg border border-border/50 bg-black/15 p-4 font-ui text-[14px] leading-6 text-foreground outline-none disabled:opacity-50"/></label>)}</div>
+    <div className="space-y-3">{content.blocks.map((block,index)=><label key={block.id} className="block"><span className="mb-1 block font-terminal text-[12px] text-muted-foreground">{block.type} · {block.id}</span><textarea aria-label={`Document block ${index+1}`} disabled={disabled || saving || pending || conflict} value={block.text} onChange={(event)=>{const text=event.target.value;setContent(current=>({...current,blocks:current.blocks.map((item,i)=>i===index?{...item,text}:item)}));}} className="min-h-[100px] w-full rounded-lg border border-border/50 bg-black/15 p-4 font-ui text-[14px] leading-6 text-foreground outline-none disabled:opacity-50"/></label>)}</div>
   </div>;
   return <div>
-    {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={()=>{setContent(incomingContent);if(incomingContent.kind==="research"){setQuestion(incomingContent.question);setSourceMode(incomingContent.sourcePolicy.mode);setAllowedRefs(incomingContent.sourcePolicy.allowedSourceRefs.join("\n"));}setBaseline(JSON.stringify(incomingContent));setBaseRevision(revision);saveRef.current=onSave;pendingContent.current=null;setConflict(false);setPending(false);setNotice(null);setRichError(null);setAdvancedDirty(false);}}>Discard local changes and reload revision</button></div>}
-    <fieldset disabled={advancedDirty} className="min-w-0">
+    <NativeDraftRecoveryNotice recovery={recovery} dirty={dirty}/>
+    {advancedDirty && <p role="status" className="mb-2 text-sm text-amber-200">Advanced JSON edits are not included in local crash checkpoints. Save or reset them before leaving.</p>}
+    {conflict && <div role="alert" data-testid="document-revision-conflict" className="mb-3 rounded border border-amber-300/40 p-3 text-sm text-amber-200">A newer canonical revision arrived. Your local draft was not overwritten. Saving is blocked until you explicitly reload.<button type="button" disabled={saving} className="ml-2 underline" onClick={() => void reloadDocument()}>Discard local changes and reload revision</button></div>}
+    <fieldset disabled={disabled || advancedDirty || recovery.blocked} className="min-w-0">
     {content.kind==="research"&&<div className="mb-3 space-y-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.015] p-3">
       <div className="flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-cyan-200">RESEARCH PLAN · {content.plan.status.toUpperCase()}</span><span className="font-terminal text-[12px] text-muted-foreground">{content.plan.steps.length} STEPS · {content.evidence.length} EVIDENCE · {content.contradictions.filter((x)=>x.status==="open").length} OPEN CONTRADICTIONS · {content.executionTrail.length} TRAIL EVENTS</span></div>
       <input aria-label="Research question" disabled={saving || pending} value={question} onChange={(e)=>setQuestion(e.target.value)} placeholder="Research question" className="w-full rounded border border-border/50 bg-black/20 px-2 py-1.5 font-ui text-[14px] outline-none"/>
@@ -138,28 +184,37 @@ function DocumentEditor({ content: incomingContent, revision, onSave, onDirtyCha
       {!!content.evidence.length&&<div className="space-y-1">{content.evidence.slice(0,6).map((item)=><div key={item.id} className="rounded border border-border/35 px-2 py-1.5"><div className="flex gap-2"><span className="font-terminal text-[12px] text-emerald-300">{item.sourceType.toUpperCase()}</span><span className="truncate font-ui text-[13px]">{item.title}</span></div>{item.snippet&&<div className="mt-1 line-clamp-2 font-ui text-[13px] text-muted-foreground">{item.snippet}</div>}</div>)}</div>}
       {!!content.contradictions.filter((item)=>item.status==="open").length&&<div className="space-y-1">{content.contradictions.filter((item)=>item.status==="open").slice(0,5).map((item)=><div key={item.id} className="rounded border border-red-300/15 px-2 py-1.5 font-ui text-[13px] text-red-200">Contradiction · {item.summary}</div>)}</div>}
     </div>}
-    <div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-muted-foreground">LIVE DOCUMENT · BASE V{baseRevision}</span><button type="button" disabled={saving || pending} onClick={()=>{setRichError(null);setBuiltin(current=>!current);}} className="ml-auto rounded border border-border/50 px-2 py-1 text-[13px]">{builtin ? "Open rich document editor" : "Use built-in text editor"}</button></div>
-    {builtin || richError ? fallback : <RichDocumentBoundary key={baseRevision} fallback={<div><p role="alert" className="mb-2 text-sm text-amber-200">Rich renderer unavailable. Your canonical draft is retained in the built-in editor.</p>{fallback}</div>}><Suspense fallback={<div><p role="status">Loading rich editor. The built-in editor remains available.</p><button type="button" onClick={()=>setBuiltin(true)} className="underline">Use built-in text editor</button></div>}><RichArtifactDocumentEditor content={content} disabled={disabled || saving || pending || advancedDirty} onChange={setContent} onError={setRichError}/></Suspense></RichDocumentBoundary>}
-    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={!dirty || saving || pending || conflict || advancedDirty} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
+    <div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-terminal text-[12px] text-muted-foreground">LIVE DOCUMENT · BASE V{baseRevision}</span><button type="button" disabled={disabled || saving || pending || conflict} onClick={()=>{setRichError(null);setBuiltin(current=>!current);}} className="ml-auto rounded border border-border/50 px-2 py-1 text-[13px]">{builtin ? "Open rich document editor" : "Use built-in text editor"}</button></div>
+    {builtin || richError ? fallback : <RichDocumentBoundary key={baseRevision} fallback={<div><p role="alert" className="mb-2 text-sm text-amber-200">Rich renderer unavailable. Your canonical draft is retained in the built-in editor.</p>{fallback}</div>}><Suspense fallback={<div><p role="status">Loading rich editor. The built-in editor remains available.</p><button type="button" onClick={()=>setBuiltin(true)} className="underline">Use built-in text editor</button></div>}><RichArtifactDocumentEditor content={content} disabled={disabled || saving || pending || advancedDirty || recovery.blocked} onChange={setContent} onError={setRichError}/></Suspense></RichDocumentBoundary>}
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-2"><span role="status" aria-live="polite" data-testid="document-save-status" className="mr-auto text-sm text-muted-foreground">{notice ?? (advancedDirty ? "Unsaved advanced JSON changes · save or reset in the advanced editor" : dirty ? "Unsaved local changes" : "No unsaved document changes")}</span><button type="button" data-testid="save-document-revision" disabled={disabled || !dirty || saving || pending || conflict || advancedDirty || recovery.blocked} onClick={()=>void saveDocument().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">{saving ? "Saving document revision…" : pending ? "Waiting for canonical revision…" : "Save document revision"}</button></div>
     </fieldset>
-    {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={saving || pending || conflict} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
+    {content.kind==="research"&&<details className="mt-3 rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED RESEARCH STATE · PLAN / EVIDENCE / CONTRADICTIONS / EXECUTION TRAIL</summary><div className="mt-2"><JsonEditor key={baseRevision} content={draftContent} disabled={disabled || saving || pending || conflict || recovery.blocked} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="research")throw new Error("The research document kind cannot be changed here.");setContent(next);setQuestion(next.question);setSourceMode(next.sourcePolicy.mode);setAllowedRefs(next.sourcePolicy.allowedSourceRefs.join("\n"));await saveDocument(next);}}/></div></details>}
   </div>;
 }
-function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function SpreadsheetEditor(props: {content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   if (props.content.rendererPreference === "univer") return <Suspense fallback={<p role="status">Loading spreadsheet editor…</p>}><UniverSpreadsheetEditor {...props} /></Suspense>;
   return <BuiltinSpreadsheetEditor {...props}/>;
 }
-function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string}) {
+function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled=false,revisionKey,recoveryContext}:{content:Extract<ArtifactContent,{kind:"spreadsheet"}>;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean;revisionKey?:string;recoveryContext?: NativeArtifactDraftContext | null}) {
   const [grid, setGrid] = useState(() => artifactSheetToGrid(content));
   const [draftContent, setDraftContent] = useState(content);
   const [tick, setTick] = useState(0);
   const [selectedRef, setSelectedRef] = useState("B4");
   const [ref, setRef] = useState("B4");
   const [value, setValue] = useState("");
-  const baseline = useRef({ content, revisionKey });
+  const baseline = useRef({ content, revisionKey, recoveryContext });
   const draft = useRef({ content: draftContent, grid });
   draft.current = { content: draftContent, grid };
   const [conflict, setConflict] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const checkpoint = gridToArtifactSheet(draftContent, grid);
+  const isDirty = spreadsheetDraftHasChanges(baseline.current.content, checkpoint);
+  const recovery = useNativeArtifactDraftRecovery(baseline.current.recoveryContext ?? null, checkpoint, isDirty, tick, saved => {
+    setDraftContent(saved); setGrid(artifactSheetToGrid(saved)); setConflict(false);
+    onDirtyChange?.(true); setTick(current => current + 1);
+  });
   useEffect(() => {
     const local = gridToArtifactSheet(draft.current.content, draft.current.grid);
     const dirty = spreadsheetDraftHasChanges(baseline.current.content, local);
@@ -168,7 +223,7 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     if (dirty && spreadsheetDraftHasChanges(content, local)) {
       setConflict(true); onDirtyChange?.(true); return;
     }
-    baseline.current = { content, revisionKey };
+    baseline.current = { content, revisionKey, recoveryContext };
     setDraftContent(content); setGrid(artifactSheetToGrid(content)); setTick(v => v + 1);
     setConflict(false); onDirtyChange?.(false);
   }, [content, revisionKey, onDirtyChange]);
@@ -177,7 +232,6 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     onDirtyChange?.(dirty || conflict);
   };
   const sheet = draftContent.sheets.find(s => s.id === draftContent.activeSheetId)!;
-  const canonicalSheet = content.sheets.find(s => s.id === sheet.id);
   const selectSheet = (sheetId: string) => {
     if (disabled || conflict || sheetId === sheet.id) return;
     // Flush the active renderer into the same P4 draft before projecting another worksheet.
@@ -188,16 +242,41 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     setTick(v => v + 1);
   };
   const rows = Math.min(sheet.rowCount, 30), cols = Math.min(sheet.columnCount, 12);
-  const selectedCoordinates = /^[A-Z]{1,4}[1-9][0-9]{0,6}$/.test(selectedRef) ? parseCellRef(selectedRef) : null;
-  const selectedInBounds = selectedCoordinates && selectedCoordinates.row < sheet.rowCount && selectedCoordinates.col < sheet.columnCount;
-  const selectedCell = { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) };
+  const selectedInBounds = checkedSpreadsheetCellRef(sheet, selectedRef) !== null;
+  // Invalid and out-of-bounds user-input refs must never reach the grid
+  // engine: returning an explicit unavailable inspector is safer than a crash.
+  const selectedCell = selectedInBounds
+    ? { ...sheet.cells[selectedRef], raw: grid.getCell(selectedRef).raw, format: grid.getFormat(selectedRef) }
+    : null;
+  const reviewRef = checkedSpreadsheetCellRef(sheet, ref);
+  const persist = async (next: ArtifactContent) => {
+    if (disabled || conflict || recovery.blocked || saving) return;
+    setSaving(true); setSaveError(null);
+    try { await onSave(next); }
+    catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Spreadsheet revision could not be saved. Your local draft was retained."); }
+    finally { setSaving(false); }
+  };
+  const propose = async () => {
+    if (disabled || conflict || recovery.blocked || saving) return;
+    setSaving(true); setSaveError(null);
+    try { await onDraft(prepareSpreadsheetCellReview(baseline.current.content, sheet.id, ref, value)); }
+    catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Spreadsheet review diff could not be created."); }
+    finally { setSaving(false); }
+  };
   return <div>
-    {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => { baseline.current = { content, revisionKey }; setDraftContent(content); setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1); }} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
-    <fieldset disabled={disabled || conflict} className="min-w-0">
+    <NativeDraftRecoveryNotice recovery={recovery} dirty={isDirty}/>
+    {cleanupNotice && <p role="status" className="mb-2 text-sm text-amber-200">{cleanupNotice}</p>}
+    {conflict && <p role="alert" className="mb-3 text-sm text-amber-200">A different saved revision arrived. Your local worksheet draft is retained; saving and model maintenance are blocked.<button type="button" disabled={disabled} onClick={() => void (async () => {
+      try { await recovery.clear(); }
+      catch { setCleanupNotice("Saved revision reloaded, but encrypted checkpoint cleanup needs review."); }
+      baseline.current = { content, revisionKey, recoveryContext }; setDraftContent(content);
+      setGrid(artifactSheetToGrid(content)); setConflict(false); onDirtyChange?.(false); setTick(v => v + 1);
+    })()} className="ml-2 underline disabled:opacity-40">Discard local draft and reload saved revision</button></p>}
+    <fieldset disabled={disabled || saving || conflict || recovery.blocked} className="min-w-0">
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <span className="font-terminal text-[12px] text-muted-foreground">SPREADSHEET · BASIC EDITOR</span>
       <label className="text-[13px] text-muted-foreground">Worksheet <select aria-label="Spreadsheet worksheet" value={sheet.id} onChange={e => selectSheet(e.target.value)} className="ml-1 rounded border border-border/50 bg-[#090909] px-2 py-1">{draftContent.sheets.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
-      <button onClick={() => void onSave({...gridToArtifactSheet(draftContent, grid), rendererPreference: "univer"})} className="ml-auto rounded border border-border px-3 py-1.5 font-ui text-[13px]">Open advanced spreadsheet editor</button>
+      <button onClick={() => void persist({...gridToArtifactSheet(draftContent, grid), rendererPreference: "univer"})} className="ml-auto rounded border border-border px-3 py-1.5 font-ui text-[13px]">Open advanced spreadsheet editor</button>
     </div>
     <div className="max-h-[420px] overflow-auto rounded-lg border border-border/60" data-render-tick={tick}>
       <table className="border-collapse"><thead><tr><th className="sticky left-0 top-0 z-20 bg-[#0a0a0a]"/>{Array.from({length:cols},(_,c) => <th key={c} className="sticky top-0 border border-border/40 bg-[#0a0a0a] px-2 py-1 font-terminal text-[12px] text-muted-foreground">{colIndexToLetters(c)}</th>)}</tr></thead>
@@ -210,14 +289,16 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <label className="text-[13px] text-muted-foreground">Selected cell <input aria-label="Selected cell reference" value={selectedRef} onChange={e => setSelectedRef(e.target.value.trim().toUpperCase())} className="ml-1 w-20 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal"/></label>
-      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
+      <label className="text-[13px] text-muted-foreground">Number format <input aria-label="Selected cell number format" disabled={!selectedInBounds} value={selectedCell?.format ?? ""} maxLength={200} onChange={e => { grid.setFormat(selectedRef, e.target.value || null); reportDirty(); setTick(v => v + 1); }} className="ml-1 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal disabled:opacity-40"/></label>
     </div>
-    {selectedInBounds ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
+    {selectedInBounds && selectedCell ? <SpreadsheetCellSourceInspect sheetName={sheet.name} cellRef={selectedRef} cell={selectedCell}/> : <p className="mt-2 text-[13px] text-muted-foreground">Select a cell reference within this worksheet to inspect its recorded source.</p>}
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <button onClick={() => void onSave(gridToArtifactSheet(draftContent,grid))} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save spreadsheet revision</button>
-      <div className="ml-auto flex gap-1"><input aria-label="Proposed cell reference" value={ref} onChange={e => setRef(e.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><input aria-label="Proposed cell value" value={value} onChange={e => setValue(e.target.value)} placeholder="proposed raw" className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><button onClick={() => void onDraft({sheetId:sheet.id,ref,before:canonicalSheet?.cells[ref] ?? null,after:{...canonicalSheet?.cells[ref],raw:value,format:grid.getFormat(ref)}})} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Create review diff</button></div>
+      <button disabled={!isDirty} onClick={() => { if (isDirty) void persist(gridToArtifactSheet(draftContent,grid)); }} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Save spreadsheet revision</button>
+      <div className="ml-auto flex gap-1"><input aria-label="Proposed cell reference" aria-invalid={!reviewRef} value={ref} onChange={e => setRef(e.target.value.toUpperCase())} className="w-16 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><input aria-label="Proposed cell value" value={value} onChange={e => setValue(e.target.value)} placeholder="proposed raw" className="w-32 rounded border border-border/50 bg-black/20 px-2 py-1 font-terminal text-[13px]"/><button disabled={!reviewRef} onClick={() => void propose()} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Create review diff</button></div>
     </div>
     </fieldset>
+    {saveError && <p role="alert" data-testid="spreadsheet-save-error" className="mt-2 text-[13px] text-red-300">{saveError}</p>}
+    {!reviewRef && <p role="status" className="mt-1 font-ui text-[12px] text-amber-200">Enter a cell within the saved worksheet bounds to create a review diff.</p>}
   </div>;
 }
 function ThesisEditor({content,onSave,onRefresh,onPostmortem}:{content:Extract<ArtifactContent,{kind:"thesis"}>;onSave:(c:ArtifactContent)=>Promise<void>;onRefresh:()=>Promise<void>;onPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>}) {
@@ -278,17 +359,32 @@ function StrategyEditor({content,onSave}:{content:Extract<ArtifactContent,{kind:
   useEffect(()=>setSource(content.source),[content.source]);
   return <div><div className="mb-2 font-terminal text-[12px] text-muted-foreground">STRATEGY STUDIO · {content.language.toUpperCase()} · {content.validation.status.toUpperCase()}</div><textarea value={source} onChange={(e)=>setSource(e.target.value)} className="min-h-[320px] w-full rounded-lg border border-border/50 bg-black/20 p-3 font-terminal text-[14px] leading-5 text-foreground outline-none"/><div className="mt-2 flex justify-end"><button onClick={()=>void onSave({...content,source,validation:{status:"unvalidated",errors:[]}})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save strategy revision</button></div></div>;
 }
-function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,onOpenExport}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;onOpenExport?:()=>void}) {
-  if(content.kind==="spreadsheet") return <SpreadsheetEditor content={content} revisionKey={`${revision}:${contentHash}`} onSave={onSave} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="research"||content.kind==="report") return <DocumentEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
+function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,artifactSourceRefs,onOpenExport,onAsk,owner,onNativeVersion}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;artifactSourceRefs?:readonly string[];onOpenExport?:()=>void;onAsk:(id:string,title:string,stagedPrompt?:string)=>void;owner:{projectId:number|null;owningChatId:number|null};onNativeVersion:(version:number)=>void}) {
+  const recoveryOwner = useNativeArtifactDraftOwner();
+  const recoveryLifetime = useNativeDraftLifetime(`${recoveryOwner ?? ""}\0${artifactId}`);
+  const [recoveryCleanupWarning, setRecoveryCleanupWarning] = useState<string | null>(null);
+  const recoveryContext = recoveryOwner ? { owner: recoveryOwner, artifactId, baseVersion: revision, contentHash } : null;
+  const saveWithRecovery = async (next: ArtifactContent) => {
+    const lease = recoveryLifetime.current;
+    await onSave(next);
+    try { if (recoveryContext) await clearNativeArtifactDraft(recoveryContext, lease); }
+    catch { if (lease.active) setRecoveryCleanupWarning("Revision saved. Encrypted draft cleanup failed; review the checkpoint when reopening."); }
+  };
+  if(content.kind==="screen" && content.state.terminal) return <TerminalScreenArtifact content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onAsk={onAsk} target={{artifactId,version:revision,contentHash,...owner}} onNativeVersion={onNativeVersion}/>;
+  if(content.kind==="spreadsheet" || content.kind==="research" || content.kind==="report") return <>
+    {recoveryCleanupWarning && <p role="status" className="mb-2 text-sm text-amber-200">{recoveryCleanupWarning}</p>}
+    {content.kind==="spreadsheet"
+      ? <SpreadsheetEditor content={content} recoveryContext={recoveryContext} revisionKey={`${revision}:${contentHash}`} onSave={saveWithRecovery} onDraft={onDraft} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>
+      : <DocumentEditor content={content} recoveryContext={recoveryContext} revision={revision} onSave={saveWithRecovery} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>}
+  </>;
+  if(content.kind==="chart") return <ArtifactChartBoundary><Suspense fallback={<p role="status">Loading chart renderer…</p>}><ArtifactChart content={content} artifactSourceRefs={artifactSourceRefs} onSave={onSave}/></Suspense></ArtifactChartBoundary>;
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
   if(content.kind==="backtest") return <BacktestArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   if(content.kind==="thesis") return <ThesisEditor content={content} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem}/>;
   if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
   if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
-  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onRequestRecalculation={(waccPct) => onAsk(artifactId, `Recalculate valuation · ${content.symbol || content.modelId}`, prepareValuationRecalculationPrompt(content, { artifactId, version: revision, contentHash }, waccPct))}/>;
   if(content.kind==="portfolio") return <PortfolioArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   return <ArtifactViewerFallback kind={content.kind} content={content} onSave={onSave} onOpenExport={onOpenExport} facts={content.kind==="screen"?[{label:"Screen",value:content.view},...(content.symbol?[{label:"Symbol",value:content.symbol}]:[])]:[]}/>;
 }
@@ -467,7 +563,7 @@ interface ArtifactPaneProps {
   artifactId: string;
   version?: number | null;
   onVersionChange?: (version: number | null) => void;
-  onDisplayedVersionChange?: (version: number, artifactId: string) => void;
+  onDisplayedVersionChange?: (version: number, artifactId: string, requestedVersion: number | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   projectId: number | null;
   owningChatId?: number | null;
@@ -533,7 +629,12 @@ function ArtifactReportRequest({ detail, artifactId, projectId, onRerun }: {
 
 export function ArtifactPane(props: ArtifactPaneProps) {
   const [selection, setSelection] = useState<{ artifactId: string; version: number } | null>(null);
-  const selectedVersion = selection?.artifactId === props.artifactId ? selection.version : props.version;
+  const controlledRevision = useRef({ artifactId: props.artifactId, version: props.version });
+  if (controlledRevision.current.artifactId !== props.artifactId || controlledRevision.current.version !== props.version) {
+    controlledRevision.current = { artifactId: props.artifactId, version: props.version };
+    if (selection !== null) setSelection(null);
+  }
+  const selectedVersion = resolveArtifactPaneRequestedVersion(props.artifactId, props.version, selection);
   return <ArtifactPaneWorkspace {...props} version={selectedVersion} onVersionChange={(version) => {
     setSelection(version === null ? null : { artifactId: props.artifactId, version });
     props.onVersionChange?.(version);
@@ -560,14 +661,19 @@ function ArtifactPaneWorkspace({
 }: ArtifactPaneProps & { onEngineOutput: (result: IntegratedModelArtifactRunResult) => void }) {
   const detail=useArtifact(artifactId,version),versions=useArtifactVersions(artifactId),proposals=useArtifactProposals(artifactId),refs=useArtifactReferences(artifactId),invalidate=useInvalidateArtifacts();
   const invalidateProjectIntelligence=useInvalidateProjectIntelligence();
-  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? detail.data?.artifact.owningChatId });
+  const projectArtifacts=useOwnedArtifacts({ projectId, owningChatId: owningChatId ?? (detail.data?.artifact.id === artifactId ? detail.data.artifact.owningChatId : null) });
   const [mergeBranchId,setMergeBranchId]=useState("");
   const [mergeConflicts,setMergeConflicts]=useState<string[]>([]);
   const [mergePreviews,setMergePreviews]=useState<Record<string,{target:string;branch:string;truncated:boolean}>>({});
   const [mergeResolutions,setMergeResolutions]=useState<Record<string,"target"|"branch">>({});
   const [mergeNotice,setMergeNotice]=useState<string|null>(null);
   const automation=useP9Workflows(projectId),invalidateAutomation=useInvalidateP9Automation();
-  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<string|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<{text:string;anchor:ArtifactHistoryAnchor;from:number}|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
+  const [restoreIntent, setRestoreIntent] = useState<{ anchor: ArtifactHistoryAnchor; targetVersion: number; targetHash: string } | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const historyInFlight = useRef(false);
+  const historyRequest = useRef(0);
+  const historyCurrent = useRef<{ anchor: ArtifactHistoryAnchor; left: number | null } | null>(null);
   const [exportPlan, setExportPlan] = useState<ArtifactExportPlan | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ArtifactExportPlan["formats"][number] | null>(null);
@@ -587,11 +693,12 @@ function ArtifactPaneWorkspace({
   const [inspectorTab, setInspectorTab] = useState<"artifact" | "evidence" | "history">("artifact");
   const inspectorId = useId();
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
-  const data=detail.data; useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
+  const data = exactArtifactHistoryDetail(detail.data, artifactId, version, projectId, owningChatId, detail.isPlaceholderData || detail.isError);
+  useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
-  useEffect(() => { if (data) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version]);
+  useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
     setExportPlan(null);
@@ -605,7 +712,96 @@ function ArtifactPaneWorkspace({
     return () => { active = false; };
   }, [artifactId, data?.version.version, data?.version.contentHash, exportOpen]);
   const run=async(fn:()=>Promise<void>)=>{setError(null);try{await fn()}catch(e){setError(e instanceof Error?e.message:"Artifact action failed.")}};
-  if(!data)return <div className="rounded-xl border border-border/60 p-5 font-ui text-[14px] text-muted-foreground">{detail.isLoading?"Loading Artifact…":"Artifact unavailable."}</div>;
+  if (!data) {
+    const state = resolveAsyncSurfaceState({ hasData: false, isPending: detail.isPending, isError: detail.isError, error: detail.error });
+    return <AsyncSurfaceNotice surface="artifact" state={state === "ready" ? "missing" : state} onRetry={() => void detail.refetch()} retrying={detail.isFetching} onLeave={onClose} leaveLabel="Close Artifact" />;
+  }
+  const anchor = artifactHistoryAnchor(data);
+  historyCurrent.current = { anchor, left };
+  const historicalVersions = (versions.data ?? []).filter(entry => entry.artifactId === artifactId);
+  const leftRecord = historicalVersions.find(entry => entry.version === left);
+  const displayedRecord = historicalVersions.find(entry => entry.version === anchor.displayedVersion);
+  const hasUnsavedArtifactEdits = spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying;
+  const canRestore = canRestoreArtifactHistory(anchor, leftRecord, hasUnsavedArtifactEdits, historyBusy || versions.isFetching || historyInFlight.current);
+  const activeRestoreIntent = restoreIntent && leftRecord
+    && restoreIntent.targetVersion === left
+    && restoreIntent.targetHash === leftRecord.contentHash
+    && sameArtifactHistoryAnchor(restoreIntent.anchor, anchor) ? restoreIntent : null;
+  const compareSelectedHistory = async () => {
+    if (historyInFlight.current || !leftRecord || !displayedRecord || leftRecord.version === displayedRecord.version) return;
+    if (displayedRecord.contentHash !== anchor.contentHash) {
+      setError("The version catalog does not match the displayed Artifact. Refresh history before comparing.");
+      return;
+    }
+    const captured = { ...anchor };
+    const from = leftRecord;
+    const to = displayedRecord;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setComparison(null); setError(null);
+    try {
+      const result = await compareArtifactVersions(artifactId, from.version, to.version);
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== from.version
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured)) return;
+      if (!exactArtifactHistoryComparison(result, captured, from, to)) {
+        throw new Error("The comparison response does not match the selected saved revisions or content hashes. Nothing was applied.");
+      }
+      const metadataLabels = metadataDeltaLabels(compareArtifactVersionMetadata(from, to));
+      const contentSummary = result.changed
+        ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
+        : "Content unchanged";
+      const semanticSummary = semanticArtifactComparisonLabel(result.semantic);
+      const summary = metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
+      setComparison({ text: `Compared exact v${from.version} with v${to.version} · ${semanticSummary ? `${summary} · ${semanticSummary}` : summary}`, anchor: captured, from: from.version });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Exact saved Artifact comparison failed.");
+    } finally {
+      historyInFlight.current = false; if (mounted.current) setHistoryBusy(false);
+    }
+  };
+  const prepareRestoreHistory = () => {
+    if (!canRestore || !leftRecord) {
+      setError("Open the current Artifact head, finish unsaved edits and select an earlier recorded revision before restoring.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setError(null);
+    setRestoreIntent({ anchor: { ...anchor }, targetVersion: leftRecord.version, targetHash: leftRecord.contentHash });
+  };
+  const confirmRestoreHistory = async () => {
+    if (!activeRestoreIntent || !canRestore || !leftRecord || historyInFlight.current) return;
+    const captured = activeRestoreIntent;
+    const requestId = ++historyRequest.current;
+    historyInFlight.current = true; setHistoryBusy(true); setRestoreIntent(null); setError(null);
+    try {
+      // P4 enforces optimistic concurrency against this exact head version.
+      // Restoring creates a NEW immutable revision; it never edits history.
+      const saved = await restoreArtifactRevision(artifactId, captured.anchor.headVersion, captured.targetVersion);
+      invalidate(projectId, artifactId);
+      if (saved.artifactId !== captured.anchor.artifactId || saved.version !== captured.anchor.headVersion + 1) {
+        throw new Error("Restore response has an unexpected Artifact ID or revision. Refresh history to verify the saved outcome.");
+      }
+      if (!mounted.current || historyRequest.current !== requestId
+        || !historyCurrent.current || historyCurrent.current.left !== captured.targetVersion
+        || !sameArtifactHistoryAnchor(historyCurrent.current.anchor, captured.anchor)) return;
+      onVersionChange?.(saved.version);
+      setComparison({ text: `Restored v${captured.targetVersion} as new v${saved.version}. Original saved revisions remain unchanged.`, anchor: captured.anchor, from: captured.targetVersion });
+    } catch (cause) {
+      if (mounted.current && historyRequest.current === requestId) setError(cause instanceof Error ? cause.message : "Restore failed; no successful new revision was confirmed. Refresh and retry.");
+    } finally {
+      historyInFlight.current = false;
+      if (mounted.current) setHistoryBusy(false);
+    }
+  };
+  const changeDisplayedRevision = (next: number | null) => {
+    if (hasUnsavedArtifactEdits || historyInFlight.current) {
+      setError("Save or reset unsaved Artifact edits before switching revisions; your draft has not been discarded.");
+      return;
+    }
+    historyRequest.current += 1;
+    setComparison(null); setRestoreIntent(null); setError(null);
+    onVersionChange?.(next);
+  };
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
@@ -687,7 +883,7 @@ function ArtifactPaneWorkspace({
       }
       return;
     }
-    if(next.kind==="research" || next.kind==="report" || next.kind==="decision") {
+    if(next.kind==="research" || next.kind==="report" || next.kind==="decision" || next.kind==="screen") {
       setError(null);
       try {
         if(data.version.version!==data.artifact.headVersion) throw new Error("This Artifact is not the current revision. Reload before saving.");
@@ -718,7 +914,16 @@ function ArtifactPaneWorkspace({
   const draft=async(d:SpreadsheetCellDiff)=>run(async()=>{await proposeArtifactChange(artifactId,{baseVersion:data.artifact.headVersion,type:"spreadsheet_ai_diff",summary:`Conversation-ready draft ${d.sheetId}!${d.ref}`,diffs:[d],actorType:"conversation"});invalidate(projectId,artifactId)});
   const refreshThesis=async()=>run(async()=>{if(projectId===null)throw new Error("Project evidence refresh requires a Project.");await refreshThesisArtifact(projectId,artifactId);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
   const thesisPostmortem=async(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>run(async()=>{if(projectId===null)throw new Error("Project thesis postmortems require a Project.");await appendThesisPostmortem(projectId,artifactId,input);invalidate(projectId,artifactId);invalidateProjectIntelligence(projectId)});
-  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{const saved=await undoArtifact(artifactId);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} disabled={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying || data.artifact.headVersion <= 1 || data.version.version !== data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Undo by new version"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
+  return <div className="lios-artifact-frame rounded-xl border border-amber-300/15 bg-[#080808]"><div className="flex flex-wrap items-center gap-2 border-b border-border/60 p-3"><FileBarChart className="h-4 w-4 text-amber-300"/><div className="min-w-0 flex-1"><div className="truncate font-ui text-[10px] font-semibold">{data.artifact.title}</div><div className="mt-0.5 font-terminal text-[12px] text-muted-foreground">{data.artifact.kind.toUpperCase()} · V{data.version.version}</div></div><button onClick={()=>onAsk(artifactId,data.artifact.title)} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Ask LiOS</button>{data.version.refreshSpec && !isIntegratedModelWorkbook(data) && onRerun && <button onClick={()=>onRerun(artifactId,data.artifact.title,data.version.refreshSpec!)} disabled={data.version.version!==data.artifact.headVersion} className="flex items-center gap-1 rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-40" title={data.version.version!==data.artifact.headVersion?"Open the current revision before rerunning":"Stage the saved governed request in a fresh Project chat"}><RefreshCw className="h-3 w-3"/> Rerun</button>}{onFocus&&<button onClick={()=>onFocus(artifactId,data.artifact.title)} className="flex items-center gap-1 rounded border border-amber-300/20 px-2 py-1 font-ui text-[13px] text-amber-200" title="Open this Artifact as the active professional work object"><Maximize2 className="h-3 w-3"/> Focus</button>}<button onClick={()=>setInspectorTab("evidence")} aria-pressed={(inspectorTab==="evidence")} className="rounded border border-border/50 px-2 py-1 font-ui text-[13px] text-muted-foreground hover:text-foreground">Show Work</button>{content.kind==="thesis"&&<button disabled={Boolean(thesisMonitor)} onClick={()=>void createThesisMonitor()} className="rounded border border-emerald-300/20 px-2 py-1 font-ui text-[13px] text-emerald-200 disabled:opacity-60">{thesisMonitor?"Thesis monitored":"Monitor Thesis"}</button>}<button onClick={()=>void run(async()=>{const f=await forkArtifact(artifactId);invalidate(projectId,artifactId);invalidate(projectId,f.artifact.id)})} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Fork"><GitFork className="h-3.5 w-3.5"/></button><button onClick={()=>{
+  const previous=historicalVersions.find(entry=>entry.version===anchor.headVersion-1);
+  setInspectorTab("history");
+  if (!previous || !canRestoreArtifactHistory(anchor, previous, hasUnsavedArtifactEdits, historyBusy || historyInFlight.current)) {
+    setError("Previous saved revision is unavailable or this Artifact has unsaved edits. Refresh history before preparing undo.");
+    return;
+  }
+  historyRequest.current += 1; setLeft(previous.version); setComparison(null); setError(null);
+  setRestoreIntent({anchor:{...anchor},targetVersion:previous.version,targetHash:previous.contentHash});
+}} disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || data.artifact.headVersion <= 1 || data.version.version !== data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before undoing":"Review and confirm restoring the previous version as a new head"}><RotateCcw className="h-3.5 w-3.5"/></button><button onClick={()=>setExportOpen((v)=>!v)} className="rounded border border-border/50 p-1.5 text-muted-foreground" title="Export"><Download className="h-3.5 w-3.5"/></button><button onClick={()=>void run(async()=>{await setArtifactStatus(artifactId,"archived");invalidate(projectId,artifactId);onClose()})} disabled={data.version.version!==data.artifact.headVersion} className="rounded border border-border/50 p-1.5 text-muted-foreground disabled:opacity-30" title={data.version.version!==data.artifact.headVersion?"Open the current revision before archiving":"Archive"}><Archive className="h-3.5 w-3.5"/></button><button aria-label="Close artifact" onClick={onClose} className="rounded p-1.5 text-muted-foreground"><X className="h-3.5 w-3.5"/></button></div>
     <div role="tablist" aria-label="Artifact inspector" className="lios-reference-artifact-tabs">
       {(["artifact", "evidence", "history"] as const).map((tab, index, tabs) => <button key={tab} type="button" role="tab" id={`${inspectorId}-${tab}-tab`} aria-controls={`${inspectorId}-${tab}-panel`} aria-selected={inspectorTab === tab} tabIndex={inspectorTab === tab ? 0 : -1} onClick={() => setInspectorTab(tab)} onKeyDown={(event) => {
         const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
@@ -743,7 +948,7 @@ function ArtifactPaneWorkspace({
       {data.version.version !== data.artifact.headVersion && <p role="status" className="mb-3 text-sm">Viewing saved revision {data.version.version}; current revision is {data.artifact.headVersion}. <button type="button" className="underline" onClick={() => onVersionChange?.(null)}>Open current revision</button></p>}
       {content.kind === "portfolio" && <ArtifactPortfolioMateriality key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} detail={data} blocked={spreadsheetDirty || spreadsheetSaving || spreadsheetPendingRevision || modelApplying}/>}
       <div data-artifact-id={artifactId} data-artifact-version={data.version.version} data-artifact-hash={data.version.contentHash}>
-      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} onOpenExport={()=>setExportOpen(true)}/></fieldset>}
+      {content.kind==="data" ? <DataArtifactTable key={`${artifactId}:${data.version.version}:${data.version.contentHash}`} artifactId={artifactId} content={content}/> : <fieldset disabled={data.version.version !== data.artifact.headVersion} className="min-w-0"><Body key={content.kind==="table"||content.kind==="chart" ? `${artifactId}:${data.version.version}:${data.version.contentHash}` : artifactId} artifactId={artifactId} contentHash={data.version.contentHash} content={content} revision={data.version.version} onSave={save} onDraft={draft} onThesisRefresh={refreshThesis} onThesisPostmortem={thesisPostmortem} onSpreadsheetDirtyChange={setSpreadsheetDirty} spreadsheetDisabled={data.version.version !== data.artifact.headVersion || modelApplying || spreadsheetSaving || spreadsheetPendingRevision} facts={{savedAt:data.version.createdAt,sourceCount:data.version.sourceRefs.filter(ref=>!ref.startsWith("model:")).length,receiptCount:data.version.executionReceiptIds.length}} artifactSourceRefs={data.version.sourceRefs} onOpenExport={()=>setExportOpen(true)} onAsk={onAsk} owner={{projectId:data.artifact.projectId,owningChatId:data.artifact.owningChatId ?? null}} onNativeVersion={version=>{setSpreadsheetPendingRevision(true);onVersionChange?.(version);invalidate(projectId,artifactId);}}/></fieldset>}
       </div>
       {projectId !== null && <ScenarioFormulaReview projectId={projectId} artifactId={artifactId} artifactKind={content.kind} headVersion={data.artifact.headVersion} forkedFromArtifactId={data.artifact.forkedFromArtifactId}/>}
       <details data-testid="artifact-more-actions" className="mt-4 rounded-lg border border-border/40 bg-black/10 p-3"><summary className="cursor-pointer font-ui text-[13px] text-muted-foreground">More actions · review, reports, maintenance and source inspection</summary>
@@ -780,18 +985,54 @@ function ArtifactPaneWorkspace({
       })} className="rounded border border-cyan-300/30 px-3 py-2 disabled:opacity-30">Review branch reconciliation</button>
       {mergeNotice&&<p role="status">{mergeNotice}</p>}
     </div>}
-    {inspectorTab==="history"&&<button disabled={!left||left>=data.artifact.headVersion} onClick={()=>void run(async()=>{const saved=await restoreArtifactRevision(artifactId,data.artifact.headVersion,left!);onVersionChange?.(saved.version);invalidate(projectId,artifactId)})} className="m-3 rounded border border-amber-300/30 px-3 py-2 disabled:opacity-30">Restore selected revision as new version</button>}
-    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="border-t border-border/50 p-3"><div className="mb-4 space-y-2">{(versions.data??[]).slice().reverse().map(version=><div key={version.id} className="flex items-center justify-between border-b border-border/40 pb-2 text-xs"><span>Revision {version.version}</span><span className="text-muted-foreground">{version.version===data.artifact.headVersion?"Current":"Saved revision"}</span></div>)}</div><div className="flex flex-wrap items-end gap-2"><label className="font-terminal text-[12px] text-muted-foreground">COMPARE FROM<select value={left??""} onChange={(e)=>setLeft(Number(e.target.value))} className="mt-1 block rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">{(versions.data??[]).slice().reverse().map((v)=><option key={v.id} value={v.version}>v{v.version}</option>)}</select></label><button disabled={!left||left===data.artifact.headVersion} onClick={()=>void run(async()=>{
-  const result=await compareArtifactVersions(artifactId,left!,data.artifact.headVersion);
-  const leftRecord=(versions.data??[]).find((version)=>version.version===left);
-  const metadataLabels=leftRecord?metadataDeltaLabels(compareArtifactVersionMetadata(leftRecord,data.version)):[];
-  const contentSummary=result.changed
-    ? `Content: ${result.topLevelChangedKeys.join(", ") || "changed"} · ${result.spreadsheetDiffs.length} cell diffs`
-    : "Content unchanged";
-  const semanticSummary=semanticArtifactComparisonLabel(result.semantic);
-  const summary=metadataLabels.length ? `${contentSummary} · Metadata: ${metadataLabels.join(", ")}` : contentSummary;
-  setComparison(semanticSummary ? `${summary} · ${semanticSummary}` : summary);
-})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px] disabled:opacity-30"><GitCompareArrows className="h-3 w-3"/> Compare</button>{sessions[0]&&<button onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:data.artifact.headVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})} className="flex items-center gap-1 rounded border border-border/50 px-2 py-1.5 font-ui text-[13px]"><Link2 className="h-3 w-3"/> Reference Session</button>}</div>{comparison&&<div className="mt-2 rounded border border-fuchsia-300/15 px-2 py-1.5 font-ui text-[13px] text-fuchsia-100">{comparison}</div>}</div>
+    <div role="tabpanel" id={`${inspectorId}-history-panel`} aria-labelledby={`${inspectorId}-history-tab`} hidden={inspectorTab!=="history"} className="space-y-3 border-t border-border/50 p-3">
+      <p className="font-ui text-[13px] text-muted-foreground">Saved revisions are immutable. Open any exact version for read-only inspection, compare exact version hashes, or deliberately restore an earlier version as a NEW head. The server rejects concurrent head changes.</p>
+      {versions.isError && <p role="alert" className="text-sm text-red-200">Saved version history could not be loaded. Reopen this Artifact to retry.</p>}
+      <div className="max-h-48 space-y-2 overflow-auto" data-testid="artifact-history-version-list">
+        {historicalVersions.slice().reverse().map(savedVersion => <div key={savedVersion.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2 font-ui text-[12px]">
+          <span>v{savedVersion.version} · {savedVersion.version===anchor.headVersion ? "Current head" : "Historical"} · saved {new Date(savedVersion.createdAt).toLocaleString()} · hash {shortHash(savedVersion.contentHash)}</span>
+          <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || savedVersion.version===anchor.displayedVersion}
+            onClick={()=>changeDisplayedRevision(savedVersion.version)} className="min-h-9 rounded border border-border/50 px-3 py-2 disabled:opacity-40">
+            {savedVersion.version===anchor.displayedVersion ? "Viewing" : `View exact v${savedVersion.version}`}
+          </button>
+        </div>)}
+        {!historicalVersions.length && <p role="status">No authorized versions available to inspect.</p>}
+      </div>
+      <button type="button" disabled={hasUnsavedArtifactEdits || historyBusy || historyInFlight.current || (version==null && anchor.displayedVersion===anchor.headVersion)} onClick={()=>changeDisplayedRevision(null)}
+        className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">Open current head</button>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="font-terminal text-[12px] text-muted-foreground">COMPARE / RESTORE FROM
+          <select aria-label="Historical Artifact source revision" value={left??""} onChange={(event)=>{
+            historyRequest.current += 1; setComparison(null); setRestoreIntent(null); setLeft(Number(event.target.value)||null);
+          }} disabled={historyBusy || historyInFlight.current || versions.isFetching}
+          className="mt-1 block min-h-9 rounded border border-border/50 bg-[#090909] px-2 py-1 font-terminal text-[13px]">
+            <option value="">Select revision</option>
+            {historicalVersions.slice().reverse().map(entry=><option key={entry.id} value={entry.version}>v{entry.version} · {shortHash(entry.contentHash)}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!leftRecord || !displayedRecord || displayedRecord.contentHash!==anchor.contentHash || leftRecord.version===anchor.displayedVersion || historyBusy || historyInFlight.current || versions.isFetching}
+          onClick={()=>void compareSelectedHistory()} className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:opacity-40">
+          <GitCompareArrows className="h-3.5 w-3.5"/> Compare with displayed v{anchor.displayedVersion}
+        </button>
+        <button type="button" data-testid="artifact-prepare-restore" disabled={!canRestore} onClick={prepareRestoreHistory}
+          className="min-h-9 rounded border border-amber-300/30 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Prepare restore as new version</button>
+        {sessions[0] && <button type="button" onClick={()=>void run(async()=>{await createArtifactReference(artifactId,{version:anchor.displayedVersion,targetType:"session",targetRef:sessions[0].id,label:sessions[0].name});invalidate(projectId,artifactId)})}
+          className="flex min-h-9 items-center gap-2 rounded border border-border/50 px-3 py-2 font-ui text-[13px]"><Link2 className="h-3.5 w-3.5"/> Reference displayed v{anchor.displayedVersion}</button>}
+      </div>
+      {hasUnsavedArtifactEdits && <p role="status" className="text-sm text-amber-200">Save or reset unsaved Artifact edits before opening another revision or restoring. Your draft remains in the current editor.</p>}
+      {anchor.displayedVersion!==anchor.headVersion && <p role="status" className="text-sm text-amber-200">Viewing historical v{anchor.displayedVersion} read-only. Open the current head before restoring another revision.</p>}
+      {activeRestoreIntent && <section role="group" aria-label="Confirm immutable Artifact restore" data-testid="artifact-restore-confirmation" className="space-y-2 rounded border border-amber-300/30 p-3">
+        <p className="font-ui text-[13px] text-amber-100">Restore exact historical v{activeRestoreIntent.targetVersion} ({shortHash(activeRestoreIntent.targetHash)}) over current head v{anchor.headVersion} ({shortHash(anchor.contentHash)}) by creating new v{anchor.headVersion+1}? Earlier versions will not be changed. Other users' concurrent changes will be rejected.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" data-testid="artifact-confirm-restore" disabled={!canRestore || historyBusy || historyInFlight.current} onClick={()=>void confirmRestoreHistory()}
+            className="min-h-9 rounded border border-amber-300 px-3 py-2 font-ui text-[13px] text-amber-200 disabled:opacity-40">Confirm restore as new version</button>
+          <button type="button" onClick={()=>setRestoreIntent(null)} disabled={historyBusy || historyInFlight.current} className="min-h-9 rounded border border-border/50 px-3 py-2 font-ui text-[13px]">Cancel restore</button>
+        </div>
+      </section>}
+      {comparison && sameArtifactHistoryAnchor(comparison.anchor, anchor) && comparison.from===left
+        && <p role="status" data-testid="artifact-history-comparison" className="rounded border border-fuchsia-300/20 px-3 py-2 font-ui text-[13px] text-fuchsia-100">{comparison.text}</p>}
+      {historyBusy && <p role="status" className="font-ui text-[12px] text-muted-foreground">Checking exact saved revisions…</p>}
+    </div>
     {error&&<div role="alert" className="m-3 border border-red-300/20 px-3 py-2 text-sm text-red-200">{error}</div>}
   </div>;
 }
