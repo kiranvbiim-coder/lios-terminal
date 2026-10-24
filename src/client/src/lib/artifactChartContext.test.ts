@@ -89,6 +89,9 @@ test("WS-39 table paging uses exact 40-position windows; all hidden plot series 
 test("WS-39 chart retains original keyboard point inspector and independent full-comparison table", () => {
   const source = readFileSync(new URL("../components/terminal/ArtifactChart.tsx", import.meta.url), "utf8");
   assert.match(source, /<ArtifactChartRecordedTable projection=\{prepared\} content=\{content\}/);
+  assert.match(source, /class ChartPlotBoundary extends React.Component/);
+  assert.match(source, /artifact-chart-plot-failed/);
+  assert.match(source, /<ChartPlotBoundary key=\{`\$\{chartType\}:\$\{content\.rendererPreference\}`\}>/);
   assert.match(source, /data-testid="artifact-chart-recorded-context"/);
   assert.match(source, /chartSourceCaveat\(recordedContext\)/);
   assert.match(source, /Source refs: /);
