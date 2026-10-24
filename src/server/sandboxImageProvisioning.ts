@@ -1,11 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { createGunzip } from "node:zlib";
-import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { runCommand } from "./exec/run-command";
+import { streamSandboxImageArchive } from "./sandboxImageArchiveImport";
 import { resolveSandboxRuntimeProfile } from "./exec/sandbox-runtime-profile";
 
 export interface SandboxImageRelease {
@@ -190,34 +189,9 @@ export function repairSandboxImage(): Promise<SandboxImageReadiness> {
         profile.engine === "docker" ? `--host=${profile.engineTarget}` : `--url=${profile.engineTarget}`,
         "load",
       ], { stdio: ["pipe", "pipe", "pipe"] });
-      let stderr = "";
-      let timedOut = false;
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => { stderr = (stderr + chunk).slice(-4096); });
-      const completed = new Promise<void>((resolve, reject) => {
-        child.once("error", reject);
-        child.once("close", (code) => code === 0
-          ? resolve()
-          : reject(new Error(timedOut
-            ? "Image import exceeded the 15-minute limit."
-            : `Local sandbox image load failed: ${stderr.trim() || code}`)));
-      });
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, 15 * 60_000);
-      timeout.unref();
-      try {
-        await Promise.all([
-          pipeline(fs.createReadStream(bundle.archive), createGunzip(), child.stdin),
-          completed,
-        ]);
-      } catch (error) {
-        child.kill("SIGKILL");
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-      }
+      // Drain engine diagnostics without buffering or logging them; otherwise a
+      // full stdout pipe can stall the import and incorrectly time it out.
+      await streamSandboxImageArchive(bundle.archive, child);
       const after = await inspectSandboxImageReadiness();
       return after.state === "ready" ? after : status("repair_failed", bundle.release.image, `Image load completed but verification returned ${after.state}: ${after.reason}`, "retry");
     } catch (error) {
