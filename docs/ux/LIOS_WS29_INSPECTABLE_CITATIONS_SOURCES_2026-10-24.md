@@ -14,7 +14,7 @@
 1. Reused **one pure link custody rule** `inspectableSourceHref` defined in the existing `chatMarkdown.ts` module. It returns an external http(s) destination only if the source ID and href both independently pass existing `safeHref` and normalize to the **exact same URL**. `ResearchSourceList` preserves its named export for existing consumers.
 2. Inline citation chips now use that same rule. Provider handles, mismatched URLs, credentialed URLs, unsafe schemes, and document-less references remain inspectable by label **without a navigable link**. Inline popover explicitly calls such references unlinked.
 3. `collectCitationSources(events, requestId?)` respects the active request and discards pre-last-plan references when replanning. Without an explicit request ID, the most recent actual plan is preferred; only in plan-less traces does it infer the latest source-bearing request. A mismatched trust manifest request does not launder another request's evidence.
-4. `ConversationRuntimeTrace` passes the actual `requestId`. Streaming Chat and saved-answer metadata keep their existing source-custody boundaries. No new registry, storage, provider retrieval, permission authority, AI call or source claim.
+4. `ConversationRuntimeTrace` and streaming `ProjectExperienceShell` pass the active `requestId`, while saved-answer metadata retains its existing per-message boundary. Source-list accessibility language identifies **recorded references**, not independently verified source usage. No new registry, storage, provider retrieval, permission authority, AI call or source claim.
 
 ## Test coverage added
 
