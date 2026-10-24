@@ -67,6 +67,7 @@ import { artifactIntegratedModelReviewSchema, artifactIntegratedModelRunSchema, 
 import { artifactModelMaintenanceHeadSchema, artifactModelMaintenanceReviewSchema, artifactModelMaintenanceApplySchema, listArtifactModelMaintenanceOptions, reviewArtifactModelMaintenance, applyArtifactModelMaintenance } from "./artifactModelMaintenance";
 import { createModelChangeReport } from "./artifactModelChangeReport";
 import { proposeOfficeArtifactReturn } from "./officeArtifactReturn";
+import { prepareReportDocxDownload } from "./reportDocxDownload";
 import { proposeSpreadsheetReturn } from "./spreadsheetArtifactReturn";
 import { proposeArtifactComposition } from "./artifactComposition";
 import { createProfessionalWorkPackage } from "./professionalWorkPackage";
@@ -589,6 +590,30 @@ export function registerArtifactRoutes(app: Express): void {
       }).strict().parse(req.body);
       const version = await getArtifactVersion(ctx(req), pathText(req.params.artifactId));
       res.json(await queryDataArtifact(version.content, body, ctx(req)));
+    } catch (error) { fail(res, error); }
+  });
+
+  // Native local Word download for a saved professional Report Artifact.
+  // Authenticated, tenant-owned, current-revision only. The exported file
+  // retains P4 Office return metadata so later edits can be reviewed.
+  app.get("/api/artifacts/:artifactId/report.docx", async (req, res) => {
+    try {
+      const version = req.query.version ? pathVersion(req.query.version) : undefined;
+      const file = await prepareReportDocxDownload(
+        ctx(req), pathText(req.params.artifactId), version,
+      );
+      // Content-Disposition uses a bounded ASCII filename so recorded user
+      // titles cannot inject headers or turn the response into inline HTML.
+      const filename = file.filename
+        .replace(/[^\x20-\x7e]/g, "_")
+        .replace(/["\\]/g, "_")
+        .slice(0, 220);
+      res.setHeader("Content-Type", file.mimeType);
+      res.setHeader("Content-Disposition", 'attachment; filename="' + filename + '"');
+      res.setHeader("Content-Length", String(file.bytes.byteLength));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.status(200).end(Buffer.from(file.bytes));
     } catch (error) { fail(res, error); }
   });
 
