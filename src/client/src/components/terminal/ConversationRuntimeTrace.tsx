@@ -529,7 +529,7 @@ export default function ConversationRuntimeTrace({
                 <button type="button" data-testid="trace-error-connect" onClick={() => onRecoveryAction("Open Connection Center")} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Open Connect</button>
               )}
               {view.recoveries.includes("retry") && onRetry && !busy && (
-                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Try again</button>
+                <button type="button" data-testid="trace-error-retry" onClick={onRetry} className="rounded-full border border-border/55 px-2.5 py-1 font-ui text-[12px] text-foreground hover:border-red-300/30">Review request</button>
               )}
               {showWork && <span className="ml-auto font-terminal text-[12px] uppercase tracking-wider text-red-200/50">{runtimeError.code}</span>}
             </div>
