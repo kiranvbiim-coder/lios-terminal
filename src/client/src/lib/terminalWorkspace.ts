@@ -253,8 +253,14 @@ export function workspaceForShare(workspace: WorkspaceState): WorkspaceState {
 export function buildWorkspaceShareUrl(workspace: WorkspaceState, currentUrl?: string): string {
   const base = currentUrl ?? (typeof window !== "undefined" ? window.location.href : "http://localhost/");
   const url = new URL(base);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("This local application URL is not a shareable public workspace link.");
+  }
   url.username = "";
   url.password = "";
+  // A signed-in route can contain private tenant, project or chat identifiers
+  // even when the query string is empty. The public workspace entry is root.
+  url.pathname = "/";
   url.search = "";
   url.hash = "#/";
   url.searchParams.set("ws", serializeWorkspace(workspaceForShare(workspace)));
