@@ -313,3 +313,52 @@ test("a refused resume surfaces the server's typed status and code and nothing i
   assert.equal(result.errorCode, "agent_resume_drift");
   client.stop();
 });
+
+test("WS-61: Home restart is unconfirmed, not a successful run that may clear draft attachments", async () => {
+  const client = await readyClient("boot-1");
+  const first = FakeWebSocket.last;
+  const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "draft" }, onEvent: () => {} });
+  await sleep(0);
+  first.serverSend({ type: "res", id: lastRequest(first, "conversation.start").id, ok: true, payload: { requestId: ID } });
+  await sleep(0);
+  first.serverClose();
+  await sleep(15);
+  await accept("boot-2");
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.errorCode, "run_status_unconfirmed");
+  assert.match(result.error ?? "", /check the original run before resending/);
+  client.stop();
+});
+
+test("WS-61: terminal failed and cancelled statuses cannot claim a successful submission", async () => {
+  for (const status of ["failed", "cancelled", "denied"] as const) {
+    const client = await readyClient();
+    const ws = FakeWebSocket.last;
+    const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "request" }, onEvent: () => {} });
+    await sleep(0);
+    const start = lastRequest(ws, "conversation.start");
+    ws.serverSend({ type: "res", id: start.id, ok: true, payload: { requestId: ID } });
+    emit(ws, 0, { type: "done", requestId: ID, at, status });
+    const result = await pending;
+    assert.equal(result.ok, false, status);
+    assert.match(result.error ?? "", /completion was not confirmed/);
+    client.stop();
+  }
+});
+
+test("WS-61: a completed run with a prior error event never asserts success", async () => {
+  const client = await readyClient();
+  const ws = FakeWebSocket.last;
+  const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "request" }, onEvent: () => {} });
+  await sleep(0);
+  const start = lastRequest(ws, "conversation.start");
+  ws.serverSend({ type: "res", id: start.id, ok: true, payload: { requestId: ID } });
+  emit(ws, 0, { type: "error", requestId: ID, at, message: "Permission denied", code: "permission_denied" });
+  emit(ws, 1, done());
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "Permission denied");
+  client.stop();
+});
