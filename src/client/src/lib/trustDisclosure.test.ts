@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { TrustManifest } from "@shared/trustContracts";
 import ConversationTrustPanel from "@/components/terminal/ConversationTrustPanel";
+import BoundedAgentComposerControl from "@/components/terminal/BoundedAgentComposerControl";
 import { projectTrustDisclosure } from "./trustDisclosure";
 
 function manifest(overrides: Partial<TrustManifest> = {}): TrustManifest {
@@ -78,4 +79,26 @@ test("WS-60 warning lists are bounded but cannot silently disappear", () => {
   assert.equal(projection.additionalLimitationCount, 25);
   assert.equal(projection.visibleLimitations[0], warnings[0]);
   assert.equal(projection.visibleLimitations[4], warnings[4]);
+});
+
+test("WS-60 composer stays quiet until the multi-step agent is selected", () => {
+  const agent = {
+    supported: true, enabled: false, selected: false, ready: true,
+    checking: false, guidance: "Plans and executes bounded steps. Consequential tools still require your review.",
+    setSelected: (_selected: boolean) => undefined,
+  };
+  const props = { agent, busy: false, onConfigureAI: () => undefined };
+  const quiet = renderToStaticMarkup(React.createElement(BoundedAgentComposerControl, props));
+  assert.match(quiet, /Multi-step agent/);
+  assert.doesNotMatch(quiet, /Plans and executes bounded steps/);
+  assert.doesNotMatch(quiet, /Configure AI/);
+  const selected = renderToStaticMarkup(React.createElement(BoundedAgentComposerControl, {
+    ...props, agent: { ...agent, selected: true, enabled: true, ready: false, guidance: "Configure a connected AI provider and model." },
+  }));
+  assert.match(selected, /Configure AI/);
+  assert.match(selected, /Configure a connected AI provider and model/);
+  const unsupported = renderToStaticMarkup(React.createElement(BoundedAgentComposerControl, {
+    ...props, agent: { ...agent, supported: false, guidance: "Multi-step agents require a saved chat." },
+  }));
+  assert.match(unsupported, /Multi-step agents require a saved chat/);
 });
