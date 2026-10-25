@@ -11,11 +11,13 @@ export interface TrustDisclosure {
 export function projectTrustDisclosure(manifest: TrustManifest): TrustDisclosure {
   const { summary, warnings } = manifest;
   const sourceLabel = summary.sourceCount === 1 ? "recorded source" : "recorded sources";
-  const conciseSummary = `${summary.sourceCount} ${sourceLabel} · ${summary.freshness.replaceAll("_", " ")} freshness`;
+  const freshnessLabel = summary.freshness === "ai_generated" ? "AI-generated evidence" : `${summary.freshness.replaceAll("_", " ")} evidence`;
+  const conciseSummary = `${summary.sourceCount} ${sourceLabel} · ${freshnessLabel}`;
   const limitations: string[] = [];
   if (summary.sourceCount === 0) limitations.push("No source references are recorded for this result.");
-  if (summary.freshness === "stale") limitations.push("Some recorded evidence is stale. Check the as-of dates before relying on it.");
-  if (summary.freshness === "unknown") limitations.push("Source freshness could not be verified.");
+  if (summary.freshness === "delayed") limitations.push("Some recorded evidence is delayed. Check its as-of dates.");
+  if (summary.freshness === "unknown") limitations.push("Source freshness has not been established.");
+  if (summary.freshness === "ai_generated") limitations.push("AI-generated content is not independently observed source data.");
   if (summary.quality === "low" || summary.quality === "unknown") {
     limitations.push(summary.quality === "low" ? "Recorded evidence quality is low." : "Recorded evidence quality is unknown.");
   }
