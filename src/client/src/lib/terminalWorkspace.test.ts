@@ -379,7 +379,7 @@ test("WS-63 inbound manually forged workspace URL cannot inject an Artifact or t
   const evil = {
     primary: {
       view: "artifact", symbol: "AAPL",
-      artifact: { projectId: 4321, chatId: 9876, artifactId: "private-revision-id", version: 3 },
+      artifact: { projectId: 4321, chatId: 9876, artifactId: "artifact:123e4567-e89b-42d3-a456-426614174000", version: 3 },
     },
     secondary: { view: "news", symbol: "MSFT", credential: "private-key" },
     focusedPane: "primary",
@@ -391,7 +391,7 @@ test("WS-63 inbound manually forged workspace URL cannot inject an Artifact or t
     secondary: { view: "news", symbol: "MSFT" },
     focusedPane: "primary",
   });
-  assert.equal(JSON.stringify(received).includes("private-revision-id"), false);
+  assert.equal(JSON.stringify(received).includes("123e4567-e89b-42d3-a456-426614174000"), false);
   assert.equal(JSON.stringify(received).includes("private-key"), false);
 });
 
