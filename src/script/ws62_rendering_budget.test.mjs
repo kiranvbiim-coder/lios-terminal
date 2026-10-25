@@ -11,6 +11,7 @@ const search = read("client/src/components/terminal/WorkSearchDialog.tsx");
 const chart = read("client/src/components/terminal/ArtifactChart.tsx");
 const data = read("client/src/components/terminal/ArtifactPane.tsx");
 const budget = read("client/src/lib/conversationRenderBudget.ts");
+const transport = read("client/src/lib/gateway/conversationRun.ts");
 
 test("WS-62 Chat renders bounded history, not full saved messages on each streaming token", () => {
   assert.match(shell, /selectConversationMessageWindow\(displayMessages, visibleMessageCount\)/);
@@ -26,6 +27,8 @@ test("WS-62 Chat renders bounded history, not full saved messages on each stream
   assert.match(shell, /flushPendingText\(\);[\s\S]*recordP3TrustManifest|flushPendingText\(\);/);
   assert.match(budget, /CHAT_RENDER_BATCH = 80/);
   assert.match(budget, /event\.type !== "text" \|\| event\.requestId !== next\.requestId/);
+  assert.match(transport, /events\.splice\(previousIndex, 1\)/);
+  assert.match(transport, /prior\.type === "text" && prior\.requestId === requestId/);
 });
 
 test("WS-62 existing search debounce and stale-request cancellation remain bounded", () => {
