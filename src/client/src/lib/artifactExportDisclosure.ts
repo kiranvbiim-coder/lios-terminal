@@ -1,4 +1,5 @@
 import type { TrustManifest } from "@shared/trustContracts";
+import { recordedBlockedArtifactSources } from "@shared/artifactExportRights";
 
 export interface ArtifactExportDisclosure {
   blocked: boolean;
@@ -19,9 +20,7 @@ export function artifactExportDisclosure(
   sourceRefs: readonly string[],
 ): ArtifactExportDisclosure {
   const evidence = manifest?.evidence ?? [];
-  const revokedStates = /^(denied|blocked|revoked|forbidden|unauthorized|not_authorized|rights_revoked|access_denied|entitlement_denied|license_expired|expired)$/i;
-  const blockedSourceCount = evidence.filter((item) =>
-    Boolean(item.access && revokedStates.test(item.access.state.trim().replace(/[\s-]+/g, "_")))).length;
+  const blockedSourceCount = recordedBlockedArtifactSources(manifest);
   const rightsReviewRequired = evidence.some((item) => item.access?.entitlementRequired === true
     || /^(restricted|license_required|entitlement_required|unknown)$/i.test(item.access?.state ?? ""));
   const sourceCount = sourceRefs.length;
