@@ -38,7 +38,7 @@ app.setName("LiOS Intelligence Terminal");
     if (!path.isAbsolute(isolated)) throw new Error("LIOS_USER_DATA_DIR must be an absolute path.");
     fs.mkdirSync(isolated, { recursive: true, mode: 0o700 });
     app.setPath("userData", isolated);
-    if (!process.env.LIOS_DATA_ROOT) process.env.LIOS_DATA_ROOT = path.join(isolated, "data");
+    process.env.LIOS_DATA_ROOT = path.join(isolated, "data");
   }
   const debugPort = Number.parseInt(process.env.LIOS_REMOTE_DEBUG_PORT || "", 10);
   if (isolated && Number.isInteger(debugPort) && debugPort > 1024 && debugPort < 65536) {
