@@ -217,7 +217,12 @@ export function deserializeWorkspace(value: string | null, audience: WorkspaceAu
 export function loadWorkspaceFromUrl(search?: string, audience: WorkspaceAudience = "internal"): WorkspaceState | null {
   if (typeof window === "undefined" && search === undefined) return null;
   const params = new URLSearchParams(search ?? window.location.search);
-  return deserializeWorkspace(params.get("ws"), audience);
+  const raw = params.get("ws");
+  // Incoming public links are untrusted. Do not restore private Artifact,
+  // tenant/Chat or arbitrary pane fields even if a URL was hand-crafted.
+  if (!raw || raw.length > 10_000) return null;
+  const decoded = deserializeWorkspace(raw, audience);
+  return decoded ? workspaceForShare(decoded) : null;
 }
 
 export function serializeWorkspace(workspace: WorkspaceState): string {
