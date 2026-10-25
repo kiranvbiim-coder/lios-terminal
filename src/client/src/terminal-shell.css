@@ -1475,3 +1475,7 @@ body:has([data-testid='connect-data']) :is(
   flex-shrink: 0;
   font-size: var(--lios-ux-control-type);
 }
+
+/* Packaged macOS hiddenInset: native window controls (x 12-72, y 12-24) overlay the sidebar rail and wordmark. */
+html[data-desktop-platform="darwin"] .lios-reference-navigation-rail { padding-top: 44px; }
+html[data-desktop-platform="darwin"] .lios-reference-navigation-brand { padding-left: 44px; }

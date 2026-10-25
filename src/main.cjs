@@ -788,6 +788,14 @@ function createWindow() {
     }
   });
 
+  // hiddenInset draws the native macOS window controls over the web UI. Tell the
+  // renderer (fixed string, no user data) so shell CSS can reserve their space.
+  mainWindow.webContents.on("dom-ready", () => {
+    if (process.platform === "darwin" && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript('document.documentElement.dataset.desktopPlatform = "darwin";', true).catch(() => {});
+    }
+  });
+
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
     console.error("Renderer failed to load:", errorCode, errorDescription);
   });
@@ -801,6 +809,18 @@ function createWindow() {
 
 // Initialize Electron lifecycle
 app.whenReady().then(async () => {
+  if (app.isPackaged && process.env.LIOS_ENABLE_DEVTOOLS !== "1") {
+    // Packaged builds do not expose Toggle Developer Tools / Force Reload in the default menu.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      ...(process.platform === "darwin" ? [{ role: "appMenu" }] : []),
+      { role: "editMenu" },
+      { label: "View", submenu: [
+        { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+        { type: "separator" }, { role: "togglefullscreen" },
+      ] },
+      { role: "windowMenu" },
+    ]));
+  }
   if (nativeUnicodePdfSmokeRequested) {
     // A separate opt-in installed-app renderer test. It does not start the
     // local server or access a user workspace. A PDF may be saved ONLY when
