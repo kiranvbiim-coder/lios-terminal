@@ -123,7 +123,9 @@ export interface RunConversationInput {
 
 export function runConversation(client: GatewayClient, input: RunConversationInput): Promise<GatewayRunResult> {
   return followConversationRun(client, input.body.requestId, input.onEvent, async () => {
-    await client.request("conversation.start", { chatId: input.chatId, body: input.body }, { queueUntilReady: true, timeoutMs: 60_000 });
+    // A new run must never sit in the transport's reconnect queue.
+    // Explicit resume / subscribe only can follow an already-known run id.
+    await client.request("conversation.start", { chatId: input.chatId, body: input.body }, { queueUntilReady: false, timeoutMs: 60_000 });
   }, input.body.agent === true);
 }
 
