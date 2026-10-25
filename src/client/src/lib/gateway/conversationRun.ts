@@ -52,10 +52,15 @@ export async function followConversationRun(
       disposers.forEach((dispose) => dispose());
       resolve(result);
     };
-    const complete = () => finish({ status: 200, ok: true, text, error, events });
+    // Only the Home's confirmed terminal completion (or explicit legacy approval pause)
+    // may produce ok:true. Disconnect, cancellation and failure are not success receipts.
+    const complete = (terminalStatus: string) => {
+      const ok = (terminalStatus === "completed" || terminalStatus === "waiting_approval") && !error;
+      finish({ status: ok ? 200 : 503, ok, text, error: ok ? null : (error ?? `Home reported ${terminalStatus}; completion was not confirmed.`), events });
+    };
     const interrupted = (message: string) => {
       error ??= message;
-      complete();
+      finish(failure(503, `${error} The outcome was not confirmed; check the original run before resending.`, "run_status_unconfirmed"));
     };
 
     disposers.push(client.onEvent("conversation.event", (payload) => {
@@ -74,7 +79,7 @@ export async function followConversationRun(
       if (event.type === "error") error = event.message;
       if (event.type === "plan" && event.plan.steps.some((step) => step.kind === "agent")) agentPause = true;
       if (event.type === "governed_tool_approval_required") agentPause = true;
-      if (event.type === "done" && (event.status !== "waiting_approval" || !agentPause)) complete();
+      if (event.type === "done" && (event.status !== "waiting_approval" || !agentPause)) complete(event.status);
     }));
 
     disposers.push(client.onReady(({ restarted }) => {
@@ -102,7 +107,7 @@ export async function followConversationRun(
         await client.request("conversation.subscribe", { requestId, afterSeq: lastSeq }, { queueUntilReady: true, timeoutMs: 15_000 });
         started = true;
       } catch {
-        finish(failure(0, "LiOS could not reach your Home. Check the connection and retry."));
+        finish(failure(0, "LiOS could not confirm whether Home received this request. Inspect the original run before resending; it was not retried automatically.", "run_status_unconfirmed"));
       }
     });
   });
