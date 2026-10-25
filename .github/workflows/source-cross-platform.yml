@@ -126,6 +126,13 @@ jobs:
         timeout-minutes: ${{ matrix.platform == 'macOS' && 45 || 30 }}
         run: npm run test:offline
 
+      - name: WS-64 and WS-65 scenario/evidence source-only contracts
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        # Run actual offline continuity, gateway, privacy and typed native-evidence
+        # negative controls. Fixtures here are NOT installed release witnesses.
+        run: npm run test:ws64 && npm run test:ws65
+
       - name: Desktop source and syntax contracts
         if: ${{ !cancelled() }}
         timeout-minutes: 10
