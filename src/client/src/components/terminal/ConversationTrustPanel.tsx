@@ -4,13 +4,12 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  CircleCheck,
   Database,
   FlaskConical,
-  ShieldCheck,
 } from "lucide-react";
 import type { TrustManifest } from "@shared/trustContracts";
 import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
+import { projectTrustDisclosure } from "@/lib/trustDisclosure";
 
 interface Props {
   manifest: TrustManifest;
@@ -35,47 +34,51 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
     if (next) recordP3TrustInteraction("show_work_opened");
   };
   const summary = manifest.summary;
+  const disclosure = projectTrustDisclosure(manifest);
 
   return (
     <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-emerald-300/15 bg-emerald-300/[0.018]" data-p3-trust-manifest="true">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-        <span className="font-terminal text-[12px] uppercase tracking-[0.18em] text-muted-foreground">Trust</span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          {titleCase(summary.freshness)}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          Quality {summary.quality}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          Confidence {summary.confidence}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-muted-foreground">
-          Evidence {summary.evidenceCoveragePct.toFixed(0)}%
-        </span>
-        {summary.conflictState !== "none" && (
-          <span className="rounded-full border border-amber-300/20 px-2 py-1 font-terminal text-[12px] uppercase text-amber-200">
-            {summary.conflictState === "not_evaluated_single_source" ? "Conflict not evaluated" : `Conflict ${summary.conflictState}`}
-          </span>
-        )}
-        {summary.missingCount > 0 && (
-          <span className="rounded-full border border-amber-300/20 px-2 py-1 font-terminal text-[12px] uppercase text-amber-200">
-            {summary.missingCount} missing
-          </span>
-        )}
+        <Database aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="font-ui text-[13px] font-medium text-foreground">Sources</span>
+        <span className="font-ui text-[12px] text-muted-foreground" data-testid="trust-quiet-summary">{disclosure.summary}</span>
         <button
           type="button"
           onClick={toggle}
           aria-expanded={expanded}
+          aria-controls="lios-trust-details"
           className="ml-auto flex items-center gap-1 rounded border border-border/50 px-2 py-1 font-ui text-[12px] text-muted-foreground hover:border-emerald-300/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/50"
         >
-          Show Work
+          {expanded ? "Hide details" : "Show work"}
           {expanded ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
         </button>
       </div>
 
+      {disclosure.visibleLimitations.length > 0 && (
+        <div className="border-t border-amber-300/15 px-3 py-2" data-testid="trust-visible-limitations" aria-label="Important source limitations">
+          <ul className="space-y-1">
+            {disclosure.visibleLimitations.map((limitation) => (
+              <li key={limitation} className="flex items-start gap-2 font-ui text-[12px] leading-5 text-amber-100">
+                <AlertTriangle aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>{limitation}</span>
+              </li>
+            ))}
+          </ul>
+          {disclosure.additionalLimitationCount > 0 && (
+            <p className="mt-1 font-ui text-[12px] text-muted-foreground">
+              {disclosure.additionalLimitationCount} more source limitation{disclosure.additionalLimitationCount === 1 ? "" : "s"} in Show work.
+            </p>
+          )}
+        </div>
+      )}
+
       {expanded && (
-        <div className="grid gap-3 border-t border-border/45 px-3 py-3 md:grid-cols-2">
+        <div id="lios-trust-details" className="grid gap-3 border-t border-border/45 px-3 py-3 md:grid-cols-2">
+          <section className="md:col-span-2" aria-label="Recorded evidence metrics">
+            <p className="font-ui text-[12px] text-muted-foreground">
+              Recorded quality: {summary.quality} · Reported confidence: {summary.confidence} · Evidence coverage: {summary.evidenceCoveragePct.toFixed(0)}% · Conflict check: {titleCase(summary.conflictState)}
+            </p>
+          </section>
           <section>
             <div className="flex items-center gap-1.5 font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
               <Database className="h-3 w-3" /> Sources
@@ -202,7 +205,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
                 ))}
                 {manifest.warnings.map((warning) => (
                   <div key={warning} className="flex items-start gap-1.5 font-ui text-[12px] leading-3 text-muted-foreground">
-                    <CircleCheck className="mt-0.5 h-2.5 w-2.5 shrink-0" />
+                    <AlertTriangle aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0 text-amber-200" />
                     <span>{warning}</span>
                   </div>
                 ))}
