@@ -1047,9 +1047,17 @@ export default function ProjectExperienceShell({
         reason: `Requested from Project chat: ${exact.label}`,
       }, "user");
     } else if (exact.command === "/session") {
-      await saveCurrentSession();
+      if (!selection.projectId) {
+        setLifecycleNotice("Choose a Project before saving an analytical Session. Your command remains available.");
+        return true;
+      }
+      try { await saveCurrentSession(); }
+      catch (cause) {
+        setLifecycleNotice(cause instanceof Error ? cause.message : "Session save was not confirmed. Review saved Sessions before trying again.");
+        return true; // Command stays in composer until the Home confirms the save.
+      }
     } else if (exact.command === "/sandbox") {
-      await proposeSandboxTerminal();
+      if (!await proposeSandboxTerminal()) return true; // Never clear on Home/permission failure.
     }
     setInput("");
     return true;
@@ -1450,8 +1458,11 @@ export default function ProjectExperienceShell({
     recordP1ShellEvent("composer_cancel"); await cancelConversationRun(requireGateway(), runtimeRequestId);
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
-  const proposeSandboxTerminal = async () => {
-    if (chatMode !== "project" || !selection.projectId || !selection.chatId || sandboxOpening) return;
+  const proposeSandboxTerminal = async (): Promise<boolean> => {
+    if (chatMode !== "project" || !selection.projectId || !selection.chatId || sandboxOpening) {
+      setLifecycleNotice("Choose a saved Project Chat before requesting a sandbox review. Your command remains available.");
+      return false;
+    }
     const { projectId, chatId } = selection;
     const stillSelected = () => sandboxSelectionRef.current.projectId === projectId
       && sandboxSelectionRef.current.chatId === chatId;
@@ -1460,8 +1471,10 @@ export default function ProjectExperienceShell({
     try {
       const proposal = await requireGateway().request("execution.operation.propose", { projectId, chatId });
       if (stillSelected()) setSandboxProposal(proposal);
+      return stillSelected();
     } catch (error) {
       if (stillSelected()) setSandboxError(error instanceof Error ? error.message : "LiOS could not prepare the reviewed sandbox operation.");
+      return false;
     } finally {
       setSandboxOpening(false);
     }
