@@ -117,6 +117,8 @@
     "audit:active-seven-phase": "tsx script/validate_active_seven_phase_closure.ts",
     "test:flagship": "node --import tsx --test server/flagshipArtifactPersistence.test.ts server/aiProviderVerification.test.ts script/live_ai_product_smoke_contract.test.ts shared/flagshipReleaseEvidence.test.ts",
     "test:ws64": "node --import tsx --test server/ws64SevenProductScenarios.test.ts server/flagshipArtifactPersistence.test.ts client/src/lib/gateway/conversationRun.test.ts client/src/lib/terminalWorkspace.test.ts shared/artifactExportRights.test.ts && node --import tsx script/ws64_scenario_source_report.ts --source-tests-passed",
+    "test:ws65": "node --import tsx --test evals/ws65InstalledUxEvidence.test.ts && node --test script/ws65_installed_ux_wiring.test.mjs",
+    "acceptance:ux:installed": "tsx script/validate_ws65_installed_ux.ts",
     "acceptance:flagship": "node --import tsx --test script/live_ai_product_smoke_contract.test.ts && tsx script/validate_flagship_product_acceptance.ts",
     "acceptance:flagship:live": "tsx script/live_ai_product_smoke.ts",
     "acceptance:flagship:live-service": "tsx script/live_flagship_service_journey.ts",
