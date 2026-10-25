@@ -362,3 +362,14 @@ test("WS-61: a completed run with a prior error event never asserts success", as
   assert.equal(result.error, "Permission denied");
   client.stop();
 });
+
+test("WS-61: a disconnected Home cannot queue a fresh run that sends on reconnect", async () => {
+  const client = await readyClient();
+  const ws = FakeWebSocket.last;
+  client.stop();
+  const result = await runConversation(client, { chatId: 9, body: { requestId: ID, message: "Unsent private draft" }, onEvent: () => {} });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 0);
+  assert.equal(result.errorCode, "run_status_unconfirmed");
+  assert.equal(ws.sent.filter((frame) => frame.method === "conversation.start").length, 0);
+});
