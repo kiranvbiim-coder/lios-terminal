@@ -20,7 +20,7 @@ export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpa
     : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
     <div role="separator" aria-label="Resize analytical Artifact" aria-orientation="vertical" tabIndex={focus ? -1 : 0}
       className={focus ? "hidden" : "absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"}
-      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); const available = event.currentTarget.parentElement?.parentElement?.getBoundingClientRect().width ?? 0; setWidth(value => clampConversationSidecarWidth((value ?? event.currentTarget.parentElement?.getBoundingClientRect().width ?? 600) + (event.key === "ArrowLeft" ? 40 : -40), available)); } }}
+      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); const aside = event.currentTarget.parentElement; const available = aside?.parentElement?.getBoundingClientRect().width ?? 0; const currentWidth = aside?.getBoundingClientRect().width ?? 600; const change = event.key === "ArrowLeft" ? 40 : -40; setWidth(value => clampConversationSidecarWidth((value ?? currentWidth) + change, available)); } }}
       onPointerDown={event => {
         event.preventDefault(); cleanup.current?.();
         const aside = event.currentTarget.parentElement, container = aside?.parentElement, initial = aside?.getBoundingClientRect().width ?? 600, start = event.clientX;
