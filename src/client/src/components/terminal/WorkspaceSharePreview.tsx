@@ -103,14 +103,14 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
             <span>I understand this link reveals the listed pane types and symbols to anyone who receives it. I have reviewed them and choose to copy this public layout link.</span>
           </label>
           <p className="text-xs leading-5 text-muted-foreground">
-            A copied link can be forwarded and cannot revoke access to its public layout details. It does not grant access to private sources or Artifacts.
+            A copied link can be forwarded and cannot revoke access to its public layout details. It does not grant access to private sources or Artifacts. A local Home address may not be reachable from another device.
           </p>
         </div>
 
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-[#080808] p-4 sm:px-5">
           <p role={copyState === "error" ? "alert" : "status"} className={copyState === "error" ? "min-w-0 flex-1 text-sm text-rose-200" : "min-w-0 flex-1 text-sm text-muted-foreground"}>
             {copyState === "copied" ? "Link copied. You control where it is shared."
-              : copyState === "error" ? "Could not copy the link. Check clipboard permissions and try again."
+              : copyState === "error" ? "Could not create or copy a shareable link. Check the app address and clipboard permissions, then retry. No link was copied."
                 : disclosureConfirmed ? "Only the layout details shown above will be copied." : "Review and acknowledge the public symbols before copying."}
           </p>
           <button type="button" onClick={() => void copy()} disabled={copyState === "copying" || !disclosureConfirmed}
