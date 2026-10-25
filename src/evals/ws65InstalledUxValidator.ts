@@ -49,6 +49,14 @@ export function validateWS65ReleaseBundle(paths: WS65ValidationPaths) {
   for (const platform of WS65_PLATFORMS) {
     const run = report.runs.find((item) => item.platform === platform);
     if (!run) throw new Error("Missing installed UX run for " + platform);
+    for (const [filename, expected, role] of [
+      [run.installerName, run.installerSha256, "signed installer"],
+      [run.installedAppName, run.installedAppSha256, "installed executable"],
+    ] as const) {
+      if (sha256(path.resolve(paths.evidenceDir, platform, filename)) !== expected) {
+        throw new Error(`WS-65 ${platform} ${role} bytes do not match the recorded package digest.`);
+      }
+    }
     for (const artifact of run.evidence) {
       const evidencePath = path.resolve(paths.evidenceDir, platform, artifact.name);
       const computed = sha256(evidencePath);
