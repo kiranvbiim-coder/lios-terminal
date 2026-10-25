@@ -55,3 +55,27 @@ test("budget, network, storage and unknown errors are distinct and never headlin
   assert.equal(unknown.kind, "unknown");
   assert.doesNotMatch(unknown.title, /runtime_failed/);
 });
+
+test("WS-61 permission denial does not become a provider failure or an automatic retry", () => {
+  for (const [code, message] of [
+    ["access_denied", "The source permission was denied."],
+    ["forbidden", "HTTP 403 forbidden for this Project resource"],
+    ["rights_revoked", "The selected source was revoked."],
+    ["entitlement", "Entitlement required for the requested licensed source."],
+  ]) {
+    const view = presentRuntimeError(code, message);
+    assert.equal(view.kind, "permission");
+    assert.deepEqual(view.recoveries, []);
+    assert.match(view.title, /Access was not granted/);
+  }
+  assert.equal(presentRuntimeError("provider_error", "Provider returned 403 invalid API key").kind, "ai_provider");
+});
+
+test("WS-61 interrupted network or uncertain storage does not claim the draft was saved", () => {
+  const network = presentRuntimeError("network", "fetch failed");
+  assert.equal(network.kind, "network");
+  assert.match(network.hint, /may have received/);
+  const storage = presentRuntimeError("storage", "could not save");
+  assert.equal(storage.kind, "storage");
+  assert.match(storage.hint, /no save success was confirmed/);
+});
