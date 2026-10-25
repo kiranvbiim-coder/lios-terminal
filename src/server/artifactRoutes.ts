@@ -49,7 +49,7 @@ import {
 } from "./artifactStore";
 import { queryDataArtifact } from "./dataArtifactStore";
 import { createArtifactPackage, importArtifactPackage, verifyArtifactPackage } from "./artifactPackage";
-import { getArtifactExportPlan } from "./artifactExport";
+import { ArtifactExportRightsError, getArtifactExportPlan } from "./artifactExport";
 import { proposeArtifactBranchMerge } from "./artifactRevisionMerge";
 import {
   SPREADSHEET_IMPORT_MAX_FILE_BYTES,
@@ -117,6 +117,10 @@ function pathText(value: unknown): string {
 }
 
 function fail(res: Response, error: unknown): void {
+  if (error instanceof ArtifactExportRightsError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
   if (error instanceof DecisionObjectArtifactError) {
     res.status(error.status).json({ error: error.message });
     return;
