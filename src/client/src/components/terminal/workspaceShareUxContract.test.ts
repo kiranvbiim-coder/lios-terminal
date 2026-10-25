@@ -25,7 +25,10 @@ test("clipboard failure cannot masquerade as success and can be retried", () => 
   assert.match(preview, /role=\{copyState === "error" \? "alert" : "status"\}/);
   assert.match(preview, /Could not copy the link/);
   assert.match(preview, /onClick=\{\(\) => void copy\(\)\}/);
-  assert.match(preview, /disabled=\{copyState === "copying"\}/);
+  assert.match(preview, /disabled=\{copyState === "copying" \|\| !disclosureConfirmed\}/);
+  assert.match(preview, /data-testid="share-public-symbol-consent"/);
+  assert.match(preview, /onChange=\{\(event\) => \{ setDisclosureConfirmed\(event\.target\.checked\)/);
+  assert.match(preview, /if \(copyState === "copying" \|\| !disclosureConfirmed\) return/);
   assert.doesNotMatch(preview, /setTimeout\(/);
 });
 
