@@ -373,3 +373,26 @@ test("WS-61: a disconnected Home cannot queue a fresh run that sends on reconnec
   assert.equal(result.errorCode, "run_status_unconfirmed");
   assert.equal(ws.sent.filter((frame) => frame.method === "conversation.start").length, 0);
 });
+
+test("WS-62 Gateway retains only final cumulative text but every nontext receipt", async () => {
+  const client = await readyClient();
+  const ws = FakeWebSocket.last;
+  const seen: string[] = [];
+  const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "stream" }, onEvent: e => seen.push(e.type) });
+  await sleep(0);
+  const start = lastRequest(ws, "conversation.start");
+  ws.serverSend({ type: "res", id: start.id, ok: true, payload: { requestId: ID } });
+  emit(ws, 0, status("working"));
+  for (let i = 1; i <= 1_000; i++) emit(ws, i, text("x".repeat(i)));
+  emit(ws, 1_001, { type: "error", requestId: ID, at, message: "Source unavailable", code: "source_unavailable" });
+  emit(ws, 1_002, { type: "done", requestId: ID, at, status: "failed" });
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(seen.filter(kind => kind === "text").length, 1_000, "all wire snapshots reach the original observer");
+  assert.equal(result.events.filter(e => e.type === "text").length, 1, "only final cumulative text retained");
+  assert.equal(result.events.length, 4);
+  assert.deepEqual(result.events.map(e => e.type), ["status", "text", "error", "done"]);
+  assert.equal(result.text, "x".repeat(1_000), "final full response remains exact");
+  assert.equal(result.error, "Source unavailable", "server error preserved");
+  client.stop();
+});
