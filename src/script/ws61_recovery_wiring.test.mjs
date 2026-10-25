@@ -44,3 +44,15 @@ test("WS-61 P4 existing encrypted draft and revision conflict path stays canonic
   assert.match(artifact, /Local changes are retained/);
   assert.doesNotMatch(shell, /localStorage\.setItem\([^;]*draft/i);
 });
+
+test("WS-61 failed /session or /sandbox command remains in the composer and cannot be reported saved", () => {
+  const command = shell.slice(shell.indexOf("const runCommand = async"), shell.indexOf("const gateway = useGateway()"));
+  assert.match(command, /await saveCurrentSession\(\)/);
+  assert.match(command, /catch \(cause\)/);
+  assert.match(command, /Session save was not confirmed/);
+  assert.match(command, /if \(!await proposeSandboxTerminal\(\)\) return true/);
+  const proposal = shell.slice(shell.indexOf("const proposeSandboxTerminal = async"), shell.indexOf("const reviewSandboxTerminal = async"));
+  assert.match(proposal, /Promise<boolean>/);
+  assert.match(proposal, /return false/);
+  assert.match(proposal, /return stillSelected\(\)/);
+});
