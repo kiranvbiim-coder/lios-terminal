@@ -57,10 +57,25 @@ test("WS64-02 domain-neutral first-use: helpful file-oriented AI without a finan
   const starters = starterPromptsForChatMode("quick");
   assert.ok(starters.some((item) => /create something/i.test(item.label)));
   assert.ok(starters.some((item) => /explore/i.test(item.label)));
-  // JR05 exercises actual conversation/AI synthesis with a fixture response;
-  // it does not claim that an unconfigured live AI provider can answer.
-  const result = await requirePass("JR05");
-  assert.equal(result.status, "must_pass");
+  // This is a genuinely non-financial prompt through the canonical Runtime,
+  // with only the provider completion replaced by a labelled fixture. Never
+  // use the portfolio/file case as evidence for a general writing experience.
+  const result = await runJourney({
+    id: "WS64-NONFINANCE",
+    prompt: "Draft a friendly agenda for a volunteer community cleanup meeting. Include roles and next actions.",
+    aiText: "Volunteer community cleanup meeting agenda: welcome, choose roles, agree on cleanup locations, and assign next actions.",
+    expect: {
+      textIncludes: ["volunteer community cleanup meeting agenda", "roles", "next actions"],
+      forbidToolStarts: ["lios.market-data", "lios.company-intelligence", "lios.instrument-master"],
+      artifactTypes: [],
+      noErrorEvent: true,
+      doneStatus: "completed",
+    },
+    maxMs: 5000,
+    status: "must_pass",
+  });
+  assert.deepEqual(result.failures, [], `Non-finance Runtime gaps: ${result.failures.join("; ")}`);
+  assert.equal(result.passed, true);
   assert.equal(sourceStatus("WS64-02").accepted, false);
 });
 
