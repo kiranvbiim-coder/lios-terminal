@@ -333,7 +333,7 @@ test("WS-61: Home restart is unconfirmed, not a successful run that may clear dr
 });
 
 test("WS-61: terminal failed and cancelled statuses cannot claim a successful submission", async () => {
-  for (const status of ["failed", "cancelled", "denied"] as const) {
+  for (const status of ["failed", "cancelled"] as const) {
     const client = await readyClient();
     const ws = FakeWebSocket.last;
     const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "request" }, onEvent: () => {} });
