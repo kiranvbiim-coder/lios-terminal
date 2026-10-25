@@ -8,6 +8,7 @@ import { getTerminalCapability } from "@/lib/terminalCatalog";
 
 export default function WorkspaceSharePreview({ workspace, onClose }: { workspace: WorkspaceState; onClose: () => void }) {
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const [disclosureConfirmed, setDisclosureConfirmed] = useState(false);
   const originalPanes = getWorkspacePanes(workspace);
   const panes = getWorkspacePanes(workspaceForShare(workspace));
   const includesPrivateSurface = originalPanes.some(({ pane }) =>
@@ -15,7 +16,7 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
   const containsArtifact = originalPanes.some(({ pane }) => pane.view === "artifact");
 
   const copy = async () => {
-    if (copyState === "copying") return;
+    if (copyState === "copying" || !disclosureConfirmed) return;
     setCopyState("copying");
     try {
       const url = buildWorkspaceShareUrl(workspace);
@@ -95,8 +96,14 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
             </p>
           )}
 
+          <label className="flex items-start gap-3 rounded-lg border border-amber-300/30 bg-amber-300/[0.035] p-3 text-sm leading-6 text-amber-100">
+            <input type="checkbox" data-testid="share-public-symbol-consent" checked={disclosureConfirmed}
+              onChange={(event) => { setDisclosureConfirmed(event.target.checked); setCopyState("idle"); }}
+              className="mt-1 h-4 w-4 shrink-0 accent-amber-300" />
+            <span>I understand this link reveals the listed pane types and symbols to anyone who receives it. I have reviewed them and choose to copy this public layout link.</span>
+          </label>
           <p className="text-xs leading-5 text-muted-foreground">
-            Review the symbols above before sharing. The link can be forwarded, and it cannot revoke access to the public layout details.
+            A copied link can be forwarded and cannot revoke access to its public layout details. It does not grant access to private sources or Artifacts.
           </p>
         </div>
 
@@ -104,9 +111,9 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
           <p role={copyState === "error" ? "alert" : "status"} className={copyState === "error" ? "min-w-0 flex-1 text-sm text-rose-200" : "min-w-0 flex-1 text-sm text-muted-foreground"}>
             {copyState === "copied" ? "Link copied. You control where it is shared."
               : copyState === "error" ? "Could not copy the link. Check clipboard permissions and try again."
-                : "Only the layout details shown above will be copied."}
+                : disclosureConfirmed ? "Only the layout details shown above will be copied." : "Review and acknowledge the public symbols before copying."}
           </p>
-          <button type="button" onClick={() => void copy()} disabled={copyState === "copying"}
+          <button type="button" onClick={() => void copy()} disabled={copyState === "copying" || !disclosureConfirmed}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50">
             {copyState === "copied" ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             {copyState === "copying" ? "Copying…" : copyState === "copied" ? "Copied" : "Copy layout link"}
