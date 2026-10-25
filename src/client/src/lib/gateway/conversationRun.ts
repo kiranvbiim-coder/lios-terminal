@@ -67,6 +67,12 @@ export async function followConversationRun(
       if (payload.requestId !== requestId || payload.runSeq <= lastSeq) return;
       lastSeq = payload.runSeq;
       const event = payload.event;
+      if (event.type === "text") {
+        // Each text payload replaces the cumulative text for this same request.
+        // Avoid retaining O(n²) answer snapshots until the run settles.
+        const previousIndex = events.findIndex((prior) => prior.type === "text" && prior.requestId === requestId);
+        if (previousIndex >= 0) events.splice(previousIndex, 1);
+      }
       events.push(event);
       try {
         onEvent(event);
