@@ -30,6 +30,23 @@ const {
 } = require("./desktopBackupRestore.cjs");
 app.setName("LiOS Intelligence Terminal");
 
+// Opt-in test isolation (explicit env only): run on a separate Electron profile and data root so
+// qualification never touches the real user profile. Remote debugging is loopback-only and also opt-in.
+{
+  const isolated = (process.env.LIOS_USER_DATA_DIR || "").trim();
+  if (isolated) {
+    if (!path.isAbsolute(isolated)) throw new Error("LIOS_USER_DATA_DIR must be an absolute path.");
+    fs.mkdirSync(isolated, { recursive: true, mode: 0o700 });
+    app.setPath("userData", isolated);
+    process.env.LIOS_DATA_ROOT = path.join(isolated, "data");
+  }
+  const debugPort = Number.parseInt(process.env.LIOS_REMOTE_DEBUG_PORT || "", 10);
+  if (isolated && Number.isInteger(debugPort) && debugPort > 1024 && debugPort < 65536) {
+    app.commandLine.appendSwitch("remote-debugging-port", String(debugPort));
+    app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+  }
+}
+
 const desktopSelfTestRequested = process.argv.includes("--desktop-self-test");
 const nativeUnicodePdfSmokeRequested = process.argv.includes("--unicode-pdf-smoke");
 
