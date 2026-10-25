@@ -389,6 +389,8 @@ export default function ProjectExperienceShell({
   const voiceInputAvailable = hasNonWhisperTranscription || (hasLocalWhisper && Boolean(voiceRuntimeStatus?.browserRecordingReady));
   const voiceOutputAvailable = Boolean(voiceProvidersQuery.data?.speech.some((provider) => provider.id));
   const [streaming, setStreaming] = useState("");
+  const pendingTextEventRef = useRef<ConversationRuntimeEvent | null>(null);
+  const pendingTextFrameRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -592,6 +594,9 @@ export default function ProjectExperienceShell({
     followLatestRef.current = true;
     setAwayFromLatest(false);
     historyScrollAnchorRef.current = null;
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    pendingTextEventRef.current = null;
     setVisibleMessageCount(CHAT_RENDER_BATCH);
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
@@ -1091,8 +1096,6 @@ export default function ProjectExperienceShell({
   };
   // The Home emits cumulative text snapshots. Present at most one per animation frame,
   // while recording every original event for telemetry and flushing before non-text evidence.
-  const pendingTextEventRef = useRef<ConversationRuntimeEvent | null>(null);
-  const pendingTextFrameRef = useRef<number | null>(null);
   const flushPendingText = () => {
     if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
     pendingTextFrameRef.current = null;
