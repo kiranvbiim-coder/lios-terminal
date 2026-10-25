@@ -129,7 +129,8 @@ import SavedArtifactCards from "./SavedArtifactCards";
 import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
-import { useGateway } from "@/lib/gateway/GatewayProvider";
+import { useGateway, useGatewayState } from "@/lib/gateway/GatewayProvider";
+import { conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
 import { attachConversationRun, cancelConversationRun, runConversation } from "@/lib/gateway/conversationRun";
 import { useInterruptedAgentRun } from "@/lib/useInterruptedAgentRun";
 import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
@@ -1055,6 +1056,15 @@ export default function ProjectExperienceShell({
   };
 
   const gateway = useGateway();
+  const gatewayState = useGatewayState();
+  const [browserOnline, setBrowserOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine !== false);
+  useEffect(() => {
+    const refresh = () => setBrowserOnline(navigator.onLine !== false);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => { window.removeEventListener("online", refresh); window.removeEventListener("offline", refresh); };
+  }, []);
+  const sendAvailability = conversationSendAvailability(browserOnline, gatewayState);
   const requireGateway = () => {
     if (!gateway) throw new Error("LiOS is not connected to your Home yet. Please retry in a moment.");
     return gateway;
@@ -1168,6 +1178,13 @@ export default function ProjectExperienceShell({
       setLifecycleNotice(agentComposer.guidance);
       return;
     }
+    // Preflight before creating a Chat or uploading private staged files.
+    // Existing read-only and local Artifact actions remain independently available.
+    const sendGate = conversationSendAvailability(typeof navigator === "undefined" || navigator.onLine !== false, gateway?.state ?? "idle");
+    if (!sendGate.canSubmit) {
+      setLifecycleNotice(`${sendGate.title}. ${sendGate.detail}`);
+      return;
+    }
 
     if (chatMode === "project" && selection.projectId) {
       dispatchVisualContext({
@@ -1279,8 +1296,10 @@ export default function ProjectExperienceShell({
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
-        if (!result.ok) setInput(message);
-        else {
+        if (!result.ok) {
+          if (!retrying) setTemporaryMessages((current) => current.filter((item) => item.id !== userMessage.id));
+          setInput(message);
+        } else {
           setVoiceTranscripts([]);
           setVoiceTranscriptReviewed(false);
         }
@@ -2120,7 +2139,13 @@ export default function ProjectExperienceShell({
                   setInput(action);
                   requestAnimationFrame(() => composerRef.current?.focus());
                 }}
-                onRetry={() => { if (lastSubmittedMessage.trim() && !busy) void send({ message: lastSubmittedMessage }); }}
+                onRetry={() => {
+                  if (lastSubmittedMessage.trim() && !busy) {
+                    setInput((current) => current.trim() ? current : lastSubmittedMessage);
+                    setLifecycleNotice(unconfirmedRunRecoveryNotice());
+                    requestAnimationFrame(() => composerRef.current?.focus());
+                  }
+                }}
                 onOpenTerminal={visibleExecutionSessionId ? () => setExecutionTerminalOpen(true) : undefined}
                 {...interruptedRun.traceProps}
                 onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}
@@ -2145,6 +2170,11 @@ export default function ProjectExperienceShell({
                   stageAttachmentFiles(event.dataTransfer.files);
                 }}
               >
+                {!sendAvailability.canSubmit && (
+                  <div role="status" data-testid="conversation-connection-recovery" className="border-b border-amber-300/20 px-3 py-2 font-ui text-[12px] text-amber-100">
+                    <strong>{sendAvailability.title}.</strong> {sendAvailability.detail}
+                  </div>
+                )}
                 {(mentionCandidates.length > 0 || commandCandidates.length > 0) && (
                   <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
                     {commandCandidates.map((item) => (
@@ -2402,7 +2432,7 @@ export default function ProjectExperienceShell({
                   <button
                     type="button"
                     onClick={() => void send()}
-                    disabled={busy || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
+                    disabled={busy || !sendAvailability.canSubmit || (agentComposer.enabled && !agentComposer.ready) || (!input.trim() && pendingAttachmentFiles.length + pendingAttachmentRefs.length === 0)}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-black transition-opacity disabled:opacity-30"
                     aria-label="Send"
                   >
