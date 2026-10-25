@@ -32,7 +32,7 @@ export function presentRuntimeError(code: string, message: string): ErrorPresent
   if (/\b429\b|rate.?limit|quota|too many requests|billing/.test(text)) {
     return { kind: "rate_limit", title: "The AI provider is out of quota", hint: "Check the provider's usage or billing, or switch provider on the Connect screen. Deterministic results still work with AI off.", recoveries: ["connect", "retry"] };
   }
-  if (/permission.?denied|access.?denied|\bforbidden\b|source.{0,30}revoked|entitlement required|not permitted|\b403\b/.test(text)
+  if (/permission.{0,14}denied|access.?denied|\bforbidden\b|source.{0,30}revoked|entitlement required|not permitted|\b403\b/.test(text)
     && !/provider|api key|model credential/.test(text)) {
     return {
       kind: "permission",
