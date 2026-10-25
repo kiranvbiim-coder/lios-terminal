@@ -305,12 +305,16 @@ test("H2b receipts persist per chat and restore on reload without storing answer
   assert.match(shell, /traceOwnerChatRef\.current = chatId/);
 });
 
-test("H2b error kit: failed runs show a plain-language card with retry and Connect, not a raw code headline", () => {
+test("H2b error kit: failed runs show a plain-language card with review and Connect, not a raw code headline", () => {
   const trace = source("../components/terminal/ConversationRuntimeTrace.tsx");
   const shell = source("../components/terminal/ProjectExperienceShell.tsx");
   assert.match(trace, /presentRuntimeError\(runtimeError\.code, runtimeError\.message\)/);
   assert.match(trace, /data-testid="trace-error-retry"/);
   assert.match(trace, /data-testid="trace-error-connect"/);
   assert.doesNotMatch(trace, /Execution failed/);
-  assert.match(shell, /onRetry=\{\(\) => \{ if \(lastSubmittedMessage\.trim\(\) && !busy\)/);
+  assert.match(shell, /onRetry=\{\(\) => \{/);
+  assert.match(shell, /setInput\(\(current\) => current\.trim\(\) \? current : lastSubmittedMessage\)/);
+  assert.match(shell, /unconfirmedRunRecoveryNotice\(\)/);
+  const recovery = shell.slice(shell.indexOf("onRetry={() => {"), shell.indexOf("onRetry={() => {") + 450);
+  assert.doesNotMatch(recovery, /void send\(/, "review must never silently start a duplicate run");
 });
