@@ -218,7 +218,7 @@ export default function DevicesSettings() {
         <button type="button" className={buttonClass} onClick={() => { setPendingReadCount(pendingNotificationReadCount()); void refresh(); }}
           disabled={devicesQuery.isFetching}>Refresh server device status</button>
       </section>
-      {continuityNotice && <p role="status" className="font-ui text-xs text-amber-200">{continuityNotice}</p>
+      {continuityNotice && <p role="status" className="font-ui text-xs text-amber-200">{continuityNotice}</p>}
       {data && <RemoteNodeCapabilities />}
 
       {data?.canPair && (
@@ -306,7 +306,7 @@ export default function DevicesSettings() {
               <button type="button" disabled={networkMutation.isPending} className={buttonClass} onClick={() => setNetworkReview(null)}>Cancel</button>
             </div>
           </section>}
-          {networkMutation.isPending && <p className="font-terminal text-xs text-muted-foreground" role="status">Saving device network settings at Home; connectivity has not yet been confirmed…</p>
+          {networkMutation.isPending && <p className="font-terminal text-xs text-muted-foreground" role="status">Saving device network settings at Home; connectivity has not yet been confirmed…</p>}
           {networkError && <p className="font-terminal text-[8px] text-rose-300" role="alert">{networkError}</p>}
           {network?.error && network.error !== networkError && (
             <p className="font-terminal text-[8px] text-rose-300" role="alert">{network.error}</p>
