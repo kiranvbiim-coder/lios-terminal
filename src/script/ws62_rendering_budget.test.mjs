@@ -20,6 +20,10 @@ test("WS-62 Chat renders bounded history, not full saved messages on each stream
   assert.match(shell, /historyScrollAnchorRef/);
   assert.match(shell, /useLayoutEffect/);
   assert.match(shell, /appendConversationPresentationEvent\(current, runtimeEvent\)/);
+  assert.match(shell, /appendConversationPresentationEvent\(current, textEvent\)/);
+  assert.match(shell, /pendingTextEventRef\.current = runtimeEvent/);
+  assert.match(shell, /requestAnimationFrame\(flushPendingText\)/);
+  assert.match(shell, /flushPendingText\(\);[\s\S]*recordP3TrustManifest|flushPendingText\(\);/);
   assert.match(budget, /CHAT_RENDER_BATCH = 80/);
   assert.match(budget, /event\.type !== "text" \|\| event\.requestId !== next\.requestId/);
 });
