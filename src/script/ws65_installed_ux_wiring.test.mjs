@@ -34,7 +34,7 @@ test("WS-65 rejects source-only completion and SHA mismatches, reuses canonical 
   assert.match(validator, /physicalObservationIndependentlyVerified: false/);
   assert.match(cli, /source CI is not installed release evidence/);
   assert.match(cli, /process\.env\.GITHUB_SHA/);
-  assert.match(cli, /--report/);
+  assert.match(cli, /required\("report"\)/);
   assert.equal(typeof packageJson.scripts["test:ws65"], "string");
   assert.equal(typeof packageJson.scripts["acceptance:ux:installed"], "string");
 });
