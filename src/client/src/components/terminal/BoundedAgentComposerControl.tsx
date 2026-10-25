@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Bot } from "lucide-react";
 import type { BoundedAgentComposerState } from "@/lib/useBoundedAgentComposer";
 
