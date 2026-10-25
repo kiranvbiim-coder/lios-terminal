@@ -13,13 +13,13 @@
 1. Safe share builder: allowlist pane view + symbol + position/focus only, preserve 1–4-pane arrangement; generic Market replaces Artifact pane. A clean HTTP(S) root link strips query, private path, hash and userinfo; file/custom protocols fail. No mutation of private source or saved layout.
 2. Safe receiver: cap untrusted ws parameter at 10,000 chars; always re-project decoded state onto the public allowlist. Existing audience restrictions still apply before projection.
 3. Share consent: readable Radix Dialog previews exact outgoing symbols and exclusions, requires unchecked-by-default affirmative acknowledgement before clipboard copy, and does not report successful copy on error. Local Home URLs may not be reachable by others.
-4. Artifact export: explicit per-version checkbox acknowledging local copy and redistribution restrictions; explicit P3 evidence access denial, revocation or expiration blocks UI export. Remaining licensed/unknown sources display caution; no new permission is invented.
-5. Preserve authenticated server route: getArtifactExportPlan(ctx(req), artifactId, version), exact P4 Artifact version/hash checks and canonical P3 manifest remain authoritative. UI is not an entitlement engine or a replacement for server ACL.
+4. Artifact export: explicit per-version checkbox acknowledging local copy and redistribution restrictions; a **shared P3 source-denial classifier** blocks both the UI and the authenticated P4 export-plan endpoint on explicitly recorded denial/revocation/expiration. Server responds HTTP 403, malformed recorded non-null manifests also fail closed. Remaining licensed/unknown sources display caution; no new permission is invented.
+5. Preserve authenticated server route: getArtifactExportPlan(ctx(req), artifactId, version), exact P4 Artifact version/hash checks and canonical P3 manifest remain authoritative. The new 403 is recorded-state denial, **not** a live source-license or recipient-redistribution authorization service.
 
 ## Source checks (from src/)
 
 ```sh
-node --import tsx --test client/src/lib/terminalWorkspace.test.ts client/src/lib/artifactExportDisclosure.test.ts
+node --import tsx --test shared/artifactExportRights.test.ts client/src/lib/terminalWorkspace.test.ts client/src/lib/artifactExportDisclosure.test.ts
 node --import tsx --test client/src/components/terminal/workspaceShareUxContract.test.ts
 node --test script/ws63_privacy_rights_share.test.mjs
 npm run check
