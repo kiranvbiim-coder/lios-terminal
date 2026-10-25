@@ -26,7 +26,7 @@ const valid = () => ({
     platform, arch: platform === "macos" ? "arm64" : "x64",
     osVersion: platform === "macos" ? "macOS test" : "Windows test",
     deviceProfile: "Synthetic test fixture only",
-    installerSha256: sha, installedAppSha256: sha, signedPackageVerified: true,
+    installerName: "signed-installer.bin", installerSha256: sha, installedAppName: "installed-app.bin", installedAppSha256: sha, signedPackageVerified: true,
     macNotarizationVerified: platform === "macos",
     cleanInstallCompleted: true, firstUseCompleted: true,
     keyboardOnlyCompleted: true, assistiveTechnology: platform === "macos" ? "voiceover" : "narrator",
