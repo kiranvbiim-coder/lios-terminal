@@ -1385,3 +1385,130 @@ body,
 .lios-reference-titlebar-brand .font-display { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:400; }
 
 .lios-reference-navigation-rail, .lios-reference-expand-sidebar { box-sizing:border-box; }
+
+/*
+ * TC/UX WS-59: small-window and 200%-zoom reflow.
+ * CSS viewport units follow browser zoom; no special "zoom detector", saved
+ * layout rewrite, hidden action, fixed-width drawer or second Workbench.
+ * These rules intentionally follow the reference shell's 260px/348px overrides.
+ */
+.terminal-root .lios-project-experience-shell,
+.terminal-root .lios-project-chat-surface,
+.terminal-root .lios-project-experience-shell > main {
+  min-inline-size: 0;
+}
+.terminal-root .lios-project-experience-shell .lios-conversation-header > div:first-child {
+  min-inline-size: 0;
+}
+.terminal-root .lios-project-experience-shell .lios-conversation-composer-actions {
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  row-gap: .375rem;
+}
+.terminal-root .lios-project-experience-shell .lios-conversation-composer-actions > * {
+  max-inline-size: 100%;
+}
+.terminal-root .lios-project-experience-shell .lios-section-surface {
+  min-inline-size: 0;
+  overflow-x: auto;
+}
+.terminal-root .lios-project-experience-shell .lios-section-surface > header {
+  flex-wrap: wrap;
+}
+.terminal-root .lios-project-experience-shell .lios-section-surface h1 {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1023px) {
+  /* A 768px window or 1440px device zoomed to 200% must not reserve
+     a 260px desktop rail beside chat. The existing Sheet owns navigation. */
+  .terminal-root .lios-project-experience-shell { flex-direction: column; }
+  .terminal-root .lios-authenticated-navigation { display: none !important; }
+  .terminal-root .lios-project-experience-shell .lios-mobile-navigation {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: .75rem;
+    min-height: 44px;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--lios-border-default);
+  }
+  .lios-navigation-sheet {
+    max-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+  .lios-navigation-sheet .lios-navigation-history {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .terminal-root .lios-project-experience-shell > main {
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .terminal-root .lios-project-experience-shell .lios-conversation-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 44px;
+    padding: .5rem .75rem;
+  }
+  .terminal-root .lios-project-experience-shell .lios-conversation-header button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .terminal-root .lios-project-experience-shell .lios-context-strip {
+    padding-inline: .75rem;
+    overflow-wrap: anywhere;
+  }
+  /* Sidecar remains in the *same* Chat and is scrollable below the composer.
+     Focus mode still uses the existing Artifact and Exit Focus actions. */
+  .terminal-root .lios-project-chat-surface {
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .terminal-root .lios-project-chat-surface > div:first-child:not(.hidden) {
+    flex: 1 1 60%;
+    min-height: 0;
+    min-width: 0;
+  }
+  .terminal-root .lios-project-chat-surface > .lios-artifact-sidecar {
+    flex: 0 0 min(40%, 22rem);
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 0;
+    max-height: 40%;
+    overflow-x: auto;
+    overflow-y: auto;
+    border-left: 0;
+    border-top: 1px solid var(--lios-border-default);
+  }
+  /* A vertical drag handle is misleading when the panels stack. */
+  .terminal-root .lios-project-chat-surface > .lios-artifact-sidecar [role="separator"] {
+    display: none;
+  }
+}
+
+@media (max-width: 410px) {
+  /* Real 320/375/390px and zoom-equivalent CSS viewports. */
+  .terminal-root .lios-project-experience-shell .lios-conversation-header { gap: .375rem; padding: .375rem .5rem; }
+  .terminal-root .lios-project-experience-shell .lios-conversation-composer-actions { padding-inline: .375rem; }
+  .terminal-root .lios-project-experience-shell .lios-conversation-composer-actions :is(button,select) {
+    min-height: 36px;
+  }
+  .terminal-root .lios-project-experience-shell .lios-section-surface { padding: 1rem .75rem; }
+  .terminal-root .lios-project-experience-shell .lios-project-chat-content { min-width: 0; }
+  .terminal-root .lios-project-experience-shell .lios-artifact-sidecar :is(button,input,select,textarea) { max-width: 100%; }
+}
+
+@media (max-height: 600px) and (max-width: 1023px) {
+  /* High zoom often reduces *height* as well as width. Retain working scroll
+     surfaces instead of forcing a fixed minimum conversation viewport. */
+  .terminal-root .lios-project-experience-shell .lios-conversation-composer textarea {
+    min-height: 3rem;
+  }
+  .terminal-root .lios-project-experience-shell .lios-conversation-composer { min-height: 0; }
+}
