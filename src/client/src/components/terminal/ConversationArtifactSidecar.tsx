@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import type { ComponentProps } from "react";
 import { ArtifactPane } from "./ArtifactPane";
+import { clampConversationSidecarWidth } from "@/lib/conversationSidecarSizing";
 
 interface Props extends ComponentProps<typeof ArtifactPane> {
   focus: boolean;
@@ -14,16 +15,16 @@ export default function ConversationArtifactSidecar({ focus, onExitFocus, onExpa
   const cleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => cleanup.current?.(), []);
   const requestedVersion = props.version ?? null;
-  return <aside style={focus ? undefined : { position: "relative", width: width ?? "48%", minWidth: 320, maxWidth: "80%" }} className={focus
+  return <aside style={focus ? undefined : { position: "relative", width: width ?? "48%", minWidth: 320, maxWidth: "min(80%, max(320px, calc(100% - 360px)))" }} className={focus
     ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#060606]/95 p-3"
     : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}>
     <div role="separator" aria-label="Resize analytical Artifact" aria-orientation="vertical" tabIndex={focus ? -1 : 0}
       className={focus ? "hidden" : "absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"}
-      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setWidth(value => Math.max(320, (value ?? 600) + (event.key === "ArrowLeft" ? 40 : -40))); } }}
+      onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); const available = event.currentTarget.parentElement?.parentElement?.getBoundingClientRect().width ?? 0; setWidth(value => clampConversationSidecarWidth((value ?? event.currentTarget.parentElement?.getBoundingClientRect().width ?? 600) + (event.key === "ArrowLeft" ? 40 : -40), available)); } }}
       onPointerDown={event => {
         event.preventDefault(); cleanup.current?.();
-        const aside = event.currentTarget.parentElement, initial = aside?.getBoundingClientRect().width ?? 600, start = event.clientX;
-        const move = (next: PointerEvent) => setWidth(Math.max(320, Math.min(window.innerWidth * 0.8, initial + start - next.clientX)));
+        const aside = event.currentTarget.parentElement, container = aside?.parentElement, initial = aside?.getBoundingClientRect().width ?? 600, start = event.clientX;
+        const move = (next: PointerEvent) => setWidth(clampConversationSidecarWidth(initial + start - next.clientX, container?.getBoundingClientRect().width ?? 0));
         const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); cleanup.current = null; };
         cleanup.current = end; window.addEventListener("pointermove", move); window.addEventListener("pointerup", end, { once: true });
       }}/>
