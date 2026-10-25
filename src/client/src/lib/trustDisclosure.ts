@@ -14,6 +14,15 @@ export function projectTrustDisclosure(manifest: TrustManifest): TrustDisclosure
   const freshnessLabel = summary.freshness === "ai_generated" ? "AI-generated evidence" : `${summary.freshness.replaceAll("_", " ")} evidence`;
   const conciseSummary = `${summary.sourceCount} ${sourceLabel} · ${freshnessLabel}`;
   const limitations: string[] = [];
+  // Warnings arrive with the canonical manifest and can be safety/rights material.
+  // Preserve their actual wording, never imply they are a successful source check.
+  for (const warning of warnings) {
+    if (!limitations.includes(warning)) limitations.push(warning);
+  }
+  const restricted = manifest.evidence.filter((item) => item.access?.entitlementRequired === true).length;
+  if (restricted) limitations.push(`${restricted} recorded source${restricted === 1 ? "" : "s"} require additional access or entitlement. Review the source details.`);
+  const unsupported = manifest.claims.filter((item) => item.status === "unsupported" || item.status === "conflicted").length;
+  if (unsupported) limitations.push(`${unsupported} claim${unsupported === 1 ? "" : "s"} lack support or contain conflicting evidence.`);
   if (summary.sourceCount === 0) limitations.push("No source references are recorded for this result.");
   if (summary.freshness === "delayed") limitations.push("Some recorded evidence is delayed. Check its as-of dates.");
   if (summary.freshness === "unknown") limitations.push("Source freshness has not been established.");
@@ -32,13 +41,9 @@ export function projectTrustDisclosure(manifest: TrustManifest): TrustDisclosure
   if (summary.missingCount > 0) {
     limitations.push(`${summary.missingCount} missing input${summary.missingCount === 1 ? "" : "s"} recorded; review the gaps and recovery actions.`);
   }
-  // Provider-produced warnings are material, and never silently disappear when Show work is closed.
-  for (const warning of warnings) {
-    if (!limitations.includes(warning)) limitations.push(warning);
-  }
   return {
     summary: conciseSummary,
-    visibleLimitations: limitations.slice(0, 3),
-    additionalLimitationCount: Math.max(0, limitations.length - 3),
+    visibleLimitations: limitations.slice(0, 5),
+    additionalLimitationCount: Math.max(0, limitations.length - 5),
   };
 }
