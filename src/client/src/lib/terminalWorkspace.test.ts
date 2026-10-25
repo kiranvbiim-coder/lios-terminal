@@ -353,3 +353,24 @@ test("workspace sharing strips authentication credentials embedded in an origin 
   assert.equal(parsed.searchParams.has("session"), false);
   assert.equal(parsed.searchParams.has("ws"), true);
 });
+
+test("WS-63 share links discard signed-in path tokens as well as query and hash", () => {
+  const shared = buildWorkspaceShareUrl(createInitialWorkspace(),
+    "https://alice:pass@lios.example.org/tenant/very-private/org/178/chat/90001?token=topsecret#/private/revision");
+  const url = new URL(shared);
+  assert.equal(url.origin, "https://lios.example.org");
+  assert.equal(url.pathname, "/");
+  assert.equal(url.hash, "#/");
+  assert.deepEqual([...url.searchParams.keys()], ["ws"]);
+  for (const secret of ["very-private", "90001", "topsecret", "alice", "pass", "revision"]) assert.ok(!shared.includes(secret), secret);
+});
+
+test("WS-63 share links refuse local file/custom protocols rather than exporting a private path", () => {
+  for (const base of [
+    "file:///Users/owner/private/projects/current/index.html",
+    "lios://workspace/tenant-secret?token=secret",
+    "data:text/html,private",
+  ]) {
+    assert.throws(() => buildWorkspaceShareUrl(createInitialWorkspace(), base), /not a shareable public workspace link/);
+  }
+});
