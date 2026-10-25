@@ -42,7 +42,7 @@ import { SaveWorkflowDialog } from "./SaveWorkflowDialog";
 import { useInvalidateP9Automation } from "@/lib/useP9Automation";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import { keepConversationDraft, keepConversationDraftVersion, useInvalidateArtifacts } from "@/lib/useArtifacts";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { speakText, useVoiceProviders, useVoiceRecorder } from "@/lib/useVoiceInput";
 import {
   dispatchVisualContext,
@@ -137,6 +137,7 @@ import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
 import BoundedAgentComposerControl from "./BoundedAgentComposerControl";
 import { loadSandboxSessionBookmark, saveSandboxSessionBookmark } from "@/lib/sandboxSessionBookmarkStore";
 import { loadRuntimeReceipt, saveRuntimeReceipt } from "@/lib/runtimeReceiptStore";
+import { appendConversationPresentationEvent, CHAT_RENDER_BATCH, selectConversationMessageWindow } from "@/lib/conversationRenderBudget";
 import {
   createConversationRequestId,
   loadProjectAITransmissionPolicy,
@@ -369,6 +370,7 @@ export default function ProjectExperienceShell({
   const [temporaryMessages, setTemporaryMessages] = useState<LocalMessage[]>([]);
   const temporaryWorkingContextRef = useRef<WorkingContextSnapshot | null>(null);
   const [input, setInput] = useState("");
+  const [visibleMessageCount, setVisibleMessageCount] = useState(CHAT_RENDER_BATCH);
   const [voiceTranscripts, setVoiceTranscripts] = useState<VoiceTranscript[]>([]);
   const [voiceTranscriptReviewed, setVoiceTranscriptReviewed] = useState(false);
   const [pendingAttachmentFiles, setPendingAttachmentFiles] = useState<File[]>([]);
@@ -518,6 +520,14 @@ export default function ProjectExperienceShell({
   const conversationScrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
   const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const historyScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  useLayoutEffect(() => {
+    const anchor = historyScrollAnchorRef.current;
+    if (!anchor) return;
+    historyScrollAnchorRef.current = null;
+    const viewport = conversationScrollRef.current;
+    if (viewport) viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+  }, [visibleMessageCount]);
   const keepingArtifactRef = useRef(false);
   const [projectDestination, setProjectDestination] = useState<{ description: string; save: (project: Project) => Promise<void> } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -581,6 +591,8 @@ export default function ProjectExperienceShell({
     pendingArtifactFocusRef.current = false;
     followLatestRef.current = true;
     setAwayFromLatest(false);
+    historyScrollAnchorRef.current = null;
+    setVisibleMessageCount(CHAT_RENDER_BATCH);
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
     setVoiceTranscripts([]);
@@ -1084,7 +1096,7 @@ export default function ProjectExperienceShell({
       invalidateArtifacts(runtimeEvent.artifact.projectId, runtimeEvent.persistedArtifact.id);
       if (!artifactDraftDirtyRef.current) { setConversationArtifactRef(runtimeEvent.persistedArtifact.id); setArtifactViewVersion(runtimeEvent.persistedArtifact.version); }
     }
-    setRuntimeEvents((current) => [...current, runtimeEvent]);
+    setRuntimeEvents((current) => appendConversationPresentationEvent(current, runtimeEvent));
     if (runtimeEvent.type === "text") setStreaming(runtimeEvent.text);
   };
 
@@ -1702,6 +1714,8 @@ export default function ProjectExperienceShell({
   };
 
   const displayMessages: Array<ProjectChatMessage | LocalMessage> = chatMode === "temporary" ? temporaryMessages : persistedMessages;
+  const { messages: visibleMessages, hiddenCount: hiddenMessageCount, nextBatchCount } =
+    selectConversationMessageWindow(displayMessages, visibleMessageCount);
   const citationSources = useMemo(() => collectCitationSources(runtimeEvents), [runtimeEvents]);
   const visibleExecutionSessionId = sandboxSessionId ?? runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
   const visibleExecutionSessionProjectId = sandboxSessionId ? selection.projectId : (chatMode === "project" ? selection.projectId : null);
@@ -2031,7 +2045,19 @@ export default function ProjectExperienceShell({
                     </div>
                   </section>
                 )}
-                {displayMessages.map((message) => (
+                {hiddenMessageCount > 0 && (
+                  <div className="flex justify-center" data-testid="chat-history-window" role="group" aria-label="Earlier messages">
+                    <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {
+                      const viewport = conversationScrollRef.current;
+                      if (viewport) historyScrollAnchorRef.current = { scrollHeight: viewport.scrollHeight, scrollTop: viewport.scrollTop };
+                      followLatestRef.current = false;
+                      setVisibleMessageCount((count) => count + CHAT_RENDER_BATCH);
+                    }}>
+                      Show {nextBatchCount} earlier message{nextBatchCount === 1 ? "" : "s"} · {hiddenMessageCount} hidden
+                    </button>
+                  </div>
+                )}
+                {visibleMessages.map((message) => (
                   <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
                     <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
                       message.role === "user"
