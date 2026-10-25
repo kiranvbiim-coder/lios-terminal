@@ -23,7 +23,7 @@ test("clipboard failure cannot masquerade as success and can be retried", () => 
   assert.match(preview, /catch \{/);
   assert.match(preview, /setCopyState\("error"\)/);
   assert.match(preview, /role=\{copyState === "error" \? "alert" : "status"\}/);
-  assert.match(preview, /Could not copy the link/);
+  assert.match(preview, /Could not create or copy a shareable link/);
   assert.match(preview, /onClick=\{\(\) => void copy\(\)\}/);
   assert.match(preview, /disabled=\{copyState === "copying" \|\| !disclosureConfirmed\}/);
   assert.match(preview, /data-testid="share-public-symbol-consent"/);
@@ -35,6 +35,8 @@ test("clipboard failure cannot masquerade as success and can be retried", () => 
 test("share URL implementation uses explicit allowlisting, not complete workspace serialization", () => {
   assert.match(workspace, /export function workspaceForShare/);
   assert.match(workspace, /view: pane\.view === "artifact" \? "market" : pane\.view, symbol: pane\.symbol/);
+  assert.match(workspace, /url\.pathname = "\/"/);
+  assert.match(workspace, /url\.protocol !== "https:" && url\.protocol !== "http:"/);
   assert.match(workspace, /url\.search = ""/);
   assert.match(workspace, /url\.hash = "#\/"/);
   assert.match(workspace, /url\.searchParams\.set\("ws", serializeWorkspace\(workspaceForShare\(workspace\)\)\)/);
