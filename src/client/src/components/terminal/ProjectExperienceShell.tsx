@@ -1089,15 +1089,41 @@ export default function ProjectExperienceShell({
     if (!gateway) throw new Error("LiOS is not connected to your Home yet. Please retry in a moment.");
     return gateway;
   };
+  // The Home emits cumulative text snapshots. Present at most one per animation frame,
+  // while recording every original event for telemetry and flushing before non-text evidence.
+  const pendingTextEventRef = useRef<ConversationRuntimeEvent | null>(null);
+  const pendingTextFrameRef = useRef<number | null>(null);
+  const flushPendingText = () => {
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    const textEvent = pendingTextEventRef.current;
+    pendingTextEventRef.current = null;
+    if (textEvent?.type === "text") {
+      setRuntimeEvents((current) => appendConversationPresentationEvent(current, textEvent));
+      setStreaming(textEvent.text);
+    }
+  };
+  useEffect(() => () => {
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    pendingTextEventRef.current = null;
+  }, []);
   const applyRuntimeEvent = (runtimeEvent: ConversationRuntimeEvent) => {
     recordP2ConversationEvent(runtimeEvent);
+    if (runtimeEvent.type === "text") {
+      pendingTextEventRef.current = runtimeEvent;
+      if (pendingTextFrameRef.current === null) {
+        pendingTextFrameRef.current = requestAnimationFrame(flushPendingText);
+      }
+      return;
+    }
+    flushPendingText();
     if (runtimeEvent.type === "trust") recordP3TrustManifest(runtimeEvent.manifest);
     if (runtimeEvent.type === "artifact" && runtimeEvent.persistedArtifact && chatMode !== "temporary") {
       invalidateArtifacts(runtimeEvent.artifact.projectId, runtimeEvent.persistedArtifact.id);
       if (!artifactDraftDirtyRef.current) { setConversationArtifactRef(runtimeEvent.persistedArtifact.id); setArtifactViewVersion(runtimeEvent.persistedArtifact.version); }
     }
     setRuntimeEvents((current) => appendConversationPresentationEvent(current, runtimeEvent));
-    if (runtimeEvent.type === "text") setStreaming(runtimeEvent.text);
   };
 
   // A run keeps executing on the Home when the UI reloads or its connection drops. Re-attach to the run of the open
