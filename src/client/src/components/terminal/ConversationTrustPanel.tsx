@@ -37,7 +37,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
   const disclosure = projectTrustDisclosure(manifest);
 
   return (
-    <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-emerald-300/15 bg-emerald-300/[0.018]" data-p3-trust-manifest="true">
+    <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-border/60 bg-white/[0.012]" data-p3-trust-manifest="true">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <Database aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-ui text-[13px] font-medium text-foreground">Sources</span>
@@ -47,7 +47,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
           onClick={toggle}
           aria-expanded={expanded}
           aria-controls="lios-trust-details"
-          className="ml-auto flex items-center gap-1 rounded border border-border/50 px-2 py-1 font-ui text-[12px] text-muted-foreground hover:border-emerald-300/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/50"
+          className="ml-auto flex items-center gap-1 rounded border border-border/50 px-2 py-1 font-ui text-[12px] text-muted-foreground hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
         >
           {expanded ? "Hide details" : "Show work"}
           {expanded ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
