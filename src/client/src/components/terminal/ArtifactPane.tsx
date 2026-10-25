@@ -19,6 +19,7 @@ import { colIndexToLetters, parseCellRef } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
 import { semanticArtifactComparisonLabel } from "@/lib/artifactSemanticComparisonSummary";
 import { exportArtifactLocal } from "@/lib/artifactExport";
+import { artifactExportDisclosure } from "@/lib/artifactExportDisclosure";
 import { appendThesisPostmortem, refreshThesisArtifact, useInvalidateProjectIntelligence } from "@/lib/useProjectIntelligence";
 import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
@@ -644,6 +645,7 @@ function ArtifactPaneWorkspace({
   const automation=useP9Workflows(projectId),invalidateAutomation=useInvalidateP9Automation();
   const [error,setError]=useState<string|null>(null),[comparison,setComparison]=useState<string|null>(null),[left,setLeft]=useState<number|null>(null),[exportOpen,setExportOpen]=useState(false);
   const [exportPlan, setExportPlan] = useState<ArtifactExportPlan | null>(null);
+  const [exportAcknowledged, setExportAcknowledged] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ArtifactExportPlan["formats"][number] | null>(null);
   const [spreadsheetDirty, setSpreadsheetDirty] = useState(false);
@@ -662,13 +664,16 @@ function ArtifactPaneWorkspace({
   const [inspectorTab, setInspectorTab] = useState<"artifact" | "evidence" | "history">("artifact");
   const inspectorId = useId();
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
-  const data=detail.data; useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
+  const data=detail.data;
+  const exportRights = artifactExportDisclosure(data?.version.trustManifest ?? null, data?.version.sourceRefs ?? []);
+  useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
   displayedVersionCallback.current = onDisplayedVersionChange;
   useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
+    setExportAcknowledged(false);
     setExportPlan(null);
     if (!exportOpen || !data) { setExportLoading(false); return; }
     let active = true;
@@ -684,6 +689,14 @@ function ArtifactPaneWorkspace({
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
+    if (exportRights.blocked) {
+      setError(exportRights.note);
+      return;
+    }
+    if (!exportAcknowledged) {
+      setError("Review source rights and acknowledge the local export before downloading.");
+      return;
+    }
     exportInFlight.current = true;
     setExportingFormat(format);
     setError(null);
@@ -807,7 +820,12 @@ function ArtifactPaneWorkspace({
     {exportOpen&&<section aria-label="Export artifact" className="border-b border-border/50 p-3">
       {exportLoading && <p role="status" className="text-sm text-muted-foreground">Checking export formats…</p>}
       {exportPlan && <><p className="mb-3 break-words text-sm text-muted-foreground">{exportPlan.filenameStem}-v{exportPlan.version} · {exportPlan.sourceRefs.length} recorded sources</p>
-        <div className="flex flex-wrap gap-2">{exportPlan.formats.map((format)=><button key={format} type="button" disabled={exportLoading || exportingFormat !== null || exportPlan.artifactId !== artifactId || exportPlan.version !== data.version.version || exportPlan.contentHash !== data.version.contentHash} onClick={()=>void downloadArtifact(format)} className="rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:cursor-wait disabled:opacity-50">{format.toUpperCase()}</button>)}</div>
+        <p role={exportRights.blocked ? "alert" : "note"} data-testid="artifact-export-rights" className={`mb-3 rounded border p-3 text-sm leading-6 ${exportRights.blocked ? "border-red-300/40 text-red-200" : "border-amber-300/30 text-amber-100"}`}>{exportRights.note}</p>
+        {!exportRights.blocked && <label className="mb-3 flex items-start gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" data-testid="artifact-export-consent" className="mt-1 h-4 w-4 shrink-0 accent-amber-300" checked={exportAcknowledged} onChange={(event) => setExportAcknowledged(event.target.checked)}/>
+          <span>I understand this will download a local copy. I will check source licenses, permissions and recipient rights before distributing it.</span>
+        </label>}
+        <div className="flex flex-wrap gap-2">{exportPlan.formats.map((format)=><button key={format} type="button" disabled={exportLoading || exportingFormat !== null || exportRights.blocked || !exportAcknowledged || exportPlan.artifactId !== artifactId || exportPlan.version !== data.version.version || exportPlan.contentHash !== data.version.contentHash} onClick={()=>void downloadArtifact(format)} className="rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:cursor-wait disabled:opacity-50">{format.toUpperCase()}</button>)}</div>
         {exportingFormat !== null && <p role="status" className="mt-3 text-sm text-muted-foreground">Generating {exportingFormat.toUpperCase()} for the recorded revision…</p>}
         <p className="mt-3 text-sm text-muted-foreground">Exports use this recorded revision. Data exports contain the preview rows. Spreadsheet XLSX preserves all sheets, formulas, and number formats.</p>
       </>}
