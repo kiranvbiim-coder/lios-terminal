@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import type { P9NotificationRecord } from "@/lib/useP9Automation";
 import {
   projectNotificationHistory,
