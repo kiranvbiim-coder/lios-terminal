@@ -374,3 +374,27 @@ test("WS-63 share links refuse local file/custom protocols rather than exporting
     assert.throws(() => buildWorkspaceShareUrl(createInitialWorkspace(), base), /not a shareable public workspace link/);
   }
 });
+
+test("WS-63 inbound manually forged workspace URL cannot inject an Artifact or tenant IDs", () => {
+  const evil = {
+    primary: {
+      view: "artifact", symbol: "AAPL",
+      artifact: { projectId: 4321, chatId: 9876, artifactId: "private-revision-id", version: 3 },
+    },
+    secondary: { view: "news", symbol: "MSFT", credential: "private-key" },
+    focusedPane: "primary",
+    tenantId: "victim-tenant",
+  };
+  const received = loadWorkspaceFromUrl(`?ws=${serializeWorkspace(evil as never)}`);
+  assert.deepEqual(received, {
+    primary: { view: "market", symbol: "AAPL" },
+    secondary: { view: "news", symbol: "MSFT" },
+    focusedPane: "primary",
+  });
+  assert.equal(JSON.stringify(received).includes("private-revision-id"), false);
+  assert.equal(JSON.stringify(received).includes("private-key"), false);
+});
+
+test("WS-63 oversized untrusted workspace links fail closed before deserialization", () => {
+  assert.equal(loadWorkspaceFromUrl(`?ws=${"x".repeat(10_001)}`), null);
+});
