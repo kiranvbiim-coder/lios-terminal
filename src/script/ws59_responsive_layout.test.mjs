@@ -18,7 +18,7 @@ test("WS-59 zoom-equivalent mobile viewport switches 260px rail to accessible Sh
   assert.match(owned, /\.lios-mobile-navigation \{/);
   assert.match(owned, /max-height: 100dvh/);
   assert.match(owned, /\.lios-navigation-sheet \.lios-navigation-history/);
-  assert.match(project, /<never/>|\.lios-navigation-sheet/);
+  assert.match(project, /\.lios-navigation-sheet/);
 });
 
 test("WS-59 Artifact does not maintain a 320px sidecar plus fixed rail on narrow windows", () => {
