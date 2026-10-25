@@ -44,7 +44,7 @@ export function presentRuntimeError(code: string, message: string): ErrorPresent
   if (/api key|unauthori[sz]ed|\b401\b|\b403\b|invalid.*key|provider|model|ai (is|not)|not configured/.test(text)) {
     return { kind: "ai_provider", title: "The AI provider couldn't answer", hint: "Open Connect to check the key and model, then retry.", recoveries: ["connect", "retry"] };
   }
-  if (/network|fetch failed|timed? ?out|econn|enotfound|offline|unreachable/.test(text)) {
+  if (/network|connection|fetch failed|timed? ?out|econn|enotfound|offline|unreachable|home restarted|outcome was not confirmed|could not confirm whether home received|run_status_unconfirmed/.test(text)) {
     return { kind: "network", title: "Connection interrupted", hint: "Check the original Chat run before resending. Home may have received your request; nothing was automatically retried.", recoveries: ["retry"] };
   }
   if (/database|storage|disk|could not save|couldn't save/.test(text)) {
