@@ -33,15 +33,15 @@ Keep release-owned private evidence **outside** the source repository:
 
 ```text
 private-evidence/
-  macos/<hashed nonempty files: installer_log, screen_recording, screenreader_trace, performance_trace, source_provenance, privacy_recovery, ...>
-  windows/<same categories; independent observations>
+  macos/<actual signed installer and installed executable plus hashed installation logs, screen recording, VoiceOver trace, performance trace, provenance, privacy/recovery, ...>
+  windows/<signed installer and installed executable bytes, plus independent Narrator, recordings, logs/traces and provenance>
   p14/p14-*-evidence.json  (all fourteen original typed category records)
   flagship-release-report.json
   ws65-installed-ux-report.json
   reviewer-signoff.txt
 ```
 
-For the source suite (`cd src`):
+Keep private-evidence **outside the Git checkout** (a sibling of the checkout, so `../../private-evidence` resolves from `src/`). For the source suite (`cd src`):
 
 ```sh
 npm run test:ws64
@@ -54,11 +54,11 @@ For a **real complete witnessed** release only, supply actual files and actual t
 
 ```sh
 npm run acceptance:ux:installed -- \
-  --report=../private-evidence/ws65-installed-ux-report.json \
+  --report=../../private-evidence/ws65-installed-ux-report.json \
   --evidence-dir=../private-evidence \
-  --flagship-report=../private-evidence/flagship-release-report.json \
-  --p14-evidence-dir=../private-evidence/p14 \
-  --owner-signoff=../private-evidence/reviewer-signoff.txt \
+  --flagship-report=../../private-evidence/flagship-release-report.json \
+  --p14-evidence-dir=../../private-evidence/p14 \
+  --owner-signoff=../../private-evidence/reviewer-signoff.txt \
   --release-tag=v1.0.0 \
   --commit-sha=<EXACT_SIGNED_RELEASE_COMMIT>
 ```
