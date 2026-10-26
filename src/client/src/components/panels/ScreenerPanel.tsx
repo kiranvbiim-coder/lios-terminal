@@ -2,7 +2,7 @@ import { isObservedQuote } from "@/lib/quoteObservation";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useScreener, useDirectoryScreener, useDirectoryRegions, useBondScreener, useMacroScreener } from "@/lib/useFinance";
+import { useScreener, useDirectoryScreener, useDirectoryRegions, useDirectoryFacets, useDirectoryStatus, useBondScreener, useMacroScreener } from "@/lib/useFinance";
 import { formatPrice, formatBig, pctClass, SCREENER_SECTORS, getCurrencySymbol } from "@/lib/finance";
 import { Skeleton } from "@/components/ui/skeleton";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
@@ -388,9 +388,8 @@ export default function ScreenerPanel({ onSymbol }: Props) {
   );
 }
 
-// ── Country / Asset-Class Screener -- filters the full 80k+-ticker directory
-// (legacy catalog + P0.4 provider-ingested SEC/NASDAQ/CoinGecko rows:
-// equities, indices, commodities, forex, crypto, mutual funds) by region,
+// ── Country / Asset-Class Screener -- filters the observed P5 directory
+// (canonical-facing user-owned FinanceDatabase import plus available local rows) by region,
 // exchange, sector, and asset class. Server-paginated (20/page) since the
 // underlying universe is far larger than the equity screener's curated ~160.
 function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }) {
@@ -399,18 +398,22 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
   const [exchange, setExchange] = useTerminalArtifactState("DirectoryScreenerView.exchange", "");
   const [query, setQuery] = useTerminalArtifactState("DirectoryScreenerView.query", "");
   const [primaryListingOnly, setPrimaryListingOnly] = useTerminalArtifactState("DirectoryScreenerView.primaryListingOnly", true);
+  const [includeHistorical, setIncludeHistorical] = useTerminalArtifactState("DirectoryScreenerView.includeHistorical", false);
   const [page, setPage] = useTerminalArtifactState("DirectoryScreenerView.page", 1);
 
   const { data: regions = [] } = useDirectoryRegions();
+  const { data: facets } = useDirectoryFacets();
+  const { data: catalogStatus } = useDirectoryStatus();
   const filters: Record<string, string> = {};
   if (region) filters.region = region;
   if (assetClass) filters.assetClass = assetClass;
   if (exchange) filters.exchange = exchange;
   if (query) filters.q = query;
   if (primaryListingOnly) filters.primaryListingOnly = "true";
+  if (includeHistorical) filters.includeHistorical = "true";
   const { data, isLoading } = useDirectoryScreener(filters, page);
 
-  const ASSET_CLASSES = ["equity", "index", "commodity", "forex", "crypto", "mutual_fund"];
+  const ASSET_CLASSES = facets?.assetClasses.map(x => x.value) ?? [];
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -423,7 +426,7 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
         <label className="font-terminal text-[8px] text-muted-foreground">ASSET CLASS</label>
         <select value={assetClass} onChange={e => { setAssetClass(e.target.value); setPage(1); }} className="bg-[#0d0d0d] border border-border px-1.5 py-0.5 font-terminal text-[9px] focus:outline-none">
           <option value="">ALL</option>
-          {ASSET_CLASSES.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+          {ASSET_CLASSES.map(a => <option key={a} value={a}>{a.replace(/_/g, " ").toUpperCase()} ({facets?.assetClasses.find(x => x.value === a)?.count.toLocaleString()})</option>)}
         </select>
         <label className="font-terminal text-[8px] text-muted-foreground">EXCHANGE</label>
         <input value={exchange} onChange={e => { setExchange(e.target.value); setPage(1); }} placeholder="e.g. NASDAQ" className="w-24 bg-[#0d0d0d] border border-border px-1.5 py-0.5 font-terminal text-[9px] focus:outline-none" />
@@ -431,7 +434,10 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
         <label className="flex items-center gap-1.5 font-terminal text-[8px] text-muted-foreground" title="Rows with an explicit secondary-listing flag are excluded; legacy rows remain visible.">
           <input type="checkbox" checked={primaryListingOnly} onChange={e => { setPrimaryListingOnly(e.target.checked); setPage(1); }} className="accent-amber-400" /> PRIMARY LISTINGS
         </label>
-        <span className="ml-auto font-terminal text-[9px] text-muted-foreground">{data?.total ?? 0} RESULTS</span>
+        <label className="flex items-center gap-1.5 font-terminal text-[8px] text-muted-foreground">
+          <input type="checkbox" checked={includeHistorical} onChange={e => { setIncludeHistorical(e.target.checked); setPage(1); }} className="accent-amber-400" /> HISTORICAL
+        </label>
+        <span title="Reference symbols are not verified live prices, fundamentals or distinct companies." className="ml-auto font-terminal text-[9px] text-muted-foreground">{(data?.total ?? 0).toLocaleString()} MATCHES · {(catalogStatus?.uniqueListingCount ?? 0).toLocaleString()} REFERENCE LISTINGS</span>
       </div>
       <div className="flex-1 overflow-auto scrollbar-thin">
         {isLoading ? (
@@ -450,9 +456,9 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
             </thead>
             <tbody>
               {(data?.items ?? []).map(item => (
-                <tr key={item.symbol} onClick={() => onSymbol(item.symbol)} className="border-b border-border/50 hover:bg-white/5 cursor-pointer">
+                <tr key={`${item.assetClass ?? "equity"}:${item.symbol}:${item.mic ?? item.exchange}:${item.currency ?? ""}`} onClick={() => onSymbol(item.symbol)} className="border-b border-border/50 hover:bg-white/5 cursor-pointer">
                   <td className="py-2 px-2.5 font-terminal text-[10px] font-bold text-[hsl(38,95%,55%)]">{item.symbol}</td>
-                  <td className="py-2 px-2.5 font-terminal text-[9px] text-muted-foreground max-w-[220px] truncate">{item.name}</td>
+                  <td className="py-2 px-2.5 font-terminal text-[9px] text-muted-foreground max-w-[220px] truncate" title={`${item.source ?? "unverified reference"} · ${item.isin ?? "No ISIN"}`}>{item.name}</td>
                   <td className="py-2 px-2.5 font-terminal text-[9px] text-muted-foreground">{item.exchange}</td>
                   <td className="py-2 px-2.5 font-terminal text-[9px] text-muted-foreground">{item.region || "—"}</td>
                   <td className="py-2 px-2.5 font-terminal text-[8px] text-[hsl(186,80%,55%)]">{(item.assetClass || "equity").toUpperCase()}</td>
