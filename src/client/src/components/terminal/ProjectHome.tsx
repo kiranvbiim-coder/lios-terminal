@@ -223,7 +223,7 @@ export function ProjectHome({
                   semanticContext: "general",
                 });
               }}
-              className="rounded-md border border-border/65 bg-[#090909]/85 px-2.5 py-2 font-ui text-[12px] text-muted-foreground outline-none hover:text-foreground"
+              className="rounded-md border border-border/65 bg-card px-2.5 py-2 font-ui text-[12px] text-muted-foreground outline-none hover:text-foreground"
               title="Pin a visual environment to this Project, or keep automatic context selection"
             >
               <option value="">Environment · Auto</option>
@@ -241,11 +241,11 @@ export function ProjectHome({
           </div>
         </div>
 
-        <section className="mt-6 rounded-2xl border border-border/55 bg-black/20 p-4 backdrop-blur-sm">
+        <section className="mt-6 rounded-2xl border border-border/55 bg-card p-4 backdrop-blur-sm">
           <button
             type="button"
             onClick={() => onNewChat()}
-            className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/60 bg-[#090909]/80 px-4 py-4 text-left shadow-[0_18px_60px_rgba(0,0,0,.2)] hover:border-amber-300/25"
+            className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-4 text-left shadow-[0_18px_60px_rgba(0,0,0,.2)] hover:border-amber-300/25"
           >
             <span>
               <span className="block font-display text-[16px] font-semibold tracking-[-0.02em] text-foreground">Continue the work with LiOS</span>
@@ -265,7 +265,7 @@ export function ProjectHome({
                 key={starter}
                 type="button"
                 onClick={() => onNewChat(starter)}
-                className="rounded-full border border-border/55 bg-black/25 px-3 py-1.5 font-ui text-[13px] text-muted-foreground transition-colors hover:border-amber-300/25 hover:text-foreground"
+                className="rounded-full border border-border/55 bg-card px-3 py-1.5 font-ui text-[13px] text-muted-foreground transition-colors hover:border-amber-300/25 hover:text-foreground"
               >
                 {starter}
               </button>
@@ -363,7 +363,7 @@ export function ProjectHome({
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {found.sessions.slice(0, visibleWorkCount).map((session) => (
-                <div key={session.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+                <div key={session.id} className="rounded-lg border border-border/50 bg-card p-3">
                 <button type="button" onClick={() => onOpenSession(session)} className="w-full text-left hover:text-fuchsia-200">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
