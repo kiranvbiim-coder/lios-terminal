@@ -182,17 +182,6 @@ export async function runP9WorkflowNow(
   return outcome;
 }
 
-/** Reconcile an ambiguous manual execution by read-only server receipt lookup. */
-export async function getP9ManualRunReceipt(projectId: number, workflowId: string, idempotencyKey: string) {
-  return json<{
-    run: P9RunRecord;
-    receiptStatus: "in_progress" | "completed";
-  }>(await apiRequest(
-    "GET",
-    `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/manual-requests/${encodeURIComponent(idempotencyKey)}`,
-  ));
-}
-
 export async function markP9NotificationRead(projectId: number, notificationId: string): Promise<P9NotificationRecord> {
   return json(await apiRequest("POST", `/api/projects/${projectId}/automation/notifications/${encodeURIComponent(notificationId)}/read`, {}));
 }

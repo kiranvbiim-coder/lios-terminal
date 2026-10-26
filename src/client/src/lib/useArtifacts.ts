@@ -336,9 +336,6 @@ export async function restoreTrashedArtifact(artifactId: string): Promise<Projec
 export async function permanentlyDeleteArtifact(artifactId: string): Promise<void> {
   await apiRequest("DELETE", `/api/artifacts/${encodeURIComponent(artifactId)}/permanent`);
 }
-export async function undoArtifact(artifactId: string) {
-  return (await apiRequest("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/undo`, {})).json() as Promise<ProjectArtifactVersionRecord>;
-}
 export async function createArtifactReference(artifactId: string, input: { version?: number | null; targetType: "project" | "session" | "chat" | "resource" | "artifact"; targetRef: string; label?: string | null }) {
   return (await apiRequest("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/references`, input)).json() as Promise<ArtifactReferenceRecord>;
 }
