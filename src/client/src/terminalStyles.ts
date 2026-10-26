@@ -15,3 +15,5 @@ import "./terminal-ux-phase1.css";
 import "./terminal-shell.css";
 import "./lios-product-palettes.css";
 import "./visual-intelligence-canvas.css";
+// Palette-specific type overrides load last, but only affect conversation UX.
+import "./lios-product-typography.css";
