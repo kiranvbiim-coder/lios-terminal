@@ -22,6 +22,8 @@
     "test": "npm run test:offline",
     "test:offline": "npm run check:manifests && npm run check:routes && node script/run_project_tests.mjs server shared client script",
     "benchmark:instrument-search:real": "node --import tsx --test server/instrumentSearchIndexBenchmark.bench.ts",
+    "data:universe:import": "node script/import_financedatabase.cjs",
+    "test:data-universe": "node --test script/import_financedatabase.test.cjs && node --import tsx --test server/financeDatabaseCatalog.test.ts",
     "test:statistics": "PYTHONPATH=python-service python3 -m unittest discover -s python-service -p 'test_professional_statistics.py' -v",
     "routes:manifest": "node --import tsx script/route_manifest.ts",
     "check:routes": "node --import tsx script/route_manifest.ts --check",
