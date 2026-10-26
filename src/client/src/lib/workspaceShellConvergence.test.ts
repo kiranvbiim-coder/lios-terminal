@@ -358,5 +358,9 @@ test("P5 Connectors show the exact Verify outcome on the selected source, not ju
   assert.match(center, /setLastConnectionTest\(\{ connectionId, status: "unreachable"/);
   assert.match(center, /disabled=\{testBusy\} aria-busy=\{testBusy\}/);
   assert.match(center, /last checked/);
+  assert.match(center, /verificationInFlightRef\.current = true/);
+  assert.match(center, /verificationInFlightRef\.current = false/);
+  assert.match(center, /data-connection-state=\{\["healthy", "live_verified"\]\.includes\(conn\.status\)/);
+
   assert.doesNotMatch(center, /conn\.lastTestedAt \? \` · tested /);
 });
