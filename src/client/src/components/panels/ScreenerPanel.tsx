@@ -424,6 +424,8 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
       queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/status"] }),
       queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/facets"] }),
       queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/regions"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/directory"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/search"] }),
     ]);
   }, [installStatus?.completedAt, installStatus?.state, queryClient]);
 
