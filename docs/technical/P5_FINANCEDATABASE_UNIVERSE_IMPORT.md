@@ -75,7 +75,7 @@ Restart the local LiOS Home after importing so its existing in-process index cac
 | Money Markets | 1,225 |
 | **Total upstream** | **303,092** |
 
-This table is the upstream README count as of **2026-10-25**, not an installed or cross-source net-new LiOS count. Imported count must be observed from `npm run data:universe:verify`; union count is reported separately from `/api/finance/directory/status`.
+This table is the upstream README count as of **2026-10-25**, not an installed or cross-source net-new LiOS count. **Source freshness:** FinanceDatabase’s own project site states that Funds and Money Markets stopped receiving updates in October 2026 due to incomplete global maintenance. Their 58,986 published records remain reference-only and must not be represented as verified currently tradable securities or live-data coverage. LiOS status records `discontinuedMaintenance` and displays a Screener warning when either class is selected. Source: https://www.jeroenbouma.com/projects/financedatabase Imported count must be observed from `npm run data:universe:verify`; union count is reported separately from `/api/finance/directory/status`.
 
 ## Feature integration (same PR)
 
