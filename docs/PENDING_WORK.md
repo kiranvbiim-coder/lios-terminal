@@ -1,5 +1,9 @@
 # pending work
 
+## Owner release cost decision — 2026-10-26
+
+**Release spending cap: strictly $0 additional cash, without exceptions.** The single actionable SI-07/P10 zero-cost Electron beta plan is [`technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md`](technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md). Read it before editing any release workflow, updater, installer or packaging code. Use existing master [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) and existing P10/P14 owners, not a new program. Ad-hoc macOS / unsigned Windows beta may be packaged and labeled honestly; **production P14 Developer ID/notarization/Authenticode evidence is not bypassed or accepted**. No paid platform, credit/overage, cloud, CI or distribution requirement may be introduced. Release steps R0–R6 have proof gates in the contract; status is NOT VERIFIED until independently exercised. This heading is a current owner lock; historical notes below remain evidence only.
+
 ## Active work — public production readiness
 
 ### Updated public PR reconciliation — 2026-10-23
