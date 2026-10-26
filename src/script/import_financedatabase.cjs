@@ -123,7 +123,7 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
       const bytes = fs.readFileSync(file);
       if (bytes.length > 128 * 1024 * 1024) throw new Error("Oversized donor CSV: " + path.basename(file));
       const records = parseCsv(bytes.toString("utf8").replace(/^\uFEFF/, ""));
-      if (records.length < 2) throw new Error("Empty donor CSV: " + path.basename(file));
+      if (!records.length) throw new Error("Missing donor CSV header: " + path.basename(file));
       const header = records.shift().map(x => x.trim().toLowerCase());
       if (!header.includes("symbol") || !header.includes("name")) throw new Error("Donor CSV schema changed: " + path.basename(file));
       for (const cells of records) {
@@ -138,6 +138,7 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
       }
       files.push({ path: path.relative(database, file).replace(/\\/g, "/"), sha256: crypto.createHash("sha256").update(bytes).digest("hex") });
     }
+    if (accepted === 0) throw new Error("No valid identities in donor category: " + category);
     byCategory[category] = accepted;
   }
   if (rows.length < minimum) throw new Error("Import below required verified listing threshold: " + rows.length + " < " + minimum);
