@@ -213,6 +213,9 @@ export function planUniversalDataFromSnapshot(
   else availability = "ready";
 
   const recoveryActions: string[] = [];
+  if (request.capability === "prices" && request.pointInTime.mode !== "latest") {
+    recoveryActions.push("Use a point-in-time-capable historical data source, or explicitly request latest prices");
+  }
   if (availability === "source_scope_blocked") recoveryActions.push("Switch source scope to Auto");
   for (const candidate of scoped.filter((item) => item.requiresConnection).slice(0, 4)) {
     recoveryActions.push(`Connect ${candidate.connectorId}`);
@@ -269,6 +272,14 @@ export function explainUniversalDataGap(plan: UniversalDataPlan): {
   message: string;
 } {
   const providers = plan.candidates.map((candidate) => `${candidate.label} [${candidate.runtimeState}]`);
+  if (plan.request.capability === "prices" && plan.request.pointInTime.mode !== "latest") {
+    return {
+      reason: "unsupported",
+      providersChecked: providers,
+      nextActions: plan.recoveryActions,
+      message: `The current LiOS price conversation route cannot establish ${plan.request.pointInTime.mode} point-in-time knowledge. Historical market bars alone do not verify what was known at that time.`,
+    };
+  }
   if (plan.availability === "source_scope_blocked") {
     return {
       reason: "unsupported",
