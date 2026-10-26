@@ -11,6 +11,8 @@ import PublicProductPreview from "./pages/PublicProductPreview";
 import DomainPicker from "./pages/DomainPicker";
 import ForcedChangePassword from "./pages/ForcedChangePassword";
 import DataConnectionCenter from "./pages/DataConnectionCenter";
+import GovernedExtensionsPanel from "@/components/GovernedExtensionsPanel";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import NotFound from "./pages/not-found";
 import { LAST_DOMAIN_STORAGE_KEY, FALLBACK_FINANCE_DOMAIN, pickDefaultDomain, type DomainInfo, type DomainSlug } from "@/lib/domains";
 import { setAudienceFromRole, useAudience } from "@/lib/audience";
@@ -29,7 +31,7 @@ import { setP9DesktopNotificationOwner } from "@/lib/p9DesktopNotifications";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
-import { subscribeOpenEnvironmentCenter } from "@/lib/appShellEvents";
+import { subscribeOpenEnvironmentCenter, subscribeOpenPluginCenter } from "@/lib/appShellEvents";
 import type { AuthSessionState, EffectiveAccessSnapshot } from "@shared/identityContracts";
 
 export interface SessionData {
@@ -79,7 +81,7 @@ function App() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const signOutPending = useRef(false);
   const [activeDomain, setActiveDomain] = useState<DomainInfo | null>(null);
-  const [environmentSetupOpen, setEnvironmentSetupOpen] = useState(false);
+  const [managementView, setManagementView] = useState<"connections" | "plugins" | null>(null);
   // The workspace stays mounted while Connections is open. Capture the actual
   // initiating control (not a route string) and restore it after the overlay
   // unmounts, so the user's Chat draft and keyboard context survive.
@@ -152,17 +154,23 @@ function App() {
     return () => window.removeEventListener("online", flush);
   }, [session?.authState?.principal?.userId, session?.authState?.principal?.organizationId, session?.authState?.state]);
 
+  const captureManagementOpener = useCallback(() => {
+    const active = document.activeElement;
+    environmentReturnFocus.current = active instanceof HTMLElement && active.closest("[data-lios-workspace]") ? active : null;
+  }, []);
   const openEnvironmentSetup = useCallback(() => {
-    if (!environmentSetupOpen) {
-      const active = document.activeElement;
-      environmentReturnFocus.current = active instanceof HTMLElement && active.closest("[data-lios-workspace]") ? active : null;
-    }
-    setEnvironmentSetupOpen(true);
-  }, [environmentSetupOpen]);
+    if (!managementView) captureManagementOpener();
+    setManagementView("connections");
+  }, [managementView, captureManagementOpener]);
+  const openPluginSetup = useCallback(() => {
+    if (!managementView) captureManagementOpener();
+    setManagementView("plugins");
+  }, [managementView, captureManagementOpener]);
 
   useEffect(() => subscribeOpenEnvironmentCenter(openEnvironmentSetup), [openEnvironmentSetup]);
+  useEffect(() => subscribeOpenPluginCenter(openPluginSetup), [openPluginSetup]);
   useEffect(() => {
-    if (environmentSetupOpen || domainPickerOpen || !session) return;
+    if (managementView || domainPickerOpen || !session) return;
     const opener = environmentReturnFocus.current;
     if (!opener) return;
     environmentReturnFocus.current = null;
@@ -171,7 +179,7 @@ function App() {
     } else {
       document.querySelector<HTMLElement>('[data-lios-workspace] button:not(:disabled)')?.focus();
     }
-  }, [environmentSetupOpen, domainPickerOpen, session]);
+  }, [managementView, domainPickerOpen, session]);
 
   const handleLogout = async () => {
     if (signOutPending.current) return;
@@ -191,7 +199,7 @@ function App() {
     setAudienceFromRole(null);
     setActiveDomain(null);
     setDomainPickerOpen(false);
-    setEnvironmentSetupOpen(false);
+    setManagementView(null);
     environmentReturnFocus.current = null;
     try {
       queryClient.clear();
@@ -254,19 +262,36 @@ function App() {
         ) : session ? (
           <>
             {/* Preserve the conversation, staged inputs and workspace while contextual setup is open. */}
-            <div data-lios-workspace hidden={environmentSetupOpen || domainPickerOpen}>
+            <div data-lios-workspace hidden={domainPickerOpen}>
               <AppRouter
                 session={session}
                 onLogout={handleLogout}
                 domain={(activeDomain ?? FALLBACK_FINANCE_DOMAIN).slug as DomainSlug}
-                onSwitchDomain={() => setDomainPickerOpen(true)}
+                onSwitchDomain={() => { setManagementView(null); setDomainPickerOpen(true); }}
                 onOpenEnvironment={openEnvironmentSetup}
               />
             </div>
-            {session && environmentSetupOpen && (
-              <DataConnectionCenter session={session} onComplete={() => setEnvironmentSetupOpen(false)} onLogout={handleLogout} />
-            )}
-            {session && domainPickerOpen && !environmentSetupOpen && (
+            {/* Workspace remains visible and mounted behind a modal drawer, never replaced by setup. */}
+            <Sheet open={managementView !== null && !domainPickerOpen} onOpenChange={(open) => { if (!open) setManagementView(null); }}>
+              <SheetContent
+                side="right"
+                data-testid="chat-management-drawer"
+                className="flex h-[100dvh] w-[min(100vw,72rem)] max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-background p-0 sm:max-w-none"
+                onCloseAutoFocus={(event) => { event.preventDefault(); }}
+              >
+                <div className="shrink-0 border-b border-border px-4 py-4 pr-14 sm:px-6">
+                  <SheetTitle>{managementView === "plugins" ? "Plugins" : "Connections"}</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    {managementView === "plugins" ? "Manage governed LiOS extensions without leaving the conversation." : "Manage data and AI connections without leaving the conversation."}
+                  </SheetDescription>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="chat-management-content">
+                  {managementView === "connections" && session && <DataConnectionCenter embedded session={session} onComplete={() => setManagementView(null)} onLogout={handleLogout} />}
+                  {managementView === "plugins" && <div className="mx-auto w-full max-w-5xl p-4 sm:p-6"><GovernedExtensionsPanel /></div>}
+                </div>
+              </SheetContent>
+            </Sheet>
+            {session && domainPickerOpen && managementView === null && (
               <DomainPicker session={session} onChoose={handleChooseDomain} onCancel={() => setDomainPickerOpen(false)} onLogout={handleLogout} />
             )}
           </>
