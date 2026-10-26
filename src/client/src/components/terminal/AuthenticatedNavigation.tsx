@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { Plus, Search, FolderKanban, MessageSquare, Library, Workflow, Blocks, Plug, Settings2, Menu, LogOut, ChevronUp, ChevronLeft, ChevronRight, Trash2, Upload } from "lucide-react";
+import { Plus, Search, FolderKanban, MessageSquare, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, ChevronRight, Trash2, Upload } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
+
+import { LIOS_PRODUCT_PALETTES, readLiosProductPalette, resolveLiosProductPalette, setLiosProductPalette } from "@/lib/liosProductPalette";
 
 export type NavigationSection = "conversation" | "projects" | "chats" | "library" | "automations" | "plugins";
 
@@ -29,6 +31,7 @@ const sections = [
 
 export function AuthenticatedNavigation(props: Props) {
   const [open, setOpen] = useState(false);
+  const [palette, setPalette] = useState(readLiosProductPalette);
   const [collapsed, setCollapsed] = useState(false);
   const act = (action: () => void) => { action(); setOpen(false); };
   const content = (drawer = false) => <>
@@ -48,6 +51,18 @@ export function AuthenticatedNavigation(props: Props) {
         <DropdownMenuItem onSelect={() => act(props.onWorkbench)}>Open workspace</DropdownMenuItem>
         <DropdownMenuItem onSelect={props.onSettings}><Settings2 className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
         <DropdownMenuItem onSelect={props.onConnectors}><Plug className="mr-2 h-4 w-4" />Connections & AI</DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger><Palette className="mr-2 h-4 w-4" />Appearance</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-72">
+            <DropdownMenuRadioGroup value={palette} onValueChange={(value) => {
+              const next = resolveLiosProductPalette(value);
+              setPalette(next);
+              setLiosProductPalette(next);
+            }}>
+              {LIOS_PRODUCT_PALETTES.map(({ id, label }) => <DropdownMenuRadioItem key={id} value={id}>{label}</DropdownMenuRadioItem>)}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => act(props.onTrash)}><Trash2 className="mr-2 h-4 w-4" />Trash & archive</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => act(props.onMigrate)}><Upload className="mr-2 h-4 w-4" />Import legacy workspaces</DropdownMenuItem>
