@@ -279,7 +279,7 @@ function App() {
               <SheetContent
                 side="right"
                 data-testid="chat-management-drawer"
-                className="flex h-[100dvh] w-[min(100vw,72rem)] max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-background p-0 sm:max-w-none"
+                className="dark flex h-[100dvh] w-[min(100vw,64rem)] max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-background p-0 text-foreground sm:max-w-none"
                 onCloseAutoFocus={(event) => { event.preventDefault(); }}
               >
                 <div className="shrink-0 border-b border-border px-4 py-4 pr-14 sm:px-6">
