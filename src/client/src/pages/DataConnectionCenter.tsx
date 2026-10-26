@@ -766,11 +766,12 @@ function AddStorageModal({ onClose, onSaved, seed, editing }: { onClose: () => v
 }
 
 function ConnectionCard({
-  conn, onTest, onEdit, onRemove, testBusy = false,
+  conn, onTest, onEdit, onRemove, testBusy = false, testResult,
 }: {
   conn: SavedConnection;
   onTest: () => void;
   testBusy?: boolean;
+  testResult?: { status: string; detail: string };
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -787,9 +788,13 @@ function ConnectionCard({
         <span className={`ml-auto shrink-0 font-ui text-xs ${color}`}>{conn.status}</span>
       </div>
       <div className="mt-1 font-ui text-xs text-muted-foreground">
-        {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+        {conn.sourceType}{conn.lastTestedAt ? ` · last checked ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
       </div>
       {conn.statusDetail && <div className="mt-1 break-words font-ui text-sm text-muted-foreground">{conn.statusDetail}</div>}
+      {testResult && <p role="status" aria-live="polite" data-testid={`connection-verification-result-${conn.id}`}
+        className={`mt-2 break-words rounded border px-2 py-1.5 font-ui text-xs ${testResult.status === "healthy" ? "border-emerald-500/40 text-emerald-300" : "border-amber-500/40 text-amber-200"}`}>
+        {testResult.status === "healthy" ? "Live verified: " : "Not live verified: "}{testResult.detail}
+      </p>}
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" onClick={onTest} disabled={testBusy} aria-busy={testBusy} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{testBusy ? "Checking…" : recovery.testLabel}</button>
         <button onClick={onEdit} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
@@ -809,6 +814,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   const [removalError, setRemovalError] = useState<string | null>(null);
   const [testingConnectionId, setTestingConnectionId] = useState<number | null>(null);
   const [connectionTestNotice, setConnectionTestNotice] = useState<string | null>(null);
+  const [lastConnectionTest, setLastConnectionTest] = useState<{ connectionId: number; status: string; detail: string } | null>(null);
   const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
   const handledGuidedConnector = useRef<string | null>(null);
@@ -1123,13 +1129,16 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
     if (testingConnectionId !== null) return;
     setTestingConnectionId(connectionId);
     setConnectionTestNotice(null);
+    setLastConnectionTest(null);
     try {
       const response = await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
       const result = await response.json() as { status: string; detail: string };
+      setLastConnectionTest({ connectionId, status: result.status, detail: result.detail || "No verification details were reported." });
       setConnectionTestNotice(result.status === "healthy"
         ? "Connection verified by a live check. Check the source card for the recorded result."
         : "Live verification was not confirmed. Review the source card for the recorded status and recovery details.");
     } catch {
+      setLastConnectionTest({ connectionId, status: "unreachable", detail: "This verification did not complete. No live access is confirmed." });
       setConnectionTestNotice("Connection verification could not complete. No successful live check was confirmed; review the saved source and retry.");
     } finally {
       refresh();
@@ -1437,7 +1446,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
               {aiConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} testResult={lastConnectionTest?.connectionId === conn.id ? lastConnectionTest : undefined} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (
@@ -1623,7 +1632,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
               {dataConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} testResult={lastConnectionTest?.connectionId === conn.id ? lastConnectionTest : undefined} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (
