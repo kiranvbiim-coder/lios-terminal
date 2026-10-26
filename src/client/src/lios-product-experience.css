@@ -132,7 +132,7 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :
 }
 html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
   .lios-project-home-surface [class*="bg-black"],
-  .lios-project-home-surface [class*="bg-\[#"],
+  .lios-project-home-surface [class*="bg-[#"],
   .lios-project-experience-shell .lios-chat-empty-state__mark
 ) {
   background: var(--lios-bg-panel) !important;
@@ -316,7 +316,7 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :
 /* Keep assistant attribution available to screen readers via role=group and
  * aria-label in ProjectExperienceShell, but reduce repeated visual badges. */
 html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
-  .lios-conversation-message[data-lios-message="assistant"] > .mb-1\\.5 {
+  .lios-conversation-message[data-lios-message="assistant"] > div:first-child {
   display: none;
 }
 
