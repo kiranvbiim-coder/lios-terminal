@@ -87,6 +87,16 @@ function normalizeRow(row, category) {
     provider: "financedatabase",
     active: delisted ? !/^(true|1|yes)$/i.test(delisted) : true,
     assetClass: category,
+    // Keep real donor classification for future screening/coverage metadata.
+    // A market-cap TIER is never treated as a numeric market-cap amount.
+    sector: optional(row, "sector"),
+    industry: optional(row, "industry"),
+    market: optional(row, "market"),
+    countryName: country || null,
+    marketCapTier: optional(row, "market_cap"),
+    category: optional(row, "category"),
+    categoryGroup: optional(row, "category_group"),
+    family: optional(row, "family"),
     ...(isin && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/i.test(isin) ? { isin: isin.toUpperCase() } : {}),
     ...(figi && /^[A-Z0-9]{12}$/i.test(figi) ? { figi: figi.toUpperCase() } : {}),
     ...(compositeFigi && /^[A-Z0-9]{12}$/i.test(compositeFigi) ? { compositeFigi: compositeFigi.toUpperCase() } : {}),
