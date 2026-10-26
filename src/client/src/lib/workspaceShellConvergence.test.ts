@@ -364,3 +364,16 @@ test("P5 Connectors show the exact Verify outcome on the selected source, not ju
 
   assert.doesNotMatch(center, /conn\.lastTestedAt \? \` · tested /);
 });
+
+test("one-time file import persists data without inventing a reusable file connector", () => {
+  const wizard = source("../components/DataImportWizard.tsx");
+  const center = source("../pages/DataConnectionCenter.tsx");
+  assert.match(wizard, /api\/finance\/normalize/);
+  assert.match(wizard, /if \(persist\) \{[\s\S]*?await onImported\(\)/);
+  const handoff = center.match(/const handleImported = useCallback\(\(\) => \{([\s\S]*?)\}, \[refresh\]\);/);
+  assert.ok(handoff, "Expected an explicit post-import UI handoff");
+  assert.match(handoff[1], /setModal\(null\)/);
+  assert.match(handoff[1], /setConnectionTestNotice\(/);
+  assert.match(handoff[1], /refresh\(\)/);
+  assert.doesNotMatch(handoff[1], /apiRequest|source-connections|connectorId:\s*"file_upload"/);
+});
