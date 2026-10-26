@@ -59,7 +59,7 @@ export function AuthenticatedNavigation(props: Props) {
               setPalette(next);
               setLiosProductPalette(next);
             }}>
-              {LIOS_PRODUCT_PALETTES.map(({ id, label }) => <DropdownMenuRadioItem key={id} value={id}>{label}</DropdownMenuRadioItem>)}
+              {LIOS_PRODUCT_PALETTES.map(({ id, label }) => <DropdownMenuRadioItem key={id} value={id}><span className="lios-palette-swatch" data-lios-preview={id} aria-hidden="true"><i /><i /><i /></span>{label}</DropdownMenuRadioItem>)}
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
