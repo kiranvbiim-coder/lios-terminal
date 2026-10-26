@@ -473,6 +473,8 @@ export interface DirectoryCatalogStatus {
     upstreamCommit: string | null;
     importedAt: string | null;
     countsByAssetClass: Record<string, number>;
+    discontinuedMaintenance: { funds: "2026-10"; moneymarkets: "2026-10" };
+    maintenanceCaveat: string;
     referenceOnly: true;
   };
   priceCoverage: string;
