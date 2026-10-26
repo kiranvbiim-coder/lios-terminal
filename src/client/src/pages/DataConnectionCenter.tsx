@@ -766,10 +766,11 @@ function AddStorageModal({ onClose, onSaved, seed, editing }: { onClose: () => v
 }
 
 function ConnectionCard({
-  conn, onTest, onEdit, onRemove,
+  conn, onTest, onEdit, onRemove, testBusy = false,
 }: {
   conn: SavedConnection;
   onTest: () => void;
+  testBusy?: boolean;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -790,7 +791,7 @@ function ConnectionCard({
       </div>
       {conn.statusDetail && <div className="mt-1 break-words font-ui text-sm text-muted-foreground">{conn.statusDetail}</div>}
       <div className="mt-2 flex flex-wrap gap-2">
-        <button onClick={onTest} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button type="button" onClick={onTest} disabled={testBusy} aria-busy={testBusy} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{testBusy ? "Checking…" : recovery.testLabel}</button>
         <button onClick={onEdit} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
         <button onClick={onRemove} aria-label={`Remove saved connection ${conn.name}`} className="min-h-10 rounded border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Remove</button>
       </div>
@@ -806,6 +807,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   const [removalTarget, setRemovalTarget] = useState<number | null>(null);
   const [removingConnection, setRemovingConnection] = useState(false);
   const [removalError, setRemovalError] = useState<string | null>(null);
+  const [testingConnectionId, setTestingConnectionId] = useState<number | null>(null);
+  const [connectionTestNotice, setConnectionTestNotice] = useState<string | null>(null);
   const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
   const handledGuidedConnector = useRef<string | null>(null);
@@ -1117,10 +1120,21 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   }, [refresh]);
 
   async function handleTestConnection(connectionId: number) {
+    if (testingConnectionId !== null) return;
+    setTestingConnectionId(connectionId);
+    setConnectionTestNotice(null);
     try {
-      await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
+      const response = await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
+      const result = await response.json() as { status: string; detail: string };
+      setConnectionTestNotice(result.status === "healthy"
+        ? "Connection verified by a live check. Check the source card for the recorded result."
+        : "Live verification was not confirmed. Review the source card for the recorded status and recovery details.");
+    } catch {
+      setConnectionTestNotice("Connection verification could not complete. No successful live check was confirmed; review the saved source and retry.");
+    } finally {
       refresh();
-    } catch { refresh(); }
+      setTestingConnectionId(null);
+    }
   }
 
   function handleDeleteConnection(connectionId: number) {
@@ -1392,6 +1406,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
               <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
               <p className="mt-1 font-ui text-xs text-muted-foreground">Return to previous work closes Connections without changing your AI setup or sending a request. Use Continue to save setup explicitly. A paused or failed task never resumes on its own.</p>
               {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
+              {connectionTestNotice && <p role="status" aria-live="polite" data-testid="connection-test-feedback" className="mt-2 max-w-xl text-sm text-muted-foreground">{connectionTestNotice}</p>}
               <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
                 {connectionsQuery.data && !connectionsQuery.isError && <span>{connectionSummary.savedCount} saved · {connectionSummary.verifiedCount} verified · {connectionSummary.attentionCount} need attention</span>}
                 <span>{availableCount} catalog options · availability and rights checked when used</span>
@@ -1422,7 +1437,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
               {aiConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (
@@ -1608,7 +1623,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
               {dataConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (
