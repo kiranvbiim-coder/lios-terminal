@@ -69,6 +69,7 @@ test("P5 source save, update, verification and deletion invalidate the same prov
     entity: { ref: "example-json", symbol: null, identifiers: {} },
     fields: [],
     parameters: {},
+    pointInTime: { mode: "latest", asKnownOn: null, revision: null, requirePublicationTime: false, allowLaterRevisions: false },
     providerAllow: [],
     providerDeny: [],
   });
