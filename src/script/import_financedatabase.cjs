@@ -148,9 +148,70 @@ function writeAtomic(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = file + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
   try {
-    fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600, flag: "wx" });
+    fs.writeFileSync(tmp, Buffer.isBuffer(value) ? value : JSON.stringify(value), { mode: 0o600, flag: "wx" });
     fs.renameSync(tmp, file);
   } finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
+}
+
+/** Keep last known snapshot recoverable after an upstream schema/quality change. */
+function backupPair(catalog, manifest) {
+  if (fs.existsSync(catalog) && fs.existsSync(manifest)) {
+    const tempCatalog = catalog + ".previous.new";
+    const tempManifest = manifest + ".previous.new";
+    try {
+      fs.copyFileSync(catalog, tempCatalog);
+      fs.copyFileSync(manifest, tempManifest);
+      fs.renameSync(tempCatalog, catalog + ".previous");
+      fs.renameSync(tempManifest, manifest + ".previous");
+    } finally {
+      for (const f of [tempCatalog, tempManifest]) if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
+  }
+}
+
+function verifyInstalled(dest) {
+  const catalog = path.join(dest, "financedatabase_universe.json");
+  const manifestFile = path.join(dest, "financedatabase_manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  const bytes = fs.readFileSync(catalog);
+  const hash = crypto.createHash("sha256").update(bytes).digest("hex");
+  if (!manifest.catalogSha256 || manifest.catalogSha256 !== hash) throw new Error("Catalog SHA256 does not match manifest");
+  const rows = JSON.parse(bytes.toString("utf8"));
+  if (!Array.isArray(rows) || rows.length !== manifest.accepted) throw new Error("Imported row count mismatch");
+  const counter = {}, keys = new Set();
+  for (const r of rows) {
+    if (r.provider !== "financedatabase" || !r.symbol || !r.name || !SUPPORTED.has(r.assetClass)) {
+      throw new Error("Invalid imported identity row");
+    }
+    const key = [r.assetClass, r.symbol.toUpperCase(), (r.mic || r.exchange || "").toUpperCase(),
+      (r.currency || "").toUpperCase()].join("|");
+    if (keys.has(key)) throw new Error("Duplicate venue-qualified imported listing key");
+    keys.add(key);
+    counter[r.assetClass] = (counter[r.assetClass] || 0) + 1;
+  }
+  for (const [assetClass, count] of Object.entries(manifest.byCategory)) {
+    if (counter[assetClass] !== count) throw new Error("Manifest category count mismatch: " + assetClass);
+  }
+  return { verified: true, importedAt: manifest.importedAt, upstreamCommit: manifest.upstreamCommit,
+    count: rows.length, byCategory: counter, sha256: hash };
+}
+
+function rollback(dest) {
+  const catalog = path.join(dest, "financedatabase_universe.json");
+  const manifest = path.join(dest, "financedatabase_manifest.json");
+  if (!fs.existsSync(catalog + ".previous") || !fs.existsSync(manifest + ".previous")) {
+    throw new Error("No previous FinanceDatabase catalog version available for rollback");
+  }
+  const oldBytes = fs.readFileSync(catalog + ".previous");
+  const oldManifest = JSON.parse(fs.readFileSync(manifest + ".previous", "utf8"));
+  if (crypto.createHash("sha256").update(oldBytes).digest("hex") !== oldManifest.catalogSha256) {
+    throw new Error("Previous catalog integrity check failed");
+  }
+  const rows = JSON.parse(oldBytes.toString("utf8"));
+  if (!Array.isArray(rows) || rows.length !== oldManifest.accepted) throw new Error("Previous catalog count mismatch");
+  writeAtomic(catalog, oldBytes);
+  writeAtomic(manifest, oldManifest);
+  return verifyInstalled(dest);
 }
 
 function withDonorCheckout(callback) {
@@ -169,6 +230,17 @@ function withDonorCheckout(callback) {
 
 function run(argv = process.argv.slice(2)) {
   let sourceDir = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
+  const dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
+  if (argv.length === 1 && argv[0] === "--verify") {
+    const report = verifyInstalled(dest);
+    console.log(JSON.stringify(report, null, 2));
+    return report;
+  }
+  if (argv.length === 1 && argv[0] === "--rollback") {
+    const report = rollback(dest);
+    console.log(JSON.stringify({ rolledBack: true, ...report }, null, 2));
+    return report;
+  }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--from-dir") sourceDir = path.resolve(argv[++i] || "");
@@ -182,17 +254,22 @@ function run(argv = process.argv.slice(2)) {
     const directory = path.join(root, "database");
     if (!fs.existsSync(directory)) throw new Error("FinanceDatabase /database directory missing");
     const { rows, stats } = importDatabase(directory, categories, minimum);
-    const dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
-    // User-owned LiOS Data Root is excluded from extraResources; never place
-    // downloaded data in packaged server/data or the public repository.
-    writeAtomic(path.join(dest, "financedatabase_universe.json"), rows);
-    writeAtomic(path.join(dest, "financedatabase_manifest.json"), {
+    // Catalog snapshots stay in the user-owned root (never server/data).
+    const catalog = path.join(dest, "financedatabase_universe.json");
+    const manifestPath = path.join(dest, "financedatabase_manifest.json");
+    const catalogBytes = Buffer.from(JSON.stringify(rows));
+    const catalogSha256 = crypto.createHash("sha256").update(catalogBytes).digest("hex");
+    const manifest = {
       provider: "JerBouma/FinanceDatabase", upstreamCommit: commit,
-      importedAt: new Date().toISOString(), categories, ...stats,
-      note: "Provisional catalog identities; does not confer live prices, entitlement, or redistribution rights.",
-    });
-    console.log(JSON.stringify({ destination: dest, upstreamCommit: commit, ...stats, files: stats.files.length }, null, 2));
-    return stats;
+      importedAt: new Date().toISOString(), categories, ...stats, catalogSha256,
+      note: "Reference identities only; not a real-time data or redistribution entitlement.",
+    };
+    backupPair(catalog, manifestPath);
+    writeAtomic(catalog, catalogBytes);
+    writeAtomic(manifestPath, manifest);
+    const verified = verifyInstalled(dest);
+    console.log(JSON.stringify({ destination: dest, ...verified, ...stats, files: stats.files.length }, null, 2));
+    return verified;
   };
   if (sourceDir) {
     let commit = "local-unverified";
@@ -206,4 +283,4 @@ if (require.main === module) {
   try { run(); }
   catch (e) { console.error("LiOS FinanceDatabase import failed:", e.message); process.exitCode = 1; }
 }
-module.exports = { parseCsv, normalizeRow, importDatabase, run, catalogFiles };
+module.exports = { parseCsv, normalizeRow, importDatabase, run, catalogFiles, verifyInstalled, rollback };
