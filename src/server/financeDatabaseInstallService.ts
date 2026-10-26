@@ -58,7 +58,7 @@ export async function extractFinanceDatabaseTarGz(
     for await (const chunk of stream) {
       if (mode === "done") break;
       buffer = buffer.length ? Buffer.concat([buffer, chunk as Buffer]) : chunk as Buffer;
-      while (buffer.length && mode !== "done") {
+      while (buffer.length) {
         if (mode === "header") {
           if (buffer.length < 512) break;
           const header = buffer.subarray(0, 512);
