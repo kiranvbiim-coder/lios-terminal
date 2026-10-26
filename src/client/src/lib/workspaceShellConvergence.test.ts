@@ -348,3 +348,15 @@ test("a user-initiated connection verification reports its real result or an exp
   assert.match(code, /disabled=\{testBusy\}/);
   assert.doesNotMatch(code, /catch \{ refresh\(\); \}/);
 });
+
+
+test("P5 Connectors show the exact Verify outcome on the selected source, not just a generic readiness badge", () => {
+  const center = source("../pages/DataConnectionCenter.tsx");
+  assert.match(center, /data-testid=\{\`connection-verification-result-\$\{conn\.id\}\`\}/);
+  assert.match(center, /testResult\.status === "healthy" \? "Live verified: " : "Not live verified: "/);
+  assert.match(center, /setLastConnectionTest\(\{ connectionId, status: result\.status/);
+  assert.match(center, /setLastConnectionTest\(\{ connectionId, status: "unreachable"/);
+  assert.match(center, /disabled=\{testBusy\} aria-busy=\{testBusy\}/);
+  assert.match(center, /last checked/);
+  assert.doesNotMatch(center, /conn\.lastTestedAt \? \` · tested /);
+});
