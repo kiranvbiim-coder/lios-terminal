@@ -305,6 +305,70 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) [data-testid="co
   border-color: var(--lios-border-default);
 }
 
+/* All prominent calls to action require foreground contrast, not just hero. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell button.bg-amber-400,
+  .lios-artifact-frame button.bg-amber-300
+) {
+  color: var(--lios-theme-action-foreground) !important;
+}
+
+/* Keep assistant attribution available to screen readers via role=group and
+ * aria-label in ProjectExperienceShell, but reduce repeated visual badges. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+  .lios-conversation-message[data-lios-message="assistant"] > .mb-1\\.5 {
+  display: none;
+}
+
+/* Compact, unambiguous theme previews inside existing Appearance menu. */
+.lios-palette-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.lios-palette-swatch i {
+  display: block;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--lios-palette-preview-surface);
+}
+.lios-palette-swatch i:nth-child(2) {
+  background: var(--lios-palette-preview-panel);
+  border: 1px solid rgb(128 128 128 / .2);
+}
+.lios-palette-swatch i:nth-child(3) {
+  width: 5px;
+  background: var(--lios-palette-preview-accent);
+}
+.lios-palette-swatch[data-lios-preview="chatgpt-dark"] {
+  --lios-palette-preview-surface: #212121;
+  --lios-palette-preview-panel: #303030;
+  --lios-palette-preview-accent: #FFFFFF;
+}
+.lios-palette-swatch[data-lios-preview="chatgpt-light"] {
+  --lios-palette-preview-surface: #FFFFFF;
+  --lios-palette-preview-panel: #F4F4F4;
+  --lios-palette-preview-accent: #0D0D0D;
+}
+.lios-palette-swatch[data-lios-preview="claude-light"] {
+  --lios-palette-preview-surface: #FAF9F5;
+  --lios-palette-preview-panel: #F0EEE6;
+  --lios-palette-preview-accent: #D97757;
+}
+.lios-palette-swatch[data-lios-preview="claude-dark"] {
+  --lios-palette-preview-surface: #262624;
+  --lios-palette-preview-panel: #30302C;
+  --lios-palette-preview-accent: #D97757;
+}
+.lios-palette-swatch[data-lios-preview="lios-classic"] {
+  --lios-palette-preview-surface: #09090B;
+  --lios-palette-preview-panel: #111115;
+  --lios-palette-preview-accent: #D4A017;
+}
+
 /* Accessibility and narrow layouts: preserve existing switch / same sidecar. */
 html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-project-experience-shell :where(
   button, a, input, textarea, select, [tabindex]
