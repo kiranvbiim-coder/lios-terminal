@@ -28,11 +28,17 @@ test("user-root catalog preserves distinct exchange rows, FIGI/ISIN and delisted
   assert.deepEqual(loadFinanceDatabaseCatalog(), []);
   const destination = financeDatabaseCatalogPath();
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.writeFileSync(destination, JSON.stringify([
+  const fixture = JSON.stringify([
     { symbol: "DUP", name: "Example", exchange: "NMS", mic: "XNAS", isin: "US0378331005", figi: "BBG000B9XRY4", provider: "financedatabase", assetClass: "equities", active: true },
     { symbol: "DUP", name: "Example", exchange: "NYQ", mic: "XNYS", provider: "financedatabase", assetClass: "equities", active: false },
-    { symbol: "FILE CREATION TIME: 12345", name: "metadata", provider: "financedatabase" },
-  ]));
+  ]);
+  fs.writeFileSync(destination, fixture);
+  fs.writeFileSync(financeDatabaseManifestPath(), JSON.stringify({
+    provider: "JerBouma/FinanceDatabase", upstreamCommit: "synthetic-test-only",
+    importedAt: new Date().toISOString(), categories: ["equities"], accepted: 2,
+    byCategory: { equities: 2 }, files: [],
+    catalogSha256: crypto.createHash("sha256").update(fixture).digest("hex"),
+  }));
   resetFinanceDatabaseCatalogCache();
   const results = loadFinanceDatabaseCatalog();
   assert.equal(results.length, 2);
