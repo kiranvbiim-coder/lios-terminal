@@ -316,3 +316,22 @@ test("chat management uses one in-app drawer and never hides the conversation fo
   assert.match(navigation, /onClick=\{props.onSettings\}/);
   assert.match(pluginPanel, /Registered P13 declarative contributions last only for this Home process session/);
 });
+
+
+test("a missing provider in Chat opens its existing consent form, without new execution authority", () => {
+  const app = source("../App.tsx");
+  const chat = source("../components/terminal/ProjectExperienceShell.tsx");
+  const center = source("../pages/DataConnectionCenter.tsx");
+  const events = source("./appShellEvents.ts");
+
+  assert.match(chat, /connectorIdFromRecoveryAction\(action\)/);
+  assert.match(chat, /openGuidedConnectorSetup\(guidedConnectorId\)/);
+  assert.match(app, /subscribeOpenGuidedConnectorSetup\(openGuidedSetup\)/);
+  assert.match(app, /initialConnectorId=\{guidedConnectorId\}/);
+  assert.match(center, /handledGuidedConnector\.current === initialConnectorId/);
+  assert.match(center, /!isConnectorConnectable\(connector\)/);
+  assert.match(center, /setSelectedProvider\(connector\)/);
+  assert.match(center, /setModal\("provider"\)/);
+  assert.match(events, /window\.dispatchEvent\(new CustomEvent\(OPEN_GUIDED_CONNECTOR_EVENT/);
+  assert.doesNotMatch(events, /apiRequest|fetch\(|installPlugin|executeCanonicalDataRequest/);
+});
