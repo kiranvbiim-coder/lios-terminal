@@ -143,8 +143,10 @@ function withDonorCheckout(callback) {
   try {
     execFileSync("git", ["clone", "--filter=blob:none", "--no-checkout", "--depth=1", SOURCE_REPO, checkout], { timeout: 180000, stdio: "pipe" });
     execFileSync("git", ["-C", checkout, "fetch", "--depth=1", "origin", PINNED_COMMIT], { timeout: 180000, stdio: "pipe" });
-    execFileSync("git", ["-C", checkout, "checkout", "--detach", PINNED_COMMIT], { timeout: 180000, stdio: "pipe" });
+    // Enable sparse checkout before materializing files: do not expand the
+    // entire donor (hundreds of thousands of rows) into the temporary tree.
     execFileSync("git", ["-C", checkout, "sparse-checkout", "set", "database"], { timeout: 180000, stdio: "pipe" });
+    execFileSync("git", ["-C", checkout, "checkout", "--detach", PINNED_COMMIT], { timeout: 180000, stdio: "pipe" });
     return callback(checkout, PINNED_COMMIT);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
