@@ -93,7 +93,9 @@ This table is the upstream README count as of **2026-10-25**, not an installed o
 - Actual 303k import / SHA256 verification / UI package smoke: **NOT_RUN** (no full donor dataset or local test runner in this connector).
 - V2 installed directory smoke and V3/V4 macOS/Windows package tests: **NOT_RUN**.
 - Source CI: view current PR checks, do not claim green without result.
-- General-user one-click initial install/update UI requires an app-owned user-consented downloader that does not depend on Git; the CLI is presently for owner provisioning and does **not** alone satisfy a consumer-packaged UX gate.
+- **Source implementation added (PR #217):** existing Country/Asset Class Screener has a consent-gated `IMPORT 300K+ REFERENCES` button. `POST /api/finance/directory/install` (admin roles) downloads a pinned tar.gz directly using Node core streams (Git/donor runtimes not needed), imports locally, verifies integrity, refreshes P5 index/directory caches; `GET /api/finance/directory/install/status` provides loading/progress/error/completion. No automatic fetch at sign-in.
+- **Not yet qualified:** actual archive streaming against pinned full tarball, 300k+ row count after per-listing dedup, packaged app network/proxy handling, on-disk space, cancellation, update/rollback UX, performance and UI. Native installed build acceptance is mandatory before claiming release ready.
+- **User-run CLI** remains available for owner provisioning and emergency recovery without depending on the in-app UI.
 - User-local import makes no promise that every input has redistributable assets or working quote/statement services. A complete 300k **reference list** cannot be marketed as 300k **live market-data securities**.
 
 ## Additional donor options (do not substitute entity counts)
@@ -101,3 +103,11 @@ This table is the upstream README count as of **2026-10-25**, not an installed o
 - SEC EDGAR (CIK/company filings) and NASDAQ Trader (listing tables) are **already integrated** into LiOS and should enrich identity and freshness rather than duplicate a second catalog service.
 - OpenFIGI (FIGI mapping), GLEIF (LEI/legal entity data) and public exchange listings are *enrichment*, not independent proof of tradable security coverage; obey rate limits and rights.
 - Do not silently import GPL/AGPL components, prohibitively licensed exchange data, or OpenBB reintroductions. No paid API, hosted search service, or central runtime is necessary for the donor CSV reference import.
+
+### In-app flow and built-in downloader
+
+The existing Country/Asset Class Screener shows dynamic filters, installed local source-count/status and a click-to-import control. Installation requires an authenticated `client_admin` or `internal_admin` role and a separate explicit rights/download confirmation. A single public HTTPS archive for pinned source commit `3815eb34...` is streamed to a temporary directory. The archive extractor accepts only listed `database/` CSV paths; the importer requires >=300,000 verified venue-qualified reference rows, records the full catalog SHA256, and keeps one previous validated local version. On success the existing global search cache and Directory cache are invalidated.
+
+If GitHub is unreachable, consent is withheld, or the donor schema/source records fail the coverage gate, LiOS continues working with existing local catalogs. The in-app installer reports an error; no synthetic tickers or live prices are generated. A reference list is *not* a live quotation entitlement.
+
+**Packaging check required:** run source tests and an actual Windows/macOS installed-app one-click import on the user's own device. Source-level code and tests have been committed; V1–V4 claims are not made until those steps pass.
