@@ -376,6 +376,36 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
   --lios-palette-preview-accent: #D4A017;
 }
 
+/* Recolor the *existing* Dockview groups; keep installed professional
+ * Workbench geometry, tab sizes, layout state and data typography unchanged.
+ * Canonical shell remains the only structural authority for Dockview. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-dockview-workspace.dockview-theme-dark,
+  .lios-dockview-workspace .dockview-theme-dark
+) {
+  --dv-group-view-background-color: var(--lios-bg-app);
+  --dv-tabs-and-actions-container-background-color: var(--lios-bg-panel);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--lios-bg-app);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--lios-bg-panel-2);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--lios-bg-panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--lios-bg-shell);
+  --dv-activegroup-visiblepanel-tab-color: var(--lios-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--lios-text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--lios-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--lios-text-muted);
+  --dv-tab-divider-color: var(--lios-border-subtle);
+  --dv-separator-border: var(--lios-border-default);
+  --dv-paneview-header-border-color: var(--lios-border-default);
+  --dv-paneview-active-outline-color: var(--lios-brand);
+  --dv-active-sash-color: var(--lios-brand);
+  --dv-drag-over-background-color: var(--lios-bg-selected);
+  --dv-drag-over-border-color: var(--lios-border-strong);
+  --dv-edge-dock-indicator-color: var(--lios-brand);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-dockview-workspace .dv-sash:is(:hover,.dv-active-sash) {
+  background-color: color-mix(in srgb, var(--lios-brand) 28%, transparent);
+}
+
 /* Accessibility and narrow layouts: preserve existing switch / same sidecar. */
 html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-project-experience-shell :where(
   button, a, input, textarea, select, [tabindex]
