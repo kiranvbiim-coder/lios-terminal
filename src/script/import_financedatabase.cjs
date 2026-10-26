@@ -230,7 +230,7 @@ function withDonorCheckout(callback) {
 }
 
 function run(argv = process.argv.slice(2)) {
-  let sourceDir = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
+  let sourceDir = null, sourceCommit = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
   const dest = path.join(resolveDataRoot({ cwd: path.resolve(__dirname, "..") }).root, "instrument-catalogs");
   if (argv.length === 1 && argv[0] === "--verify") {
     const report = verifyInstalled(dest);
@@ -245,6 +245,7 @@ function run(argv = process.argv.slice(2)) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--from-dir") sourceDir = path.resolve(argv[++i] || "");
+    else if (arg === "--source-commit") sourceCommit = argv[++i] || "";
     else if (arg === "--categories") categories = (argv[++i] || "").split(",").filter(Boolean);
     else if (arg === "--min") minimum = Number(argv[++i]);
     else if (arg === "--all") categories = DEFAULT_CATEGORIES;
@@ -273,9 +274,11 @@ function run(argv = process.argv.slice(2)) {
     return verified;
   };
   if (sourceDir) {
-    let commit = "local-unverified";
-    try { commit = execFileSync("git", ["-C", sourceDir, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim(); }
-    catch { /* A local CSV copy does not have verifiable git provenance. */ }
+    let commit = sourceCommit && /^[a-f0-9]{40}$/i.test(sourceCommit) ? sourceCommit : "local-unverified";
+    if (commit === "local-unverified") {
+      try { commit = execFileSync("git", ["-C", sourceDir, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim(); }
+      catch { /* A local CSV copy does not have verifiable git provenance. */ }
+    }
     return act(sourceDir, commit);
   }
   return withDonorCheckout(act);
