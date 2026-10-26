@@ -15,7 +15,7 @@ const { resolveDataRoot } = require("../dataRootCore.cjs");
 const SOURCE_REPO = "https://github.com/JerBouma/FinanceDatabase.git";
 const PINNED_COMMIT = "3815eb341c7aa7bfae4a720744093e75528b6099";
 const SUPPORTED = new Set(["equities", "etfs", "funds", "indices", "cryptos", "currencies", "moneymarkets"]);
-const DEFAULT_CATEGORIES = ["equities", "etfs"];
+const DEFAULT_CATEGORIES = [...SUPPORTED];
 
 function parseCsv(text) {
   // RFC 4180 quoting, escaped quotes and multiline fields; fail closed on
@@ -76,7 +76,8 @@ function normalizeRow(row, category) {
   const isin = optional(row, "isin");
   const figi = optional(row, "figi");
   const compositeFigi = optional(row, "composite_figi");
-  const shareClassFigi = optional(row, "share_class_figi");
+  const shareClassFigi = optional(row, "shareclass_figi") || optional(row, "share_class_figi");
+  const cusip = optional(row, "cusip");
   const delisted = optional(row, "delisted");
   return {
     symbol, name,
@@ -96,8 +97,13 @@ function normalizeRow(row, category) {
     marketCapTier: optional(row, "market_cap"),
     category: optional(row, "category"),
     categoryGroup: optional(row, "category_group"),
+    industryGroup: optional(row, "industry_group"),
+    cryptocurrency: optional(row, "cryptocurrency"),
+    baseCurrency: optional(row, "base_currency"),
+    quoteCurrency: optional(row, "quote_currency"),
     family: optional(row, "family"),
     ...(isin && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/i.test(isin) ? { isin: isin.toUpperCase() } : {}),
+    ...(cusip && /^[A-Z0-9]{9}$/i.test(cusip) ? { cusip: cusip.toUpperCase() } : {}),
     ...(figi && /^[A-Z0-9]{12}$/i.test(figi) ? { figi: figi.toUpperCase() } : {}),
     ...(compositeFigi && /^[A-Z0-9]{12}$/i.test(compositeFigi) ? { compositeFigi: compositeFigi.toUpperCase() } : {}),
     ...(shareClassFigi && /^[A-Z0-9]{12}$/i.test(shareClassFigi) ? { shareClassFigi: shareClassFigi.toUpperCase() } : {}),
@@ -126,7 +132,7 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
         const input = Object.fromEntries(header.map((column, i) => [column, cells[i]]));
         const candidate = normalizeRow(input, category);
         if (!candidate) { skipped++; continue; }
-        const key = [category, candidate.symbol.toUpperCase(), (candidate.mic || candidate.exchange || "").toUpperCase()].join("|");
+        const key = [category, candidate.symbol.toUpperCase(), (candidate.mic || candidate.exchange || "").toUpperCase(), (candidate.currency || "").toUpperCase()].join("|");
         if (seen.has(key)) { duplicates++; continue; }
         seen.add(key); rows.push(candidate); accepted++;
       }
@@ -162,12 +168,13 @@ function withDonorCheckout(callback) {
 }
 
 function run(argv = process.argv.slice(2)) {
-  let sourceDir = null, categories = DEFAULT_CATEGORIES, minimum = 100000;
+  let sourceDir = null, categories = DEFAULT_CATEGORIES, minimum = 300000;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--from-dir") sourceDir = path.resolve(argv[++i] || "");
     else if (arg === "--categories") categories = (argv[++i] || "").split(",").filter(Boolean);
     else if (arg === "--min") minimum = Number(argv[++i]);
+    else if (arg === "--all") categories = DEFAULT_CATEGORIES;
     else throw new Error("Unknown option " + arg);
   }
   if (!Number.isSafeInteger(minimum) || minimum < 1 || !categories.length) throw new Error("Invalid import threshold or categories");
