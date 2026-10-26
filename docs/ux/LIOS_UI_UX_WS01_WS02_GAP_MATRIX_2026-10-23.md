@@ -301,7 +301,7 @@ Verified against current `src/client/src/App.tsx` and its existing `AppRouter`; 
 
 No PR is marked merged merely because its mechanism was adapted locally. Exact-head hosted CI and independent review remain required before protected-main integration.
 
-## 10. Final per-workstream status (2026-10-23, local source only)
+## 10. Historical per-workstream status (2026-10-23, superseded where noted below)
 
 Levels: **L** = locally implemented and source-gated; **E** = exercised in source-Electron; **X** = external prerequisite open. Nothing below is protected-main, installed-app or SP/P14 accepted.
 
@@ -325,3 +325,26 @@ Levels: **L** = locally implemented and source-gated; **E** = exercised in sourc
 | 63 | L | cross-tenant/revoked-source replay with real rights |
 | 64 | X | `validate_ux_flagship_acceptance` is intentionally NOT_RUN in this source distribution (withheld `ux-visual-smoke.yml`); needs private qualification |
 | 65 | X | clean macOS/Windows install-update-restart, signing/notarization, owner sign-off |
+
+## 11. Current product-integration correction — 2026-10-26
+
+The grouped **L** labels above are not proof that every consumer landed in consolidated main. Main `1234514` lacked closed #190/#191/#192/#193 runtime consumers. Integration PR [#207](https://github.com/kiranvbiim-coder/lios-terminal/pull/207) restores them and selectively adopts the remaining UX stack without replacing newer P4, draft or Gateway safeguards. No WS-04–65 full installed acceptance follows from these source changes. Exact local commands, isolated Mac journeys and limitations remain in `docs/PENDING_WORK.md`.
+
+| Workstream | Current implementation / exercised boundary | Still required |
+|---|---|---|
+| WS-54 | Project-scoped collection search, explicit context modes, revision-fenced resource updates, schema/Project-fenced continuity; actual Mac exclusion/Cancel/on-demand and failed rename/retry; actual-component search opened Chat 25 and found Resource 20 beyond the Home snapshot | Complete resource/Session lifecycle and failure/recovery qualification; no unrelated Project mutation |
+| WS-55 | Reviewed paused creation, schedule edit, enable/pause/delete and SQL stale-write refusal; actual Mac confirmed these controls without an automatic run | Real recurring/conditional current-input execution and restart/no-replay |
+| WS-56 | Project history, explicit OS opt-in, owner-fenced passive delivery and private generic banners; actual history UI, focused delivery tests | Real material event → delivery/banner/read/suppression across restart |
+| WS-57 | Existing-Gateway/device scope truth and explicit network/pairing/Home/revoke review; actual network review Cancel retained listener OFF | Real paired-device execution/revoke/offline continuity; network review is not server CAS |
+| WS-58 | Shared modal reuse; actual Save Workflow name focus, twelve contained Tabs and final Escape → Tools/pointer restoration | Complete keyboard flow and actual VoiceOver/Narrator |
+| WS-59 | 768px mobile navigation and same-instance stacked Artifact; short-phone focus-only access prevents Send occlusion; final 390×600 Send hit test and Focus passed | Native true zoom, declared hardware and independent Windows |
+| WS-60 | Quiet agent guidance and compact Trust metrics preserve canonical rights/error caveats | Whole-task material-disclosure review |
+| WS-61 | New work preflight before upload/start, no reconnect queue, honest unknown outcome; actual offline Send retained prompt/CSV with zero writes/starts | Mid-run transport/restart/permission scenarios and whole-app offline isolation |
+| WS-62 | Bounded Chat history and cumulative-text coalescing; source regressions passed | Real long-history/cold/warm/scroll/memory benchmarks; aborted interception probes are not evidence |
+| WS-63 | Sanitized public ingress/root URL, exact-preview consent, local export acknowledgement and server recorded-denial veto; HTTP/DB regressions | Live source entitlement/recipient rights and complete multi-owner native replay |
+| WS-64 | Existing seven-scenario catalogue/Runtime-fixture suite integrated, 48 focused tests; report still accepts zero installed scenarios | All live/installed scenario gates and owner review; no mandatory private workflow for the $0 beta |
+| WS-65 | Existing strict signed-production schema/CLI retained; six evidence-negative tests, incremental hashing and linked-parent refusal | Production remains unqualified; $0 beta has a separate honest observation track, not weakened signing evidence |
+
+Owner [#206](https://github.com/kiranvbiim-coder/lios-terminal/pull/206), merged as `66b4917`, locks additional release spend to **$0**. Immediate target is the integrated ad-hoc/unnotarized Mac and unsigned Windows beta, with guided testing on the owner's existing Windows computer. Signing is not an implementation blocker. Heavy native builds are currently blocked by host working-space exhaustion and an aborted guest journal; Colima is stopped pending safe storage recovery. Original qualified sandbox assets and the user's Desktop application/profile/data were preserved.
+
+Creative image/video/audio generation remains optional and must be clearly unavailable when unsupported in beta, per the owner's quiz decision. General AI, research, professional outputs, specialist Finance, automation and devices remain in scope.
