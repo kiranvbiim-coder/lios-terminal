@@ -212,3 +212,103 @@ test("P3 price planning does not advertise connectors outside the active LiOS pr
   assert.equal(plan.candidates.some((item) => item.connectorId === "fmp"), false);
   assert.equal(plan.candidates.some((item) => item.connectorId === "yahoo_finance"), true);
 });
+
+
+test("P5 catalog-only registered price provider is never advertised as executable or connectable", () => {
+  const fake = {
+    ...snapshot.connectors[0],
+    adapterImplemented: false,
+  };
+  const plan = planUniversalDataFromSnapshot(
+    pricesRequest({
+      requestId: "a5cd78ce-9aa9-40b2-9aeb-009ad81000b1",
+      symbol: "AAPL",
+      fields: ["quote"],
+      sourceScope: "web",
+      allowPartial: false,
+    }),
+    {
+      connectors: [fake],
+      health: [{ ...snapshot.health[0], adapterImplemented: false, state: "catalog_only", lastVerifiedAt: null }],
+    },
+  );
+  assert.equal(plan.availability, "unavailable");
+  assert.deepEqual(plan.selectedCandidateIds, []);
+  assert.equal(plan.recoveryActions.some((action) => action.startsWith("Connect ")), false);
+});
+
+test("P5 latest-only price route cannot claim historical as-known-on or exact-revision knowledge", () => {
+  const request = pricesRequest({
+    requestId: "a5cd78ce-9aa9-40b2-9aeb-009ad81000b2",
+    symbol: "AAPL",
+    fields: ["quote"],
+    sourceScope: "web",
+    allowPartial: false,
+  });
+  for (const pointInTime of [
+    { ...request.pointInTime, mode: "as_known_on" as const, asKnownOn: "2026-01-01T00:00:00.000Z" },
+    { ...request.pointInTime, mode: "revision_exact" as const, revision: "historic-revision" },
+  ]) {
+    const plan = planUniversalDataFromSnapshot({ ...request, pointInTime }, snapshot);
+    assert.equal(plan.availability, "unavailable");
+    assert.equal(plan.selectedCandidateIds.length, 0);
+  }
+});
+
+test("P5 selection includes later field-completing provider ahead of redundant fallbacks", () => {
+  const providerIds = ["yahoo_finance", "bse_india", "coingecko", "stooq", "twelve_data", "tiingo"];
+  const connectors = providerIds.map((id, i) => ({
+    ...snapshot.connectors[0],
+    id,
+    name: id,
+    capabilities: [{
+      contractFamily: "market_data",
+      fields: i === providerIds.length - 1 ? ["ohlcv"] : ["quote"],
+      coverage: "global",
+    }],
+  }));
+  const health = providerIds.map((id) => ({ ...snapshot.health[0], connectorId: id }));
+  const plan = planUniversalDataFromSnapshot(
+    pricesRequest({
+      requestId: "a5cd78ce-9aa9-40b2-9aeb-009ad81000b3",
+      symbol: "AAPL",
+      fields: ["quote", "ohlcv"],
+      sourceScope: "web",
+      allowPartial: false,
+    }),
+    { connectors, health },
+  );
+  assert.equal(plan.availability, "ready");
+  assert.deepEqual(plan.missingFields, []);
+  assert.equal(plan.selectedCandidateIds.length, 5);
+  assert.equal(plan.selectedCandidateIds[0], "yahoo_finance");
+  assert.equal(plan.selectedCandidateIds[1], "tiingo");
+  assert.equal(plan.selectedCandidateIds.includes("tiingo"), true);
+});
+
+test("P5 plans are partial when a required field is only offered beyond the five selected providers", () => {
+  const providerIds = ["yahoo_finance", "bse_india", "coingecko", "stooq", "twelve_data", "tiingo"];
+  const fields = ["quote", "ohlcv", "bid", "ask", "volume", "open_interest"];
+  const connectors = providerIds.map((id, i) => ({
+    ...snapshot.connectors[0],
+    id,
+    name: id,
+    capabilities: [{ contractFamily: "market_data", fields: [fields[i]], coverage: "global" }],
+  }));
+  const plan = planUniversalDataFromSnapshot(
+    pricesRequest({
+      requestId: "a5cd78ce-9aa9-40b2-9aeb-009ad81000b4",
+      symbol: "AAPL",
+      fields,
+      sourceScope: "web",
+      allowPartial: true,
+    }),
+    {
+      connectors,
+      health: providerIds.map((id) => ({ ...snapshot.health[0], connectorId: id })),
+    },
+  );
+  assert.equal(plan.availability, "partial");
+  assert.deepEqual(plan.missingFields, ["open_interest"]);
+  assert.equal(plan.selectedCandidateIds.includes("tiingo"), false);
+});
