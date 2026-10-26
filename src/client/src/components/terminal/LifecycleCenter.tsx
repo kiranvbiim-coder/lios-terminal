@@ -1,21 +1,33 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, FolderKanban, MessageSquare, Package } from "lucide-react";
+import { ArrowLeft, FileText, FolderKanban, Layers, MessageSquare, Package } from "lucide-react";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import {
   getProjectDependencySummary,
   permanentlyDeleteProject,
   permanentlyDeleteProjectChat,
+  permanentlyDeleteProjectResource,
+  permanentlyDeleteProjectSession,
   restoreTrashedProject,
   restoreTrashedProjectChat,
+  restoreTrashedProjectResource,
+  restoreTrashedProjectSession,
   trashProject,
   trashProjectChat,
+  trashProjectResource,
+  trashProjectSession,
   updateProject,
   updateProjectChat,
+  updateProjectResource,
+  updateProjectSession,
   useAllProjectChats,
+  useProjectResources,
+  useProjectSessions,
   useProjects,
   useQuickChats,
   type Project,
   type ProjectChat,
+  type ProjectResource,
+  type ProjectSession,
 } from "@/lib/useProjects";
 import {
   permanentlyDeleteArtifact,
@@ -58,13 +70,21 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
   const trashedQuickChatsQuery = useQuickChats("trash");
   const trashedArtifactsQuery = useAllArtifacts("trash");
   const archivedArtifactsQuery = useAllArtifacts("archived");
+  const activeProjectsQuery = useProjects("active");
+  const activeProjects = activeProjectsQuery.data ?? [];
+  const [workProjectId, setWorkProjectId] = useState<number | null>(null);
+  const selectedWorkProjectId = activeProjects.some((project) => project.id === workProjectId) ? workProjectId : activeProjects[0]?.id ?? null;
+  const resourcesQuery = useProjectResources(selectedWorkProjectId, tab);
+  const sessionsQuery = useProjectSessions(selectedWorkProjectId, tab);
 
   const projects = tab === "trash" ? trashedProjectsQuery.data ?? [] : archivedProjectsQuery.data ?? [];
   const chats = tab === "trash"
     ? [...(trashedChatsQuery.data ?? []), ...(trashedQuickChatsQuery.data ?? [])]
     : [...(archivedChatsQuery.data ?? []), ...(archivedQuickChatsQuery.data ?? [])];
   const artifacts = tab === "trash" ? trashedArtifactsQuery.data ?? [] : archivedArtifactsQuery.data ?? [];
-  const counts = useMemo(() => ({ projects: projects.length, chats: chats.length, artifacts: artifacts.length }), [artifacts.length, chats.length, projects.length]);
+  const resources = resourcesQuery.data ?? [];
+  const sessions = sessionsQuery.data ?? [];
+  const counts = useMemo(() => ({ projects: projects.length, chats: chats.length, artifacts: artifacts.length, work: resources.length + sessions.length }), [artifacts.length, chats.length, projects.length, resources.length, sessions.length]);
 
   const run = async (work: () => Promise<void | boolean>) => {
     // A menu can dispatch again before React disables its buttons.
@@ -145,6 +165,34 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
     return Promise.resolve();
   };
 
+  const handleResourceAction = (resource: ProjectResource, action: LifecycleAction) => {
+    if (action === "restore") return run(async () => {
+      if (resource.trashedAt) await restoreTrashedProjectResource(resource.projectId, resource.id);
+      else await updateProjectResource(resource.projectId, resource.id, { archived: false });
+    });
+    if (action === "delete") return run(async () => { await trashProjectResource(resource.projectId, resource.id); });
+    if (action === "delete_permanently") return run(async () => {
+      if (!window.confirm(`Permanently delete resource “${resource.label}”? This cannot be undone.`)) return false;
+      await permanentlyDeleteProjectResource(resource.projectId, resource.id);
+      return true;
+    });
+    return Promise.resolve();
+  };
+
+  const handleSessionAction = (session: ProjectSession, action: LifecycleAction) => {
+    if (action === "restore") return run(async () => {
+      if (session.trashedAt) await restoreTrashedProjectSession(session.id);
+      else await updateProjectSession(session.id, { status: "active" });
+    });
+    if (action === "delete") return run(async () => { await trashProjectSession(session.id); });
+    if (action === "delete_permanently") return run(async () => {
+      if (!window.confirm(`Permanently delete Session “${session.name}”? This cannot be undone.`)) return false;
+      await permanentlyDeleteProjectSession(session.id);
+      return true;
+    });
+    return Promise.resolve();
+  };
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#050505]">
       <header className="flex shrink-0 items-center gap-3 border-b border-border/70 px-5 py-4">
@@ -166,7 +214,7 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
           </button>
         ))}
         <span className="ml-auto self-center font-terminal text-[6px] uppercase tracking-[0.16em] text-muted-foreground">
-          {counts.projects + counts.chats + counts.artifacts} objects
+          {counts.projects + counts.chats + counts.artifacts + counts.work} objects
         </span>
       </div>
 
@@ -198,6 +246,29 @@ export function LifecycleCenter({ onClose, onNotice, onInvalidate }: Props) {
                 <ObjectActionMenu disabled={disabledActions} kind="artifact" status={lifecycleStatus(artifact.trashedAt, artifact.status)} hidden={[]} label={`Actions for ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
               </div>
             ))}
+          </LifecycleGroup>
+
+          <LifecycleGroup title="Project resources & Sessions" icon={<Layers className="h-3.5 w-3.5 text-emerald-300" />} empty={selectedWorkProjectId === null ? "No active Project to inspect." : tab === "trash" ? "No trashed resources or Sessions in this Project." : "No archived resources or Sessions in this Project."}>
+            {activeProjects.length > 0 && <label key="project-select" className="block font-ui text-[9px] text-muted-foreground">Active Project
+              <select value={selectedWorkProjectId ?? ""} disabled={applying} onChange={(event) => setWorkProjectId(Number(event.target.value))} className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2 text-sm text-foreground">
+                {activeProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </label>}
+            {(resourcesQuery.isError || sessionsQuery.isError) && <p key="work-error" role="alert" className="text-sm text-red-200">Project resources or Sessions could not be loaded. Nothing was changed.</p>}
+            {resources.map((resource) => (
+              <div key={`resource-${resource.id}`} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
+                <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{resource.label}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">RESOURCE · {resource.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
+                <ObjectActionMenu disabled={disabledActions} kind="source" status={lifecycleStatus(resource.trashedAt, resource.status === "archived" ? "archived" : "active")} label={`Actions for ${resource.label}`} onAction={(action) => void handleResourceAction(resource, action)} />
+              </div>
+            ))}
+            {sessions.map((session) => (
+              <div key={`session-${session.id}`} className="flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.015] px-3 py-2.5">
+                <div className="min-w-0 flex-1"><div className="truncate font-ui text-[9px] text-foreground">{session.name}</div><div className="mt-1 font-terminal text-[6px] text-muted-foreground">SESSION · {session.trashedAt ? "TRASHED" : "ARCHIVED"}</div></div>
+                <ObjectActionMenu disabled={disabledActions} kind="session" status={lifecycleStatus(session.trashedAt, session.status)} label={`Actions for ${session.name}`} onAction={(action) => void handleSessionAction(session, action)} />
+              </div>
+            ))}
+            {!resourcesQuery.isLoading && !sessionsQuery.isLoading && !resources.length && !sessions.length && <p key="work-empty" className="px-1 py-5 font-ui text-[8px] text-muted-foreground">{selectedWorkProjectId === null ? "No active Project to inspect." : tab === "trash" ? "No trashed resources or Sessions in this Project." : "No archived resources or Sessions in this Project."}</p>}
           </LifecycleGroup>
         </div>
       </div>

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Send } from "lucide-react";
 import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
-import { updateProjectResource, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
+import { trashProjectResource, trashProjectSession, updateProjectResource, updateProjectSession, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
 import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
 import {
   VISUAL_ENVIRONMENTS,
@@ -19,6 +19,7 @@ import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 
 export function relativeTime(value: string): string {
   const ms = Math.max(0, Date.now() - new Date(value).getTime());
@@ -320,6 +321,14 @@ export function ProjectHome({
                     setContextNotice(null);
                     setPendingContext({ projectId: project.id, resourceId: resource.id, from: resource.contextMode, to: resource.contextMode });
                   }} className="mt-2 min-h-10 rounded border border-border px-3 py-2 text-xs">Review context inclusion</button>
+                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy}
+                    rename={async label => {
+                      const saved = await updateProjectResource(project.id, resource.id, { label });
+                      if (saved.id !== resource.id || saved.projectId !== project.id || saved.label !== label) throw new Error("The exact resource name was not confirmed.");
+                    }}
+                    archive={async () => { await updateProjectResource(project.id, resource.id, { archived: true }); }}
+                    trash={async () => { await trashProjectResource(project.id, resource.id); }}
+                    onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
                 </div>
               ))}
               {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
@@ -353,13 +362,23 @@ export function ProjectHome({
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {found.sessions.slice(0, visibleWorkCount).map((session) => (
-                <button key={session.id} onClick={() => onOpenSession(session)} className="rounded-lg border border-border/50 bg-black/15 p-3 text-left hover:border-fuchsia-300/25 hover:bg-white/[0.025]">
+                <div key={session.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+                <button type="button" onClick={() => onOpenSession(session)} className="w-full text-left hover:text-fuchsia-200">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-terminal text-[11px] text-muted-foreground">{session.parentSessionId ? "FORK" : "BASE"}</span>
                     <span className="font-terminal text-[11px] text-muted-foreground">{relativeTime(session.updatedAt)}</span>
                   </div>
                 </button>
+                <ProjectWorkActions key={session.id} kind="session" label={session.name} disabled={false}
+                  rename={async name => {
+                    const saved = await updateProjectSession(session.id, { name });
+                    if (saved.id !== session.id || saved.projectId !== project.id || saved.name !== name) throw new Error("The exact Session name was not confirmed.");
+                  }}
+                  archive={async () => { await updateProjectSession(session.id, { status: "archived" }); }}
+                  trash={async () => { await trashProjectSession(session.id); }}
+                  onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
+                </div>
               ))}
             </div>
           </section>
@@ -400,4 +419,49 @@ export function ProjectHome({
       </div>
     </div>
   );
+}
+
+function ProjectWorkActions({ kind, label, disabled, rename, archive, trash, onChanged }: {
+  kind: "source" | "session"; label: string; disabled: boolean;
+  rename: (name: string) => Promise<void>; archive: () => Promise<void>; trash: () => Promise<void>; onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const [trashRequest, setTrashRequest] = useState<LifecycleRequest | null>(null);
+  const run = async (operation: () => Promise<void>) => {
+    if (inFlight.current || disabled) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try { await operation(); setEditing(false); onChanged(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Saved-work change was not confirmed. Your input is retained."); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
+  return <div className="mt-2">
+    {editing ? <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); if (draft.trim()) void run(() => rename(draft.trim())); }}>
+      <label className="min-w-0 flex-1 text-xs">Name for {label}
+        <input autoFocus value={draft} disabled={busy} maxLength={kind === "source" ? 240 : 200} onChange={event => setDraft(event.target.value)}
+          className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2 text-sm" />
+      </label>
+      <button type="submit" disabled={busy || disabled || !draft.trim()} className="min-h-10 rounded border border-border px-3 text-sm">{busy ? "Saving…" : "Save name"}</button>
+      <button type="button" disabled={busy} onClick={() => setEditing(false)} className="min-h-10 px-3 text-sm">Cancel</button>
+    </form> : <ObjectActionMenu kind={kind} status="active" hidden={["share", "fork", "compare"]}
+      disabled={busy || disabled ? { rename: "Wait for the pending change", archive: "Wait for the pending change", delete: "Wait for the pending change" } : undefined}
+      label={`Actions for ${label}`} onAction={(action, trigger) => {
+        if (action === "rename") { setDraft(label); setError(null); setEditing(true); }
+        if (action === "archive") void run(archive);
+        if (action === "delete") setTrashRequest({
+          title: kind === "source" ? "Move resource to Trash?" : "Move Session to Trash?",
+          detail: `“${label}” will leave active Project work and Project context. Restore it from Trash & archive before using it again.`,
+          confirmLabel: "Move to Trash",
+          returnFocus: trigger ?? null,
+          resolve: value => { if (value) void run(trash); },
+        });
+      }} />}
+    <ProjectLifecycleDialog request={trashRequest} onClose={() => setTrashRequest(null)} />
+    {error && <p role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
+  </div>;
 }

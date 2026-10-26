@@ -263,11 +263,12 @@ export function useProjectChatMessages(chatId: number | null) {
   });
 }
 
-export function useProjectResources(projectId: number | null) {
+export function useProjectResources(projectId: number | null, status: ProjectLifecycleStatus = "active") {
   return useQuery<ProjectResource[]>({
-    queryKey: ["/api/projects", projectId, "resources"],
+    queryKey: status === "active" ? ["/api/projects", projectId, "resources"] : ["/api/projects", projectId, "resources", status],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}/resources`);
+      const suffix = status === "trash" ? "?trash=true" : status === "archived" ? "?archived=true" : "";
+      const res = await fetch(`/api/projects/${projectId}/resources${suffix}`);
       if (!res.ok) throw new Error("Failed to load Project resources.");
       return res.json();
     },
@@ -287,11 +288,11 @@ export function useAllProjectChats(status: ProjectLifecycleStatus = "active", en
   });
 }
 
-export function useProjectSessions(projectId: number | null) {
+export function useProjectSessions(projectId: number | null, status: ProjectLifecycleStatus = "active") {
   return useQuery<ProjectSession[]>({
-    queryKey: ["/api/projects", projectId, "sessions"],
+    queryKey: status === "active" ? ["/api/projects", projectId, "sessions"] : ["/api/projects", projectId, "sessions", status],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}/sessions`);
+      const res = await fetch(`/api/projects/${projectId}/sessions?status=${status}`);
       if (!res.ok) throw new Error("Failed to load Sessions.");
       return res.json();
     },
