@@ -1,0 +1,331 @@
+/*
+ * TC / SI-07 — LiOS palette acceptance layer.
+ * Loaded AFTER canonical shell, one authorized VisualCanvas and typography.
+ * Chat and Project UI only; dense Workbench and code/data semantics are unchanged.
+ * The reference palettes are independently selectable, not endorsed by the
+ * products that inspired their publicly observable colors.
+ */
+
+/* Semantic *text* accent is intentionally distinct from the reference brand
+ * color: Claude's #D97757 fails WCAG AA for small text on its ivory surface. */
+html[data-lios-palette="chatgpt-dark"] {
+  --lios-theme-accent-text: #F5F5F5;
+  --lios-theme-action: #F5F5F5;
+  --lios-theme-action-foreground: #171717;
+  --lios-theme-link: #E6E6E6;
+  --lios-theme-user-bg: #303030;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #191919;
+}
+html[data-lios-palette="chatgpt-light"] {
+  --lios-theme-accent-text: #171717;
+  --lios-theme-action: #171717;
+  --lios-theme-action-foreground: #FFFFFF;
+  --lios-theme-link: #244B98;
+  --lios-theme-user-bg: #F0F0F0;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #F3F3F3;
+}
+html[data-lios-palette="claude-light"] {
+  --lios-theme-accent-text: #A44527;
+  --lios-theme-action: #D97757;
+  --lios-theme-action-foreground: #141413;
+  --lios-theme-link: #8D3B20;
+  --lios-theme-user-bg: #F0EEE6;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #F0EEE6;
+}
+html[data-lios-palette="claude-dark"] {
+  --lios-theme-accent-text: #E9947A;
+  --lios-theme-action: #D97757;
+  --lios-theme-action-foreground: #141413;
+  --lios-theme-link: #FFC5B1;
+  --lios-theme-user-bg: #393935;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #1F1E1D;
+}
+
+/* Classic remains the unchanged professional-terminal theme. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-experience-shell {
+  --lios-chat-surface: var(--lios-bg-app);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-project-experience-shell > aside,
+  .lios-reference-navigation-projects,
+  .lios-reference-expand-sidebar,
+  .lios-reference-navigation-rail,
+  .lios-navigation-sheet
+) {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects {
+  background: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-default) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-titlebar {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-reference-titlebar button,
+  .lios-reference-titlebar-brand .lios-reference-brand,
+  .lios-reference-navigation-brand,
+  .lios-reference-expand-sidebar
+) {
+  color: var(--lios-text-secondary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-primary-navigation button {
+  min-height: 38px;
+  border-radius: 9px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-primary-navigation .lios-new-chat {
+  border: 1px solid var(--lios-border-default);
+  border-radius: 10px;
+  font-family: var(--lios-chat-font) !important;
+  font-size: .875rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-account-avatar {
+  border-radius: 10px;
+  background: var(--lios-bg-elevated);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-rail button[aria-current] {
+  color: var(--lios-theme-accent-text);
+  border-color: var(--lios-brand);
+}
+
+/* Preserve the existing VisualCanvas as the only environmental layer, but
+ * prevent its dark veil/image from tinting readable light themes. */
+html[data-lios-palette="chatgpt-light"] .lios-visual-canvas,
+html[data-lios-palette="claude-light"] .lios-visual-canvas {
+  background: var(--lios-bg-app) !important;
+}
+html[data-lios-palette="chatgpt-light"] .lios-visual-canvas :is(.lios-visual-canvas__image, .lios-visual-canvas__veil, .lios-visual-canvas__light, .lios-visual-canvas__grain),
+html[data-lios-palette="claude-light"] .lios-visual-canvas :is(.lios-visual-canvas__image, .lios-visual-canvas__veil, .lios-visual-canvas__light, .lios-visual-canvas__grain) {
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+/* Consistent surfaces for the Chat home, Project home and suggestions. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-starter {
+  background: var(--lios-bg-panel) !important;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 12px !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-starter:hover {
+  background: var(--lios-bg-elevated) !important;
+  border-color: var(--lios-border-strong) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-home-surface,
+  .lios-section-surface,
+  .lios-project-chat-content
+) {
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-home-surface [class*="bg-black"],
+  .lios-project-home-surface [class*="bg-\[#"],
+  .lios-project-experience-shell .lios-chat-empty-state__mark
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root #lios-chat-empty-title {
+  color: var(--lios-text-primary) !important;
+  font-size: clamp(1.7rem, 3.5vw, 2.2rem) !important;
+  max-width: 34ch;
+  text-wrap: balance;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-empty-state > p {
+  max-width: 55ch;
+}
+
+/* Mature Chat message rhythm: user gets a quiet filled bubble; assistant
+ * prose stays almost borderless, with markdown/code/cards visually separated. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-chat-content {
+  max-width: 48rem;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message {
+  background: var(--lios-theme-assistant-bg) !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px;
+  color: var(--lios-text-primary);
+  box-shadow: none !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message[data-lios-message="user"] {
+  background: var(--lios-theme-user-bg) !important;
+  border-radius: 17px 17px 5px 17px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message[data-lios-message="assistant"] {
+  padding-inline: .1rem;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message .lios-chat-markdown {
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(h1, h2, h3) {
+  letter-spacing: -.02em;
+  font-family: var(--lios-chat-font);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown a[href] {
+  color: var(--lios-theme-link);
+  text-decoration-color: currentColor;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(a, button)[data-citation] {
+  color: var(--lios-theme-link);
+  background: var(--lios-bg-panel);
+  border: 1px solid var(--lios-border-default);
+  border-radius: 5px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(code, kbd, samp) {
+  background: var(--lios-theme-code-bg);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown blockquote {
+  border-color: var(--lios-border-strong);
+}
+
+/* Tables/copy/code stay keyboard reachable and contrast-safe on light themes. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-code-block] {
+  background: var(--lios-theme-code-bg);
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] {
+  background: var(--lios-bg-panel-2);
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] :is(thead, section > div:first-child) {
+  background: var(--lios-bg-elevated);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] th {
+  color: var(--lios-text-primary);
+}
+
+/* The composer is the main focus point: no dark glass overlay on ivory/white. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+  background: var(--lios-bg-panel) !important;
+  border: 1px solid var(--lios-border-strong) !important;
+  border-radius: 18px !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .09) !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer:focus-within {
+  border-color: var(--lios-text-muted) !important;
+  box-shadow: 0 9px 26px rgb(0 0 0 / .12) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer textarea {
+  background: transparent !important;
+  color: var(--lios-text-primary) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer textarea::placeholder {
+  color: var(--lios-text-muted);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer + * {
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-suggestion-menu {
+  background: var(--lios-bg-elevated) !important;
+  border: 1px solid var(--lios-border-default);
+  color: var(--lios-text-primary);
+  box-shadow: 0 10px 34px rgb(0 0 0 / .16);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-suggestion-menu button:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+/* Explicit action foreground avoids using white on mid-tone Claude terracotta. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  [data-first-use-primary="ask"], .lios-primary-ask-action
+) {
+  background: var(--lios-theme-action) !important;
+  color: var(--lios-theme-action-foreground) !important;
+  border-color: transparent !important;
+  border-radius: 10px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell, .lios-project-home-surface
+) :is(.text-amber-300,.text-amber-200,.text-amber-100) {
+  color: var(--lios-theme-accent-text) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-experience-shell .lios-chat-empty-state__mark :is(svg) {
+  color: var(--lios-theme-accent-text);
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell [class*="text-cyan-100"],
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell [class*="text-cyan-100"] {
+  color: #165A7D !important;
+}
+
+/* Artifact ownership is unchanged. Only surfaces in the existing sidecar,
+ * its tabs, Project cards, and theme-aware dialogs/drawers are recolored. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell .lios-artifact-sidecar,
+  .lios-project-experience-shell .lios-artifact-frame,
+  .lios-artifact-frame,
+  .lios-project-context
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-reference-artifact-tabs {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-reference-artifact-tabs button[aria-selected="true"] {
+  color: var(--lios-theme-accent-text);
+  background: var(--lios-bg-panel);
+  border-color: var(--lios-brand);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  [role="dialog"][data-state],
+  [data-radix-popper-content-wrapper] [role="menu"],
+  [data-radix-popper-content-wrapper] [role="listbox"],
+  .lios-navigation-sheet,
+  [data-testid="connect-data"]
+) {
+  background-color: var(--lios-bg-panel-2);
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) [data-testid="connect-data"] :is(
+  input, select, textarea
+) {
+  background-color: var(--lios-bg-panel);
+  color: var(--lios-text-primary);
+  border-color: var(--lios-border-default);
+}
+
+/* Accessibility and narrow layouts: preserve existing switch / same sidecar. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-project-experience-shell :where(
+  button, a, input, textarea, select, [tabindex]
+):focus-visible {
+  outline: 2px solid var(--lios-theme-accent-text) !important;
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-chat-content {
+    max-width: 100%;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message {
+    max-width: 94%;
+    overflow-wrap: anywhere;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+    border-radius: 14px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+    transition: none;
+  }
+}
