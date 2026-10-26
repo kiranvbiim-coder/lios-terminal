@@ -142,6 +142,8 @@ export interface PortfolioAnalytics {
 // ── Screeners beyond equities (Country/Directory, Bond, Macro) ─────────────
 export interface DirectoryEntry {
   symbol: string; name: string; exchange: string; sector: string; assetClass?: string; region?: string; isPrimaryListing?: boolean;
+  mic?: string; currency?: string; isin?: string; figi?: string; source?: string; active?: boolean;
+  industry?: string; category?: string; family?: string; market?: string; marketCapTier?: string;
 }
 export interface DirectoryScreenResult { items: DirectoryEntry[]; total: number; page: number; totalPages: number }
 
