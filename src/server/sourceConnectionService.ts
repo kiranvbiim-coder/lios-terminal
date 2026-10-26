@@ -4,6 +4,7 @@ import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getConnectorById, getConnectorRegistrySnapshot, getUserScopedConnectorRegistrySnapshot, testConnectorCredential } from "./connectorService";
 import type { ConnectorRuntimeState } from "@shared/connectorRegistry";
 import { hasConnectorProbe, probeConnector } from "./connectorVerification";
+import { getCredentialProbeFactory } from "./connectorCredentialProbes";
 import "./connectorProbes";
 import { fetchWithEndpointPolicy, normalizeSourceConfig, validateMcpSourceEndpoint, validateSourceEndpoint } from "./sourceConnectionPolicy";
 import { resolveCredential } from "./credentialVault";
@@ -405,11 +406,11 @@ export async function testSourceConnection(userId: number, connectionId: number,
     if (!credential) {
       status = "degraded";
       detail = "Connector is registered but no credential is available to this runtime.";
-    } else if (connection.connectorId === "gemini") {
-      // Gemini's low-cost Models.list probe verifies the saved API key. The
-      // prior fallback only surfaced process-local AI traffic, so a visible
-      // "Verify" action could report a stale chat error without testing the
-      // credential that the user had just connected.
+    } else if (getCredentialProbeFactory(connection.connectorId)) {
+      // Reuse the same explicit credential probe required when saving a keyed
+      // connector. A user-clicked Verify must test this saved key now, not
+      // recycle passive process-local health from another request or owner.
+      // Only providers with a registered probe take this path.
       const verification = await testConnectorCredential(connection.connectorId, credential);
       status = verification.state;
       detail = verification.detail;
