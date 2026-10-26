@@ -52,8 +52,14 @@ function validateCatalog(file, spec) {
   if (!validCollection) throw new Error(spec.name + ": unexpected JSON shape");
   const count = spec.kind === "array" ? parsed.length : Object.keys(parsed).length;
   if (count < spec.minEntries) throw new Error(spec.name + ": insufficient catalog records (" + count + ")");
-  if (spec.kind === "array" && !parsed.every((row) => row && typeof row.symbol === "string"
-      && row.symbol.trim() && typeof row.name === "string" && row.name.trim())) {
+  if (spec.kind === "array" && !parsed.every((row) => {
+    if (!row || typeof row.symbol !== "string" || !row.symbol.trim()
+        || typeof row.name !== "string") return false;
+    if (row.name.trim()) return true;
+    // The historical Nasdaq file contains one non-instrument timestamp record.
+    // Keep the pinned source byte-for-byte; exclude it from search separately.
+    return spec.name === "tickers.json" && /^FILE CREATION TIME:/.test(row.symbol);
+  })) {
     throw new Error(spec.name + ": invalid symbol or name record");
   }
   if (spec.kind === "map" && !Object.values(parsed).every((row) => row && typeof row.id === "string" && row.id.trim())) {
