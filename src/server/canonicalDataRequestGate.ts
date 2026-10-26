@@ -10,7 +10,7 @@ import type { TenantContext } from "./tenantContext";
 import { getProject } from "./projectStore";
 import { assertWorkflowPointInTimePolicy } from "./workflowDataPolicy";
 
-type ProjectAccessCheck = typeof getProject;
+type ProjectAccessCheck = (tenant: TenantContext, projectId: number) => Promise<unknown>;
 
 export async function authorizeCanonicalDataRequests(
   requests: readonly CanonicalDataRequest[],
