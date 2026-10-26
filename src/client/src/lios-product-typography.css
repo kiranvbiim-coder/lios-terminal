@@ -49,7 +49,9 @@ html[data-lios-palette="claude-light"] .lios-navigation-sheet {
 html[data-lios-palette]:not([data-lios-palette="lios-classic"])
   .terminal-root .lios-project-experience-shell :where(.font-ui, .font-sans),
 html[data-lios-palette]:not([data-lios-palette="lios-classic"])
-  .terminal-root .lios-project-experience-shell :where(button:not(.font-terminal), input, textarea, select) {
+  .terminal-root .lios-conversation-header button,
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-conversation-composer :where(button, input, textarea, select) {
   font-family: var(--lios-chat-font) !important;
 }
 
