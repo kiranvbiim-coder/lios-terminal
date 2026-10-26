@@ -124,7 +124,8 @@ import { fillStarterPrompt, findStarterPlaceholder, starterPromptsForChatMode, r
 import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
 import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/lib/chatSelectionActions";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
-import { LIOS_FIRST_USE_CONTRACT, firstUseRecoveryDestination } from "@/lib/firstUseJourney";
+import { LIOS_FIRST_USE_CONTRACT, connectorIdFromRecoveryAction, firstUseRecoveryDestination } from "@/lib/firstUseJourney";
+import { openGuidedConnectorSetup } from "@/lib/appShellEvents";
 import { voiceAvailability } from "@/lib/composerAvailability";
 import { asyncSurfaceStatus } from "@/lib/asyncSurfaceState";
 import { planAttachmentStage, stagedFileKey } from "@/lib/fileAttachmentStaging";
@@ -2383,7 +2384,9 @@ export default function ProjectExperienceShell({
                       setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
                     }
-                    onOpenEnvironment();
+                    const guidedConnectorId = connectorIdFromRecoveryAction(action);
+                    if (guidedConnectorId) openGuidedConnectorSetup(guidedConnectorId);
+                    else onOpenEnvironment();
                     return;
                   }
                   setInput(current => stageSafeRunRetry(current, action));
