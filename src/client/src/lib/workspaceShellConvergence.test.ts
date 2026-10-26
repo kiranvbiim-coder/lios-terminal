@@ -290,3 +290,29 @@ test("H2b receipts persist per chat and restore on reload without storing answer
   assert.match(shell, /traceOwnerChatRef\.current = chatId/);
 });
 
+
+
+test("chat management uses one in-app drawer and never hides the conversation for connectors or plugins", () => {
+  const app = source("../App.tsx");
+  const project = source("../components/terminal/ProjectExperienceShell.tsx");
+  const center = source("../pages/DataConnectionCenter.tsx");
+  const navigation = source("../components/terminal/AuthenticatedNavigation.tsx");
+  const pluginPanel = source("../components/GovernedExtensionsPanel.tsx");
+
+  assert.match(app, /<Sheet open=\{managementView !== null && !domainPickerOpen\}/);
+  assert.match(app, /data-lios-workspace hidden=\{domainPickerOpen\}/);
+  assert.doesNotMatch(app, /data-lios-workspace hidden=\{environmentSetupOpen/);
+  assert.match(app, /data-testid="chat-management-drawer"/);
+  assert.match(app, /<DataConnectionCenter embedded/);
+  assert.match(app, /<GovernedExtensionsPanel/);
+  assert.match(app, /lazy\(\(\) => import\("\.\/pages\/DataConnectionCenter"\)\)/);
+  assert.match(app, /lazy\(\(\) => import\("@\/components\/GovernedExtensionsPanel"\)\)/);
+  assert.match(center, /if \(embedded\) return <div/);
+  assert.match(project, /if \(next === "plugins"\) \{ openPluginCenter\(\); return; \}/);
+  assert.match(project, /onSelect=\{openPluginCenter\}/);
+  assert.match(project, /onSelect=\{onOpenEnvironment\}/);
+  assert.doesNotMatch(project, /section === "plugins" && <GovernedExtensionsPanel/);
+  assert.match(navigation, /onClick=\{props.onConnectors\}/);
+  assert.match(navigation, /onClick=\{props.onSettings\}/);
+  assert.match(pluginPanel, /Registered P13 declarative contributions last only for this Home process session/);
+});
