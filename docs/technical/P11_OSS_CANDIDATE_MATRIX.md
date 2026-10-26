@@ -223,7 +223,7 @@ These are not bundled P11 donor integrations. Reference rows retain their curren
 | Backtrader | GPL-3.0 | REJECT for proprietary core |
 | Freqtrade | GPL-3.0 | REJECT for proprietary core |
 | NautilusTrader | LGPL-3.0 creates distribution/compliance complexity | REFERENCE unless separate explicit decision |
-| OpenBB | no approved LiOS use case under current project policy; licensing/provider scope changed over time | REJECT under current plan |
+| OpenBB V5 only | V5 (2026-09-30) changed licensing from AGPL-3.0-only to Apache-2.0; V4 remains AGPL. LiOS previously removed OpenBB runtime and has an active no-OpenBB regression. Re-evaluate *only* isolated provider implementation modules after exact V5 source/pin/dependency, API-data rights, packaging, DX/UX and benchmark audit. No silent runtime resurrection. | REFERENCE / CONDITIONAL REASSESSMENT; **not installed or approved** |
 | unverified/ambiguous license projects | exact rights unknown | REJECT until verified, never assumed permissive |
 | donor branding/screenshots/logos | trademark/asset rights separate | REJECT from product bundle unless separately licensed |
 
@@ -266,3 +266,24 @@ rollback/removal test
 ```
 
 This matrix is an exploration-to-execution inventory. Selected release/import pins belong in `third_party/upstream-lock.json`; research `observedCommit` values in `third_party/p11-candidates.json` remain research provenance and may differ without authorizing a mixed-source import. Reconcile exact chosen release/version/path/license before implementation. Target modes are not present shipping truth. Relevant SP-01/02/04/05/07 closure requires a real MSJ, applicable target execution, no fake success, regression protection and exact evidence; no acceptance is inferred here.
+
+## 7. October 26, 2026 — breadth/depth activation review
+
+These recommendations update **execution priority only**, not current package/install truth. Code ownership remains P5 for legal/security identities, P11 for deterministic finance, CA for capability adapters and GM/P13 for providers/agents. Use the existing 92-donor registry and Shipping Point gates; do not invent a new capability authority.
+
+| Sequence | Gap with highest user benefit | Candidate already reviewed | One LiOS-owned acceptance journey | Classification |
+|---|---|---|---|---|
+| D1 | Complete global reference symbols without implying market-data entitlement | FinanceDatabase + P5 (PR #217, unmerged) | Real-data 300k dedup count, source-age, disk/RSS, symbol/venue, update/rollback and desktop smoke | P5 source work; release unverified |
+| D2 | Legal-entity hierarchy and LEI/ISIN bridges outside traded tickers | GLEIF Global LEI Index, CC0 public data, direct API | Search by LEI or legal name, see candidates with jurisdiction/registration status, provenance and **no ticker inference**; source adapter in adjacent PR | P5, read-only source |
+| D3 | Day-count, calendars, market holidays and trading-session accuracy | exchange_calendars (Apache-2.0) + QuantLib (BSD-style) | NYSE/LSE/NSE same-date and DST/half-day known answers; prices never fabricated | P11, validator first |
+| D4 | Classical portfolios and scenario risk | PyPortfolioOpt MIT + skfolio BSD-3 + Riskfolio-Lib BSD-3 | Black–Litterman/EF/HRP, covariance validation and leverage/risk constraints from user-owned price history, with alternate solver known-answers | P11, one primary per method |
+| D5 | Institutional fixed income and derivatives | Existing QuantLib + ORE (dependency/submodule audit) | Bonds, curves, volatility smile, Greeks and stress values reconcile across engines | P11, optional native sidecar |
+| D6 | SEC company intelligence beyond ticker lookup | EdgarTools MIT (where existing SEC parser lacks forms) | Source-attributed 10-K/XBRL/13F/insider/8-K with SEC fair-access, caching and mismatch denial | P5/P7, no second entity resolver |
+| D7 | Reproducible factor research/ML | Qlib MIT, StatsForecast Apache-2.0, Optuna MIT | No-lookahead pipeline, train-test split, data lineage, research revision and local CPU/RAM budget | P11, isolated optional pack |
+| D8 | Broader cross-asset provider *connectors* | OpenBB V5 Apache-2.0 (not older AGPL V4) | Map only reviewed V5 provider-owned modules to existing Provider SDK, verify legal data access, no second server/terminal/auth runtime | CA/P5, re-evaluation only |
+
+The OpenBB license and platform architecture change is documented by its own V5 license FAQ (`https://docs.openbb.co/odp/python/faqs/license` and `https://docs.openbb.co/odp/python/migration-from-v4`). Apache-2.0 licenses **software**, not provider data. Keep `src/script/openbb_removal.test.mjs` active until a specific owner-reviewed policy revision with concrete benchmark and legal evidence. No source files from V5 are bundled in this change.
+
+GLEIF legal-entity data is explicitly CC0 per its official access terms (`https://www.gleif.org/en/meta/lei-data-terms-of-use`). A legal entity ID does not count as a security ticker or live market data. For this initial integration, do **not** bulk-snapshot millions of LEIs: start with a bounded, on-demand, source-attributed read-only P5 lookup. Crosswalk to P5 canonical identifiers is a later explicitly reviewed reconciliation, not an automatic name match.
+
+**Current capability bottleneck:** `third_party/p11-candidates.json` describes target modes, not actually bundled engines. Before upgrading D3–D8 to “available”, audit actual installed package/sidecar, exact commit/version, license/dependency chain, existing consumer route, relevant known-answer tests, native packaging, and user journey. The intended sequence is **mechanisms consumed and proven**, not the count of imported repositories.
