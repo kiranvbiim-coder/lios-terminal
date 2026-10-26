@@ -49,6 +49,7 @@ import {
   instrumentDirectoryStatus,
   instrumentDirectoryFacets,
 } from "./instrumentDirectory";
+import { getFinanceDatabaseInstallStatus, installPublicFinanceDatabase } from "./financeDatabaseInstallService";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerContentRoutes } from "./contentRoutes";
 import { registerClientRoutes } from "./clientRoutes";
@@ -1026,6 +1027,26 @@ Welcome to the Limuria Intelligence Terminal command engine. I can help you anal
 
   app.get("/api/finance/directory/status", (_req, res) => {
     res.json(instrumentDirectoryStatus());
+  });
+
+  app.get("/api/finance/directory/install/status", (_req, res) => {
+    res.json(getFinanceDatabaseInstallStatus());
+  });
+
+  app.post("/api/finance/directory/install", requireRole("client_admin", "internal_admin"), (req, res) => {
+    // Data acquisition is explicitly initiated by an authorized local user.
+    // Do not run a network download or accept upstream license terms on login.
+    if (req.body?.confirmSourceDownload !== true) {
+      return res.status(400).json({ error: "Explicit donor source-download consent required" });
+    }
+    const status = getFinanceDatabaseInstallStatus();
+    if (["fetching", "extracting", "verifying"].includes(status.state)) {
+      return res.status(409).json({ error: "Catalog installation already in progress" });
+    }
+    void installPublicFinanceDatabase().catch(error => {
+      console.error("Reference catalog import failed:", error instanceof Error ? error.message : error);
+    });
+    return res.status(202).json(getFinanceDatabaseInstallStatus());
   });
 
   // Ground-truth coverage map -- what's actually covered per region across
