@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  financeDatabaseCatalogPath, financeDatabaseCatalogStatus,
+  financeDatabaseCatalogPath, financeDatabaseManifestPath, financeDatabaseCatalogStatus,
   financeDatabaseCountryCode, loadFinanceDatabaseRows,
 } from "./financeDatabaseCatalog";
 import { providerIngestedUniversePath } from "./providerIngestedCatalog";
@@ -89,7 +89,7 @@ function stamp(file: string): string {
 }
 function directoryFingerprint(): string {
   return [legacyFilePath(), stamp(legacyFilePath()), stamp(providerIngestedUniversePath()),
-    stamp(financeDatabaseCatalogPath())].join("|");
+    stamp(financeDatabaseCatalogPath()), stamp(financeDatabaseManifestPath())].join("|");
 }
 function readJsonArray(file: string): Record<string, unknown>[] {
   if (!fs.existsSync(file)) return [];
@@ -247,6 +247,40 @@ export function searchInstrumentDirectory(
 export function instrumentDirectoryRegions(rows: readonly DirectoryInstrument[]): string[] {
   return [...new Set(rows.filter(row => row.active).map(row => row.region).filter((v): v is string => !!v))].sort();
 }
+/** Live directory facets are based on imported truth, not prefilled options. */
+export function instrumentDirectoryFacets(rows: readonly DirectoryInstrument[]) {
+  const assetClass = new Map<string, number>();
+  const exchange = new Map<string, number>();
+  const sector = new Map<string, number>();
+  const region = new Map<string, number>();
+  const currency = new Map<string, number>();
+  let active = 0, historical = 0;
+  const increment = (map: Map<string, number>, key: string | undefined) => {
+    if (key) map.set(key, (map.get(key) ?? 0) + 1);
+  };
+  for (const row of rows) {
+    if (!row.active) { historical++; continue; }
+    active++;
+    increment(assetClass, row.assetClass);
+    increment(exchange, row.exchange);
+    increment(sector, row.sector);
+    increment(region, row.region);
+    increment(currency, row.currency);
+  }
+  const entries = (map: Map<string, number>) =>
+    [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([value, count]) => ({ value, count }));
+  return {
+    total: rows.length, active, historical,
+    assetClasses: entries(assetClass),
+    exchanges: entries(exchange),
+    sectors: entries(sector),
+    regions: entries(region),
+    currencies: entries(currency),
+    referenceOnly: true,
+  };
+}
+
 export function instrumentDirectoryStatus() {
   const snapshot = getInstrumentDirectorySnapshot();
   return {
