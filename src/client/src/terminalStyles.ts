@@ -1,7 +1,9 @@
 /*
- * Single CSS entry point for production and every rendered acceptance harness.
- * Keep feature-specific layers above terminal-shell.css; the canonical shell
- * is the final structural arbiter, and VisualCanvas is intentionally last.
+ * Single CSS entry point for production and rendered acceptance harnesses.
+ * Feature CSS precedes the canonical terminal-shell.css structural arbiter.
+ * Only the authorized user-selected palette/typography polish may load after
+ * that shell, alongside the existing sole Visual Intelligence Canvas.
+ * No later layer may replace Workbench geometry or its semantic data styles.
  */
 import "./index.css";
 import "./immersive-terminal-innovation.css";
