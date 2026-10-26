@@ -316,3 +316,28 @@ test("P5 plans are partial when a required field is only offered beyond the five
   assert.deepEqual(plan.missingFields, ["open_interest"]);
   assert.equal(plan.selectedCandidateIds.includes("tiingo"), false);
 });
+
+
+test("P5 does not spend selected-provider slots on unrelated healthy adapters", () => {
+  const plan = planUniversalDataFromSnapshot(
+    pricesRequest({
+      requestId: "a5cd78ce-9aa9-40b2-9aeb-009ad81000b5",
+      symbol: "AAPL",
+      fields: ["quote"],
+      sourceScope: "web",
+      allowPartial: false,
+    }),
+    {
+      connectors: [
+        { ...snapshot.connectors[0], id: "yahoo_finance", capabilities: [{ contractFamily: "market_data", fields: ["quote"] }] },
+        { ...snapshot.connectors[0], id: "bse_india", capabilities: [{ contractFamily: "market_data", fields: ["ohlcv"] }] },
+      ],
+      health: [
+        { ...snapshot.health[0], connectorId: "yahoo_finance" },
+        { ...snapshot.health[0], connectorId: "bse_india" },
+      ],
+    },
+  );
+  assert.equal(plan.availability, "ready");
+  assert.deepEqual(plan.selectedCandidateIds, ["yahoo_finance"]);
+});
