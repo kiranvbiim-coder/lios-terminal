@@ -4,6 +4,7 @@ import {
   createP9Workflow,
   deleteP9Workflow,
   markP9NotificationRead,
+  replaceP9Workflow,
   runP9WorkflowNow,
   setP9WorkflowEnabled,
   useInvalidateP9Automation,
@@ -26,8 +27,10 @@ import {
   prepareP9ManualRunAttempt,
   subscribeP9ManualRunAttempts,
 } from "@/lib/p9ManualRunAttemptLedger";
-import type { P9NotificationPolicy, P9WorkflowDefinitionInput } from "@shared/p9AutomationContracts";
+import type { P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { quickMonitorDraft, scheduleEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
+import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 
 function time(value: string | null): string {
@@ -36,16 +39,15 @@ function time(value: string | null): string {
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : "—";
 }
 
-function defaultPolicy(): P9NotificationPolicy {
-  return {
-    enabled: true,
-    channels: ["in_app"],
-    notifyOn: ["failure", "condition_met", "change_detected"],
-    minimumRelevanceScore: 0.5,
-    cooldownMinutes: 60,
-    suppressUnchanged: true,
-  };
-}
+type WorkflowReview = {
+  projectId: number;
+  workflowId: string;
+  expectedUpdatedAt: string;
+  intent: "pause" | "resume" | "edit" | "delete";
+  name: string;
+  trigger: P9WorkflowTrigger;
+  enabled: boolean;
+};
 
 export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const workflowsQuery = useP9Workflows(projectId);
@@ -57,6 +59,16 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
   const [attempts, setAttempts] = useState(() => listP9ManualRunAttempts(projectId));
   const confirming = useRef(false);
+  const [createKind, setCreateKind] = useState<QuickMonitorKind | null>(null);
+  const [createEnabled, setCreateEnabled] = useState(false);
+  const [createMinutes, setCreateMinutes] = useState(60);
+  const [review, setReview] = useState<WorkflowReview | null>(null);
+  const selectedProject = useRef(projectId);
+  selectedProject.current = projectId;
+  const managementInFlight = useRef(false);
+  useEffect(() => {
+    setCreateKind(null); setReview(null); setMessage(null);
+  }, [projectId]);
 
   useEffect(() => {
     const refresh = () => setDrafts(listP9ManualRunDrafts(projectId));
@@ -78,7 +90,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     for (const run of runs) if (!map.has(run.workflowId)) map.set(run.workflowId, run);
     return map;
   }, [runs]);
-  const unread = notifications.filter((item) => item.status === "delivered" && !item.readAt);
+  const unread = notifications.filter((item) => item.projectId === projectId && item.status === "delivered" && !item.readAt);
 
   const run = async (id: string, updatedAt: string) => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -188,43 +200,83 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     }
   };
 
-  const createTemplate = async (kind: "provider" | "changes") => {
-    setBusyId("create:" + kind);
+  const createTemplate = async () => {
+    if (!createKind || managementInFlight.current) return;
+    managementInFlight.current = true;
+    setBusyId("create");
     setMessage(null);
+    const originalProject = projectId;
     try {
-      const input: P9WorkflowDefinitionInput = kind === "provider"
-        ? {
-            schemaVersion: "1",
-            name: "Provider health monitor",
-            description: "Check configured providers and user-connected source health without exposing credentials.",
-            template: "provider_health",
-            trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 60 } },
-            action: { kind: "provider_health" },
-            notificationPolicy: defaultPolicy(),
-            sourceRefs: [],
-            engineRefs: ["lios.provider-status", "lios.source-connections"],
-            artifactRefs: [],
-            enabled: true,
-          }
-        : {
-            schemaVersion: "1",
-            name: "Project what changed",
-            description: "Compare Project Intelligence against its previous snapshot and surface material source changes.",
-            template: "custom",
-            trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: 60 } },
-            action: { kind: "project_what_changed" },
-            notificationPolicy: defaultPolicy(),
-            sourceRefs: [],
-            engineRefs: ["lios.project-intelligence"],
-            artifactRefs: [],
-            enabled: true,
-          };
-      await createP9Workflow(projectId, input);
-      invalidate(projectId);
-      setMessage(kind === "provider" ? "Provider health workflow saved." : "Project change workflow saved.");
+      const saved = await createP9Workflow(projectId, quickMonitorDraft(createKind, createEnabled, createMinutes));
+      invalidate(originalProject);
+      if (selectedProject.current === originalProject) {
+        setMessage(saved.projectId === originalProject && saved.enabled === createEnabled
+          ? createEnabled
+            ? "Workflow saved enabled. Home scheduling still requires current runtime, permissions and a recorded execution receipt."
+            : "Workflow saved paused. Nothing was scheduled until you explicitly enable it."
+          : "The server response did not confirm the reviewed Project and enable state. Reload workflow records.");
+        setCreateKind(null);
+      }
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Unable to save this workflow.");
+      if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Unable to save this reviewed workflow.");
     } finally {
+      managementInFlight.current = false;
+      // Workbench may have switched Projects while P9 was responding. Always
+      // release the UI lock, but never show the old Project's response there.
+      setBusyId(null);
+    }
+  };
+
+  const requestWorkflowReview = (workflow: (typeof workflows)[number], intent: WorkflowReview["intent"]) => {
+    if (busyId || managementInFlight.current || workflow.projectId !== projectId) return;
+    setCreateKind(null);
+    setMessage(null);
+    setReview({ projectId, workflowId: workflow.id, expectedUpdatedAt: workflow.updatedAt,
+      name: workflow.name, intent, trigger: workflow.trigger, enabled: workflow.enabled });
+  };
+
+  const confirmWorkflowReview = async () => {
+    const candidate = review;
+    if (!candidate || managementInFlight.current || candidate.projectId !== projectId) return;
+    const current = workflows.find(item => item.projectId === candidate.projectId && item.id === candidate.workflowId);
+    if (!current || current.updatedAt !== candidate.expectedUpdatedAt || current.name !== candidate.name || current.enabled !== candidate.enabled) {
+      setReview(null);
+      setMessage("The workflow changed since you opened the review. Refresh and inspect it again.");
+      return;
+    }
+    managementInFlight.current = true;
+    setBusyId("review:" + candidate.workflowId);
+    setMessage(null);
+    const originalProject = candidate.projectId;
+    try {
+      if (candidate.intent === "delete") {
+        await deleteP9Workflow(originalProject, candidate.workflowId, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage("The exact reviewed workflow was deleted. This does not undo previously recorded runs or outside-system effects.");
+      } else if (candidate.intent === "edit") {
+        const definition = scheduleEditDefinition(current, candidate.trigger);
+        // Changing a schedule does not create an execution; retain original
+        // enabled state so editing an inactive workflow never starts it.
+        const saved = await replaceP9Workflow(originalProject, candidate.workflowId, definition, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage(saved.projectId === originalProject && saved.enabled === current.enabled
+          ? "Workflow schedule saved at the server. Next execution depends on Home, current rights and scheduler acceptance."
+          : "The server response did not confirm exact workflow scope/state; refresh before relying on this edit.");
+      } else {
+        const enabled = candidate.intent === "resume";
+        const saved = await setP9WorkflowEnabled(originalProject, candidate.workflowId, enabled, candidate.expectedUpdatedAt);
+        if (selectedProject.current === originalProject) setMessage(saved.projectId === originalProject && saved.enabled === enabled
+          ? enabled
+            ? "Workflow enabled on the server. This is not a run receipt or a promise that an event will occur."
+            : "Workflow paused on the server. Previously claimed or completed runs cannot be rolled back."
+          : "The server did not confirm the exact requested enabled state; refresh this Project.");
+      }
+      invalidate(originalProject);
+      if (selectedProject.current === originalProject) setReview(null);
+    } catch (cause) {
+      if (selectedProject.current === originalProject) setMessage(cause instanceof Error ? cause.message : "Workflow update failed. No change is confirmed. Reload the workflow before retrying.");
+    } finally {
+      managementInFlight.current = false;
+      // Workbench may have switched Projects while P9 was responding. Always
+      // release the UI lock, but never show the old Project's response there.
       setBusyId(null);
     }
   };
@@ -245,32 +297,100 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void createTemplate("changes")} disabled={Boolean(busyId)} className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-40">
+          <button type="button" onClick={() => { setReview(null); setCreateKind("changes"); setCreateEnabled(false); setCreateMinutes(60); }} disabled={Boolean(busyId)} className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-40">
             + What changed
           </button>
-          <button onClick={() => void createTemplate("provider")} disabled={Boolean(busyId)} className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-40">
+          <button type="button" onClick={() => { setReview(null); setCreateKind("provider"); setCreateEnabled(false); setCreateMinutes(60); }} disabled={Boolean(busyId)} className="rounded border border-border/60 px-2.5 py-1.5 font-ui text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-40">
             + Provider health
           </button>
           <span className="rounded border border-amber-400/20 bg-amber-400/[0.04] px-2 py-1 font-terminal text-[12px] text-amber-200">
-            {workflows.filter((item) => item.enabled).length} ACTIVE
+            {workflows.filter((item) => item.enabled).length} ENABLED · NOT EXECUTION CONFIRMATION
           </span>
         </div>
       </div>
 
       {(workflowsQuery.isError || runsQuery.isError || notificationsQuery.isError) && <p role="status" className="mt-3 text-sm text-amber-200">Home refresh is unavailable. Showing previously loaded state; offline run drafts still require fresh online confirmation. <button onClick={() => { void workflowsQuery.refetch(); void runsQuery.refetch(); void notificationsQuery.refetch(); }}>Retry refresh</button></p>}
-      {message && <div className="mt-3 rounded border border-border/50 bg-black/20 px-3 py-2 font-ui text-[13px] text-muted-foreground">{message}</div>}
+      {message && <div role="status" className="mt-3 rounded border border-border/50 bg-black/20 px-3 py-2 font-ui text-[13px] text-muted-foreground">{message}</div>}
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">Workflows never start merely from opening this panel. Enabling a schedule opts in to future claims by the original P9 Home scheduler; completed, failed and skipped states come from server run records, not the UI.</p>
+      {createKind && <section aria-label="Review new Project workflow" data-testid="p9-create-review" className="mt-3 space-y-2 rounded-lg border border-amber-300/30 p-3">
+        <h3 className="font-ui text-sm font-semibold">Review {createKind === "provider" ? "Provider health" : "Project what changed"} monitor · Project {projectId}</h3>
+        <p className="text-xs text-muted-foreground">Action: {createKind === "provider" ? "check configured provider health" : "compare saved Project intelligence"}. No external action permission, data rights or completed execution is granted by saving.</p>
+        <label className="block font-ui text-sm">Interval in minutes (5 to 10080)
+          <input type="number" min={5} max={10080} step={1} value={createMinutes} disabled={Boolean(busyId)}
+            onChange={event => setCreateMinutes(Number(event.target.value))} className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2" />
+        </label>
+        <label className="flex items-start gap-2 font-ui text-sm">
+          <input type="checkbox" data-testid="p9-create-enable-consent" checked={createEnabled} disabled={Boolean(busyId)} onChange={event => setCreateEnabled(event.target.checked)} />
+          <span>Enable future scheduled execution after saving. Unchecked saves a paused workflow that cannot be claimed by the scheduler.</span>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={Boolean(busyId) || !Number.isInteger(createMinutes) || createMinutes < 5 || createMinutes > 10080}
+            onClick={() => void createTemplate()} className="min-h-10 rounded border border-amber-300/50 px-3 py-2 text-sm disabled:opacity-40">Save reviewed workflow {createEnabled ? "enabled" : "paused"}</button>
+          <button type="button" disabled={Boolean(busyId)} onClick={() => setCreateKind(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
+        </div>
+      </section>}
+      {review?.projectId === projectId && (() => {
+        const current = workflows.find(item => item.id === review.workflowId && item.projectId === projectId);
+        const unchanged = !!current && current.updatedAt === review.expectedUpdatedAt && current.enabled === review.enabled && current.name === review.name;
+        return <section aria-label="Review exact scheduled workflow change" data-testid="p9-workflow-review" className="mt-3 space-y-2 rounded-lg border border-amber-300/30 p-3">
+          <h3 className="font-ui text-sm font-semibold">Review {review.intent} · {review.name} · Project {projectId}</h3>
+          <p className="break-all text-xs text-muted-foreground">Workflow {review.workflowId} · version {review.expectedUpdatedAt}</p>
+          <p className="text-xs text-muted-foreground">Current status: {review.enabled ? "enabled" : "paused"}. {current ? workflowScheduleSummary(current) : "Workflow no longer listed."}</p>
+          {review.intent === "edit" && review.trigger.type === "schedule" && review.trigger.schedule.kind === "interval" && (
+            <label className="block text-sm">New interval · minutes (5 to 10080)
+              <input type="number" min={5} max={10080} step={1} disabled={Boolean(busyId)}
+                value={review.trigger.schedule.everyMinutes}
+                onChange={event => setReview(previous => previous && previous.trigger.type === "schedule"
+                  ? { ...previous, trigger: { type: "schedule", schedule: { kind: "interval", everyMinutes: Number(event.target.value) } } }
+                  : previous)}
+                className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2" />
+            </label>
+          )}
+          {review.intent === "edit" && review.trigger.type === "schedule" && review.trigger.schedule.kind === "daily_utc" && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">Hour UTC (0–23)<input type="number" min={0} max={23} step={1} disabled={Boolean(busyId)} value={review.trigger.schedule.hour}
+                onChange={event => setReview(previous => previous && previous.trigger.type === "schedule" && previous.trigger.schedule.kind === "daily_utc"
+                  ? { ...previous, trigger: { type: "schedule", schedule: { kind: "daily_utc", hour: Number(event.target.value), minute: previous.trigger.schedule.minute } } }
+                  : previous)}
+                className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2" /></label>
+              <label className="text-sm">Minute UTC (0–59)<input type="number" min={0} max={59} step={1} disabled={Boolean(busyId)} value={review.trigger.schedule.minute}
+                onChange={event => setReview(previous => previous && previous.trigger.type === "schedule" && previous.trigger.schedule.kind === "daily_utc"
+                  ? { ...previous, trigger: { type: "schedule", schedule: { kind: "daily_utc", hour: previous.trigger.schedule.hour, minute: Number(event.target.value) } } }
+                  : previous)}
+                className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2" /></label>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">{review.intent === "resume"
+            ? "Resuming opts into future scheduled or conditional checks, not a confirmed run."
+            : review.intent === "pause" ? "Pausing stops new scheduled claims; already admitted runs or external actions are not rolled back."
+            : review.intent === "delete" ? "Deleting this exact workflow does not delete historical receipts, reverse earlier notifications, or undo external effects."
+            : "Save only this workflow's trigger. Its actions, permissions, source refs and enabled state are preserved; schedule changes may recalculate the next due time."}</p>
+          {!unchanged && <p role="alert" className="text-amber-200">Workflow changed or is unavailable since review. Refresh and inspect again.</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={Boolean(busyId) || !unchanged || (review.intent === "edit" && review.trigger.type === "schedule" &&
+              (review.trigger.schedule.kind === "interval"
+                ? !Number.isInteger(review.trigger.schedule.everyMinutes) || review.trigger.schedule.everyMinutes < 5 || review.trigger.schedule.everyMinutes > 10080
+                : !Number.isInteger(review.trigger.schedule.hour) || review.trigger.schedule.hour < 0 || review.trigger.schedule.hour > 23 ||
+                  !Number.isInteger(review.trigger.schedule.minute) || review.trigger.schedule.minute < 0 || review.trigger.schedule.minute > 59))}
+              onClick={() => void confirmWorkflowReview()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm text-amber-200 disabled:opacity-40">Confirm {review.intent} for this workflow</button>
+            <button type="button" disabled={Boolean(busyId)} onClick={() => setReview(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
+          </div>
+        </section>;
+      })()}
       <HomeAttentionPanel />
 
       <div className="mt-3 grid gap-2 lg:grid-cols-2">
-        {workflows.slice(0, 12).map((workflow) => {
+        {workflows.map((workflow) => {
           const last = latestRun.get(workflow.id);
+          const truth = workflowExecutionTruth(workflow, last);
           return (
             <article key={workflow.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
               <div className="flex items-start gap-2">
-                <button
-                  onClick={() => void setP9WorkflowEnabled(projectId, workflow.id, !workflow.enabled).then(() => invalidate(projectId))}
-                  className={`mt-0.5 rounded border p-1 ${workflow.enabled ? "border-emerald-400/35 text-emerald-300" : "border-border/60 text-muted-foreground"}`}
-                  title={workflow.enabled ? "Pause workflow" : "Resume workflow"}
+                <button type="button" disabled={Boolean(busyId)}
+                  onClick={() => requestWorkflowReview(workflow, workflow.enabled ? "pause" : "resume")}
+                  className={`mt-0.5 rounded border p-1 disabled:opacity-40 ${workflow.enabled ? "border-emerald-400/35 text-emerald-300" : "border-border/60 text-muted-foreground"}`}
+                  title={workflow.enabled ? "Review pause" : "Review resume"}
+                  aria-label={`Review ${workflow.enabled ? "pause" : "resume"} for ${workflow.name}`}
                 >
                   {workflow.enabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                 </button>
@@ -309,17 +429,21 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                     <p className="break-all">Content hash: {workflow.action.acceptedArtifact.contentHash}</p>
                     <p>Home rechecks this exact baseline, successful-run custody and current permissions before each rerun. New outputs do not approve or overwrite your financial Decision.</p>
                   </details>}
-                  <div className="mt-2 grid grid-cols-2 gap-2 font-terminal text-[12px] text-muted-foreground">
-                    <span>NEXT · {time(workflow.nextRunAt)}</span>
-                    <span>LAST · {last ? last.status.toUpperCase() + " · " + time(last.completedAt) : "NOT RUN"}</span>
+                  <div data-testid="p9-workflow-execution-truth" className="mt-2 space-y-1 font-ui text-xs text-muted-foreground">
+                    <p>{truth.state.toUpperCase()} · {workflowScheduleSummary(workflow)}</p>
+                    <p>Next due: {truth.next === workflow.nextRunAt ? time(workflow.nextRunAt) : truth.next}</p>
+                    <p>Last observed run: {truth.latest} · {truth.receiptCount} linked execution receipt ID{truth.receiptCount === 1 ? "" : "s"}</p>
+                    <p>{truth.warning}</p>
                   </div>
                   {last?.summary && <div className="mt-2 line-clamp-2 font-ui text-[13px] leading-4 text-muted-foreground/90">{last.summary}</div>}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button disabled={busyId === workflow.id} onClick={() => void run(workflow.id, workflow.updatedAt)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now">
+                  <button type="button" disabled={Boolean(busyId)} onClick={() => void run(workflow.id, workflow.updatedAt)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now · explicit manual action">
                     <RefreshCw className={`h-3 w-3 ${busyId === workflow.id ? "animate-spin" : ""}`} />
                   </button>
-                  <button onClick={() => void deleteP9Workflow(projectId, workflow.id).then(() => invalidate(projectId))} className="rounded p-1.5 text-muted-foreground hover:bg-white/[0.03] hover:text-red-300" title="Delete workflow">
+                  <button type="button" disabled={Boolean(busyId) || workflow.trigger.type !== "schedule"} onClick={() => requestWorkflowReview(workflow, "edit")}
+                    className="rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground disabled:opacity-40" title="Review interval or UTC daily schedule edit">Edit schedule</button>
+                  <button type="button" disabled={Boolean(busyId)} onClick={() => requestWorkflowReview(workflow, "delete")} className="rounded p-1.5 text-muted-foreground hover:bg-white/[0.03] hover:text-red-300 disabled:opacity-40" title="Review workflow deletion">
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
@@ -414,8 +538,12 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         </div>
       </div>
 
+      <P9NotificationHistory key={projectId} projectId={projectId} notifications={notifications}
+        busy={Boolean(busyId)} onRead={notificationId => void markNotificationRead(notificationId)}
+        onRefetch={() => { void notificationsQuery.refetch(); }} />
+
       <div className="mt-3 font-terminal text-[12px] leading-3 text-muted-foreground/70">
-        Workflows use the selected Project’s sources and permissions. Visual workflow editing is not available. Use Save Workflow from a Project chat or add a monitor above.
+        Workflows use the selected Project's existing P9 sources and permissions. Reviewed schedule edits are available for interval and daily UTC schedules; conditional event filter authoring and the full visual editor remain under the existing P9 service, not a separate automation engine.
       </div>
     </section>
   );

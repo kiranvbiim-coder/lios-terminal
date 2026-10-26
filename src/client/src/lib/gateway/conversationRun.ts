@@ -52,7 +52,10 @@ export async function followConversationRun(
       disposers.forEach((dispose) => dispose());
       resolve(result);
     };
-    const complete = () => finish({ status: 200, ok: true, text, error, events });
+    const complete = (terminalStatus: string) => {
+      const ok = (terminalStatus === "completed" || terminalStatus === "waiting_approval") && !error;
+      finish({ status: ok ? 200 : 503, ok, text, error: ok ? null : (error ?? `Home reported ${terminalStatus}; completion was not confirmed.`), events });
+    };
     const interrupted = (message: string) => {
       finish({ status: 503, ok: false, text, error: message, errorCode: "run_interrupted", events });
     };
@@ -61,6 +64,10 @@ export async function followConversationRun(
       if (payload.requestId !== requestId || payload.runSeq <= lastSeq) return;
       lastSeq = payload.runSeq;
       const event = payload.event;
+      if (event.type === "text") {
+        const previous = events.findIndex(prior => prior.type === "text" && prior.requestId === requestId);
+        if (previous >= 0) events.splice(previous, 1);
+      }
       events.push(event);
       try {
         onEvent(event);
@@ -73,7 +80,7 @@ export async function followConversationRun(
       if (event.type === "error") error = event.message;
       if (event.type === "plan" && event.plan.steps.some((step) => step.kind === "agent")) agentPause = true;
       if (event.type === "governed_tool_approval_required") agentPause = true;
-      if (event.type === "done" && (event.status !== "waiting_approval" || !agentPause)) complete();
+      if (event.type === "done" && (event.status !== "waiting_approval" || !agentPause)) complete(event.status);
     }));
 
     disposers.push(client.onReady(({ restarted }) => {
@@ -101,7 +108,7 @@ export async function followConversationRun(
         await client.request("conversation.subscribe", { requestId, afterSeq: lastSeq }, { queueUntilReady: true, timeoutMs: 15_000 });
         started = true;
       } catch {
-        finish(failure(0, "LiOS could not reach your Home. Check the connection and retry."));
+        finish(failure(0, "The Home connection was lost before the run outcome was confirmed. Check Chat and run activity before sending again; Home may already have received the request. Nothing was retried automatically.", "run_start_unconfirmed"));
       }
     });
   });
@@ -117,7 +124,7 @@ export interface RunConversationInput {
 
 export function runConversation(client: GatewayClient, input: RunConversationInput): Promise<GatewayRunResult> {
   return followConversationRun(client, input.body.requestId, input.onEvent, async () => {
-    await client.request("conversation.start", { chatId: input.chatId, body: input.body }, { queueUntilReady: true, timeoutMs: 60_000 });
+    await client.request("conversation.start", { chatId: input.chatId, body: input.body }, { queueUntilReady: false, timeoutMs: 60_000 });
   }, input.body.agent === true);
 }
 

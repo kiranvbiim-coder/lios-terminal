@@ -64,6 +64,19 @@ try {
   process.exit(1);
 }
 
+// Never package an absent/stale dist tree from a previous source revision.
+// The same build owner produces the renderer, Home server and restore worker.
+const sourceBuild = spawnSync(process.execPath, ["--import", "tsx", "script/build.ts"], {
+  cwd: path.join(__dirname, ".."),
+  env,
+  stdio: "inherit",
+});
+if (sourceBuild.error) {
+  console.error(sourceBuild.error.message);
+  process.exit(1);
+}
+if (sourceBuild.status !== 0) process.exit(sourceBuild.status ?? 1);
+
 const executable = path.join(
   __dirname,
   "..",

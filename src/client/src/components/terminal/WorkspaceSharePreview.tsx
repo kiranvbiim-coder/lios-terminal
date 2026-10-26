@@ -3,10 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { WorkspaceState } from "@/lib/terminalTypes";
 import { buildWorkspaceShareUrl, getWorkspacePanes, workspaceForShare } from "@/lib/terminalWorkspace";
+import { serializeWorkspace } from "@/lib/terminalWorkspace";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 
 export default function WorkspaceSharePreview({ workspace, onClose }: { workspace: WorkspaceState; onClose: () => void }) {
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const publicPreview = serializeWorkspace(workspaceForShare(workspace));
+  const [confirmedPreview, setConfirmedPreview] = useState<string | null>(null);
+  const disclosureConfirmed = confirmedPreview === publicPreview;
   const inFlight = useRef(false);
   const epoch = useRef(0);
   useEffect(() => { epoch.current++; setCopyState("idle"); return () => { epoch.current++; }; }, [workspace]);
@@ -18,7 +22,7 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
   const containsArtifact = originalPanes.some(({ pane }) => pane.view === "artifact");
 
   const copy = async () => {
-    if (inFlight.current) return;
+    if (inFlight.current || !disclosureConfirmed) return;
     inFlight.current = true;
     const generation = epoch.current;
     setCopyState("copying");
@@ -103,6 +107,11 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
           <p className="text-xs leading-5 text-muted-foreground">
             Review the symbols above before sharing. The link can be forwarded, and it cannot revoke access to the public layout details.
           </p>
+          <p className="text-xs leading-5 text-muted-foreground">A link to this local Home may not be reachable from another device. Sharing does not publish the Home or establish a trusted connection.</p>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={disclosureConfirmed} onChange={event => setConfirmedPreview(event.target.checked ? publicPreview : null)} className="mt-1 h-4 w-4 shrink-0" />
+            <span>I reviewed these public pane types and symbols and agree to include them in a forwardable link.</span>
+          </label>
         </div>
 
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-[#080808] p-4 sm:px-5">
@@ -111,7 +120,7 @@ export default function WorkspaceSharePreview({ workspace, onClose }: { workspac
               : copyState === "error" ? "Could not copy the link. Check clipboard permissions and try again."
                 : "Only the layout details shown above will be copied."}
           </p>
-          <button type="button" onClick={() => void copy()} disabled={copyState === "copying"}
+          <button type="button" onClick={() => void copy()} disabled={!disclosureConfirmed || copyState === "copying"}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-4 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50">
             {copyState === "copied" ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             {copyState === "copying" ? "Copying…" : copyState === "copied" ? "Copied" : "Copy layout link"}

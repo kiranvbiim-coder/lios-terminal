@@ -146,16 +146,16 @@ export async function createP9Workflow(projectId: number, input: P9WorkflowDefin
   return json(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows`, input));
 }
 
-export async function replaceP9Workflow(projectId: number, workflowId: string, input: P9WorkflowDefinitionInput): Promise<P9WorkflowRecord> {
-  return json(await apiRequest("PUT", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`, input));
+export async function replaceP9Workflow(projectId: number, workflowId: string, input: P9WorkflowDefinitionInput, expectedUpdatedAt?: string): Promise<P9WorkflowRecord> {
+  return json(await apiRequest("PUT", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`, { ...input, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) }));
 }
 
-export async function setP9WorkflowEnabled(projectId: number, workflowId: string, enabled: boolean): Promise<P9WorkflowRecord> {
-  return json(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/enabled`, { enabled }));
+export async function setP9WorkflowEnabled(projectId: number, workflowId: string, enabled: boolean, expectedUpdatedAt?: string): Promise<P9WorkflowRecord> {
+  return json(await apiRequest("POST", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}/enabled`, { enabled, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) }));
 }
 
-export async function deleteP9Workflow(projectId: number, workflowId: string): Promise<void> {
-  await apiRequest("DELETE", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`);
+export async function deleteP9Workflow(projectId: number, workflowId: string, expectedUpdatedAt?: string): Promise<void> {
+  await apiRequest("DELETE", `/api/projects/${projectId}/automation/workflows/${encodeURIComponent(workflowId)}`, expectedUpdatedAt ? { expectedUpdatedAt } : undefined);
 }
 
 export interface P9ManualRunIdempotency {

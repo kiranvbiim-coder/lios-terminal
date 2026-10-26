@@ -81,7 +81,7 @@ import { artifactContentSchema, artifactExportFormatsForKind, artifactRefreshSpe
 import { runP6Backtest } from "./p6BacktestEngine";
 import { calculatePersonalFinanceSnapshot } from "./p6PersonalFinance";
 import { getP6ProjectContinuity } from "./p6ProjectContinuity";
-import type { P6PersonalFinanceRequest, P6StrategyDefinition } from "@shared/p6FinanceContracts";
+import { P6_PERSONAL_FINANCE_INPUT_ACTION, type P6PersonalFinanceRequest, type P6StrategyDefinition } from "@shared/p6FinanceContracts";
 import {
   currentPermittedProjectSearchDocuments,
   currentInsightLens,
@@ -3164,11 +3164,7 @@ async function executeP6PersonalFinance(
       message: "Personal-finance inputs are not available in the active conversation. LiOS will not invent accounts, transactions, debts, goals or retirement assumptions.",
       reason: "not_connected",
       providersChecked: ["Project-owned personal-finance sources"],
-      nextActions: [
-        "Import or connect user-owned accounts and transactions",
-        "Add debts, goals and explicit retirement assumptions",
-        "Provide a personal-finance input payload and rerun",
-      ],
+      nextActions: [P6_PERSONAL_FINANCE_INPUT_ACTION],
     });
   }
   assertNotAborted(signal);

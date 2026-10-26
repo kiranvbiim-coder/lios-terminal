@@ -1,5 +1,6 @@
 import { addressForSelection, formatLiosAddress, parseLiosAddress } from "@shared/liosAddress";
 import { resolveInitialSelection } from "./projectEntry";
+import { shouldClearSavedChatAddress } from "./chatPersistenceBoundary";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
@@ -165,6 +166,9 @@ export function useProjectSelection(): {
     const address = addressForSelection({ projectId, chatId });
     const next = address ? formatLiosAddress(address) : null;
     if (next && window.location.hash !== next) window.history.replaceState(null, "", next);
+    else if (shouldClearSavedChatAddress({ projectId, chatId }, parseLiosAddress(window.location.hash) !== null)) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    }
   }, [projectId, chatId]);
 
   useEffect(() => {
@@ -388,6 +392,7 @@ export async function createProjectResource(projectId: number, input: {
 export async function updateProjectResource(projectId: number, resourceId: string, patch: {
   label?: string;
   contextMode?: ProjectResource["contextMode"];
+  expectedUpdatedAt?: string;
   archived?: boolean;
 }): Promise<ProjectResource> {
   return (await apiRequest("PATCH", `/api/projects/${projectId}/resources/${encodeURIComponent(resourceId)}`, patch)).json();

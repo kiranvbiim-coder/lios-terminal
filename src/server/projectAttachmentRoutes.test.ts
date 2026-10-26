@@ -348,6 +348,22 @@ test("Project attachment HTTP routes enforce auth, file-only multipart, tenant s
     assert.deepEqual(afterTrash.sourceRefs, [quickRef.sourceRef]);
     await assert.rejects(createArtifactVersion(ownerContext, { artifactId: retained.artifact.id, baseVersion: 4, content, sourceRefs: [quickRef.sourceRef, `quick-attachment:${crypto.randomUUID()}`] }), /provenance/);
   });
+  await t.test("reviewed context changes cannot overwrite a concurrent exclusion or archived resource", async () => {
+    const { createProjectResource, getProjectResource, archiveProjectResource } = await import("./projectResourceStore");
+    const context = { userId: owner.id, organizationId: null, role: owner.role };
+    const resource = await createProjectResource(context, { projectId: project.id, kind: "note", label: "Reviewed context", contextMode: "on_demand" });
+    const url = `http://127.0.0.1:${address.port}/api/projects/${project.id}/resources/${encodeURIComponent(resource.id)}`;
+    const patch = (mode: string, revision: string) => fetch(url, { method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-test-user-id": String(owner.id) },
+      body: JSON.stringify({ contextMode: mode, expectedUpdatedAt: revision }) });
+    assert.equal((await patch("excluded", resource.updatedAt.toISOString())).status, 200);
+    assert.equal((await patch("project", resource.updatedAt.toISOString())).status, 409);
+    const excluded = await getProjectResource(context, resource.id);
+    assert.equal(excluded.contextMode, "excluded");
+    await archiveProjectResource(context, resource.id);
+    assert.equal((await patch("project", excluded.updatedAt.toISOString())).status, 409);
+    assert.equal((await getProjectResource(context, resource.id)).contextMode, "excluded");
+  });
 });
 
 function attachmentForm(fileName: string, text: string): FormData {

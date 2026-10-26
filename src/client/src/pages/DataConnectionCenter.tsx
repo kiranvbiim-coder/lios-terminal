@@ -1536,7 +1536,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             )}
             <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="connection-chat-verification">
               <p className="font-terminal text-[8px] leading-relaxed text-muted-foreground">
-                Verify chat sends only the fixed public message “Reply exactly with LIOS_AI_OK.” and a short connectivity instruction to {selectedAiProvider?.name ?? "the selected provider"} using {aiModelId || "your selected model"}, with a 16-token output limit. No original prompt, project context, files or tool calls are included.
+                Verify chat sends only a fresh public “LIOS_AI_OK_…” acknowledgement challenge and a short connectivity instruction to {selectedAiProvider?.name ?? "the selected provider"} using {aiModelId || "your selected model"}, with a 64-token output limit. No original prompt, project context, files or tool calls are included.
                 {selectedAiProvider?.isLocal
                   ? " Loopback alone is not proof of local execution. LiOS checks runtime-reported installed local model metadata before inference and blocks reported remote/cloud or unknown models. You control and must trust that local daemon; its behavior is not cryptographically attested. This chat probe does not verify native tools, vision or provider pricing."
                   : " This is a real provider inference request and may consume quota or incur charges under your provider plan."}

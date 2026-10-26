@@ -14,7 +14,7 @@ export default function BoundedAgentComposerControl({ agent, busy, onConfigureAI
         type="button"
         aria-label="Multi-step agent"
         aria-pressed={agent.enabled}
-        aria-describedby="bounded-agent-guidance"
+        aria-describedby={agent.selected || !agent.supported ? "bounded-agent-guidance" : undefined}
         data-testid="composer-agent-toggle"
         disabled={busy || !agent.supported}
         onClick={() => agent.setSelected(!agent.selected)}
@@ -22,13 +22,13 @@ export default function BoundedAgentComposerControl({ agent, busy, onConfigureAI
       >
         <Bot className="h-3.5 w-3.5" /> Multi-step agent
       </button>
-      <span id="bounded-agent-guidance" role="status" className="text-muted-foreground">{agent.guidance}</span>
-      {agent.ready && agent.configuredProvider && agent.configuredModel && (
+      {(agent.selected || !agent.supported) && <span id="bounded-agent-guidance" role="status" className="text-muted-foreground">{agent.guidance}</span>}
+      {agent.selected && agent.ready && agent.configuredProvider && agent.configuredModel && (
         <span data-provider-readiness="verified-config" className="text-xs text-muted-foreground">
           Configured: {agent.configuredProvider} / {agent.configuredModel}. Provider cost, quotas and data-transfer terms are not verified here.
         </span>
       )}
-      {agent.supported && !agent.checking && !agent.ready && (
+      {agent.selected && agent.supported && !agent.checking && !agent.ready && (
         <button type="button" onClick={onConfigureAI} data-testid="composer-agent-configure-ai" className="min-h-10 rounded px-2 text-amber-200 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">
           Configure AI
         </button>

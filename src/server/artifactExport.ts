@@ -1,4 +1,6 @@
 import { artifactExportFormatsForKind, artifactExportPlanSchema, type ArtifactKind } from "@shared/artifactContracts";
+import { recordedBlockedArtifactSources } from "@shared/artifactExportRights";
+import { trustManifestSchema } from "@shared/trustContracts";
 import type { TenantContext } from "./tenantContext";
 import { getArtifact, getArtifactVersion } from "./artifactStore";
 import { and, eq } from "drizzle-orm";
@@ -9,6 +11,10 @@ import { loadIntegratedModelArtifactSource } from "./integratedModelArtifact";
 function filenameStem(title: string): string {
   const clean = title.trim().replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "");
   return (clean || "lios-artifact").slice(0, 180);
+}
+
+export class ArtifactExportRightsError extends Error {
+  readonly status = 403;
 }
 
 export async function getArtifactExportPlan(ctx: TenantContext, artifactId: string, version?: number) {
@@ -24,6 +30,9 @@ export async function getArtifactExportPlan(ctx: TenantContext, artifactId: stri
     await loadIntegratedModelArtifactSource(ctx, match[2], artifact.projectId, false, artifact.owningChatId);
   }
   const resolved = await getArtifactVersion(ctx, artifactId, version);
+  if (recordedBlockedArtifactSources(resolved.trustManifest ? trustManifestSchema.parse(resolved.trustManifest) : null) > 0) {
+    throw new ArtifactExportRightsError("This revision records denied, revoked or expired source access. Export is blocked pending a source-rights review.");
+  }
   return artifactExportPlanSchema.parse({
     artifactId,
     version: resolved.version,
