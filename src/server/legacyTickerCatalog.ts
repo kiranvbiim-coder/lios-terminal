@@ -71,7 +71,14 @@ export function loadLegacyTickerCatalog(): InstrumentMasterCandidate[] {
   }
 
   try {
-    const rows = JSON.parse(fs.readFileSync(tickersPath, "utf8")) as LegacyTickerRow[];
+    const decoded: unknown = JSON.parse(fs.readFileSync(tickersPath, "utf8"));
+    if (!Array.isArray(decoded)) throw new Error("Ticker catalog must be a JSON array.");
+    const rows = decoded.filter((row): row is LegacyTickerRow =>
+      row !== null && typeof row === "object"
+      && typeof row.symbol === "string" && row.symbol.trim().length > 0
+      && !/^FILE CREATION TIME:/i.test(row.symbol)
+      && typeof row.name === "string" && row.name.trim().length > 0
+      && typeof row.exchange === "string" && row.exchange.trim().length > 0);
     cachedCandidates = adaptLegacySymbolCatalog(rows.map(toLegacyCatalogRow));
   } catch (error) {
     console.error(
