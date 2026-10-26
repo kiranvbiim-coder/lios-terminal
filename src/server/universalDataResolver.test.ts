@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ConnectorRegistrySnapshot } from "@shared/connectorRegistry";
-import { planUniversalDataFromSnapshot } from "./universalDataResolver";
+import { explainUniversalDataGap, planUniversalDataFromSnapshot } from "./universalDataResolver";
 
 const snapshot: ConnectorRegistrySnapshot = {
   connectors: [
@@ -252,6 +252,10 @@ test("P5 latest-only price route cannot claim historical as-known-on or exact-re
     const plan = planUniversalDataFromSnapshot({ ...request, pointInTime }, snapshot);
     assert.equal(plan.availability, "unavailable");
     assert.equal(plan.selectedCandidateIds.length, 0);
+    const gap = explainUniversalDataGap(plan);
+    assert.equal(gap.reason, "unsupported");
+    assert.match(gap.message, /point-in-time knowledge/);
+    assert.equal(gap.nextActions.some((action) => action.includes("point-in-time-capable")), true);
   }
 });
 
