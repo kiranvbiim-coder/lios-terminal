@@ -55,7 +55,7 @@ test("untrusted recovery payload cannot overwrite a present catalog", () => {
     assert.throws(() => restoreCatalogs({
       destination, force: true,
       runner: () => ({ status: 0, stdout: Buffer.from("{}") }),
-    }), /size outside expected bounds/);
+    }), /private Git blob response is invalid/);
     assert.deepEqual(fs.readFileSync(target), unchanged);
   } finally {
     fs.rmSync(destination, { recursive: true, force: true });
@@ -66,6 +66,6 @@ test("catalog recovery code does not embed credentials or expose private source 
   const gitignore = fs.readFileSync(path.join(__dirname, "..", "..", ".gitignore"), "utf8");
   assert.match(gitignore, /src\/server\/data\//);
   const script = fs.readFileSync(path.join(__dirname, "restore_market_catalogs.cjs"), "utf8");
-  assert.match(script, /github\.raw\+json/);
+  assert.match(script, /git\/blobs\//);
   assert.equal(crypto.timingSafeEqual(Buffer.from("a"), Buffer.from("a")), true);
 });
