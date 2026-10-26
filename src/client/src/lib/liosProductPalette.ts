@@ -26,17 +26,26 @@ export function readLiosProductPalette(): LiosProductPalette {
   }
 }
 
+export function isLiosLightPalette(palette: LiosProductPalette): boolean {
+  return palette === "chatgpt-light" || palette === "claude-light";
+}
+
+function applyLiosProductPalette(palette: LiosProductPalette): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const light = isLiosLightPalette(palette);
+  root.setAttribute("data-lios-palette", palette);
+  root.setAttribute("data-theme", light ? "light" : "dark");
+  root.classList.toggle("dark", !light);
+}
+
 export function setLiosProductPalette(palette: LiosProductPalette): void {
-  if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-lios-palette", palette);
-  }
+  applyLiosProductPalette(palette);
   if (typeof window !== "undefined") {
     try { window.localStorage.setItem(LIOS_PALETTE_STORAGE_KEY, palette); } catch { /* In-memory theme still applies. */ }
   }
 }
 
 export function initializeLiosProductPalette(): void {
-  if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-lios-palette", readLiosProductPalette());
-  }
+  applyLiosProductPalette(readLiosProductPalette());
 }
