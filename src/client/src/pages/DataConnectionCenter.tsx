@@ -124,6 +124,7 @@ interface Props {
   onComplete: () => void;
   onLogout: () => void;
   embedded?: boolean;
+  initialConnectorId?: string | null;
 }
 
 const READINESS_CONNECTOR_IDS = ["fred", "simfin", "finnhub", "world_bank"] as const;
@@ -799,7 +800,7 @@ function ConnectionCard({
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false }: Props) {
+export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false, initialConnectorId = null }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
   const [removalTarget, setRemovalTarget] = useState<number | null>(null);
@@ -807,6 +808,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   const [removalError, setRemovalError] = useState<string | null>(null);
   const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
+  const handledGuidedConnector = useRef<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiProviderId, setAiProviderId] = useState("");
@@ -980,6 +982,32 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   const catalogConnectors = useMemo(() => connectors.filter((c) => !META_CONNECTOR_IDS.has(c.id)), [connectors]);
 
   const pickerProviders = useMemo(() => chooseConnectionProviders(catalogConnectors, providerPickerQuery), [catalogConnectors, providerPickerQuery]);
+
+  // Reuse the exact existing setup forms when Chat names a missing provider.
+  // Wait for the authenticated catalog and saved connections before opening
+  // the form; an unimplemented or unknown id never installs or executes.
+  useEffect(() => {
+    if (!initialConnectorId || !setupQuery.data || !connectionsQuery.data
+      || handledGuidedConnector.current === initialConnectorId) return;
+    handledGuidedConnector.current = initialConnectorId;
+    const connector = connectors.find(item => item.id === initialConnectorId);
+    if (!connector || !isConnectorConnectable(connector)) {
+      setSaveNotice("That provider is not available to connect in this LiOS build. Choose another listed source.");
+      return;
+    }
+    setSaveNotice(null);
+    setEditingConnection(connectionsQuery.data.find(connection => connection.connectorId === connector.id) ?? null);
+    setSelectedProvider(null);
+    setCatalogSeed(null);
+    if (connector.sourceType === "file") setModal("import");
+    else if (connector.sourceType === "database") setModal("database");
+    else if (connector.sourceType === "private_api") setModal("api");
+    else if (connector.sourceType === "cloud_storage") setModal("storage");
+    else {
+      setSelectedProvider(connector);
+      setModal("provider");
+    }
+  }, [initialConnectorId, setupQuery.data, connectionsQuery.data, connectors]);
 
   const filteredCatalog = useMemo(() => {
     let items = catalogConnectors;
