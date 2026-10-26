@@ -8,10 +8,11 @@ export async function createProviderRegistryForUser(
   ctx: TenantContext,
   actor: Pick<User, "id" | "email">,
 ): Promise<ProviderSdkRegistry> {
+  if (ctx.userId !== actor.id) throw new Error("Provider registry request does not match the authenticated user.");
   const registry = new ProviderSdkRegistry();
   for (const adapter of createNativeProviderAdapters()) registry.register(adapter);
   const connections = (await listSourceConnections(ctx.userId))
-    .filter((connection) => connection.status !== "invalid");
+    .filter((connection) => connection.status !== "invalid" && connection.organizationId === ctx.organizationId);
   registerSourceConnectionProviders(registry, connections, actor);
   return registry;
 }
