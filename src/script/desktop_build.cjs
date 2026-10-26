@@ -81,6 +81,17 @@ try {
   process.exit(1);
 }
 
+// The catalog is intentionally untracked in the public source tree, but must
+// be present, structurally sound and consistent with its local recovery manifest
+// in a distributed installer. Never quietly ship a ticker-less LiOS build.
+const catalogCheck = spawnSync(process.execPath, ["script/restore_instrument_catalogs.cjs", "--check"], {
+  cwd: path.join(__dirname, ".."), env, stdio: "inherit",
+});
+if (catalogCheck.error || catalogCheck.status !== 0) {
+  console.error("Instrument catalogs missing/invalid. See docs/technical/LIOS_INSTRUMENT_CATALOG_RECOVERY.md; run npm run catalog:restore before packaging.");
+  process.exit(1);
+}
+
 // Never package an absent/stale dist tree from a previous source revision.
 // The same build owner produces the renderer, Home server and restore worker.
 const sourceBuild = spawnSync(process.execPath, ["--import", "tsx", "script/build.ts"], {
