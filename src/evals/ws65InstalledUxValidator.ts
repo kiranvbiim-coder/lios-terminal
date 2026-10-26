@@ -35,9 +35,15 @@ function evidencePath(name: string): string {
   return resolved;
 }
 function openEvidence(name: string): number {
-  const fd = fs.openSync(evidencePath(name), fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  const resolved = evidencePath(name);
+  // O_NOFOLLOW is zero on Windows: reject the final link explicitly too.
+  const before = fs.lstatSync(resolved);
+  if (before.isSymbolicLink() || !before.isFile() || before.size <= 0) {
+    throw new Error(`Evidence is not a nonempty nonlinked regular file: ${name}`);
+  }
+  const fd = fs.openSync(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
   const info = fs.fstatSync(fd);
-  if (!info.isFile() || info.size <= 0) {
+  if (!info.isFile() || info.size <= 0 || before.dev !== info.dev || before.ino !== info.ino) {
     fs.closeSync(fd);
     throw new Error(`Evidence is not a nonempty regular file: ${name}`);
   }
