@@ -47,17 +47,26 @@ function validateCatalogBytes(bytes, definition) {
   }
   const count = isArray ? parsed.length : Object.keys(parsed).length;
   if (count < definition.minRecords) throw new Error(definition.name + " unexpectedly small: " + count);
+  let excludedSourceRows = 0;
   if (isArray) {
-    if (!parsed.every(row => row && typeof row.symbol === "string" && row.symbol.trim()
-      && typeof row.name === "string" && row.name.trim())) {
+    const malformed = parsed.filter(row => !row || typeof row.symbol !== "string" || !row.symbol.trim()
+      || typeof row.name !== "string" || !row.name.trim());
+    // The pinned original ticker file contains one exchange-download footer,
+    // not a financial instrument. Preserve source SHA and filter at ingestion.
+    const knownFooter = definition.name === "tickers.json" && malformed.length === 1
+      && typeof malformed[0]?.symbol === "string"
+      && /^FILE CREATION TIME:/i.test(malformed[0].symbol)
+      && malformed[0].name === "";
+    if (malformed.length && !knownFooter) {
       throw new Error(definition.name + " contains invalid symbol/name rows");
     }
+    excludedSourceRows = malformed.length;
   } else if (!Object.entries(parsed).every(([symbol, row]) =>
     symbol.length > 0 && row && typeof row.id === "string" && row.id.trim()
     && typeof row.name === "string" && row.name.trim())) {
     throw new Error(definition.name + " contains invalid CoinGecko identifiers");
   }
-  return { count, bytes: bytes.length, gitBlobSha: gitBlobSha(bytes) };
+  return { count, excludedSourceRows, bytes: bytes.length, gitBlobSha: gitBlobSha(bytes) };
 }
 
 function downloadOriginal(definition, runner = spawnSync) {
@@ -164,7 +173,8 @@ function main(argv = process.argv.slice(2)) {
     : restoreCatalogs({ fromDir, force: argv.includes("--force") });
   for (const item of result) {
     console.log(item.name + ": " + item.count + " records; " + item.bytes
-      + " bytes; git blob " + item.gitBlobSha + (item.action ? "; " + item.action : ""));
+      + " bytes; git blob " + item.gitBlobSha
+      + (item.excludedSourceRows ? "; filtered provider footers=" + item.excludedSourceRows : "") + (item.action ? "; " + item.action : ""));
   }
   console.log("LiOS local market catalogs verified; source assets remain ignored by public Git.");
 }
