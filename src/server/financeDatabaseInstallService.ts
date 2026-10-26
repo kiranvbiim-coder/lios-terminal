@@ -56,6 +56,7 @@ export async function extractFinanceDatabaseTarGz(
   let files = 0, bytes = 0, totalBytes = 0, expectedFiles = 0;
   try {
     for await (const chunk of stream) {
+      if (mode === "done") break;
       buffer = buffer.length ? Buffer.concat([buffer, chunk as Buffer]) : chunk as Buffer;
       while (buffer.length) {
         if (mode === "done") break;
@@ -86,6 +87,11 @@ export async function extractFinanceDatabaseTarGz(
           remaining = entrySize;
           padding = (512 - entrySize % 512) % 512;
           mode = remaining ? "payload" : "padding";
+          if (!remaining && fileHandle !== null) {
+            fs.closeSync(fileHandle); fileHandle = null;
+            files++;
+            onProgress?.(files, bytes);
+          }
         } else if (mode === "payload") {
           const take = Math.min(remaining, buffer.length);
           if (!take) break;
