@@ -86,12 +86,12 @@ test("local import writes verified snapshot, detects tampering, and rolls back t
   const db = path.join(checkout, "database", "equities");
   fs.mkdirSync(db, { recursive: true });
   const source = path.join(db, "NMS.csv");
-  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\\nONE,Original,NMS,XNAS,False\\n");
+  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\nONE,Original,NMS,XNAS,False\n");
   const original = run(["--from-dir", checkout, "--categories", "equities", "--min", "1"]);
   assert.equal(original.verified, true);
   assert.equal(original.count, 1);
   const destination = path.join(process.env.LIOS_DATA_ROOT, "instrument-catalogs");
-  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\\nONE,Updated,NMS,XNAS,False\\nTWO,Additional,NMS,XNAS,False\\n");
+  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\nONE,Updated,NMS,XNAS,False\nTWO,Additional,NMS,XNAS,False\n");
   const updated = run(["--from-dir", checkout, "--categories", "equities", "--min", "1"]);
   assert.equal(updated.count, 2);
   assert.equal(verifyInstalled(destination).count, 2);
