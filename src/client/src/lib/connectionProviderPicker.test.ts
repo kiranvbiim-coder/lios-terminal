@@ -72,8 +72,8 @@ test("return is a separate, nonmutating workflow, and App retains Chat/Workbench
   assert.doesNotMatch(returnSlice, /persistSetup|apiRequest|turnMasterAiOff/);
   // Connections now opens in a modal drawer over the mounted Chat, rather
   // than hiding or replacing the conversation as the former setup page did.
-  assert.match(app, /<div data-lios-workspace hidden=\\{domainPickerOpen\\}>/);
-  assert.match(app, /<Sheet open=\\{managementView !== null && !domainPickerOpen\\}/);
+  assert.match(app, /<div data-lios-workspace hidden=\{domainPickerOpen\}>/);
+  assert.match(app, /<Sheet open=\{managementView !== null && !domainPickerOpen\}/);
   assert.match(app, /<DataConnectionCenter embedded/);
   assert.match(app, /environmentReturnFocus\.current = active instanceof HTMLElement/);
   assert.match(app, /environmentReturnFocus\.current = null/);
