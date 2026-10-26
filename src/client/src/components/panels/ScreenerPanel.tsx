@@ -1,8 +1,8 @@
 import { isObservedQuote } from "@/lib/quoteObservation";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useScreener, useDirectoryScreener, useDirectoryRegions, useDirectoryFacets, useDirectoryStatus, useBondScreener, useMacroScreener } from "@/lib/useFinance";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useScreener, useDirectoryScreener, useDirectoryRegions, useDirectoryFacets, useDirectoryStatus, useDirectoryInstallStatus, useBondScreener, useMacroScreener } from "@/lib/useFinance";
 import { formatPrice, formatBig, pctClass, SCREENER_SECTORS, getCurrencySymbol } from "@/lib/finance";
 import { Skeleton } from "@/components/ui/skeleton";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
@@ -308,6 +308,14 @@ export default function ScreenerPanel({ onSymbol }: Props) {
       </div>
 
       {/* Table */}
+      {(installError || installStatus?.error) && (
+        <div role="alert" className="px-3 py-1.5 text-[10px] text-red-400">{installError ?? installStatus?.error}</div>
+      )}
+      {installStatus?.state === "completed" && installStatus.importedCount !== null && (
+        <div role="status" className="px-3 py-1 text-[9px] text-muted-foreground">
+          {installStatus.importedCount.toLocaleString()} reference identities installed locally. Live quote/financial coverage is separate.
+        </div>
+      )}
       <div className="flex-1 overflow-auto scrollbar-thin">
         {isLoading ? (
           <div className="p-4 space-y-2">
@@ -404,6 +412,9 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
   const { data: regions = [] } = useDirectoryRegions();
   const { data: facets } = useDirectoryFacets();
   const { data: catalogStatus } = useDirectoryStatus();
+  const { data: installStatus } = useDirectoryInstallStatus();
+  const queryClient = useQueryClient();
+  const [installError, setInstallError] = useState<string | null>(null);
   const filters: Record<string, string> = {};
   if (region) filters.region = region;
   if (assetClass) filters.assetClass = assetClass;
@@ -414,6 +425,40 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
   const { data, isLoading } = useDirectoryScreener(filters, page);
 
   const ASSET_CLASSES = facets?.assetClasses.map(x => x.value) ?? [];
+  const installing = !!installStatus && ["fetching", "extracting", "verifying"].includes(installStatus.state);
+  useEffect(() => {
+    if (installStatus?.state !== "completed") return;
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/status"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/facets"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/regions"] }),
+    ]);
+  }, [installStatus?.completedAt, installStatus?.state, queryClient]);
+
+  const installReferenceCatalog = async () => {
+    const confirmed = window.confirm(
+      "Download the public FinanceDatabase 300k+ reference catalog to this computer? " +
+      "Reference symbols do not provide live quotes. You must have rights to use the data, " +
+      "and the download comes directly from public GitHub with no LiOS cloud storage."
+    );
+    if (!confirmed) return;
+    setInstallError(null);
+    try {
+      const response = await fetch("/api/finance/directory/install", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmSourceDownload: true }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(detail.error || "Reference import request failed");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/finance/directory/install/status"] });
+    } catch (error) {
+      setInstallError(error instanceof Error ? error.message : "Unable to start catalog import");
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -437,6 +482,13 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
         <label className="flex items-center gap-1.5 font-terminal text-[8px] text-muted-foreground">
           <input type="checkbox" checked={includeHistorical} onChange={e => { setIncludeHistorical(e.target.checked); setPage(1); }} className="accent-amber-400" /> HISTORICAL
         </label>
+        <button
+          type="button"
+          onClick={() => void installReferenceCatalog()}
+          disabled={installing}
+          title="User-authorized, Git-free local installation. Does not provide real-time prices."
+          className="border border-border rounded px-2 py-1 text-[9px] font-terminal text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >{installing ? `IMPORTING ${installStatus?.filesExtracted ?? 0} FILES` : catalogStatus?.financeDatabase.imported ? "UPDATE REFERENCE DATA" : "IMPORT 300K+ REFERENCES"}</button>
         <span title="Reference symbols are not verified live prices, fundamentals or distinct companies." className="ml-auto font-terminal text-[9px] text-muted-foreground">{(data?.total ?? 0).toLocaleString()} MATCHES · {(catalogStatus?.uniqueListingCount ?? 0).toLocaleString()} REFERENCE LISTINGS</span>
       </div>
       <div className="flex-1 overflow-auto scrollbar-thin">
