@@ -16,7 +16,8 @@ test("signed-out LiOS renders a public product preview, not an executable guest 
   assert.equal(app.includes("GuestConversationHome"), false, "guest execution shell must not remain an entry path");
   assert.ok(!app.includes("PersonaOnboarding"), "persona onboarding must not block authenticated first value");
   assert.ok(!app.includes("environmentSetupNeeded"), "environment setup must not become a startup gate");
-  assert.ok(app.includes("session && environmentSetupOpen"), "Connection Center must remain contextual after sign-in");
+  assert.ok(app.includes('managementView === "connections" && session && <DataConnectionCenter embedded'), "Connection Center must remain authenticated and contextual after sign-in");
+  assert.ok(app.includes("data-lios-workspace hidden={domainPickerOpen}"), "Connection setup must not hide or remount the authenticated conversation");
 });
 
 test("public demo is illustrative while real product actions remain authentication-gated", () => {
