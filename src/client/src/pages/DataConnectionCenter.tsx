@@ -781,7 +781,7 @@ function ConnectionCard({
   const recovery = connectionRecoveryPresentation(conn.status);
 
   return (
-    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
+    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={["healthy", "live_verified"].includes(conn.status) ? "verified" : ["configured", "credential_configured"].includes(conn.status) ? "configured" : "attention"}>
       <div className="flex items-center gap-2">
         <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
         <span className="truncate font-ui text-sm font-semibold text-foreground">{conn.name}</span>
@@ -813,6 +813,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   const [removingConnection, setRemovingConnection] = useState(false);
   const [removalError, setRemovalError] = useState<string | null>(null);
   const [testingConnectionId, setTestingConnectionId] = useState<number | null>(null);
+  const verificationInFlightRef = useRef(false);
   const [connectionTestNotice, setConnectionTestNotice] = useState<string | null>(null);
   const [lastConnectionTest, setLastConnectionTest] = useState<{ connectionId: number; status: string; detail: string } | null>(null);
   const removalInFlight = useRef(false);
@@ -1126,7 +1127,9 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
   }, [refresh]);
 
   async function handleTestConnection(connectionId: number) {
-    if (testingConnectionId !== null) return;
+    // React may batch state updates; guard synchronously against double clicks.
+    if (verificationInFlightRef.current) return;
+    verificationInFlightRef.current = true;
     setTestingConnectionId(connectionId);
     setConnectionTestNotice(null);
     setLastConnectionTest(null);
@@ -1141,6 +1144,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
       setLastConnectionTest({ connectionId, status: "unreachable", detail: "This verification did not complete. No live access is confirmed." });
       setConnectionTestNotice("Connection verification could not complete. No successful live check was confirmed; review the saved source and retry.");
     } finally {
+      verificationInFlightRef.current = false;
       refresh();
       setTestingConnectionId(null);
     }
