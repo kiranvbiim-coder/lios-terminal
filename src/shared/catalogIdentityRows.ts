@@ -6,6 +6,9 @@
 export interface CatalogIdentityRow {
   symbol: string;
   name: string;
+  /** Untrusted optional attributes are checked by each domain consumer. */
+  exchange?: unknown;
+  sector?: unknown;
 }
 
 export function isUsableCatalogIdentityRow(row: unknown): row is CatalogIdentityRow {
