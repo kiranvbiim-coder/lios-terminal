@@ -51,6 +51,7 @@ import { registerTrialRoutes } from "./trialAccess";
 import { registerPublicRoutes } from "./publicRoutes";
 import { registerEnvironmentSetupRoutes } from "./environmentSetupRoutes";
 import { resolvePackagedNativeRuntimeBundleAuthority } from "./nativeRuntimeBundle";
+import { configureRuntimeDoctorProvisioning } from "./runtimeDoctorTool";
 import { registerSourceConnectionRoutes } from "./sourceConnectionRoutes";
 import { registerSourceRegistryRoutes } from "./sourceRegistryRoutes";
 import { registerProjectRoutes } from "./projectRoutes";
@@ -211,6 +212,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.warn("Native runtime bundle verification failed; provisioning is disabled.");
     }
   }
+  configureRuntimeDoctorProvisioning(Boolean(nativeProvisioning));
   registerEnvironmentSetupRoutes(app, {
     ...(nativeProvisioning ? { strictProvisioningAuthority: nativeProvisioning } : {}),
     ...(nativeProvisioningInvalid ? { provisioningBlocker: "native_runtime_bundle_invalid" as const } : {}),
