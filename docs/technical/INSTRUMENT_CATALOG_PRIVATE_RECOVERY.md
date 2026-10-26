@@ -10,7 +10,9 @@
 | `provider_ingested_universe.json` | `8b9e82b4143d453a0d0c8e7804820cf7a778cd43` | 2,745,198 | Provider-tagged SEC/Nasdaq Trader/CoinGecko instrument candidates |
 | `crypto_coingecko_ids.json` | `ca29d5000a89a7382309d667800e495010662662` | 828,135 | Crypto ticker → CoinGecko ID mapping for live quote lookup |
 
-The original ticker catalog contains 67,217 rows including one `FILE CREATION TIME:` vendor metadata record; the legacy loader now excludes that record from instrument search. The provider catalog contains 15,592 rows; the crypto map contains 10,923 IDs.\n\nAn additional `shillerCape.json` academic dataset remains private, but **it is not included in this recovery** because its licensing/provenance require a separate review. This patch restores only the three instrument foundation assets listed above. SHA-1 is used to compare Git's content-addressed blob identity to the original source; the asset contents never appear in public commits. The script also checks exact byte lengths, JSON structure and minimum record counts. This is a snapshot integrity check, **not** a redistribution-rights approval.
+The original ticker catalog contains 67,217 rows including one `FILE CREATION TIME:` vendor metadata record; the legacy loader now excludes that record from instrument search. The provider catalog contains 15,592 rows; the crypto map contains 10,923 IDs.
+
+An additional `shillerCape.json` academic dataset remains private, but **it is not included in this recovery** because its licensing/provenance require a separate review. This patch restores only the three instrument foundation assets listed above. SHA-1 is used to compare Git's content-addressed blob identity to the original source; the asset contents never appear in public commits. The script also checks exact byte lengths, JSON structure and minimum record counts. This is a snapshot integrity check, **not** a redistribution-rights approval.
 
 ## Local recovery commands
 
