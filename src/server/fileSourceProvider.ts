@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import type { SourceConnection } from "@shared/schema";
 import type { LiOSDataProviderAdapter } from "./providerSdk";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
+import { assertSourceConnectionScope } from "./sourceConnectionScope";
 
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 const DEFAULT_MAX_ROWS = 50_000;
@@ -84,7 +85,8 @@ export function createFileProviderAdapter(connection: SourceConnection): LiOSDat
     priority: 55,
     capabilities: ["statements", "portfolios", "transactions", "provider_extension"],
     pointInTimeModes: ["latest"],
-    async fetch(request) {
+    async fetch(request, context) {
+      assertSourceConnectionScope(connection, context);
       const result = await readConfiguredLocalFile(connection, {
         maxRows: typeof request.parameters.maxRows === "number" ? request.parameters.maxRows : undefined,
       });
@@ -103,7 +105,8 @@ export function createFileProviderAdapter(connection: SourceConnection): LiOSDat
         },
       };
     },
-    async health() {
+    async health(context) {
+      assertSourceConnectionScope(connection, context);
       const checkedAt = new Date().toISOString();
       try {
         const p = fs.realpathSync(path.resolve(configuredPath(connection)));
