@@ -13,6 +13,7 @@ import { fetchCloudObject } from "./cloudStorageConnector";
 import { resolveCredential } from "./credentialVault";
 import { hashLedgerValue } from "./ledgerStore";
 import { createFileProviderAdapter } from "./fileSourceProvider";
+import { assertSourceConnectionScope } from "./sourceConnectionScope";
 import {
   fetchApiSourceConnection,
   mapApiSourceConnection,
@@ -50,6 +51,7 @@ export function createPrivateApiProviderAdapter(input: {
     capabilities: Object.keys(CONTRACT_BY_CAPABILITY) as CanonicalDataCapability[],
     pointInTimeModes: ["latest"],
     async fetch(request, context) {
+      if (context.userId !== input.actor.id) throw new Error("Source connection does not belong to this user.");
       const family = CONTRACT_BY_CAPABILITY[request.capability];
       if (!family) return null;
       const result = family === "operations"
@@ -86,6 +88,7 @@ export function createDatabaseProviderAdapter(input: {
     capabilities: ["statements", "portfolios", "transactions", "provider_extension"],
     pointInTimeModes: ["latest"],
     async fetch(request, context) {
+      if (context.userId !== input.actor.id) throw new Error("Source connection does not belong to this user.");
       const query = typeof request.parameters.query === "string" ? request.parameters.query : null;
       if (!query) return null;
       const params = Array.isArray(request.parameters.params) ? request.parameters.params : [];
@@ -116,7 +119,8 @@ export function createCloudStorageProviderAdapter(
     priority: 60,
     capabilities: ["provider_extension"],
     pointInTimeModes: ["latest"],
-    async fetch() {
+    async fetch(_request, context) {
+      assertSourceConnectionScope(connection, context);
       const endpoint = typeof connection.config.endpoint === "string" ? connection.config.endpoint : null;
       if (!endpoint) return null;
       const bearer = connection.credentialRef ? resolveCredential("", connection.credentialRef) : null;
@@ -128,7 +132,9 @@ export function createCloudStorageProviderAdapter(
       return {
         providerId: providerId(connection),
         data: result.value,
-        sourceRefs: [`source-connection:${connection.id}`, result.endpoint],
+        // Signed URLs can contain credential query parameters. A stable
+        // fingerprint identifies the object without disclosing its URL.
+        sourceRefs: [`source-connection:${connection.id}`, `cloud-object:${hashLedgerValue(result.endpoint)}`],
         availableAt: result.retrievedAt,
         revision: result.etag,
         normalized: false,
@@ -150,7 +156,8 @@ export function createMcpProviderAdapter(connection: SourceConnection): LiOSData
     priority: 60,
     capabilities: ["provider_extension"],
     pointInTimeModes: ["latest"],
-    async search(request) {
+    async search(request, context) {
+      assertSourceConnectionScope(connection, context);
       const config = externalMcpConfigForSourceConnection(connection);
       const tools = await listExternalMcpTools(config);
       const query = request.query.trim().toLowerCase();
@@ -160,7 +167,8 @@ export function createMcpProviderAdapter(connection: SourceConnection): LiOSData
         sourceRefs: [`mcp-server:${config.policy.serverId}`],
       };
     },
-    async health() {
+    async health(context) {
+      assertSourceConnectionScope(connection, context);
       const checkedAt = new Date().toISOString();
       const started = Date.now();
       try {
@@ -180,7 +188,8 @@ export function createMcpProviderAdapter(connection: SourceConnection): LiOSData
         };
       }
     },
-    async fetch(request) {
+    async fetch(request, context) {
+      assertSourceConnectionScope(connection, context);
       const config = externalMcpConfigForSourceConnection(connection);
       const toolId = typeof request.parameters.toolId === "string" ? request.parameters.toolId : null;
       const resourceUri = typeof request.parameters.resourceUri === "string" ? request.parameters.resourceUri : null;
@@ -214,7 +223,7 @@ export function createMcpProviderAdapter(connection: SourceConnection): LiOSData
         return {
           providerId: providerId(connection),
           data: output,
-          sourceRefs: [resourceUri, `mcp-server:${config.policy.serverId}`],
+          sourceRefs: [`mcp-resource:${hashLedgerValue(resourceUri)}`, `mcp-server:${config.policy.serverId}`],
           normalized: false,
           entitlement: {
             decision: "unknown",
@@ -246,6 +255,7 @@ export function registerSourceConnectionProviders(
   actor: Pick<User, "id" | "email">,
 ): void {
   for (const connection of connections) {
+    if (connection.userId !== actor.id) throw new Error("Cannot register a source connection for a different user.");
     const id = providerId(connection);
     if (registry.get(id)) continue;
     if (connection.sourceType === "file") {
