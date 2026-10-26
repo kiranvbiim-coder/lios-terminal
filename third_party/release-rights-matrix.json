@@ -11,9 +11,9 @@
       "obligations": ["Everyone receiving any part must receive the complete Blue Oak Model License 1.0.0 text or its canonical link; retain the full supplied legal file."]
     },
     {
-      "name": "@fontsource/barlow-condensed", "version": "5.2.8",
+      "name": "@fontsource/barlow-condensed", "version": "5.3.0",
       "declaredLicense": "OFL-1.1", "selectedExpression": "OFL-1.1", "reviewedTerms": ["OFL-1.1"],
-      "reviewEvidence": "Installed LICENSE sections Permission & Conditions 1-5; client index.css imports the packaged font CSS. Copyright 2017 The Barlow Project Authors.",
+      "reviewEvidence": "Installed 5.3.0 LICENSE read in full after dependency PR #211; exact SHA-256 unchanged from reviewed 5.2.8. Permission & Conditions 1-5 retained; client index.css imports packaged font CSS. Copyright 2017 The Barlow Project Authors.",
       "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "046ee27d8bddc6b6ee08eee53c96dbf3ec1f6df561644e018507dd8ffcb11d31"}],
       "obligations": ["Distribute full copyright/OFL text with fonts in an easily viewable form; do not sell fonts alone or relicense under LiOS proprietary terms.", "No LiOS font source changes recorded; reserved-name and modified-font obligations require review before any font alteration, subsetting or format conversion."]
     },
@@ -100,9 +100,9 @@
       "obligations": ["Preserve full historical license chain/copyrights and disclaimers; do not use licensors' names for endorsement.", "LiOS redistributes the upstream JavaScript port without local source edits; future derivative changes require the PSF/CNRI change summary."]
     },
     {
-      "name": "nodemailer", "version": "10.0.13",
+      "name": "nodemailer", "version": "10.2.1",
       "declaredLicense": "MIT-0", "selectedExpression": "MIT-0", "reviewedTerms": ["MIT-0"],
-      "reviewEvidence": "Installed LICENSE is MIT No Attribution: permissive grant and warranty disclaimer without the MIT attribution condition. Copyright (c) 2011-2023 Andris Reinman retained.",
+      "reviewEvidence": "Installed 10.2.1 LICENSE read in full after dependency PR #211; exact SHA-256 unchanged from reviewed 10.0.13. MIT No Attribution permissive grant and warranty disclaimer retained, Copyright (c) 2011-2023 Andris Reinman.",
       "legalFiles": [{"scope": "package", "path": "LICENSE", "sha256": "4f814dcacd2da618d62829ea1f6238701cf421f18a6b36c91c5d8212245e2c78"}],
       "obligations": ["Retain the supplied grant/disclaimer with this unchanged package; no broad approval of unrelated license identifiers."]
     },

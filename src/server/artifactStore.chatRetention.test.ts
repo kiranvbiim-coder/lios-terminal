@@ -9,6 +9,7 @@ import { createServer } from "node:http";
 import { eq } from "drizzle-orm";
 import type { ConversationArtifactDraft } from "@shared/conversationRuntime";
 import { artifactContentSchema } from "@shared/artifactContracts";
+import { trustManifestSchema } from "@shared/trustContracts";
 import type { TenantContext } from "./tenantContext";
 
 // db.ts captures the data root at module load; this test deliberately imports it after isolation.
@@ -146,6 +147,22 @@ test("Quick Chat uses canonical durable P4 ownership without manufacturing a Pro
     }), /owning Project/);
     await assert.rejects(p7ResearchBranchingService.createBranch(tenant, { artifactId: retained.artifact.id, baseVersion: 1 }), /owning Project/);
   });
+  await t.test("export rejects explicit revoked evidence without blocking a separate authorized revision", async () => {
+    const manifest = trustManifestSchema.parse({
+      schemaVersion: "1", trustId: crypto.randomUUID(), requestId: crypto.randomUUID(),
+      generatedAt: new Date().toISOString(), sourceScope: "my_data",
+      summary: { freshness: "manual", quality: "high", confidence: "high", conflictState: "none", evidenceCoveragePct: 100, sourceCount: 1, receiptCount: 0, missingCount: 0 },
+      evidence: [{ evidenceId: crypto.randomUUID(), sourceRef: "user:explicit-test-input", providerLabel: "Owned test input",
+        kind: "manual", observedAt: new Date().toISOString(), freshness: "manual", quality: "high", confidence: "high", access: { state: "rights-revoked" } }],
+    });
+    const denied = await persistConversationDraft(tenant, { ...input, requestId: crypto.randomUUID(), draft: draft(), trustManifest: manifest });
+    await assert.rejects(getArtifactExportPlan(tenant, denied.artifact.id, 1), (cause: unknown) =>
+      cause instanceof Error && "status" in cause && cause.status === 403);
+    const allowed = await persistConversationDraft(tenant, { ...input, requestId: crypto.randomUUID(), draft: draft(),
+      trustManifest: { ...manifest, trustId: crypto.randomUUID(), evidence: manifest.evidence.map(item => ({ ...item, access: { ...item.access!, state: "allowed" } })) } });
+    assert.equal((await getArtifactExportPlan(tenant, allowed.artifact.id, 1)).contentHash, allowed.version.contentHash);
+  });
+
   await t.test("reopen, immutable revisions, references, export and inspection use the original identity", async () => {
     await closeDb();
     await initDb();

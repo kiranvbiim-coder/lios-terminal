@@ -317,3 +317,58 @@ test("a refused resume surfaces the server's typed status and code and nothing i
   assert.equal(result.errorCode, "agent_resume_drift");
   client.stop();
 });
+
+test("failed and cancelled Home terminals never report a successful Chat request", async (t) => {
+  for (const terminal of ["failed", "cancelled"] as const) {
+    const client = await readyClient();
+    t.after(() => client.stop());
+    const ws = FakeWebSocket.last;
+    const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "run" }, onEvent: () => {} });
+    await sleep(0);
+    ws.serverSend({ type: "res", id: lastRequest(ws, "conversation.start").id, ok: true, payload: { requestId: ID } });
+    emit(ws, 0, text("partial output"));
+    emit(ws, 1, { type: "done", requestId: ID, at, status: terminal });
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.equal(result.text, "partial output");
+    assert.equal(result.events.at(-1)?.type === "done" && result.events.at(-1)!.status, terminal);
+    client.stop();
+  }
+});
+
+test("cumulative Chat text remains exact without retaining every prior answer snapshot", async (t) => {
+  const client = await readyClient();
+  t.after(() => client.stop());
+  const ws = FakeWebSocket.last;
+  let observations = 0;
+  const pending = runConversation(client, { chatId: 9, body: { requestId: ID }, onEvent: event => { if (event.type === "text") observations++; } });
+  await sleep(0);
+  ws.serverSend({ type: "res", id: lastRequest(ws, "conversation.start").id, ok: true, payload: { requestId: ID } });
+  emit(ws, 0, status("working"));
+  for (let i = 1; i <= 1000; i++) emit(ws, i, text("x".repeat(i)));
+  emit(ws, 1001, { type: "error", requestId: ID, at, code: "source_unavailable", message: "Source unavailable" });
+  emit(ws, 1002, { type: "done", requestId: ID, at, status: "failed" });
+  const result = await pending;
+  assert.equal(observations, 1000);
+  assert.equal(result.text, "x".repeat(1000));
+  assert.deepEqual(result.events.map(event => event.type), ["status", "text", "error", "done"]);
+  assert.equal(result.error, "Source unavailable");
+  assert.equal(result.ok, false);
+});
+
+test("a fresh Chat request is never queued for automatic execution after reconnect", async (t) => {
+  const client = await readyClient();
+  t.after(() => client.stop());
+  const ws = FakeWebSocket.last;
+  ws.serverClose();
+  const pending = runConversation(client, { chatId: 9, body: { requestId: ID, message: "do not queue" }, onEvent: () => {} });
+  await sleep(15);
+  const reconnected = await accept("boot-1");
+  await sleep(0);
+  const subscribe = lastRequest(reconnected, "conversation.subscribe");
+  if (subscribe) reconnected.serverSend({ type: "res", id: subscribe.id, ok: false, error: { code: "NOT_FOUND", message: "No run admitted" } });
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(reconnected.sent.filter(frame => frame.method === "conversation.start").length, 0);
+  assert.equal(ws.sent.filter(frame => frame.method === "conversation.start").length, 0);
+});

@@ -31,6 +31,7 @@ import {
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 import { resolveEntrySurface, resolveInitialChatMode } from "@/lib/projectEntry";
 import { ProjectHome, relativeTime } from "./ProjectHome";
+import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { AuthenticatedNavigation, type NavigationSection } from "./AuthenticatedNavigation";
 import WorkSearchDialog from "./WorkSearchDialog";
 import type { WorkSearchResult } from "@shared/workSearch";
@@ -42,7 +43,7 @@ import { SaveWorkflowDialog } from "./SaveWorkflowDialog";
 import { useInvalidateP9Automation } from "@/lib/useP9Automation";
 import { ObjectActionMenu } from "./ObjectActionMenu";
 import { keepConversationDraft, keepConversationDraftVersion, useInvalidateArtifacts } from "@/lib/useArtifacts";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { speakText, useVoiceProviders, useVoiceRecorder } from "@/lib/useVoiceInput";
 import {
   dispatchVisualContext,
@@ -73,7 +74,7 @@ import {
 import type { ArtifactWorkbenchContext, ViewMode } from "@/lib/terminalTypes";
 import { resolveScopedWorkbenchSymbol } from "@/lib/chatWorkbenchContext";
 import type { LifecycleAction } from "@shared/objectLifecycle";
-import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
+import { P6_PERSONAL_FINANCE_INPUT_ACTION, type P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import type { WorkspaceAudience } from "@/lib/featureRegistry";
 import type { WorkspaceAdapter } from "@shared/runtimeAdapters";
 import type { SafeWorkspaceAction } from "@shared/projectContracts";
@@ -140,13 +141,18 @@ import SavedArtifactCards from "./SavedArtifactCards";
 import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
-import { useGateway } from "@/lib/gateway/GatewayProvider";
+import { useGateway, useGatewayState } from "@/lib/gateway/GatewayProvider";
+import { conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
 import { attachConversationRun, cancelConversationRun, runConversation } from "@/lib/gateway/conversationRun";
 import { useInterruptedAgentRun } from "@/lib/useInterruptedAgentRun";
 import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
 import BoundedAgentComposerControl from "./BoundedAgentComposerControl";
 import { loadSandboxSessionBookmark, saveSandboxSessionBookmark } from "@/lib/sandboxSessionBookmarkStore";
 import { loadRuntimeReceipt, saveRuntimeReceipt } from "@/lib/runtimeReceiptStore";
+import { canonicalRecentChats } from "@/lib/conversationSwitchPolicy";
+import { contextForChatMode } from "@/lib/chatPersistenceBoundary";
+import { appendConversationPresentationEvent, CHAT_RENDER_BATCH, selectConversationMessageWindow } from "@/lib/conversationRenderBudget";
+import { contextChangeConfirmation, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
 import {
   createConversationRequestId,
   loadProjectAITransmissionPolicy,
@@ -326,13 +332,18 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
     handledNavigation.current = navigationRequest.id;
-    if (navigationRequest.section === "search") setWorkSearchOpen(true);
+    if (navigationRequest.section === "search") requestWorkSearch();
     else setSection(navigationRequest.section);
     setShowLifecycleCenter(false);
     setContextOpen(false);
   }, [navigationRequest]);
   const [librarySelection, setLibrarySelection] = useState<{ projectId: number; artifactId: string | null; resourceId: string | null; version?: number | null; request: number } | null>(null);
   const [workSearchOpen, setWorkSearchOpen] = useState(false);
+  const workSearchOpener = useRef<HTMLElement | null>(null);
+  const requestWorkSearch = () => {
+    workSearchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setWorkSearchOpen(true);
+  };
   const [contextOpen, setContextOpen] = useState(false);
   const [chatLimit, setChatLimit] = useState(50);
   const contextCloseRef = useRef<HTMLButtonElement>(null);
@@ -360,6 +371,7 @@ export default function ProjectExperienceShell({
   const [temporaryMessages, setTemporaryMessages] = useState<LocalMessage[]>([]);
   const temporaryWorkingContextRef = useRef<WorkingContextSnapshot | null>(null);
   const [input, setInput] = useState("");
+  const [visibleMessageCount, setVisibleMessageCount] = useState(CHAT_RENDER_BATCH);
   const [voiceTranscripts, setVoiceTranscripts] = useState<VoiceTranscript[]>([]);
   const [voiceTranscriptReviewed, setVoiceTranscriptReviewed] = useState(false);
   const [pendingAttachmentFiles, setPendingAttachmentFiles] = useState<File[]>([]);
@@ -379,10 +391,15 @@ export default function ProjectExperienceShell({
   const voiceOutputAvailable = voiceStatus.speechReady;
   const chatCreationInFlightRef = useRef(false);
   const projectCreationInFlightRef = useRef(false);
-  const draftSnapshot = { input, files: pendingAttachmentFiles, attachments: pendingAttachmentRefs, voice: voiceTranscripts, chatId: selection.chatId, projectId: selection.projectId };
+  const [pendingPersonalFinance, setPendingPersonalFinance] = useState<P6PersonalFinanceRequest | null>(null);
+  const [financeInputOwner, setFinanceInputOwner] = useState<string | null>(null);
+  const financeOwner = `${chatMode}:${selection.projectId ?? "none"}:${selection.chatId ?? "none"}`;
+  const draftSnapshot = { input, files: pendingAttachmentFiles, attachments: pendingAttachmentRefs, voice: voiceTranscripts, personalFinance: pendingPersonalFinance, chatId: selection.chatId, projectId: selection.projectId };
   const currentDraftRef = useRef(draftSnapshot);
   currentDraftRef.current = draftSnapshot;
   const [streaming, setStreaming] = useState("");
+  const pendingTextEventRef = useRef<ConversationRuntimeEvent | null>(null);
+  const pendingTextFrameRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const sendInFlightRef = useRef(false);
   const cancelInFlightRef = useRef(false);
@@ -405,8 +422,9 @@ export default function ProjectExperienceShell({
   sandboxSelectionRef.current = { projectId: selection.projectId, chatId: selection.chatId };
   const [lastSubmittedMessage, setLastSubmittedMessage] = useState("");
   const [lastWorkflowRequest, setLastWorkflowRequest] = useState<Omit<ConversationRequest, "requestId" | "continuationOf"> | null>(null);
-  const [pendingPersonalFinance, setPendingPersonalFinance] = useState<P6PersonalFinanceRequest | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
+  const composerToolsTrigger = useRef<HTMLButtonElement>(null);
+  const pendingComposerDialog = useRef<"workflow" | "resource" | null>(null);
   const [lifecycleNotice, setLifecycleNotice] = useState<string | null>(null);
   const [executionMode, setExecutionMode] = useState<ConversationExecutionMode>("ai_assisted");
   const agentComposer = useBoundedAgentComposer(chatMode, executionMode);
@@ -521,6 +539,14 @@ export default function ProjectExperienceShell({
   const conversationScrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
   const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const historyScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  useLayoutEffect(() => {
+    const anchor = historyScrollAnchorRef.current;
+    if (!anchor) return;
+    historyScrollAnchorRef.current = null;
+    const viewport = conversationScrollRef.current;
+    if (viewport) viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+  }, [visibleMessageCount]);
   const keepingArtifactRef = useRef(false);
   const [projectDestination, setProjectDestination] = useState<{ description: string; save: (project: Project) => Promise<void> } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -591,6 +617,11 @@ export default function ProjectExperienceShell({
     pendingArtifactFocusRef.current = false;
     followLatestRef.current = true;
     setAwayFromLatest(false);
+    historyScrollAnchorRef.current = null;
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    pendingTextEventRef.current = null;
+    setVisibleMessageCount(CHAT_RENDER_BATCH);
     setLastSubmittedMessage("");
     setLastWorkflowRequest(null);
     setVoiceTranscripts([]);
@@ -677,7 +708,7 @@ export default function ProjectExperienceShell({
   }, [persistedMessages, temporaryMessages, streaming]);
 
   useEffect(() => {
-    const openSearch = () => setWorkSearchOpen(true);
+    const openSearch = () => requestWorkSearch();
     window.addEventListener("lios:open-work-search", openSearch);
     return () => window.removeEventListener("lios:open-work-search", openSearch);
   }, []);
@@ -709,10 +740,7 @@ export default function ProjectExperienceShell({
   }, []);
 
   const recentChats = useMemo(
-    () => [...(allChatsQuery.data ?? []), ...quickChats]
-      .filter((chat) => chat.status === "active" && !chat.trashedAt)
-      .sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime())
-      .slice(0, 14),
+    () => canonicalRecentChats(allChatsQuery.data ?? [], quickChats),
     [allChatsQuery.data, quickChats],
   );
 
@@ -725,6 +753,41 @@ export default function ProjectExperienceShell({
   }, [home?.project.name, selection.projectId, selection.chatId, activeChat?.title, onNavigationContext]);
 
   const resources = home?.resources ?? [];
+  const latestResourceContext = useRef({ projectId: selection.projectId, resources });
+  latestResourceContext.current = { projectId: selection.projectId, resources };
+  const contextUpdateInFlight = useRef(false);
+  const [contextUpdateBusy, setContextUpdateBusy] = useState(false);
+  const reviewResourceContext = async (resource: ProjectResource, next: ProjectResourceContextMode) => {
+    if (contextUpdateInFlight.current || resource.contextMode === next || resource.projectId !== selection.projectId) return;
+    contextUpdateInFlight.current = true;
+    setContextUpdateBusy(true);
+    try {
+      const answer = await requestLifecycle({
+        title: "Review Project resource inclusion",
+        detail: contextChangeConfirmation(resource.label, resource.contextMode, next),
+        confirmLabel: "Save context mode",
+      });
+      if (!answer) return;
+      const latest = latestResourceContext.current;
+      const reviewed = latest.resources.find(row => row.id === resource.id && row.projectId === resource.projectId);
+      if (latest.projectId !== resource.projectId || !reviewed || reviewed.status !== "active"
+        || reviewed.contextMode !== resource.contextMode || reviewed.updatedAt !== resource.updatedAt) {
+        throw new Error("Resource changed since review. Reopen this Project's context before saving.");
+      }
+      const saved = await updateProjectResource(resource.projectId, resource.id, { contextMode: next, expectedUpdatedAt: resource.updatedAt });
+      invalidate(resource.projectId);
+      if (saved.id !== resource.id || saved.projectId !== resource.projectId || saved.contextMode !== next) {
+        throw new Error("The server did not confirm the reviewed resource and mode. Refresh before relying on the change.");
+      }
+    } catch (cause) {
+      if (sandboxSelectionRef.current.projectId === resource.projectId) {
+        setLifecycleNotice(cause instanceof Error ? cause.message : "Project context update was not confirmed.");
+      }
+    } finally {
+      contextUpdateInFlight.current = false;
+      setContextUpdateBusy(false);
+    }
+  };
   const mentionCandidates = useMemo(
     () => eligibleProjectMentions(resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences),
     [resources, input, selection.projectId, chatMode, sourceScope, transmissionPolicy.allowResourceReferences],
@@ -738,11 +801,12 @@ export default function ProjectExperienceShell({
 
   const discardConversationDraft = (expected = currentDraftRef.current) => {
     const current = currentDraftRef.current;
-    if (current.input !== expected.input || current.files !== expected.files || current.attachments !== expected.attachments || current.voice !== expected.voice || current.chatId !== expected.chatId || current.projectId !== expected.projectId) {
+    if (current.input !== expected.input || current.files !== expected.files || current.attachments !== expected.attachments || current.voice !== expected.voice || current.personalFinance !== expected.personalFinance || current.chatId !== expected.chatId || current.projectId !== expected.projectId) {
       setLifecycleNotice("Your draft or conversation changed while that action was pending. It has been kept; open the saved destination when ready.");
       return false;
     }
     setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]); setVoiceTranscriptReviewed(false);
+    setPendingPersonalFinance(null);
     return true;
   };
   const confirmConversationSwitch = async (deferDiscard = false, allowCreation = false) => {
@@ -750,8 +814,8 @@ export default function ProjectExperienceShell({
     if (busy || busyRef.current) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
     const expected = currentDraftRef.current;
-    if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length) return true;
-    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
+    if (!input.trim() && !pendingAttachmentFiles.length && !pendingAttachmentRefs.length && !voiceTranscripts.length && !pendingPersonalFinance) return true;
+    const answer = await requestLifecycle({ title: "Leave this draft?", detail: "Switching conversations clears the unsent draft, staged attachments, personal-finance inputs and voice transcript. Saved messages are kept.", confirmLabel: "Discard draft" });
     if (!answer) return false;
     if (!deferDiscard && !discardConversationDraft(expected)) return false;
     return true;
@@ -989,7 +1053,10 @@ export default function ProjectExperienceShell({
     setTemporaryTerminal(null);
     setSection("conversation"); setContextOpen(false); setShowLifecycleCenter(false);
     selection.setChatId(null);
+    selection.setProjectId(null);
     setChatMode("temporary");
+    setFinanceInputOwner(null);
+    updateSourceScope("auto");
     setTemporaryMessages([]);
     temporaryWorkingContextRef.current = null;
     setStreaming("");
@@ -1121,19 +1188,48 @@ export default function ProjectExperienceShell({
   };
 
   const gateway = useGateway();
+  const gatewayState = useGatewayState();
+  const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const observe = () => setBrowserOnline(navigator.onLine);
+    window.addEventListener("online", observe);
+    window.addEventListener("offline", observe);
+    return () => { window.removeEventListener("online", observe); window.removeEventListener("offline", observe); };
+  }, []);
+  const sendAvailability = conversationSendAvailability(browserOnline, gatewayState);
   const requireGateway = () => {
     if (!gateway) throw new Error("LiOS is not connected to your Home yet. Please retry in a moment.");
     return gateway;
   };
+  const flushPendingText = () => {
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    const textEvent = pendingTextEventRef.current;
+    pendingTextEventRef.current = null;
+    if (textEvent?.type === "text") {
+      setRuntimeEvents(current => appendConversationPresentationEvent(current, textEvent));
+      setStreaming(textEvent.text);
+    }
+  };
+  useEffect(() => () => {
+    if (pendingTextFrameRef.current !== null) cancelAnimationFrame(pendingTextFrameRef.current);
+    pendingTextFrameRef.current = null;
+    pendingTextEventRef.current = null;
+  }, []);
   const applyRuntimeEvent = (runtimeEvent: ConversationRuntimeEvent) => {
     recordP2ConversationEvent(runtimeEvent);
+    if (runtimeEvent.type === "text") {
+      pendingTextEventRef.current = runtimeEvent;
+      if (pendingTextFrameRef.current === null) pendingTextFrameRef.current = requestAnimationFrame(flushPendingText);
+      return;
+    }
+    flushPendingText();
     if (runtimeEvent.type === "trust") recordP3TrustManifest(runtimeEvent.manifest);
     if (runtimeEvent.type === "artifact" && runtimeEvent.persistedArtifact && chatMode !== "temporary") {
       invalidateArtifacts(runtimeEvent.artifact.projectId, runtimeEvent.persistedArtifact.id);
       if (!artifactDraftDirtyRef.current) { setConversationArtifactRef(runtimeEvent.persistedArtifact.id); setArtifactViewVersion(runtimeEvent.persistedArtifact.version); }
     }
-    setRuntimeEvents((current) => [...current, runtimeEvent]);
-    if (runtimeEvent.type === "text") setStreaming(runtimeEvent.text);
+    setRuntimeEvents(current => appendConversationPresentationEvent(current, runtimeEvent));
   };
 
   // A run keeps executing on the Home when the UI reloads or its connection drops. Re-attach to the run of the open
@@ -1242,6 +1338,11 @@ export default function ProjectExperienceShell({
       setLifecycleNotice(agentComposer.guidance);
       return;
     }
+    const availability = conversationSendAvailability(navigator.onLine, gateway?.state ?? "stopped");
+    if (!availability.canSubmit) {
+      setLifecycleNotice(`Send was blocked because the Home connection was not confirmed. ${availability.detail}`);
+      return;
+    }
 
     if (chatMode === "project" && selection.projectId) {
       dispatchVisualContext({
@@ -1266,7 +1367,7 @@ export default function ProjectExperienceShell({
       view: activeView,
       activeObjectRefs: conversationArtifactRef && chatMode !== "temporary" ? [conversationArtifactRef] : [activeSymbol ? `security:${activeSymbol}` : `panel:${activeView}`],
       ...(retainedScreen && terminalDetail.data ? { terminalArtifact: { artifactId: terminalDetail.data.artifact.id, version: terminalDetail.data.version.version, contentHash: terminalDetail.data.version.contentHash } } : {}),
-      personalFinance: chatMode === "project" && pendingPersonalFinance ? pendingPersonalFinance : undefined,
+      personalFinance: pendingPersonalFinance ?? undefined,
       selection: selectedTextContext && policy.allowSelection
         ? {
             kind: "text" as const,
@@ -1291,18 +1392,19 @@ export default function ProjectExperienceShell({
       requestId,
       continuationOf: override?.continuationOf ?? null,
       message,
-      sourceScope,
+      sourceScope: sourceScopeForChatMode(chatMode, sourceScope),
       executionMode,
       aiDirectApproved,
       approvals,
       transmissionPolicy: policy,
       attachments: attachmentsForRequest,
-      context,
+      context: chatMode === "temporary"
+        ? (pendingPersonalFinance ? { personalFinance: pendingPersonalFinance } : undefined)
+        : contextForChatMode(chatMode, context),
     };
     const voiceReview = voiceTranscripts.length
       ? { transcripts: voiceTranscripts, transcriptReviewed: voiceTranscriptReviewed }
       : undefined;
-    if (!override?.continuationOf && pendingPersonalFinance) setPendingPersonalFinance(null);
     if (!override?.continuationOf && chatMode === "project") {
       const projectApprovals = approvals.filter((grant) => grant.scope === "project");
       setLastWorkflowRequest({
@@ -1356,6 +1458,7 @@ export default function ProjectExperienceShell({
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
+        if (hasObservedCompletion(result.events, requestId)) setPendingPersonalFinance(current => current === pendingPersonalFinance ? null : current);
         if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
@@ -1420,6 +1523,7 @@ export default function ProjectExperienceShell({
           setLifecycleNotice(result.error ?? "Review the spoken transcript before this high-impact action.");
           return;
         }
+        if (hasObservedCompletion(result.events, requestId)) setPendingPersonalFinance(current => current === pendingPersonalFinance ? null : current);
         if (!result.ok) setInput(current => restoreFailedComposerDraft(current, originalComposerDraft, message));
         else {
           setVoiceTranscripts([]);
@@ -1449,7 +1553,7 @@ export default function ProjectExperienceShell({
       setBusy(false);
     }
     } catch {
-      setLifecycleNotice("LiOS could not start that request. Your unsent draft is still available.");
+      setLifecycleNotice(unconfirmedRunRecoveryNotice());
     } finally {
       sendInFlightRef.current = false;
     }
@@ -1766,6 +1870,8 @@ export default function ProjectExperienceShell({
   };
 
   const displayMessages: Array<ProjectChatMessage | LocalMessage> = chatMode === "temporary" ? temporaryMessages : persistedMessages;
+  const { messages: visibleMessages, hiddenCount: hiddenMessageCount, nextBatchCount } =
+    selectConversationMessageWindow(displayMessages, visibleMessageCount);
   const citationSources = useMemo(() => collectCitationSources(runtimeEvents), [runtimeEvents]);
   const visibleExecutionSessionId = sandboxSessionId ?? runtimeRequestId ?? runtimeEvents.at(-1)?.requestId ?? null;
   const visibleExecutionSessionProjectId = sandboxSessionId ? selection.projectId : (chatMode === "project" ? selection.projectId : null);
@@ -1800,10 +1906,33 @@ export default function ProjectExperienceShell({
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={financeInputOwner === financeOwner} onOpenChange={(open) => { if (!open) setFinanceInputOwner(null); }}>
+        <DialogContent className="max-w-3xl" onCloseAutoFocus={(event) => { event.preventDefault(); composerRef.current?.focus(); }}>
+          <DialogTitle>Personal-finance inputs</DialogTitle>
+          <DialogDescription>
+            Stage your inputs in this conversation, then review and choose Send. Closing this editor discards unstaged changes.
+            {chatMode === "temporary" ? " Temporary Chat keeps them in memory only." : " Sending retains the calculation in this saved Chat."}
+          </DialogDescription>
+          {financeInputOwner === financeOwner && <ProjectPersonalFinancePanel
+            key={financeOwner}
+            projectId={null}
+            stageOnly
+            initialProfile={pendingPersonalFinance}
+            onAnalyze={(profile) => {
+              setPendingPersonalFinance(profile);
+              setFinanceInputOwner(null);
+              setInput(current => stageSafeRunRetry(current, lastSubmittedMessage || "Analyze my personal finances using the supplied inputs."));
+              setExecutionMode("deterministic_first");
+              setLifecycleNotice("Personal-finance inputs staged in this Chat. Review the request and choose Send to calculate; nothing has run yet.");
+            }}
+          />}
+        </DialogContent>
+      </Dialog>
       {projectDestination && <ProjectDestinationDialog projects={projects} description={projectDestination.description} onConfirm={projectDestination.save} onClose={() => { invalidate(); setProjectDestination(null); }} />}
       <ProjectLifecycleDialog request={lifecycleRequest} onClose={() => { lifecycleResolver.current = null; setLifecycleRequest(null); }} />
       <WorkSearchDialog
         open={workSearchOpen}
+        opener={workSearchOpener.current}
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
       />
@@ -1811,7 +1940,7 @@ export default function ProjectExperienceShell({
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
-        onSearch={onOpenCommand ?? (() => setWorkSearchOpen(true))}
+        onSearch={onOpenCommand ?? requestWorkSearch}
         onWorkbench={onOpenWorkbench}
         onConnectors={onOpenEnvironment}
         onSettings={onOpenSettings} onLogout={onLogout}
@@ -1904,6 +2033,9 @@ export default function ProjectExperienceShell({
       </AuthenticatedNavigation>
 
       <main className="min-w-0 flex-1">
+        {!sendAvailability.canSubmit && <div role="status" className="border-b border-amber-300/20 px-4 py-2 text-sm text-amber-100">
+          <strong>{sendAvailability.title}.</strong> {sendAvailability.detail}
+        </div>}
         {lifecycleNotice && (
           <div role="alert" className="border-b border-red-300/20 bg-red-300/[0.04] px-4 py-2 font-ui text-[13px] text-red-200">
             {lifecycleNotice}
@@ -1983,7 +2115,11 @@ export default function ProjectExperienceShell({
             onOpenSession={(session) => void restoreSession(session)}
             onOpenContext={toggleContext}
             onOpenWorkbench={onOpenWorkbench}
-            onRenameProject={(name) => void updateProject(home.project.id, { name }).then(() => invalidate(home.project.id)).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to rename this Project."))}
+            onRenameProject={async name => {
+              const saved = await updateProject(home.project.id, { name });
+              if (saved.id !== home.project.id || saved.name !== name) throw new Error("The server did not confirm this Project name. Your draft is retained.");
+              invalidate(home.project.id);
+            }}
             onTogglePin={() => void handleProjectLifecycleAction(home.project, home.project.pinned ? "unpin" : "pin")}
             onArchiveProject={() => void handleProjectLifecycleAction(home.project, "archive")}
             onRestoreProject={() => void handleProjectLifecycleAction(home.project, "restore")}
@@ -2086,7 +2222,17 @@ export default function ProjectExperienceShell({
                     </div>
                   </section>
                 )}
-                {displayMessages.map((message) => (
+                {hiddenMessageCount > 0 && (
+                  <div className="flex justify-center" role="group" aria-label="Earlier messages">
+                    <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {
+                      const viewport = conversationScrollRef.current;
+                      if (viewport) historyScrollAnchorRef.current = { scrollHeight: viewport.scrollHeight, scrollTop: viewport.scrollTop };
+                      followLatestRef.current = false;
+                      setVisibleMessageCount(count => count + CHAT_RENDER_BATCH);
+                    }}>Show {nextBatchCount} earlier message{nextBatchCount === 1 ? "" : "s"} · {hiddenMessageCount} hidden</button>
+                  </div>
+                )}
+                {visibleMessages.map((message) => (
                   <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
                     <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
                       message.role === "user"
@@ -2202,6 +2348,12 @@ export default function ProjectExperienceShell({
                 onMutationApply={(action) => void approveRuntimeAction(action, "once")}
                 onMutationCancel={(action) => denyRuntimeAction(action)}
                 onRecoveryAction={(action) => {
+                  if (action === P6_PERSONAL_FINANCE_INPUT_ACTION
+                    || runtimeEvents.some(event => event.type === "data_gap" && event.requestId === runtimeRequestId
+                      && event.gap.field === "personal_finance_inputs" && event.gap.nextActions.includes(action))) {
+                    if (!busy && !sendInFlightRef.current) setFinanceInputOwner(financeOwner);
+                    return;
+                  }
                   if (firstUseRecoveryDestination(action) === "connections") {
                     if (lastSubmittedMessage.trim()) {
                       setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
@@ -2227,7 +2379,7 @@ export default function ProjectExperienceShell({
                   setCancelAcknowledgedRunId(null);
                   interruptedRun.resume();
                 }}
-                onFollowUp={(prompt) => { setInput(prompt); requestAnimationFrame(() => composerRef.current?.focus()); }}
+                onFollowUp={(prompt) => { setInput(current => stageSafeRunRetry(current, prompt)); requestAnimationFrame(() => composerRef.current?.focus()); }}
                 onKeepArtifact={chatMode === "temporary" ? undefined : keepArtifact}
                 onSubmitAssumptions={(message) => void send({ message })}
               />
@@ -2273,6 +2425,7 @@ export default function ProjectExperienceShell({
                         Personal Finance profile staged for this one request · {pendingPersonalFinance.accounts.length} accounts · {pendingPersonalFinance.transactions.length} recent transactions
                       </span>
                       <button type="button" onClick={() => setPendingPersonalFinance(null)} className="font-ui text-[13px] text-muted-foreground hover:text-foreground">Remove</button>
+                      <button type="button" disabled={busy} onClick={() => setFinanceInputOwner(financeOwner)} className="min-h-9 rounded border border-border/60 px-2 font-ui text-sm">Edit inputs</button>
                     </div>
                   </div>
                 )}
@@ -2435,11 +2588,20 @@ export default function ProjectExperienceShell({
                   {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
+                      <button ref={composerToolsTrigger} type="button" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.06] hover:text-foreground" aria-label="Tools">
                         <Plus className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="top" className="w-64">
+                    <DropdownMenuContent align="start" side="top" className="w-64" onCloseAutoFocus={event => {
+                      const dialog = pendingComposerDialog.current;
+                      pendingComposerDialog.current = null;
+                      if (!dialog) return;
+                      // Match ObjectActionMenu: release its modal layer before opening another.
+                      event.preventDefault();
+                      composerToolsTrigger.current?.focus();
+                      if (dialog === "workflow") setShowSaveWorkflow(true);
+                      else setShowResourceForm(true);
+                    }}>
                       <DropdownMenuItem
                         onSelect={() => {
                           attachmentInputRef.current?.click();
@@ -2449,7 +2611,7 @@ export default function ProjectExperienceShell({
                         <Paperclip className="h-4 w-4" /> Attach files
                       </DropdownMenuItem>
                       {chatMode === "project" && selection.projectId && (
-                        <DropdownMenuItem onSelect={() => setShowResourceForm(true)}>
+                        <DropdownMenuItem onSelect={() => { pendingComposerDialog.current = "resource"; }}>
                           <FileText className="h-4 w-4" /> Add Project resource
                         </DropdownMenuItem>
                       )}
@@ -2472,7 +2634,7 @@ export default function ProjectExperienceShell({
                             </>
                           )}
                           {chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && runtimeEvents.some(event => event.type === "done" && event.requestId === runtimeRequestId && event.status === "completed") && (
-                            <DropdownMenuItem onSelect={() => setShowSaveWorkflow(true)}>Save workflow</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => { pendingComposerDialog.current = "workflow"; }}>Save workflow</DropdownMenuItem>
                           )}
                           {voiceOutputAvailable && (
                             <DropdownMenuCheckboxItem
@@ -2688,9 +2850,12 @@ export default function ProjectExperienceShell({
                   <div className="flex items-center gap-2">
                     <FileText className="h-3 w-3 text-cyan-300" />
                     <span className="min-w-0 flex-1 truncate font-ui text-[13px]">{resource.label}</span>
-                    <button onClick={() => void updateProjectResource(home.project.id, resource.id, { contextMode: resource.contextMode === "project" ? "on_demand" : "project" }).then(() => invalidate(home.project.id))} className="font-terminal text-[10px] text-muted-foreground hover:text-foreground">
-                      {resource.contextMode === "project" ? "AUTO" : "ASK"}
-                    </button>
+                    <label className="min-w-0 text-xs text-muted-foreground">
+                      <span className="sr-only">Context mode for {resource.label}</span>
+                      <select value={resource.contextMode} disabled={contextUpdateBusy} onChange={event => void reviewResourceContext(resource, event.target.value as ProjectResourceContextMode)} className="min-h-10 max-w-full rounded border border-border bg-background px-2 py-1">
+                        {PROJECT_RESOURCE_CONTEXT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
                   </div>
                 </div>
               ))}

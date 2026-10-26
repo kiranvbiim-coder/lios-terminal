@@ -11,6 +11,13 @@ import { planManagedRuntimeRepair } from "./doctorRepairPlan";
 import { getEnvironmentSetupStatus } from "./environmentSetupService";
 import { inspectRunningPythonService } from "./pythonService";
 
+let strictProvisioningAuthorityAvailable = false;
+
+/** Server bootstrap observation only; this does not grant repair or execution. */
+export function configureRuntimeDoctorProvisioning(available: boolean): void {
+  strictProvisioningAuthorityAvailable = available;
+}
+
 const tenantSchema = z.object({
   userId: z.number().int().positive(),
   organizationId: z.number().int().positive().nullable(),
@@ -24,7 +31,7 @@ export function inspectRuntimeDoctor() {
     pythonAvailable: managedRuntimePythonPath() !== null,
     requiredPackIds: ["core"],
   });
-  const repair = planManagedRuntimeRepair(readiness, { isolationMode: "strict" });
+  const repair = planManagedRuntimeRepair(readiness, { isolationMode: "strict", strictProvisioningAuthorityAvailable });
   return { readiness, repair, mutationPerformed: false as const, credentialValuesExposed: false as const };
 }
 

@@ -14,6 +14,7 @@ import crypto from "node:crypto";
 import { aiChatVerificationAttemptId, beginAIChatVerification, hasAIChatVerification, publishAIChatVerification, recordConnectorVerification, type AIChatVerificationAttempt } from "./connectorVerification";
 import { getRequestIdentity } from "./requestContext";
 import { getEnvironmentSetupForUser } from "./environmentSetupService";
+import { acceptsAIConnectionAcknowledgement, issueAIConnectionChallenge } from "./aiVerificationChallenge";
 
 export interface AIProviderVerificationResult {
   ok: true;
@@ -94,12 +95,13 @@ export async function verifyAIProviderConnection(
     }
   }
   const startedAt = Date.now();
+  const challenge = issueAIConnectionChallenge();
   const result = await invoker({
     provider,
     ...(model ? { model } : {}),
     system: "You are a connectivity probe for LiOS. Reply with a very short acknowledgement only.",
-    messages: [{ role: "user", content: "Reply exactly with LIOS_AI_OK." }],
-    maxTokens: 16,
+    messages: [{ role: "user", content: `Reply exactly with ${challenge}.` }],
+    maxTokens: 64,
     dataClassification: "public",
     enterpriseApproval: true,
   });
@@ -121,10 +123,9 @@ export async function verifyAIProviderConnection(
   if (!result.text.trim()) {
     throw new AIProviderError("empty_completion", config.name + " returned an empty completion.", { provider });
   }
-  // Metadata can match while a proxy returns arbitrary prose; require the public
-  // low-cost challenge before claiming a live connection (quoting/punctuation only).
-  const acknowledgement = result.text.trim().replace(/^["'`]+|["'`.!]+$/g, "").trim();
-  if (acknowledgement !== "LIOS_AI_OK") {
+  // Readiness requires a fresh acknowledgement for this attempt, not a cached
+  // static OK reply. Exact selected-provider/model and vault fences still apply.
+  if (!acceptsAIConnectionAcknowledgement(result.text, challenge)) {
     throw new AIProviderError("upstream_error", config.name + " did not complete the LiOS connection verification challenge.", { provider });
   }
   if (localModelIdentity !== undefined && result.localModelIdentity !== localModelIdentity) {

@@ -31,7 +31,6 @@ import { getCoverageMap } from "./dataCoverageRegistry";
 import { getProviderStatuses } from "./providerStatus";
 import { resolveEntity } from "./entityResolver";
 import { calculatePortfolioAnalytics } from "./portfolioAnalytics";
-import { appendMemory, getMemoryContext } from "./aiMemory";
 import { auditLog } from "./auditLog";
 import { validateKey, generateKey } from "./apiKey";
 import { registerAuthRoutes, registerClientAuthRoutes, requireAuth, requireInternal, requireRole } from "./auth";
@@ -51,6 +50,7 @@ import { registerTrialRoutes } from "./trialAccess";
 import { registerPublicRoutes } from "./publicRoutes";
 import { registerEnvironmentSetupRoutes } from "./environmentSetupRoutes";
 import { resolvePackagedNativeRuntimeBundleAuthority } from "./nativeRuntimeBundle";
+import { configureRuntimeDoctorProvisioning } from "./runtimeDoctorTool";
 import { registerSourceConnectionRoutes } from "./sourceConnectionRoutes";
 import { registerSourceRegistryRoutes } from "./sourceRegistryRoutes";
 import { registerProjectRoutes } from "./projectRoutes";
@@ -211,6 +211,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.warn("Native runtime bundle verification failed; provisioning is disabled.");
     }
   }
+  configureRuntimeDoctorProvisioning(Boolean(nativeProvisioning));
   registerEnvironmentSetupRoutes(app, {
     ...(nativeProvisioning ? { strictProvisioningAuthority: nativeProvisioning } : {}),
     ...(nativeProvisioningInvalid ? { provisioningBlocker: "native_runtime_bundle_invalid" as const } : {}),
@@ -636,14 +637,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (await rejectIfMasterAiOff(req, res)) return;
 
     await storage.addChatMessage(req.user!.id, { role: "user", content: message });
-    await appendMemory({ ts: new Date().toISOString(), role: "user", content: message });
     auditLog("chat_user_message", { messageLength: message.length });
 
     const intent = classifyAskLiosIntent(message);
     if (intent.kind === "compute") {
       const fullContent = formatAskLiosDelegation(intent);
       await storage.addChatMessage(req.user!.id, { role: "assistant", content: fullContent });
-      await appendMemory({ ts: new Date().toISOString(), role: "assistant", content: fullContent });
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
@@ -709,7 +708,9 @@ You can control the client's terminal workspace by appending navigation commands
 - To update both: <<NAVIGATE: SYMBOL, VIEW_MODE>> (e.g. <<NAVIGATE: AAPL, options>>)
 Available VIEW_MODE choices: market, quote, chart, news, agent, screener, watchlist, alerts, economics, portfolio, ising, optimizer, valuation, fixedincome, fractal, risknetwork, filingintel, sentiment, macrostress.`;
 
-      systemPrompt += await getMemoryContext();
+      // Owner decision (2026-10-26): no hidden cross-Chat recall. This
+      // assistant keeps its own visible thread history only; durable
+      // memories are created/changed solely by explicit, confirmed Chat tools.
 
       if (typeof magnetization === "number") {
         systemPrompt += `\n\n[TRADER SOCIAL CONTAGION HERD STATE (ISING CONSENSUS): ${magnetization.toFixed(2)}]`;
@@ -731,7 +732,6 @@ Available VIEW_MODE choices: market, quote, chart, news, agent, screener, watchl
       res.write(`data: ${JSON.stringify({ text: fullContent })}\n\n`);
 
       await storage.addChatMessage(req.user!.id, { role: "assistant", content: fullContent });
-      await appendMemory({ ts: new Date().toISOString(), role: "assistant", content: fullContent });
       auditLog("chat_assistant_message", { contentLength: fullContent.length, provider });
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     } catch (err) {
@@ -973,7 +973,6 @@ Welcome to the Limuria Intelligence Terminal command engine. I can help you anal
       }
 
       await storage.addChatMessage(req.user!.id, { role: "assistant", content: msg });
-      await appendMemory({ ts: new Date().toISOString(), role: "assistant", content: msg });
       auditLog("chat_assistant_fallback_message", { contentLength: msg.length });
       res.write(`data: ${JSON.stringify({ text: msg, done: true })}\n\n`);
     }

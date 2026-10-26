@@ -970,6 +970,7 @@ app.whenReady().then(async () => {
     const updateStatus = configureAutoUpdater({
       updater: autoUpdater,
       isPackaged: app.isPackaged,
+      releaseChannel: require("./package.json").liosReleaseChannel || "production",
       log: logToFile,
     });
     logToFile(`whenReady: auto-updater ${updateStatus.enabled ? "enabled" : "disabled"}${updateStatus.reason ? ` (${updateStatus.reason})` : ""}`);

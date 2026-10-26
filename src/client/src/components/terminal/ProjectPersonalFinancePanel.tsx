@@ -83,7 +83,7 @@ function Field({
   step?: number;
 }) {
   return (
-    <label className="min-w-0 font-ui text-[10px] text-muted-foreground">
+    <label className="min-w-0 font-ui text-xs text-muted-foreground">
       <span className="mb-1 block">{label}</span>
       <input
         type={type}
@@ -91,7 +91,7 @@ function Field({
         min={min}
         step={step}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-border/60 bg-black/25 px-2.5 py-2 font-ui text-[11px] text-foreground outline-none focus:border-amber-300/45"
+        className="min-h-10 w-full rounded-md border border-border/60 bg-black/25 px-2.5 py-2 font-ui text-sm text-foreground outline-none focus:border-amber-300/45"
       />
     </label>
   );
@@ -109,14 +109,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border/55 bg-black/15 p-3">
+    <section aria-label={title} className="rounded-xl border border-border/55 bg-black/15 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-ui text-[11px] font-semibold text-foreground">{title}</div>
-          <div className="mt-1 font-ui text-[10px] leading-4 text-muted-foreground">{detail}</div>
+          <div className="font-ui text-sm font-semibold text-foreground">{title}</div>
+          <div className="mt-1 font-ui text-xs leading-5 text-muted-foreground">{detail}</div>
         </div>
         {onAdd && (
-          <button type="button" onClick={onAdd} className="rounded-md border border-border/60 px-2.5 py-1.5 font-ui text-[10px] text-foreground hover:border-amber-300/30">
+          <button type="button" aria-label={`Add ${title.toLowerCase()}`} onClick={onAdd} className="min-h-10 rounded-md border border-border/60 px-2.5 py-1.5 font-ui text-sm text-foreground hover:border-amber-300/30">
             + Add
           </button>
         )}
@@ -129,32 +129,39 @@ function Section({
 export function ProjectPersonalFinancePanel({
   projectId,
   onAnalyze,
+  stageOnly = false,
+  initialProfile,
 }: {
-  projectId: number;
+  projectId: number | null;
   onAnalyze: (profile: P6PersonalFinanceRequest) => void;
+  stageOnly?: boolean;
+  initialProfile?: P6PersonalFinanceRequest | null;
 }) {
   const queryClient = useQueryClient();
   const profileQuery = useQuery<PersonalFinanceProfileResponse>({
     queryKey: ["/api/projects", projectId, "personal-finance-profile"],
+    enabled: projectId !== null && !stageOnly,
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/personal-finance-profile`);
       if (!res.ok) throw new Error("Unable to load Personal Finance profile.");
       return res.json();
     },
   });
-  const [profile, setProfile] = useState<P6PersonalFinanceRequest>(blankProfile);
+  const [profile, setProfile] = useState<P6PersonalFinanceRequest>(() => initialProfile ?? blankProfile());
   const [snapshot, setSnapshot] = useState<PersonalFinanceSnapshot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (stageOnly) return;
     if (profileQuery.data?.profile) setProfile(profileQuery.data.profile);
     else if (profileQuery.data && !profileQuery.data.profile) setProfile(blankProfile());
-  }, [profileQuery.data]);
+  }, [profileQuery.data, stageOnly]);
 
   const baseCurrency = useMemo(() => profile.accounts[0]?.currency ?? profile.debts[0]?.currency ?? profile.goals[0]?.currency ?? "INR", [profile]);
 
   const save = async (next = profile): Promise<P6PersonalFinanceRequest> => {
+    if (projectId === null || stageOnly) throw new Error("This input editor does not save a Project profile.");
     const parsed = p6PersonalFinanceRequestSchema.parse(next);
     const res = await apiRequest("PUT", `/api/projects/${projectId}/personal-finance-profile`, parsed);
     const body = await res.json() as PersonalFinanceProfileResponse;
@@ -186,9 +193,9 @@ export function ProjectPersonalFinancePanel({
     setBusy(true);
     setNotice(null);
     try {
-      const validated = await save();
+      const validated = stageOnly ? p6PersonalFinanceRequestSchema.parse(profile) : await save();
       onAnalyze(validated);
-      setNotice("Profile staged for one governed Personal Finance conversation request.");
+      setNotice(stageOnly ? "Inputs staged for this Chat. Choose Send to calculate." : "Profile staged for one governed Personal Finance conversation request.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to stage Personal Finance analysis.");
     } finally {
@@ -210,13 +217,13 @@ export function ProjectPersonalFinancePanel({
   };
 
   return (
-    <details className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4" data-personal-finance-project-surface="true">
+    <details open={stageOnly ? true : undefined} className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.025] p-4" data-personal-finance-project-surface="true">
       <summary className="cursor-pointer list-none">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="font-ui text-[12px] font-semibold text-foreground">Personal Finance & Wealth</div>
             <div className="mt-1 max-w-2xl font-ui text-[10px] leading-4 text-muted-foreground">
-              User-owned accounts, transactions, debt, goals and retirement assumptions. Saved locally with this Project as an excluded resource; never added to ordinary AI context automatically.
+              {stageOnly ? "Enter only values you know. Inputs stay in this Chat draft until you choose Send; no Project profile is saved and no model is called by this form." : "User-owned accounts, transactions, debt, goals and retirement assumptions. Saved locally with this Project as an excluded resource; never added to ordinary AI context automatically."}
             </div>
           </div>
           <span className="rounded-full border border-emerald-300/20 px-2.5 py-1 font-terminal text-[10px] text-emerald-200">DETERMINISTIC</span>
@@ -363,9 +370,11 @@ export function ProjectPersonalFinancePanel({
 
         {notice && <div role="status" className="font-ui text-[10px] text-muted-foreground">{notice}</div>}
         <div className="flex flex-wrap justify-end gap-2 border-t border-border/45 pt-3">
-          <button type="button" disabled={busy} onClick={() => void save().then(() => setNotice("Personal Finance profile saved to this Project.")).catch((error) => setNotice(error instanceof Error ? error.message : "Unable to save profile."))} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[10px] text-foreground disabled:opacity-40">Save profile</button>
-          <button type="button" disabled={busy} onClick={() => void runPreview()} className="rounded-md border border-emerald-300/25 px-3 py-2 font-ui text-[10px] text-emerald-200 disabled:opacity-40">Run deterministic snapshot</button>
-          <button type="button" disabled={busy} onClick={() => void analyze()} className="rounded-md bg-amber-300 px-3 py-2 font-ui text-[10px] font-semibold text-black disabled:opacity-40">Analyze in Project chat</button>
+          {!stageOnly && <>
+            <button type="button" disabled={busy} onClick={() => void save().then(() => setNotice("Personal Finance profile saved to this Project.")).catch((error) => setNotice(error instanceof Error ? error.message : "Unable to save profile."))} className="rounded-md border border-border/60 px-3 py-2 font-ui text-[10px] text-foreground disabled:opacity-40">Save profile</button>
+            <button type="button" disabled={busy} onClick={() => void runPreview()} className="rounded-md border border-emerald-300/25 px-3 py-2 font-ui text-[10px] text-emerald-200 disabled:opacity-40">Run deterministic snapshot</button>
+          </>}
+          <button type="button" disabled={busy} onClick={() => void analyze()} className="min-h-10 rounded-md bg-amber-300 px-3 py-2 font-ui text-sm font-semibold text-black disabled:opacity-40">{stageOnly ? "Stage inputs for this Chat" : "Analyze in Project chat"}</button>
         </div>
       </div>
     </details>

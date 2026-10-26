@@ -113,14 +113,15 @@ function isFreshNotification(
   return ageMs >= 0 && ageMs <= freshnessMs;
 }
 
-async function resolvePermission(port: P9DesktopNotificationPort): Promise<P9DesktopNotificationPermission> {
-  if (port.permission !== "default") return port.permission;
-  if (!port.requestPermission) return "unsupported";
-  try {
-    return await port.requestPermission();
-  } catch {
-    return "unsupported";
-  }
+/** Only a direct foreground gesture may request native OS permission. */
+export function requestP9DesktopPermissionFromGesture(): Promise<P9DesktopNotificationPermission> {
+  const port = createBrowserP9DesktopNotificationPort();
+  if (port.permission !== "default" || !port.requestPermission) return Promise.resolve(port.permission);
+  return port.requestPermission().catch(() => "unsupported");
+}
+
+export function p9DesktopPermissionState(): P9DesktopNotificationPermission {
+  return createBrowserP9DesktopNotificationPort().permission;
 }
 
 export async function deliverP9DesktopNotifications(
@@ -163,11 +164,9 @@ export async function deliverP9DesktopNotifications(
       continue;
     }
 
-    // Resolve Chromium/Electron's default notification permission before the
-    // durable delivery claim. A denied request therefore leaves the canonical
-    // id unclaimed and still available inside LiOS rather than pretending an
-    // OS alert was attempted.
-    if (resolvedPermission === null) resolvedPermission = await resolvePermission(port);
+    // Passive delivery never prompts for permission. A user must opt in from
+    // the foreground Project notification history before a native claim.
+    if (resolvedPermission === null) resolvedPermission = port.permission;
     if (resolvedPermission !== "granted") {
       result.unavailable += 1;
       continue;
@@ -244,7 +243,11 @@ export function createBrowserP9DesktopNotificationPort(): P9DesktopNotificationP
 
   return {
     permission,
-    requestPermission: async () => window.Notification.requestPermission() as Promise<P9DesktopNotificationPermission>,
+    requestPermission: async () => {
+      if (!authorized()) return "unsupported";
+      const choice = await window.Notification.requestPermission() as P9DesktopNotificationPermission;
+      return authorized() ? choice : "unsupported";
+    },
     claimDelivery: (id) => {
       // A session switch invalidates ports created for the previous principal,
       // including an in-flight permission prompt that resolved after logout.

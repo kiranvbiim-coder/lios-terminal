@@ -1,5 +1,6 @@
 import { addressForSelection, formatLiosAddress, parseLiosAddress } from "@shared/liosAddress";
 import { resolveInitialSelection } from "./projectEntry";
+import { shouldClearSavedChatAddress } from "./chatPersistenceBoundary";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
@@ -165,6 +166,9 @@ export function useProjectSelection(): {
     const address = addressForSelection({ projectId, chatId });
     const next = address ? formatLiosAddress(address) : null;
     if (next && window.location.hash !== next) window.history.replaceState(null, "", next);
+    else if (shouldClearSavedChatAddress({ projectId, chatId }, parseLiosAddress(window.location.hash) !== null)) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/`);
+    }
   }, [projectId, chatId]);
 
   useEffect(() => {
@@ -259,11 +263,12 @@ export function useProjectChatMessages(chatId: number | null) {
   });
 }
 
-export function useProjectResources(projectId: number | null) {
+export function useProjectResources(projectId: number | null, status: ProjectLifecycleStatus = "active") {
   return useQuery<ProjectResource[]>({
-    queryKey: ["/api/projects", projectId, "resources"],
+    queryKey: status === "active" ? ["/api/projects", projectId, "resources"] : ["/api/projects", projectId, "resources", status],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}/resources`);
+      const suffix = status === "trash" ? "?trash=true" : status === "archived" ? "?archived=true" : "";
+      const res = await fetch(`/api/projects/${projectId}/resources${suffix}`);
       if (!res.ok) throw new Error("Failed to load Project resources.");
       return res.json();
     },
@@ -283,11 +288,11 @@ export function useAllProjectChats(status: ProjectLifecycleStatus = "active", en
   });
 }
 
-export function useProjectSessions(projectId: number | null) {
+export function useProjectSessions(projectId: number | null, status: ProjectLifecycleStatus = "active") {
   return useQuery<ProjectSession[]>({
-    queryKey: ["/api/projects", projectId, "sessions"],
+    queryKey: status === "active" ? ["/api/projects", projectId, "sessions"] : ["/api/projects", projectId, "sessions", status],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}/sessions`);
+      const res = await fetch(`/api/projects/${projectId}/sessions?status=${status}`);
       if (!res.ok) throw new Error("Failed to load Sessions.");
       return res.json();
     },
@@ -388,6 +393,7 @@ export async function createProjectResource(projectId: number, input: {
 export async function updateProjectResource(projectId: number, resourceId: string, patch: {
   label?: string;
   contextMode?: ProjectResource["contextMode"];
+  expectedUpdatedAt?: string;
   archived?: boolean;
 }): Promise<ProjectResource> {
   return (await apiRequest("PATCH", `/api/projects/${projectId}/resources/${encodeURIComponent(resourceId)}`, patch)).json();

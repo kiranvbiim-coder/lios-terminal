@@ -300,19 +300,6 @@ export async function appendDurableMemory(input: DurableMemoryInput): Promise<Du
   return existing;
 }
 
-/** Compatibility adapter for the legacy /api/chat caller. */
-export async function appendMemory(entry: MemoryEntry): Promise<DurableMemoryRow | null> {
-  return appendDurableMemory({
-    content: entry.content,
-    kind: "conversation_turn",
-    role: entry.role,
-    originClass: originClassForRole(entry.role),
-    originKind: "chat_turn",
-    epistemicStatus: "observed",
-    observedAt: entry.ts,
-  });
-}
-
 export async function listDurableMemories(input: { projectId?: number | null; limit?: number } = {}): Promise<DurableMemoryRow[]> {
   const identity = currentIdentity();
   if (!identity) return [];

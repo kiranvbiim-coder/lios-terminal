@@ -217,7 +217,10 @@ export function deserializeWorkspace(value: string | null, audience: WorkspaceAu
 export function loadWorkspaceFromUrl(search?: string, audience: WorkspaceAudience = "internal"): WorkspaceState | null {
   if (typeof window === "undefined" && search === undefined) return null;
   const params = new URLSearchParams(search ?? window.location.search);
-  return deserializeWorkspace(params.get("ws"), audience);
+  const raw = params.get("ws");
+  if (!raw || raw.length > 10_000) return null;
+  const decoded = deserializeWorkspace(raw, audience);
+  return decoded ? workspaceForShare(decoded) : null;
 }
 
 export function serializeWorkspace(workspace: WorkspaceState): string {
@@ -242,8 +245,12 @@ export function workspaceForShare(workspace: WorkspaceState): WorkspaceState {
 export function buildWorkspaceShareUrl(workspace: WorkspaceState, currentUrl?: string): string {
   const base = currentUrl ?? (typeof window !== "undefined" ? window.location.href : "http://localhost/");
   const url = new URL(base);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("This local application URL is not a shareable public workspace link.");
+  }
   url.username = "";
   url.password = "";
+  url.pathname = "/";
   url.search = "";
   url.hash = "#/";
   url.searchParams.set("ws", serializeWorkspace(workspaceForShare(workspace)));

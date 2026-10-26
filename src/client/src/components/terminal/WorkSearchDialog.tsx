@@ -9,6 +9,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSelect: (result: WorkSearchResult) => boolean | Promise<boolean>;
+  opener?: HTMLElement | null;
 }
 
 const KIND_LABEL: Record<WorkSearchResult["kind"], string> = {
@@ -25,7 +26,7 @@ function ResultIcon({ kind }: { kind: WorkSearchResult["kind"] }) {
   return <FileText className="h-4 w-4" />;
 }
 
-export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
+export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WorkSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,14 +42,14 @@ export default function WorkSearchDialog({ open, onClose, onSelect }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    returnFocus.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setQuery("");
     setResults([]);
     setFilter("all");
     setError(null);
     setSelected(0);
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [open]);
+  }, [open, opener]);
 
   useEffect(() => {
     if (!open) return;

@@ -97,7 +97,8 @@ test("local first-user setup requires explicit listing and chat proof, preserves
       const servedModel = servedModelOverride === undefined
         ? url.pathname === "/api/chat" ? localModel.name : studioModelKey
         : servedModelOverride;
-      return new Response(JSON.stringify({ ...(servedModel === null ? {} : { model: servedModel }), message: { content: "LIOS_AI_OK" }, choices: [{ message: { content: "LIOS_AI_OK" } }] }));
+      const acknowledgement = String(init?.body).match(/LIOS_AI_OK_[a-f0-9]{24}/)?.[0] ?? "LIOS_AI_OK";
+      return new Response(JSON.stringify({ ...(servedModel === null ? {} : { model: servedModel }), message: { content: acknowledgement }, choices: [{ message: { content: acknowledgement } }] }));
     }
     throw new Error(`Unexpected outbound path ${url.pathname}`);
   }) as typeof fetch;

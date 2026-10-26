@@ -1,0 +1,35 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
+const test = require("node:test");
+const sign = require("./signBetaMac.cjs");
+
+test("beta signing covers resource Mach-O code while retaining hash-pinned runtime bytes", { skip: process.platform !== "darwin" }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-beta-code-signing-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = path.join(root, "Beta.app");
+  const contents = path.join(app, "Contents");
+  const resources = path.join(contents, "Resources");
+  fs.mkdirSync(path.join(contents, "MacOS"), { recursive: true });
+  fs.mkdirSync(path.join(resources, "native-runtime-dist"), { recursive: true });
+  fs.copyFileSync("/bin/echo", path.join(contents, "MacOS", "Beta"));
+  const helper = path.join(resources, "helper");
+  const pinned = path.join(resources, "native-runtime-dist", "python");
+  fs.copyFileSync("/bin/echo", helper);
+  fs.copyFileSync("/bin/echo", pinned);
+  const hash = filename => crypto.createHash("sha256").update(fs.readFileSync(filename)).digest("hex");
+  const originalPinned = hash(pinned);
+  fs.writeFileSync(path.join(contents, "Info.plist"), '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.limuria.terminal</string><key>CFBundleExecutable</key><string>Beta</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>');
+  await sign({ app, platform: "darwin", identity: "-" });
+  assert.equal(hash(pinned), originalPinned);
+  const metadata = spawnSync("/usr/bin/codesign", ["-d", "--verbose=4", "--entitlements", ":-", helper], { encoding: "utf8" });
+  assert.equal(metadata.status, 0, metadata.stderr);
+  assert.match(metadata.stderr, /Signature=adhoc/);
+  assert.match(metadata.stderr, /flags=.*runtime/);
+  assert.match(metadata.stdout, /com.apple.security.cs.disable-library-validation/);
+  assert.equal(spawnSync("/usr/bin/codesign", ["--verify", "--strict", helper]).status, 0);
+  await assert.rejects(sign({ app, platform: "darwin", identity: "paid-identity" }), /only accepts/);
+});

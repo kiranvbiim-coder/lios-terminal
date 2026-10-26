@@ -14,7 +14,7 @@ test("live AI verification uses a tiny public probe and returns safe metadata", 
       return {
         provider: "openai",
         model: request.model ?? "gpt-4o-mini",
-        text: "LIOS_AI_OK",
+        text: request.messages[0].content.match(/LIOS_AI_OK_[a-f0-9]{24}/)![0],
         attribution: {
           id: "11111111-1111-4111-8111-111111111111",
           provider: "openai",
@@ -36,7 +36,7 @@ test("live AI verification uses a tiny public probe and returns safe metadata", 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].dataClassification, "public");
   assert.equal(calls[0].enterpriseApproval, true);
-  assert.equal(calls[0].maxTokens, 16);
+  assert.ok(calls[0].maxTokens! > 0 && calls[0].maxTokens! <= 64, "readiness probe has a bounded output budget");
   assert.match(calls[0].messages[0].content, /LIOS_AI_OK/);
 });
 
@@ -172,9 +172,9 @@ test("GM12 a nonempty but incorrect AI acknowledgement is not a verified model c
 });
 
 test("GM12 minor model acknowledgement punctuation does not produce a false negative", async () => {
-  for (const text of ["  LIOS_AI_OK  ", '"LIOS_AI_OK"', "LIOS_AI_OK."]) {
-    const result = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async () => ({
-      provider: "openai", model: "gpt-4o-mini", text,
+  for (const format of [(text: string) => `  ${text}  `, (text: string) => `"${text}"`, (text: string) => `${text}.`]) {
+    const result = await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, async (request) => ({
+      provider: "openai", model: "gpt-4o-mini", text: format(request.messages[0].content.match(/LIOS_AI_OK_[a-f0-9]{24}/)![0]),
       attribution: {
         id: "77777777-7777-4777-8777-777777777777",
         provider: "openai", model: "gpt-4o-mini",
@@ -184,4 +184,25 @@ test("GM12 minor model acknowledgement punctuation does not produce a false nega
     }));
     assert.equal(result.ok, true);
   }
+});
+
+test("a captured acknowledgement from a previous probe cannot verify a new attempt", async () => {
+  let captured = "";
+  const reply: AIProviderVerificationInvoker = async request => {
+    const current = request.messages[0].content.match(/LIOS_AI_OK_[a-f0-9]{24}/)![0];
+    captured ||= current;
+    return {
+      provider: "openai", model: "gpt-4o-mini", text: captured,
+      attribution: {
+        id: "88888888-8888-4888-8888-888888888888", provider: "openai", model: "gpt-4o-mini",
+        promptHash: "a".repeat(64), outputHash: "b".repeat(64),
+        toolsCalled: [], dataAccessed: [], timestamp: new Date().toISOString(),
+      },
+    };
+  };
+  await verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, reply);
+  await assert.rejects(
+    verifyAIProviderConnection({ provider: "openai", model: "gpt-4o-mini" }, reply),
+    /did not complete the LiOS connection verification challenge/,
+  );
 });

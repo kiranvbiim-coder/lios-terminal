@@ -54,18 +54,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         {needsReview ? <AlertTriangle className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" /> : <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />}
         <span className="font-terminal text-[12px] uppercase tracking-[0.18em] text-muted-foreground">{needsReview ? "Evidence needs review" : "Trust"}</span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          {titleCase(summary.freshness)}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          Quality {summary.quality}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-foreground">
-          Confidence {summary.confidence}
-        </span>
-        <span className="rounded-full border border-border/50 px-2 py-1 font-terminal text-[12px] uppercase text-muted-foreground">
-          Evidence {summary.evidenceCoveragePct.toFixed(0)}%
-        </span>
+        <span className="font-ui text-xs text-muted-foreground">{manifest.evidence.length} recorded evidence item{manifest.evidence.length === 1 ? "" : "s"}</span>
         {summary.conflictState !== "none" && (
           <span className="rounded-full border border-amber-300/20 px-2 py-1 font-terminal text-[12px] uppercase text-amber-200">
             {summary.conflictState === "not_evaluated_single_source" ? "Conflict not evaluated" : `Conflict ${summary.conflictState}`}
@@ -89,6 +78,9 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
 
       {expanded && (
         <div className="grid gap-3 border-t border-border/45 px-3 py-3 md:grid-cols-2">
+          <p className="font-ui text-xs text-muted-foreground md:col-span-2">
+            Freshness: {titleCase(summary.freshness)} · quality: {summary.quality} · confidence: {summary.confidence} · evidence coverage: {summary.evidenceCoveragePct.toFixed(0)}%
+          </p>
           <section>
             <div className="flex items-center gap-1.5 font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
               <Database className="h-3 w-3" /> Sources

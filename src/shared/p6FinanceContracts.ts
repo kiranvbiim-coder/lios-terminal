@@ -2,6 +2,9 @@ import { z } from "zod";
 
 export const P6_FINANCE_SCHEMA_VERSION = "1" as const;
 
+/** Explicit user action: open the existing input editor, never auto-run a calculation. */
+export const P6_PERSONAL_FINANCE_INPUT_ACTION = "Enter personal-finance inputs";
+
 export const financeWorkflowFamilySchema = z.enum([
   "company_fundamentals",
   "valuation",

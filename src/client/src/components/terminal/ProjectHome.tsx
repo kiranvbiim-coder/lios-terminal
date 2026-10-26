@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Send } from "lucide-react";
 import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
-import type { Project, ProjectChat, ProjectResource, ProjectSession } from "@/lib/useProjects";
+import { trashProjectResource, trashProjectSession, updateProjectResource, updateProjectSession, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
+import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
 import {
   VISUAL_ENVIRONMENTS,
   dispatchVisualContext,
@@ -17,6 +19,7 @@ import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 
 export function relativeTime(value: string): string {
   const ms = Math.max(0, Date.now() - new Date(value).getTime());
@@ -56,7 +59,7 @@ export function ProjectHome({
   onNewChat: (starterPrompt?: string) => void;
   onOpenSession: (session: ProjectSession) => void;
   onOpenWorkbench: () => void;
-  onRenameProject: (name: string) => void;
+  onRenameProject: (name: string) => Promise<void>;
   onTogglePin: () => void;
   onArchiveProject: () => void;
   onRestoreProject: () => void;
@@ -67,18 +70,96 @@ export function ProjectHome({
   onAnalyzePersonalFinance: (profile: P6PersonalFinanceRequest) => void;
   onOpenContext: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const chatsQuery = useProjectChats(project.id);
+  const resourcesQuery = useProjectResources(project.id);
+  const sessionsQuery = useProjectSessions(project.id);
+  const projectChats = chatsQuery.data ?? chats;
+  const projectResources = resourcesQuery.data ?? resources;
+  const projectSessions = sessionsQuery.data ?? sessions;
+  const [visibleWorkCount, setVisibleWorkCount] = useState(12);
+  const collectionsPending = chatsQuery.isPending || resourcesQuery.isPending || sessionsQuery.isPending;
+  const collectionsFailed = chatsQuery.isError || resourcesQuery.isError || sessionsQuery.isError;
+  const [workQuery, setWorkQuery] = useState("");
+  const [pendingContext, setPendingContext] = useState<{ projectId: number; resourceId: string; from: ProjectResourceContextMode; to: ProjectResourceContextMode } | null>(null);
+  const [contextBusy, setContextBusy] = useState(false);
+  const [contextNotice, setContextNotice] = useState<string | null>(null);
+  const contextSaveInFlight = useRef(false);
+  const selectedProjectId = useRef(project.id);
+  selectedProjectId.current = project.id;
+  const found = useMemo(() => findProjectHomeItems(project.id, projectChats, projectResources, projectSessions, workQuery), [project.id, projectChats, projectResources, projectSessions, workQuery]);
+  useEffect(() => { setVisibleWorkCount(12); }, [project.id, workQuery]);
+
+  async function confirmContextUpdate() {
+    const draft = pendingContext;
+    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id) return;
+    const resource = projectResources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
+    if (!resource || resource.contextMode !== draft.from || !mayEditProjectResourceContext(draft.projectId, resource, draft.to)) {
+      setPendingContext(null);
+      setContextNotice("Resource details changed. Reopen this Project's context to review the latest saved state.");
+      return;
+    }
+    contextSaveInFlight.current = true;
+    setContextBusy(true);
+    setContextNotice(null);
+    try {
+      const saved = await updateProjectResource(draft.projectId, draft.resourceId, { contextMode: draft.to, expectedUpdatedAt: resource.updatedAt });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "home"], exact: true }),
+        queryClient.invalidateQueries({ queryKey: ["/api/projects", draft.projectId, "resources"], exact: true }),
+      ]);
+      if (selectedProjectId.current !== draft.projectId) return;
+      setContextNotice(saved.projectId === draft.projectId && saved.id === draft.resourceId && saved.contextMode === draft.to
+        ? "Context mode saved for this Project resource. Source rights and retrieval permissions still apply."
+        : "The server did not confirm this exact Project resource and mode. Reload before relying on the change.");
+      setPendingContext(null);
+    } catch {
+      if (selectedProjectId.current === draft.projectId) setContextNotice("Resource context change was not confirmed. Refresh this Project before retrying.");
+    } finally {
+      contextSaveInFlight.current = false;
+      if (selectedProjectId.current === draft.projectId) setContextBusy(false);
+    }
+  }
+
   const [editingName, setEditingName] = useState(false);
   const [projectDepthOpen, setProjectDepthOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
+  const renameInFlight = useRef(false);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const saveName = async () => {
+    const next = nameDraft.trim();
+    const originalProject = project.id;
+    if (!next || renameInFlight.current) return;
+    renameInFlight.current = true;
+    setRenameBusy(true);
+    setRenameError(null);
+    try {
+      await onRenameProject(next);
+      if (selectedProjectId.current === originalProject) setEditingName(false);
+    } catch (cause) {
+      if (selectedProjectId.current === originalProject) setRenameError(cause instanceof Error ? cause.message : "Project rename was not confirmed. Your draft is retained.");
+    } finally {
+      renameInFlight.current = false;
+      if (selectedProjectId.current === originalProject) setRenameBusy(false);
+    }
+  };
   const [environmentId, setEnvironmentId] = useState<VisualEnvironmentId | "">(
     () => getProjectVisualEnvironmentPin(project.id) ?? "",
   );
   useEffect(() => {
     setNameDraft(project.name);
+    setWorkQuery("");
+    setPendingContext(null);
+    setContextNotice(null);
+    setContextBusy(false);
     setEditingName(false);
     setProjectDepthOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
-  }, [project.id, project.name]);
+    setRenameBusy(false);
+    setRenameError(null);
+  }, [project.id]);
+  useEffect(() => { if (!editingName && !renameInFlight.current) setNameDraft(project.name); }, [project.name, editingName]);
 
   return (
     <div className="lios-project-home-surface h-full overflow-y-auto px-6 py-6 lg:px-10">
@@ -91,18 +172,17 @@ export function ProjectHome({
                 <input
                   autoFocus
                   value={nameDraft}
+                  disabled={renameBusy}
                   onChange={(event) => setNameDraft(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && nameDraft.trim()) {
-                      onRenameProject(nameDraft.trim());
-                      setEditingName(false);
-                    }
-                    if (event.key === "Escape") setEditingName(false);
+                    if (event.nativeEvent.isComposing) return;
+                    if (event.key === "Enter") { event.preventDefault(); void saveName(); }
+                    if (event.key === "Escape" && !renameInFlight.current) setEditingName(false);
                   }}
-                  className="min-w-[280px] border-b border-amber-300/40 bg-transparent font-ui text-2xl font-semibold text-foreground outline-none"
+                  className="min-w-0 max-w-full flex-1 border-b border-amber-300/40 bg-transparent font-ui text-2xl font-semibold text-foreground outline-none"
                   aria-label="Project name"
                 />
-                <button onClick={() => { if (nameDraft.trim()) onRenameProject(nameDraft.trim()); setEditingName(false); }} className="font-ui text-[12px] text-amber-200">Save</button>
+                <button type="button" disabled={renameBusy || !nameDraft.trim()} onClick={() => void saveName()} className="min-h-10 font-ui text-sm text-amber-200">{renameBusy ? "Saving…" : "Save"}</button>
               </div>
             ) : (
               <div className="mt-2 flex items-center gap-2">
@@ -122,6 +202,7 @@ export function ProjectHome({
                 />
               </div>
             )}
+            {renameError && <p role="alert" className="mt-2 text-sm text-red-200">{renameError}</p>}
             <p className="mt-2 max-w-2xl font-ui text-[14px] leading-5 text-muted-foreground">
               {project.instructions || "Keep this Project focused. Add instructions, connected resources and Sessions as the work develops."}
             </p>
@@ -193,14 +274,21 @@ export function ProjectHome({
         </section>
 
 
+        <section aria-label="Find work within this Project" className="mt-6 space-y-2 rounded-xl border border-border/55 p-4">
+          <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Find this Project's chats, context and Sessions</label>
+          <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
+            placeholder="Search this Project's titles and resource kinds" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
+          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} Sessions match in this Project.{collectionsPending ? " Loading the complete active collections; recent work remains visible." : " Search covers the active collections loaded from this Project."}</p>
+          {collectionsFailed && <p role="alert" className="text-sm text-amber-200">The complete Project collections could not be refreshed. Showing available records; a missing match is not proof no saved item exists. <button type="button" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry Project collections</button></p>}
+        </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
             <div className="flex items-center justify-between">
               <div className="font-ui text-[14px] font-semibold">Recent chats</div>
-              <span className="font-terminal text-[11px] text-muted-foreground">{chats.length} ACTIVE</span>
+              <span className="font-terminal text-[11px] text-muted-foreground">{found.chats.length} MATCHING</span>
             </div>
             <div className="mt-3 space-y-1.5">
-              {chats.length ? chats.slice(0, 8).map((chat) => (
+              {found.chats.length ? found.chats.slice(0, visibleWorkCount).map((chat) => (
                 <button key={chat.id} onClick={() => onOpenChat(chat)} className="flex w-full items-center gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left hover:border-amber-300/25 hover:bg-white/[0.025]">
                   <MessageSquare className="h-3.5 w-3.5 text-amber-300/80" />
                   <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-foreground">{chat.title}</span>
@@ -208,7 +296,7 @@ export function ProjectHome({
                 </button>
               )) : (
                 <button onClick={() => onNewChat()} className="w-full rounded-lg border border-dashed border-border/60 px-4 py-8 font-ui text-[13px] text-muted-foreground hover:border-amber-300/30 hover:text-foreground">
-                  Start the first conversation in this Project
+                  {workQuery.trim() ? "No matching chats. Start a new conversation in this Project" : "Start the first conversation in this Project"}
                 </button>
               )}
             </div>
@@ -216,11 +304,12 @@ export function ProjectHome({
 
           <section className="border-t border-border/45 pt-4">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-ui text-[14px] font-semibold">Project context</div>
-              <span className="font-terminal text-[11px] text-muted-foreground">{resources.length} SOURCES</span>
+              <div className="font-ui text-[14px] font-semibold">Project memory &amp; context</div>
+              <span className="font-terminal text-[11px] text-muted-foreground">{found.resources.length} MATCHING</span>
             </div>
+            <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Chats here use the Project's instructions, these resources and their own history. LiOS does not automatically recall other Chats; saved memories change only when you confirm a memory action in Chat, where you can also ask to inspect, correct or delete them.</p>
             <div className="mt-3 space-y-2">
-              {resources.slice(0, 6).map((resource) => (
+              {found.resources.slice(0, visibleWorkCount).map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-border/45 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-ui text-[13px] text-foreground">{resource.label}</span>
@@ -229,32 +318,74 @@ export function ProjectHome({
                     }`}>{resource.contextMode.toUpperCase()}</span>
                   </div>
                   <div className="mt-1 font-terminal text-[11px] uppercase tracking-wider text-muted-foreground">{resource.kind}</div>
+                  <button type="button" disabled={contextBusy} onClick={() => {
+                    setContextNotice(null);
+                    setPendingContext({ projectId: project.id, resourceId: resource.id, from: resource.contextMode, to: resource.contextMode });
+                  }} className="mt-2 min-h-10 rounded border border-border px-3 py-2 text-xs">Review context inclusion</button>
+                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy}
+                    rename={async label => {
+                      const saved = await updateProjectResource(project.id, resource.id, { label });
+                      if (saved.id !== resource.id || saved.projectId !== project.id || saved.label !== label) throw new Error("The exact resource name was not confirmed.");
+                    }}
+                    archive={async () => { await updateProjectResource(project.id, resource.id, { archived: true }); }}
+                    trash={async () => { await trashProjectResource(project.id, resource.id); }}
+                    onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
                 </div>
               ))}
-              {!resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-[13px] text-muted-foreground">No resources connected yet.</div>}
+              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
+              <p className="font-ui text-xs text-muted-foreground">Project = eligible for automatic context; on demand = only when requested; excluded = retained but not routinely retrieved. Server source rights still apply.</p>
+              {pendingContext?.projectId === project.id && (() => {
+                const resource = projectResources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
+                if (!resource) return <p role="alert">The selected resource is no longer active. Reopen this Project's context.</p>;
+                return <section aria-label="Review exact Project resource context change" className="space-y-2 rounded border border-amber-300/30 p-3">
+                  <label className="block text-sm">Resource inclusion mode
+                    <select value={pendingContext.to} disabled={contextBusy} onChange={event => setPendingContext(current => current ? { ...current, to: event.target.value as ProjectResourceContextMode } : null)} className="mt-1 min-h-11 w-full rounded border border-border bg-background px-3 py-2">
+                      {PROJECT_RESOURCE_CONTEXT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <p className="text-xs">{contextChangeConfirmation(resource.label, pendingContext.from, pendingContext.to)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={contextBusy || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)} onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm">Save this resource's context mode</button>
+                    <button type="button" disabled={contextBusy} onClick={() => setPendingContext(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
+                  </div>
+                </section>;
+              })()}
+              {contextNotice && <p role="status" className="text-xs text-amber-200">{contextNotice}</p>}
             </div>
           </section>
         </div>
 
-        {!!sessions.length && (
+        {!!found.sessions.length && (
           <section className="mt-8 border-t border-border/45 pt-4">
             <div className="flex items-center justify-between">
               <div className="font-ui text-[14px] font-semibold">Resume a Session</div>
               <span className="font-terminal text-[11px] text-muted-foreground">FORKABLE ANALYTICAL STATE</span>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {sessions.slice(0, 6).map((session) => (
-                <button key={session.id} onClick={() => onOpenSession(session)} className="rounded-lg border border-border/50 bg-black/15 p-3 text-left hover:border-fuchsia-300/25 hover:bg-white/[0.025]">
+              {found.sessions.slice(0, visibleWorkCount).map((session) => (
+                <div key={session.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+                <button type="button" onClick={() => onOpenSession(session)} className="w-full text-left hover:text-fuchsia-200">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-terminal text-[11px] text-muted-foreground">{session.parentSessionId ? "FORK" : "BASE"}</span>
                     <span className="font-terminal text-[11px] text-muted-foreground">{relativeTime(session.updatedAt)}</span>
                   </div>
                 </button>
+                <ProjectWorkActions key={session.id} kind="session" label={session.name} disabled={false}
+                  rename={async name => {
+                    const saved = await updateProjectSession(session.id, { name });
+                    if (saved.id !== session.id || saved.projectId !== project.id || saved.name !== name) throw new Error("The exact Session name was not confirmed.");
+                  }}
+                  archive={async () => { await updateProjectSession(session.id, { status: "archived" }); }}
+                  trash={async () => { await trashProjectSession(session.id); }}
+                  onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
+                </div>
               ))}
             </div>
           </section>
         )}
+        {Math.max(found.chats.length, found.resources.length, found.sessions.length) > visibleWorkCount
+          && <button type="button" onClick={() => setVisibleWorkCount(count => count + 40)} className="mt-4 min-h-11 rounded border border-border px-4 py-2 text-sm">Show more matching Project work</button>}
 
         <section className="mt-8 border-t border-border/45 pt-4">
           <button
@@ -272,7 +403,7 @@ export function ProjectHome({
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
-              <ProjectContinuityPanel projectId={project.id} onFocusArtifact={onFocusArtifact} />
+              <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
               <ProjectIntelligencePanel projectId={project.id} />
               <ProjectAutomationPanel projectId={project.id} />
               <ProjectArtifactsPanel
@@ -289,4 +420,49 @@ export function ProjectHome({
       </div>
     </div>
   );
+}
+
+function ProjectWorkActions({ kind, label, disabled, rename, archive, trash, onChanged }: {
+  kind: "source" | "session"; label: string; disabled: boolean;
+  rename: (name: string) => Promise<void>; archive: () => Promise<void>; trash: () => Promise<void>; onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const [trashRequest, setTrashRequest] = useState<LifecycleRequest | null>(null);
+  const run = async (operation: () => Promise<void>) => {
+    if (inFlight.current || disabled) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try { await operation(); setEditing(false); onChanged(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Saved-work change was not confirmed. Your input is retained."); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
+  return <div className="mt-2">
+    {editing ? <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); if (draft.trim()) void run(() => rename(draft.trim())); }}>
+      <label className="min-w-0 flex-1 text-xs">Name for {label}
+        <input autoFocus value={draft} disabled={busy} maxLength={kind === "source" ? 240 : 200} onChange={event => setDraft(event.target.value)}
+          className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2 text-sm" />
+      </label>
+      <button type="submit" disabled={busy || disabled || !draft.trim()} className="min-h-10 rounded border border-border px-3 text-sm">{busy ? "Saving…" : "Save name"}</button>
+      <button type="button" disabled={busy} onClick={() => setEditing(false)} className="min-h-10 px-3 text-sm">Cancel</button>
+    </form> : <ObjectActionMenu kind={kind} status="active" hidden={["share", "fork", "compare"]}
+      disabled={busy || disabled ? { rename: "Wait for the pending change", archive: "Wait for the pending change", delete: "Wait for the pending change" } : undefined}
+      label={`Actions for ${label}`} onAction={(action, trigger) => {
+        if (action === "rename") { setDraft(label); setError(null); setEditing(true); }
+        if (action === "archive") void run(archive);
+        if (action === "delete") setTrashRequest({
+          title: kind === "source" ? "Move resource to Trash?" : "Move Session to Trash?",
+          detail: `“${label}” will leave active Project work and Project context. Restore it from Trash & archive before using it again.`,
+          confirmLabel: "Move to Trash",
+          returnFocus: trigger ?? null,
+          resolve: value => { if (value) void run(trash); },
+        });
+      }} />}
+    <ProjectLifecycleDialog request={trashRequest} onClose={() => setTrashRequest(null)} />
+    {error && <p role="alert" className="mt-2 text-sm text-red-200">{error}</p>}
+  </div>;
 }

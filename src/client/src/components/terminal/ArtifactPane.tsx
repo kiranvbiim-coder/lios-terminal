@@ -22,6 +22,7 @@ import { colIndexToLetters } from "@/lib/spreadsheetEngine";
 import { artifactSheetToGrid, gridToArtifactSheet } from "@/lib/artifactSpreadsheet";
 import { semanticArtifactComparisonLabel } from "@/lib/artifactSemanticComparisonSummary";
 import { exportArtifactLocal } from "@/lib/artifactExport";
+import { artifactExportDisclosure } from "@/lib/artifactExportDisclosure";
 import { appendThesisPostmortem, refreshThesisArtifact, useInvalidateProjectIntelligence } from "@/lib/useProjectIntelligence";
 import { ScenarioFormulaReview } from "./ScenarioFormulaReview";
 import { createP9Workflow, useInvalidateP9Automation, useP9Workflows } from "@/lib/useP9Automation";
@@ -675,6 +676,7 @@ function ArtifactPaneWorkspace({
   const historyRequest = useRef(0);
   const historyCurrent = useRef<{ anchor: ArtifactHistoryAnchor; left: number | null } | null>(null);
   const [exportPlan, setExportPlan] = useState<ArtifactExportPlan | null>(null);
+  const [exportAcknowledged, setExportAcknowledged] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<ArtifactExportPlan["formats"][number] | null>(null);
   const [spreadsheetDirty, setSpreadsheetDirty] = useState(false);
@@ -694,6 +696,7 @@ function ArtifactPaneWorkspace({
   const inspectorId = useId();
   useEffect(() => { setInspectorTab("artifact"); }, [artifactId]);
   const data = exactArtifactHistoryDetail(detail.data, artifactId, version, projectId, owningChatId, detail.isPlaceholderData || detail.isError);
+  const exportRights = artifactExportDisclosure(data?.version.trustManifest ?? null, data?.version.sourceRefs ?? []);
   useEffect(()=>{if(data)setLeft(Math.max(1,data.artifact.headVersion-1))},[artifactId, data?.artifact.headVersion]);
   useEffect(() => { setSpreadsheetPendingRevision(false); }, [data?.version.version, data?.version.contentHash]);
   const displayedVersionCallback = useRef(onDisplayedVersionChange);
@@ -701,6 +704,7 @@ function ArtifactPaneWorkspace({
   useEffect(() => { if (data && !detail.isPlaceholderData && (version == null || data.version.version === version)) displayedVersionCallback.current?.(data.version.version, artifactId, version ?? null); }, [artifactId, version, data?.version.version, detail.isPlaceholderData]);
   exportRevision.current = data ? { artifactId, version: data.version.version, contentHash: data.version.contentHash } : null;
   useEffect(() => {
+    setExportAcknowledged(false);
     setExportPlan(null);
     if (!exportOpen || !data) { setExportLoading(false); return; }
     let active = true;
@@ -805,6 +809,8 @@ function ArtifactPaneWorkspace({
   const content=data.version.content;
   const downloadArtifact = async (format: ArtifactExportPlan["formats"][number]) => {
     if (exportInFlight.current) return;
+    if (exportRights.blocked) { setError(exportRights.note); return; }
+    if (!exportAcknowledged) { setError("Review source rights and acknowledge the local export before downloading."); return; }
     exportInFlight.current = true;
     setExportingFormat(format);
     setError(null);
@@ -936,8 +942,13 @@ function ArtifactPaneWorkspace({
     {inspectorTab==="evidence"&&<div role="tabpanel" id={`${inspectorId}-evidence-panel`} aria-labelledby={`${inspectorId}-evidence-tab`} className="border-b border-border/50 bg-black/25 px-3 py-3">{data.version.trustManifest?<ConversationTrustPanel manifest={data.version.trustManifest}/>:<div className="grid gap-3 md:grid-cols-2"><div><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Sources</div><div className="mt-1 break-words font-ui text-[13px] leading-5 text-foreground">{data.version.sourceRefs.length?data.version.sourceRefs.join(" · "):"No source references recorded for this legacy version."}</div></div><div><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Execution</div><div className="mt-1 font-ui text-[13px] leading-5 text-foreground">Adapter {data.version.adapterId} · {data.version.executionReceiptIds.length} receipt{data.version.executionReceiptIds.length===1?"":"s"} · content {shortHash(data.version.contentHash)}</div></div></div>}{data.version.dependencyRefs.length>0&&<div className="mt-3 rounded border border-border/50 bg-black/20 p-2"><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">Dependencies</div><div className="mt-1 break-words font-ui text-[13px] leading-5 text-foreground">{data.version.dependencyRefs.join(" · ")}</div></div>}{data.version.refreshSpec&&<div className="mt-3 rounded border border-emerald-300/15 bg-emerald-300/[0.02] p-2"><div className="font-terminal text-[12px] uppercase tracking-wider text-emerald-200">Governed replay</div><div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{data.version.refreshSpec.capabilityIds.length?data.version.refreshSpec.capabilityIds.join(" · "):"Conversation replay"} · {data.version.refreshSpec.sourceScope} · {data.version.refreshSpec.executionMode}</div></div>}</div>}
     {exportOpen&&<section aria-label="Export artifact" className="border-b border-border/50 p-3">
       {exportLoading && <p role="status" className="text-sm text-muted-foreground">Checking export formats…</p>}
+      <p role={exportRights.blocked ? "alert" : "note"} data-testid="artifact-export-rights" className={`mb-3 rounded border p-3 text-sm leading-6 ${exportRights.blocked ? "border-red-300/40 text-red-200" : "border-amber-300/30 text-amber-100"}`}>{exportRights.note}</p>
       {exportPlan && <><p className="mb-3 break-words text-sm text-muted-foreground">{exportPlan.filenameStem}-v{exportPlan.version} · {exportPlan.sourceRefs.length} recorded sources</p>
-        <div className="flex flex-wrap gap-2">{exportPlan.formats.map((format)=><button key={format} type="button" disabled={exportLoading || exportingFormat !== null || exportPlan.artifactId !== artifactId || exportPlan.version !== data.version.version || exportPlan.contentHash !== data.version.contentHash} onClick={()=>void downloadArtifact(format)} className="rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:cursor-wait disabled:opacity-50">{format.toUpperCase()}</button>)}</div>
+        {!exportRights.blocked && <label className="mb-3 flex items-start gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" data-testid="artifact-export-consent" className="mt-1 h-4 w-4 shrink-0 accent-amber-300" checked={exportAcknowledged} onChange={event => setExportAcknowledged(event.target.checked)} />
+          <span>I understand this downloads a local copy. I will check source licenses, permissions and recipient rights before distributing it.</span>
+        </label>}
+        <div className="flex flex-wrap gap-2">{exportPlan.formats.map((format)=><button key={format} type="button" disabled={exportLoading || exportingFormat !== null || exportRights.blocked || !exportAcknowledged || exportPlan.artifactId !== artifactId || exportPlan.version !== data.version.version || exportPlan.contentHash !== data.version.contentHash} onClick={()=>void downloadArtifact(format)} className="rounded border border-border/50 px-3 py-2 font-ui text-[13px] disabled:cursor-wait disabled:opacity-50">{format.toUpperCase()}</button>)}</div>
         {exportingFormat !== null && <p role="status" className="mt-3 text-sm text-muted-foreground">Generating {exportingFormat.toUpperCase()} for the recorded revision…</p>}
         <p className="mt-3 text-sm text-muted-foreground">Exports use this recorded revision. Data exports contain the preview rows. Spreadsheet XLSX preserves all sheets, formulas, and number formats.</p>
       </>}

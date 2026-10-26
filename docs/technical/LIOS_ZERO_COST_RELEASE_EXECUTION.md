@@ -55,6 +55,16 @@ Start with macOS ARM64 on existing Mac hardware and Windows x64 on a standard fr
 
 Run the appropriate existing source gates from `src/` (e.g. `npm run check`, `npm run test:offline`, `npm run test:desktop`, `npm run build`, `npm run audit:licenses`, and platform-specific pack/sidecar verification). For beta, do **not** run the production-only signing preflight as though it could pass; add an explicitly scoped beta preflight that checks everything applicable and retains missing proof as failures. Follow `docs/technical/P14_DESKTOP_LAUNCH_QUALIFICATION.md` for production evidence rules.
 
+Current beta commands use the existing build owner:
+
+```sh
+LIOS_BETA_VERSION=1.0.0-beta.1 npm run app:beta:mac
+```
+
+On Windows x64, set `LIOS_BETA_VERSION` in the shell and run `npm run app:beta:win`. Both modes require native sidecars and the qualified sandbox release; neither publishes. `-- --dir` is available only for local signing/launch qualification and does not produce installer acceptance. Embedded beta metadata disables the production updater; production `app:dist:mac` / `app:dist:win` keep their signed paths. Mac beta uses a bounded custom signing hook, beta-only entitlements and explicit Resources Mach-O verification while retaining the hash-pinned native-runtime exclusion. Actual installer, nested-code launch, upgrade and rights proof remain required.
+
+**2026-10-26 size work:** owner selected single-installer optimization before multipart distribution. The previous Mac bundle occupied about 5.9 GiB, including a 3.8 GB sandbox archive. Docker history exposed redundant archived build inputs retained in lower layers; canonical Dockerfiles now use offline read-only BuildKit mounts instead. The old qualified image/source lock is not replaced until a new candidate passes numerical/model/browser/isolation qualification. No capability removal or new paid storage service is authorized by this optimization.
+
 Every agent working this plan must report: **canonical owner + existing issue/PR, exact SHA and version, changed paths, actual commands/results, package OS/architecture and SHA-256, spent $0 / any blocked fee, native installed evidence, rights/security result, limitations and next single actionable dependency**. A unit test, green source workflow, synthetic JSON, unsigned package or PR merge must never be promoted to a native installed acceptance claim.
 
 Do not change signed-production validators or bypass security policy to obtain a green beta status. Existing P14 issues including visual-count disagreement (9/13/15), shared release-asset overwrite names and missing actual Windows visual proof remain release-path issues; resolve under their current owners.

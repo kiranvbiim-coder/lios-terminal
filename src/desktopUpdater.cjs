@@ -95,12 +95,21 @@ function createDesktopUpdateInstallController({ updater, confirmInstall, log = (
 function configureAutoUpdater({
   updater,
   isPackaged,
+  releaseChannel = "production",
   env = process.env,
   log = () => {},
   confirmInstall = nativeConfirmDesktopUpdate,
 }) {
   if (!isPackaged) {
     return { enabled: false, reason: "Desktop updates are disabled for unpackaged development launches." };
+  }
+
+  if (releaseChannel !== "production") {
+    // Beta/development packages never enter the signed production updater.
+    // A plain official download link is not a verified or executable upgrade.
+    updater.autoDownload = false;
+    updater.autoInstallOnAppQuit = false;
+    return { enabled: false, reason: "This beta/development build requires an explicit manual upgrade from the official release channel." };
   }
 
   // Signed distribution builds embed the canonical generic provider into

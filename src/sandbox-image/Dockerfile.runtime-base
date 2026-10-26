@@ -2,7 +2,6 @@ ARG RUNTIME_BASE
 FROM ${RUNTIME_BASE}
 ARG TARGETARCH
 USER 0:0
-COPY browser-inputs /tmp/browser-inputs
 COPY source-lock.json /opt/lios/browser-source-lock.json
 COPY install-browser.py /opt/lios/install-browser.py
 COPY smoke.py /opt/lios/sandbox-smoke.py
@@ -10,10 +9,11 @@ COPY quant_smoke.py /opt/lios/quant_smoke.py
 COPY worker_smoke.py /opt/lios/worker_smoke.py
 COPY worker-smoke/ /opt/lios/worker-smoke/
 COPY smoke-xlsx.cjs /opt/lios/smoke-xlsx.cjs
-RUN --network=none set -eu; \
+RUN --network=none \
+    --mount=type=bind,source=browser-inputs,target=/tmp/browser-inputs \
+    set -eu; \
     test "$TARGETARCH" = 'arm64'; \
     python /opt/lios/install-browser.py; \
-    rm -rf /tmp/browser-inputs; \
     rm /opt/lios/install-browser.py
 WORKDIR /tmp
 USER 10001:10001

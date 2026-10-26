@@ -126,12 +126,16 @@ export async function setProjectResourceContextMode(
   ctx: TenantContext,
   resourceId: string,
   contextMode: "project" | "on_demand" | "excluded",
+  expectedUpdatedAt?: string,
 ): Promise<ProjectResource> {
   const resource = await getProjectResource(ctx, resourceId);
   const [row] = await getDb().update(projectResources)
     .set({ contextMode, updatedAt: new Date() })
-    .where(and(eq(projectResources.id, resourceId), tenantFilter(ctx)))
+    .where(and(eq(projectResources.id, resourceId), tenantFilter(ctx),
+      expectedUpdatedAt ? eq(projectResources.updatedAt, new Date(expectedUpdatedAt)) : undefined,
+      expectedUpdatedAt ? eq(projectResources.status, "active") : undefined))
     .returning();
+  if (!row) throw new Error("Resource changed since review. Refresh this Project before changing context inclusion.");
   await touchProjectActivity(ctx, resource.projectId);
   return row;
 }

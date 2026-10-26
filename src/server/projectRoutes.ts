@@ -133,6 +133,10 @@ function fail(res: Response, error: unknown): void {
     return;
   }
   const message = error instanceof Error ? error.message : "Request failed.";
+  if (/^Resource changed since review\./.test(message)) {
+    res.status(409).json({ error: message });
+    return;
+  }
   if (isInternalDetail(message) || (error instanceof Error && error.cause && isInternalDetail(String((error.cause as Error).message ?? "")))) {
     console.error("Project route database failure", error);
     res.status(500).json({ error: DATABASE_FAILURE_MESSAGE });
@@ -456,13 +460,14 @@ export function registerProjectRoutes(app: Express): void {
       const body = z.object({
         label: z.string().trim().min(1).max(240).optional(),
         contextMode: z.enum(["project", "on_demand", "excluded"]).optional(),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
         archived: z.boolean().optional(),
       }).strict().parse(req.body);
       const { projectId } = await assertProjectResourceRoute(ctx(req), req.params.projectId, req.params.resourceId);
       let resource = body.label !== undefined
         ? await renameProjectResource(ctx(req), req.params.resourceId, body.label)
         : null;
-      if (body.contextMode !== undefined) resource = await setProjectResourceContextMode(ctx(req), req.params.resourceId, body.contextMode);
+      if (body.contextMode !== undefined) resource = await setProjectResourceContextMode(ctx(req), req.params.resourceId, body.contextMode, body.expectedUpdatedAt);
       if (body.archived === true) resource = await archiveProjectResource(ctx(req), req.params.resourceId);
       if (body.archived === false) resource = await restoreProjectResource(ctx(req), req.params.resourceId);
       if (!resource) throw new Error("No resource update supplied.");

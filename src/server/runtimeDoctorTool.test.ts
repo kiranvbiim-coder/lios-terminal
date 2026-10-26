@@ -15,7 +15,7 @@ const { users } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const { executeConversationRuntime, planConversationWorkflow } = await import("./conversationRuntime");
 const { conversationRequestSchema } = await import("@shared/conversationRuntime");
-const { runtimeDoctorTool } = await import("./runtimeDoctorTool");
+const { runtimeDoctorTool, configureRuntimeDoctorProvisioning } = await import("./runtimeDoctorTool");
 
 const request = (message: string) => conversationRequestSchema.parse({ requestId: crypto.randomUUID(), message, executionMode: "deterministic_first" });
 
@@ -48,6 +48,15 @@ test("runtime Doctor is read-only, owner-scoped and available without a model", 
   const receipt = events.find(event => event.type === "receipt");
   assert.ok(receipt && receipt.type === "receipt");
   assert.equal(receipt.receipt.deterministic, true);
+  configureRuntimeDoctorProvisioning(true);
+  t.after(() => configureRuntimeDoctorProvisioning(false));
+  const available = await executeConversationRuntime({
+    tenant, scope: "quick", projectId: null, chatId: null, history: [], request: request("LiOS doctor"),
+    aiCompletion: async () => { throw new Error("Diagnosis must not invoke AI"); }, emit: () => {},
+  });
+  assert.match(available.text, /Managed runtime: missing/);
+  assert.doesNotMatch(available.text, /Repair blocked: strict_provisioning_authority_missing/);
+  configureRuntimeDoctorProvisioning(false);
   assert.ok(!fs.existsSync(path.join(root, "runtime", "python", "current")), "diagnosis must not install a runtime");
   const call = { source: "workflow" as const, requestId: crypto.randomUUID(), userId: other.id, projectId: project.id,
     tenant: { userId: other.id, organizationId: null, role: other.role } };

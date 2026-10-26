@@ -298,3 +298,19 @@ test("public layout sharing excludes origin credentials, saved Artifact custody 
   assert.deepEqual(loadWorkspaceFromUrl(url.search), { primary: { view: "market", symbol: "AAPL" }, secondary: { view: "chart", symbol: "MSFT" }, focusedPane: "primary" });
   assert.equal(workspace.primary.artifact.version, 17);
 });
+
+test("public layout links remove signed-in paths and ignore private payloads on ingress", () => {
+  const workspace = createInitialWorkspace();
+  const privatePane = { ...workspace.primary, view: "artifact" as const, artifact: { projectId: 42, chatId: 9, artifactId: "artifact:123e4567-e89b-42d3-a456-426614174000", version: 7 }, privateNote: "private" };
+  const url = new URL(buildWorkspaceShareUrl({ ...workspace, primary: privatePane }, "https://user:password@example.test/projects/42/chat/9?token=private#/c/9"));
+  assert.equal(url.pathname, "/");
+  assert.equal(url.username, "");
+  assert.equal(url.password, "");
+  assert.deepEqual([...url.searchParams.keys()], ["ws"]);
+  const decoded = deserializeWorkspace(url.searchParams.get("ws"));
+  assert.deepEqual(decoded?.primary, { view: "market", symbol: workspace.primary.symbol });
+  const hostile = new URLSearchParams({ ws: serializeWorkspace({ ...workspace, primary: privatePane }) });
+  assert.deepEqual(loadWorkspaceFromUrl(`?${hostile}`)?.primary, { view: "market", symbol: workspace.primary.symbol });
+  assert.equal(loadWorkspaceFromUrl(`?ws=${"a".repeat(10_001)}`), null);
+  assert.throws(() => buildWorkspaceShareUrl(workspace, "file:///private/user/workspace"), /not.*shareable/);
+});
