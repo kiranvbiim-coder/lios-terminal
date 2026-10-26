@@ -41,7 +41,14 @@ import { classifyAskLiosIntent, formatAskLiosDelegation, ASK_LIOS_SYSTEM_PREAMBL
 import { rejectIfMasterAiOff } from "./masterAiGate";
 import { isAuthenticatedSelfServiceRoute } from "./apiAccessPolicy";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
-import { providerIngestedUniversePath } from "./providerIngestedCatalog";
+import {
+  getInstrumentDirectorySnapshot,
+  queryInstrumentDirectory,
+  searchInstrumentDirectory,
+  instrumentDirectoryRegions,
+  instrumentDirectoryStatus,
+  instrumentDirectoryFacets,
+} from "./instrumentDirectory";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerContentRoutes } from "./contentRoutes";
 import { registerClientRoutes } from "./clientRoutes";
@@ -992,138 +999,33 @@ Welcome to the Limuria Intelligence Terminal command engine. I can help you anal
   // account is now a real row in the users table with a real password.
 
   // ─── Stock Universe Autocomplete Search ────────────────────────────────────
-  let tickersList: Array<{ symbol: string; name: string; exchange: string; sector: string; assetClass?: string; region?: string; isPrimaryListing?: boolean }> = [];
-  try {
-    const resourcesBase = (process as { resourcesPath?: string }).resourcesPath || process.env.ELECTRON_RESOURCES_PATH;
-    const dataPath = resourcesBase
-      ? path.resolve(resourcesBase, "server", "data", "tickers.json")
-      : path.resolve(process.cwd(), "server", "data", "tickers.json");
-    if (fs.existsSync(dataPath)) {
-      tickersList = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    }
-    const mutualFunds = [
-      { symbol: "VFIAX", name: "Vanguard 500 Index Fund Admiral", exchange: "NASDAQ", sector: "Blended Large Cap", assetClass: "mutual_fund", region: "US" },
-      { symbol: "FCNTX", name: "Fidelity Contrafund", exchange: "NYSE", sector: "Growth Large Cap", assetClass: "mutual_fund", region: "US" },
-      { symbol: "PONAX", name: "PIMCO Income Fund Class A", exchange: "NYSE", sector: "Fixed Income Bond", assetClass: "mutual_fund", region: "US" },
-      { symbol: "0P0000XWAI.BO", name: "SBI Bluechip Fund Direct Growth", exchange: "BSE", sector: "Equity Large Cap", assetClass: "mutual_fund", region: "IN" },
-      { symbol: "0P0000XW4Y.BO", name: "HDFC Top 100 Mutual Fund Growth", exchange: "BSE", sector: "Equity Large Cap", assetClass: "mutual_fund", region: "IN" },
-      { symbol: "0P0000XVZE.BO", name: "Nippon India Growth Fund Direct Growth", exchange: "BSE", sector: "Equity Mid Cap", assetClass: "mutual_fund", region: "IN" },
-      { symbol: "0P0000Y1S2.T", name: "Nomura Morningstar Index Fund", exchange: "TSE", sector: "Index Blend", assetClass: "mutual_fund", region: "JP" },
-      { symbol: "0P00018G8I.T", name: "Nikko AM World Equity Fund", exchange: "TSE", sector: "Global Equity", assetClass: "mutual_fund", region: "JP" },
-      { symbol: "0P0000Y2B0.HK", name: "Hang Seng Index Fund Class A", exchange: "HKEX", sector: "Index Blend", assetClass: "mutual_fund", region: "HK" },
-      { symbol: "0P0001LUX8.HK", name: "HSBC Hang Seng Tech Index Fund", exchange: "HKEX", sector: "Technology Sector", assetClass: "mutual_fund", region: "HK" },
-      { symbol: "0P0000KSP2.L", name: "Vanguard FTSE U.K. All Share Index", exchange: "LSE", sector: "UK Equity Blend", assetClass: "mutual_fund", region: "UK" },
-      { symbol: "0P00000B2H.L", name: "BlackRock World Gold Fund Class A", exchange: "LSE", sector: "Precious Metals", assetClass: "mutual_fund", region: "UK" },
-      { symbol: "0P000071C6.TO", name: "RBC Select Balanced Fund Class A", exchange: "TSX", sector: "Multi-Asset Balanced", assetClass: "mutual_fund", region: "CA" },
-      { symbol: "0P0000720O.TO", name: "TD Comfort Balanced Portfolio Class A", exchange: "TSX", sector: "Multi-Asset Balanced", assetClass: "mutual_fund", region: "CA" },
-      { symbol: "0P0000W82O.AX", name: "Vanguard Balanced Index Fund", exchange: "ASX", sector: "Multi-Asset Balanced", assetClass: "mutual_fund", region: "AU" },
-      { symbol: "0P00000B1A.DE", name: "DWS Deutschland Fund", exchange: "XETRA", sector: "German Equity", assetClass: "mutual_fund", region: "DE" },
-      { symbol: "0P00000AWG.PA", name: "Amundi Funds - European Equity", exchange: "Euronext", sector: "European Equity", assetClass: "mutual_fund", region: "FR" },
-      { symbol: "0P0000Y7P7.TW", name: "Yuanta Taiwan Top 50 ETF Mutual Fund", exchange: "TWSE", sector: "Index Blend", assetClass: "mutual_fund", region: "TW" },
-      { symbol: "0P0000YD7L.KS", name: "Samsung KODEX 200 Mutual Fund", exchange: "KRX", sector: "Index Blend", assetClass: "mutual_fund", region: "KR" },
-      { symbol: "0P0000UGX8.SA", name: "Itaú ETF Ibovespa Mutual Fund", exchange: "B3", sector: "Index Blend", assetClass: "mutual_fund", region: "BR" },
-      { symbol: "0P0000UYP5.KL", name: "Public Ittikal Fund (Malaysia)", exchange: "Bursa", sector: "Islamic Equity", assetClass: "mutual_fund", region: "MY" }
-    ];
-    tickersList.push(...mutualFunds);
-
-    // Converge the Screener on the canonical provider-aware universe. The
-    // Directory Screener previously read only tickers.json, entirely
-    // bypassing provider-ingested rows (server/data/provider_ingested_universe.json,
-    // real SEC EDGAR/NASDAQ Trader/CoinGecko data -- see
-    // instrumentUniverseIngestion.ts) even though the search-box path
-    // (instrumentSearchIndexStore.ts) already included them. Read raw
-    // here (not through providerIngestedCatalog.ts's InstrumentMasterCandidate
-    // adapter) because assetClass/sector -- fields this screener's filter
-    // UI depends on -- have no equivalent on InstrumentMasterCandidate;
-    // asset class is inferred honestly from each row's real originating
-    // source (CoinGecko rows are genuinely crypto; SEC/NASDAQ rows are
-    // genuinely equities -- neither ingestion path pulls bonds/derivatives
-    // today), not fabricated.
-    const ingestedPath = providerIngestedUniversePath();
-    if (fs.existsSync(ingestedPath)) {
-      const ingestedRows = JSON.parse(fs.readFileSync(ingestedPath, "utf8")) as Array<{
-        symbol: string; name?: string | null; exchange?: string | null; countryCode?: string | null; provider?: string | null; active?: boolean;
-      }>;
-      for (const row of ingestedRows) {
-        if (row.active === false) continue;
-        tickersList.push({
-          symbol: row.symbol,
-          name: row.name || row.symbol,
-          exchange: row.exchange || "UNKNOWN",
-          sector: "",
-          assetClass: row.exchange === "CRYPTO" ? "crypto" : "equity",
-          region: row.countryCode || undefined,
-          isPrimaryListing: false,
-        });
-      }
-      console.log(`Directory: merged ${ingestedRows.length} provider-ingested rows into the ${tickersList.length}-row directory.`);
-    }
-  } catch (err) {
-    console.error("Failed to load tickers.json directory file:", err);
-  }
-
+  // Finance Directory, autocomplete and screener share one P5 source catalog.
+  // A donor reference row is not a canonical security or live market quote.
   app.get("/api/finance/directory", (req, res) => {
-    const exchange = String(req.query.exchange || "").trim().toUpperCase();
-    const search = String(req.query.q || "").trim().toLowerCase();
-    const sector = String(req.query.sector || "").trim().toLowerCase();
-    const assetClass = String(req.query.assetClass || "").trim().toLowerCase();
-    const region = String(req.query.region || "").trim().toUpperCase();
-    const primaryListingOnly = String(req.query.primaryListingOnly || "").trim().toLowerCase() === "true";
-    const page = Math.max(1, parseInt(String(req.query.page || "1")));
-    const limit = 20;
-
-    let filtered = tickersList;
-    if (exchange) {
-      if (exchange === "US") {
-        filtered = filtered.filter(item => item.exchange === "NASDAQ" || item.exchange === "NYSE");
-      } else {
-        filtered = filtered.filter(item => item.exchange.toUpperCase() === exchange);
-      }
-    }
-    if (sector && sector !== "all") {
-      filtered = filtered.filter(item => (item.sector || "").toLowerCase() === sector);
-    }
-    if (assetClass && assetClass !== "all") {
-      filtered = filtered.filter(item => (item.assetClass || "equity").toLowerCase() === assetClass);
-    }
-    if (region && region !== "ALL") {
-      filtered = filtered.filter(item => (item.region || "").toUpperCase() === region);
-    }
-    // The bundled legacy directory predates canonical listing IDs and does
-    // not tag most rows. Preserve those rows for compatibility; when a
-    // provider supplies an explicit flag, primary-only mode excludes the
-    // known secondary listings without inventing identity data.
-    if (primaryListingOnly) {
-      filtered = filtered.filter(item => item.isPrimaryListing !== false);
-    }
-    if (search) {
-      filtered = filtered.filter(item => 
-        item.symbol.toLowerCase().includes(search) || 
-        item.name.toLowerCase().includes(search) || 
-        (item.sector || "").toLowerCase().includes(search)
-      );
-    }
-
-    const total = filtered.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const items = filtered.slice(startIndex, endIndex);
-
-    res.json({
-      items,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
+    const rows = getInstrumentDirectorySnapshot().items;
+    const page = queryInstrumentDirectory(rows, {
+      q: String(req.query.q ?? ""),
+      exchange: String(req.query.exchange ?? ""),
+      sector: String(req.query.sector ?? ""),
+      assetClass: String(req.query.assetClass ?? ""),
+      region: String(req.query.region ?? ""),
+      primaryListingOnly: String(req.query.primaryListingOnly ?? "") === "true",
+      includeHistorical: String(req.query.includeHistorical ?? "") === "true",
+      page: Number(req.query.page ?? 1),
     });
+    res.json(page);
   });
 
-  // Distinct region/country codes present in the ticker directory -- powers
-  // the Country Screener's dropdown without shipping the full 80k+-row list
-  // (legacy catalog + provider-ingested rows, see the tickersList
-  // population above).
   app.get("/api/finance/directory/regions", (_req, res) => {
-    const regions = Array.from(new Set(tickersList.map(t => t.region).filter((r): r is string => !!r))).sort();
-    res.json(regions);
+    res.json(instrumentDirectoryRegions(getInstrumentDirectorySnapshot().items));
+  });
+
+  app.get("/api/finance/directory/facets", (_req, res) => {
+    res.json(instrumentDirectoryFacets(getInstrumentDirectorySnapshot().items));
+  });
+
+  app.get("/api/finance/directory/status", (_req, res) => {
+    res.json(instrumentDirectoryStatus());
   });
 
   // Ground-truth coverage map -- what's actually covered per region across
@@ -1154,37 +1056,8 @@ Welcome to the Limuria Intelligence Terminal command engine. I can help you anal
   });
 
   app.get("/api/finance/search", (req, res) => {
-    const query = String(req.query.q || "").trim().toUpperCase();
-    if (!query) {
-      return res.json([]);
-    }
-
-    const queryLower = query.toLowerCase();
-    const exactMatches: typeof tickersList = [];
-    const prefixMatches: typeof tickersList = [];
-    const categoryMatches: typeof tickersList = [];
-    const nameMatches: typeof tickersList = [];
-
-    for (const item of tickersList) {
-      const symUpper = item.symbol.toUpperCase();
-      const assetClassLower = (item.assetClass || "").toLowerCase();
-      
-      if (symUpper === query) {
-        exactMatches.push(item);
-      } else if (symUpper.startsWith(query)) {
-        prefixMatches.push(item);
-      } else if (assetClassLower === queryLower) {
-        categoryMatches.push(item);
-      } else if (
-        item.name.toLowerCase().includes(queryLower) ||
-        (item.sector || "").toLowerCase().includes(queryLower)
-      ) {
-        nameMatches.push(item);
-      }
-    }
-
-    const merged = [...exactMatches, ...prefixMatches, ...categoryMatches, ...nameMatches].slice(0, 15);
-    res.json(merged);
+    const query = String(req.query.q ?? "").trim();
+    res.json(searchInstrumentDirectory(getInstrumentDirectorySnapshot().items, query));
   });
 
   app.get("/api/finance/premarket-brief", async (_req, res) => {
