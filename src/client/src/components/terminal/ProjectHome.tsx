@@ -304,9 +304,10 @@ export function ProjectHome({
 
           <section className="border-t border-border/45 pt-4">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-ui text-[14px] font-semibold">Project context</div>
+              <div className="font-ui text-[14px] font-semibold">Project memory &amp; context</div>
               <span className="font-terminal text-[11px] text-muted-foreground">{found.resources.length} MATCHING</span>
             </div>
+            <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Chats here use the Project's instructions, these resources and their own history. LiOS does not automatically recall other Chats; saved memories change only when you confirm a memory action in Chat, where you can also ask to inspect, correct or delete them.</p>
             <div className="mt-3 space-y-2">
               {found.resources.slice(0, visibleWorkCount).map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-border/45 px-3 py-2">

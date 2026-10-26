@@ -12,7 +12,6 @@ const { initDb, closeDb, getDb } = await import("./db");
 const { runWithRequestIdentity } = await import("./requestContext");
 const { stateDir } = await import("./dataRoot");
 const {
-  appendMemory,
   appendDurableMemory,
   correctDurableMemory,
   deleteDurableMemory,
@@ -21,6 +20,16 @@ const {
   listDurableMemories,
 } = await import("./aiMemory");
 const { durableMemories, organizations, projects, users } = await import("@shared/schema");
+// Turn-shaped records written through the canonical durable writer (no
+// automatic Chat writer remains; this exercises storage isolation only).
+const appendMemory = (entry: { ts: string; role: "user" | "assistant"; content: string }) => appendDurableMemory({
+  content: entry.content,
+  kind: "conversation_turn",
+  role: entry.role,
+  originKind: "chat_turn",
+  epistemicStatus: "observed",
+  observedAt: entry.ts,
+});
 
 type Identity = { userId: number | null; organizationId: number | null };
 const asIdentity = <T>(identity: Identity, fn: () => T): T => runWithRequestIdentity(identity, fn);
