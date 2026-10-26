@@ -27,6 +27,7 @@ import { assertOrganizationCredentialSnapshotCurrent, organizationCredentialStor
 import { parseSecretRef, type SecretRef } from "@shared/secretRef";
 import { PrivateSecretFileError, readPrivateSecretFile } from "./privateSecretFile";
 import { invalidateAIChatCredential } from "./connectorVerification";
+import { noteProviderCredentialMutation } from "./providerCredentialRevision";
 
 const ALGORITHM = "aes-256-gcm" as const;
 const KEY_LENGTH = 32;
@@ -194,6 +195,9 @@ function writeVaultStore(store: VaultStore): void {
   try { fs.chmodSync(filePath, 0o600); } catch { /* Windows */ }
   cachedStore = store;
   cachedStorePath = filePath;
+  // A successful vault write can rotate or revoke a provider credential;
+  // cached observations from the previous revision must not be reused.
+  noteProviderCredentialMutation();
 }
 
 interface PortableVaultEntry {
@@ -356,6 +360,8 @@ export function restoreVaultMigrationEnvelope(envelopeBytes: Buffer, passphrase:
 export function invalidateVaultCache(): void {
   cachedStore = null;
   cachedStorePath = null;
+  // A caller may be invalidating the cached vault after an external change.
+  noteProviderCredentialMutation();
 }
 
 /**
