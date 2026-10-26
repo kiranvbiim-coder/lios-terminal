@@ -47,5 +47,10 @@ export function setLiosProductPalette(palette: LiosProductPalette): void {
 }
 
 export function initializeLiosProductPalette(): void {
+  if (typeof document === "undefined") return;
+  // A mounted legacy control must not reset an in-memory choice when storage
+  // is disabled; the first bootstrap from main.tsx has no palette attribute.
+  const applied = document.documentElement.getAttribute("data-lios-palette");
+  if (LIOS_PRODUCT_PALETTES.some((candidate) => candidate.id === applied)) return;
   applyLiosProductPalette(readLiosProductPalette());
 }
