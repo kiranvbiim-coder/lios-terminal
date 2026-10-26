@@ -26,11 +26,16 @@ const PRICE_ROUTER_CONNECTOR_IDS = new Set([
 ]);
 
 function executionPathCompatible(request: UniversalDataRequest, connector: ConnectorDefinition): boolean {
-  // The active price conversation path is the LiOS market-data router. A
-  // connector that exposes a generic market_data capability elsewhere is not
-  // advertised here unless this router can actually invoke it.
-  if (request.capability === "prices") return PRICE_ROUTER_CONNECTOR_IDS.has(connector.id);
-  return connector.adapterImplemented;
+  // A catalog definition is not an executable connector, even if its id
+  // appears in an existing routing allow-list. Never request setup for one.
+  if (!connector.adapterImplemented) return false;
+  // The active price conversation router serves the current request; it does
+  // not reconstruct what was known on a past date or an exact past revision.
+  // Historical bars are not the same claim as point-in-time knowledge.
+  if (request.capability === "prices") {
+    return request.pointInTime.mode === "latest" && PRICE_ROUTER_CONNECTOR_IDS.has(connector.id);
+  }
+  return true;
 }
 
 const CAPABILITY_CONTRACTS: Record<UniversalDataRequest["capability"], string[]> = {
@@ -108,7 +113,8 @@ function operationalState(state: ConnectorRuntimeReport["state"]): boolean {
 }
 
 function needsConnectionState(state: ConnectorRuntimeReport["state"]): boolean {
-  return state === "adapter_available" || state === "catalog_only";
+  // A catalog-only source needs real adapter implementation, not credentials.
+  return state === "adapter_available";
 }
 
 export interface UniversalDataPlanningOptions {
@@ -179,9 +185,25 @@ export function planUniversalDataFromSnapshot(
     return connector ? sourceScopeCompatible(request, connector) : false;
   });
   const operational = scoped.filter((candidate) => candidate.operational);
-  const coveredFields = new Set(operational.flatMap((candidate) => candidate.fields));
-  const missingFields = request.fields.filter((field) => !coveredFields.has(field));
-  const selectedCandidateIds = operational.slice(0, 5).map((candidate) => candidate.connectorId);
+  // The selected providers, not every listed provider, must actually cover
+  // the fields used to claim this plan is ready. Preserve stack priority,
+  // prefer providers that close a requested-field gap, then fill remaining
+  // slots with eligible fallbacks. Never silently depend on provider #6.
+  const selected: UniversalProviderCandidate[] = [];
+  const uncovered = new Set(request.fields);
+  for (const candidate of operational) {
+    if (selected.length >= 5 || uncovered.size === 0) break;
+    const contributes = candidate.fields.filter((field) => uncovered.has(field));
+    if (!contributes.length) continue;
+    selected.push(candidate);
+    for (const field of contributes) uncovered.delete(field);
+  }
+  for (const candidate of operational) {
+    if (selected.length >= 5) break;
+    if (!selected.includes(candidate)) selected.push(candidate);
+  }
+  const selectedCandidateIds = selected.map((candidate) => candidate.connectorId);
+  const missingFields = request.fields.filter((field) => uncovered.has(field));
 
   let availability: UniversalDataPlan["availability"];
   if (!scoped.length && candidates.length) availability = "source_scope_blocked";
