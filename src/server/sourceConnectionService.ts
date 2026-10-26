@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getConnectorById, getConnectorRegistrySnapshot, getUserScopedConnectorRegistrySnapshot, testConnectorCredential } from "./connectorService";
+import type { ConnectorRuntimeState } from "@shared/connectorRegistry";
 import { hasConnectorProbe, probeConnector } from "./connectorVerification";
 import "./connectorProbes";
 import { fetchWithEndpointPolicy, normalizeSourceConfig, validateMcpSourceEndpoint, validateSourceEndpoint } from "./sourceConnectionPolicy";
@@ -318,6 +319,23 @@ export async function deleteSourceConnection(userId: number, connectionId: numbe
   return true;
 }
 
+/** A passive observation cannot satisfy a user-initiated "Verify" click.
+ * Only this invocation's successful live probe may write healthy status. */
+export function unprobedConnectionResult(state: ConnectorRuntimeState | null | undefined): {
+  status: "configured" | "degraded" | "unreachable" | "invalid";
+  detail: string;
+} {
+  if (!state) return { status: "unreachable", detail: "No live probe is registered and no runtime observation is available. Verification was not performed." };
+  const status = state === "catalog_only" ? "invalid"
+    : state === "disabled" || state === "degraded" || state === "rate_limited" ? "degraded"
+    : state === "adapter_available" || state === "credential_configured" || state === "live_verified" ? "configured"
+    : "unreachable";
+  return {
+    status,
+    detail: `Live verification is not supported for this connector in this build. Last observed runtime state: ${state}. This check did not contact the provider or verify access.`,
+  };
+}
+
 export async function testSourceConnection(userId: number, connectionId: number, actor: Pick<User, "id" | "email">): Promise<SourceConnectionTestResult | null> {
   const db = getDb();
   const [connection] = await db.select().from(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId))).limit(1);
@@ -402,11 +420,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } else {
       const snapshot = await getConnectorRegistrySnapshot();
       const health = snapshot.health.find((item) => item.connectorId === connection.connectorId);
-      status = health?.state === "live_verified" ? "healthy"
-        : health?.state === "disabled" ? "degraded"
-        : health?.state === "credential_configured" ? "configured"
-        : "unreachable";
-      detail = health?.detail ?? "Connector health is unavailable. No live probe is wired for this connector yet; this reflects its last passively-observed state, not a fresh test.";
+      const noLiveProbe = unprobedConnectionResult(health?.state);
+      status = noLiveProbe.status;
+      detail = noLiveProbe.detail;
     }
   } else if (connection.sourceType === "public_api" || connection.sourceType === "sidecar") {
     if (hasConnectorProbe(connection.connectorId)) {
@@ -416,11 +432,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } else {
       const snapshot = await getConnectorRegistrySnapshot();
       const health = snapshot.health.find((item) => item.connectorId === connection.connectorId);
-      status = health?.state === "live_verified" ? "healthy"
-        : health?.state === "disabled" ? "degraded"
-        : health?.state === "credential_configured" ? "configured"
-        : "unreachable";
-      detail = health?.detail ?? "Connector health is unavailable. No live probe is wired for this connector yet; this reflects its last passively-observed state, not a fresh test.";
+      const noLiveProbe = unprobedConnectionResult(health?.state);
+      status = noLiveProbe.status;
+      detail = noLiveProbe.detail;
     }
   } else {
     status = "configured";
