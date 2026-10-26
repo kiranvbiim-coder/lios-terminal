@@ -485,6 +485,11 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
         >{installing ? `IMPORTING ${installStatus?.filesExtracted ?? 0} FILES` : catalogStatus?.financeDatabase.imported ? "UPDATE REFERENCE DATA" : "IMPORT 300K+ REFERENCES"}</button>
         <span title="Reference symbols are not verified live prices, fundamentals or distinct companies." className="ml-auto font-terminal text-[9px] text-muted-foreground">{(data?.total ?? 0).toLocaleString()} MATCHES · {(catalogStatus?.uniqueListingCount ?? 0).toLocaleString()} REFERENCE LISTINGS</span>
       </div>
+      {(assetClass === "fund" || assetClass === "money_market") && catalogStatus?.financeDatabase.discontinuedMaintenance && (
+        <div role="status" className="px-3 py-1.5 text-[9px] text-amber-300">
+          Reference only: upstream maintenance of this fund category ended in October 2026. Current tradability and data availability are unverified.
+        </div>
+      )}
       {(installError || installStatus?.error) && (
         <div role="alert" className="px-3 py-1.5 text-[10px] text-red-400">{installError ?? installStatus?.error}</div>
       )}
