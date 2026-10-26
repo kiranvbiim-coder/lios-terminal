@@ -194,6 +194,14 @@ export function financeDatabaseCatalogStatus() {
     importedAt: manifest?.importedAt ?? null,
     countsByAssetClass: manifest && rows.length === manifest.accepted ? manifest.byCategory : {},
     coverageKind: "reference_symbols_not_live_prices",
+    // Source provider explicitly discontinued routine updates to these
+    // non-exchange fund categories in Oct 2026; they remain useful reference
+    // identifiers but their "active" status is not verified by this catalog.
+    discontinuedMaintenance: {
+      funds: "2026-10",
+      moneymarkets: "2026-10",
+    } as const,
+    maintenanceCaveat: "Funds and money-market source catalogs are no longer maintained upstream; listing existence and tradability are unverified.",
   };
 }
 
