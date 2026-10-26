@@ -81,6 +81,20 @@ try {
   process.exit(1);
 }
 
+// Every desktop distribution must include the audited local market catalogs.
+// The public source repository intentionally excludes these datasets; recover
+// them from the original authenticated private repository before packaging.
+const catalogCheck = spawnSync(process.execPath, ["script/restore_market_catalogs.cjs", "--check"], {
+  cwd: path.join(__dirname, ".."),
+  env,
+  stdio: "inherit",
+});
+if (catalogCheck.error || catalogCheck.status !== 0) {
+  console.error("Desktop packaging blocked: market catalog data is missing or invalid.");
+  console.error("Run npm run data:catalogs:restore from src/ (requires access to the original private repository).");
+  process.exit(1);
+}
+
 // Never package an absent/stale dist tree from a previous source revision.
 // The same build owner produces the renderer, Home server and restore worker.
 const sourceBuild = spawnSync(process.execPath, ["--import", "tsx", "script/build.ts"], {
