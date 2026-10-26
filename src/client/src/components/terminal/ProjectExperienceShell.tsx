@@ -2197,7 +2197,7 @@ export default function ProjectExperienceShell({
                     <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                     </div>
-                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-white">What do you want to understand, test or build?</h1>
+                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-foreground">What do you want to understand, test or build?</h1>
                     <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
                       Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
                     </p>
@@ -2206,7 +2206,7 @@ export default function ProjectExperienceShell({
                         <button
                           key={starter.id}
                           type="button"
-                          className="lios-chat-starter rounded-lg border border-border/70 bg-[#080808]/90 p-3.5 text-left transition-colors hover:border-amber-300/35 hover:bg-[#0b0b0b]"
+                          className="lios-chat-starter rounded-lg border border-border/70 bg-card p-3.5 text-left transition-colors hover:border-border hover:bg-accent"
                           aria-label={`Use example: ${starter.label}`}
                           onClick={() => {
                             const prompt = fillStarterPrompt(starter.prompt, recentStarterSymbol);
@@ -2257,7 +2257,10 @@ export default function ProjectExperienceShell({
                 )}
                 {visibleMessages.map((message) => (
                   <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                    <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
+                    <div data-lios-message={message.role}
+                    role="group"
+                    aria-label={message.role === "assistant" ? "LiOS response" : message.role === "user" ? "Your message" : "System message"}
+                    className={`lios-conversation-message max-w-[85%] rounded-xl border px-4 py-3 ${
                       message.role === "user"
                         ? "border-amber-300/20 bg-amber-300/[0.05]"
                         : "border-border/60 bg-white/[0.018]"
@@ -2425,7 +2428,7 @@ export default function ProjectExperienceShell({
                 }}
               >
                 {(mentionCandidates.length > 0 || commandCandidates.length > 0) && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
+                  <div className="lios-chat-suggestion-menu absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
                     {commandCandidates.map((item) => (
                       <button key={item.command} onClick={() => setInput(item.command)} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05]">
                         <span className="font-terminal text-[13px] text-amber-300">{item.command}</span>
