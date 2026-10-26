@@ -14,6 +14,9 @@
   "scripts": {
     "dev": "node script/dev.mjs",
     "native:runtime:build": "python3 script/build_native_runtime_bundle.py",
+    "catalog:restore": "node script/restore_instrument_catalogs.cjs",
+    "catalog:check": "node script/restore_instrument_catalogs.cjs --check",
+    "test:catalog": "node --test script/restore_instrument_catalogs.test.cjs",
     "history:import": "NODE_ENV=production tsx script/import_stooq_db.ts",
     "history:import:bse": "NODE_ENV=production tsx script/import_bse_bhavcopy.ts",
     "history:adjust:bse": "NODE_ENV=production tsx script/adjust_bse_splits.ts",
