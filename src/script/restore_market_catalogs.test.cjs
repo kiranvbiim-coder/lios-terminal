@@ -25,6 +25,18 @@ test("catalog schema rejects empty, malformed, or wrong-kind inputs", () => {
   assert.equal(validateCatalogBytes(Buffer.from('[{"symbol":"AAPL","name":"Apple"}]'), definition).count, 1);
 });
 
+test("exact original ticker footer is accounted for without accepting arbitrary malformed rows", () => {
+  const definition = { name: "tickers.json", kind: "array", minBytes: 1, minRecords: 1 };
+  const source = Buffer.from(JSON.stringify([
+    { symbol: "AAPL", name: "Apple", exchange: "NASDAQ" },
+    { symbol: "FILE CREATION TIME: 0820202603:02", name: "", exchange: "NASDAQ" },
+  ]));
+  assert.equal(validateCatalogBytes(source, definition).excludedSourceRows, 1);
+  assert.throws(() => validateCatalogBytes(Buffer.from(JSON.stringify([
+    { symbol: "INVALID", name: "" },
+  ])), definition), /invalid symbol\/name rows/);
+});
+
 test("crypto mappings require stable external IDs", () => {
   const definition = { name: "crypto.json", kind: "object", minBytes: 1, minRecords: 1 };
   assert.throws(
