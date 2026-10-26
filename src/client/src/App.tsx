@@ -30,7 +30,7 @@ import { setP9DesktopNotificationOwner } from "@/lib/p9DesktopNotifications";
 import { clearResearchTray } from "@/lib/terminalResearchTray";
 import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
-import { subscribeOpenEnvironmentCenter, subscribeOpenPluginCenter } from "@/lib/appShellEvents";
+import { subscribeOpenEnvironmentCenter, subscribeOpenPluginCenter, subscribeOpenGuidedConnectorSetup } from "@/lib/appShellEvents";
 import type { AuthSessionState, EffectiveAccessSnapshot } from "@shared/identityContracts";
 
 // Chat-first: connection and plugin management must not inflate the initial Chat bundle.
@@ -85,6 +85,7 @@ function App() {
   const signOutPending = useRef(false);
   const [activeDomain, setActiveDomain] = useState<DomainInfo | null>(null);
   const [managementView, setManagementView] = useState<"connections" | "plugins" | null>(null);
+  const [guidedConnectorId, setGuidedConnectorId] = useState<string | null>(null);
   // The workspace stays mounted while Connections is open. Capture the actual
   // initiating control (not a route string) and restore it after the overlay
   // unmounts, so the user's Chat draft and keyboard context survive.
@@ -163,6 +164,13 @@ function App() {
   }, []);
   const openEnvironmentSetup = useCallback(() => {
     if (!managementView) captureManagementOpener();
+    setGuidedConnectorId(null);
+    setManagementView("connections");
+  }, [managementView, captureManagementOpener]);
+
+  const openGuidedSetup = useCallback((connectorId: string) => {
+    if (!managementView) captureManagementOpener();
+    setGuidedConnectorId(connectorId);
     setManagementView("connections");
   }, [managementView, captureManagementOpener]);
   const openPluginSetup = useCallback(() => {
@@ -171,6 +179,7 @@ function App() {
   }, [managementView, captureManagementOpener]);
 
   useEffect(() => subscribeOpenEnvironmentCenter(openEnvironmentSetup), [openEnvironmentSetup]);
+  useEffect(() => subscribeOpenGuidedConnectorSetup(openGuidedSetup), [openGuidedSetup]);
   useEffect(() => subscribeOpenPluginCenter(openPluginSetup), [openPluginSetup]);
   useEffect(() => {
     if (managementView || domainPickerOpen || !session) return;
@@ -203,6 +212,7 @@ function App() {
     setActiveDomain(null);
     setDomainPickerOpen(false);
     setManagementView(null);
+    setGuidedConnectorId(null);
     environmentReturnFocus.current = null;
     try {
       queryClient.clear();
@@ -290,7 +300,7 @@ function App() {
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="chat-management-content">
                   <Suspense fallback={<div role="status" className="p-6 font-ui text-sm text-muted-foreground">Opening {managementView === "plugins" ? "Plugins" : "Connections"}…</div>}>
-                    {managementView === "connections" && session && <DataConnectionCenter embedded session={session} onComplete={() => setManagementView(null)} onLogout={handleLogout} />}
+                    {managementView === "connections" && session && <DataConnectionCenter embedded initialConnectorId={guidedConnectorId} session={session} onComplete={() => { setGuidedConnectorId(null); setManagementView(null); }} onLogout={handleLogout} />}
                     {managementView === "plugins" && <div className="mx-auto w-full max-w-5xl p-4 sm:p-6"><GovernedExtensionsPanel /></div>}
                   </Suspense>
                 </div>
