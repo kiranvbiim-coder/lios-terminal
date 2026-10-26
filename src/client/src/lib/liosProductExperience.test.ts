@@ -88,6 +88,12 @@ test("chat, composer, markdown, palette swatches and mounted artifact retain can
   assert.match(polishCss, /prefers-reduced-motion: reduce/);
   assert.match(polishCss, /\\[data-chat-table-block\\]/);
   assert.match(polishCss, /\\[data-chat-code-block\\]/);
+  assert.match(polishCss, /--dv-group-view-background-color: var\\(--lios-bg-app\\)/);
+  assert.match(polishCss, /--dv-tabs-and-actions-container-background-color: var\\(--lios-bg-panel\\)/);
+  assert.match(polishCss, /lios-visual-canvas__veil/);
+  assert.match(polishCss, /lios-chat-suggestion-menu/);
+  assert.match(typeCss, /"Anthropic Sans", "Inter"/);
+  assert.match(typeCss, /"Anthropic Serif", Georgia/);
 });
 
 test("theme regression contract never re-creates AI routing, source catalogs or artifact stores", () => {
