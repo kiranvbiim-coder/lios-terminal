@@ -64,8 +64,8 @@ export async function extractFinanceDatabaseTarGz(
           const header = buffer.subarray(0, 512);
           buffer = buffer.subarray(512);
           if (header.every(b => b === 0)) { mode = "done"; break; }
-          const name = header.subarray(0, 100).toString("utf8").split("\\0")[0]!;
-          const sizeString = header.subarray(124, 136).toString("ascii").replace(/\\0/g, "").trim();
+          const name = header.subarray(0, 100).toString("utf8").split("\u0000")[0]!;
+          const sizeString = header.subarray(124, 136).toString("ascii").replace(/\0/g, "").trim();
           const entrySize = parseInt(sizeString, 8);
           if (!Number.isSafeInteger(entrySize) || entrySize < 0 || entrySize > MAX_SINGLE_FILE) {
             throw new Error("Invalid or oversized donor archive entry");
