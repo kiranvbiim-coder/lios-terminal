@@ -335,3 +335,16 @@ test("a missing provider in Chat opens its existing consent form, without new ex
   assert.match(events, /window\.dispatchEvent\(new CustomEvent\(OPEN_GUIDED_CONNECTOR_EVENT/);
   assert.doesNotMatch(events, /apiRequest|fetch\(|installPlugin|executeCanonicalDataRequest/);
 });
+
+
+test("a user-initiated connection verification reports its real result or an explicit failure", () => {
+  const code = source("../pages/DataConnectionCenter.tsx");
+  assert.match(code, /setTestingConnectionId\(connectionId\)/);
+  assert.match(code, /const result = await response\.json\(\)/);
+  assert.match(code, /result\.status === "healthy"/);
+  assert.match(code, /Live verification was not confirmed/);
+  assert.match(code, /Connection verification could not complete/);
+  assert.match(code, /data-testid="connection-test-feedback"/);
+  assert.match(code, /disabled=\{testBusy\}/);
+  assert.doesNotMatch(code, /catch \{ refresh\(\); \}/);
+});
