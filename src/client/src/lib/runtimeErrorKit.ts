@@ -3,7 +3,7 @@
  * decides the title, what the user can do next, and which button to offer. The raw code stays available
  * as small print for support, never as the headline.
  */
-export type ErrorKind = "input_required" | "ai_provider" | "rate_limit" | "budget" | "network" | "storage" | "unknown";
+export type ErrorKind = "input_required" | "permission" | "ai_provider" | "rate_limit" | "budget" | "network" | "unconfirmed" | "storage" | "unknown";
 export type ErrorRecovery = "retry" | "connect";
 
 export interface ErrorPresentation {
@@ -32,6 +32,13 @@ export function presentRuntimeError(code: string, message: string): ErrorPresent
   if (/\b429\b|rate.?limit|quota|too many requests|billing/.test(text)) {
     return { kind: "rate_limit", title: "The AI provider is out of quota", hint: "Check the provider's usage or billing, or switch provider on the Connect screen. Deterministic results still work with AI off.", recoveries: ["connect", "retry"] };
   }
+  if (/run_interrupted|run_start_unconfirmed|outcome (was )?not confirmed|outcome was confirmed|home restarted/.test(text)) {
+    return { kind: "unconfirmed", title: "Run outcome not confirmed", hint: "Check the original Chat run before sending again. Home may have received the request; nothing was retried automatically.", recoveries: [] };
+  }
+  if (/permission.{0,14}denied|access.?denied|\bforbidden\b|source.{0,30}revoked|entitlement required|not permitted/.test(text)
+    && !/provider|api key|model credential/.test(text)) {
+    return { kind: "permission", title: "Access was not granted", hint: "The requested source or action is not authorized. Check access in Connections or ask its owner for permission. No approval or result was confirmed.", recoveries: [] };
+  }
   if (/api key|unauthori[sz]ed|\b401\b|\b403\b|invalid.*key|provider|model|ai (is|not)|not configured/.test(text)) {
     return { kind: "ai_provider", title: "The AI provider couldn't answer", hint: "Open Connect to check the key and model, then retry.", recoveries: ["connect", "retry"] };
   }
@@ -39,7 +46,7 @@ export function presentRuntimeError(code: string, message: string): ErrorPresent
     return { kind: "network", title: "Couldn't reach a data source", hint: "This looks like a connection problem. Retry in a moment.", recoveries: ["retry"] };
   }
   if (/database|storage|disk|could not save|couldn't save/.test(text)) {
-    return { kind: "storage", title: "LiOS couldn't save this run", hint: "Nothing was lost from your chat. Retry, and restart LiOS if it keeps happening.", recoveries: ["retry"] };
+    return { kind: "storage", title: "LiOS could not confirm this save", hint: "Review the original Chat and saved work before trying again. No save success was confirmed.", recoveries: ["retry"] };
   }
   return { kind: "unknown", title: "Something went wrong with this request", hint: "Retry, or rephrase the request.", recoveries: ["retry"] };
 }

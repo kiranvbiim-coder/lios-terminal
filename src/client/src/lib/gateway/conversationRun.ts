@@ -86,13 +86,13 @@ export async function followConversationRun(
     disposers.push(client.onReady(({ restarted }) => {
       if (settled || !started) return;
       if (restarted) {
-        interrupted("The Home restarted before this run finished. Please retry.");
+        interrupted("The Home restarted before this run's outcome was confirmed. Check the original Chat run before sending again; nothing was retried automatically.");
         return;
       }
       client.request("conversation.subscribe", { requestId, afterSeq: lastSeq }, { timeoutMs: 15_000 }).catch((subscribeError: unknown) => {
         interrupted(subscribeError instanceof GatewayRequestError && subscribeError.code === "NOT_FOUND"
-          ? "This run is no longer available. Please retry."
-          : "The connection was interrupted before this run finished. Please retry.");
+          ? "This run is no longer available from Home, so its outcome was not confirmed. Check the original Chat run before sending again; nothing was retried automatically."
+          : "The connection was interrupted before this run's outcome was confirmed. Check the original Chat run before sending again; nothing was retried automatically.");
       });
     }));
 

@@ -455,6 +455,13 @@ export default function ProjectExperienceShell({
   const retainedScreen = terminalDetail.data?.version.content.kind === "screen" && readTerminalScreenState(terminalDetail.data.version.content.state) ? terminalDetail.data.version.content : null;
   const selectedTerminalScope = retainedScreen ? readTerminalScreenState(retainedScreen.state)?.sourceScope : undefined;
   const [temporaryTerminal, setTemporaryTerminal] = useState<Extract<import("@shared/artifactContracts").ArtifactContent, {kind:"screen"}> | null>(null);
+  const focusComposerAfterTerminalCloseRef = useRef(false);
+  useEffect(() => {
+    // After commit the covered Chat is visible again, so focus can land.
+    if (temporaryTerminal || !focusComposerAfterTerminalCloseRef.current) return;
+    focusComposerAfterTerminalCloseRef.current = false;
+    composerRef.current?.focus();
+  }, [temporaryTerminal]);
   const terminalContext: ChatTerminalContext | null = chatMode === "temporary"
     ? temporaryTerminal ? { view: temporaryTerminal.view as ViewMode, symbol: temporaryTerminal.symbol } : null
     : retainedScreen ? { view: retainedScreen.view as ViewMode, symbol: retainedScreen.symbol } : null;
@@ -1106,8 +1113,8 @@ export default function ProjectExperienceShell({
     if (!requested) throw new Error("Workspace layout proposal is unavailable outside the active LiOS renderer.");
   };
 
-  const saveCurrentSession = async (name?: string) => {
-    if (!selection.projectId) return;
+  const saveCurrentSession = async (name?: string): Promise<boolean> => {
+    if (!selection.projectId) return false;
     const workspaceState = captureProjectWorkspaceSessionState(audience, "dockview");
     if (!workspaceState) throw new Error("Current analytical workspace is unavailable.");
     const created = await createProjectSession(selection.projectId, {
@@ -1121,6 +1128,7 @@ export default function ProjectExperienceShell({
       conversationId: created.chatId,
     }));
     invalidate(selection.projectId);
+    return true;
   };
 
   const restoreSession = async (session: ProjectSession) => {
@@ -1163,27 +1171,37 @@ export default function ProjectExperienceShell({
     setSessionComparison(changes.length ? `Changed: ${changes.join(", ")}` : "No tracked workspace-state differences.");
   };
 
-  const runCommand = async (command: string): Promise<boolean> => {
+  /** Commands clear the draft only after the requested outcome is confirmed. */
+  const runCommand = async (command: string, clearDraft: () => void): Promise<boolean> => {
     const [token, ...args] = command.trim().split(/\s+/);
     const exact = QUICK_COMMANDS.find((item) => item.command === token.toLowerCase());
     if (!exact) return false;
-    if (exact.view) {
-      const firstArg = args[0]?.replace(/^\$/, "") ?? "";
-      const commandSymbol = /^[A-Za-z][A-Za-z0-9.\-]{0,15}$/.test(firstArg) ? firstArg.toUpperCase() : activeSymbol;
-      recordP1ShellEvent("living_workspace_action");
-      await applyWorkspaceAction({
-        type: "open-panel",
-        view: exact.view,
-        symbol: commandSymbol,
-        placement: "secondary",
-        reason: `Requested from Project chat: ${exact.label}`,
-      }, "user");
-    } else if (exact.command === "/session") {
-      await saveCurrentSession();
-    } else if (exact.command === "/sandbox") {
-      await proposeSandboxTerminal();
+    let applied = true;
+    try {
+      if (exact.view) {
+        const firstArg = args[0]?.replace(/^\$/, "") ?? "";
+        const commandSymbol = /^[A-Za-z][A-Za-z0-9.\-]{0,15}$/.test(firstArg) ? firstArg.toUpperCase() : activeSymbol;
+        recordP1ShellEvent("living_workspace_action");
+        await applyWorkspaceAction({
+          type: "open-panel",
+          view: exact.view,
+          symbol: commandSymbol,
+          placement: "secondary",
+          reason: `Requested from Project chat: ${exact.label}`,
+        }, "user");
+      } else if (exact.command === "/session") {
+        applied = await saveCurrentSession();
+        if (!applied) setLifecycleNotice("Sessions are saved inside a Project. Open a Project Chat, then run /session again. Your command is kept.");
+      } else if (exact.command === "/sandbox") {
+        const outcome = await proposeSandboxTerminal();
+        applied = outcome === "proposed";
+        if (outcome === "unavailable") setLifecycleNotice("The reviewed sandbox opens from a saved Project Chat when no other sandbox request is pending. Your command is kept.");
+      }
+    } catch (cause) {
+      applied = false;
+      setLifecycleNotice(`${cause instanceof Error ? cause.message : `${exact.label} was not completed.`} Your command is kept.`);
     }
-    setInput("");
+    if (applied) clearDraft();
     return true;
   };
 
@@ -1333,7 +1351,9 @@ export default function ProjectExperienceShell({
       setLifecycleNotice("Temporary Chat does not save files. Use a regular Quick Chat or a Project Chat.");
       return;
     }
-    if (!override?.approval && !override?.continuationOf && await runCommand(message)) return;
+    if (!override?.approval && !override?.continuationOf && await runCommand(message, () => {
+      if (canClearDraft) setInput(current => clearSubmittedComposerDraft(current, originalComposerDraft, message));
+    })) return;
     if (agentComposer.enabled && !agentComposer.ready) {
       setLifecycleNotice(agentComposer.guidance);
       return;
@@ -1638,8 +1658,8 @@ export default function ProjectExperienceShell({
     void cancelRuntime();
   };
   const interruptedRun = useInterruptedAgentRun({ gateway, chatId: resumeChatId, busy, onEvent: applyRuntimeEvent, shell: { busyRef, traceOwnerChatRef, setBusy, setStreaming, setRuntimeEvents, setRuntimeRequestId, setLifecycleNotice, onSettled: () => invalidate(selection.projectId, resumeChatId) } });
-  const proposeSandboxTerminal = async () => {
-    if (chatMode !== "project" || !selection.projectId || !selection.chatId || sandboxOpening) return;
+  const proposeSandboxTerminal = async (): Promise<"proposed" | "failed" | "unavailable"> => {
+    if (chatMode !== "project" || !selection.projectId || !selection.chatId || sandboxOpening) return "unavailable";
     const { projectId, chatId } = selection;
     const stillSelected = () => sandboxSelectionRef.current.projectId === projectId
       && sandboxSelectionRef.current.chatId === chatId;
@@ -1647,9 +1667,12 @@ export default function ProjectExperienceShell({
     setSandboxError(null);
     try {
       const proposal = await requireGateway().request("execution.operation.propose", { projectId, chatId });
-      if (stillSelected()) setSandboxProposal(proposal);
+      if (!stillSelected()) return "unavailable";
+      setSandboxProposal(proposal);
+      return "proposed";
     } catch (error) {
       if (stillSelected()) setSandboxError(error instanceof Error ? error.message : "LiOS could not prepare the reviewed sandbox operation.");
+      return "failed";
     } finally {
       setSandboxOpening(false);
     }
@@ -2140,7 +2163,7 @@ export default function ProjectExperienceShell({
           />
         ) : (
           <div className="lios-project-chat-surface relative flex h-full min-h-0 min-w-0">
-            <div className={artifactFocusMode && conversationArtifactRef ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
+            <div className={artifactFocusMode && conversationArtifactRef ? "hidden" : `flex min-w-0 flex-1 flex-col${chatMode === "temporary" && temporaryTerminal ? " lios-covered-by-temporary-terminal" : ""}`}>
             <header className="lios-conversation-header flex h-11 shrink-0 items-center gap-2 border-b border-border/55 px-4">
               <div className="min-w-0 flex-1 truncate font-ui text-[14px] font-semibold text-foreground">
                 {chatMode === "temporary" ? "Temporary chat" : activeChat?.title ?? "New conversation"}
@@ -2706,7 +2729,7 @@ export default function ProjectExperienceShell({
               </div>
             </div>
             </div>
-            {chatMode === "temporary" && temporaryTerminal && <aside className="lios-artifact-sidecar w-[48%] overflow-auto border-l p-3"><button type="button" onClick={() => setTemporaryTerminal(null)}>Close terminal Artifact</button><TerminalScreenArtifact key={temporaryTerminal.view} content={temporaryTerminal} revision={1} onSave={async content => { if (content.kind === "screen") setTemporaryTerminal(content); }} ephemeral/></aside>}
+            {chatMode === "temporary" && temporaryTerminal && <aside aria-label="Temporary terminal Artifact" className="lios-artifact-sidecar lios-temporary-terminal-sidecar w-[48%] overflow-auto border-l p-3"><button type="button" className="min-h-10" onClick={() => { focusComposerAfterTerminalCloseRef.current = true; setTemporaryTerminal(null); }}>Close terminal Artifact</button><TerminalScreenArtifact key={temporaryTerminal.view} content={temporaryTerminal} revision={1} onSave={async content => { if (content.kind === "screen") setTemporaryTerminal(content); }} ephemeral/></aside>}
             {conversationArtifactRef && chatMode !== "temporary" && selection.chatId && (
               <ConversationArtifactSidecar focus={artifactFocusMode}
                     onEnterFocus={() => setArtifactFocusMode(true)}
