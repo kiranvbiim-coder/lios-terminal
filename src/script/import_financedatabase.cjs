@@ -13,6 +13,25 @@ const { execFileSync } = require("node:child_process");
 const { resolveDataRoot } = require("../dataRootCore.cjs");
 
 const SOURCE_REPO = "https://github.com/JerBouma/FinanceDatabase.git";
+const DONOR_LICENSE_NOTICE = [
+  "MIT License",
+  "Copyright (c) 2023 Jeroen Bouma",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy",
+  'of this software and associated documentation files (the "Software"), to deal',
+  "in the Software without restriction, including without limitation the rights",
+  "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+  "copies of the Software, and to permit persons to whom the Software is",
+  "furnished to do so, subject to the following conditions:",
+  "The above copyright notice and this permission notice shall be included in all",
+  "copies or substantial portions of the Software.",
+  'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+  "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,",
+  "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE",
+  "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER",
+  "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,",
+  "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE",
+  "SOFTWARE.",
+].join("\n");
 const PINNED_COMMIT = "3815eb341c7aa7bfae4a720744093e75528b6099";
 const SUPPORTED = new Set(["equities", "etfs", "funds", "indices", "cryptos", "currencies", "moneymarkets"]);
 const DEFAULT_CATEGORIES = [...SUPPORTED];
@@ -264,6 +283,9 @@ function run(argv = process.argv.slice(2)) {
     const manifest = {
       provider: "JerBouma/FinanceDatabase", upstreamCommit: commit,
       importedAt: new Date().toISOString(), categories, ...stats, catalogSha256,
+      license: "MIT", donorCopyright: "Copyright (c) 2023 Jeroen Bouma",
+      licenseNotice: DONOR_LICENSE_NOTICE,
+      licenseSource: "https://github.com/JerBouma/FinanceDatabase/blob/" + PINNED_COMMIT + "/LICENSE",
       note: "Reference identities only; not a real-time data or redistribution entitlement.",
     };
     backupPair(catalog, manifestPath);
