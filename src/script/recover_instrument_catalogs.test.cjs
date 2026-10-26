@@ -54,7 +54,14 @@ test("symlink catalog sources are refused", (t) => {
   const file = path.join(x.inputDir, "tickers.json");
   const original = path.join(x.inputDir, "original-tickers.json");
   fs.renameSync(file, original);
-  fs.symlinkSync(original, file);
+  try { fs.symlinkSync(original, file); }
+  catch (error) {
+    if (error && (error.code === "EPERM" || error.code === "EACCES")) {
+      t.skip("Host does not permit creating symbolic links");
+      return;
+    }
+    throw error;
+  }
   assert.throws(() => validateCatalog(file, x.specs[0]), /not a regular file/);
 });
 
