@@ -375,7 +375,6 @@
       "native-runtime-dist/**/*",
       "sandbox-image/CDLA-Permissive-2.0.txt",
       "script/**/*",
-      "server/data/**/*",
       "migrations/**/*",
       "python-service/**/*",
       "!python-service/.venv/**",
