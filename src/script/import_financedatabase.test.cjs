@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { parseCsv, normalizeRow, importDatabase, catalogFiles } = require("./import_financedatabase.cjs");
+const { parseCsv, normalizeRow, importDatabase, catalogFiles, run, verifyInstalled, rollback } = require("./import_financedatabase.cjs");
 
 test("RFC 4180 multiline names and escaped quotes remain one row", () => {
   assert.deepEqual(parseCsv('symbol,name,exchange\r\n"ABC","A ""quoted""\ncompany",NMS\r\n'), [
@@ -71,4 +71,33 @@ test("missing data and malformed quoted CSV fail rather than fabricate coverage"
   fs.mkdirSync(path.join(root, "equities"));
   fs.writeFileSync(path.join(root, "equities", "NMS.csv"), "symbol,name\nABC,\"Unclosed");
   assert.throws(() => importDatabase(root, ["equities"], 1), /Unterminated/);
+});
+
+test("local import writes verified snapshot, detects tampering, and rolls back to last version", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-financedatabase-roundtrip-"));
+  const previousRoot = process.env.LIOS_DATA_ROOT;
+  process.env.LIOS_DATA_ROOT = path.join(root, "data-root");
+  t.after(() => {
+    if (previousRoot === undefined) delete process.env.LIOS_DATA_ROOT;
+    else process.env.LIOS_DATA_ROOT = previousRoot;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const checkout = path.join(root, "donor");
+  const db = path.join(checkout, "database", "equities");
+  fs.mkdirSync(db, { recursive: true });
+  const source = path.join(db, "NMS.csv");
+  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\\nONE,Original,NMS,XNAS,False\\n");
+  const original = run(["--from-dir", checkout, "--categories", "equities", "--min", "1"]);
+  assert.equal(original.verified, true);
+  assert.equal(original.count, 1);
+  const destination = path.join(process.env.LIOS_DATA_ROOT, "instrument-catalogs");
+  fs.writeFileSync(source, "symbol,name,exchange,mic,delisted\\nONE,Updated,NMS,XNAS,False\\nTWO,Additional,NMS,XNAS,False\\n");
+  const updated = run(["--from-dir", checkout, "--categories", "equities", "--min", "1"]);
+  assert.equal(updated.count, 2);
+  assert.equal(verifyInstalled(destination).count, 2);
+  const report = rollback(destination);
+  assert.equal(report.count, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(destination, "financedatabase_universe.json"), "utf8"))[0].name, "Original");
+  fs.appendFileSync(path.join(destination, "financedatabase_universe.json"), " ");
+  assert.throws(() => verifyInstalled(destination), /SHA256 does not match/);
 });
