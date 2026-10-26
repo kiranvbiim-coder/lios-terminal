@@ -53,6 +53,19 @@ test("development is disabled while packaged builds use only embedded app-update
   assert.deepEqual(packaged.calls, [["check"]]);
 });
 
+test("beta packages never check, download or install through the signed production updater", () => {
+  for (const releaseChannel of ["beta", "development"]) {
+    const { updater, calls, events } = makeUpdater();
+    const status = configureAutoUpdater({ updater, isPackaged: true, releaseChannel,
+      env: { LIOS_UPDATE_URL: "https://attacker.example/updates", LIOS_RELEASE_CHANNEL: "production" } });
+    assert.equal(status.enabled, false);
+    assert.equal(updater.autoDownload, false);
+    assert.equal(updater.autoInstallOnAppQuit, false);
+    assert.deepEqual(calls, []);
+    assert.equal(events.has("update-downloaded"), false);
+  }
+});
+
 test("packaged runtime environment cannot replace the embedded release feed", () => {
   const { updater, calls } = makeUpdater();
   const logs = [];

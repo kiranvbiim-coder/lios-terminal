@@ -16,16 +16,19 @@ function resolveMacPackAppPath({ rootDir, arch, productName }) {
  */
 const DEFAULT_BUNDLE_IDENTIFIER = "com.limuria.terminal";
 
-function signAdHocMacPack({ appPath, platform = process.platform, existsSync = fs.existsSync, run = spawnSync, bundleIdentifier = DEFAULT_BUNDLE_IDENTIFIER } = {}) {
+function signAdHocMacPack({ appPath, platform = process.platform, existsSync = fs.existsSync, run = spawnSync, bundleIdentifier = DEFAULT_BUNDLE_IDENTIFIER, entitlementsFile, hardenedRuntime = false } = {}) {
   if (platform !== "darwin") return { ok: true, skipped: true };
   if (!appPath || !existsSync(appPath)) return { ok: false, reason: "missing_bundle" };
 
-  const sign = run("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", appPath], { stdio: "inherit" });
+  const options = entitlementsFile ? ["--entitlements", entitlementsFile] : [];
+  if (hardenedRuntime) options.push("--options", "runtime");
+  const preserve = entitlementsFile ? "flags,runtime" : "entitlements,flags,runtime";
+  const sign = run("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", `--preserve-metadata=${preserve}`, ...options, appPath], { stdio: "inherit" });
   if (sign.error || sign.status !== 0) return { ok: false, reason: "sign_failed" };
 
   const stableRequirement = run(
     "/usr/bin/codesign",
-    ["--force", "--sign", "-", "--timestamp=none", `-r=designated => identifier "${bundleIdentifier}"`, appPath],
+    ["--force", "--sign", "-", "--timestamp=none", "--preserve-metadata=entitlements,flags,runtime", `-r=designated => identifier "${bundleIdentifier}"`, appPath],
     { stdio: "inherit" },
   );
   if (stableRequirement.error || stableRequirement.status !== 0) return { ok: false, reason: "requirement_failed" };

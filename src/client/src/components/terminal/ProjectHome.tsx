@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Send } from "lucide-react";
 import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
-import { updateProjectResource, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
+import { updateProjectResource, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
 import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
 import {
   VISUAL_ENVIRONMENTS,
@@ -70,6 +70,15 @@ export function ProjectHome({
   onOpenContext: () => void;
 }) {
   const queryClient = useQueryClient();
+  const chatsQuery = useProjectChats(project.id);
+  const resourcesQuery = useProjectResources(project.id);
+  const sessionsQuery = useProjectSessions(project.id);
+  const projectChats = chatsQuery.data ?? chats;
+  const projectResources = resourcesQuery.data ?? resources;
+  const projectSessions = sessionsQuery.data ?? sessions;
+  const [visibleWorkCount, setVisibleWorkCount] = useState(12);
+  const collectionsPending = chatsQuery.isPending || resourcesQuery.isPending || sessionsQuery.isPending;
+  const collectionsFailed = chatsQuery.isError || resourcesQuery.isError || sessionsQuery.isError;
   const [workQuery, setWorkQuery] = useState("");
   const [pendingContext, setPendingContext] = useState<{ projectId: number; resourceId: string; from: ProjectResourceContextMode; to: ProjectResourceContextMode } | null>(null);
   const [contextBusy, setContextBusy] = useState(false);
@@ -77,12 +86,13 @@ export function ProjectHome({
   const contextSaveInFlight = useRef(false);
   const selectedProjectId = useRef(project.id);
   selectedProjectId.current = project.id;
-  const found = useMemo(() => findProjectHomeItems(project.id, chats, resources, sessions, workQuery), [project.id, chats, resources, sessions, workQuery]);
+  const found = useMemo(() => findProjectHomeItems(project.id, projectChats, projectResources, projectSessions, workQuery), [project.id, projectChats, projectResources, projectSessions, workQuery]);
+  useEffect(() => { setVisibleWorkCount(12); }, [project.id, workQuery]);
 
   async function confirmContextUpdate() {
     const draft = pendingContext;
     if (!draft || contextSaveInFlight.current || draft.projectId !== project.id) return;
-    const resource = resources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
+    const resource = projectResources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
     if (!resource || resource.contextMode !== draft.from || !mayEditProjectResourceContext(draft.projectId, resource, draft.to)) {
       setPendingContext(null);
       setContextNotice("Resource details changed. Reopen this Project's context to review the latest saved state.");
@@ -266,8 +276,9 @@ export function ProjectHome({
         <section aria-label="Find work within this Project" className="mt-6 space-y-2 rounded-xl border border-border/55 p-4">
           <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Find this Project's chats, context and Sessions</label>
           <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
-            placeholder="Search loaded titles and resource kinds" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
-          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} Sessions in this Project matching your search. Only currently loaded records are searched; use global Search for all saved work.</p>
+            placeholder="Search this Project's titles and resource kinds" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
+          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} Sessions match in this Project.{collectionsPending ? " Loading the complete active collections; recent work remains visible." : " Search covers the active collections loaded from this Project."}</p>
+          {collectionsFailed && <p role="alert" className="text-sm text-amber-200">The complete Project collections could not be refreshed. Showing available records; a missing match is not proof no saved item exists. <button type="button" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry Project collections</button></p>}
         </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
@@ -276,7 +287,7 @@ export function ProjectHome({
               <span className="font-terminal text-[11px] text-muted-foreground">{found.chats.length} MATCHING</span>
             </div>
             <div className="mt-3 space-y-1.5">
-              {found.chats.length ? found.chats.slice(0, 8).map((chat) => (
+              {found.chats.length ? found.chats.slice(0, visibleWorkCount).map((chat) => (
                 <button key={chat.id} onClick={() => onOpenChat(chat)} className="flex w-full items-center gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left hover:border-amber-300/25 hover:bg-white/[0.025]">
                   <MessageSquare className="h-3.5 w-3.5 text-amber-300/80" />
                   <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-foreground">{chat.title}</span>
@@ -296,7 +307,7 @@ export function ProjectHome({
               <span className="font-terminal text-[11px] text-muted-foreground">{found.resources.length} MATCHING</span>
             </div>
             <div className="mt-3 space-y-2">
-              {found.resources.slice(0, 6).map((resource) => (
+              {found.resources.slice(0, visibleWorkCount).map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-border/45 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-ui text-[13px] text-foreground">{resource.label}</span>
@@ -314,7 +325,7 @@ export function ProjectHome({
               {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
               <p className="font-ui text-xs text-muted-foreground">Project = eligible for automatic context; on demand = only when requested; excluded = retained but not routinely retrieved. Server source rights still apply.</p>
               {pendingContext?.projectId === project.id && (() => {
-                const resource = resources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
+                const resource = projectResources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
                 if (!resource) return <p role="alert">The selected resource is no longer active. Reopen this Project's context.</p>;
                 return <section aria-label="Review exact Project resource context change" className="space-y-2 rounded border border-amber-300/30 p-3">
                   <label className="block text-sm">Resource inclusion mode
@@ -341,7 +352,7 @@ export function ProjectHome({
               <span className="font-terminal text-[11px] text-muted-foreground">FORKABLE ANALYTICAL STATE</span>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {found.sessions.slice(0, 6).map((session) => (
+              {found.sessions.slice(0, visibleWorkCount).map((session) => (
                 <button key={session.id} onClick={() => onOpenSession(session)} className="rounded-lg border border-border/50 bg-black/15 p-3 text-left hover:border-fuchsia-300/25 hover:bg-white/[0.025]">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
@@ -353,6 +364,8 @@ export function ProjectHome({
             </div>
           </section>
         )}
+        {Math.max(found.chats.length, found.resources.length, found.sessions.length) > visibleWorkCount
+          && <button type="button" onClick={() => setVisibleWorkCount(count => count + 40)} className="mt-4 min-h-11 rounded border border-border px-4 py-2 text-sm">Show more matching Project work</button>}
 
         <section className="mt-8 border-t border-border/45 pt-4">
           <button

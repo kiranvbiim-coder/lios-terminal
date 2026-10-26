@@ -53,7 +53,6 @@ for entry in artifacts + dependencies:
 subprocess.run([
     'apt-get', '--yes', '--no-download', '--no-install-recommends',
     '-o', 'Dpkg::Use-Pty=0', 'install',
-    '-o', 'Dir::Cache::archives=' + str(inputs / 'browser-debs') + '/',
     *[str(inputs / 'browser-debs' / d['filename']) for d in dependencies],
 ], check=True, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
 for dep in dependencies:

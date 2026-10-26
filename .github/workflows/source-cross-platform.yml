@@ -126,6 +126,13 @@ jobs:
         timeout-minutes: ${{ matrix.platform == 'macOS' && 45 || 30 }}
         run: npm run test:offline
 
+      - name: Installed UX evidence negative controls (source only)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        # WS-64 runtime scenarios already run in test:offline. These evals are
+        # outside that runner's roots and do not certify native observations.
+        run: npm run test:ws65
+
       - name: Desktop source and syntax contracts
         if: ${{ !cancelled() }}
         timeout-minutes: 10

@@ -4,9 +4,22 @@ const { resolveMacPackAppPath, signAdHocMacPack } = require("../desktopMacPackSi
 const { verifyPackagedSandboxRelease } = require("../desktopSandboxImage.cjs");
 
 const mode = process.argv[2];
-if (!["pack", "mac", "win"].includes(mode)) {
-  console.error("Usage: node script/desktop_build.cjs <pack|mac|win>");
+if (!["pack", "mac", "win", "beta-mac", "beta-win"].includes(mode)) {
+  console.error("Usage: node script/desktop_build.cjs <pack|mac|win|beta-mac|beta-win>");
   process.exit(2);
+}
+const beta = mode === "beta-mac" || mode === "beta-win";
+const betaDirectoryOnly = beta && process.argv.includes("--dir");
+const targetMac = mode === "mac" || mode === "beta-mac";
+const targetWin = mode === "win" || mode === "beta-win";
+if (beta && (targetMac ? process.platform !== "darwin" || process.arch !== "arm64" : process.platform !== "win32" || process.arch !== "x64")) {
+  console.error("Beta sidecars and packages must be built on the target OS/architecture (macOS ARM64 or Windows x64).");
+  process.exit(1);
+}
+const betaVersion = process.env.LIOS_BETA_VERSION;
+if (beta && !/^\d+\.\d+\.\d+-beta\.[1-9]\d*$/.test(betaVersion || "")) {
+  console.error("Set LIOS_BETA_VERSION to an explicit version such as 1.0.0-beta.1.");
+  process.exit(1);
 }
 
 function normalizeHttpsUrl(raw) {
@@ -24,11 +37,15 @@ function normalizeHttpsUrl(raw) {
 const env = { ...process.env };
 const configuredUpdateUrl = normalizeHttpsUrl(env.LIOS_UPDATE_URL);
 
-if (mode === "pack") {
+if (mode === "pack" || beta) {
   // Local unsigned iteration still needs a syntactically valid publish URL so
   // electron-builder can generate its metadata. .invalid is reserved by
   // RFC 2606 and can never become a real network destination.
   env.LIOS_UPDATE_URL = configuredUpdateUrl || "https://updates.invalid/lios/";
+  if (beta) {
+    env.LIOS_UPDATE_URL = "https://updates.invalid/lios/";
+    env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  }
 } else {
   if (!configuredUpdateUrl || new URL(configuredUpdateUrl).hostname.endsWith(".invalid")) {
     console.error("A real HTTPS LIOS_UPDATE_URL is required for signed desktop distribution builds.");
@@ -37,24 +54,24 @@ if (mode === "pack") {
   env.LIOS_UPDATE_URL = configuredUpdateUrl;
 }
 
-if (mode === "mac" || mode === "win") {
+if (mode !== "pack") {
   const expectedSidecar = path.join(
     __dirname,
     "..",
     "python-sidecar-dist",
     "lios-python-sidecar",
-    mode === "win" ? "lios-python-sidecar.exe" : "lios-python-sidecar",
+    targetWin ? "lios-python-sidecar.exe" : "lios-python-sidecar",
   );
   if (!require("node:fs").existsSync(expectedSidecar)) {
-    console.error(`Self-contained Python sidecar is required before signed distribution packaging: ${expectedSidecar}`);
+    console.error(`Self-contained Python sidecar is required before distribution packaging: ${expectedSidecar}`);
     console.error("Run npm run python:sidecar:build on the target platform first.");
     process.exit(1);
   }
 }
 
-const sandboxTarget = mode === "win"
+const sandboxTarget = targetWin
   ? { platform: "win32", arch: "x64" }
-  : mode === "mac"
+  : targetMac
     ? { platform: "darwin", arch: process.arch }
     : { platform: process.platform, arch: process.arch };
 try {
@@ -86,6 +103,16 @@ const executable = path.join(
 );
 
 const args = ["build"];
+if (mode === "pack") args.push("-c.extraMetadata.liosReleaseChannel=development");
+if (beta) {
+  args.push("--publish", "never", "-c.forceCodeSigning=false", "-c.extraMetadata.liosReleaseChannel=beta",
+    `-c.extraMetadata.version=${betaVersion}`, "-c.artifactName=LiOS-${version}-${os}-${arch}-beta.${ext}");
+  if (targetMac) args.push("--mac", ...(betaDirectoryOnly ? ["dir"] : ["dmg", "zip"]), "--arm64", "-c.mac.identity=-", "-c.mac.notarize=false",
+    "-c.mac.entitlements=build-resources/entitlements.beta.mac.plist",
+    "-c.mac.entitlementsInherit=build-resources/entitlements.beta.mac.plist",
+    "-c.mac.sign=script/signBetaMac.cjs");
+  else args.push("--win", ...(betaDirectoryOnly ? ["dir"] : ["nsis"]), "--x64", "-c.win.signAndEditExecutable=false", "-c.nsis.perMachine=false", "-c.nsis.oneClick=true");
+}
 if (mode === "pack") {
   args.push("--dir");
   if (process.platform === "darwin") {
