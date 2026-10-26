@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { P9WorkflowRecord, P9RunRecord } from "./useP9Automation";
-import { quickMonitorDraft, scheduleEditDefinition, workflowExecutionTruth, workflowScheduleSummary } from "./workflowReviewTruth";
+import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary } from "./workflowReviewTruth";
 
 const workflow = (overrides: Partial<P9WorkflowRecord> = {}): P9WorkflowRecord => ({
   id: "workflow:alpha", projectId: 15, ownerUserId: 3, organizationId: null,
@@ -36,17 +36,17 @@ test("quick creation needs user opt-in and only the existing P9 definition schem
 
 test("editing a schedule preserves exact action, sources, notification policy and enabled state", () => {
   const original = workflow();
-  const edited = scheduleEditDefinition(original, { type: "schedule", schedule: { kind: "interval", everyMinutes: 120 } });
+  const edited = workflowTriggerEditDefinition(original, { type: "schedule", schedule: { kind: "interval", everyMinutes: 120 } });
   assert.equal(edited.enabled, false);
   assert.deepEqual(edited.action, original.action);
   assert.deepEqual(edited.notificationPolicy, original.notificationPolicy);
   assert.deepEqual(edited.sourceRefs, original.sourceRefs);
   assert.deepEqual(edited.engineRefs, original.engineRefs);
   assert.equal(edited.trigger.type, "schedule");
-  assert.deepEqual(scheduleEditDefinition(original, { type: "schedule", schedule: { kind: "daily_utc", hour: 18, minute: 15 } }).trigger,
+  assert.deepEqual(workflowTriggerEditDefinition(original, { type: "schedule", schedule: { kind: "daily_utc", hour: 18, minute: 15 } }).trigger,
     { type: "schedule", schedule: { kind: "daily_utc", hour: 18, minute: 15 } });
-  assert.throws(() => scheduleEditDefinition(original, { type: "schedule", schedule: { kind: "daily_utc", hour: 24, minute: 0 } }));
-  assert.throws(() => scheduleEditDefinition(workflow({ projectId: 0 }), original.trigger), /Missing current Project/);
+  assert.throws(() => workflowTriggerEditDefinition(original, { type: "schedule", schedule: { kind: "daily_utc", hour: 24, minute: 0 } }));
+  assert.throws(() => workflowTriggerEditDefinition(workflow({ projectId: 0 }), original.trigger), /Missing current Project/);
 });
 
 test("paused, manual and enabled schedules never invent future executions or last-run receipts", () => {

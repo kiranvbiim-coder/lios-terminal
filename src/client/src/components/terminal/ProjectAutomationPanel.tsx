@@ -27,8 +27,8 @@ import {
   prepareP9ManualRunAttempt,
   subscribeP9ManualRunAttempts,
 } from "@/lib/p9ManualRunAttemptLedger";
-import type { P9WorkflowTrigger } from "@shared/p9AutomationContracts";
-import { quickMonitorDraft, scheduleEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
+import { p9AutomationEventTypeSchema, p9EventFiltersSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
+import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
 import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
@@ -63,6 +63,11 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const [createEnabled, setCreateEnabled] = useState(false);
   const [createMinutes, setCreateMinutes] = useState(60);
   const [review, setReview] = useState<WorkflowReview | null>(null);
+  const [eventFiltersDraft, setEventFiltersDraft] = useState("{}");
+  const eventFilters = useMemo(() => {
+    try { return p9EventFiltersSchema.safeParse(JSON.parse(eventFiltersDraft)); }
+    catch { return null; }
+  }, [eventFiltersDraft]);
   const selectedProject = useRef(projectId);
   selectedProject.current = projectId;
   const managementInFlight = useRef(false);
@@ -231,6 +236,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     if (busyId || managementInFlight.current || workflow.projectId !== projectId) return;
     setCreateKind(null);
     setMessage(null);
+    setEventFiltersDraft(workflow.trigger.type === "event" ? JSON.stringify(workflow.trigger.filters, null, 2) : "{}");
     setReview({ projectId, workflowId: workflow.id, expectedUpdatedAt: workflow.updatedAt,
       name: workflow.name, intent, trigger: workflow.trigger, enabled: workflow.enabled });
   };
@@ -244,6 +250,10 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       setMessage("The workflow changed since you opened the review. Refresh and inspect it again.");
       return;
     }
+    if (candidate.intent === "edit" && candidate.trigger.type === "event" && !eventFilters?.success) {
+      setMessage("Event filters must be a JSON object with at most 50 string, number or boolean values.");
+      return;
+    }
     managementInFlight.current = true;
     setBusyId("review:" + candidate.workflowId);
     setMessage(null);
@@ -253,12 +263,14 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         await deleteP9Workflow(originalProject, candidate.workflowId, candidate.expectedUpdatedAt);
         if (selectedProject.current === originalProject) setMessage("The exact reviewed workflow was deleted. This does not undo previously recorded runs or outside-system effects.");
       } else if (candidate.intent === "edit") {
-        const definition = scheduleEditDefinition(current, candidate.trigger);
+        const trigger = candidate.trigger.type === "event" && eventFilters?.success
+          ? { ...candidate.trigger, filters: eventFilters.data } : candidate.trigger;
+        const definition = workflowTriggerEditDefinition(current, trigger);
         // Changing a schedule does not create an execution; retain original
         // enabled state so editing an inactive workflow never starts it.
         const saved = await replaceP9Workflow(originalProject, candidate.workflowId, definition, candidate.expectedUpdatedAt);
         if (selectedProject.current === originalProject) setMessage(saved.projectId === originalProject && saved.enabled === current.enabled
-          ? "Workflow schedule saved at the server. Next execution depends on Home, current rights and scheduler acceptance."
+          ? "Workflow trigger saved at the server. Next execution depends on Home, current rights and scheduler acceptance."
           : "The server response did not confirm exact workflow scope/state; refresh before relying on this edit.");
       } else {
         const enabled = candidate.intent === "resume";
@@ -332,7 +344,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
       {review?.projectId === projectId && (() => {
         const current = workflows.find(item => item.id === review.workflowId && item.projectId === projectId);
         const unchanged = !!current && current.updatedAt === review.expectedUpdatedAt && current.enabled === review.enabled && current.name === review.name;
-        return <section aria-label="Review exact scheduled workflow change" data-testid="p9-workflow-review" className="mt-3 space-y-2 rounded-lg border border-amber-300/30 p-3">
+        return <section aria-label="Review exact workflow trigger or state change" data-testid="p9-workflow-review" className="mt-3 space-y-2 rounded-lg border border-amber-300/30 p-3">
           <h3 className="font-ui text-sm font-semibold">Review {review.intent} · {review.name} · Project {projectId}</h3>
           <p className="break-all text-xs text-muted-foreground">Workflow {review.workflowId} · version {review.expectedUpdatedAt}</p>
           <p className="text-xs text-muted-foreground">Current status: {review.enabled ? "enabled" : "paused"}. {current ? workflowScheduleSummary(current) : "Workflow no longer listed."}</p>
@@ -360,6 +372,23 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                 className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2" /></label>
             </div>
           )}
+          {review.intent === "edit" && review.trigger.type === "event" && <div className="space-y-2">
+            <label className="block text-sm">Observed event type
+              <select value={review.trigger.eventType} disabled={Boolean(busyId)}
+                onChange={event => setReview(previous => previous?.trigger.type === "event"
+                  ? { ...previous, trigger: { ...previous.trigger, eventType: p9AutomationEventTypeSchema.parse(event.target.value) } } : previous)}
+                className="mt-1 min-h-10 w-full rounded border border-border bg-background px-2">
+                {p9AutomationEventTypeSchema.options.map(type => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm">Matching event filters (JSON object)
+              <textarea value={eventFiltersDraft} disabled={Boolean(busyId)} maxLength={64000}
+                onChange={event => setEventFiltersDraft(event.target.value)}
+                className="mt-1 min-h-28 w-full rounded border border-border bg-background p-2 font-mono text-sm" />
+            </label>
+            <p className="text-xs text-muted-foreground">All filters must match an observed event. Values may be strings, numbers or booleans; strings match without case or surrounding spaces. An empty object matches all permitted events of this type. Saving does not publish an event, run the workflow or grant source access.</p>
+            {!eventFilters?.success && <p role="alert" className="text-sm text-amber-200">Use a valid JSON object with at most 50 string, number or boolean values; nested values and null are not supported.</p>}
+          </div>}
           <p className="text-xs text-muted-foreground">{review.intent === "resume"
             ? "Resuming opts into future scheduled or conditional checks, not a confirmed run."
             : review.intent === "pause" ? "Pausing stops new scheduled claims; already admitted runs or external actions are not rolled back."
@@ -367,7 +396,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
             : "Save only this workflow's trigger. Its actions, permissions, source refs and enabled state are preserved; schedule changes may recalculate the next due time."}</p>
           {!unchanged && <p role="alert" className="text-amber-200">Workflow changed or is unavailable since review. Refresh and inspect again.</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={Boolean(busyId) || !unchanged || (review.intent === "edit" && review.trigger.type === "schedule" &&
+            <button type="button" disabled={Boolean(busyId) || !unchanged || (review.intent === "edit" && review.trigger.type === "event" && !eventFilters?.success) || (review.intent === "edit" && review.trigger.type === "schedule" &&
               (review.trigger.schedule.kind === "interval"
                 ? !Number.isInteger(review.trigger.schedule.everyMinutes) || review.trigger.schedule.everyMinutes < 5 || review.trigger.schedule.everyMinutes > 10080
                 : !Number.isInteger(review.trigger.schedule.hour) || review.trigger.schedule.hour < 0 || review.trigger.schedule.hour > 23 ||
@@ -441,8 +470,8 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   <button type="button" disabled={Boolean(busyId)} onClick={() => void run(workflow.id, workflow.updatedAt)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now · explicit manual action">
                     <RefreshCw className={`h-3 w-3 ${busyId === workflow.id ? "animate-spin" : ""}`} />
                   </button>
-                  <button type="button" disabled={Boolean(busyId) || workflow.trigger.type !== "schedule"} onClick={() => requestWorkflowReview(workflow, "edit")}
-                    className="rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground disabled:opacity-40" title="Review interval or UTC daily schedule edit">Edit schedule</button>
+                  <button type="button" disabled={Boolean(busyId) || workflow.trigger.type === "manual"} onClick={() => requestWorkflowReview(workflow, "edit")}
+                    className="rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground disabled:opacity-40" title={workflow.trigger.type === "event" ? "Review event type and matching filters" : "Review interval or UTC daily schedule edit"}>{workflow.trigger.type === "event" ? "Edit event trigger" : "Edit schedule"}</button>
                   <button type="button" disabled={Boolean(busyId)} onClick={() => requestWorkflowReview(workflow, "delete")} className="rounded p-1.5 text-muted-foreground hover:bg-white/[0.03] hover:text-red-300 disabled:opacity-40" title="Review workflow deletion">
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -543,7 +572,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
         onRefetch={() => { void notificationsQuery.refetch(); }} />
 
       <div className="mt-3 font-terminal text-[12px] leading-3 text-muted-foreground/70">
-        Workflows use the selected Project's existing P9 sources and permissions. Reviewed schedule edits are available for interval and daily UTC schedules; conditional event filter authoring and the full visual editor remain under the existing P9 service, not a separate automation engine.
+        Workflows use the selected Project's existing P9 sources and permissions. Review interval and daily UTC schedules or event-type and filter changes here. Saving a trigger does not run it or authorize additional actions.
       </div>
     </section>
   );

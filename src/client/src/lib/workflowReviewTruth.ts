@@ -32,7 +32,7 @@ export function quickMonitorDraft(kind: QuickMonitorKind, enabled: boolean, minu
 /** Build a full replacement from exactly one server-returned Project workflow;
  * the action, source IDs, notification rights and schedule are not fabricated.
  * A strict server-side revision compare is required on saving. */
-export function scheduleEditDefinition(
+export function workflowTriggerEditDefinition(
   workflow: P9WorkflowRecord,
   trigger: P9WorkflowTrigger,
 ): P9WorkflowDefinitionInput {
