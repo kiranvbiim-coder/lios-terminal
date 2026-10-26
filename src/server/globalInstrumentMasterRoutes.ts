@@ -23,6 +23,7 @@ import { z } from "zod";
 import { INSTRUMENT_IDENTIFIER_TYPES } from "@shared/globalInstrumentMaster";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
 import { searchCommonInstrumentUniverse } from "./instrumentSearchIndexStore";
+import { searchGleifLegalEntities, GleifApiError } from "./gleifEntityReference";
 
 // LV4-04-13: real point-in-time (backtest) resolution/search, not just the
 // includeHistorical binary toggle -- see globalInstrumentMaster.ts's
@@ -77,6 +78,30 @@ export const searchInstrumentsQuerySchema = z.object({
 });
 
 export function registerGlobalInstrumentMasterRoutes(app: Express): void {
+  // CC0 legal-entity intelligence: LEI is NOT an exchange listing.
+  // Results are source-attributed P5 candidates, never written/promoted.
+  app.get("/api/finance/entities/gleif", async (req, res) => {
+    const parsed = z.object({
+      lei: z.string().trim().optional(),
+      name: z.string().trim().optional(),
+    }).strict().superRefine((value, ctx) => {
+      if (Number(Boolean(value.lei)) + Number(Boolean(value.name)) !== 1) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide exactly one of lei or name." });
+      }
+    }).safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid legal entity query" });
+      return;
+    }
+    try {
+      const query = parsed.data.lei ? { lei: parsed.data.lei } : { name: parsed.data.name! };
+      res.json(await searchGleifLegalEntities(query));
+    } catch (error) {
+      const status = error instanceof GleifApiError ? error.status : 502;
+      res.status(status).json({ error: error instanceof Error ? error.message : "GLEIF lookup unavailable" });
+    }
+  });
+
   app.get("/api/finance/instruments/resolve", async (req, res) => {
     const parsed = resolveInstrumentQuerySchema.safeParse(req.query);
     if (!parsed.success) {
