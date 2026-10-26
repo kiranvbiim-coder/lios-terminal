@@ -1,5 +1,5 @@
 import { GatewayProvider } from "@/lib/gateway/GatewayProvider";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Router, Switch, Route } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -10,8 +10,7 @@ import Terminal from "./pages/Terminal";
 import PublicProductPreview from "./pages/PublicProductPreview";
 import DomainPicker from "./pages/DomainPicker";
 import ForcedChangePassword from "./pages/ForcedChangePassword";
-import DataConnectionCenter from "./pages/DataConnectionCenter";
-import GovernedExtensionsPanel from "@/components/GovernedExtensionsPanel";
+
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import NotFound from "./pages/not-found";
 import { LAST_DOMAIN_STORAGE_KEY, FALLBACK_FINANCE_DOMAIN, pickDefaultDomain, type DomainInfo, type DomainSlug } from "@/lib/domains";
@@ -33,6 +32,10 @@ import { clearTerminalPersonalization } from "@/lib/terminalPersonalization";
 import { restoreSession, signOutSession } from "./lib/sessionLifecycle";
 import { subscribeOpenEnvironmentCenter, subscribeOpenPluginCenter } from "@/lib/appShellEvents";
 import type { AuthSessionState, EffectiveAccessSnapshot } from "@shared/identityContracts";
+
+// Chat-first: connection and plugin management must not inflate the initial Chat bundle.
+const DataConnectionCenter = lazy(() => import("./pages/DataConnectionCenter"));
+const GovernedExtensionsPanel = lazy(() => import("@/components/GovernedExtensionsPanel"));
 
 export interface SessionData {
   email: string;
@@ -286,8 +289,10 @@ function App() {
                   </SheetDescription>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="chat-management-content">
-                  {managementView === "connections" && session && <DataConnectionCenter embedded session={session} onComplete={() => setManagementView(null)} onLogout={handleLogout} />}
-                  {managementView === "plugins" && <div className="mx-auto w-full max-w-5xl p-4 sm:p-6"><GovernedExtensionsPanel /></div>}
+                  <Suspense fallback={<div role="status" className="p-6 font-ui text-sm text-muted-foreground">Opening {managementView === "plugins" ? "Plugins" : "Connections"}…</div>}>
+                    {managementView === "connections" && session && <DataConnectionCenter embedded session={session} onComplete={() => setManagementView(null)} onLogout={handleLogout} />}
+                    {managementView === "plugins" && <div className="mx-auto w-full max-w-5xl p-4 sm:p-6"><GovernedExtensionsPanel /></div>}
+                  </Suspense>
                 </div>
               </SheetContent>
             </Sheet>
