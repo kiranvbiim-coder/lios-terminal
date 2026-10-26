@@ -12,6 +12,8 @@ The original 2026-10-14 public-repository import intentionally omitted private h
 | `provider_ingested_universe.json` | 15,592 | `8b9e82b4143d453a0d0c8e7804820cf7a778cd43` | providerIngestedCatalog; instrument search |
 | `crypto_coingecko_ids.json` | 10,923 | `ca29d5000a89a7382309d667800e495010662662` | marketData CoinGecko identifier mapping |
 
+The pinned ticker file contains exactly one non-instrument exchange footer (`FILE CREATION TIME: ...`). The original bytes remain unchanged for custody; `legacyTickerCatalog.ts` filters this record before instrument search. The expected usable ticker-row count is 67,216.
+
 Do not interpret total catalog rows as unique tradable listings or verified live quote coverage. The catalog includes provisional, historical, exchange-specific and possibly overlapping identifiers.
 
 ## Restore and verify locally
