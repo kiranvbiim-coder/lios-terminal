@@ -48,7 +48,7 @@ export function loadFinanceDatabaseCatalog(): InstrumentMasterCandidate[] {
       ] as const) {
         const value = row[key];
         const valid = type === "isin"
-          ? typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9}$/i.test(value)
+          ? typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/i.test(value)
           : typeof value === "string" && /^[A-Z0-9]{12}$/.test(value);
         if (valid) candidate.identifiers.push({ type, value: value!.toUpperCase(), provider: "financedatabase" });
       }
