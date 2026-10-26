@@ -17,7 +17,7 @@ const [{ initDb, closeDb, getDb }, { users, sourceConnections }, { testSourceCon
   import("./credentialVault"),
 ]);
 
-test("Gemini connection Verify makes a fresh credential probe instead of reflecting stale chat health", async (t) => {
+test("Gemini and FRED Verify use fresh saved-key probes rather than stale connector health", async (t) => {
   await initDb();
   const previousFetch = globalThis.fetch;
   t.after(async () => {
@@ -69,6 +69,46 @@ test("Gemini connection Verify makes a fresh credential probe instead of reflect
   assert.equal(saved.status, "healthy");
   assert.match(saved.statusDetail ?? "", /accepted the credential probe/);
   assert.ok(saved.lastTestedAt);
+
+  // A non-AI keyed connector must take the same fresh verification path.
+  // Previously only Gemini had the explicit credential-probe branch.
+  setVaultCredential("fredApiKey", "test-fred-key", "FRED connection test fixture");
+  const [fredConnection] = await db.insert(sourceConnections).values({
+    userId: user.id,
+    organizationId: null,
+    connectorId: "fred",
+    name: "FRED",
+    sourceType: "keyed_api",
+    config: {},
+    credentialRef: "fredApiKey",
+    status: "configured",
+  }).returning();
+  recordConnectorVerification("fred", true, "stale passive success");
+  let fredUrl = "";
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    fredUrl = inputUrl(input);
+    return new Response(JSON.stringify({ seriess: [{ id: "GDP" }] }), { status: 200 });
+  }) as typeof fetch;
+
+  const fredResult = await testSourceConnection(user.id, fredConnection.id, { id: user.id, email: user.email });
+  assert.ok(fredResult);
+  assert.equal(fredResult.status, "healthy");
+  assert.match(fredResult.detail, /accepted the credential probe/);
+  assert.match(fredUrl, /^https:\/\/api\.stlouisfed\.org\/fred\/series\?/);
+  assert.equal(new URL(fredUrl).searchParams.get("api_key"), "test-fred-key");
+  assert.equal(fredResult.detail.includes("test-fred-key"), false);
+
+  // Fresh authorization rejection overrides an earlier passive success.
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify({ error: "Invalid API key" }), { status: 401 },
+  )) as typeof fetch;
+  const fredFailure = await testSourceConnection(user.id, fredConnection.id, { id: user.id, email: user.email });
+  assert.ok(fredFailure);
+  assert.equal(fredFailure.status, "invalid");
+  assert.match(fredFailure.detail, /rejected the credential/);
+  const [savedFred] = await db.select().from(sourceConnections).where(eq(sourceConnections.id, fredConnection.id));
+  assert.equal(savedFred.status, "invalid");
+  assert.equal(savedFred.lastHealthyAt !== null, true);
 });
 
 function inputUrl(input: RequestInfo | URL): string {
