@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Eye, LockKeyhole, MousePointer2 } from "lucide-react";
+import { Eye, Palette, MousePointer2 } from "lucide-react";
 import { setSignatureCursorEnabled } from "./SignatureCursor";
+import { initializeLiosProductPalette } from "@/lib/liosProductPalette";
 
 function readBoolean(key: string, fallback = false): boolean {
   if (typeof window === "undefined") return fallback;
@@ -12,9 +13,7 @@ export default function ThemeSwitcher() {
   const [signatureCursor, setSignatureCursor] = useState<boolean>(() => readBoolean("limuria-signature-cursor-v1"));
 
   useEffect(() => {
-    document.documentElement.classList.add("dark");
-    document.documentElement.setAttribute("data-theme", "dark");
-    try { window.localStorage.setItem("limuria-theme", "DARK"); } catch {}
+    initializeLiosProductPalette();
   }, []);
 
   useEffect(() => {
@@ -30,8 +29,8 @@ export default function ThemeSwitcher() {
 
   return (
     <div className="flex items-center gap-1 font-terminal text-[9px]" aria-label="LiOS visual accessibility controls">
-      <span className="flex items-center gap-1 border border-[hsl(38,100%,50%)/22%] bg-[hsl(38,100%,50%)/4%] px-1.5 py-1 text-[hsl(38,100%,58%)]" title="LiOS V5 is permanently dark">
-        <LockKeyhole className="h-3 w-3" /> DARK
+      <span className="flex items-center gap-1 border border-[hsl(38,100%,50%)/22%] bg-[hsl(38,100%,50%)/4%] px-1.5 py-1 text-[hsl(38,100%,58%)]" title="Choose a palette from your account menu">
+        <Palette className="h-3 w-3" /> THEME
       </span>
       <button
         type="button"
