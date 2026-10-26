@@ -71,7 +71,17 @@ export function loadLegacyTickerCatalog(): InstrumentMasterCandidate[] {
   }
 
   try {
-    const rows = JSON.parse(fs.readFileSync(tickersPath, "utf8")) as LegacyTickerRow[];
+    const parsed: unknown = JSON.parse(fs.readFileSync(tickersPath, "utf8"));
+    if (!Array.isArray(parsed)) throw new Error("Expected legacy ticker array");
+    // The historical private snapshot contains a provider FILE CREATION TIME
+    // footer; reject it and malformed listings at the single loader boundary.
+    const rows = parsed.filter((row): row is LegacyTickerRow =>
+      Boolean(row) && typeof row === "object" && !Array.isArray(row) &&
+      typeof row.symbol === "string" && row.symbol.trim().length > 0 &&
+      !/^FILE CREATION TIME:/i.test(row.symbol) &&
+      typeof row.name === "string" && row.name.trim().length > 0 &&
+      typeof row.exchange === "string" && row.exchange.trim().length > 0,
+    );
     cachedCandidates = adaptLegacySymbolCatalog(rows.map(toLegacyCatalogRow));
   } catch (error) {
     console.error(
