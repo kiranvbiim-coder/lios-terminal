@@ -64,8 +64,15 @@ export default function GovernedExtensionsPanel() {
   }
 
   return <section aria-label="Governed extensions" className="space-y-4 rounded-lg border border-border p-4">
-    <div><h2 className="font-semibold">Governed Finance extensions</h2><p className="text-sm text-muted-foreground">Inspect existing runtime contributions or import an approved local package. No public vendor catalog, downloads or automatic installation. Package signatures do not establish independent publisher identity, license or data/model/API rights.</p></div>
-    <p className="text-sm">Registered P13 declarative contributions last only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="font-semibold">Installed plugins and extensions</h2>
+      <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">Local · governed</span>
+    </div>
+    <details className="rounded border border-border/60 px-3 py-2 text-sm text-muted-foreground">
+      <summary className="cursor-pointer text-foreground">Installation, rights and runtime limitations</summary>
+      <p className="mt-2">Inspect existing runtime contributions or import an approved local package. No public vendor catalog, downloads or automatic installation. Package signatures do not establish independent publisher identity, license or data/model/API rights.</p>
+      <p className="mt-2">Registered P13 declarative contributions last only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    </details>
     <button type="button" onClick={() => void refreshCatalog()} disabled={busy} className="min-h-10 rounded border px-3 py-1.5 text-sm disabled:opacity-50" data-testid="extensions-refresh-catalog">Refresh current runtime inventory</button>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {!catalog ? <p role="status" className="text-sm">{error ? "Canonical extension catalog unavailable. Confirm the Home owner administrator session or try refreshing; installed capability status is unknown." : "Loading canonical runtime catalog…"}</p> : <>
