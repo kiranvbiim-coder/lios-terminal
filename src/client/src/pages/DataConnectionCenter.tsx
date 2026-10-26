@@ -1114,15 +1114,13 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
     if (selectedProvider?.category === "ai") setChatVerification(null);
     setModal(null); setSelectedProvider(null); setProviderPickerQuery(""); setCatalogSeed(null); setEditingConnection(null); refresh();
   }, [refresh, selectedProvider]);
-  const handleImported = useCallback(async () => {
-    await apiRequest("PUT", "/api/setup/source-connections", {
-      connectorId: "file_upload",
-      name: "Imported data",
-      sourceType: "file",
-      config: { source: "User BYOD upload" },
-      credentialRef: null,
-    });
+  const handleImported = useCallback(() => {
+    // DataImportWizard has already persisted the approved observations through
+    // /api/finance/normalize. Browser uploads have no reusable local file path:
+    // inventing a file_upload source connection here fails validation *after*
+    // the data is saved and misleadingly invites duplicate imports.
     setModal(null);
+    setConnectionTestNotice("File observations imported successfully. A one-time upload is not a reusable local-file connection.");
     refresh();
   }, [refresh]);
 
