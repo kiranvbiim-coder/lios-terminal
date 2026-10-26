@@ -18,6 +18,7 @@
 > **Public source distribution:** `kiranvbiim-coder/lios-terminal` — sanitized source snapshot; original development repository and history remain private.
 > **Default branch:** `main`  
 > **Implementation authority:** `AGENTS.md`, the final SI execution plan, mandatory Shipping Point contract and canonical subsystem/product docs below.
+> **$0 release execution lock (2026-10-26):** All agents must follow [the no-additional-spending public-beta release contract](docs/technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md): free Electron packaging, public GitHub Releases and existing website, no paid signing/notarization/hosting/CI. Public beta is explicitly unsigned on Windows and ad-hoc signed/unnotarized on macOS; this does not satisfy P14 signed-production certification.
 
 This distribution contains source code and synthetic test fixtures, **not private work, provider datasets, database/vault backups, model weights, native installers or the original Git history**. LiOS remains proprietary original code under [LICENSE](LICENSE); third-party licenses remain intact.
 

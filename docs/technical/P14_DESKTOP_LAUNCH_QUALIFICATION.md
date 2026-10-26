@@ -4,6 +4,11 @@
 
 P14 does not rebuild P10. P10 created release capabilities; P14 proves that the actual customer package works on clean machines and that the complete flagship user journey is reproducible.
 
+## $0 beta and P14 truth boundary
+
+The owner has locked **$0 additional cash release spend**. See [Zero-Cost Release Execution Contract](LIOS_ZERO_COST_RELEASE_EXECUTION.md). Its explicitly named ad-hoc signed/unnotarized macOS and unsigned Windows **public beta** uses a separate beta evidence/approval track and manual update verification. It is **not** a P14 production release and must **never** be marked as meeting P14-01/02/03, the 14-category P14 final board or signed flagship requirements. No paid signing/notarization/CI/hosting workaround is authorized, and no P14 validator or security boundary may be weakened to accommodate the beta. The pre-existing P14 production gates below remain intact; at $0 their paid trust prerequisites stay openly unresolved.
+
+
 ## Release rule
 
 P14 is the final release authority under [SI-01–SI-07](../LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md), not a replacement execution program. P14 may run in parallel with Product Hardening. Production release requires both:
