@@ -12,6 +12,9 @@
     "npm": ">=10"
   },
   "scripts": {
+    "data:recover": "node script/recover_instrument_catalogs.cjs --restore --github",
+    "data:verify": "node script/recover_instrument_catalogs.cjs --verify",
+    "test:catalog-recovery": "node --test script/recover_instrument_catalogs.test.cjs",
     "dev": "node script/dev.mjs",
     "native:runtime:build": "python3 script/build_native_runtime_bundle.py",
     "history:import": "NODE_ENV=production tsx script/import_stooq_db.ts",
