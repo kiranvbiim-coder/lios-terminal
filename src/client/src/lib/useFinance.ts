@@ -488,6 +488,28 @@ export function useDirectoryFacets() {
     staleTime: 60_000,
   });
 }
+export interface DirectoryCatalogInstallStatus {
+  state: "idle" | "fetching" | "extracting" | "verifying" | "completed" | "failed";
+  startedAt: string | null;
+  completedAt: string | null;
+  filesExtracted: number;
+  bytesExtracted: number;
+  importedCount: number | null;
+  upstreamCommit: string;
+  error: string | null;
+}
+export function useDirectoryInstallStatus() {
+  return useQuery<DirectoryCatalogInstallStatus>({
+    queryKey: ["/api/finance/directory/install/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/finance/directory/install/status");
+      if (!res.ok) throw new Error("Reference import state unavailable");
+      return res.json();
+    },
+    refetchInterval: 3000,
+  });
+}
+
 export function useDirectoryStatus() {
   return useQuery<DirectoryCatalogStatus>({
     queryKey: ["/api/finance/directory/status"],
