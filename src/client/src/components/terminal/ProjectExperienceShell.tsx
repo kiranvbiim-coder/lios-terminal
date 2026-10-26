@@ -13,7 +13,7 @@ import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import GovernedExtensionsPanel from "@/components/GovernedExtensionsPanel";
+import { openPluginCenter } from "@/lib/appShellEvents";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -61,6 +61,7 @@ import {
   Paperclip,
   Plus,
   Plug,
+  Blocks,
   Search,
   Send,
   Sparkles,
@@ -333,6 +334,7 @@ export default function ProjectExperienceShell({
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
     handledNavigation.current = navigationRequest.id;
     if (navigationRequest.section === "search") requestWorkSearch();
+    else if (navigationRequest.section === "plugins") openPluginCenter();
     else setSection(navigationRequest.section);
     setShowLifecycleCenter(false);
     setContextOpen(false);
@@ -1960,7 +1962,7 @@ export default function ProjectExperienceShell({
         onSelect={openWorkSearchResult}
       />
       <AuthenticatedNavigation section={section} account={account} busy={busy}
-        onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
+        onSection={(next) => { if (next === "plugins") { openPluginCenter(); return; } setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
         onSearch={onOpenCommand ?? requestWorkSearch}
@@ -2092,7 +2094,6 @@ export default function ProjectExperienceShell({
                   onFocusArtifact={(id) => { void newProjectChat(undefined, { artifactId: id }); }} /> : <ProjectAutomationPanel key={home.project.id} projectId={home.project.id} />}
               </div>}
             </>}
-            {section === "plugins" && <GovernedExtensionsPanel />}
           </section>
         ) : showLifecycleCenter ? (
           <LifecycleCenter
@@ -2638,6 +2639,13 @@ export default function ProjectExperienceShell({
                           <FileText className="h-4 w-4" /> Add Project resource
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={onOpenEnvironment}>
+                        <Plug className="h-4 w-4" /> Connect sources
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={openPluginCenter}>
+                        <Blocks className="h-4 w-4" /> Plugins & tools
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={askActiveObject}>Ask this</DropdownMenuItem>
                       <DropdownMenuSub>
