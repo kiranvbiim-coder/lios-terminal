@@ -200,6 +200,9 @@ export function planUniversalDataFromSnapshot(
   }
   for (const candidate of operational) {
     if (selected.length >= 5) break;
+    // A vendor that has no claimed overlap with the requested fields should
+    // not consume quota or an execution slot as an unrelated fallback.
+    if (request.fields.length && !candidate.fields.some((field) => request.fields.includes(field))) continue;
     if (!selected.includes(candidate)) selected.push(candidate);
   }
   const selectedCandidateIds = selected.map((candidate) => candidate.connectorId);
