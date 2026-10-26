@@ -4,6 +4,8 @@
 
 > **PUBLIC SOURCE SECURITY GATE:** This repository is publicly readable but original LiOS source remains proprietary under `LICENSE`; donor/asset/data rights remain independent. Before any source, agent, donor or workflow PR, read [`docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md`](docs/technical/PUBLIC_REPOSITORY_SAFEGUARDS.md). Never commit secrets, private data, non-redistributable material or unreviewed privileged CI; do not treat source CI as native shipping acceptance. Report suspected vulnerabilities privately under `SECURITY.md`.
 
+> **MARKET CATALOG RECOVERY (2026-10-26):** The public source snapshot deliberately excludes the original instrument/provider datasets, which still exist in the private `kiranvbiim-coder/lios-v1.0.0` repository. Before desktop packaging, restore them locally using `cd src && npm run data:catalogs:restore` and verify with `npm run data:catalogs:check`. Never commit recovered datasets to public Git; review upstream redistribution rights before bundling public release artifacts. See [`docs/technical/MARKET_CATALOG_RECOVERY.md`](docs/technical/MARKET_CATALOG_RECOVERY.md). This repairs the missing data foundation without introducing a second P5 instrument authority.
+
 > **CURRENT PENDING WORK:** [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) is the active **SI-06/SI-07-only** implementation queue for this public repository. SI-01–SI-05 remain preserved but paused/collapsed. Recheck current public `main` and public PR heads before editing; do not recreate existing PR work. Track coding, exercised user journeys and shipping qualification separately. A merged PR or passing source gate is not native/SP/P14 acceptance.
 
 ## 0. FINAL EXECUTION AUTHORITY — SUPER INTELLIGENCE — 2026-10-03
