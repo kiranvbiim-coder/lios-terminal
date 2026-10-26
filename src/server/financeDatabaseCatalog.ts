@@ -103,10 +103,11 @@ export function loadFinanceDatabaseRows(): readonly FinanceDatabaseRow[] {
   try {
     const buffer = fs.readFileSync(file);
     const manifest = readFinanceDatabaseManifest();
-    if (manifest?.catalogSha256) {
-      const sha = crypto.createHash("sha256").update(buffer).digest("hex");
-      if (sha !== manifest.catalogSha256) throw new Error("Downloaded catalog integrity mismatch");
+    if (!manifest || !manifest.catalogSha256 || !/^[a-f0-9]{64}$/i.test(manifest.catalogSha256)) {
+      throw new Error("Catalog provenance manifest or SHA256 is missing/invalid");
     }
+    const sha = crypto.createHash("sha256").update(buffer).digest("hex");
+    if (sha !== manifest.catalogSha256) throw new Error("Downloaded catalog integrity mismatch");
     const parsed: unknown = JSON.parse(buffer.toString("utf8"));
     if (!Array.isArray(parsed)) throw new Error("Expected a provider-row JSON array");
     const result = parsed.filter(isFinanceDatabaseRow);
