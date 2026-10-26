@@ -9,7 +9,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-gemini-connection-")
 const previousDataDir = process.env.LIMURIA_DATA_DIR;
 process.env.LIMURIA_DATA_DIR = dataDir;
 
-const [{ initDb, closeDb, getDb }, { users, sourceConnections }, { testSourceConnection }, { recordConnectorVerification }, { setVaultCredential, invalidateVaultCache }] = await Promise.all([
+const [{ initDb, closeDb, getDb }, { users, sourceConnections }, { testSourceConnection, unprobedConnectionResult }, { recordConnectorVerification }, { setVaultCredential, invalidateVaultCache }] = await Promise.all([
   import("./db"),
   import("@shared/schema"),
   import("./sourceConnectionService"),
@@ -76,3 +76,16 @@ function inputUrl(input: RequestInfo | URL): string {
   if (input instanceof URL) return input.toString();
   return input.url;
 }
+
+
+test("a previous passive success cannot satisfy a new Verify click without a live probe", () => {
+  const pastSuccess = unprobedConnectionResult("live_verified");
+  assert.equal(pastSuccess.status, "configured");
+  assert.match(pastSuccess.detail, /did not contact the provider/);
+  assert.notEqual(pastSuccess.status, "healthy");
+  assert.equal(unprobedConnectionResult("credential_configured").status, "configured");
+  assert.equal(unprobedConnectionResult("catalog_only").status, "invalid");
+  assert.equal(unprobedConnectionResult("disabled").status, "degraded");
+  assert.equal(unprobedConnectionResult("rate_limited").status, "degraded");
+  assert.equal(unprobedConnectionResult(null).status, "unreachable");
+});
