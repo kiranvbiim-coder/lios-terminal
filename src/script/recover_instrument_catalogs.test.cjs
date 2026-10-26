@@ -66,3 +66,15 @@ test("well-formed JSON with unexpected identity rows is rejected", (t) => {
   const spec = { ...x.specs[0], blob: gitBlobDigest(bytes), bytes: bytes.length };
   assert.throws(() => validateCatalog(file, spec), /invalid symbol or name/);
 });
+
+test("historical vendor timestamp row is valid snapshot metadata, not an instrument", (t) => {
+  const x = fixtures(t);
+  const file = path.join(x.inputDir, "tickers.json");
+  const bytes = Buffer.from(JSON.stringify([
+    { symbol: "ABC", name: "A Company" },
+    { symbol: "FILE CREATION TIME: 0820202603:02", name: "" }
+  ]));
+  fs.writeFileSync(file, bytes);
+  const spec = { ...x.specs[0], blob: gitBlobDigest(bytes), bytes: bytes.length };
+  assert.equal(validateCatalog(file, spec).records, 2);
+});
