@@ -55,3 +55,19 @@ test("budget, network, storage and unknown errors are distinct and never headlin
   assert.equal(unknown.kind, "unknown");
   assert.doesNotMatch(unknown.title, /runtime_failed/);
 });
+
+test("unconfirmed run outcomes and permission denials never offer an automatic retry", () => {
+  for (const message of [
+    "The Home restarted before this run's outcome was confirmed.",
+    "The Home connection was lost before the run outcome was confirmed.",
+  ]) {
+    const view = presentRuntimeError("request_failed", message);
+    assert.equal(view.kind, "unconfirmed");
+    assert.deepEqual(view.recoveries, []);
+  }
+  const denied = presentRuntimeError("runtime_failed", "Source access revoked by its owner");
+  assert.equal(denied.kind, "permission");
+  assert.deepEqual(denied.recoveries, []);
+  assert.equal(presentRuntimeError("runtime_failed", "The provider rejected the request: forbidden (403).").kind, "ai_provider");
+  assert.doesNotMatch(presentRuntimeError("runtime_failed", "database unavailable").hint, /Nothing was lost/);
+});

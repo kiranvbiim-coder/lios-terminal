@@ -150,3 +150,31 @@ test("WS-65 rejects evidence reached through a linked parent directory", t => {
   fs.symlinkSync(real, path.join(fixture.dir, "macos"), process.platform === "win32" ? "junction" : "dir");
   assert.throws(() => validateWS65ReleaseBundle(fixture.paths), /nonlinked directory/);
 });
+
+test("WS-65 refuses final-file links even when open cannot enforce no-follow", t => {
+  const fixture = buildSyntheticFixture();
+  t.after(() => fs.rmSync(fixture.dir, { recursive: true, force: true }));
+  for (const name of [fixture.paths.report, path.join(fixture.dir, "windows", "signed-installer.bin")]) {
+    const target = name + ".original";
+    fs.renameSync(name, target);
+    try { fs.symlinkSync(target, name, "file"); }
+    catch (error) {
+      fs.renameSync(target, name);
+      if (process.platform === "win32" && error instanceof Error && "code" in error && error.code === "EPERM") {
+        t.skip("Windows file symlink creation requires Developer Mode or elevation");
+        return;
+      }
+      throw error;
+    }
+    // Simulate a platform with O_NOFOLLOW=0 without changing production code.
+    const open = fs.openSync;
+    t.mock.method(fs, "openSync", (file, flags, mode) =>
+      open(file, typeof flags === "number" ? flags & ~(fs.constants.O_NOFOLLOW ?? 0) : flags, mode));
+    try { assert.throws(() => validateWS65ReleaseBundle(fixture.paths), /nonlinked regular file/); }
+    finally {
+      t.mock.restoreAll();
+      fs.unlinkSync(name);
+      fs.renameSync(target, name);
+    }
+  }
+});
