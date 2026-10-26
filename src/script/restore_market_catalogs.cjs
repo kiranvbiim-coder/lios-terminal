@@ -61,9 +61,10 @@ function validateCatalogBytes(bytes, definition) {
 }
 
 function downloadOriginal(definition, runner = spawnSync) {
-  const endpoint = "repos/" + SOURCE_REPOSITORY
-    + "/contents/src/server/data/" + definition.name + "?ref=main";
-  const result = runner("gh", ["api", endpoint, "--header", "Accept: application/vnd.github.raw+json"], {
+  // Pin directly to the audited Git object. The private repository may change
+  // its main branch without silently changing the recovered source bytes.
+  const endpoint = "repos/" + SOURCE_REPOSITORY + "/git/blobs/" + definition.sha;
+  const result = runner("gh", ["api", endpoint], {
     encoding: null,
     maxBuffer: MAX_BYTES + 1024 * 1024,
     windowsHide: true,
@@ -75,7 +76,14 @@ function downloadOriginal(definition, runner = spawnSync) {
       + ", or supply --from-dir /path/to/private/checkout."
     );
   }
-  return result.stdout;
+  let payload;
+  try { payload = JSON.parse(result.stdout.toString("utf8")); }
+  catch { throw new Error("Authenticated private Git blob response is not JSON: " + definition.name); }
+  if (!payload || payload.sha !== definition.sha || payload.encoding !== "base64"
+    || typeof payload.content !== "string") {
+    throw new Error("Authenticated private Git blob response is invalid: " + definition.name);
+  }
+  return Buffer.from(payload.content.replace(/\s/g, ""), "base64");
 }
 
 function localOriginal(directory, definition) {
