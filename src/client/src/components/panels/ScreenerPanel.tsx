@@ -308,14 +308,6 @@ export default function ScreenerPanel({ onSymbol }: Props) {
       </div>
 
       {/* Table */}
-      {(installError || installStatus?.error) && (
-        <div role="alert" className="px-3 py-1.5 text-[10px] text-red-400">{installError ?? installStatus?.error}</div>
-      )}
-      {installStatus?.state === "completed" && installStatus.importedCount !== null && (
-        <div role="status" className="px-3 py-1 text-[9px] text-muted-foreground">
-          {installStatus.importedCount.toLocaleString()} reference identities installed locally. Live quote/financial coverage is separate.
-        </div>
-      )}
       <div className="flex-1 overflow-auto scrollbar-thin">
         {isLoading ? (
           <div className="p-4 space-y-2">
@@ -491,6 +483,14 @@ function DirectoryScreenerView({ onSymbol }: { onSymbol: (sym: string) => void }
         >{installing ? `IMPORTING ${installStatus?.filesExtracted ?? 0} FILES` : catalogStatus?.financeDatabase.imported ? "UPDATE REFERENCE DATA" : "IMPORT 300K+ REFERENCES"}</button>
         <span title="Reference symbols are not verified live prices, fundamentals or distinct companies." className="ml-auto font-terminal text-[9px] text-muted-foreground">{(data?.total ?? 0).toLocaleString()} MATCHES · {(catalogStatus?.uniqueListingCount ?? 0).toLocaleString()} REFERENCE LISTINGS</span>
       </div>
+      {(installError || installStatus?.error) && (
+        <div role="alert" className="px-3 py-1.5 text-[10px] text-red-400">{installError ?? installStatus?.error}</div>
+      )}
+      {installStatus?.state === "completed" && installStatus.importedCount !== null && (
+        <div role="status" className="px-3 py-1 text-[9px] text-muted-foreground">
+          {installStatus.importedCount.toLocaleString()} reference identities installed locally. Live quote/financial coverage is separate.
+        </div>
+      )}
       <div className="flex-1 overflow-auto scrollbar-thin">
         {isLoading ? (
           <div className="p-4 space-y-2">{Array(12).fill(0).map((_, i) => <Skeleton key={i} className="h-8 bg-border" />)}</div>
