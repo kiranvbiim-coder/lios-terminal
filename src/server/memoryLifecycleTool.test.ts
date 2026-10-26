@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-memory-lifecycle-tool-"));
 process.env.LIMURIA_DATA_DIR = dataDir;
@@ -75,8 +76,9 @@ test("SI-03.03 governed memory lifecycle tools expose owned revisions and requir
   );
   assert.ok(original);
 
-  await t.test("descriptor policy keeps inspection read-only and mutations one-shot confirm", () => {
-    assert.equal(memoryInspectTool.permissionClass, "safe_auto");
+  await t.test("memory inspection and mutations require exact one-shot confirmation", () => {
+    assert.equal(memoryInspectTool.permissionClass, "user_confirm");
+    assert.equal(memoryInspectTool.allowProjectApproval, false);
     assert.equal(memoryInspectTool.access, "read");
     assert.equal(memoryInspectTool.sideEffect, "none");
     assert.equal(memoryInspectTool.replaySafe, true);
@@ -159,5 +161,76 @@ test("SI-03.03 governed memory lifecycle tools expose owned revisions and requir
       ),
       /Auto or My Data/,
     );
+  });
+
+  await t.test("confirmed inspection survives a second approval without exposing contents to the model", async () => {
+    const { executeConversationRuntime, currentConversationToolApprovalPolicy, getConversationTool } = await import("./conversationRuntime");
+    const { createAttribution } = await import("./byoaiRouter");
+    const { proposeGovernedToolOperation, reviewGovernedToolOperation, resolveGovernedToolOperation } = await import("./conversationGrantStore");
+    const { conversationRequestSchema } = await import("@shared/conversationRuntime");
+    const marker = "OWNER_ONLY_SAVED_MEMORY_20261026";
+    const saved = await asIdentity({ userId: owner.id, organizationId: null }, () => appendDurableMemory({
+      content: marker, kind: "owner_note", originClass: "owner", originKind: "explicit_owner_note",
+    }));
+    assert.ok(saved);
+    const ownerMemoryInspection: { text: string | null } = { text: null };
+    const requestId = crypto.randomUUID();
+    const signal = new AbortController().signal;
+    const prompts: string[] = [];
+    const replies = [JSON.stringify({ steps: [
+      { id: "inspect", toolId: memoryInspectTool.id, label: "Inspect saved memories", input: {}, dependsOn: [] },
+      { id: "correct", toolId: memoryCorrectTool.id, label: "Correct saved note", input: { memoryKey: saved.memoryKey, expectedRevision: 1, content: "Owner corrected note" }, dependsOn: ["inspect"] },
+    ] }), JSON.stringify({ decision: "complete", answer: "The recorded memories are shown below." })];
+    const request = conversationRequestSchema.parse({
+      requestId, message: "Inspect my saved memories.", sourceScope: "my_data", executionMode: "ai_assisted",
+      transmissionPolicy: { mode: "configured", allowToolCalling: true, allowResourceReferences: false },
+    });
+    const user = { id: owner.id, organizationId: null, role: "internal_analyst" as const };
+    const events: ConversationRuntimeEvent[] = [];
+    const base = {
+      tenant: { userId: owner.id, organizationId: null, role: user.role }, scope: "quick" as const,
+      chatId: null, projectId: null, resources: [], history: [], request, signal,
+      emit: (event: ConversationRuntimeEvent) => { events.push(event); },
+      aiCompletion: async (input: unknown) => {
+        prompts.push(JSON.stringify(input));
+        const text = replies.shift();
+        if (!text) throw new Error("Unexpected model call");
+        return { provider: "openai" as const, model: "gpt-4o", text, attribution: createAttribution({ provider: "openai", model: "gpt-4o", prompt: "public test", output: text }) };
+      },
+    };
+    const paused = await asIdentity({ userId: owner.id, organizationId: null }, () => executeConversationRuntime({ ...base, agentLoop: { ownerMemoryInspection } }));
+    assert.equal(paused.awaitingApproval, true);
+    assert.doesNotMatch(paused.text, new RegExp(marker));
+    const authorize = async (pause: NonNullable<typeof paused.agentPause>) => {
+      const planned = pause.resume.steps.find(step => step.id === pause.stepId)!;
+      const proposal = await proposeGovernedToolOperation({
+        user, projectId: null, chatId: null, requestId, stepId: pause.stepId, toolCallId: pause.resume.paused.toolCallId,
+        toolId: pause.toolId, input: planned.input, descriptor: getConversationTool(pause.toolId)!,
+        planHash: pause.planSha256, policy: currentConversationToolApprovalPolicy(pause.toolId), runSignal: signal,
+        currentPolicy: () => currentConversationToolApprovalPolicy(pause.toolId),
+      });
+      await reviewGovernedToolOperation({ user, requestId, reviewId: proposal.reviewId, allow: true, scope: "once" });
+      return resolveGovernedToolOperation({ user, requestId, reviewId: proposal.reviewId });
+    };
+    const pause = paused.agentPause!;
+    const authorization = await authorize(pause);
+    const secondPause = await asIdentity({ userId: owner.id, organizationId: null }, () => executeConversationRuntime({
+      ...base, agentLoop: { ownerMemoryInspection, resume: { state: pause.resume, authorization } },
+    }));
+    assert.equal(secondPause.awaitingApproval, true);
+    assert.match(secondPause.text, new RegExp(marker));
+    assert.equal(JSON.stringify(secondPause.agentPause).includes(marker), false, "raw memory is not part of model continuation");
+    const next = secondPause.agentPause!;
+    const nextAuthorization = await authorize(next);
+    const result = await asIdentity({ userId: owner.id, organizationId: null }, () => executeConversationRuntime({
+      ...base, agentLoop: { ownerMemoryInspection, resume: { state: next.resume, authorization: nextAuthorization } },
+    }));
+    assert.equal(result.awaitingApproval, false);
+    assert.match(result.text, new RegExp(marker));
+    assert.match(result.text, /"memoryKey"/);
+    assert.match(result.text, /"revision":1/);
+    assert.ok(events.some(event => event.type === "text" && event.text.includes(marker)), "owner-facing text event must include the recorded memory");
+    assert.equal(prompts.length, 2);
+    assert.equal(prompts.some(prompt => prompt.includes(marker)), false, "inspection content must not enter planner or review model requests");
   });
 });

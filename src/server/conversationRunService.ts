@@ -635,6 +635,9 @@ async function runProjectChat(
     });
     if (!restart) await ledger.recordRequest();
 
+    // Owner-only display data survives live approval resumes, not process
+    // restarts or model checkpoints. A restarted run must inspect again.
+    const ownerMemoryInspection: { text: string | null } = { text: null };
     const executeAttempt = (
       resume?: { state: NonNullable<ConversationRuntimeResult["agentPause"]>["resume"]; authorization: GovernedToolAuthorization },
       restartRun?: PreparedRestartRun,
@@ -692,6 +695,7 @@ async function runProjectChat(
           request: runtimeRequest,
           ...(agent ? {
             agentLoop: {
+              ownerMemoryInspection,
               ledger: (event: AgentEventInput) => journal.appendAgentEvent(request.requestId, event),
               prepareApproval: async ({ step, toolCallId }) => {
                 if (!chat.projectId) {

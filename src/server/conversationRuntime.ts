@@ -235,6 +235,8 @@ export interface AgentLoopRuntimeOptions {
    * this path never appends it. The state is live in-memory only; it is never persisted.
    */
   resume?: { state: AgentLoopResumeState; authorization: unknown };
+  /** Server-only owner display buffer, shared across live approval resumes; never included in model/checkpoint state. */
+  ownerMemoryInspection?: { text: string | null };
   /**
    * Server-set preparation hook for confirm-class calls (L9 prepares the exact GM-11 operation and appends
    * `tool_call_execution_prepared` here). It runs before the call waits for approval, never executes or approves, and a
@@ -4543,6 +4545,11 @@ async function executeAgentLoop(
   // Never journal, checkpoint or expose raw external MCP observations. They
   // exist only in the current run and are re-authorized before AI release.
   const mcpEvidenceByStep = new Map<string, McpAgentEvidenceCapture>();
+  // Confirmed inspection contents are for the owner, not planner/AI context.
+  // Keep only the latest inspection, bounded by the tool's 128 KiB output cap.
+  const ownerMemoryInspection = options.ownerMemoryInspection ?? { text: null };
+  const withMemoryInspection = (text: string) => ownerMemoryInspection.text === null ? text
+    : `${text}\n\n### Most recent confirmed saved-memory inspection\n\nRecorded memory contents below were not sent to the AI for this inspection. They are saved with this Chat response when the run completes.\n\n\`\`\`json\n${ownerMemoryInspection.text}\n\`\`\``;
   const startedAt = nowIso();
   const budget = agentLoopBudget(options);
   const { tools, skills } = offeredAgentLoopCatalogue(input.tenant.role);
@@ -4807,6 +4814,7 @@ async function executeAgentLoop(
         // Only after the governed registry validated the result AND committed
         // the external dispatch may it become review-eligible, never before.
         if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
+        if (step.toolId === "lios.memory.inspect") ownerMemoryInspection.text = JSON.stringify(result.output);
         const publishesArtifact = step.toolId === terminalArtifactTool.id
           || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";
         if (publishesArtifact && result.output && typeof result.output === "object") {
@@ -4869,7 +4877,7 @@ async function executeAgentLoop(
   const sourceRefs = [...requiredSourceRefs, ...additionalSourceRefs.slice(0, Math.max(0, 500 - requiredSourceRefs.length))];
   const summaryOutput = { status: outcome.status, aiCalls: outcome.aiCalls, revisions: outcome.revisions, steps: outcome.steps.map((step) => ({ id: step.id, toolId: step.toolId, status: step.status })) };
   if (outcome.status === "awaiting_approval") {
-    const text = `Waiting for your approval: the plan needs "${outcome.awaiting?.toolId}", which cannot run without it. Nothing was executed for that step.`;
+    const text = withMemoryInspection(`Waiting for your approval: the plan needs "${outcome.awaiting?.toolId}", which cannot run without it. Nothing was executed for that step.`);
     await emit(input, { ...eventBase(request.requestId), type: "text", text, label: "manual" });
     const pause = outcome.resume && outcome.planSha256 && outcome.awaiting
       ? { planSha256: outcome.planSha256, stepId: outcome.awaiting.stepId, toolId: outcome.awaiting.toolId, resume: outcome.resume }
@@ -4877,12 +4885,12 @@ async function executeAgentLoop(
     return { text, label: "manual", plan: agentPlan, receiptIds: [], artifacts: [], cancelled: false, awaitingApproval: true, ...(pause ? { agentPause: pause } : {}) };
   }
   const completed = outcome.status === "completed" && outcome.answer !== null;
-  const text = completed
+  const text = withMemoryInspection(completed
     ? outcome.answer!
     : [
       `Stopped before finishing: the ${outcome.stopReason?.replaceAll("_", " ") ?? "run"} limit was reached.`,
       ...outcome.steps.map((step) => `- ${step.label}: ${step.status === "completed" ? step.summary : agentStatusLabel(step.status)}`),
-    ].join("\n");
+    ].join("\n"));
   const allDeterministic = outcome.steps.length > 0 && outcome.steps.every((step) => step.status !== "completed" || step.deterministic);
   const label: ConversationRuntimeResult["label"] = completed ? "ai_derived" : allDeterministic ? "deterministic" : "observed_source";
   const receipt = createReceipt({
