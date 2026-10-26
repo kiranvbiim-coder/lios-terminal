@@ -14,6 +14,7 @@ import { sourceConnections, type SourceConnection, type SourceConnectionConfig, 
 import { persistSourceSnapshot } from "./sourceSnapshotStore";
 import { normalizeUniversalFinanceRecords } from "@shared/universalIngestion";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
+import { clearProviderExecutionCache } from "./providerExecutionCache";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -266,6 +267,9 @@ export async function upsertSourceConnection(
       updatedAt: now,
     }).where(and(eq(sourceConnections.id, input.id), eq(sourceConnections.userId, userId))).returning();
     if (!updated) throw new Error("Source connection was not found.");
+    // An identical adapter id/metadata can resolve a changed endpoint, file,
+    // credential or rights policy. Never reuse an earlier cached observation.
+    clearProviderExecutionCache();
 
     await recordAuditEvent(actor.id, "source_connection_saved", {
       connectionId: updated.id,
@@ -300,6 +304,7 @@ export async function upsertSourceConnection(
       updatedAt: now,
     },
   }).returning();
+  clearProviderExecutionCache();
 
   await recordAuditEvent(actor.id, "source_connection_saved", {
     connectionId: connection.id,
@@ -316,6 +321,7 @@ export async function deleteSourceConnection(userId: number, connectionId: numbe
   const [connection] = await db.select().from(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId))).limit(1);
   if (!connection) return false;
   await db.delete(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId)));
+  clearProviderExecutionCache();
   await recordAuditEvent(actor.id, "source_connection_deleted", { connectionId, connectorId: connection.connectorId, organizationId: connection.organizationId, ...auditActor(actor) });
   return true;
 }
@@ -444,6 +450,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
 
   const testedAt = new Date().toISOString();
   await db.update(sourceConnections).set({ status, statusDetail: detail, lastTestedAt: new Date(testedAt), lastHealthyAt: status === "healthy" ? new Date(testedAt) : connection.lastHealthyAt, updatedAt: new Date(testedAt) }).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId)));
+  // Verification may revoke a once-healthy source, or prove a freshly
+  // rotated credential. Both change the authority of retained observations.
+  clearProviderExecutionCache();
   await recordAuditEvent(actor.id, "source_connection_tested", { connectionId, connectorId: connection.connectorId, status, organizationId: connection.organizationId, ...auditActor(actor) });
   return { connectionId, status, detail, testedAt };
 }
