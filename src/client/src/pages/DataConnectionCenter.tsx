@@ -123,6 +123,7 @@ interface Props {
   session: { email: string; role: string; name: string };
   onComplete: () => void;
   onLogout: () => void;
+  embedded?: boolean;
 }
 
 const READINESS_CONNECTOR_IDS = ["fred", "simfin", "finnhub", "world_bank"] as const;
@@ -798,7 +799,7 @@ function ConnectionCard({
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function DataConnectionCenter({ session, onComplete, onLogout }: Props) {
+export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
   const [removalTarget, setRemovalTarget] = useState<number | null>(null);
@@ -1324,17 +1325,17 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
   const setupDenied = setupQuery.isError && [401, 403].includes(asyncSurfaceStatus(setupQuery.error) ?? 0);
   const setupReadState = resolveAsyncSurfaceState({ hasData: Boolean(setupQuery.data) && !setupDenied, isPending: setupQuery.isPending, isError: setupQuery.isError, error: setupQuery.error });
-  if (setupReadState !== "ready") return <Shell session={session} onLogout={onLogout}>
+  if (setupReadState !== "ready") return <Shell session={session} onLogout={onLogout} embedded={embedded}>
     <AsyncSurfaceNotice surface="connections" state={setupReadState} onRetry={() => void setupQuery.refetch()} retrying={setupQuery.isFetching} onLeave={onComplete} leaveLabel="Return to Chat" />
   </Shell>;
 
   return (
-    <Shell session={session} onLogout={onLogout}>
+    <Shell session={session} onLogout={onLogout} embedded={embedded}>
       {setupQuery.isError && !setupDenied && setupQuery.data && <div role="alert" className="mx-auto mb-3 w-full max-w-5xl rounded border border-amber-300/30 p-3 text-sm">
         Connection status could not be refreshed. Showing the last loaded configuration; current availability is unverified. Your open form remains here.
         <button type="button" disabled={setupQuery.isFetching} onClick={() => void setupQuery.refetch()} className="ml-2 min-h-10 underline">Retry connection status</button>
       </div>}
-      <div className="w-full max-w-5xl space-y-5 overflow-y-auto max-h-[calc(100vh-120px)] pr-1">
+      <div className={embedded ? "w-full space-y-5 pb-8" : "w-full max-w-5xl space-y-5 overflow-y-auto max-h-[calc(100vh-120px)] pr-1"}>
 
         <div className="flex items-end justify-between border-b border-border pb-3">
           <div>
@@ -2100,7 +2101,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
 // ── Shell ──────────────────────────────────────────────────────────────────
 
-function Shell({ session, onLogout, children }: { session: { name: string }; onLogout: () => void; children: React.ReactNode }) {
+function Shell({ session, onLogout, embedded, children }: { session: { name: string }; onLogout: () => void; embedded: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="dark mx-auto w-full min-w-0 max-w-5xl px-4 py-4 sm:px-6">{children}</div>;
   return (
     <div className="dark min-h-screen bg-[#030303] flex flex-col items-center px-6 py-8">
       <div className="w-full max-w-5xl flex items-center justify-between mb-5">
