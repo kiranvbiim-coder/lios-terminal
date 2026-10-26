@@ -72,7 +72,12 @@ export function loadLegacyTickerCatalog(): InstrumentMasterCandidate[] {
 
   try {
     const rows = JSON.parse(fs.readFileSync(tickersPath, "utf8")) as LegacyTickerRow[];
-    cachedCandidates = adaptLegacySymbolCatalog(rows.map(toLegacyCatalogRow));
+    // The original Nasdaq-derived directory includes a non-instrument
+    // "FILE CREATION TIME:" footer row. Do not index it as a security.
+    const instruments = rows.filter((row) => typeof row.symbol === "string"
+      && row.symbol.trim() && typeof row.name === "string" && row.name.trim()
+      && !/^FILE CREATION TIME:/i.test(row.symbol));
+    cachedCandidates = adaptLegacySymbolCatalog(instruments.map(toLegacyCatalogRow));
   } catch (error) {
     console.error(
       "legacyTickerCatalog: failed to load server/data/tickers.json:",
