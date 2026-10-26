@@ -3532,6 +3532,18 @@
   },
   {
    "method": "GET",
+   "path": "/api/finance/entities/gleif",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
    "path": "/api/finance/entities/resolve",
    "reachableBy": [
     "client_user",
