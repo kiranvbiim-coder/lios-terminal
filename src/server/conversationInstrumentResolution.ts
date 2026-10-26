@@ -14,8 +14,8 @@ import {
  */
 function observationKey(candidate: InstrumentMasterCandidate): string {
   return [candidate.name, candidate.symbol ?? ""]
-    .map(value => value.trim().toUpperCase().replace(/\\s+/g, " "))
-    .join("\\u0000");
+    .map(value => value.trim().toUpperCase().replace(/\s+/g, " "))
+    .join("\u0000");
 }
 
 /** Extend the existing master fallback, never a competing identity registry. */
