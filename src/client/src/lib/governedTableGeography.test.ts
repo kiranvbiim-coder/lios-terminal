@@ -63,10 +63,23 @@ test("bounded map projection never displays more than 60 source-verified points 
   assert.equal(result.points.length, 60);
   assert.equal(result.omittedCount, 940);
 });
+test("map never invents event times from ambiguous or rolled-over saved dates", () => {
+  const dates = ["1", "03/04/2026", "2026-02-30", "2024-02-29", "2026-10-27T15:30:00+05:30"];
+  const result = projectSavedTableGeography({ ...table, content: { ...table.content,
+    rows: dates.map(event_date => ({
+      Latitude: 10, Longitude: 80, source_ref: "evidence:p7:one", event_date,
+    })),
+  } });
+  assert.deepEqual(result.points.map(point => point.occurredAt), [
+    null, null, null, "2024-02-29T00:00:00.000Z", "2026-10-27T10:00:00.000Z",
+  ]);
+});
+
 test("Chat map uses saved source-backed table only, no external map network or invented location", () => {
   const ui = readFileSync(new URL("../components/terminal/GovernedVisualAnswer.tsx", import.meta.url), "utf8");
   assert.match(ui, /projectSavedTableGeography\(decision\)/);
   assert.match(ui, /<OfflineProjectWorldMap points=\{mapProjection\.points\} origin="P4 saved table"/);
   assert.match(ui, /View recorded locations/);
+  assert.match(ui, /\{mapOpen && <GovernedChartBoundary>/);
   assert.doesNotMatch(ui, /geocode|mapbox|googleapis|OpenStreetMap|createArtifact\(/i);
 });
