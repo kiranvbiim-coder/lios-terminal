@@ -18,7 +18,7 @@ test("core workstations expose the intended first-class capability groups", () =
   assert.deepEqual(WORKSTATION_DEFINITIONS.fixedIncome.sections.map((section) => section.id), ["overview", "curves", "bonds", "methodology"]);
   assert.deepEqual(WORKSTATION_DEFINITIONS.quant.sections.map((section) => section.id), ["overview", "lab", "methodology"]);
   assert.deepEqual(WORKSTATION_DEFINITIONS.economics.sections.map((section) => section.id), ["overview", "macro", "signals", "policy", "indicators", "calendar"]);
-  assert.deepEqual(WORKSTATION_DEFINITIONS.research.sections.map((section) => section.id), ["investigation", "filings", "consensus", "financials", "fundamentals", "methodology"]);
+  assert.deepEqual(WORKSTATION_DEFINITIONS.research.sections.map((section) => section.id), ["investigation", "perspectives", "filings", "consensus", "financials", "fundamentals", "methodology"]);
 });
 
 test("trust/methodology remains first-class where hidden assumptions are material", () => {
