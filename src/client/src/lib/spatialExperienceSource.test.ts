@@ -170,6 +170,8 @@ test("Phase 2 narrow and zoomed panes are readable, undraggable and never alloca
   assert.match(canvas, /presentation\.canMoveCompanion \? <button/);
   assert.match(canvas, /<span className="lios-spatial-companion-grip">Insight companion<\/span>/);
   assert.match(canvas, /companionRegion\.current\?\.focus\(\)/);
+  assert.match(canvas, /if \(activeDrag\?\.kind === "companion" && activeDrag\.startPoint\) setCompanionPoint\(activeDrag\.startPoint\)/);
+  assert.match(styles, /\.lios-spatial-companion:focus-visible/);
   assert.match(canvas, /announcement \|\| presentation\.layoutHint/);
   assert.match(presentationPolicy, /SPATIAL_STACKED_MAX_WIDTH = 760/);
   assert.match(presentationPolicy, /canMoveNodes: mode === "map" && !stacked/);
