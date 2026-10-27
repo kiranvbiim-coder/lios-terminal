@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EditorialMedia } from "@shared/editorialMedia";
 import { extractRssImageCandidate } from "./newsFeedImageCandidates";
+import { fetchPublicNewsArticleHtml, validatePublicNewsUrl } from "./publicNewsArticleFetch";
 import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
 import { buildDataStatus, type DataStatus } from "./dataStatus";
@@ -587,11 +588,7 @@ export function filterNewsItems(items: NewsItem[], query?: string): NewsItem[] {
 }
 
 function sanitizeArticleUrl(url: string) {
-  const parsed = new URL(url);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error(`Unsupported article protocol: ${parsed.protocol}`);
-  }
-  return parsed.toString();
+  return validatePublicNewsUrl(url).href;
 }
 
 function inferSentiment(text: string): NewsItem["sentiment"] {
@@ -2337,7 +2334,7 @@ export async function getNewsArticle(input: {
   });
 
   try {
-    const html = await fetchText(url);
+    const html = await fetchPublicNewsArticleHtml(url);
     const content = extractArticleContent(html);
     const article: NewsArticle = {
       title: input.title,
