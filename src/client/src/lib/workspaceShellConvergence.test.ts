@@ -290,8 +290,15 @@ test("H2a sidebar: rare actions live in the account menu", () => {
   assert.match(navigation, /DropdownMenuTrigger.*Account:/);
   assert.match(navigation, /act\(props.onTrash\).*Trash & archive/);
   assert.match(navigation, /act\(props.onMigrate\).*Import legacy workspaces/);
-  assert.match(project, /onTrash=\{.*setShowLifecycleCenter\(true\)/);
-  assert.match(project, /onMigrate=\{.*migrateLegacyWorkspaces\(/);
+  const trashHandler = project.split("onTrash={() => {")[1]?.split("onMigrate={() => {")[0] ?? "";
+  const migrateHandler = project.split("onMigrate={() => {")[1]?.split("}}>")[0] ?? "";
+  for (const handler of [trashHandler, migrateHandler]) {
+    assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current/);
+    assert.match(handler, /setLifecycleNotice\(/);
+    assert.match(handler, /return;/);
+  }
+  assert.match(trashHandler, /setShowLifecycleCenter\(true\)/);
+  assert.match(migrateHandler, /migrateLegacyWorkspaces\(/);
 });
 
 test("H2b receipts persist per chat and restore on reload without storing answers", () => {
