@@ -73,7 +73,9 @@ export function savedModelArtifactMatchesReceipt(
   return artifact.id === version.artifactId &&
     artifact.projectId === destination.projectId &&
     (destination.projectId !== null || artifact.owningChatId === destination.owningChatId) &&
-    artifact.kind === "spreadsheet" && artifact.origin === "engine" &&
+    artifact.kind === "spreadsheet" && artifact.origin === "conversation" &&
+    version.refreshSpec?.kind === "engine" &&
+    version.refreshSpec.engineRef?.includes(`:run:${receipt.runId}`) &&
     artifact.status === "active" && version.version > 0 && version.content.kind === "spreadsheet" &&
     refSet.has(`financial-model-run:${receipt.runId}`) &&
     refSet.has(`financial-model-result-sha256:${receipt.resultHash}`) &&
