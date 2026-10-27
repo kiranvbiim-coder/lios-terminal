@@ -85,6 +85,7 @@ export const WORKSTATION_DEFINITIONS = {
     subtitle: "Investigation → evidence → filings → consensus → financial context → methodology",
     sections: [
       { id: "investigation", label: "INVESTIGATION", code: "CASE", description: "Build a persistent thesis with source-scored evidence, relationships, timelines, changes, and briefs.", stage: "ANALYZE" },
+      { id: "perspectives", label: "PERSPECTIVES", code: "VIEW", description: "Explore the two sides of explicit evidence relationships, trace recorded sources, and see where investigation links are missing.", stage: "ANALYZE" },
       { id: "filings", label: "FILINGS", code: "FILE", description: "Inspect company filing evidence and move between relevant security contexts.", stage: "ANALYZE" },
       { id: "consensus", label: "CONSENSUS", code: "CONS", description: "Compare internal conclusions with external expectations and variant perception.", stage: "DECIDE" },
       { id: "financials", label: "FINANCIALS", code: "FIN", description: "Ground the thesis in normalized statements rather than narrative evidence alone.", stage: "ANALYZE" },

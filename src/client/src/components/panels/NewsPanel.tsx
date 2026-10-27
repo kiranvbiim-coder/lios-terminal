@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
+import NewsEditorialStoryCard from "./NewsEditorialStoryCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { NewsItem } from "@/lib/finance";
 import { useNewsArticle } from "@/lib/useFinance";
@@ -134,7 +135,7 @@ export default function NewsPanel({ symbol }: Props) {
         className="grid flex-1 min-h-0 min-w-0 overflow-hidden"
         data-news-readthrough-layout="responsive"
       >
-        <div className="h-full overflow-y-auto scrollbar-thin bg-[#060606] border-r border-border" data-news-list="true" data-analytical-role="evidence">
+        <div className="h-full space-y-2 overflow-y-auto scrollbar-thin border-r border-border bg-[#060606] p-3" data-news-list="true" data-analytical-role="evidence">
             {isLoading ? (
               <div className="p-4 space-y-3">
                 {Array(6).fill(0).map((_, index) => <Skeleton key={index} className="h-24 bg-border" />)}
@@ -142,37 +143,21 @@ export default function NewsPanel({ symbol }: Props) {
             ) : filtered.length === 0 ? (
               <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">NO STORIES MATCH CURRENT FILTERS</div>
             ) : (
-              filtered.map((item) => {
-                const isActive = item.url === selectedUrl;
-                return (
-                  <button
-                    key={item.url}
-                    onClick={() => setSelectedUrl(item.url)}
-                    className={`w-full text-left border-b border-border/60 p-4 transition-colors ${isActive ? "bg-[hsl(38,95%,50%)/8%] shadow-[inset_2px_0_0_hsl(38,95%,55%)]" : "hover:bg-white/5"}`}
-                    data-testid={`news-item-${item.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                    data-analytical-row
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`shrink-0 w-1.5 h-1.5 rounded-full mt-2 ${
-                        item.sentiment === "positive" ? "bg-[hsl(142,71%,45%)]" :
-                        item.sentiment === "negative" ? "bg-[hsl(0,80%,55%)]" :
-                        "bg-[hsl(38,95%,55%)]"
-                      }`} />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-terminal text-sm text-foreground leading-snug line-clamp-2">{item.title}</div>
-                        <div className="font-terminal text-[11px] text-muted-foreground mt-1 leading-relaxed line-clamp-3">{item.summary}</div>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <span className="font-terminal text-[8px] px-1.5 py-0.5 border border-border text-[hsl(38,95%,55%)]">
-                            {item.source.toUpperCase()}
-                          </span>
-                          <DataStatusBadge status={item.status} compact />
-                          <span className="font-terminal text-[8px] text-muted-foreground">{relativeTime(item.publishedAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
+              filtered.map((item, index) => (
+                <NewsEditorialStoryCard
+                  key={item.url}
+                  title={item.title}
+                  summary={item.summary}
+                  source={item.source}
+                  publishedAt={item.publishedAt}
+                  ageLabel={relativeTime(item.publishedAt)}
+                  sentiment={item.sentiment}
+                  statusBadge={<DataStatusBadge status={item.status} compact />}
+                  active={item.url === selectedUrl}
+                  lead={index === 0}
+                  onSelect={() => setSelectedUrl(item.url)}
+                />
+              ))
             )}
           </div>
         <div className="min-h-0 min-w-0 overflow-hidden">
@@ -190,7 +175,7 @@ export default function NewsPanel({ symbol }: Props) {
                 <div className="flex items-start gap-3 justify-between">
                   <div>
                     <div className="panel-label mb-2">READ-THROUGH</div>
-                    <h2 className="font-terminal text-lg text-foreground leading-tight max-w-3xl">{article?.title ?? selectedItem.title}</h2>
+                    <h2 className="max-w-3xl font-ui text-xl font-semibold leading-snug text-foreground sm:text-2xl">{article?.title ?? selectedItem.title}</h2>
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       <span className="font-terminal text-[9px] px-1.5 py-0.5 border border-border text-[hsl(38,95%,55%)]">
                         {selectedItem.source.toUpperCase()}
@@ -210,13 +195,13 @@ export default function NewsPanel({ symbol }: Props) {
                   <span>AGE · {relativeTime(selectedItem.publishedAt).toUpperCase()}</span>
                 </div>
 
-                <p className="font-terminal text-[11px] text-muted-foreground leading-relaxed mt-4 pb-4 border-b border-border/60">
+                <p className="mt-4 border-b border-border/60 pb-4 font-ui text-sm leading-6 text-muted-foreground">
                   {article?.excerpt || selectedItem.summary}
                 </p>
 
                 <div className="mt-5 space-y-3">
                   {(article?.content.length ? article.content : [selectedItem.summary]).map((paragraph, index) => (
-                    <p key={`${selectedItem.url}-${index}`} className="font-terminal text-[11px] text-foreground/95 leading-relaxed">
+                    <p key={`${selectedItem.url}-${index}`} className="max-w-prose font-ui text-sm leading-7 text-foreground/95">
                       {paragraph}
                     </p>
                   ))}

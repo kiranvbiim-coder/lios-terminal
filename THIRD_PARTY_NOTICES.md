@@ -11,6 +11,20 @@ This file is the human-readable notice entry point. The machine-readable source 
 - `third_party/upstream-lock.json`
 - `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
 
+### Watermelon UI — adapted News editorial card (MIT)
+
+The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the
+expandable event card interaction from
+[`WatermelonCorp/watermellon-registry`](https://github.com/WatermelonCorp/watermellon-registry),
+source file `src/components/watermelon-ui/expandable-event-card-base.tsx` pinned
+to commit `86052b8fd12bc19bf3bac07625a7f93736c42b17`.
+Copyright (c) 2025-present Watermelon Contributors. The complete MIT notice
+is retained at `third_party/licenses/watermellon-registry-MIT.txt`.
+The adapted component uses LIOS's existing Framer Motion, React 18, story
+selection, source status and reader. It excludes upstream demo media, remote
+assets, modal, standalone store, paid packages and new runtime dependencies.
+This grants code reuse only; it does not grant publisher photograph or article rights.
+
 The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook selects the locked production/optional/peer dependency closure plus the explicitly retained TypeScript operator-tool root, preserving original installation paths. This is not a `dev`-flag filter: any development-marked package reached by that closure remains included, and the auditor inventories **every package actually copied**, including unexpected extras. Build-only exclusion is a reachability decision, never a license ignore list.
 
 The desktop ASAR rebuild retains this notice file, the root proprietary original-code `LICENSE`, the complete `third_party/licenses/` tree and full selected package payloads, including LICENSE/COPYING/NOTICE files, README grants, legal directories and source attribution headers. Binary resources also carry an ordinary-text copy of these root legal materials under `Resources/legal` (`resources/legal` on platforms using that directory spelling), so accompanying notices can be read without extracting ASAR. Unknown/restricted terms, missing metadata, missing/tampered reviewed grants, lock drift and untracked copied packages block binary packaging. Preserved bytes and source rights reviews do not establish signing, exact-target release qualification or complete sidecar/sandbox/model/data/asset rights.
