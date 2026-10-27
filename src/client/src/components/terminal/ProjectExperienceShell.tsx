@@ -2091,7 +2091,7 @@ export default function ProjectExperienceShell({
                     <FolderKanban className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-ui text-[13px]">{project.name}</span>
                   </button>
-                  <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  <div className="lios-history-action-menu opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     <ObjectActionMenu
                       kind="project"
                       status={project.status}
@@ -2126,7 +2126,7 @@ export default function ProjectExperienceShell({
                     active={selection.chatId === chat.id}
                     badge={relativeTime(chat.lastActivityAt)}
                     trailing={
-                      <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      <div className="lios-history-action-menu opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                         <ObjectActionMenu
                           kind="chat"
                           scope={chat.scope}
