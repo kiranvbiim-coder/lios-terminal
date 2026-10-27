@@ -16,9 +16,10 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectLedgerPanel } from "./ProjectLedgerPanel";
 import { ProjectArtifactsPanel } from "./ProjectArtifactsPanel";
 import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
-import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { ProjectResumeDesk } from "./ProjectResumeDesk";
+import { ProjectWatchroomDesk } from "./ProjectWatchroomDesk";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 
 export function relativeTime(value: string): string {
@@ -123,6 +124,8 @@ export function ProjectHome({
 
   const [editingName, setEditingName] = useState(false);
   const [projectDepthOpen, setProjectDepthOpen] = useState(false);
+  const [watchroomsOpen, setWatchroomsOpen] = useState(false);
+  const [continuityOpen, setContinuityOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const renameInFlight = useRef(false);
   const [renameBusy, setRenameBusy] = useState(false);
@@ -155,6 +158,8 @@ export function ProjectHome({
     setContextBusy(false);
     setEditingName(false);
     setProjectDepthOpen(false);
+    setWatchroomsOpen(false);
+    setContinuityOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
     setRenameBusy(false);
     setRenameError(null);
@@ -269,6 +274,34 @@ export function ProjectHome({
           </div>
         </section>
 
+        <ProjectResumeDesk key={project.id} projectId={project.id} chats={projectChats} sessions={projectSessions}
+          onOpenChat={onOpenChat} onOpenSession={onOpenSession} onFocusArtifact={onFocusArtifact}
+          onInspectContinuity={() => setContinuityOpen(true)}
+          onOpenWatchrooms={() => setWatchroomsOpen(true)} />
+
+        <section className="mt-5 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-watchrooms-entry">
+          <button type="button" aria-expanded={watchroomsOpen}
+            aria-controls={`project-watchrooms-${project.id}`}
+            onClick={() => setWatchroomsOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Watchrooms</span><span className="text-sm font-normal text-muted-foreground">{watchroomsOpen ? "Hide" : "Open"}</span>
+          </button>
+          {watchroomsOpen && <div id={`project-watchrooms-${project.id}`} className="border-t border-border/55 px-2 pb-2 pt-4">
+            <ProjectWatchroomDesk key={project.id} projectId={project.id} />
+          </div>}
+        </section>
+
+        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-continuity-entry">
+          <button type="button" aria-expanded={continuityOpen}
+            aria-controls={`project-continuity-${project.id}`}
+            onClick={() => setContinuityOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Project history</span><span className="text-sm font-normal text-muted-foreground">{continuityOpen ? "Hide" : "Open"}</span>
+          </button>
+          {continuityOpen && <div id={`project-continuity-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
+            <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
+          </div>}
+        </section>
 
         {collectionsFailed && <p role="alert" className="mt-5 rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">Some saved Project items could not be loaded. Results may be incomplete. <button type="button" className="underline" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry</button></p>}
         <details className="mt-6 rounded-xl border border-border/55" data-testid="project-saved-work">
@@ -403,9 +436,7 @@ export function ProjectHome({
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
-              <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
               <ProjectIntelligencePanel projectId={project.id} />
-              <ProjectAutomationPanel projectId={project.id} />
               <ProjectArtifactsPanel
                 projectId={project.id}
                 sessions={sessions}
