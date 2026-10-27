@@ -404,7 +404,7 @@ export function ProjectHome({
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
               <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
-              <ProjectIntelligencePanel projectId={project.id} />
+              <ProjectIntelligencePanel key={project.id} projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />
               <ProjectAutomationPanel projectId={project.id} />
               <ProjectArtifactsPanel
                 projectId={project.id}
