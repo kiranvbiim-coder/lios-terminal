@@ -425,3 +425,8 @@ The complete [20-site premium donor audit and LiOS reuse plan](LIOS_20_SITE_PREM
 ## 15. Whole-product intelligence architecture (27 October 2026)
 
 For the user-requested **long-life product-wide design** (not just rich cards and editorial feed), read the [Whole-Product Intelligence Experience Architecture](LIOS_WHOLE_PRODUCT_EXPERIENCE_ARCHITECTURE_2026-10-27.md). It reconciles inspected Chat/agent code, P3/P5 evidence, P4 Artifact, P9 automations, GM/P13 plugins, durable memory, devices, data sources, conceptual visual descriptor, 20 composed innovations, competitor work journeys and the same four-phase SI-07 experience execution. Treat this as the **latest broader product framing**, preserving F01-F12/N01-N08 and all existing canonical owner boundaries; plan only, not shipped.
+
+
+## 16. Final approved-for-execution UI synthesis — 27 October 2026
+
+The [final four-phase UI donor and premium experience execution plan](LIOS_PREMIUM_UI_FINAL_FOUR_PHASE_EXECUTION_2026-10-27.md) is the **single UI implementation checklist** and supersedes narrower shortlist/order suggestions in this planning collection. It provides every owner-supplied website's exact use, an architecture-preserving code/import plan by existing LiOS surface, visible deliverables, phase acceptance, and a first engineering vertical slice. The original F01–F12 and N01–N08 stay in scope. It is a planning-only document; merge and code implementation remain separate.
