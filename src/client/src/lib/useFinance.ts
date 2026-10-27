@@ -451,6 +451,79 @@ export function useDirectoryScreener(filters: Record<string, string>, page: numb
   });
 }
 
+export interface DirectoryCatalogFacets {
+  total: number;
+  active: number;
+  historical: number;
+  assetClasses: Array<{ value: string; count: number }>;
+  exchanges: Array<{ value: string; count: number }>;
+  sectors: Array<{ value: string; count: number }>;
+  regions: Array<{ value: string; count: number }>;
+  currencies: Array<{ value: string; count: number }>;
+  referenceOnly: true;
+}
+export interface DirectoryCatalogStatus {
+  referenceOnly: true;
+  uniqueListingCount: number;
+  uniqueSymbolCount: number;
+  sources: Record<string, number>;
+  financeDatabase: {
+    imported: boolean;
+    searchCount: number;
+    upstreamCommit: string | null;
+    importedAt: string | null;
+    countsByAssetClass: Record<string, number>;
+    discontinuedMaintenance: { funds: "2026-10"; moneymarkets: "2026-10" };
+    maintenanceCaveat: string;
+    referenceOnly: true;
+  };
+  priceCoverage: string;
+}
+export function useDirectoryFacets() {
+  return useQuery<DirectoryCatalogFacets>({
+    queryKey: ["/api/finance/directory/facets"],
+    queryFn: async () => {
+      const res = await fetch("/api/finance/directory/facets");
+      if (!res.ok) throw new Error("Directory facets unavailable");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
+export interface DirectoryCatalogInstallStatus {
+  state: "idle" | "fetching" | "extracting" | "verifying" | "completed" | "failed";
+  startedAt: string | null;
+  completedAt: string | null;
+  filesExtracted: number;
+  bytesExtracted: number;
+  importedCount: number | null;
+  upstreamCommit: string;
+  error: string | null;
+}
+export function useDirectoryInstallStatus() {
+  return useQuery<DirectoryCatalogInstallStatus>({
+    queryKey: ["/api/finance/directory/install/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/finance/directory/install/status");
+      if (!res.ok) throw new Error("Reference import state unavailable");
+      return res.json();
+    },
+    refetchInterval: 3000,
+  });
+}
+
+export function useDirectoryStatus() {
+  return useQuery<DirectoryCatalogStatus>({
+    queryKey: ["/api/finance/directory/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/finance/directory/status");
+      if (!res.ok) throw new Error("Directory source status unavailable");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function useDirectoryRegions() {
   return useQuery<string[]>({
     queryKey: ["/api/finance/directory/regions"],

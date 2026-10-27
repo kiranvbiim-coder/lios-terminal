@@ -122,7 +122,7 @@ test("unlinked legacy rows with identical name and symbol collapse without inven
   assert.equal(results.length, 2, "identical unlinked rows collapse; distinct unlinked rows stay separate");
   const coinGroup = results.find((group) => group.primary.symbol === "LGC");
   assert.ok(coinGroup);
-  assert.equal(coinGroup!.groupKey, "legacy:LEGACY COIN:LGC");
+  assert.equal(coinGroup!.groupKey, "legacy:LEGACY COIN:LGC:XNAS:USD");
   assert.equal(coinGroup!.relatedListings.length, 1);
 });
 

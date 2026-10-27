@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1",
+  "id": "financedatabase-reference",
+  "provider": "JerBouma/FinanceDatabase",
+  "repository": "https://github.com/JerBouma/FinanceDatabase",
+  "commitSha": "3815eb341c7aa7bfae4a720744093e75528b6099",
+  "observedDate": "2026-10-25",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2023 Jeroen Bouma",
+  "rightsState": "user_local_download_only_third_party_source_redistribution_unverified",
+  "donorCategory": "financial_reference_data_not_trading_quotes",
+  "implementationMode": "local_csv_adapter_no_donor_runtime",
+  "catalogSourcePaths": [
+    "database/equities/*.csv",
+    "database/etfs/*.csv",
+    "database/funds/*.csv",
+    "database/indices.csv",
+    "database/currencies.csv",
+    "database/cryptos.csv",
+    "database/moneymarkets.csv"
+  ],
+  "upstreamPublishedRecords": 303092,
+  "importedRecords": "unverified_until_runtime_import",
+  "noLivePriceClaim": true,
+  "destination": "user-owned data root/instrument-catalogs",
+  "notIncludedInPublicGit": true,
+  "notIncludedInInstaller": true,
+  "owner": "LiOS P5 Global Instrument Master",
+  "codeOwners": [
+    "src/script/import_financedatabase.cjs",
+    "src/server/financeDatabaseCatalog.ts",
+    "src/server/instrumentSearchIndexStore.ts",
+    "src/server/instrumentDirectory.ts"
+  ],
+  "tests": [
+    "src/script/import_financedatabase.test.cjs",
+    "src/server/financeDatabaseCatalog.test.ts",
+    "src/server/instrumentDirectory.test.ts",
+    "src/server/financeDatabaseInstallService.test.ts",
+    "src/server/financeDatabaseScale.bench.ts"
+  ],
+  "validation": "source tests committed; real-data and native packaged V2/V3/V4 NOT_RUN",
+  "licenseNoticeDelivery": "Full MIT donor copyright and permission notice included in every local manifest",
+  "sourceRightsPolicy": "Per-exchange origin and redistribution rights must be checked before any customer-delivered dataset is prebundled; local user-initiated direct public source download does not grant redistribution rights."
+}
