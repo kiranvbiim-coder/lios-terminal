@@ -10,9 +10,16 @@ import { chatExtensionCatalogSchema, type ChatExtensionCatalog } from "@shared/c
  * still decide installation and execution.
  */
 function safeLabel(value: string, fallback: string): string {
-  const text = value.trim();
-  return text && text.length <= 240 && isCredentialSafeReference(text) && !/\\/\\/|:\\/\\/|[\\r\\n]|(?:secret|password|token|credential|api[_-]?key)\\s*[=:]/i.test(text)
-    ? text : fallback;
+  const label = value.trim();
+  const lowered = label.toLowerCase();
+  const secretLabels = ["secret=", "password=", "token=", "credential=", "api_key=", "apikey=", "authorization="];
+  return label && label.length <= 240
+    && isCredentialSafeReference(label)
+    && !label.includes("://")
+    && !label.includes(String.fromCharCode(10))
+    && !label.includes(String.fromCharCode(13))
+    && !secretLabels.some((prefix) => lowered.includes(prefix))
+    ? label : fallback;
 }
 
 export function chatExtensionCatalog(input: {
