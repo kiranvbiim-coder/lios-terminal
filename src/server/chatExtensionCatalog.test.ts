@@ -56,6 +56,7 @@ test("P3 Chat extension catalog exposes only non-executable plugin metadata and 
   assert.equal(catalog.mcpConnections[1].status, "configured");
   assert.equal(catalog.installationManagedByHomeOwner, true);
   assert.equal(catalog.managementAvailable, true);
+  assert.equal(catalog.managementAvailable, true);
   const json = JSON.stringify(catalog);
   for (const forbidden of ["secret.example", "DO_NOT_SEND", "vault:sensitive", "signatureBase64", "secret-publisher-key", "unsafe.permission.hidden", "secret-digest"]) {
     assert.equal(json.includes(forbidden), false, `${forbidden} must not be exposed to Chat`);
@@ -72,6 +73,26 @@ test("P3 Chat catalog masks unsupported/untrusted plugin execution and clamps re
   assert.equal(catalog.plugins.length, 100);
   assert.equal(catalog.mcpConnections.length, 100);
   assert.ok(catalog.plugins.every(row => !row.trusted && !row.registered && !row.executableFromChat));
+});
+
+test("P3 Chat hides credential-like labels and does not allow non-owner management", () => {
+  const leaking = {
+    ...plugin,
+    manifest: { ...plugin.manifest, name: "https://user:password@private.example/path?token=bad" },
+  } as unknown as InstalledPluginSnapshot;
+  const catalog = chatExtensionCatalog({
+    plugins: [leaking],
+    connections: [{
+      ...connection(1, 5, null, "mcp", "healthy"),
+      name: "api_key=private-secret",
+    }],
+    userId: 5,
+    organizationId: null,
+  });
+  assert.equal(catalog.managementAvailable, false);
+  assert.equal(catalog.plugins[0].name, "Installed plugin");
+  assert.equal(catalog.mcpConnections[0].name, "MCP connection 1");
+  assert.equal(JSON.stringify(catalog).includes("private-secret"), false);
 });
 
 test("P3 catalog route stays authenticated, read only, and P13 installation remains owner-managed", () => {
