@@ -96,8 +96,13 @@ export function filterPreferredPulseCards(
   // Ignore arbitrary client-submitted following subjectKeys: only persisted,
   // user-owned follows and the existing user's watchlist define this channel.
   if (!following.size) return [];
-  const trustedFollowFilter: PulseFilter = {
-    ...filter, channel: "following", subjectKeys: [...following],
-  };
-  return filterPulseCards(kept, trustedFollowFilter);
+  // Some older Wave D records carry only symbol rather than subjectKey;
+  // use the same canonical identity offered by the visible Follow button.
+  const selected = kept.filter(card => {
+    const subject = normalizePulseSubject(card.subjectKey ?? card.symbol);
+    return !!subject && following.has(subject);
+  });
+  return filterPulseCards(selected, {
+    channel: "for_you", kinds: filter.kinds, unreadOnly: filter.unreadOnly,
+  });
 }
