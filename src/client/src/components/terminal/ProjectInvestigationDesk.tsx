@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Compass, GitBranch, MapPinned, MessageSquareText, Network } from "lucide-react";
 import type { P7ContextGraph, P7InsightLens } from "@shared/p7ResearchContracts";
 import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
+import { OfflineProjectWorldMap } from "./OfflineProjectWorldMap";
 import {
   consequenceTrailChatPrompt,
   investigationViewIntentSchema,
@@ -91,10 +92,10 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
           <p className="font-ui text-xs text-muted-foreground">{trail.matchedNodes.length} directly identified graph object{trail.matchedNodes.length === 1 ? "" : "s"} · {trail.totalLinks} stored adjacency link{trail.totalLinks === 1 ? "" : "s"}. Adjacency does not prove consequence or exposure.</p>
           <ProjectEvidenceGraph key={projectId + ":" + selected.id} projectId={projectId} graph={validGraph} insight={selected} />
         </section>}
-        {view === "geography" && <section aria-label="Verified geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
+        {view === "geography" && <section aria-label="Recorded geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><MapPinned aria-hidden="true" className="h-4 w-4"/>Geographic evidence</h4>
-          <p className="font-ui text-xs leading-5 text-muted-foreground">Only current Project geography nodes with explicit numeric latitude/longitude are plotted. This coordinate diagram does not claim source map tiles, country boundaries or place-name geocoding.</p>
-          <GeographicEvidenceDiagram points={localGeographic.length ? localGeographic : []} />
+          <p className="font-ui text-xs leading-5 text-muted-foreground">Only current Project geography nodes with explicit numeric latitude/longitude are shown on a bundled public-domain Natural Earth world atlas. No name geocoding, device location, external map tiles or inferred coordinates.</p>
+          <OfflineProjectWorldMap key={projectId + ":" + selected.id} points={localGeographic} />
           {localGeographic.length === 0 && <p className="font-ui text-sm text-muted-foreground">{geographic.length > 0 ? `${geographic.length} Project locations have coordinates, but none are directly linked to the chosen insight.` : "No verified coordinate-bearing geography nodes are recorded in this Project."}</p>}
         </section>}
         <div className="flex flex-wrap gap-2 border-t border-border/55 pt-3">
@@ -107,21 +108,3 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
   </section>;
 }
 
-function GeographicEvidenceDiagram({ points }: { points: ReturnType<typeof recordedGeographicPoints> }) {
-  if (!points.length) return null;
-  return <div className="w-full overflow-x-auto" role="img" aria-label={`Coordinate diagram showing ${points.length} recorded Project locations`}>
-    <svg viewBox="0 0 720 350" className="h-auto min-w-[320px] w-full rounded-lg border border-border/55 bg-background/80" aria-hidden="true">
-      {[0,90,180,270,360,450,540,630,720].map(x=><line key={"lon"+x} x1={x} x2={x} y1="0" y2="350" stroke="currentColor" strokeOpacity="0.13" strokeWidth=".6"/>)}
-      {[0,87.5,175,262.5,350].map(y=><line key={"lat"+y} x1="0" x2="720" y1={y} y2={y} stroke="currentColor" strokeOpacity="0.13" strokeWidth=".6"/>)}
-      <line x1="360" x2="360" y1="0" y2="350" stroke="currentColor" strokeOpacity=".35" strokeDasharray="5 5"/>
-      <line x1="0" x2="720" y1="175" y2="175" stroke="currentColor" strokeOpacity=".35" strokeDasharray="5 5"/>
-      {points.slice(0, 60).map(point => <g key={point.id}>
-        <circle cx={(point.longitude+180)*2} cy={(90-point.latitude)*350/180} r="5.5" fill="rgb(251,191,36)" fillOpacity=".85" stroke="currentColor" strokeWidth="1.5"/>
-      </g>)}
-    </svg>
-    <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
-      {points.slice(0, 12).map(point => <li key={point.id} className="break-words font-ui text-xs text-muted-foreground"><span className="font-medium text-foreground">{point.label}</span> · {point.latitude.toFixed(4)}, {point.longitude.toFixed(4)}{point.sourceRef ? ` · ${point.sourceRef}` : ""}</li>)}
-    </ul>
-    {points.length > 12 && <p className="mt-1 text-xs text-muted-foreground">Showing 12 of {points.length} labels. The coordinate diagram shows at most 60 points.</p>}
-  </div>;
-}
