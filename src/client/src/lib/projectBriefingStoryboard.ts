@@ -1,0 +1,84 @@
+import type { ArtifactContent } from "@shared/artifactContracts";
+import type { ProjectArtifactRecord } from "./useArtifacts";
+
+export type BriefingSource = Pick<
+  ProjectArtifactRecord, "id" | "projectId" | "title" | "headVersion" | "kind" | "status"
+>;
+
+export interface BriefingDraftInput {
+  projectId: number;
+  title: string;
+  introduction: string;
+  sources: readonly BriefingSource[];
+}
+
+export const MAX_BRIEFING_SOURCES = 8;
+
+/**
+ * A user-reviewed, immutable outline referencing exact versions of authorized
+ * existing Project Artifacts. This function does not access source contents,
+ * generate claims, fetch media, create slides, or call an AI service.
+ * The server remains authoritative for Project and Artifact permissions.
+ */
+export function buildProjectBriefingReport(input: BriefingDraftInput): {
+  title: string;
+  content: Extract<ArtifactContent, { kind: "report" }>;
+  dependencyRefs: string[];
+} {
+  const title = input.title.trim();
+  if (title.length < 3 || title.length > 200) throw new Error("Enter a briefing title between 3 and 200 characters.");
+  if (input.introduction.length > 2000) throw new Error("Briefing introduction exceeds 2,000 characters.");
+  if (!input.sources.length || input.sources.length > MAX_BRIEFING_SOURCES) {
+    throw new Error("Select between 1 and 8 saved Project sources.");
+  }
+  const ids = new Set<string>();
+  for (const source of input.sources) {
+    if (!source.id || ids.has(source.id)) throw new Error("Each selected source must be a different saved Artifact.");
+    if (source.projectId !== input.projectId || source.status !== "active"
+      || !Number.isSafeInteger(source.headVersion) || source.headVersion < 1) {
+      throw new Error("A source is not an active saved Artifact in this Project.");
+    }
+    ids.add(source.id);
+  }
+
+  const cover = ["briefing-title", "briefing-introduction"];
+  const intro = input.introduction.trim()
+    || "Review this authored storyboard and open each saved Artifact to verify its content. References are not citations, slide images or permission to redistribute source material.";
+  const blocks: Extract<ArtifactContent, { kind: "report" }>["blocks"] = [
+    { id: cover[0], type: "heading", text: title, attrs: {} },
+    { id: cover[1], type: "paragraph", text: intro, attrs: {} },
+  ];
+  const sections: Extract<ArtifactContent, { kind: "report" }>["sections"] = [
+    { id: "briefing-cover", title: "Briefing overview", blockIds: cover },
+  ];
+
+  input.sources.forEach((source, index) => {
+    const number = index + 1;
+    const prefix = `briefing-frame-${number}`;
+    const frame = [`${prefix}-title`, `${prefix}-source`, `${prefix}-review`];
+    blocks.push(
+      { id: frame[0], type: "heading", text: `Frame ${number}: ${source.title}`, attrs: {} },
+      {
+        id: frame[1], type: "artifact_ref",
+        text: `Project Artifact: ${source.title} · ${source.kind} · version ${source.headVersion}`,
+        attrs: {
+          artifactId: source.id, artifactVersion: source.headVersion,
+          projectId: input.projectId, artifactKind: source.kind,
+          referenceStatus: "review_required",
+        },
+      },
+      {
+        id: frame[2], type: "paragraph",
+        text: "Review the exact saved source and its rights, evidence and current validity before adding a figure or factual claim. No content has been copied or regenerated.",
+        attrs: {},
+      },
+    );
+    sections.push({ id: prefix, title: `Frame ${number}: ${source.title}`, blockIds: frame });
+  });
+
+  return {
+    title,
+    content: { kind: "report", templateId: null, editorPreference: "builtin", blocks, sections },
+    dependencyRefs: input.sources.map(source => source.id),
+  };
+}
