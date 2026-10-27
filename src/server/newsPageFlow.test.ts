@@ -80,6 +80,20 @@ test("ticker-specific filtering cannot reintroduce out-of-window RSS articles", 
   assert.doesNotMatch(backend, /items = feedItems\.filter\(\(item\) =>/);
 });
 
+test("paged RSS queries and server-side UTC validation share one request anchor", () => {
+  assert.match(backend, /const effectiveOptions = \{ \.\.\.options, page, to: options\.to \?\?/);
+  assert.match(backend, /fetchNewsFeeds\([^\n]+, effectiveOptions\)/);
+  assert.match(backend, /filterNewsPageWindow\(feedItems, page, effectiveOptions\)/);
+  assert.deepEqual(newsPageWindowBounds(2, { windowDays: 7 },
+    new Date("2026-10-27T23:59:59.000Z")), { from: "2026-10-14", to: "2026-10-20" });
+});
+
+test("total upstream RSS failure is not represented as empty but successful News", () => {
+  assert.match(backend, /options\.page !== undefined && settled\.length > 0 && settled\.every\(result => result\.status === "rejected"\)/);
+  assert.match(panel, /News could not be fetched/);
+  assert.match(panel, /Retry news/);
+});
+
 test("bounded older-period paging is not terminated merely because an RSS window is sparse", () => {
   assert.match(backend, /const hasMore = explicitFrom \? items\.length > offset \+ limit : page < 52/);
   assert.match(backend, /coverage: explicitFrom && !hasMore \? "window-exhausted"/);
