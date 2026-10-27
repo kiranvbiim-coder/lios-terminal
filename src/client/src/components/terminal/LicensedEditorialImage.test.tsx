@@ -60,7 +60,7 @@ test("Pulse keeps source-grounded Watermelon disclosure while optionally renderi
   const html=render(React.createElement(LiosPulseStoryCard,{card,featured:true,onAsk:()=>undefined}));
   assert.match(html,/licensed-editorial-image/);
   assert.match(html, /Original image supplied by source owner/);
-  assert.match(html,/evidence/i);
+  assert.match(html,/recorded source/i);
   assert.match(html,/Source-reported installation/);
   const unsafe=render(React.createElement(LiosPulseStoryCard,{card:{...card,evidence:[]},featured:true,onAsk:()=>undefined}));
   assert.doesNotMatch(unsafe,/<img\b/);
