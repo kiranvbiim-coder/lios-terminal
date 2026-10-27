@@ -316,6 +316,7 @@ async function buildPulseForUser(req: Request, sources: PulseSources) {
       cards.push({
         id: `news:${symbol}:${item.url}`,
         kind: "news",
+        ...(item.media ? { media: item.media } : {}),
         title: item.title,
         whatHappened: item.summary || item.title,
         whyItMatters: "A provider-attributed news item was published for a followed instrument.",
