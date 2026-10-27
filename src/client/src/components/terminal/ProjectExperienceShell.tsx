@@ -529,9 +529,14 @@ export default function ProjectExperienceShell({
           setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to try switching again.");
           return;
         }
-        setChatMode(origin.mode);
-        selection.setProjectId(origin.projectId);
-        selection.setChatId(origin.chatId);
+        // Change the owning selection first; the existing selected-Chat sync
+        // resolves its mode after IDs settle. A mode-only change has no ID update.
+        if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+          selection.setProjectId(origin.projectId);
+          selection.setChatId(origin.chatId);
+        } else {
+          setChatMode(origin.mode);
+        }
       })().finally(() => {
         if (reviewingChatReturn.current === request) reviewingChatReturn.current = null;
       });
@@ -573,9 +578,12 @@ export default function ProjectExperienceShell({
           setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to open that Artifact later.");
           return;
         }
-        setChatMode(context.projectId === null ? "quick" : "project");
-        selection.setProjectId(context.projectId);
-        selection.setChatId(context.chatId);
+        if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
+          selection.setProjectId(context.projectId);
+          selection.setChatId(context.chatId);
+        } else {
+          setChatMode(context.projectId === null ? "quick" : "project");
+        }
       })().finally(() => {
         if (reviewingArtifactReturn.current === request) reviewingArtifactReturn.current = null;
       });
