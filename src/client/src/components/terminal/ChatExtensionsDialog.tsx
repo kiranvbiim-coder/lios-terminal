@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ChatExtensionCatalog } from "@shared/chatExtensionCatalog";
+import ChatMcpConnectForm from "./ChatMcpConnectForm";
 
 const GovernedExtensionsPanel = lazy(() => import("@/components/GovernedExtensionsPanel"));
 
@@ -15,15 +16,18 @@ export default function ChatExtensionsDialog({
   open,
   onOpenChange,
   projectAvailable,
+  projectId,
   onStagePrompt,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectAvailable: boolean;
+  projectId: number | null;
   onStagePrompt: (prompt: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [manage, setManage] = useState(false);
+  const [connectMcp, setConnectMcp] = useState(false);
   const queryClient = useQueryClient();
   const catalog = useQuery<ChatExtensionCatalog>({
     queryKey: ["/api/extensions/chat-catalog"],
@@ -39,7 +43,7 @@ export default function ChatExtensionsDialog({
     };
   }, [catalog.data, query]);
 
-  return <Dialog open={open} onOpenChange={next => { onOpenChange(next); if (!next) { setManage(false); setQuery(""); } }}>
+  return <Dialog open={open} onOpenChange={next => { onOpenChange(next); if (!next) { setManage(false); setConnectMcp(false); setQuery(""); } }}>
     <DialogContent className="flex max-h-[min(88dvh,820px)] w-[calc(100vw-24px)] max-w-2xl flex-col gap-3 overflow-hidden border-border bg-background p-4">
       <DialogTitle>Plugins & tools</DialogTitle>
       <DialogDescription>
@@ -68,7 +72,13 @@ export default function ChatExtensionsDialog({
             <p className="mt-2 text-xs text-muted-foreground">Registered plugins are not automatically callable in Chat; their skills and tools require explicit runtime integration and permissions.</p>
           </section>
           <section aria-label="MCP connections">
-            <h3 className="mb-2 text-sm font-semibold">MCP connections</h3>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">MCP connections</h3>
+              {projectId && <button type="button" className="min-h-9 rounded-md border border-border px-2 text-xs" onClick={() => setConnectMcp(value => !value)}>
+                {connectMcp ? "Hide setup" : "Connect MCP"}
+              </button>}
+            </div>
+            {connectMcp && projectId && <ChatMcpConnectForm projectId={projectId} onSaved={() => { void queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] }); }} onCancel={() => setConnectMcp(false)} />}
             {visible.mcp.length ? <ul className="space-y-1.5">{visible.mcp.map(mcp => <li key={mcp.id} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
               <span className="truncate text-sm font-medium">{mcp.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{mcp.status === "healthy" ? "Verified" : "Needs verification"}</span>
@@ -78,6 +88,7 @@ export default function ChatExtensionsDialog({
                 onClick={() => {
                   onStagePrompt(`Show the locally allowed tool IDs for my MCP connection ${mcp.id}. Do not call the remote server.`);
                   setManage(false);
+                  setConnectMcp(false);
                   setQuery("");
                   onOpenChange(false);
                 }}
@@ -96,7 +107,7 @@ export default function ChatExtensionsDialog({
         {catalog.data?.managementAvailable ? <button type="button" className="min-h-10 rounded-md border border-border px-3 text-sm" onClick={() => setManage(current => !current)}>
           {manage ? "Hide management" : "Manage installed plugins"}
         </button> : <p className="text-xs text-muted-foreground">Installation is managed by the Home owner.</p>}
-        <button type="button" className="min-h-10 rounded-md px-3 text-sm" onClick={() => { setManage(false); setQuery(""); onOpenChange(false); }}>Done</button>
+        <button type="button" className="min-h-10 rounded-md px-3 text-sm" onClick={() => { setManage(false); setConnectMcp(false); setQuery(""); onOpenChange(false); }}>Done</button>
       </div>
     </DialogContent>
   </Dialog>;
