@@ -108,9 +108,14 @@ export function applyScenarioToBindings(scenario: TerminalScenario, filter?: { v
       skipped.push({ assumptionKey: match.assumptionKey, reason: "Registered input changed after review; no value applied" });
       continue;
     }
-    binding.apply(match.value);
-    updateAssumptionBindingValue(binding.id, match.value);
-    applied.push({ bindingId: binding.id, assumptionKey: match.assumptionKey, value: match.value });
+    try {
+      binding.apply(match.value);
+      updateAssumptionBindingValue(binding.id, match.value);
+      applied.push({ bindingId: binding.id, assumptionKey: match.assumptionKey, value: match.value });
+    } catch {
+      skipped.push({ assumptionKey: match.assumptionKey,
+        reason: "Model input rejected the value; inspect actual model state before retrying" });
+    }
   }
   emit();
   return { applied, unmatched: plan.unmatched, skipped };
