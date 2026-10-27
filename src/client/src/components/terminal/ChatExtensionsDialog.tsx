@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ChatExtensionCatalog } from "@shared/chatExtensionCatalog";
 import ChatMcpConnectForm from "./ChatMcpConnectForm";
+import { canInspectMcpInChat } from "@/lib/chatMcpProjectEligibility";
 
 const GovernedExtensionsPanel = lazy(() => import("@/components/GovernedExtensionsPanel"));
 
@@ -103,7 +104,8 @@ export default function ChatExtensionsDialog({
               <span className="truncate text-sm font-medium">{mcp.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{mcp.status === "healthy" ? "Verified" : "Needs verification"}</span>
               {mcp.status !== "invalid" && <button type="button" disabled={verifyingId !== null} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50" onClick={() => void verifyMcp(mcp.id)}>{verifyingId === mcp.id ? "Verifying…" : "Verify"}</button>}
-              {projectAvailable && mcp.status !== "invalid" && <button
+              {projectAvailable && projectId !== mcp.projectId && <span className="shrink-0 text-xs text-muted-foreground">Another Project</span>}
+              {projectAvailable && canInspectMcpInChat(projectId, mcp) && <button
                 type="button"
                 className="shrink-0 rounded-md border border-border px-2 py-1 text-xs"
                 onClick={() => {
