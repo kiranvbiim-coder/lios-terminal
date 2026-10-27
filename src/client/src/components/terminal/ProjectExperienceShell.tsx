@@ -1961,7 +1961,20 @@ export default function ProjectExperienceShell({
         onSelect={openWorkSearchResult}
       />
       <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
-        onSection={(next) => { setSection(next); if (next === "conversation") setProjectHomeRequested(false); setShowLifecycleCenter(false); setContextOpen(false); }}
+        onSection={(next) => {
+          if (next !== "conversation" && (busy || sendInFlightRef.current)) {
+            setLifecycleNotice("Stop the current response before opening another section.");
+            return;
+          }
+          if (next !== "conversation" && artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
+            return;
+          }
+          setSection(next);
+          if (next === "conversation") setProjectHomeRequested(false);
+          setShowLifecycleCenter(false);
+          setContextOpen(false);
+        }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
         onSearch={requestWorkSearch}
