@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { GitBranch, RefreshCw } from "lucide-react";
 import { refreshP6ProjectContinuity, useInvalidateP6ProjectContinuity, useP6ProjectContinuity } from "@/lib/useP6Continuity";
 import { ProjectChangeActivity } from "./ProjectChangeActivity";
 import { ProjectContinuationActivitiesCard } from "./ProjectContinuationActivitiesCard";
 import { focusProjectWorkflowRow } from "@/lib/projectWorkflowFocus";
+import { canBeginProjectRefresh, visibleProjectRefreshNotice, type ProjectRefreshNotice } from "@/lib/projectContinuityRefreshState";
 
 function time(value: string | null): string {
   if (!value) return "—";
@@ -20,31 +21,61 @@ export function ProjectContinuityPanel({
 }) {
   const continuity = useP6ProjectContinuity(projectId);
   const invalidate = useInvalidateP6ProjectContinuity();
-  const [refreshing, setRefreshing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  // Preserve exact Project ownership across asynchronous refreshes and rapid
+  // Project navigation. A previous Project's result never appears under the
+  // newly selected Project; an in-flight request is never repeated by a click.
+  const currentProjectRef = useRef(projectId);
+  currentProjectRef.current = projectId;
+  const inFlightProjectsRef = useRef<Set<number>>(new Set());
+  const [refreshingProjects, setRefreshingProjects] = useState<ReadonlySet<number>>(() => new Set());
+  const [notice, setNotice] = useState<ProjectRefreshNotice | null>(null);
+  const refreshing = refreshingProjects.has(projectId);
+  const message = visibleProjectRefreshNotice(notice, projectId);
   const snapshot = !continuity.isError ? continuity.data : undefined;
 
   const refresh = async () => {
-    setRefreshing(true);
-    setMessage(null);
+    const requestedProjectId = projectId;
+    if (!canBeginProjectRefresh(inFlightProjectsRef.current, requestedProjectId)) return;
+    inFlightProjectsRef.current.add(requestedProjectId);
+    setRefreshingProjects(previous => new Set(previous).add(requestedProjectId));
+    setNotice(null);
     try {
-      const next = await refreshP6ProjectContinuity(projectId);
-      invalidate(projectId);
+      const next = await refreshP6ProjectContinuity(requestedProjectId);
+      invalidate(requestedProjectId);
+      if (currentProjectRef.current !== requestedProjectId) return;
       const changed = next.changeSummary
         ? next.changeSummary.added + next.changeSummary.changed + next.changeSummary.removed
         : 0;
-      setMessage(changed ? `${changed} retained source change(s) are visible in Project Continuity.` : "Continuity refreshed. No retained source delta is currently available.");
+      setNotice({
+        projectId: requestedProjectId,
+        text: changed
+          ? `${changed} retained source change(s) are visible in Project Continuity.`
+          : "Continuity refreshed. No retained source delta is currently available.",
+      });
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Project Continuity refresh failed.");
+      if (currentProjectRef.current === requestedProjectId) {
+        setNotice({
+          projectId: requestedProjectId,
+          text: cause instanceof Error ? cause.message : "Project Continuity refresh failed.",
+        });
+      }
     } finally {
-      setRefreshing(false);
+      inFlightProjectsRef.current.delete(requestedProjectId);
+      setRefreshingProjects(previous => {
+        const next = new Set(previous);
+        next.delete(requestedProjectId);
+        return next;
+      });
     }
   };
 
   const reviewExactWorkflow = (workflowId: string) => {
     const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const focused = focusProjectWorkflowRow(document, projectId, workflowId, prefersReducedMotion);
-    setMessage(focused ? null : "This exact workflow is not visible in this Project's Automations panel. Open or refresh Continuous Intelligence before reviewing it. Nothing was run or changed.");
+    setNotice(focused ? null : {
+      projectId,
+      text: "This exact workflow is not visible in this Project's Automations panel. Open or refresh Continuous Intelligence before reviewing it. Nothing was run or changed.",
+    });
   };
 
   return (
@@ -63,6 +94,7 @@ export function ProjectContinuityPanel({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
+          aria-busy={refreshing}
           className="flex min-h-11 items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
         >
           <RefreshCw className={`h-3 w-3 ${refreshing ? "motion-safe:animate-spin" : ""}`} />
@@ -92,7 +124,7 @@ export function ProjectContinuityPanel({
         <div className="rounded-lg border border-border/50 bg-background/60 p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="font-ui text-sm font-semibold text-foreground">Decision memory</div>
-            <span className="font-ui text-xs text-muted-foreground">{snapshot?.counts.unresolvedDecisions ?? 0} open</span>
+            <span className="font-ui text-xs text-muted-foreground">{snapshot ? `${snapshot.counts.unresolvedDecisions} open` : "Unavailable"}</span>
           </div>
           <div className="mt-2 space-y-1.5">
             {(snapshot?.decisions ?? []).slice(0, 6).map((decision) => (
