@@ -4,7 +4,7 @@ import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { loadResearchTray, subscribeResearchTray, type ResearchTrayItem } from "@/lib/terminalResearchTray";
 import { loadResearchCanvasPositions, removeResearchCanvasPosition, setResearchCanvasPosition, subscribeResearchCanvas } from "@/lib/terminalResearchCanvas";
-import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, listExplicitResearchConnections, inspectExplicitResearchConnection, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, listExplicitResearchConnections, inspectExplicitResearchConnection, findSpatialResearchPins, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { isSoftwareRendered } from "@/lib/desktopRendering";
@@ -29,6 +29,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   const [version, setVersion] = useState(0);
   const [mode, setMode] = useState<SpatialLayoutMode>(initialReturnState?.mode ?? "map");
   const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>(initialReturnState?.kindFilter ?? "all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [trailGroup, setTrailGroup] = useState(initialReturnState?.trailGroup ?? "");
   const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(initialReturnState?.selectedConnectionKey ?? null);
   const [expanded, setExpanded] = useState(initialReturnState?.expanded ?? false);
@@ -41,7 +42,9 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   const companionHeading = useRef<HTMLButtonElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const positions = useMemo(() => loadResearchCanvasPositions(), [version]);
-  const visibleItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
+  const kindItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
+  const visibleItems = useMemo(() => findSpatialResearchPins(kindItems, searchQuery), [kindItems, searchQuery]);
+  const quickHits = useMemo(() => searchQuery.trim() ? visibleItems.slice(0, 5) : [], [visibleItems, searchQuery]);
   const model = useMemo(() => buildSpatialResearchModel(visibleItems, positions, mode), [visibleItems, positions, mode]);
   const trails = useMemo(() => buildExplicitResearchTrails(model.nodes), [model]);
   const connections = useMemo(() => listExplicitResearchConnections(model), [model]);
@@ -169,6 +172,52 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
           </button>
         ))}
       </div>
+
+      <div className="lios-spatial-spotlight" role="search" aria-label="Find in pinned research">
+        <div className="lios-spatial-spotlight-header">
+          <label htmlFor="lios-spatial-find" className="font-ui text-sm font-semibold">Find in research</label>
+          <span className="font-ui text-xs text-muted-foreground" role="status" aria-live="polite">
+            {searchQuery.trim() ? `${visibleItems.length} matching saved pins` : "Search local saved research"}
+          </span>
+        </div>
+        <div className="lios-spatial-spotlight-controls">
+          <input type="search" id="lios-spatial-find" className="lios-spatial-find"
+            value={searchQuery} maxLength={80} autoComplete="off"
+            placeholder="Title, symbol, group, tags or notes"
+            onChange={event => setSearchQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && visibleItems.length) {
+                event.preventDefault();
+                openInspection(visibleItems[0].id);
+              } else if (event.key === "Escape" && searchQuery) {
+                event.preventDefault();
+                event.stopPropagation();
+                setSearchQuery("");
+              }
+            }}
+            aria-describedby="lios-spatial-find-hint"
+          />
+          <button type="button" className="lios-spatial-control"
+            disabled={!searchQuery} onClick={() => setSearchQuery("")}>Clear search</button>
+        </div>
+        <p id="lios-spatial-find-hint" className="font-ui text-xs text-muted-foreground">
+          Matches only pins in your existing Research Tray; search stays in this view. Enter inspects the first match.
+        </p>
+        {searchQuery.trim() && quickHits.length > 0 && (
+          <ul className="lios-spatial-quick-hits" aria-label="Matching research pins">
+            {quickHits.map(item => (
+              <li key={item.id}>
+                <button type="button" className="lios-spatial-quick-hit"
+                  onClick={() => openInspection(item.id)}
+                  aria-label={`Inspect saved research: ${item.title}`}>
+                  <span className="truncate">{item.title}</span>
+                  <small>{item.kind}{item.symbol ? ` · ${item.symbol}` : ""}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className="lios-spatial-trail" role="group" aria-label="Guided evidence trail">
         <label htmlFor="lios-spatial-trail-choice" className="font-ui text-sm font-medium">Guided evidence trail</label>
         <select id="lios-spatial-trail-choice" value={trailGroup} onChange={event => setTrailGroup(event.target.value)}
@@ -263,8 +312,8 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
         )}
         {!model.nodes.length && <div className="lios-spatial-empty">
           <Pin size={22} aria-hidden="true" />
-          <strong>No pinned research yet</strong>
-          <p>Pin an evidence item, note, analysis or output from the existing Research Tray or Workbench. Nothing is generated or transmitted by this canvas.</p>
+          <strong>{searchQuery.trim() || kindFilter !== "all" ? "No matching pinned research" : "No pinned research yet"}</strong>
+          <p>{searchQuery.trim() || kindFilter !== "all" ? "Try clearing the search or pin-type filter to view the existing saved pins." : "Pin an evidence item, note, analysis or output from the existing Research Tray or Workbench. Nothing is generated or transmitted by this canvas."}</p>
         </div>}
         {model.nodes.map(({ item, point }) => {
           const capability = getTerminalCapability(item.view);
@@ -331,7 +380,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
       <p className="font-ui text-xs leading-5 text-muted-foreground" role="status" aria-live="polite">
         {announcement || (mode === "map" ? "Drag a pin's handle or use its arrow keys to arrange. Inspect opens one movable companion." : "Timeline orders pins by when they were saved locally; positions are read-only here.")}
         {model.hiddenCount > 0 ? ` Showing the first ${model.nodes.length} of ${visibleItems.length} matching pins; filter by kind to narrow this view.` : ""}
-        {kindFilter !== "all" ? ` Filtered to ${visibleItems.length} of ${items.length} saved pins.` : ""}
+        {kindFilter !== "all" || searchQuery.trim() ? ` Displaying ${visibleItems.length} of ${items.length} saved pins after active filters.` : ""}
       </p>
     </section>
   );
