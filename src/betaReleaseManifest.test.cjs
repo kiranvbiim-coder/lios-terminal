@@ -8,7 +8,7 @@ const test = require("node:test");
 const {
   TARGETS, targetName, validateBody, signBetaManifest, verifyBetaManifest,
 } = require("./betaReleaseManifest.cjs");
-const { options } = require("./script/beta_release_manifest.cjs");
+const { options, main } = require("./script/beta_release_manifest.cjs");
 
 const version = "1.0.0-beta.2";
 const commit = "c".repeat(40);
@@ -120,4 +120,35 @@ test("SI07 release CLI refuses duplicate flags and has no implicit trust anchor"
   assert.match(source, /trusted-public-key/);
   assert.match(source, /outside the public repository/);
   assert.doesNotMatch(source, /autoDownload\s*=\s*true|quitAndInstall\(/);
+});
+
+
+test("SI07 owner CLI signs only with off-repo key and verifies with independent public key", async t => {
+  const f = fixture(t);
+  const privatePath = path.join(f.dir, "owner-private.pem");
+  const publicPath = path.join(f.dir, "independently-trusted-public.pem");
+  const output = path.join(f.dir, "beta-manifest.json");
+  fs.writeFileSync(privatePath, f.privateKeyPem, { mode: 0o600 });
+  fs.writeFileSync(publicPath, f.trustedPublicKeyPem);
+  await main(["sign", "--version", version, "--commit", commit,
+    "--assets-dir", f.dir, "--private-key", privatePath, "--out", output]);
+  assert.equal(fs.existsSync(output), true);
+  await assert.rejects(main(["sign", "--version", version, "--commit", commit,
+    "--assets-dir", f.dir, "--private-key", privatePath, "--out", output]), /overwrite/);
+  const bytes = fs.readFileSync(output, "utf8");
+  assert.equal(bytes.includes("PRIVATE KEY"), false);
+  await main(["verify", "--manifest", output, "--assets-dir", f.dir,
+    "--trusted-public-key", publicPath, "--commit", commit, "--current-version", "1.0.0-beta.1"]);
+  await assert.rejects(main(["verify", "--manifest", output, "--assets-dir", f.dir,
+    "--trusted-public-key", publicPath, "--commit", commit, "--current-version", version]), /replay/);
+});
+
+test("SI07 beta release version rejects unsafe huge integers, ambiguous zeros, and production versions", async t => {
+  const f = fixture(t);
+  for (const bad of ["1.0.0", "1.0.0-beta.0", "01.0.0-beta.1",
+    "1.0.0-beta.9007199254740993", "1.0.0-beta.1+unsigned"]) {
+    await assert.rejects(signBetaManifest({
+      ...f, assetDir: f.dir, version: bad, commit,
+    }), /version|integer/);
+  }
 });
