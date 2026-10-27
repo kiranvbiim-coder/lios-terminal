@@ -121,6 +121,7 @@ async function runPackagedDesktopSelfTest(options) {
         python: sidecar.python,
         requiredPackages: sidecar.packages,
         representativeRoute: sidecar.representativeRoute,
+        valuationRoute: sidecar.valuationRoute,
       },
       packagedResourceImmutability: {
         checkedRoots: ["python-service", "python-sidecar-dist", "script"],
