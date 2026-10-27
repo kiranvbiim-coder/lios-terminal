@@ -105,12 +105,30 @@ test("artifact contents must be retained, byte-identical, regular files within e
   }
 });
 
+test("matching manifest digests from a different checkout never authorize release", () => {
+  const root = mkdtempSync(join(tmpdir(), "lios-phase4-checkout-"));
+  try {
+    const input = complete();
+    for (const row of input.evidence) writeFileSync(join(root, row.artifactPath), payload);
+    const oldCommit = assessPhase4Release(input, root, { commit: "cd".repeat(20), trackedFilesClean: true });
+    assert.equal(oldCommit.releaseReady, false);
+    assert.equal(oldCommit.exactCheckout, false);
+    assert.match(oldCommit.checkoutErrors.join(" "), /Git HEAD/);
+    const dirty = assessPhase4Release(input, root, { commit, trackedFilesClean: false });
+    assert.equal(dirty.releaseReady, false);
+    assert.match(dirty.checkoutErrors.join(" "), /modified/);
+    assert.equal(assessPhase4Release(input, root, null).releaseReady, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("positive decision is possible only with all named exact-commit physical evidence", () => {
   const root = mkdtempSync(join(tmpdir(), "lios-phase4-positive-fixture-"));
   try {
     const input = complete();
     for (const row of input.evidence) writeFileSync(join(root, row.artifactPath), payload);
-    const result = assessPhase4Release(input, root);
+    const result = assessPhase4Release(input, root, { commit, trackedFilesClean: true });
     assert.equal(result.releaseReady, true, "test fixture validates algorithm only; does NOT demonstrate installed app readiness");
     assert.equal(result.evidenceFilesChecked, true);
   } finally {

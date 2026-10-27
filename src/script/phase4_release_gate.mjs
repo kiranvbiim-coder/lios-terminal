@@ -42,15 +42,30 @@ export function verifyEvidenceFiles(input, baseDir) {
   return errors;
 }
 
-export function assessPhase4Release(input, baseDir) {
+export function assessPhase4Release(input, baseDir, checkout = null) {
   const result = evaluatePhase4ReleaseEvidence(input);
   const artifactErrors = baseDir ? verifyEvidenceFiles(input, baseDir) : [];
-  // The inventory alone cannot be release proof: physical bytes must be
-  // checked against a known retained evidence directory in require-ready mode.
+  // The inventory can refer to a different Git revision. Only the independently
+  // inspected checkout's exact HEAD may qualify; edits to tracked source files
+  // after that commit also invalidate this release decision.
+  const checkoutCommit = typeof checkout?.commit === "string" && /^[a-f0-9]{40}$/.test(checkout.commit)
+    ? checkout.commit : null;
+  const exactCheckout = Boolean(checkoutCommit && result.commit === checkoutCommit);
+  const trackedFilesClean = checkout?.trackedFilesClean === true;
+  const checkoutErrors = [
+    ...(!exactCheckout ? ["Evidence commit does not match the independently inspected Git HEAD."] : []),
+    ...(!trackedFilesClean ? ["Tracked source files are modified or checkout cleanliness could not be verified."] : []),
+  ];
+  // Physical bytes and a clean matching checkout are prerequisites, not proof
+  // of original signed attestation provenance or actual installed behavior.
   return {
     ...result,
-    releaseReady: Boolean(baseDir) && result.releaseReady && artifactErrors.length === 0,
+    releaseReady: Boolean(baseDir) && result.releaseReady && artifactErrors.length === 0 && checkoutErrors.length === 0,
     artifactErrors,
     evidenceFilesChecked: Boolean(baseDir),
+    checkoutCommit,
+    exactCheckout,
+    trackedFilesClean,
+    checkoutErrors,
   };
 }

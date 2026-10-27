@@ -90,7 +90,10 @@ node script/phase4_release_report.mjs --evidence /secure/release-evidence.json \
 ```
 
 `--require-ready` rejects any missing required record or nonmatching
-retained byte digest. The tool **only verifies the inventory and file bytes**;
+retained byte digest. It independently reads the repository's `git rev-parse HEAD`
+and rejects reports for another commit or with modified staged/unstaged tracked
+source files. Run it from the exact, clean release checkout—not a copied or
+altered working tree. The tool **only verifies the inventory and file bytes**;
 a local SHA-256 file alone is not cryptographic provenance or a trusted
 attestation that a real physical test was run. The release owner must inspect
 original GitHub run links, signed installer fingerprints, original unmodified
