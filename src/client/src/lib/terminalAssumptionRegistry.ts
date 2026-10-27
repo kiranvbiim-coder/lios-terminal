@@ -55,10 +55,13 @@ export function listAssumptionBindings(filter?: { view?: ViewMode; symbol?: stri
   }).map((binding) => ({ ...binding }));
 }
 
-export function updateAssumptionBindingValue(id: string, value: number): void {
+export function updateAssumptionBindingValue(id: string, value: number, announce = true): void {
   const current = bindings.get(id);
-  if (!current) return;
+  if (!current || !Number.isFinite(value)) return;
   bindings.set(id, { ...current, value });
+  // If a mounted model changes its input outside the Scenario Workbench,
+  // invalidate any stale approval preview immediately.
+  if (announce) emit();
 }
 
 export interface ScenarioBindingApplicationPlan {
@@ -123,7 +126,7 @@ export function applyScenarioToBindings(scenario: TerminalScenario, filter?: { v
     }
     try {
       binding.apply(match.value);
-      updateAssumptionBindingValue(binding.id, match.value);
+      updateAssumptionBindingValue(binding.id, match.value, false);
       applied.push({ bindingId: binding.id, assumptionKey: match.assumptionKey, value: match.value });
     } catch {
       skipped.push({ assumptionKey: match.assumptionKey,
