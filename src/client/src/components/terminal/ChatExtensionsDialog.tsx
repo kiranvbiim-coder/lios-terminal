@@ -14,9 +14,13 @@ const GovernedExtensionsPanel = lazy(() => import("@/components/GovernedExtensio
 export default function ChatExtensionsDialog({
   open,
   onOpenChange,
+  projectAvailable,
+  onStagePrompt,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  projectAvailable: boolean;
+  onStagePrompt: (prompt: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [manage, setManage] = useState(false);
@@ -67,6 +71,16 @@ export default function ChatExtensionsDialog({
             {visible.mcp.length ? <ul className="space-y-1.5">{visible.mcp.map(mcp => <li key={mcp.id} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
               <span className="truncate text-sm font-medium">{mcp.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{mcp.status === "healthy" ? "Verified" : "Needs verification"}</span>
+              {projectAvailable && mcp.status !== "invalid" && <button
+                type="button"
+                className="shrink-0 rounded-md border border-border px-2 py-1 text-xs"
+                onClick={() => {
+                  onStagePrompt(`Show the locally allowed tool IDs for my MCP connection ${mcp.id}. Do not call the remote server.`);
+                  setManage(false);
+                  setQuery("");
+                  onOpenChange(false);
+                }}
+              >Inspect in Chat</button>}
             </li>)}</ul> : <p className="text-xs text-muted-foreground">No matching MCP connections.</p>}
             <p className="mt-2 text-xs text-muted-foreground">MCP tool calls remain Project-scoped and require an exact user-approved operation. Connection status does not grant execution permission.</p>
           </section>
