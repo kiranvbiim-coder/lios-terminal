@@ -90,7 +90,7 @@ test("A07 shows optional rights-safe context when a recorded image fails source-
     card: { ...card, title: "Solar power stocks rise on report", media: invalid as IntelligenceCard["media"] },
     disabled: false, onAsk: () => undefined,
   }));
-  assert.doesNotMatch(html, /<img\\b|src="\/editorial-media/);
+  assert.doesNotMatch(html, /<img\b|src="\/editorial-media/);
   assert.match(html, /Find context picture/);
   assert.match(html, /after your click/);
   assert.match(html, /Recorded sources \(3\)/);
