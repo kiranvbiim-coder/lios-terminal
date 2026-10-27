@@ -161,6 +161,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
         className="lios-spatial-board"
         data-layout={mode}
         data-expanded={expanded ? "true" : "false"}
+        data-trail-active={selectedTrail ? "true" : "false"}
         role="group"
         aria-label={mode === "map" ? "Pinned research map" : mode === "timeline" ? "Pinned research timeline" : "Pinned research list"}
       >
@@ -192,6 +193,8 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
               className="lios-spatial-node"
               data-kind={item.kind}
               data-inspected={inspectedId === item.id ? "true" : "false"}
+              data-trail-member={selectedTrail?.itemIds.includes(item.id) ? "true" : "false"}
+              data-trail-current={selectedTrail && inspectedId === item.id ? "true" : "false"}
               style={{ left: `${effectivePoint.x}%`, top: `${effectivePoint.y}%` }}
               aria-label={`${item.title}; ${item.kind}; ${item.group ? `group ${item.group}` : "ungrouped"}`}
             >
