@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "./pulseStoryPresentation";
+import { pulseStoryMediaSourceIds, pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "./pulseStoryPresentation";
 
 test("only ordinary external web schemes are navigable as citations", () => {
   assert.equal(safePulseSourceUrl("javascript:alert(1)"), null);
@@ -84,4 +84,16 @@ test("Ask LiOS does not manufacture citations for source-free market cards", () 
     whatHappened: "Move", priority: "fyi", score: 30 });
   assert.match(prompt, /No external source URLs were attached/);
   assert.doesNotMatch(prompt, /Recorded source URLs \(/);
+});
+
+test("the same recorded article URL can anchor licensed media without changing historical source IDs", () => {
+  const result = pulseStoryMediaSourceIds([
+    { id: "news-evidence:previous-identity", url: "https://example.org/story" },
+    { id: "short", url: "javascript:alert(1)" },
+    { id: "secret", url: "https://example.org/story?api_key=PRIVATE" },
+  ]);
+  assert.ok(result.includes("news-evidence:previous-identity"));
+  assert.ok(result.includes("https://example.org/story"));
+  assert.equal(result.some(item => item.startsWith("javascript:")), false);
+  assert.equal(result.some(item => item.includes("PRIVATE")), false);
 });
