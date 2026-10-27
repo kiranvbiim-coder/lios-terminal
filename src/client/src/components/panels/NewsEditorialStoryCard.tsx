@@ -79,6 +79,9 @@ export default function NewsEditorialStoryCard({
         <time className="ml-auto font-ui text-[11px] text-muted-foreground" dateTime={publishedAt}>{ageLabel}</time>
       </div>
       <div className="mt-2.5 flex min-w-0 items-start gap-3">
+        {!lead && <LicensedEditorialImage media={media}
+          sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []}
+          variant="compact" className="w-24 shrink-0 sm:w-28" />}
         <div className="min-w-0 flex-1">
           <h3 className={`font-ui font-semibold leading-snug text-foreground ${lead ? "line-clamp-3 text-[17px]" : "line-clamp-2 text-[14px]"}`}>
             {title}
