@@ -41,3 +41,13 @@ test("existing installed ECharts is used lazily; no additional peer dependency o
   assert.match(projection,/to:\$\{link\.to\.id\}/);
   assert.doesNotMatch(projection,/confidence|calculateImpact|predict\(|consensusScore|Math\.random/);
 });
+
+test("Kibo-style aligned compare is rendered in the existing exact-source evidence component, not a new comparison store",()=>{
+  const comparison=source("../components/panels/ResearchEvidencePresentation.tsx");
+  assert.match(comparison,/export function compareRecordedEvidenceMetadata\(/);
+  assert.match(comparison,/Aligned recorded evidence metadata/);
+  assert.match(comparison,/data-metadata-comparison=\{row\.status\}/);
+  assert.match(comparison,/different fields do not establish conflicting claims/i);
+  assert.match(comparison,/ResearchEvidenceComparison/);
+  assert.doesNotMatch(comparison,/createRelationship\(|useMutation\(|fetch\("https?:/);
+});
