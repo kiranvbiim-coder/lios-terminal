@@ -13,6 +13,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
+import { LicensedEditorialImage } from "./LicensedEditorialImage";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
@@ -49,7 +50,10 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
         onClick={() => setExpanded((value) => !value)}
         className="w-full min-w-0 p-4 text-left outline-none transition-colors hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300/70 sm:p-5"
       >
-        {featured && (
+        {featured && card.media && <LicensedEditorialImage
+          media={card.media} sourceIds={evidence.map(source => source.id)}
+          className="mb-4" />}
+        {featured && !card.media && (
           <div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-amber-200/10 bg-gradient-to-br from-amber-200/[0.09] via-zinc-500/[0.035] to-cyan-300/[0.045] px-6">
             <div className="absolute -right-10 top-[-90px] h-52 w-52 rounded-full border border-amber-200/15" />
             <div className="absolute -right-3 top-[-63px] h-44 w-44 rounded-full border border-amber-200/10" />
