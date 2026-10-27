@@ -142,7 +142,7 @@ import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
 import { useGateway, useGatewayState } from "@/lib/gateway/GatewayProvider";
-import { conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
+import { canRetryHomeConnection, conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
 import { attachConversationRun, cancelConversationRun, runConversation } from "@/lib/gateway/conversationRun";
 import { useInterruptedAgentRun } from "@/lib/useInterruptedAgentRun";
 import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
@@ -2151,8 +2151,13 @@ export default function ProjectExperienceShell({
       </AuthenticatedNavigation>
 
       <main className="min-w-0 flex-1">
-        {!sendAvailability.canSubmit && <div role="status" className="border-b border-amber-300/20 px-4 py-2 text-sm text-amber-100">
-          <strong>{sendAvailability.title}.</strong> {sendAvailability.detail}
+        {!sendAvailability.canSubmit && <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-300/20 px-4 py-2 text-sm text-amber-100">
+          <span><strong>{sendAvailability.title}.</strong> {sendAvailability.detail}</span>
+          {gateway && canRetryHomeConnection(browserOnline, gatewayState) && (
+            <button type="button" onClick={() => gateway.start()} className="min-h-10 shrink-0 rounded-md border border-amber-300/50 px-3 py-1.5 font-ui text-sm font-semibold focus-visible:outline focus-visible:outline-2" aria-label="Retry LiOS Home connection">
+              Retry connection
+            </button>
+          )}
         </div>}
         {lifecycleNotice && (
           <div role="alert" className="border-b border-red-300/20 bg-red-300/[0.04] px-4 py-2 font-ui text-[13px] text-red-200">
