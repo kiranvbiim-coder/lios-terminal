@@ -94,3 +94,25 @@ test("valid exact-source saved table is shown but unsourced/empty and mismatched
   assert.equal(resolveGovernedVisualAnswer(tableReq,{...tableDetail,version:{...tableDetail.version,content:{...tableContent,rows:[]}}}).status,"blocked");
   assert.equal(resolveGovernedVisualAnswer(tableReq,detail()).status,"blocked");
 });
+
+test("P3 saved trust observation explicitly denying a selected source blocks P4 visual display",()=>{
+  const withAccess=(state:string,entitlementRequired:boolean|null=false)=>({
+    ...detail(),
+    version:{...detail().version,trustManifest:{evidence:[
+      {sourceRef:"filing:official",access:{state,entitlementRequired}},
+    ]}},
+  });
+  assert.equal(resolveGovernedVisualAnswer(request,withAccess("allowed")).status,"ready");
+  for(const state of ["blocked","restricted","denied","unauthorized","expired","not_entitled"]){
+    assert.equal(resolveGovernedVisualAnswer(request,withAccess(state)).status,"blocked",state);
+  }
+  assert.equal(resolveGovernedVisualAnswer(request,withAccess("allowed",true)).status,"blocked");
+  assert.equal(resolveGovernedVisualAnswer(request,{
+    ...detail(),version:{...detail().version,trustManifest:{evidence:[
+      {sourceRef:"another:source",access:{state:"allowed",entitlementRequired:false}},
+    ]}},
+  }).status,"blocked");
+  assert.equal(resolveGovernedVisualAnswer(request,{
+    ...detail(),version:{...detail().version,trustManifest:{evidence:[{sourceRef:"filing:official",access:{state:123}}]}},
+  }).status,"blocked");
+});
