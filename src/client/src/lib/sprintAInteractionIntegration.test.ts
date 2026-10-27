@@ -34,7 +34,7 @@ test("Sprint A layout commands are tab-scoped geometry only and never replace P4
   assert.match(ui, /Default pane arrangement requested/);
   assert.match(ui, /Save layout/);
   assert.match(ui, /Default layout/);
-  assert.match(ui, /setLayoutNotice\(" "\), \[props\.layoutScope\]/);
+  assert.ok(ui.includes('useEffect(() => setLayoutNotice(""), [props.layoutScope])'));
   assert.match(ui, /syncWorkspace\(api, latestPropsRef\.current\.workspace, suppressSyncRef\)/);
   assert.doesNotMatch(ui, /apiRequest\(|fetch\(/);
 });
