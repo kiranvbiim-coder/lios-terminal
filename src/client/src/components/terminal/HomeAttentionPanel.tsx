@@ -14,6 +14,13 @@ interface HomeAttention {
   asOf?: string;
   cards: IntelligenceCard[];
   actionInbox: ActionInboxItem[];
+  discoveryChanges?: {
+    status: "not_reviewed" | "compared";
+    reviewedAt: string | null;
+    newCardIds: string[];
+    newCount: number;
+    sourceBackedCount: number;
+  };
 }
 
 /** One Home view over the existing Wave D Pulse and Action Inbox, not another feed or scheduler. */
@@ -39,6 +46,7 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
   const [filter, setFilter] = useState<AttentionFilter>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(9);
+  const [onlyNew, setOnlyNew] = useState(false);
   const [stagingId, setStagingId] = useState<string | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
 
@@ -60,15 +68,40 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
     },
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/wave-d/pulse/review", {});
+      const payload: unknown = await response.json();
+      const data = payload as { status?: string; persisted?: boolean } | null;
+      if (!data || data.status !== "saved" || data.persisted !== true)
+        throw new Error("Home did not confirm a persisted source review.");
+    },
+    onSuccess: async () => {
+      setOnlyNew(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/wave-d/pulse"] });
+    },
+  });
+
   const entries = useMemo(
     () => homeAttentionEntries(query.data?.cards ?? [], query.data?.actionInbox ?? []),
     [query.data],
   );
   const counts = useMemo(() => homeAttentionCounts(entries), [entries]);
-  const filtered = useMemo(() => filterHomeAttention(entries, filter, search), [entries, filter, search]);
+  const discoveryChanges = query.data?.discoveryChanges;
+  const hasBaseline = discoveryChanges?.status === "compared" && Array.isArray(discoveryChanges.newCardIds);
+  const newlyRecorded = useMemo(
+    () => new Set(hasBaseline ? discoveryChanges.newCardIds : []),
+    [hasBaseline, discoveryChanges?.newCardIds],
+  );
+  const filtered = useMemo(
+    () => filterHomeAttention(entries, filter, search).filter(entry =>
+      !onlyNew || !hasBaseline || newlyRecorded.has(entry.card.id)),
+    [entries, filter, search, onlyNew, hasBaseline, newlyRecorded],
+  );
   const page = filtered.slice(0, visibleCount);
   const asOf = pulseStoryTimestamp(query.data?.asOf);
   const disableWrite = mutation.isPending || query.isError || query.isPending;
+  const disableReview = reviewMutation.isPending || query.isFetching || query.isPending || query.isError;
 
   const changeFilter = (next: AttentionFilter) => { setFilter(next); setVisibleCount(9); };
   const changeSearch = (next: string) => { setSearch(next); setVisibleCount(9); };
@@ -121,11 +154,38 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
       </p>}
       {askError && <p role="alert" className="rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm text-amber-100">{askError}</p>}
       {mutation.isError && <p role="alert" className="rounded-lg border border-rose-300/25 p-3 font-ui text-sm text-rose-200">{mutation.error instanceof Error ? mutation.error.message : "The review update could not be saved."}</p>}
+      {reviewMutation.isError && <p role="alert" className="rounded-lg border border-rose-300/30 px-3 py-2 font-ui text-sm text-rose-200">Could not save this review checkpoint. The previous reviewed snapshot is unchanged.</p>}
+      {reviewMutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving current recorded source snapshot…</p>}
+      {reviewMutation.isSuccess && !reviewMutation.isPending && !query.isFetching && <p role="status" className="font-ui text-sm text-emerald-200">Reviewed source snapshot saved.</p>}
       {mutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving review status…</p>}
       {mutation.isSuccess && !mutation.isPending && <p role="status" className="flex items-center gap-1.5 font-ui text-sm text-emerald-200"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />Review status saved.</p>}
 
       {query.data && (
         <>
+          <section aria-label="Changes since last source review" data-testid="home-reviewed-continuity" className="rounded-lg border border-border/55 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 font-ui text-sm text-foreground">
+                {hasBaseline ? (
+                  <><strong>{discoveryChanges.newCount}</strong> recorded source-backed item(s) new or revised since your last review
+                    {discoveryChanges.reviewedAt && <span className="mt-1 block text-xs text-muted-foreground">
+                      Reviewed <time dateTime={discoveryChanges.reviewedAt}>{new Date(discoveryChanges.reviewedAt).toLocaleString()}</time>
+                    </span>}</>
+                ) : "No source review checkpoint saved yet."}
+              </div>
+              <button type="button" disabled={disableReview} onClick={() => reviewMutation.mutate()}
+                className="min-h-10 rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.07] focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">
+                {reviewMutation.isPending ? "Saving…" : "Mark current source snapshot reviewed"}
+              </button>
+            </div>
+            <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">
+              Comparison uses retained card and source-reference revisions, not an inferred explanation of what happened. Monitoring and Inbox review statuses are not changed.
+            </p>
+            {hasBaseline && <label className="mt-3 flex min-h-10 cursor-pointer items-center gap-2 font-ui text-sm text-foreground">
+              <input type="checkbox" checked={onlyNew} onChange={event => { setOnlyNew(event.target.checked); setVisibleCount(9); }}
+                className="h-4 w-4 accent-amber-300 focus-visible:ring-2 focus-visible:ring-amber-300/70" />
+              Show only new or revised source-backed items
+            </label>}
+          </section>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter Home intelligence">
             {ATTENTION_FILTERS.map(item => (
               <button
