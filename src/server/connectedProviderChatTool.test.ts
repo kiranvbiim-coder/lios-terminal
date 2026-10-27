@@ -14,6 +14,7 @@ test("P5 Chat: source discovery is read-only while retrieval needs exact user co
   assert.equal(connectedProviderListChatTool.permissionClass, "safe_auto");
   assert.equal(connectedProviderListChatTool.access, "read");
   assert.equal(connectedProviderPreviewChatTool.permissionClass, "user_confirm");
+  assert.equal(connectedProviderPreviewChatTool.access, "write", "remote POST-capable connectors must use external-side-effect classification");
   assert.equal(connectedProviderPreviewChatTool.allowProjectApproval, false);
   assert.equal(connectedProviderPreviewChatTool.replaySafe, false);
   assert.equal(connectedProviderPreviewChatTool.sideEffect, "external");
