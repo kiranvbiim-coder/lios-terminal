@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useRef, useState } from "react";
 import { formatLiosAddress } from "@shared/liosAddress";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
