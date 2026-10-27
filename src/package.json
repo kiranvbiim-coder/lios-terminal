@@ -20,6 +20,7 @@
     "build": "npm run media:verify && tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "test": "npm run test:offline",
+    "audit:donors:gaps": "node script/donor_gap_audit.mjs",
     "test:offline": "npm run check:manifests && npm run check:routes && node script/run_project_tests.mjs server shared client script",
     "test:website-d1": "node --import tsx --test client/src/lib/phase4BriefingVisuals.test.ts client/src/lib/projectBriefingNativeVisuals.test.ts client/src/lib/projectBriefingVisualIntegration.test.ts client/src/lib/projectBriefingNativePptx.test.ts client/src/lib/projectBriefingStoryboard.test.ts client/src/components/terminal/ProjectBriefingStudio.test.tsx client/src/lib/phase4BriefingNative.test.ts client/src/lib/phase4Briefing.test.ts",
     "test:website-d2": "node --import tsx --test client/src/lib/projectBriefingD2Roundtrip.test.ts client/src/lib/projectBriefingD2Provenance.test.ts client/src/lib/phase4BriefingVisuals.test.ts client/src/lib/projectBriefingNativeVisuals.test.ts client/src/lib/projectBriefingStoryboard.test.ts client/src/lib/websiteD2NativePptx.test.ts client/src/lib/websiteD2Provenance.test.ts script/beta_release_acceptance.test.cjs",
