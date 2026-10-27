@@ -3,6 +3,14 @@ import type { SpatialLayoutMode } from "./spatialResearchModel";
 /** Matches the CSS container breakpoint of the one canonical spatial surface. */
 export const SPATIAL_STACKED_MAX_WIDTH = 760;
 
+/** Re-render only when crossing the pane behavior breakpoint, not every pixel. */
+export function bucketSpatialPaneWidth(width: number): number | null {
+  if (!Number.isFinite(width) || width < 0) return null;
+  return width <= SPATIAL_STACKED_MAX_WIDTH
+    ? SPATIAL_STACKED_MAX_WIDTH
+    : SPATIAL_STACKED_MAX_WIDTH + 1;
+}
+
 export interface SpatialPresentationPolicy {
   stacked: boolean;
   canMoveNodes: boolean;
