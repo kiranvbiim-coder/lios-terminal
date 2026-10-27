@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { editorialMediaSchema } from "../shared/editorialMedia";
 import { approvedNewsMediaByUrl } from "../server/newsEditorialMedia";
+import { safePublicSourceUrl } from "../shared/publicSourceUrl";
 
 const MAX_MEDIA_ROWS = 128;
 const MAX_MANIFEST_BYTES = 128 * 1024;
@@ -41,6 +42,7 @@ export function verifyBuiltEditorialMedia(
     const parsed = editorialMediaSchema.safeParse(row);
     if (!parsed.success) throw new Error("Build includes a malformed editorial media grant.");
     const media = parsed.data;
+    if (!safePublicSourceUrl(media.sourceEvidenceId)) throw new Error("Editorial source URL contains private credentials or is not public HTTP(S).");
     if (media.state !== "approved" ||
         Date.parse(at) < Date.parse(media.verifiedAt) ||
         (media.expiresAt && Date.parse(media.expiresAt) <= Date.parse(at))) {

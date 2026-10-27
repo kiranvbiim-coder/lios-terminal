@@ -15,6 +15,8 @@ export interface NewsStoryObservation {
 export interface NewsStoryRevision extends NewsStoryObservation {
   /** Local observation time, NOT when the publisher changed the story. */
   observedAt: string;
+  /** Latest successful feed observation, including unchanged responses. */
+  lastObservedAt?: string;
 }
 export type StoryChangedField = "headline" | "summary" | "source" | "publication time";
 export const MAX_NEWS_STORIES = 80;
@@ -68,11 +70,14 @@ export function observeNewsFeed(
     // Switching between cached React Query keys can surface an older response
     // after a newer one. Never reclassify old feed data as a fresh revision.
     if (latest) {
-      const lastSeen = Date.parse(latest.observedAt);
+      const lastSeen = Date.parse(latest.lastObservedAt ?? latest.observedAt);
       if (!Number.isFinite(lastSeen) || observationTime <= lastSeen) continue;
-      if (changedNewsFields(latest, item).length === 0) continue;
+      if (changedNewsFields(latest, item).length === 0) {
+        next = next.map(record => record === latest ? { ...record, lastObservedAt: observedAt } : record);
+        continue;
+      }
     }
-    next = [{ ...item, observedAt }, ...next];
+    next = [{ ...item, observedAt, lastObservedAt: observedAt }, ...next];
   }
   // Retain the last 6 actual observed versions of the last 80 unique stories.
   const storyCounts = new Map<string, number>();

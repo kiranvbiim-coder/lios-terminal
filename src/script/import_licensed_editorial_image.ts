@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { editorialMediaSchema, eligibleEditorialMedia, type EditorialMedia } from "../shared/editorialMedia";
 import { approvedNewsMediaByUrl, imageSignatureValid } from "../server/newsEditorialMedia";
+import { safePublicSourceUrl } from "../shared/publicSourceUrl";
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 const MAX_MANIFEST = 128 * 1024;
@@ -37,7 +38,7 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
   let sourceUrl: URL;
   try { sourceUrl = new URL(media.sourceEvidenceId); }
   catch { throw new Error("Exact published article URL is required as sourceEvidenceId."); }
-  if (!["https:", "http:"].includes(sourceUrl.protocol) || sourceUrl.username || sourceUrl.password || !sourceUrl.hostname.includes(".")) {
+  if (safePublicSourceUrl(media.sourceEvidenceId) === null || !sourceUrl.hostname.includes(".")) {
     throw new Error("Article evidence must be an ordinary public HTTP(S) URL.");
   }
   if (!eligibleEditorialMedia(media, [media.sourceEvidenceId], new Date().toISOString())) {

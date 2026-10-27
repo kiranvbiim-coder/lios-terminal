@@ -81,3 +81,10 @@ test("revoked, future, duplicated and divergent manifests cannot ship", t => {
   fs.writeFileSync(manifest,"[]");
   assert.throws(()=>verifyBuiltEditorialMedia(source,built,NOW),/Build changed/);
 });
+
+test("public manifests cannot publish credential query values in article identities", t => {
+  const { source, built } = fixture(t);
+  for (const base of [source, built])
+    fs.writeFileSync(path.join(base, "editorial-media", "manifest.json"), JSON.stringify([{ ...grant, sourceEvidenceId: ARTICLE + "?access_token=private" }]));
+  assert.throws(() => verifyBuiltEditorialMedia(source, built, NOW), /private credentials/);
+});

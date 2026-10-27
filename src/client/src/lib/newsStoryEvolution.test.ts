@@ -77,3 +77,13 @@ test("bounded memory never grows beyond last 80 stories and 6 revisions per URL"
   assert.equal(newsStoryRevisions(history, target).length, MAX_NEWS_REVISIONS_PER_STORY);
   assert.ok(history.length <= MAX_NEWS_STORIES + MAX_NEWS_REVISIONS_PER_STORY - 1);
 });
+
+test("unchanged newer observations advance the watermark without inventing revisions", () => {
+  const first = observeNewsFeed([], [article], at);
+  const unchanged = observeNewsFeed(first, [article], at + 3000);
+  const cached = observeNewsFeed(unchanged, [{ ...article, title: "Older cached content" }], at + 2000);
+  assert.equal(cached.length, 1);
+  assert.equal(cached[0].title, article.title);
+  assert.equal(cached[0].observedAt, first[0].observedAt);
+  assert.equal(cached[0].lastObservedAt, new Date(at + 3000).toISOString());
+});

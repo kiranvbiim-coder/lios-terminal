@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { eligibleEditorialMedia, type EditorialMedia } from "@shared/editorialMedia";
+import { safePublicSourceUrl } from "@shared/publicSourceUrl";
 
 const MAX_MANIFEST_BYTES = 128 * 1024;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -40,7 +41,7 @@ export function approvedNewsMediaByUrl(root: string, asOf: string): Map<string, 
     for (const entry of payload) {
       try {
       const candidate = eligibleEditorialMedia(entry, [entry?.sourceEvidenceId].filter((x): x is string => typeof x === "string"), asOf);
-      if (!candidate || approved.has(candidate.sourceEvidenceId)) continue;
+      if (!candidate || !safePublicSourceUrl(candidate.sourceEvidenceId) || approved.has(candidate.sourceEvidenceId)) continue;
       const relative = candidate.assetPath.slice(1);
       const file = path.join(rootReal, relative);
       const real = fs.realpathSync(file);

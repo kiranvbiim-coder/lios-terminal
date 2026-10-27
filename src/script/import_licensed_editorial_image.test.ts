@@ -45,6 +45,8 @@ test("no rights assertion, unsafe format and unrelated source cannot be accepted
   assert.throws(() => importLicensedNewsPhoto(src, { ...grant, permission: "publisher_thumbnail_only" }, out), /Grant is invalid/);
   assert.throws(() => importLicensedNewsPhoto(src, { ...grant, sourceEvidenceId: "file:\/\/\/secret" }, out), /ordinary public/);
   assert.throws(() => importLicensedNewsPhoto(src, { ...grant, state: "pending" }, out), /must be approved/);
+  for (const field of ["api_key", "access_token", "signature", "session_id"])
+    assert.throws(() => importLicensedNewsPhoto(src, { ...grant, sourceEvidenceId: source + "?" + field + "=private" }, out), /ordinary public/);
   fs.writeFileSync(path.join(root, "wrong.png"), "not an image");
   assert.throws(() => importLicensedNewsPhoto(path.join(root, "wrong.png"), grant, out), /non-empty file|Image content/);
   assert.equal(fs.existsSync(path.join(out, "editorial-media", "manifest.json")), false);

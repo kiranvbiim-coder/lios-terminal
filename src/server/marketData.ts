@@ -2262,6 +2262,14 @@ export function dedupeNewsItems(items: NewsItem[]): NewsItem[] {
     .sort((a, b) => +new Date(b.publishedAt) - +new Date(a.publishedAt) || a.url.localeCompare(b.url));
 }
 
+function attachCurrentNewsMedia(items: NewsItem[]): NewsItem[] {
+  const licensed = approvedNewsMediaForFeed();
+  return items.map(({ media: _previousGrant, ...item }) => {
+    const media = licensed.get(item.url);
+    return media ? { ...item, media } : item;
+  });
+}
+
 async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options: NewsPageOptions = {}) {
   const page = Math.max(1, Math.floor(options.page ?? 1));
   // Every explicit-from page uses the same bounded provider feed. Cache its
@@ -2269,7 +2277,7 @@ async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options:
   const cachePage = options.from ? "bounded" : String(page);
   const pagedKey = `${cacheKey}:${cachePage}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
   const cached = getCached(newsCache, pagedKey);
-  if (cached) return cached;
+  if (cached) return attachCurrentNewsMedia(cached);
 
   const settled = await Promise.allSettled(feeds.map(async (feed) => {
     const xml = await fetchText(feedUrlForPage(feed.url, page, options));
@@ -2277,17 +2285,12 @@ async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options:
   }));
 
   const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
-  // Attach only exact article-linked images whose bundled bytes and license
-  // metadata passed verification. Raw RSS imageCandidate links never render.
-  const licensed = approvedNewsMediaForFeed();
-  const normalized = dedupeNewsItems(items).map(item => {
-    const media = licensed.get(item.url);
-    return media ? { ...item, media } : item;
-  });
+  const normalized = dedupeNewsItems(items);
 
   // Don't cache empty results — let the next request retry live feeds.
   if (!normalized.length) return [];
-  return setCached(newsCache, pagedKey, normalized, NEWS_TTL_MS);
+  setCached(newsCache, pagedKey, normalized, NEWS_TTL_MS);
+  return attachCurrentNewsMedia(normalized);
 }
 
 export async function getNewsPage(symbol?: string, query?: string, options: NewsPageOptions = {}): Promise<NewsPage> {
@@ -2302,7 +2305,7 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     const upper = symbol.toUpperCase();
     const profile = getProfileWithCryptoFallback(upper);
     const tokens = [upper, profile?.name?.split(" ")[0]].filter(Boolean).map((token) => String(token).toLowerCase());
-    items = feedItems.filter((item) => {
+    items = items.filter((item) => {
       const haystack = `${item.title} ${item.summary}`.toLowerCase();
       return tokens.some((token) => haystack.includes(token));
     });
