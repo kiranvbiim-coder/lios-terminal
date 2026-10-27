@@ -1,4 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
+import type { EditorialMedia } from "@shared/editorialMedia";
+import { extractRssImageCandidate } from "./newsFeedImageCandidates";
 import { getIndicatorQuotes } from "./fredData";
 import { buildDataStatus, type DataStatus } from "./dataStatus";
 import { fetchText, fetchWithRetry, getCached, setCached } from "./providerUtils";
@@ -104,6 +106,9 @@ export interface OHLCVWithProvenance {
 }
 
 export interface NewsItem {
+  /** Independently approved publisher media only, never RSS URL metadata. */
+  media?: EditorialMedia;
+  imageCandidate?: ReturnType<typeof extractRssImageCandidate>;
   title: string;
   summary: string;
   url: string;
@@ -1046,6 +1051,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         source,
         feedProvider: "Limuria Intelligence",
         publishedAt,
+        imageCandidate: extractRssImageCandidate(item),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,
