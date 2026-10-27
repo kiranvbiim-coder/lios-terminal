@@ -10,6 +10,7 @@ import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalCo
 import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
 import ChatSourcesControl from "./ChatSourcesControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
+import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -2891,7 +2892,13 @@ export default function ProjectExperienceShell({
                     onEnterFocus={() => setArtifactFocusMode(true)}
                     onExitFocus={() => { setArtifactFocusMode(false); requestAnimationFrame(() => reopenArtifactFocusRef.current?.focus()); }}
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
-                    onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, requestedVersion: artifactViewVersion, version }; }}
+                    onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
+                      // Only the currently selected exact P4 load may update
+                      // the separate Chat → Workbench shortcut target.
+                      if (isCurrentArtifactLoad(artifactId, loadedRequest, version, conversationArtifactRef, artifactViewVersion)) {
+                        displayedArtifactRef.current = { artifactId, requestedVersion: loadedRequest, version };
+                      }
+                    }}
                     artifactId={conversationArtifactRef}
                     version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
                     projectId={selection.projectId} owningChatId={selection.chatId}
