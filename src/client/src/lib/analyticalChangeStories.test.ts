@@ -36,6 +36,14 @@ test("filter keeps exact local changed fields and never mutates original snapsho
   assert.equal(JSON.stringify(all), before);
 });
 
+test("most recently captured context appears first without reordering the store", () => {
+  const older = entry("older", [numeric], 1_700_000_000_000);
+  const newer = entry("newer", [numeric], 1_750_000_000_000);
+  const records = [older, newer];
+  assert.deepEqual(visibleAnalyticalChanges(records, "", "all").map(x => x.contextKey), ["newer", "older"]);
+  assert.deepEqual(records.map(x => x.contextKey), ["older", "newer"]);
+});
+
 test("field categories never classify added records as numeric before-and-after", () => {
   assert.equal(recordedChangeCategory(numeric), "numeric");
   assert.equal(recordedChangeCategory(added), "structure");
