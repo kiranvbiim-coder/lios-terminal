@@ -14,7 +14,7 @@ const [
   { initDb, closeDb, getDb },
   { users },
   { createProject },
-  { verifySavedMcpConnection },
+  { verifySavedMcpConnection, upsertSourceConnection },
 ] = await Promise.all([
   import("./db"),
   import("@shared/schema"),
@@ -46,6 +46,40 @@ test("P3 MCP live verification checks saved owner and Project before any officia
     { userId: stranger.id, organizationId: null, role: "internal_analyst" as const },
     { name: "Foreign MCP" },
   );
+  const saveInput = {
+    connectorId: "custom_mcp",
+    sourceType: "mcp" as const,
+    name: "MCP with owner-supplied allowlist",
+    credentialRef: null,
+    config: {
+      // Public numeric address avoids DNS/network dependencies in offline
+      // save-policy tests. No remote request is dispatched on save.
+      endpoint: "https://8.8.8.8/mcp",
+      projectId: project.id,
+      allowedToolIds: "reports.read",
+      requireApprovalForTools: true,
+    },
+  };
+  const actor = { id: owner.id, email: owner.email };
+  await assert.rejects(
+    () => upsertSourceConnection(owner.id, null, {
+      ...saveInput,
+      config: { ...saveInput.config, projectId: foreignProject.id },
+    }, actor),
+    /not owned|not found/i,
+    "an MCP source must not be persisted against a foreign Project",
+  );
+  await assert.rejects(
+    () => upsertSourceConnection(owner.id, null, {
+      ...saveInput,
+      config: { ...saveInput.config, requireApprovalForTools: false },
+    }, actor),
+    /explicit user approval/i,
+  );
+  const saved = await upsertSourceConnection(owner.id, null, saveInput, actor);
+  assert.equal(saved.status, "configured", "save alone must never count as live verification");
+  assert.equal(saved.config.projectId, project.id);
+
   const source = {
     id: 101, userId: owner.id, organizationId: null,
     sourceType: "mcp", credentialRef: null,
