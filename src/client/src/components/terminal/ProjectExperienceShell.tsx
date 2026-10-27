@@ -2066,15 +2066,13 @@ export default function ProjectExperienceShell({
         )}
         {section !== "conversation" ? (
           <section className="lios-section-surface" aria-label={section}>
-            <header><div><h1>{({ projects: "Projects", chats: "Chats", library: "Library", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
-              <p>{section === "projects" ? "Keep sources, conversations and analytical work together." : section === "chats" ? "Continue a saved conversation." : section === "library" ? "Live artifacts and sources in the selected Project." : section === "automations" ? "Saved workflows and monitors in the selected Project." : "Extend LiOS through governed connections and capabilities."}</p></div>
-              <button className="lios-section-action" onClick={() => setSection("conversation")}>Back to conversation</button></header>
+            <header><h1>{({ projects: "Projects", chats: "Chats", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
+              <button className="lios-section-action" onClick={() => setSection("conversation")}>Back to chat</button></header>
             {section === "projects" && <>
               <button className="lios-section-action" onClick={() => { setSection("conversation"); setNewProjectOpen(true); }}>New Project</button>
               {projectsQuery.isLoading ? <p role="status">Loading Projects…</p> : projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : <div className="lios-directory-list">{projects.map((project) => <button key={project.id} onClick={() => openProject(project, false, true)}><strong>{project.name}</strong><small>{project.instructions || "Open Project"}</small></button>)}{!projects.length && <p>Create a Project to organize your research.</p>}</div>}
             </>}
             {section === "chats" && <>
-              <div className="mb-4 font-ui text-[12px] text-muted-foreground">Use Search to find words inside conversations, Projects, files and Artifacts.</div>
               {allChatsQuery.isLoading || quickChatsQuery.isLoading ? <p role="status">Loading chats…</p> : allChatsQuery.isError || quickChatsQuery.isError ? <p role="alert">Unable to load chats. <button onClick={() => { void allChatsQuery.refetch(); void quickChatsQuery.refetch(); }}>Retry</button></p> : (() => {
                 const chats = [...(allChatsQuery.data ?? []), ...quickChats].sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime());
                 return <div className="lios-directory-list">{chats.slice(0, chatLimit).map((chat) => <button key={chat.id} onClick={() => openChat(chat)}><strong>{chat.title}</strong><small>{chat.projectId ? projects.find((project) => project.id === chat.projectId)?.name || "Project chat" : "Quick chat"} · {relativeTime(chat.updatedAt)}</small></button>)}{chats.length > chatLimit && <button className="lios-section-action" onClick={() => setChatLimit((limit) => limit + 50)}>Load more chats</button>}{!chats.length && <p>Your saved conversations will appear here.</p>}</div>;
@@ -2108,8 +2106,7 @@ export default function ProjectExperienceShell({
           <div className="flex h-full min-h-[320px] items-center justify-center px-6" role="status" aria-live="polite">
             <div className="max-w-md rounded-xl border border-border/60 bg-[#080808]/90 p-6 text-center">
               <div className="mx-auto h-2 w-2 animate-pulse rounded-full bg-amber-300" />
-              <div className="mt-4 font-ui text-[15px] font-semibold text-foreground">Restoring your LiOS workspace</div>
-              <div className="mt-2 font-ui text-[12px] leading-5 text-muted-foreground">Loading Projects, conversation state and the authenticated workspace boundary. Setup is not required.</div>
+              <div className="mt-4 font-ui text-[15px] font-semibold text-foreground">Opening workspace…</div>
             </div>
           </div>
         ) : shellLoadState === "error" ? (
@@ -2124,7 +2121,6 @@ export default function ProjectExperienceShell({
                 <button type="button" onClick={() => void retryShell()} className="rounded-md bg-amber-400 px-3 py-2 font-ui text-[12px] font-semibold text-black hover:bg-amber-300">Retry restore</button>
                 {shellErrorStatus === 401 || shellErrorStatus === 403 ? <button type="button" onClick={onLogout} className="min-h-10 rounded border px-3 text-sm">Sign out</button> : <button type="button" onClick={() => void startTemporary()} className="min-h-10 rounded border px-3 text-sm">Open Temporary Chat</button>}
               </div>
-              <div className="mt-3 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/70">No connector setup or data reset is required to retry.</div>
             </div>
           </div>
         ) : entrySurface === "project-home" && home ? (
