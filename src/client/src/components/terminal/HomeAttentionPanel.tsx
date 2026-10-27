@@ -168,7 +168,7 @@ function HomeAttentionContents() {
   );
 }
 
-function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
+export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
   entry: HomeAttentionEntry;
   onUpdate: (status: ActionInboxItem["status"]) => void;
   disabled: boolean;
