@@ -60,3 +60,15 @@ test("B09 fallback remains keyboard selectable with semantic graph objects",()=>
   assert.match(html,/<button/);
   assert.doesNotMatch(html,/No records/);
 });
+
+test("B09 active Visual News, World, Perspectives and Data Fabric panes use readable minimum type",()=>{
+  for(const path of [
+    "../components/panels/EconomicDataFabricPanel.tsx",
+    "../components/panels/MarketDataFabricPanel.tsx",
+    "../components/panels/NewsStoryEvolution.tsx",
+    "../components/panels/RecordedPerspectivesBoard.tsx",
+    "../components/terminal/OfflineProjectWorldMap.tsx",
+  ]) {
+    assert.doesNotMatch(source(path),/text-\[(?:6|7|8|9|10|11)px\]/,"tiny chart/pane typography in "+path);
+  }
+});

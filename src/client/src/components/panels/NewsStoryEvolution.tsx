@@ -50,7 +50,7 @@ export function NewsStoryEvolution({
       data-testid="news-story-evolution" aria-label="Observed story feed changes">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-ui text-sm font-semibold text-foreground">Story Evolution</h3>
-        <span className="font-ui text-[11px] text-muted-foreground">
+        <span className="font-ui text-xs text-muted-foreground">
           {changes.length} observed {changes.length === 1 ? "change" : "changes"}
         </span>
       </div>
@@ -156,7 +156,7 @@ export function NewsStoryEvolution({
         </>}
         <ul className="mt-3 space-y-2">{related.map(item => (
           <li key={item.url} className="rounded-lg border border-border/60 p-2">
-            <p className="font-ui text-[11px] text-amber-200">{item.source} · <time dateTime={item.publishedAt}>{utcDateTime(item.publishedAt)}</time></p>
+            <p className="font-ui text-xs text-amber-200">{item.source} · <time dateTime={item.publishedAt}>{utcDateTime(item.publishedAt)}</time></p>
             <p className="mt-1 font-ui text-sm leading-5 text-foreground">{item.title}</p>
             <div className="mt-2 flex flex-wrap gap-3">
               {onSelectRelated && <button type="button" onClick={() => onSelectRelated(item.url)}

@@ -197,7 +197,7 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
           <MapPin className="h-4 w-4" aria-hidden="true"/>
         </button>)}
       </div>
-      <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border/50 bg-[#07131c]/90 px-2 py-1 font-ui text-[11px] text-white/75">Natural Earth · offline · {Math.round(zoom * 100)}%</span>
+      <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border/50 bg-[#07131c]/90 px-2 py-1 font-ui text-xs text-white/75">Natural Earth · offline · {Math.round(zoom * 100)}%</span>
     </div>
     {atlasUnavailable && <p role="alert" className="rounded-lg border border-amber-300/40 p-3 font-ui text-sm text-amber-200">Bundled world outline unavailable. Recorded coordinates remain accessible below; no online basemap will be requested.</p>}
     {projection.points.length === 0
