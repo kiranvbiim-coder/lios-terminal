@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { RecordedGeographicPoint } from "./offlineWorldMapPresentation";
-import { projectOfflineWorldPoints, worldPointCoordinates } from "./offlineWorldMapPresentation";
+import { projectOfflineWorldPoints, worldPointCoordinates, recordedWorldMapDays } from "./offlineWorldMapPresentation";
 
 const at = "2026-10-27T12:00:00Z";
 const locations: RecordedGeographicPoint[] = [
@@ -58,4 +58,22 @@ test("show at most 60 points but report actual omissions; do not mutate source r
   assert.equal(result.omittedCount,60);
   assert.equal(many[0].longitude,original);
   assert.equal(projectOfflineWorldPoints([]).points.length,0);
+});
+
+
+test("B01 time slider uses recorded UTC event days only and inclusive date boundaries", () => {
+  const newer = { ...locations[0], id:"later", occurredAt:"2026-10-28T01:00:00+05:30" };
+  const invalid = { ...locations[0], id:"fake", occurredAt:"2026-02-30T12:00:00Z" };
+  const input=[...locations,newer,invalid];
+  assert.deepEqual(recordedWorldMapDays(input), ["2026-10-27"]);
+  assert.deepEqual(projectOfflineWorldPoints(input,{fromDate:"2026-10-27",throughDate:"2026-10-27"}).points.map(x=>x.id),
+    ["west","north","later"]);
+  assert.equal(projectOfflineWorldPoints(input,{fromDate:"2026-10-28",throughDate:"2026-10-28"}).points.length,0);
+  for (const range of [{fromDate:"2026-02-30"}, {fromDate:"bad"}, {fromDate:"2026-10-28",throughDate:"2026-10-27"}]) {
+    assert.equal(projectOfflineWorldPoints(input,range).points.length,0);
+  }
+});
+test("B01 explicit time-window never reintroduces source-free or undated points",()=>{
+  const x=projectOfflineWorldPoints(locations,{sourceOnly:true,fromDate:"2026-10-27",throughDate:"2026-10-27"});
+  assert.deepEqual(x.points.map(item=>item.id),["west"]);
 });
