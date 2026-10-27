@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { init, use, type EChartsCoreOption } from "echarts/core";
 import { SankeyChart } from "echarts/charts";
