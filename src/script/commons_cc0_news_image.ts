@@ -83,11 +83,18 @@ function safeTitle(value: unknown): value is string {
 export function cc0Candidate(page: CommonsFile): CommonsCandidate | null {
   const info = page.imageinfo?.[0];
   if (!safeTitle(page.title) || !info || !validCommonsPage(info.descriptionurl)) return null;
-  if (metadata(info.extmetadata, "LicenseShortName").toLowerCase() !== "cc0 1.0") return null;
+  if (!["cc0", "cc0 1.0"].includes(metadata(info.extmetadata, "LicenseShortName").toLowerCase())) return null;
   if (metadata(info.extmetadata, "NonFree").toLowerCase() === "true") return null;
   const license = metadata(info.extmetadata, "LicenseUrl");
-  if (license !== CC0_URL && license !== CC0_URL.slice(0, -1)) return null;
-  const mime = info.thumburl ? info.mime : info.mime;
+  // Commons sometimes publishes the canonical CC0 deed URL as HTTP or with
+  // /deed.en. Require exact CC0 host/path; never downgrade to BY/BY-SA.
+  let licenseUrl: URL;
+  try { licenseUrl = new URL(license); } catch { return null; }
+  if (!["http:", "https:"].includes(licenseUrl.protocol)
+    || licenseUrl.hostname !== "creativecommons.org"
+    || !["/publicdomain/zero/1.0", "/publicdomain/zero/1.0/", "/publicdomain/zero/1.0/deed.en"].includes(licenseUrl.pathname)
+    || licenseUrl.search || licenseUrl.hash || licenseUrl.username || licenseUrl.password) return null;
+  const mime = info.mime;
   if (!["image/jpeg", "image/png", "image/webp", "image/avif"].includes(mime ?? "")) return null;
   const previewUrl = info.thumburl;
   if (!safeUploadUrl(previewUrl)) return null;
