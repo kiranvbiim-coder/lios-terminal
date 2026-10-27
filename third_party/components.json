@@ -2945,6 +2945,90 @@
         "Adapted to existing React 18/Tailwind 3/Radix primitives instead of Kibo React 19 monorepo."
       ],
       "notes": "Full MIT license at client/src/components/vendor/kibo/LICENSE. Native and source acceptance unverified."
+    },
+    {
+      "id": "beui-pulse-tabs",
+      "name": "beUI accessible spring Pulse channel selector",
+      "repository": "starc007/ui-components",
+      "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "TC-Wave-D-Pulse",
+        "accessible-discovery-channels"
+      ],
+      "importedPaths": [
+        "components/motion/tabs.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/PulseDiscoveryTabs.tsx"
+      ],
+      "modifications": [
+        "Adapted controlled beUI Tabs for existing Wave D four-channel state and callbacks, using existing React18/Framer Motion11 and Tailwind3.",
+        "Arrow/Home/End keyboard navigation and reduced-motion animations preserve source/data truth and never introduce a second feed."
+      ],
+      "notes": "Specific pinned source and full MIT notice retained. Source import and component test are not native acceptance."
+    },
+    {
+      "id": "watermelon-p6-activities",
+      "name": "Watermelon UI P6 Project Continuation ActivitiesCard",
+      "repository": "WatermelonCorp/watermellon-registry",
+      "commitSha": "86052b8fd12bc19bf3bac07625a7f93736c42b17",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Watermelon UI",
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "TC-Project-Continuity",
+        "P6-Continuation-Queue"
+      ],
+      "importedPaths": [
+        "src/components/watermelon-ui/activities-card-base.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectContinuationActivitiesCard.tsx"
+      ],
+      "modifications": [
+        "Adapted motion disclosure and activity rail to existing deterministic P6 queue and item priorities with bounded visible list and source-aware actions.",
+        "Focuses exact visible P9 record for review; does not change workflow execution permissions or retention."
+      ],
+      "notes": "MIT source and license retained. New component replaces old P6 duplicate list, not new automation authority."
+    },
+    {
+      "id": "opensourceui-spreadsheet-review",
+      "name": "Opensource UI governed spreadsheet review/dropzone",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Opensource UI",
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "P4-Project-Library-Import",
+        "TC-Review-Before-Upload"
+      ],
+      "importedPaths": [
+        "components/inputs/file-upload-field-input.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectSpreadsheetImportField.tsx"
+      ],
+      "modifications": [
+        "Replaced immediate Project Library file picker with local selection/drop, maximum 20 MB validation, explicit review and confirmation before canonical importSpreadsheetArtifact(projectId,file).",
+        "Preserves P4/Project auth and imports through existing single endpoint; no external service, duplicate uploader or local spreadsheet parser."
+      ],
+      "notes": "Full MIT notice retained. Only selected file is passed after explicit approval; native import and user rights acceptance require tests."
     }
   ]
 }
