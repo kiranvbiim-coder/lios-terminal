@@ -535,3 +535,94 @@ html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-s
     transition: none;
   }
 }
+
+
+/* SI-07 navigation foundation: readable names first, icon rail only by choice.
+ * Applies to all five themes, including Classic, without changing route ownership.
+ * The 260px sidebar is one named navigation + history column, not two rails. */
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="false"] {
+  width: 260px !important;
+  flex-basis: 260px !important;
+  border-right: 1px solid var(--lios-border-default);
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-rail[hidden],
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-projects[hidden] {
+  display: none !important;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="false"] .lios-reference-navigation-projects {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  border-right: 0;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="true"] .lios-reference-navigation-rail {
+  display: flex;
+  width: 60px;
+  min-width: 60px;
+  align-items: center;
+  padding: 8px 5px;
+  background: var(--lios-bg-shell);
+  border-right: 1px solid var(--lios-border-default);
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-brand {
+  color: var(--lios-text-primary);
+  letter-spacing: normal;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation {
+  padding: 10px 12px;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button,
+.lios-navigation-sheet .lios-primary-navigation button {
+  min-height: 38px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: var(--lios-chat-font, inherit);
+  font-size: 14px !important;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation .lios-new-chat,
+.lios-navigation-sheet .lios-primary-navigation .lios-new-chat {
+  min-height: 40px;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 9px;
+  font-family: var(--lios-chat-font, inherit) !important;
+  font-size: 14px !important;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.terminal-root .lios-navigation-section-links,
+.lios-navigation-sheet .lios-navigation-section-links {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--lios-border-subtle);
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button[aria-current="page"],
+.lios-navigation-sheet .lios-primary-navigation button[aria-current="page"] {
+  background: var(--lios-bg-selected);
+  color: var(--lios-text-primary);
+  font-weight: 600;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button:focus-visible,
+.lios-navigation-sheet .lios-primary-navigation button:focus-visible,
+.terminal-root .lios-reference-navigation-rail button:focus-visible {
+  outline: 2px solid var(--lios-brand) !important;
+  outline-offset: -2px;
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-rail button {
+  min-width: 42px;
+  min-height: 40px;
+  border-radius: 8px;
+}
+.lios-navigation-sheet .lios-primary-navigation {
+  max-height: 57vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .terminal-root .lios-authenticated-navigation { display: none !important; }
+}
