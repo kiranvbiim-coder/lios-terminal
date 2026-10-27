@@ -136,6 +136,21 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const loadOwnedSavedViews = async () => {
+      try {
+        const response = await fetch("/api/wave-d/pulse/views", {
+          credentials: "same-origin", cache: "no-store", signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Saved discovery views unavailable.");
+        const result: unknown = await response.json();
+        if (cancelled || controller.signal.aborted) return;
+        if (!result || typeof result !== "object" || !("savedViews" in result) || !Array.isArray(result.savedViews))
+          throw new Error("Saved discovery views response invalid.");
+        setPulseSavedViews(normalizePulseSavedViews(result.savedViews));
+      } catch {
+        if (!cancelled && !controller.signal.aborted) setPulseSavedViews([]);
+      }
+    };
     setWaveDStatus("loading");
     setPulseReview(null);
     if (document.visibilityState === "hidden") return () => controller.abort();
@@ -145,7 +160,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
-      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); return; }
+      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); return; }
       const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences; discoveryChanges?: unknown; savedViews?: unknown };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
@@ -155,14 +170,22 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDPulseCards(authorizedCards);
       setPulseReview(normalizePulseReviewPresentation(pulse.discoveryChanges, authorizedCards));
       setPulseSavedViews(normalizePulseSavedViews(pulse.savedViews));
-      setPulsePreferences(normalizePulseSubjectPreferences(pulse.preferences));
+      const ownedFollowing = normalizePulseSubjectPreferences(pulse.preferences);
+      setPulsePreferences(ownedFollowing);
+      // A second device may have unfollowed/muted this subject. Never render a
+      // stale saved filter as an apparently authorized selection.
+      if (activeSavedSubject && !ownedFollowing.followed.includes(activeSavedSubject)) {
+        setActiveSavedSubject(null);
+        setSavedViewError("A previously selected subject is no longer followed.");
+        setWaveDPulseCards([]);
+      }
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
       setWaveDMonitoringCount(Number(pulse.monitoring?.activeRules ?? 0));
       setBriefHeadline(typeof brief.headline === "string" ? brief.headline : null);
       setWaveDStatus("ready");
-    }).catch(() => { if (!cancelled) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); } });
+    }).catch(() => { if (!cancelled && !controller.signal.aborted) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); void loadOwnedSavedViews(); } });
     return () => { cancelled = true; controller.abort(); };
   }, [pulseChannel, activeSavedSubject, pulseRevision]);
 
@@ -173,6 +196,8 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       if (document.visibilityState === "hidden") {
         setWaveDPulseCards([]);
         setPulseReview(null);
+        setPulseSavedViews([]);
+        setPulsePreferences(EMPTY_PULSE_SUBJECT_PREFERENCES);
         setWaveDStatus("loading");
         setPulseRevision(value => value + 1);
         lastRefresh = 0;
@@ -181,6 +206,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const now = Date.now();
       if (now - lastRefresh < 500) return;
       lastRefresh = now;
+      setWaveDPulseCards([]);
+      setPulseReview(null);
+      setPulseSavedViews([]);
+      setPulsePreferences(EMPTY_PULSE_SUBJECT_PREFERENCES);
       setPulseRevision(value => value + 1);
     };
     window.addEventListener("focus", revalidatePulse);
@@ -203,7 +232,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     setPulseRevision(value => value + 1);
   };
   const changeSavedView = async (change: { action: "save"; name: string } | { action: "delete"; id: string }): Promise<boolean> => {
-    if (savedViewRequestPending.current || waveDStatus !== "ready") return false;
+    if (savedViewRequestPending.current || (change.action === "save" && waveDStatus !== "ready")) return false;
     savedViewRequestPending.current = true;
     setSavedViewPending(true);
     setSavedViewError(null);

@@ -70,3 +70,16 @@ test("A05 failed saved-view writes retain draft names and confirmed writes avoid
   assert.ok(board.includes('if (saved) setViewName("")'));
   assert.doesNotMatch(board, /onSavePulseView\(label.slice\(0, 60\)\);\s*setViewName\("")/);
 });
+
+test("A05 saved view names remain available through user-scoped reads when upstream Pulse fails", () => {
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
+  const routes = readFileSync(new URL("../../../server/waveDRoutes.ts", import.meta.url), "utf8");
+  assert.ok(routes.includes('app.get("/api/wave-d/pulse/views", requireWaveDRetailRead'));
+  assert.ok(routes.includes('await getWaveDState(waveUser(req))'));
+  assert.ok(routes.includes('res.setHeader("Cache-Control", "no-store")'));
+  assert.ok(shell.includes('void loadOwnedSavedViews()'));
+  assert.ok(shell.includes('A previously selected subject is no longer followed.'));
+  assert.ok(shell.includes('setPulsePreferences(EMPTY_PULSE_SUBJECT_PREFERENCES)'));
+  assert.ok(board.includes('onDeletePulseView(view.id)} disabled={savedViewPending}'));
+});

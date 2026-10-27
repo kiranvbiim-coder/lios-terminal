@@ -250,7 +250,7 @@ export default function FusionPulseBoard({
                     {view.name}
                     <span className="ml-2 text-muted-foreground">{view.channel.replaceAll("_", " ")}{view.subjectKey ? " · " + view.subjectKey : ""}</span>
                   </button>
-                  <button type="button" onClick={() => onDeletePulseView(view.id)} disabled={savedViewPending || pulseStatus !== "ready"}
+                  <button type="button" onClick={() => onDeletePulseView(view.id)} disabled={savedViewPending}
                     aria-label={`Delete saved view ${view.name}`}
                     className="min-h-10 rounded-md border border-border/60 px-2 font-ui text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Remove</button>
                 </li>)}

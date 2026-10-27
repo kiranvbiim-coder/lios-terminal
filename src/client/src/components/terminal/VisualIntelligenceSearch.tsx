@@ -44,7 +44,7 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
   const [actionError, setActionError] = useState<string | null>(null);
   const [stagingId, setStagingId] = useState<string | null>(null);
   const [facet, setFacet] = useState<IntelligenceSearchFacet>("all");
-  const [presentation, setPresentation] = useState<"cards" | "table" | "timeline">("cards");
+  const [presentation, setPresentation] = useState<"cards" | "table" | "timeline" | "chart">("cards");
   const [foregroundRevision, setForegroundRevision] = useState(0);
   const activeQuery = query.trim().slice(0, 120);
   const searchReady = activeQuery.length >= 2;
@@ -153,10 +153,10 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
               >{item.label} <span aria-hidden="true">({counts[item.value]})</span></button>)}
             </div>
             <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-3 py-2" role="group" aria-label="Intelligence results presentation">
-              {(["cards", "table", "timeline"] as const).map(mode => <button key={mode} type="button"
+              {(["cards", "table", "timeline", "chart"] as const).map(mode => <button key={mode} type="button"
                 aria-pressed={presentation === mode} onClick={() => setPresentation(mode)}
                 className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70 ${presentation === mode ? "border-amber-300/50 text-foreground" : "border-border/60 text-muted-foreground"}`}>
-                {mode === "timeline" ? "Recorded timeline" : mode === "table" ? "Table" : "Cards"}
+                {mode === "timeline" ? "Recorded timeline" : mode === "table" ? "Table" : mode === "chart" ? "Relevance chart" : "Cards"}
               </button>)}
             </div>
             <p role="status" className="px-4 py-3 font-ui text-xs text-muted-foreground">
@@ -165,7 +165,37 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
               {found.limited && ` Showing first ${found.results.length}; narrow the query for more.`}
             </p>
             {found.total === 0 ? <p className="px-5 py-8 text-center font-ui text-sm text-muted-foreground">No matching recorded intelligence. Try another subject or filter.</p>
-              : presentation === "table" ? (
+              : presentation === "chart" ? (
+                <div className="max-h-[50vh] overflow-y-auto p-3" aria-label="Recorded intelligence relevance comparison">
+                  <p className="mb-3 font-ui text-xs leading-5 text-muted-foreground">
+                    Relevance scores are computed from retained Pulse rankings (0–100), not market prices,
+                    verified impact measures or corroboration. Each bar represents one currently authorized card.
+                  </p>
+                  <ol className="space-y-2">
+                    {found.results.map(card => {
+                      const score = Math.max(0, Math.min(100, card.score));
+                      return <li key={card.id} className="min-w-0 rounded-lg border border-border/60 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 font-ui text-xs">
+                          <span className="min-w-0 flex-1 break-words font-semibold text-foreground">{card.title}</span>
+                          <span className="tabular-nums text-muted-foreground">{score.toFixed(0)} / 100</span>
+                        </div>
+                        <div role="meter" aria-label={`Recorded relevance score for ${card.title}`}
+                          aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}
+                          className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-border/60">
+                          <div className="h-full rounded-full bg-amber-300/65" style={{ width: `${score}%` }} />
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                          <span className="font-ui text-xs capitalize text-muted-foreground">{card.kind.replaceAll("_", " ")}</span>
+                          <VisualIntelligenceSourceDisclosure card={card} />
+                          <button type="button" disabled={stagingId !== null} onClick={() => void stage(card)}
+                            aria-label={`Ask LiOS about ${card.title}`}
+                            className="min-h-10 rounded-lg border border-border/60 px-3 font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Ask LiOS</button>
+                        </div>
+                      </li>;
+                    })}
+                  </ol>
+                </div>
+              ) : presentation === "table" ? (
                 <div className="max-h-[50vh] overflow-auto p-3" aria-label="Recorded intelligence table">
                   <table className="w-full min-w-[520px] border-collapse text-left font-ui text-xs">
                     <caption className="pb-2 text-left text-muted-foreground">Only the currently authorized, recorded source snapshot. No inferred rows.</caption>
