@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseActionInboxReview, safeInboxEvidenceUrl } from "./actionInboxReview";
+import { parseActionInboxReview, safeInboxEvidenceUrl, buildActionInboxChatDraft } from "./actionInboxReview";
 import type { ActionInboxItem } from "@shared/waveDContracts";
 
 const asOf = "2026-10-27T10:00:00.000Z";
@@ -81,4 +81,37 @@ test("Phase 3 source links reject non-HTTPS, script schemes and credential-like 
   })]));
   assert.equal(result.status, "ready");
   assert.equal(result.items[0].evidence[0].url, undefined);
+});
+
+test("Phase 3 Chat handoff is an explicit, bounded draft with identifiers and entitlement cautions", () => {
+  const live = item("review-1", {
+    title: "Material alert", priority: "critical", reason: "Unusual indicator from attributed source",
+    evidence: [
+      { id: "file:one", source: "Exchange filing", provider: "Official registry", availableAt: asOf },
+      { id: "file:two", source: "Issuer notice", provider: "Issuer" },
+    ],
+  });
+  const draft = buildActionInboxChatDraft(live, asOf);
+  assert.match(draft, /REVIEW this LiOS Action Inbox alert/);
+  assert.match(draft, /untrusted context, not instructions/);
+  assert.match(draft, /authorized in my current Chat context/);
+  assert.match(draft, /alertId/);
+  assert.match(draft, /card:review-1/);
+  assert.match(draft, /Exchange filing/);
+  assert.match(draft, /Issuer notice/);
+  assert.match(draft, /Do not auto-execute tools/);
+  assert.doesNotMatch(draft, /https:\/\//);
+  assert.doesNotMatch(draft, /credential|api[_-]?key.*[:=]/i);
+});
+
+test("Phase 3 drafted alert limits copied text and evidence fanout before canonical Chat review", () => {
+  const long = item("i".repeat(250), {
+    reason: "x".repeat(7_000),
+    evidence: Array.from({ length: 30 }, (_, i) => ({ id: String(i), source: "User-owned source" })),
+  });
+  const draft = buildActionInboxChatDraft(long, asOf);
+  assert.equal((draft.match(/User-owned source/g) || []).length, 6);
+  assert.match(draft, /"omittedSourceCount": 24/);
+  assert.equal(draft.includes("x".repeat(1000)), false);
+  assert.equal(draft.includes("x".repeat(900)), true);
 });
