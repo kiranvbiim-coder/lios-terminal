@@ -197,7 +197,7 @@ export default function FusionPulseBoard({
 
       <div className="p-3">
         <div data-testid="lios-pulse-discovery-stories">
-        <FusionSection title="Your recorded intelligence" eyebrow="DISCOVER · INSPECT SOURCES · ASK · FOLLOW" className="mb-4" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">OPEN MONITORS</FusionActionButton>}>
+        <FusionSection title="Your recorded intelligence" eyebrow="DISCOVER · WHY IT MATTERS · SOURCES · ASK · FOLLOW" className="mb-4" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">OPEN MONITORS</FusionActionButton>}>
           {preferenceError && <p role="alert" className="mb-3 rounded-lg border border-rose-300/35 px-3 py-2 font-ui text-sm text-rose-200">{preferenceError}</p>}
           {pulseStatus === "ready" && pulsePreferences.followed.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Followed subjects ({pulsePreferences.followed.length})</summary>
