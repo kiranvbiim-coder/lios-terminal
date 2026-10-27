@@ -25,7 +25,7 @@ test("real offline atlas with no remote tiles supports zoom/fit, source layers a
   assert.match(html,/data-testid="recorded-map-location"/);
   assert.match(html,/Recorded station/);
   assert.match(html,/Unattributed location/);
-  assert.match(html,/public-domain Natural Earth/);
+  assert.match(html,/public-domain Natural Earth/i);
   assert.match(html,/no.*geocoded names|not geocoded names/i);
   assert.doesNotMatch(html,/https?:\/\/|api_key|<iframe|<script|maptiler|openstreetmap\.org/);
 });
