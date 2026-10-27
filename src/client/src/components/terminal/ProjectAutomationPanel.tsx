@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, Pause, Play, RefreshCw, Trash2, Workflow } from "lucide-react";
+import { Status, StatusIndicator, StatusLabel } from "@/components/vendor/kibo/Status";
 import {
   createP9Workflow,
   deleteP9Workflow,
@@ -425,6 +426,10 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-ui text-[14px] font-medium text-foreground">{workflow.name}</span>
                     <span className="rounded border border-border/50 px-1.5 py-0.5 font-terminal text-[12px] uppercase text-cyan-300">{workflow.template}</span>
+                    <Status status={workflow.enabled ? "online" : "offline"} data-testid={`automation-status-${workflow.id}`}>
+                      <StatusIndicator />
+                      <StatusLabel>{workflow.enabled ? "Enabled" : "Paused"}</StatusLabel>
+                    </Status>
                     <span className="font-terminal text-[12px] uppercase text-muted-foreground">{workflow.trigger.type}</span>
                   </div>
                   <div className="mt-1 font-ui text-[13px] leading-4 text-muted-foreground">
