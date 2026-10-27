@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const fs = require("node:fs");
+const path = require("node:path");
 const { qualifyBuiltPythonSidecar, hasCompleteSidecarBuildProof } = require("./sidecar_build_acceptance.cjs");
 
 const result = {
@@ -61,7 +62,7 @@ test("unexpected Python stderr and private path from probe cannot escape release
 });
 
 test("PyInstaller builder invokes proof after checking actual frozen executable", () => {
-  const source = fs.readFileSync(new URL("./build_python_sidecar.cjs", import.meta.url), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "build_python_sidecar.cjs"), "utf8");
   assert.match(source, /qualifyBuiltPythonSidecar\(executable\)/);
   assert.match(source, /process\.exitCode = 1/);
   assert.ok(source.indexOf("fs.existsSync(executable)") < source.indexOf("qualifyBuiltPythonSidecar(executable)"));
