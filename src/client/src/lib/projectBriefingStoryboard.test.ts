@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildProjectBriefingReport, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "./projectBriefingStoryboard";
 
 const artifact = (id: string, version: number, projectId = 11): BriefingSource => ({
@@ -47,6 +47,17 @@ test("no fake briefing is created without active, distinct, authorized Project s
   assert.throws(() => create([artifact("zero", 0)]), /active saved Artifact/);
   assert.throws(() => create([artifact("fraction", 1.5)]), /active saved Artifact/);
   assert.throws(() => create(Array.from({ length: MAX_BRIEFING_SOURCES + 1 }, (_, i) => artifact(String(i), 1))), /between 1 and 8/);
+});
+
+test("reviewed source identity never silently upgrades when its saved version or metadata changes", () => {
+  const selected = artifact("a", 3);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected }, 11), true);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected, headVersion: 4 }, 11), false);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected, title: "Renamed" }, 11), false);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected, kind: "table" }, 11), false);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected, status: "archived" }, 11), false);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, { ...selected, projectId: 22 }, 11), false);
+  assert.equal(isReviewedBriefingSourceCurrent(selected, undefined, 11), false);
 });
 
 test("bounded title and authored introduction; defaults never claim source contents or rights", () => {
