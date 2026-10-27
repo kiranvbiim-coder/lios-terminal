@@ -1,7 +1,10 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { checkNativeSelfTest, checkNativeUX, parseFlags } = require("./beta_release_acceptance.cjs");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags } = require("./beta_release_acceptance.cjs");
 
 const checksum = "a".repeat(64);
 function packaged(platform, arch) {
@@ -74,4 +77,34 @@ test("beta acceptance CLI never defaults missing evidence or accepts duplicate f
   assert.equal(parseFlags(input)["mac-self-test"],"local-mac-self-test");
   assert.throws(() => parseFlags([...input.slice(0,-2),"--mac-self-test","other"]), /BLOCKED/);
   assert.throws(() => parseFlags([...input.slice(0,-2),"--secret-key","key"]), /BLOCKED/);
+});
+
+test("beta evidence checker reads and hashes actual screenshot and test log, never bare paths", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-beta-evidence-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const report = path.join(dir, "mac-ux.json");
+  const image = path.join(dir, "screen.png");
+  const log = path.join(dir, "test.log");
+  fs.writeFileSync(image, Buffer.from("89504e470d0a1a0a" + "01".repeat(90), "hex"));
+  fs.writeFileSync(log, "Keyboard-only Project reopening was exercised.");
+  const found = inspectNativeEvidence(report, ["screen.png", "test.log"]);
+  assert.equal(found.length, 2);
+  assert.match(found[0].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(found[0].bytes, fs.statSync(image).size);
+  assert.throws(() => inspectNativeEvidence(report, ["missing.png", "test.log"]), /ENOENT/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "missing.log"]), /ENOENT/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png"]), /BLOCKED/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "../outside.log"]), /BLOCKED/);
+  assert.throws(() => inspectNativeEvidence(report, ["/tmp/screen.png", "test.log"]), /BLOCKED/);
+  if (process.platform !== "win32") {
+    fs.symlinkSync(log, path.join(dir, "linked.log"));
+    assert.throws(() => inspectNativeEvidence(report, ["screen.png", "linked.log"]), /BLOCKED/);
+    fs.mkdirSync(path.join(dir, "nested"));
+    fs.symlinkSync(dir, path.join(dir, "nested", "linked"));
+    assert.throws(() => inspectNativeEvidence(report, ["screen.png", "nested/linked/test.log"]), /BLOCKED/);
+  }
+});
+
+test("native screenshot and UX evidence may never be inferred from an unchecked path label", () => {
+  assert.throws(() => inspectNativeEvidence("/missing/ux.json", ["screen.png", "test.log"]), /ENOENT/);
 });
