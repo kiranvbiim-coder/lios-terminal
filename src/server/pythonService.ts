@@ -234,6 +234,15 @@ export function resolvePackagedPythonSidecar(
   const filename = platform === "win32" ? "lios-python-sidecar.exe" : "lios-python-sidecar";
   const candidate = path.join(root, "python-sidecar-dist", "lios-python-sidecar", filename);
   try {
+    // Check every directory *beneath* the packaged Resources root. A regular
+    // executable behind a symlinked parent would otherwise pass lstatSync and
+    // could execute an unrelated user-local Python binary.
+    const distribution = path.join(root, "python-sidecar-dist");
+    const bundle = path.join(distribution, "lios-python-sidecar");
+    for (const directory of [distribution, bundle]) {
+      const metadata = fs.lstatSync(directory);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) throw unavailable();
+    }
     const stat = fs.lstatSync(candidate);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 ||
         (platform !== "win32" && (stat.mode & 0o111) === 0)) {
