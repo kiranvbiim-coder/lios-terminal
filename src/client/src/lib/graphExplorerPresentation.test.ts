@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildCrossDomainGraph, type CrossDomainGraph } from "./terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph } from "./graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, selectRecordedCrossDomainGraphObjects } from "./graphExplorerPresentation";
 import type { IntelligenceObject } from "./terminalIntelligenceObjects";
 
 const object = (id: string, label: string, relations: IntelligenceObject["relations"] = []): IntelligenceObject => ({
@@ -93,4 +93,17 @@ test("view transforms do not mutate the canonical graph", () => {
   presentCrossDomainGraph(graph, { query: "market", selectedId: "e:market", neighborsOnly: true, bridgesOnly: true });
   graphNodeConnections(graph, "e:market");
   assert.equal(JSON.stringify(graph), before);
+});
+
+test("B07 saved cross-domain radar finds recorded matches beyond the first 120 without inventing links", () => {
+  const list=Array.from({length:220},(_,i)=>object("node:"+i,i===215?"Recorded Solar Evidence":"Saved source "+i));
+  list[215].relations=[{targetId:"node:9",kind:"supports",note:"Stored relation"}];
+  const chosen=selectRecordedCrossDomainGraphObjects(list,"solar",null,120);
+  assert.deepEqual(chosen.map(x=>x.id),["node:215","node:9"]);
+  const graph=buildCrossDomainGraph(chosen);
+  assert.deepEqual(graph.edges.map(x=>[x.sourceId,x.targetId]),[["node:215","node:9"]]);
+  assert.deepEqual(selectRecordedCrossDomainGraphObjects(list,"missing",null),[]);
+  assert.equal(selectRecordedCrossDomainGraphObjects(list,"",null).length,120);
+  assert.deepEqual(selectRecordedCrossDomainGraphObjects(list,"", "node:215",3).map(x=>x.id),["node:215","node:9"]);
+  assert.equal(list[215].relations.length,1);
 });
