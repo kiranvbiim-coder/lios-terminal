@@ -16,17 +16,20 @@ export function comparisonReviewKey(
 }
 
 /**
- * Never silently clamp an expired receipt selection to a different receipt.
- * A and B must refer to separate, currently published record identities.
+ * Compare by immutable published receipt identity, never array position.
+ * New calculations are prepended to the evidence store; index selections can
+ * silently drift to another model after a receipt is published or revoked.
+ * Missing, duplicate, or replaced identities must require a new selection.
  */
 export function resolveRecordedReceiptPair(
   receipts: readonly CalculationReceipt[],
-  indexA: number,
-  indexB: number,
+  idA: string | null,
+  idB: string | null,
 ): readonly [CalculationReceipt, CalculationReceipt] | null {
-  if (!Number.isSafeInteger(indexA) || !Number.isSafeInteger(indexB)) return null;
-  if (indexA < 0 || indexB < 0 || indexA === indexB) return null;
-  const a = receipts[indexA];
-  const b = receipts[indexB];
-  return a && b && a.id !== b.id ? [a, b] : null;
+  if (!idA || !idB || idA === idB) return null;
+  const matchingA = receipts.filter(receipt => receipt.id === idA);
+  const matchingB = receipts.filter(receipt => receipt.id === idB);
+  return matchingA.length === 1 && matchingB.length === 1
+    ? [matchingA[0], matchingB[0]]
+    : null;
 }
