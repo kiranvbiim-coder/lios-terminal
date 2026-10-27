@@ -9,6 +9,7 @@ import { parseTerminalArtifactInstruction, applyTerminalArtifactOperations } fro
 import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalContext } from "@/lib/chatTerminalContext";
 import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
 import ChatSourcesControl from "./ChatSourcesControl";
+import ChatExtensionsDialog from "./ChatExtensionsDialog";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
@@ -427,7 +428,7 @@ export default function ProjectExperienceShell({
   const [lastWorkflowRequest, setLastWorkflowRequest] = useState<Omit<ConversationRequest, "requestId" | "continuationOf"> | null>(null);
   const [showSaveWorkflow, setShowSaveWorkflow] = useState(false);
   const composerToolsTrigger = useRef<HTMLButtonElement>(null);
-  const pendingComposerDialog = useRef<"workflow" | "resource" | null>(null);
+  const pendingComposerDialog = useRef<"workflow" | "resource" | "plugins" | null>(null);
   const [lifecycleNotice, setLifecycleNotice] = useState<string | null>(null);
   const [executionMode, setExecutionMode] = useState<ConversationExecutionMode>("ai_assisted");
   const agentComposer = useBoundedAgentComposer(chatMode, executionMode);
@@ -436,6 +437,7 @@ export default function ProjectExperienceShell({
   const [providerAllowDraft, setProviderAllowDraft] = useState(() => loadProjectAITransmissionPolicy(selection.projectId).providerAllow.join(", "));
   const [providerDenyDraft, setProviderDenyDraft] = useState(() => loadProjectAITransmissionPolicy(selection.projectId).providerDeny.join(", "));
   const [showResourceForm, setShowResourceForm] = useState(false);
+  const [showChatExtensions, setShowChatExtensions] = useState(false);
   const [resourceLabel, setResourceLabel] = useState("");
   const [resourceRef, setResourceRef] = useState("");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -2627,6 +2629,7 @@ export default function ProjectExperienceShell({
                       event.preventDefault();
                       composerToolsTrigger.current?.focus();
                       if (dialog === "workflow") setShowSaveWorkflow(true);
+                      else if (dialog === "plugins") setShowChatExtensions(true);
                       else setShowResourceForm(true);
                     }}>
                       <DropdownMenuItem
@@ -2646,7 +2649,7 @@ export default function ProjectExperienceShell({
                       <DropdownMenuItem onSelect={onOpenEnvironment}>
                         <Plug className="h-4 w-4" /> Connect sources
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={openPluginCenter}>
+                      <DropdownMenuItem onSelect={() => { pendingComposerDialog.current = "plugins"; }}>
                         <Blocks className="h-4 w-4" /> Plugins & tools
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -2778,6 +2781,7 @@ export default function ProjectExperienceShell({
         )}
       </main>
 
+      <ChatExtensionsDialog open={showChatExtensions} onOpenChange={setShowChatExtensions} />
       {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
