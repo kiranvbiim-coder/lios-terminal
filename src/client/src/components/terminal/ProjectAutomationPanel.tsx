@@ -29,7 +29,6 @@ import {
 } from "@/lib/p9ManualRunAttemptLedger";
 import { p9AutomationEventTypeSchema, p9EventFiltersSchema, type P9WorkflowTrigger } from "@shared/p9AutomationContracts";
 import { quickMonitorDraft, workflowTriggerEditDefinition, workflowExecutionTruth, workflowScheduleSummary, type QuickMonitorKind } from "@/lib/workflowReviewTruth";
-import { HomeAttentionPanel } from "./HomeAttentionPanel";
 import { P9NotificationHistory } from "./P9NotificationHistory";
 import { PortfolioMaterialityResult } from "./ArtifactPortfolioMateriality";
 
@@ -406,7 +405,6 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           </div>
         </section>;
       })()}
-      <HomeAttentionPanel />
 
       <div className="mt-3 grid gap-2 lg:grid-cols-2">
         {workflows.map((workflow) => {

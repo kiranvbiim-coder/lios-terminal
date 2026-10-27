@@ -8,6 +8,14 @@ export interface ChatWorkbenchOrigin {
   symbol?: string;
 }
 
+/** A mode switch can change persistence even if both selections have null IDs.
+ * Only compare navigation identity here; caller must review/discard drafts before mutation. */
+export function returnChangesChatIdentity(current: ChatWorkbenchOrigin, destination: ChatWorkbenchOrigin): boolean {
+  return current.mode !== destination.mode
+    || current.projectId !== destination.projectId
+    || current.chatId !== destination.chatId;
+}
+
 function validId(value: number | null): value is number {
   return value !== null && Number.isSafeInteger(value) && value > 0;
 }

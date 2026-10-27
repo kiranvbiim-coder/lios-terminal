@@ -104,7 +104,7 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
     style={style}
     data-artifact-sidecar-focus={focus ? "true" : "false"}
     className={focus
-      ? "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#060606]/95 p-3"
+      ? "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-background p-3"
       : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}
   >
     <div

@@ -71,3 +71,20 @@ function requireSource(): string {
   // Source-contract assertion complements SSR without a browser or new test runner.
   return fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "ResearchSourceList.tsx"), "utf8");
 }
+
+
+test("premium source inspector shares the exact inline citation link policy and needs no remote media", () => {
+  const sources: ChatCitationSource[] = [
+    { id: "provider:sec_edgar", label: "Provider", href: "https://www.sec.gov/", index: 1 },
+    { id: "https://example.com/doc", label: "A recorded long-form research document", href: "https://example.com/doc", index: 2 },
+  ];
+  const markup = renderToStaticMarkup(createElement(ResearchSourceList, { sources }));
+  assert.match(markup, /2 recorded sources|Recorded source references \(2\)/);
+  assert.match(markup, /recorded web/);
+  assert.match(markup, /reference-only/);
+  assert.match(markup, /example\.com/);
+  assert.match(markup, /Citation 2/);
+  assert.equal((markup.match(/<a\b/g) ?? []).length, 1);
+  assert.doesNotMatch(markup, /<img\b|favicon\.ico|assets\.watermelon\.sh/i, "rendering a source reference must not fetch arbitrary remote imagery");
+  assert.match(markup, /grid min-w-0 gap-2 md:grid-cols-2/, "responsive cards share the same trust and presentation contract");
+});

@@ -244,3 +244,20 @@ test("saved answer citation sources never depend on another run", () => {
   assert.equal(savedMessageCitationSources(previous)[0].href, "https://example.test/old");
   assert.deepEqual(savedMessageCitationSources({}), []);
 });
+
+
+test("inline citations open only exact runtime-recorded source URLs, not inferred provider homepages", () => {
+  const sources: ChatCitationSource[] = [
+    { id: "provider:sec_edgar", label: "SEC EDGAR", href: "https://www.sec.gov/", index: 1 },
+    { id: "https://example.test/report", label: "Recorded report", href: "https://example.test/report", index: 2 },
+    { id: "mailto:someone@example.test", label: "Email handle", href: "mailto:someone@example.test", index: 3 },
+    { id: "https://example.test/other", label: "Conflicting URL", href: "https://another.example.test/other", index: 4 },
+  ];
+  const markup = render("Read [1], [2], [3] and [4].", { sources });
+  assert.equal((markup.match(/<a\b[^>]*data-citation=/g) ?? []).length, 1, "only the exact recorded document URL becomes an anchor");
+  assert.equal((markup.match(/<button\b[^>]*data-citation=/g) ?? []).length, 3, "other citations remain inspectable reference buttons");
+  assert.doesNotMatch(markup, /href="https:\/\/www\.sec\.gov\//, "an inferred provider homepage is not an examined document");
+  assert.doesNotMatch(markup, /href="mailto:/, "source references do not become mailto navigation");
+  assert.match(markup, /referrerpolicy="no-referrer"/i);
+  assert.match(markup, /Source 1: SEC EDGAR/);
+});

@@ -5,6 +5,7 @@ import SignatureCursor from "./components/terminal/SignatureCursor";
 import { getAudience } from "./lib/audience";
 import { reportTerminalCrash } from "./lib/terminalTelemetry";
 import "./terminalStyles";
+import { initializeLiosProductPalette } from "./lib/liosProductPalette";
 
 class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -49,10 +50,11 @@ if (!window.location.hash) {
   window.location.hash = "#/";
 }
 
-// V5 is dark-only by product contract. Accessibility variants may change
-// semantic up/down colors, but never switch the surface theme.
+// Preserve the legacy dark selector for specialist terminal compatibility.
+// The independent LiOS palette layer may opt into a light appearance.
 document.documentElement.classList.add("dark");
 document.documentElement.setAttribute("data-theme", "dark");
+initializeLiosProductPalette();
 
 createRoot(document.getElementById("root")!).render(
   <RootErrorBoundary>

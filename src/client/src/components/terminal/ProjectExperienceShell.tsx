@@ -1,10 +1,11 @@
 import { ChatTerminalControl, type ChatTerminalRenderer } from "./ChatTerminalSurface";
 import TerminalScreenArtifact from "./TerminalScreenArtifact";
 import { initialTerminalScreenState, readTerminalScreenState } from "@shared/terminalArtifact";
-import { captureChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
+import { captureChatWorkbenchOrigin, returnChangesChatIdentity, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
 import { useArtifact, createArtifactVersion, type ArtifactDetail } from "@/lib/useArtifacts";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 import { apiRequest } from "@/lib/queryClient";
+import { openPluginCenter } from "@/lib/appShellEvents";
 import { parseTerminalArtifactInstruction, applyTerminalArtifactOperations } from "@shared/terminalArtifactOperations";
 import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalContext } from "@/lib/chatTerminalContext";
 import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
@@ -32,6 +33,8 @@ import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycl
 import { resolveEntrySurface, resolveInitialChatMode } from "@/lib/projectEntry";
 import { ProjectHome, relativeTime } from "./ProjectHome";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { HomeAttentionPanel } from "./HomeAttentionPanel";
+import { pulseStoryQuestion } from "@/lib/pulseStoryPresentation";
 import { AuthenticatedNavigation, type NavigationSection } from "./AuthenticatedNavigation";
 import WorkSearchDialog from "./WorkSearchDialog";
 import type { WorkSearchResult } from "@shared/workSearch";
@@ -142,7 +145,7 @@ import ExecutionSessionPanel from "./ExecutionSessionPanel";
 import SandboxOperationReviewCard from "./SandboxOperationReviewCard";
 import { GATEWAY_METHODS } from "@shared/gatewayProtocol";
 import { useGateway, useGatewayState } from "@/lib/gateway/GatewayProvider";
-import { conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
+import { canRetryHomeConnection, conversationSendAvailability, unconfirmedRunRecoveryNotice } from "@/lib/conversationConnectionRecovery";
 import { attachConversationRun, cancelConversationRun, runConversation } from "@/lib/gateway/conversationRun";
 import { useInterruptedAgentRun } from "@/lib/useInterruptedAgentRun";
 import { useBoundedAgentComposer } from "@/lib/useBoundedAgentComposer";
@@ -291,6 +294,7 @@ function NavItem({
         type="button"
         data-navigation-action="true"
         onClick={onClick}
+        aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none hover:bg-white/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-cyan-300/70"
       >
         <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${muted ? "opacity-45" : ""}`} />
@@ -311,7 +315,6 @@ export default function ProjectExperienceShell({
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
-  onOpenCommand,
   renderTerminalPanel, chatWorkbenchReturn,
 }: Props) {
   const [lifecycleRequest, setLifecycleRequest] = useState<LifecycleRequest | null>(null);
@@ -332,8 +335,23 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
     handledNavigation.current = navigationRequest.id;
-    if (navigationRequest.section === "search") requestWorkSearch();
-    else setSection(navigationRequest.section);
+    // Host shortcuts/deep links use the same safety rules as sidebar navigation.
+    // Never hide Stop or an unsaved Artifact draft just because navigation was external.
+    if (navigationRequest.section === "search") {
+      requestWorkSearch();
+      return;
+    }
+    if (navigationRequest.section === "plugins") { openPluginCenter(); return; }
+    if (navigationRequest.section !== "conversation" && (busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current)) {
+      setLifecycleNotice("Stop the current response before opening another section.");
+      return;
+    }
+    if (navigationRequest.section !== "conversation" && artifactDraftDirtyRef.current) {
+      setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
+      return;
+    }
+    setSection(navigationRequest.section);
+    if (navigationRequest.section === "conversation") setProjectHomeRequested(false);
     setShowLifecycleCenter(false);
     setContextOpen(false);
   }, [navigationRequest]);
@@ -451,6 +469,7 @@ export default function ProjectExperienceShell({
   const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
+  const reviewingArtifactReturn = useRef<number | null>(null);
   const terminalDetail = useArtifact(chatMode === "temporary" ? null : conversationArtifactRef, artifactViewVersion);
   const retainedScreen = terminalDetail.data?.version.content.kind === "screen" && readTerminalScreenState(terminalDetail.data.version.content.state) ? terminalDetail.data.version.content : null;
   const selectedTerminalScope = retainedScreen ? readTerminalScreenState(retainedScreen.state)?.sourceScope : undefined;
@@ -499,14 +518,76 @@ export default function ProjectExperienceShell({
     finally { terminalOpeningRef.current = false; setBusy(false); }
   };
   const handledChatReturn = useRef<number | null>(null);
+  const reviewingChatReturn = useRef<number | null>(null);
   useEffect(() => {
     if (!chatWorkbenchReturn || handledChatReturn.current === chatWorkbenchReturn.request) return;
-    const { origin } = chatWorkbenchReturn;
-    if (origin.mode !== "temporary" && (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId)) { selection.setProjectId(origin.projectId); selection.setChatId(origin.chatId); return; }
-    handledChatReturn.current = chatWorkbenchReturn.request;
+    const { origin, request } = chatWorkbenchReturn;
+    // The return target, including Temporary's null scope, is authoritative.
+    // Returning to a different Chat must never silently clear an unsent draft.
+    if (returnChangesChatIdentity({ mode: chatMode, projectId: selection.projectId, chatId: selection.chatId }, origin)) {
+      if (reviewingChatReturn.current === request) return;
+      reviewingChatReturn.current = request;
+      void (async () => {
+        if (!(await confirmConversationSwitch())) {
+          handledChatReturn.current = request;
+          setLifecycleNotice("Your unsent work remains in this Chat. You can reopen the originating conversation from History.");
+          return;
+        }
+        // Change the owning selection first; the existing selected-Chat sync
+        // resolves its mode after IDs settle. A mode-only change has no ID update.
+        if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+          selection.setProjectId(origin.projectId);
+          selection.setChatId(origin.chatId);
+        } else {
+          setChatMode(origin.mode);
+        }
+      })().finally(() => {
+        if (reviewingChatReturn.current === request) reviewingChatReturn.current = null;
+      });
+      return;
+    }
+    handledChatReturn.current = request;
     setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
-  }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
+  }, [chatWorkbenchReturn, chatMode, selection.projectId, selection.chatId]);
+  // Outside the Chat shell, navigation may visually cover Stop or local Artifact edits.
+  // Keep Connections/Settings recoverable without discarding the unsent composer.
+  const openSafeDestination = (destination: "Connections" | "Settings", action: () => void) => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
+      setLifecycleNotice(`Stop the current response or finish the pending request before opening ${destination}.`);
+      return;
+    }
+    if (artifactDraftDirtyRef.current) {
+      setLifecycleNotice(`Save or reset unsaved Artifact edits before opening ${destination}. Your draft remains in Chat.`);
+      return;
+    }
+    action();
+  };
+  const openSafeConnections = () => openSafeDestination("Connections", onOpenEnvironment);
+  const signingOutRef = useRef(false);
+  const signOutSafely = async () => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    try {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
+      setLifecycleNotice("Stop the current response or finish the pending request before signing out.");
+      return;
+    }
+    if (artifactDraftDirtyRef.current) {
+      setLifecycleNotice("Save or reset unsaved Artifact edits before signing out.");
+      return;
+    }
+    const before = currentDraftRef.current;
+    if (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before)) return;
+    onLogout();
+    } finally {
+      signingOutRef.current = false;
+    }
+  };
   const onOpenWorkbench = () => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
+      setLifecycleNotice("Stop the current response before opening Work.");
+      return;
+    }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
     if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
       const displayed = displayedArtifactRef.current;
@@ -525,15 +606,32 @@ export default function ProjectExperienceShell({
   };
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
-    const { context, prompt } = workbenchReturn;
-    if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
-      selection.setProjectId(context.projectId); selection.setChatId(context.chatId); return;
+    const { context, prompt, request } = workbenchReturn;
+    if (returnChangesChatIdentity({ mode: chatMode, projectId: selection.projectId, chatId: selection.chatId }, { mode: context.projectId === null ? "quick" : "project", projectId: context.projectId, chatId: context.chatId })) {
+      if (reviewingArtifactReturn.current === request) return;
+      reviewingArtifactReturn.current = request;
+      void (async () => {
+        if (!(await confirmConversationSwitch())) {
+          handledWorkbenchReturn.current = request;
+          setLifecycleNotice("Your unsent work remains in this Chat. You can reopen that Artifact through saved-work Search.");
+          return;
+        }
+        if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
+          selection.setProjectId(context.projectId);
+          selection.setChatId(context.chatId);
+        } else {
+          setChatMode(context.projectId === null ? "quick" : "project");
+        }
+      })().finally(() => {
+        if (reviewingArtifactReturn.current === request) reviewingArtifactReturn.current = null;
+      });
+      return;
     }
-    handledWorkbenchReturn.current = workbenchReturn.request;
+    handledWorkbenchReturn.current = request;
     setChatMode(context.projectId === null ? "quick" : "project"); setSection("conversation"); setProjectHomeRequested(false);
     setConversationArtifactRef(context.artifactId); setArtifactViewVersion(context.version);
-    if (prompt) setInput(current => current ? `${current}\n\n${prompt}` : prompt);
-  }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
+    if (prompt) setInput(current => stageUniversalChatQuestion(current, prompt));
+  }, [workbenchReturn, chatMode, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
   useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
     const width = shellRef.current?.querySelector(".lios-project-chat-surface")?.clientWidth ?? 0;
@@ -578,7 +676,7 @@ export default function ProjectExperienceShell({
     setVoiceTranscriptReviewed(false);
     setInput((current) => (current.trim() ? `${current.trim()} ${result.text}` : result.text));
     requestAnimationFrame(() => composerRef.current?.focus());
-  }, `${account.email ?? ""}:${account.name}:${chatMode}:${selection.projectId ?? ""}:${selection.chatId ?? ""}`);
+  }, `${account.email ?? ""}:${chatMode}:${selection.projectId ?? ""}:${selection.chatId ?? ""}`);
   const voiceInputHint = voiceRecorder.isRecording ? "Stop recording to upload this clip to LiOS Home for transcription. Review the transcript before Send."
     : voiceInputAvailable ? "Record speech; stopping uploads it to LiOS Home for transcription, never automatically to Chat."
     : voiceStatus.label;
@@ -812,8 +910,8 @@ export default function ProjectExperienceShell({
       setLifecycleNotice("Your draft or conversation changed while that action was pending. It has been kept; open the saved destination when ready.");
       return false;
     }
-    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]); setVoiceTranscriptReviewed(false);
     voiceRecorder.cancel();
+    setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]); setVoiceTranscriptReviewed(false);
     setPendingPersonalFinance(null);
     return true;
   };
@@ -865,13 +963,22 @@ export default function ProjectExperienceShell({
       if (!matchesSavedSearchChat(result, chat) || detail.artifact.id !== result.artifactId || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
       if (busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) return false;
       if (selection.chatId !== chat.id && (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before))) return false;
-      if (selection.chatId === chat.id) {
+      if (selection.chatId === chat.id && chatMode === "quick") {
         pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
         setConversationArtifactRef(result.artifactId); setArtifactFocusMode(false);
+        setArtifactViewVersion(detail.version.version);
       } else {
-        pendingArtifactOpenRef.current = result.artifactId; pendingArtifactFocusRef.current = false;
+        // The destination Chat owns this bookmark. Never write its selected
+        // Artifact/revision into the *currently mounted* Chat's local state.
+        // The canonical P4 load still verifies exact ownership and access.
+        rememberConversationArtifactView(chat.ownerUserId, null, chat.id, {
+          artifactId: result.artifactId,
+          revision: detail.version.version,
+          focus: false,
+        });
+        pendingArtifactOpenRef.current = null;
+        pendingArtifactFocusRef.current = false;
       }
-      setArtifactViewVersion(detail.version.version);
       return await openChat(chat, true);
     }
     if (result.kind === "chat" && result.chatId) {
@@ -1305,7 +1412,7 @@ export default function ProjectExperienceShell({
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) return;
-    if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before Send. Your typed draft and clip remain in this Chat."); return; }
+    if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before Send. Your draft and clip remain in this Chat."); return; }
     if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences && (sourceScope === "auto" || sourceScope === "my_data")) {
       const owned = resources.filter(resource => resource.projectId === selection.projectId && resource.status === "active" && !resource.trashedAt);
       if (ambiguousMentionTokens(owned, message).length) {
@@ -1961,17 +2068,57 @@ export default function ProjectExperienceShell({
         opener={workSearchOpener.current}
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
+        intelligenceEnabled={chatMode !== "temporary"}
+        onAskIntelligence={(card) => {
+          // A search discovery never runs a model or changes Project scope.
+          // Existing unsent Chat work is preserved and the user must press Send.
+          if (chatMode === "temporary" || busy || busyRef.current || sendInFlightRef.current ||
+            chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) return false;
+          setInput(current => stageUniversalChatQuestion(current, pulseStoryQuestion(card)));
+          setSection("conversation");
+          setProjectHomeRequested(false);
+          setShowLifecycleCenter(false);
+          setContextOpen(false);
+          requestAnimationFrame(() => composerRef.current?.focus());
+          return true;
+        }}
       />
-      <AuthenticatedNavigation section={section} account={account} busy={busy}
-        onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
+      <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
+        onSection={(next) => {
+          if (next === "plugins") { openPluginCenter(); return; }
+          if (next !== "conversation" && (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current)) {
+            setLifecycleNotice("Stop the current response before opening another section.");
+            return;
+          }
+          if (next !== "conversation" && artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
+            return;
+          }
+          setSection(next);
+          if (next === "conversation") setProjectHomeRequested(false);
+          setShowLifecycleCenter(false);
+          setContextOpen(false);
+        }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
-        onSearch={onOpenCommand ?? requestWorkSearch}
+        onSearch={requestWorkSearch}
         onWorkbench={onOpenWorkbench}
-        onConnectors={onOpenEnvironment}
-        onSettings={onOpenSettings} onLogout={onLogout}
-        onTrash={() => { setSection("conversation"); setShowLifecycleCenter(true); setContextOpen(false); }}
-        onMigrate={() => void migrateLegacyWorkspaces().then(() => invalidate()).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to import workspaces."))}>
+        onConnectors={() => openSafeDestination("Connections", onOpenEnvironment)}
+        onSettings={() => openSafeDestination("Settings", onOpenSettings)} onLogout={() => requestAnimationFrame(() => void signOutSafely())}
+        onTrash={() => {
+          if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Finish the current response or save/reset Artifact edits before opening Trash & archive.");
+            return;
+          }
+          setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(true); setContextOpen(false);
+        }}
+        onMigrate={() => {
+          if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Finish the current response or save/reset Artifact edits before importing workspaces.");
+            return;
+          }
+          void migrateLegacyWorkspaces().then(() => invalidate()).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to import workspaces."));
+        }}>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <section className="mb-5" aria-label="Projects">
             <div className="mb-1 flex items-center px-2">
@@ -1994,12 +2141,13 @@ export default function ProjectExperienceShell({
                     data-navigation-action="true"
                     type="button"
                     onClick={() => openProject(project, false, true)}
+                    aria-current={selection.projectId === project.id && chatMode === "project" ? "page" : undefined}
                     className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left ${selection.projectId === project.id && chatMode === "project" ? "bg-white/[0.05] text-foreground" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"}`}
                   >
                     <FolderKanban className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-ui text-[13px]">{project.name}</span>
                   </button>
-                  <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  <div className="lios-history-action-menu opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     <ObjectActionMenu
                       kind="project"
                       status={project.status}
@@ -2016,9 +2164,7 @@ export default function ProjectExperienceShell({
                   View all Projects
                 </button>
               )}
-              {projectsQuery.isLoading && <p role="status" className="px-2.5 py-2 text-xs text-muted-foreground">Loading Projects…</p>}
-              {projectsQuery.isError && <div role="alert" className="px-2.5 py-2 text-xs text-amber-200">Unable to load Projects. <button type="button" disabled={projectsQuery.isFetching} onClick={() => void projectsQuery.refetch()} className="min-h-10 underline disabled:opacity-50">Retry Projects</button></div>}
-              {!projects.length && !projectsQuery.isLoading && !projectsQuery.isError && (
+              {!projects.length && !projectsQuery.isLoading && (
                 <button data-navigation-action="true" type="button" onClick={() => setNewProjectOpen(true)} className="w-full rounded-md px-2.5 py-2 text-left font-ui text-[12px] text-muted-foreground hover:bg-white/[0.035] hover:text-foreground">
                   Create your first Project
                 </button>
@@ -2036,7 +2182,7 @@ export default function ProjectExperienceShell({
                     active={selection.chatId === chat.id}
                     badge={relativeTime(chat.lastActivityAt)}
                     trailing={
-                      <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      <div className="lios-history-action-menu opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                         <ObjectActionMenu
                           kind="chat"
                           scope={chat.scope}
@@ -2052,9 +2198,7 @@ export default function ProjectExperienceShell({
                   />
                 </div>
               ))}
-              {(allChatsQuery.isLoading || quickChatsQuery.isLoading) && <p role="status" className="px-2.5 py-2 text-xs text-muted-foreground">Loading recent chats…</p>}
-              {(allChatsQuery.isError || quickChatsQuery.isError) && <div role="alert" className="px-2.5 py-2 text-xs text-amber-200">Unable to load recent chats. <button type="button" disabled={allChatsQuery.isFetching || quickChatsQuery.isFetching} onClick={() => void Promise.all([allChatsQuery.refetch(), quickChatsQuery.refetch()])} className="min-h-10 underline disabled:opacity-50">Retry recent chats</button></div>}
-              {!recentChats.length && !allChatsQuery.isLoading && !quickChatsQuery.isLoading && !allChatsQuery.isError && !quickChatsQuery.isError && (
+              {!recentChats.length && (
                 <div className="px-2.5 py-3 font-ui text-[12px] text-muted-foreground">Your recent chats will appear here.</div>
               )}
             </div>
@@ -2063,8 +2207,13 @@ export default function ProjectExperienceShell({
       </AuthenticatedNavigation>
 
       <main className="min-w-0 flex-1">
-        {!sendAvailability.canSubmit && <div role="status" className="border-b border-amber-300/20 px-4 py-2 text-sm text-amber-100">
-          <strong>{sendAvailability.title}.</strong> {sendAvailability.detail}
+        {!sendAvailability.canSubmit && <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-300/20 px-4 py-2 text-sm text-amber-100">
+          <span><strong>{sendAvailability.title}.</strong> {sendAvailability.detail}</span>
+          {gateway && canRetryHomeConnection(browserOnline, gatewayState) && (
+            <button type="button" onClick={() => gateway.start()} className="min-h-10 shrink-0 rounded-md border border-amber-300/50 px-3 py-1.5 font-ui text-sm font-semibold focus-visible:outline focus-visible:outline-2" aria-label="Retry LiOS Home connection">
+              Retry connection
+            </button>
+          )}
         </div>}
         {lifecycleNotice && (
           <div role="alert" className="border-b border-red-300/20 bg-red-300/[0.04] px-4 py-2 font-ui text-[13px] text-red-200">
@@ -2073,23 +2222,22 @@ export default function ProjectExperienceShell({
         )}
         {section !== "conversation" ? (
           <section className="lios-section-surface" aria-label={section}>
-            <header><div><h1>{({ projects: "Projects", chats: "Chats", library: "Library", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
-              <p>{section === "projects" ? "Keep sources, conversations and analytical work together." : section === "chats" ? "Continue a saved conversation." : section === "library" ? "Live artifacts and sources in the selected Project." : section === "automations" ? "Saved workflows and monitors in the selected Project." : "Extend LiOS through governed connections and capabilities."}</p></div>
-              <button className="lios-section-action" onClick={() => setSection("conversation")}>Back to conversation</button></header>
+            <header><h1>{({ projects: "Projects", chats: "History", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
+              <button className="lios-section-action" onClick={() => { setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(false); }}>Back to chat</button></header>
             {section === "projects" && <>
               <button className="lios-section-action" onClick={() => { setSection("conversation"); setNewProjectOpen(true); }}>New Project</button>
               {projectsQuery.isLoading ? <p role="status">Loading Projects…</p> : projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : <div className="lios-directory-list">{projects.map((project) => <button key={project.id} onClick={() => openProject(project, false, true)}><strong>{project.name}</strong><small>{project.instructions || "Open Project"}</small></button>)}{!projects.length && <p>Create a Project to organize your research.</p>}</div>}
             </>}
             {section === "chats" && <>
-              <div className="mb-4 font-ui text-[12px] text-muted-foreground">Use Search to find words inside conversations, Projects, files and Artifacts.</div>
               {allChatsQuery.isLoading || quickChatsQuery.isLoading ? <p role="status">Loading chats…</p> : allChatsQuery.isError || quickChatsQuery.isError ? <p role="alert">Unable to load chats. <button onClick={() => { void allChatsQuery.refetch(); void quickChatsQuery.refetch(); }}>Retry</button></p> : (() => {
-                const chats = [...(allChatsQuery.data ?? []), ...quickChats].sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime());
+                const chats = canonicalRecentChats(allChatsQuery.data ?? [], quickChats, Number.MAX_SAFE_INTEGER);
                 return <div className="lios-directory-list">{chats.slice(0, chatLimit).map((chat) => <button key={chat.id} onClick={() => openChat(chat)}><strong>{chat.title}</strong><small>{chat.projectId ? projects.find((project) => project.id === chat.projectId)?.name || "Project chat" : "Quick chat"} · {relativeTime(chat.updatedAt)}</small></button>)}{chats.length > chatLimit && <button className="lios-section-action" onClick={() => setChatLimit((limit) => limit + 50)}>Load more chats</button>}{!chats.length && <p>Your saved conversations will appear here.</p>}</div>;
               })()}
             </>}
             {(section === "library" || section === "automations") && <>
-              <label htmlFor="lios-tools-project" className="mr-3 text-sm">Project</label><select id="lios-tools-project" value={selection.projectId ?? ""} disabled={busy} onChange={async (e) => { const nextId = Number(e.target.value) || null; if (nextId === selection.projectId || !(await confirmConversationSwitch())) return; selection.setChatId(null); selection.setProjectId(nextId); setChatMode("project"); }} className="rounded border border-border bg-background p-2"><option value="">Choose a Project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
-              {projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : !selection.projectId ? <p className="mt-6">Choose a Project to keep this work isolated.</p> : projectHomeQuery.isLoading ? <p role="status">Loading Project…</p> : projectHomeQuery.isError ? <p role="alert">Unable to load this Project. <button onClick={() => void projectHomeQuery.refetch()}>Retry</button></p> : home && <div className="lios-project-tools">
+              <label htmlFor="lios-tools-project" className="mr-3 text-sm">Project</label><select id="lios-tools-project" value={selection.projectId ?? ""} disabled={busy} onChange={async (e) => { const nextId = Number(e.target.value) || null; if (nextId === selection.projectId || !(await confirmConversationSwitch())) return; selection.setChatId(null); selection.setProjectId(nextId); setChatMode(nextId === null ? "quick" : "project"); }} className="rounded border border-border bg-background p-2"><option value="">Choose a Project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+              {section === "library" && <button type="button" className="lios-section-action ml-3" onClick={requestWorkSearch}>Search saved work</button>}
+              {projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : !selection.projectId ? <p className="mt-6">{section === "library" ? "Saved Artifacts from regular Chats are available through Search. Choose a Project to browse its library." : "Choose a Project to manage its automations."}</p> : projectHomeQuery.isLoading ? <p role="status">Loading Project…</p> : projectHomeQuery.isError ? <p role="alert">Unable to load this Project. <button onClick={() => void projectHomeQuery.refetch()}>Retry</button></p> : home && <div className="lios-project-tools">
                 {section === "library" ? <ProjectArtifactsPanel key={`${home.project.id}:${librarySelection?.projectId === home.project.id ? librarySelection.request : 0}`} projectId={home.project.id} sessions={home.sessions}
                   initialArtifactId={librarySelection?.projectId === home.project.id ? librarySelection.artifactId : null}
                   initialVersion={librarySelection?.projectId === home.project.id ? librarySelection.version ?? null : null}
@@ -2115,8 +2263,7 @@ export default function ProjectExperienceShell({
           <div className="flex h-full min-h-[320px] items-center justify-center px-6" role="status" aria-live="polite">
             <div className="max-w-md rounded-xl border border-border/60 bg-[#080808]/90 p-6 text-center">
               <div className="mx-auto h-2 w-2 animate-pulse rounded-full bg-amber-300" />
-              <div className="mt-4 font-ui text-[15px] font-semibold text-foreground">Restoring your LiOS workspace</div>
-              <div className="mt-2 font-ui text-[12px] leading-5 text-muted-foreground">Loading Projects, conversation state and the authenticated workspace boundary. Setup is not required.</div>
+              <div className="mt-4 font-ui text-[15px] font-semibold text-foreground">Opening workspace…</div>
             </div>
           </div>
         ) : shellLoadState === "error" ? (
@@ -2131,7 +2278,6 @@ export default function ProjectExperienceShell({
                 <button type="button" onClick={() => void retryShell()} className="rounded-md bg-amber-400 px-3 py-2 font-ui text-[12px] font-semibold text-black hover:bg-amber-300">Retry restore</button>
                 {shellErrorStatus === 401 || shellErrorStatus === 403 ? <button type="button" onClick={onLogout} className="min-h-10 rounded border px-3 text-sm">Sign out</button> : <button type="button" onClick={() => void startTemporary()} className="min-h-10 rounded border px-3 text-sm">Open Temporary Chat</button>}
               </div>
-              <div className="mt-3 font-terminal text-[10px] uppercase tracking-wider text-muted-foreground/70">No connector setup or data reset is required to retry.</div>
             </div>
           </div>
         ) : entrySurface === "project-home" && home ? (
@@ -2201,19 +2347,13 @@ export default function ProjectExperienceShell({
               <div className="lios-project-chat-content mx-auto max-w-4xl space-y-5">
                 {!displayMessages.length && !streaming && (
                   <section className="lios-conversation-empty-state lios-chat-empty-state flex min-h-[45vh] flex-col items-center justify-center px-2 py-8 text-center" aria-labelledby="lios-chat-empty-title">
-                    <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
-                      <Sparkles className="h-5 w-5 text-amber-300" />
-                    </div>
-                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-white">What do you want to understand, test or build?</h1>
-                    <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
-                      Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
-                    </p>
-                    <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Example prompts">
+                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-foreground">How can I help?</h1>
+                    <div className="lios-chat-starters mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Example prompts">
                       {starterPromptsForChatMode(chatMode).map((starter) => (
                         <button
                           key={starter.id}
                           type="button"
-                          className="lios-chat-starter rounded-lg border border-border/70 bg-[#080808]/90 p-3.5 text-left transition-colors hover:border-amber-300/35 hover:bg-[#0b0b0b]"
+                          className="lios-chat-starter rounded-lg border border-border/70 bg-card px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-accent"
                           aria-label={`Use example: ${starter.label}`}
                           onClick={() => {
                             const prompt = fillStarterPrompt(starter.prompt, recentStarterSymbol);
@@ -2227,31 +2367,36 @@ export default function ProjectExperienceShell({
                           }}
                         >
                           <span className="block font-ui text-[13px] font-semibold text-foreground">{starter.label}</span>
-                          <span className="mt-1 block font-ui text-[12px] leading-4 text-muted-foreground">{starter.description}</span>
                         </button>
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
                       <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-sm font-semibold text-black focus-visible:outline focus-visible:outline-2">
-                        <Sparkles className="h-4 w-4" /> Ask LiOS
+                        Ask LiOS
                       </button>
-                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
+                      <details className="lios-first-use-options text-left">
+                        <summary className="cursor-pointer rounded-md px-3 py-2 font-ui text-[13px] text-muted-foreground hover:text-foreground">More options</summary>
+                        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                          <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
                         <Plus className="h-3.5 w-3.5" /> Create a Project
                       </button>
                       <button
                         type="button"
                         data-first-use-connect="optional"
-                        onClick={onOpenEnvironment}
+                        onClick={openSafeConnections}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-[12px] font-medium text-muted-foreground transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
                       >
                         <Plug className="h-3.5 w-3.5" /> {LIOS_FIRST_USE_CONTRACT.optionalConnectionAction}
                       </button>
-                    </div>
-                    <div data-first-use-entry="ask-first" className="mt-3 font-ui text-[12px] text-muted-foreground">
-                      {LIOS_FIRST_USE_CONTRACT.shellHint}
+                        </div>
+                        <div data-first-use-entry="ask-first" className="mt-2 max-w-md font-ui text-[12px] leading-5 text-muted-foreground">
+                          {LIOS_FIRST_USE_CONTRACT.shellHint}
+                        </div>
+                      </details>
                     </div>
                   </section>
                 )}
+                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel />}
                 {hiddenMessageCount > 0 && (
                   <div className="flex justify-center" role="group" aria-label="Earlier messages">
                     <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {
@@ -2264,7 +2409,10 @@ export default function ProjectExperienceShell({
                 )}
                 {visibleMessages.map((message) => (
                   <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                    <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
+                    <div data-lios-message={message.role}
+                    role="group"
+                    aria-label={message.role === "assistant" ? "LiOS response" : message.role === "user" ? "Your message" : "System message"}
+                    className={`lios-conversation-message max-w-[85%] rounded-xl border px-4 py-3 ${
                       message.role === "user"
                         ? "border-amber-300/20 bg-amber-300/[0.05]"
                         : "border-border/60 bg-white/[0.018]"
@@ -2322,7 +2470,7 @@ export default function ProjectExperienceShell({
                 ))}
                 {streaming && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3">
+                    <div className="lios-conversation-message lios-conversation-stream max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3" data-lios-message="assistant" role="group" aria-label="LiOS response in progress">
                       <div className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3 w-3 text-amber-300" /><span className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">LIOS</span></div>
                       <ChatMarkdown text={streaming} streaming sources={citationSources} />
                     </div>
@@ -2389,7 +2537,7 @@ export default function ProjectExperienceShell({
                       setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
                     }
-                    onOpenEnvironment();
+                    openSafeConnections();
                     return;
                   }
                   setInput(current => stageSafeRunRetry(current, action));
@@ -2432,7 +2580,7 @@ export default function ProjectExperienceShell({
                 }}
               >
                 {(mentionCandidates.length > 0 || commandCandidates.length > 0) && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
+                  <div className="lios-chat-suggestion-menu absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-border/70 bg-[#090909] p-1 shadow-xl">
                     {commandCandidates.map((item) => (
                       <button key={item.command} onClick={() => setInput(item.command)} className="flex w-full items-center gap-3 rounded px-3 py-2 text-left hover:bg-white/[0.05]">
                         <span className="font-terminal text-[13px] text-amber-300">{item.command}</span>
@@ -2612,9 +2760,9 @@ export default function ProjectExperienceShell({
                   }}
                 />
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
-                <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
+                <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={openSafeConnections} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
-                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode !== "temporary"} />
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={openSafeConnections} disabled={busy} projectAvailable={chatMode !== "temporary"} />
                   {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2691,7 +2839,7 @@ export default function ProjectExperienceShell({
 
                   <button
                     type="button"
-                    onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : onOpenEnvironment()}
+                    onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : openSafeConnections()}
                     disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy}
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${voiceRecorder.isRecording ? "bg-red-400/10 text-red-200" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"}`}
                     title={voiceInputHint}
@@ -2765,7 +2913,7 @@ export default function ProjectExperienceShell({
                       const replay = artifactReplayDraft(title, spec);
                       updateSourceScope(replay.sourceScope);
                       setExecutionMode(replay.executionMode);
-                      setInput(current => stageSafeRunRetry(current, replay.message));
+                      setInput(replay.message);
                       setLifecycleNotice(`Restored the saved replay posture for "${title}". Review or send the staged request.`);
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}

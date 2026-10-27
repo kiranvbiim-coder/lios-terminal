@@ -123,6 +123,7 @@ interface Props {
   session: { email: string; role: string; name: string };
   onComplete: () => void;
   onLogout: () => void;
+  embedded?: boolean;
 }
 
 const READINESS_CONNECTOR_IDS = ["fred", "simfin", "finnhub", "world_bank"] as const;
@@ -798,7 +799,7 @@ function ConnectionCard({
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function DataConnectionCenter({ session, onComplete, onLogout }: Props) {
+export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
   const [removalTarget, setRemovalTarget] = useState<number | null>(null);
@@ -1324,23 +1325,23 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
   const setupDenied = setupQuery.isError && [401, 403].includes(asyncSurfaceStatus(setupQuery.error) ?? 0);
   const setupReadState = resolveAsyncSurfaceState({ hasData: Boolean(setupQuery.data) && !setupDenied, isPending: setupQuery.isPending, isError: setupQuery.isError, error: setupQuery.error });
-  if (setupReadState !== "ready") return <Shell session={session} onLogout={onLogout}>
+  if (setupReadState !== "ready") return <Shell session={session} onLogout={onLogout} embedded={embedded}>
     <AsyncSurfaceNotice surface="connections" state={setupReadState} onRetry={() => void setupQuery.refetch()} retrying={setupQuery.isFetching} onLeave={onComplete} leaveLabel="Return to Chat" />
   </Shell>;
 
   return (
-    <Shell session={session} onLogout={onLogout}>
+    <Shell session={session} onLogout={onLogout} embedded={embedded}>
       {setupQuery.isError && !setupDenied && setupQuery.data && <div role="alert" className="mx-auto mb-3 w-full max-w-5xl rounded border border-amber-300/30 p-3 text-sm">
         Connection status could not be refreshed. Showing the last loaded configuration; current availability is unverified. Your open form remains here.
         <button type="button" disabled={setupQuery.isFetching} onClick={() => void setupQuery.refetch()} className="ml-2 min-h-10 underline">Retry connection status</button>
       </div>}
-      <div className="w-full max-w-5xl space-y-5 overflow-y-auto max-h-[calc(100vh-120px)] pr-1">
+      <div className={embedded ? "w-full space-y-5 pb-8" : "w-full max-w-5xl space-y-5 overflow-y-auto max-h-[calc(100vh-120px)] pr-1"}>
 
         <div className="flex items-end justify-between border-b border-border pb-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Plug className="w-4 h-4 text-[hsl(38,95%,55%)]" />
-              <span className="font-terminal text-[12px] tracking-[0.2em] text-foreground uppercase">Data Connection Center</span>
+              <span className="font-terminal text-[12px] tracking-[0.2em] text-foreground uppercase">{embedded ? "Manage sources and providers" : "Data Connection Center"}</span>
             </div>
             <p className="font-ui text-[10px] text-muted-foreground">
               Add the sources you trust when you need them. LiOS can open and start useful work without any connection.
@@ -1373,12 +1374,12 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <div className="flex flex-wrap gap-2 sm:justify-end">
               <button type="button" onClick={handleReturnToWork} disabled={saving || aiBusy || masterBusy || runtimeBusy !== null} data-testid="connection-return-to-work"
                 className="min-h-11 rounded border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40">
-                Return to previous work
+                {embedded ? "Return to Chat" : "Return to previous work"}
               </button>
               <button type="button" onClick={handleEnterTerminal} disabled={saving || aiBusy || masterBusy}
                 title={continueWithoutAi ? "Continue with AI disabled. You can choose and verify a model later." : undefined}
                 className="flex items-center gap-1.5 border border-[hsl(38,95%,50%)]/60 bg-[hsl(38,95%,50%)]/10 px-3 py-2 font-terminal text-[9px] uppercase text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)]/20 disabled:opacity-40">
-                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
+                <Terminal className="w-3 h-3" /> {saving ? "Saving..." : embedded ? "Save and return to Chat" : continueWithoutAi ? "Continue without AI" : connectionSummary.ctaLabel}
               </button>
             </div>
           </div>
@@ -2101,7 +2102,8 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
 
 // ── Shell ──────────────────────────────────────────────────────────────────
 
-function Shell({ session, onLogout, children }: { session: { name: string }; onLogout: () => void; children: React.ReactNode }) {
+function Shell({ session, onLogout, embedded, children }: { session: { name: string }; onLogout: () => void; embedded: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="dark mx-auto w-full min-w-0 max-w-5xl px-4 py-4 sm:px-6">{children}</div>;
   return (
     <div className="dark min-h-screen bg-[#030303] flex flex-col items-center px-6 py-8">
       <div className="w-full max-w-5xl flex items-center justify-between mb-5">

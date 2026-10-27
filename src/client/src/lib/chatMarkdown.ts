@@ -102,6 +102,21 @@ export function safeHref(raw: string): string | null {
   }
 }
 
+/**
+ * A citation can be opened only when the actual runtime source reference
+ * is itself the same recorded HTTP(S) URL. A provider handle accompanied by
+ * an inferred homepage is NOT an inspected document. This same guard is used
+ * by inline Chat citations and the expanded research source inspector.
+ */
+export function recordedCitationHref(source: ChatCitationSource): string | null {
+  if (!source.href) return null;
+  const canonicalId = safeHref(source.id);
+  const canonicalHref = safeHref(source.href);
+  return canonicalId && canonicalHref && canonicalId === canonicalHref && /^https?:\/\//i.test(canonicalId)
+    ? canonicalId
+    : null;
+}
+
 /* ------------------------------------------------------------------------------------------------ */
 /* Inline                                                                                            */
 /* ------------------------------------------------------------------------------------------------ */
