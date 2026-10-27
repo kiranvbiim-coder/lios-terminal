@@ -20,6 +20,7 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectArtifactGalleryCard } from "./ProjectArtifactGalleryCard";
 import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
+import { ProjectSpreadsheetImportField } from "./ProjectSpreadsheetImportField";
 import { buildProjectBriefingReport, isReviewedBriefingSourceCurrent, type BriefingSource } from "@/lib/projectBriefingStoryboard";
 
 function starter(kind: ArtifactContent["kind"]): ArtifactContent {
@@ -80,6 +81,7 @@ export function ProjectArtifactsPanel({
   const [error, setError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [importingSpreadsheet, setImportingSpreadsheet] = useState(false);
+  const [spreadsheetImportOpen, setSpreadsheetImportOpen] = useState(false);
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState("");
   const [galleryKind, setGalleryKind] = useState<"all" | ArtifactContent["kind"]>("all");
@@ -139,7 +141,7 @@ export function ProjectArtifactsPanel({
     setSelected(created.artifact.id);
   };
 
-  const handleSpreadsheetImport = async (file: File) => {
+  const handleSpreadsheetImport = async (file: File): Promise<boolean> => {
     setError(null);
     setImportSummary(null);
     setImportingSpreadsheet(true);
@@ -150,8 +152,10 @@ export function ProjectArtifactsPanel({
         ? ` Not imported: ${result.import.unsupportedFeatures.join(", ")}.`
         : "";
       setImportSummary(`Imported ${result.import.fileName} as a governed spreadsheet Artifact with ${result.import.sheets} sheet${result.import.sheets === 1 ? "" : "s"}.${omitted}`);
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Spreadsheet import failed.");
+      return false;
     } finally {
       setImportingSpreadsheet(false);
     }
@@ -223,21 +227,13 @@ export function ProjectArtifactsPanel({
           <button onClick={() => void (async () => { try { setError(null); const created = await createArtifact(projectId, { title: `New ${newKind} Artifact`, content: starter(newKind) }); invalidate(projectId); setSelected(created.artifact.id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create Artifact."); } })()} className="flex items-center gap-1 rounded border border-amber-300/20 px-2.5 py-1.5 font-ui text-[7px] text-amber-200">
             <Plus className="h-3 w-3" /> New
           </button>
-          <label className={`flex cursor-pointer items-center gap-1 rounded border border-cyan-300/20 px-2.5 py-1.5 font-ui text-[7px] text-cyan-200 focus-within:outline focus-within:outline-2 focus-within:outline-primary ${importingSpreadsheet ? "pointer-events-none opacity-50" : ""}`}>
-            <FileUp className="h-3 w-3" /> {importingSpreadsheet ? "Importing…" : "Import spreadsheet"}
-            <input
-              type="file"
-              accept=".xlsx,.csv,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              className="sr-only"
-              aria-label="Import spreadsheet"
-              disabled={importingSpreadsheet}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleSpreadsheetImport(file);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          <button type="button" onClick={() => setSpreadsheetImportOpen(value => !value)}
+            disabled={importingSpreadsheet} aria-expanded={spreadsheetImportOpen}
+            aria-controls={"lios-project-spreadsheet-upload-" + projectId}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cyan-300/25 px-3 font-ui text-sm text-cyan-200 hover:bg-cyan-300/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
+            <FileUp aria-hidden="true" className="h-4 w-4" />
+            Import spreadsheet
+          </button>
           <button onClick={() => void exportProjectArtifactPackage(projectId).then((pkg) => downloadPackage(projectId, pkg)).catch((cause) => setError(cause instanceof Error ? cause.message : "Package export failed."))} className="flex items-center gap-1 rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground">
             <Package className="h-3 w-3" /> Export package
           </button>
@@ -247,6 +243,9 @@ export function ProjectArtifactsPanel({
           </label>
         </div>
       </div>
+      {spreadsheetImportOpen && <div id={"lios-project-spreadsheet-upload-" + projectId}>
+        <ProjectSpreadsheetImportField key={projectId} busy={importingSpreadsheet} onImport={handleSpreadsheetImport} />
+      </div>}
       {briefingOpen && <div id="project-briefing-studio">
         <ProjectBriefingStudio projectId={projectId} artifacts={rows}
           onSave={handleSaveBriefing} onClose={() => setBriefingOpen(false)}
