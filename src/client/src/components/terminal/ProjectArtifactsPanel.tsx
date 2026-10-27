@@ -158,7 +158,6 @@ export function ProjectArtifactsPanel({
     setVersionView(null);
     setSelected(created.artifact.id);
   };
-
   const handleSpreadsheetImport = async (file: File): Promise<boolean> => {
     setError(null);
     setImportSummary(null);
