@@ -12,7 +12,7 @@ test("saved-work search is accessible from both navigation and the Artifact dire
   assert.match(shell, /section === "library" && <button type="button" className="lios-section-action ml-3" onClick=\{requestWorkSearch\}>Search saved work<\/button>/);
   assert.match(shell, /Saved Artifacts from regular Chats are available through Search/);
   assert.match(shell, /section === "library" \? <ProjectArtifactsPanel/);
-  assert.match(search, /placeholder="Search chats, Projects, files and Artifacts"/);
+  assert.match(search, /Search chats, Projects, files and Artifacts/);
 });
 
 test("Quick Artifact search validates the authoritative owning Chat and Artifact before navigation", () => {
