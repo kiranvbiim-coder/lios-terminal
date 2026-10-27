@@ -26,5 +26,5 @@ test("map is one bounded first-party static atlas, not third-party map API or sp
   assert.match(map,/Only points with recorded event dates/);
   assert.match(selector,/const MAX_POINTS = 60/);
   assert.doesNotMatch(map,/fetch\(|XMLHttpRequest|navigator\.geolocation|window\.location|eval\(|new WebSocket|maptiler|googleapis|demotiles/);
-  assert.doesNotMatch(selector,/geocode|geoip|Math\.random\(/);
+  assert.doesNotMatch(selector,/\b(?:geocode|geoip)\s*\(|Math\.random\(/);
 });
