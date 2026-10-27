@@ -151,7 +151,7 @@ function EmptyCategory({ category }: { category: ConnectionCenterCategoryId }) {
       </div>
     );
   }
-  return <div className="border border-dashed border-border bg-[#070707] p-5 font-terminal text-[8px] text-muted-foreground">No sources are currently registered in this category. Use the actions above to add one.</div>;
+  return <div className="border border-dashed border-border bg-[#070707] p-5 font-ui text-sm text-muted-foreground">No sources are currently registered in this category. Use the actions above to add one.</div>;
 }
 
 export default function DataSourcesPanel({
@@ -176,7 +176,7 @@ export default function DataSourcesPanel({
   if (query.isLoading && !query.data) return <div className="border border-border bg-[#070707] p-4 font-ui text-sm text-muted-foreground" role="status">Loading Connection Center…</div>;
 
   if (!query.data) {
-    return <div className="border border-red-500/30 bg-red-500/5 p-4" role="alert"><p className="font-terminal text-[10px] text-red-400">Unable to load Connection Center sources.</p><button type="button" className="mt-2 border border-border px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground" onClick={() => query.refetch()}>Retry</button></div>;
+    return <div className="border border-red-500/30 bg-red-500/5 p-4" role="alert"><p className="font-ui text-sm text-red-300">Unable to load Connection Center sources. No source status is currently verified.</p><button type="button" disabled={query.isFetching} aria-busy={query.isFetching} className="mt-2 min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => void query.refetch()}>{query.isFetching ? "Retrying…" : "Retry connection status"}</button></div>;
   }
 
   const registry = query.data;
@@ -198,8 +198,8 @@ export default function DataSourcesPanel({
       </div>}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-[#070707] px-4 py-3">
         <Plug className="h-4 w-4 text-[hsl(38,95%,55%)]" aria-hidden="true" />
-        <div><h2 id="connection-center-heading" className="panel-label">CONNECTION CENTER</h2><p className="font-terminal text-[8px] uppercase tracking-widest text-muted-foreground">Connect your workspace · one setup surface for external and user-owned systems</p></div>
-        <div className="ml-auto flex items-center gap-2 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground"><span>{registry.summary.connectionCount} saved</span><span>{readOnly ? "Operational status unverified" : `${registry.summary.operationalCount} reported operational`}</span>{registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" disabled={query.isFetching} aria-busy={query.isFetching} className="min-h-10 min-w-10 rounded-md border border-border p-2 text-muted-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
+        <div><h2 id="connection-center-heading" className="font-ui text-base font-semibold tracking-wide text-foreground">Connection Center</h2><p className="font-ui text-xs leading-5 text-muted-foreground">Connect your workspace · one setup surface for external and user-owned systems</p></div>
+        <div className="ml-auto flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{registry.summary.connectionCount} saved</span><span>{readOnly ? "Operational status unverified" : `${registry.summary.operationalCount} reported operational`}</span>{registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" disabled={query.isFetching} aria-busy={query.isFetching} className="min-h-10 min-w-10 rounded-md border border-border p-2 text-muted-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
       </div>
 
       <nav className="grid grid-cols-1 border-b border-border sm:grid-cols-5" aria-label="Connection categories">
@@ -207,17 +207,17 @@ export default function DataSourcesPanel({
           const Icon = CATEGORY_ICONS[category.id];
           const count = connectionCategoryCount(registry, category.id);
           const active = activeCategory === category.id;
-          return <button type="button" key={category.id} onClick={() => setActiveCategory(category.id)} aria-pressed={active} className={`border-b border-border px-3 py-3 text-left transition-colors sm:border-b-0 sm:border-r ${active ? "bg-[hsl(38,95%,50%)]/[0.08] text-[hsl(38,95%,55%)]" : "text-muted-foreground hover:bg-white/[0.02] hover:text-foreground"}`}><div className="flex items-center gap-2"><Icon className="h-3.5 w-3.5" aria-hidden="true" /><span className="font-terminal text-[8px] font-bold uppercase tracking-wider">{category.label}</span></div><div className="mt-1 font-terminal text-[7px] uppercase tracking-wider opacity-70">{category.id === "communications" ? "reserved" : `${count} visible`}</div></button>;
+          return <button type="button" key={category.id} onClick={() => setActiveCategory(category.id)} aria-pressed={active} className={`border-b border-border px-3 py-3 text-left transition-colors sm:border-b-0 sm:border-r ${active ? "bg-[hsl(38,95%,50%)]/[0.08] text-[hsl(38,95%,55%)]" : "text-muted-foreground hover:bg-white/[0.02] hover:text-foreground"}`}><div className="flex items-center gap-2"><Icon className="h-3.5 w-3.5" aria-hidden="true" /><span className="font-ui text-sm font-semibold">{category.label}</span></div><div className="mt-1 font-ui text-xs opacity-70">{category.id === "communications" ? "reserved" : `${count} visible`}</div></button>;
         })}
       </nav>
 
       <div className="border-b border-border bg-[#070707] px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="font-terminal text-[9px] font-bold uppercase tracking-wider text-foreground">{CONNECTION_CENTER_CATEGORIES.find((category) => category.id === activeCategory)?.label}</p><p className="mt-1 max-w-2xl font-terminal text-[8px] leading-relaxed text-muted-foreground">{CONNECTION_CENTER_CATEGORIES.find((category) => category.id === activeCategory)?.description}</p></div>
+          <div><p className="font-ui text-sm font-semibold text-foreground">{CONNECTION_CENTER_CATEGORIES.find((category) => category.id === activeCategory)?.label}</p><p className="mt-1 max-w-2xl font-ui text-sm leading-6 text-muted-foreground">{CONNECTION_CENTER_CATEGORIES.find((category) => category.id === activeCategory)?.description}</p></div>
           <div className="flex flex-wrap gap-2">
-            {activeCategory === "data_providers" && <><button type="button" className="border border-[hsl(38,95%,55%)]/50 bg-[hsl(38,95%,55%)]/[0.08] px-3 py-2 font-terminal text-[8px] font-bold uppercase tracking-widest text-[hsl(38,95%,55%)]" onClick={() => setProviderWizardOpen(true)}>+ Add Any Data Provider</button><button type="button" className="border border-border px-3 py-2 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground hover:text-foreground" onClick={() => onConnectProvider()}>Built-in Providers</button></>}
-            {activeCategory === "databases" && <button type="button" className="border border-[hsl(38,95%,55%)]/40 px-3 py-2 font-terminal text-[8px] uppercase tracking-widest text-[hsl(38,95%,55%)]" onClick={onAddDatabase}>+ Add Database</button>}
-            {activeCategory === "files" && <><button type="button" className="flex items-center gap-1 border border-[hsl(38,95%,55%)]/40 px-3 py-2 font-terminal text-[8px] uppercase tracking-widest text-[hsl(38,95%,55%)]" onClick={onImportFile}><Upload className="h-3 w-3" /> Import File</button><button type="button" className="border border-border px-3 py-2 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground" onClick={onAddStorage}>Add Storage</button></>}
+            {activeCategory === "data_providers" && <><button type="button" disabled={readOnly} className="min-h-11 rounded-lg border border-[hsl(38,95%,55%)]/50 bg-[hsl(38,95%,55%)]/[0.08] px-3 py-2 font-ui text-sm font-semibold text-[hsl(38,95%,55%)] disabled:opacity-40" onClick={() => setProviderWizardOpen(true)}>+ Add Any Data Provider</button><button type="button" disabled={readOnly} className="min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground disabled:opacity-40" onClick={() => onConnectProvider()}>Built-in Providers</button></>}
+            {activeCategory === "databases" && <button type="button" disabled={readOnly} className="min-h-11 rounded-lg border border-[hsl(38,95%,55%)]/40 px-3 py-2 font-ui text-sm text-[hsl(38,95%,55%)] disabled:opacity-40" onClick={onAddDatabase}>+ Add Database</button>}
+            {activeCategory === "files" && <><button type="button" disabled={readOnly} className="flex min-h-11 items-center gap-1 rounded-lg border border-[hsl(38,95%,55%)]/40 px-3 py-2 font-ui text-sm text-[hsl(38,95%,55%)] disabled:opacity-40" onClick={onImportFile}><Upload className="h-3 w-3" /> Import File</button><button type="button" disabled={readOnly} className="min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-muted-foreground disabled:opacity-40" onClick={onAddStorage}>Add Storage</button></>}
           </div>
         </div>
       </div>
@@ -226,7 +226,7 @@ export default function DataSourcesPanel({
         {categoryItems.length > 0 ? categoryItems.map((item) => <SourceCard key={item.id} item={item} readOnly={readOnly} onConnectProvider={onConnectProvider} onTestConnection={onTestConnection} onEditConnection={onEditConnection} onDeleteConnection={onDeleteConnection} onDiscoverDatabase={(connectionId, name) => setDatabaseDiscovery({ connectionId, name })} />) : <div className="xl:col-span-2"><EmptyCategory category={activeCategory} /></div>}
       </div>
 
-      <div className="border-t border-border px-4 py-2 font-terminal text-[7px] leading-relaxed text-muted-foreground/80">{readOnly ? "Previously loaded connection records only — status unverified until successful refresh. " : ""}Connection status reflects the evidence available for each source: catalog availability, saved credentials, or a specific live verification. A saved credential alone does not prove that data is flowing or that an AI conversation succeeds.</div>
+      <div className="border-t border-border px-4 py-3 font-ui text-xs leading-5 text-muted-foreground">{readOnly ? "Previously loaded connection records only — status unverified until successful refresh. " : ""}Connection status reflects the evidence available for each source: catalog availability, saved credentials, or a specific live verification. A saved credential alone does not prove that data is flowing or that an AI conversation succeeds.</div>
 
       {providerWizardOpen && <AddAnyDataProviderWizard onClose={() => setProviderWizardOpen(false)} onSaved={() => { setProviderWizardOpen(false); refresh(); }} />}
       {databaseDiscovery && <DatabaseDiscoveryBrowser connectionId={databaseDiscovery.connectionId} connectionName={databaseDiscovery.name} onClose={() => setDatabaseDiscovery(null)} />}
