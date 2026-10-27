@@ -14,6 +14,12 @@ function count(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
+function actualIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function percentages(advances: number, declines: number, unchanged: number, netAdvances?: number) {
   if (![advances, declines, unchanged].every(count)) return null;
   const total = advances + declines + unchanged;
@@ -33,7 +39,7 @@ export function recordedBreadthRows(points: readonly BreadthPoint[], limit: numb
   return points.slice(-bound || points.length).filter((point): point is BreadthPoint => Boolean(point))
     .flatMap(point => {
       const values = percentages(point.advances, point.declines, point.unchanged, point.netAdvances);
-      if (!values || values.net === null || typeof point.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(point.date)) return [];
+      if (!values || values.net === null || typeof point.date !== "string" || !actualIsoDate(point.date)) return [];
       return [{ date: point.date, advances: values.advances, declines: -values.declines, net: values.net }];
     }).slice(-bound);
 }
@@ -45,7 +51,7 @@ export function recordedLatestBreadth(latest: LatestBreadth | null | undefined) 
 
 /** Escape arbitrary provider dates from local parser surprises; presentation only. */
 export function shortRecordedMarketDate(date: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  if (!actualIsoDate(date)) return date;
   const parsed = new Date(`${date}T00:00:00Z`);
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return date;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(parsed);
