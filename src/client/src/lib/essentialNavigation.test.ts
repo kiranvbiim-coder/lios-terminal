@@ -83,9 +83,29 @@ test("navigation actions preserve the right section and avoid losing current wor
   assert.match(shell, /activeSection=\{section === "conversation" && entrySurface === "project-home" \? "projects" : section\}/);
   assert.match(shell, /onSearch=\{requestWorkSearch\}/);
   assert.match(shell, /if \(next === "conversation"\) setProjectHomeRequested\(false\)/);
-  assert.match(shell, /next !== "conversation" && \(busy \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /next !== "conversation" && \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current/);
   assert.match(shell, /next !== "conversation" && artifactDraftDirtyRef\.current/);
   assert.match(shell, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(shell, /aria-current=\{selection\.projectId === project\.id && chatMode === "project" \? "page" : undefined\}/);
   assert.match(shell, /projects: "Projects", chats: "History", library: "Artifacts"/);
+});
+
+test("Connections and Settings cannot hide active work or local unsaved Artifact edits", () => {
+  assert.match(shell, /const openSafeDestination = \(destination: "Connections" \| "Settings", action: \(\) => void\) =>/);
+  assert.match(shell, /onConnectors=\{\(\) => openSafeDestination\("Connections", onOpenEnvironment\)\}/);
+  assert.match(shell, /onSettings=\{\(\) => openSafeDestination\("Settings", onOpenSettings\)\}/);
+  const guard = shell.split('const openSafeDestination = ')[1]?.split('const signOutSafely = ')[0] ?? "";
+  assert.match(guard, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current/);
+  assert.match(guard, /artifactDraftDirtyRef\.current/);
+  assert.match(guard, /action\(\)/);
+});
+
+test("Sign out reviews staged unsent work and never silently discards an in-flight response", () => {
+  const handler = shell.split('const signOutSafely = async () => {')[1]?.split('const onOpenWorkbench = ')[0] ?? "";
+  assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current/);
+  assert.match(handler, /artifactDraftDirtyRef\.current/);
+  assert.match(handler, /confirmConversationSwitch\(true\)/);
+  assert.match(handler, /discardConversationDraft\(before\)/);
+  assert.match(handler, /onLogout\(\)/);
+  assert.match(shell, /onLogout=\{\(\) => void signOutSafely\(\)\}/);
 });
