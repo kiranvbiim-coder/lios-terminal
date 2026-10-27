@@ -17,7 +17,7 @@
     "history:import": "NODE_ENV=production tsx script/import_stooq_db.ts",
     "history:import:bse": "NODE_ENV=production tsx script/import_bse_bhavcopy.ts",
     "history:adjust:bse": "NODE_ENV=production tsx script/adjust_bse_splits.ts",
-    "build": "tsx script/build.ts",
+    "build": "npm run media:verify && tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "test": "npm run test:offline",
     "test:offline": "npm run check:manifests && npm run check:routes && node script/run_project_tests.mjs server shared client script",
