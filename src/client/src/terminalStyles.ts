@@ -14,6 +14,8 @@ import "./terminal-canvas-v10.css";
 import "./terminal-analytics-v11.css";
 import "./terminal-quant-trust-v8.css";
 import "./terminal-ux-phase1.css";
+// Sprint C's scoped chart/inspector polish loads before the canonical shell arbiter.
+import "./sprint-c-intelligence-visuals.css";
 import "./terminal-shell.css";
 import "./lios-product-palettes.css";
 import "./visual-intelligence-canvas.css";
