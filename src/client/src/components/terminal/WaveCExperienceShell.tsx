@@ -18,7 +18,7 @@ import {
 } from "@shared/waveCContracts";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { useAudience } from "@/lib/audience";
-import type { ActionInboxItem } from "@shared/waveDContracts";
+import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY,
@@ -43,7 +43,7 @@ interface Props {
   embedded?: boolean;
   surface?: ExperienceShellSurface;
   onSurfaceChange?: (surface: ExperienceShellSurface) => void;
-  onAskLios?: () => void;
+  onAskLios?: (initialQuestion?: string) => void;
 }
 
 const masterAiResponseSchema = z.object({
@@ -54,15 +54,6 @@ const masterAiResponseSchema = z.object({
 const MARKET_PACK_KEY = "lios.waveC.marketPack";
 const SURFACE_ICONS = { projects: FolderKanban, pulse: Activity, explore: Compass, workbench: LayoutDashboard, signals: Radio, library: Library } as const;
 
-interface WaveDPulseCard {
-  id: string;
-  title: string;
-  whatHappened: string;
-  whyItMattersToUser: string;
-  priority: "critical" | "important" | "fyi";
-  score: number;
-  symbol?: string;
-}
 
 type PulseChannel = "for_you" | "following" | "markets" | "research";
 
@@ -102,7 +93,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       return Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string").slice(0, 6) : ["metric.pe", "metric.roic"];
     } catch { return ["metric.pe", "metric.roic"]; }
   });
-  const [waveDPulseCards, setWaveDPulseCards] = useState<WaveDPulseCard[]>([]);
+  const [waveDPulseCards, setIntelligenceCards] = useState<IntelligenceCard[]>([]);
   const [waveDInboxCount, setWaveDInboxCount] = useState(0);
   const [waveDInboxItems, setWaveDInboxItems] = useState<ActionInboxItem[]>([]);
   const [waveDMonitoringCount, setWaveDMonitoringCount] = useState(0);
@@ -134,11 +125,11 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
       if (!pulseResponse.ok) { setWaveDStatus("unavailable"); return; }
-      const pulse = await pulseResponse.json() as { cards?: WaveDPulseCard[]; monitoring?: { activeRules?: number } };
+      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number } };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
-      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
+      setIntelligenceCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
