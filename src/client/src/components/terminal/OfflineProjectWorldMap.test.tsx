@@ -58,6 +58,10 @@ test("B01 single offline map uses the same approved point projection for search 
   assert.match(source,/projectOfflineWorldPoints\(points, \{ sourceOnly, withEventDate, query \}\)/);
   assert.match(source,/onChange=\{event => \{ setQuery\(event\.target\.value\); setSelectedId\(null\); \}\}/);
   assert.match(source,/setQuery\(""\)/);
+  assert.match(source,/Focus first match/);
+  assert.match(source,/worldMapCenterPreservingPan/);
+  assert.match(source,/recordedIsoTimestamp\(selected\.occurredAt\)/);
+  assert.match(source,/No event date was recorded/);
   assert.match(source,/aria-label="Map location list"/);
   assert.doesNotMatch(source,/fetch\(|navigator\.geolocation|mapboxgl|maplibregl|localStorage/);
 });
