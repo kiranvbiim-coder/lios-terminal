@@ -92,6 +92,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Spatial layout controls">
           <button type="button" className="lios-spatial-control" aria-pressed={mode === "map"} onClick={() => setMode("map")}>Map</button>
           <button type="button" className="lios-spatial-control" aria-pressed={mode === "timeline"} onClick={() => setMode("timeline")}>Timeline</button>
+          <button type="button" className="lios-spatial-control" aria-pressed={mode === "list"} onClick={() => setMode("list")}>List</button>
           <button type="button" className="lios-spatial-control" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
             {expanded ? <Minimize size={15} aria-hidden="true" /> : <Expand size={15} aria-hidden="true" />}
             {expanded ? "Compact" : "Expand"}
