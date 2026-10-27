@@ -138,6 +138,14 @@ jobs:
         timeout-minutes: 5
         run: npm run phase4:source
 
+      - name: OSS donor licence, supply-chain and CI preflight source gates
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: |
+          npm run audit:oss
+          npm run audit:licenses
+          npm run release:preflight:ci
+
       - name: Desktop source and syntax contracts
         if: ${{ !cancelled() }}
         timeout-minutes: 10
