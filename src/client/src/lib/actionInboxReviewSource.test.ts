@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const pulse = read("../components/terminal/IntelligencePulse.tsx");
 const hook = read("./useProactivePulse.ts");
-const routes = read("../../../../server/waveDRoutes.ts");
-const shared = read("../../../../shared/waveDContracts.ts");
+const routes = read("../../../server/waveDRoutes.ts");
+const shared = read("../../../shared/waveDContracts.ts");
 
 test("Phase 3 reviews the existing authenticated Wave D Action Inbox, never another agent registry", () => {
   assert.match(routes, /app\.get\("\/api\/wave-d\/action-inbox", requireWaveDRetailRead/);
