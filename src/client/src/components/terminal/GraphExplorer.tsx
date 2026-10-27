@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Focus, Network, Search, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
@@ -40,9 +40,27 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  // Keep the Escape handler current without re-running the modal focus trap on parent renders.
+  // Keep modal Escape stable on parent re-renders without restarting focus management.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const viewportRef = useRef<HTMLElement>(null);
+  const dragRef = useRef<{pointer: number; clientX: number; clientY: number; originX: number; originY: number} | null>(null);
+  const [zoom, setZoom] = useState(0.7);
+  const [pan, setPan] = useState({x: 0, y: 0});
+  const zoomClamp = (value: number) => Math.min(1.8, Math.max(0.35, value));
+  const fit = () => {
+    const width = viewportRef.current?.clientWidth ?? 700;
+    const height = viewportRef.current?.clientHeight ?? 440;
+    const size = zoomClamp(Math.min(1, (width - 24) / 900, (height - 24) / 600));
+    setZoom(size);
+    setPan({x: Math.max(0, (width - 900 * size) / 2), y: Math.max(0, (height - 600 * size) / 2)});
+  };
+  useEffect(() => {
+    fit();
+    const resized = () => fit();
+    window.addEventListener("resize", resized);
+    return () => window.removeEventListener("resize", resized);
+  }, []);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -143,6 +161,15 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             {(query || selectedId || neighborsOnly || bridgesOnly) && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); setNeighborsOnly(false); setBridgesOnly(false); }}
               className="min-h-10 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground hover:text-foreground">Reset view</button>}
           </div>
+          <div className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Cross-domain graph viewport controls">
+            <button type="button" aria-label="Zoom cross-domain graph out" onClick={() => setZoom(current => zoomClamp(current - 0.15))}
+              className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Minus className="h-4 w-4" aria-hidden="true"/></button>
+            <button type="button" aria-label="Zoom cross-domain graph in" onClick={() => setZoom(current => zoomClamp(current + 0.15))}
+              className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Plus className="h-4 w-4" aria-hidden="true"/></button>
+            <button type="button" aria-label="Fit cross-domain graph" onClick={fit}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70"><Focus className="h-4 w-4" aria-hidden="true"/>Fit graph</button>
+            <span className="font-ui text-xs text-muted-foreground" role="status">{Math.round(zoom * 100)}%</span>
+          </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-ui text-xs text-muted-foreground" role="status">
             <span>{presentation.nodes.length} shown · {graph.nodes.length} objects loaded</span>
             <span>{presentation.edges.length} recorded links shown</span>
@@ -152,10 +179,37 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
           </div>
         </header>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(180px,0.6fr)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
-          <main className="relative min-h-0 overflow-auto bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505]" aria-label="Intelligence graph canvas">
+          <main ref={viewportRef} role="region" tabIndex={0}
+            className="relative min-h-0 touch-pan-y overflow-y-auto bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 md:touch-none md:overflow-hidden"
+            aria-label="Intelligence graph canvas. Drag empty space to pan, use zoom and fit controls, Tab to inspect objects."
+            onWheel={event => {
+              if (document.activeElement !== event.currentTarget && !event.currentTarget.contains(document.activeElement)) return;
+              if (event.cancelable) event.preventDefault();
+              setZoom(value => zoomClamp(value + (event.deltaY < 0 ? 0.09 : -0.09)));
+            }}
+            onPointerDown={event => {
+              if (event.button !== 0 || event.target !== event.currentTarget) return;
+              dragRef.current = {pointer:event.pointerId,clientX:event.clientX,clientY:event.clientY,originX:pan.x,originY:pan.y};
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={event => {
+              const drag = dragRef.current;
+              if (drag?.pointer !== event.pointerId) return;
+              setPan({x:drag.originX + event.clientX - drag.clientX,y:drag.originY + event.clientY - drag.clientY});
+            }}
+            onPointerUp={event => {if(dragRef.current?.pointer===event.pointerId) dragRef.current=null;}}
+            onPointerCancel={() => {dragRef.current=null;}}
+            onKeyDown={event => {
+              if(event.target!==event.currentTarget) return;
+              const dx=event.key==="ArrowLeft"?-40:event.key==="ArrowRight"?40:0;
+              const dy=event.key==="ArrowUp"?-40:event.key==="ArrowDown"?40:0;
+              if(dx||dy){event.preventDefault();setPan(position=>({x:position.x+dx,y:position.y+dy}));}
+              if(event.key==="Home"){event.preventDefault();fit();}
+            }}>
             <GraphExplorerCompactList nodes={presentation.nodes} selectedId={selectedId} onSelect={setSelectedId}
               emptyMessage={graph.nodes.length ? "No matching recorded objects. Reset search or filters." : "Capture or publish intelligence objects to build the graph."} />
-            <div className="relative hidden h-full min-h-[440px] w-full min-w-[660px] md:block">
+            <div className="pointer-events-none absolute left-0 top-0 hidden h-[600px] w-[900px] md:block"
+              style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:"top left"}}>
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Recorded object relationships">
                 {presentation.edges.map((edge, index) => {
                   const a = positions.get(edge.sourceId); const b = positions.get(edge.targetId);
@@ -185,7 +239,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                 return <button key={node.objectId} type="button" aria-pressed={active}
                   data-graph-object={node.objectId} onClick={() => setSelectedId(node.objectId)}
                   aria-label={`Inspect ${node.label} in ${DOMAIN_LABEL[node.domain]}`}
-                  className={`absolute w-[116px] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-2.5 text-left shadow-xl transition-all focus-visible:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${DOMAIN_COLOR[node.domain]} ${active ? "z-20 bg-[#322312] ring-2 ring-amber-300/60" : "bg-[#101113] hover:z-20 hover:scale-[1.04]"} ${faded ? "opacity-40" : "opacity-100"}`}
+                  className={`pointer-events-auto absolute w-[116px] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-2.5 text-left shadow-xl transition-all focus-visible:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${DOMAIN_COLOR[node.domain]} ${active ? "z-20 bg-[#322312] ring-2 ring-amber-300/60" : "bg-[#101113] hover:z-20 hover:scale-[1.04]"} ${faded ? "opacity-40" : "opacity-100"}`}
                   style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   title={`${DOMAIN_LABEL[node.domain]} · ${node.label}`}>
                   <span className="block truncate font-ui text-[10px] font-medium text-cyan-200/85">{DOMAIN_LABEL[node.domain]}</span>
