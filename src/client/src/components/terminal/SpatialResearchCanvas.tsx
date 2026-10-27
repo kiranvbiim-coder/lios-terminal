@@ -89,6 +89,15 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
     setDragPreview(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
+  // A canceled pointer gesture (system gesture, lost touch capture) never saves.
+  const cancelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    dragPreviewRef.current = null;
+    setDragPreview(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setAnnouncement("Move canceled. The prior saved pin position is unchanged.");
+  };
   const keyboardMove = (event: ReactKeyboardEvent<HTMLButtonElement>, kind: DragState["kind"], id: string) => {
     if (!(event.key in MOVE_KEYS) || (mode === "timeline" && kind === "node")) return;
     event.preventDefault();
@@ -212,7 +221,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
                   onPointerDown={event => startDrag(event, "node", item.id)}
                   onPointerMove={continueDrag}
                   onPointerUp={stopDrag}
-                  onPointerCancel={stopDrag}
+                  onPointerCancel={cancelDrag}
                   onKeyDown={event => keyboardMove(event, "node", item.id)}
                 ><Grip size={16} aria-hidden="true" /></button>}
               </div>
@@ -230,7 +239,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
         })}
         {selected && <aside className="lios-spatial-companion" aria-label="Insight companion" style={{ left: `${companionPoint.x}%`, top: `${companionPoint.y}%` }}>
           <div className="lios-spatial-companion-head">
-            <button ref={companionHeading} type="button" className="lios-spatial-companion-grip" title="Move companion; use arrow keys or drag" aria-label="Move insight companion with arrow keys or pointer" onPointerDown={event => startDrag(event, "companion", selected.id)} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onKeyDown={event => keyboardMove(event, "companion", selected.id)}>
+            <button ref={companionHeading} type="button" className="lios-spatial-companion-grip" title="Move companion; use arrow keys or drag" aria-label="Move insight companion with arrow keys or pointer" onPointerDown={event => startDrag(event, "companion", selected.id)} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={cancelDrag} onKeyDown={event => keyboardMove(event, "companion", selected.id)}>
               <Grip size={16} aria-hidden="true" /> Insight companion
             </button>
             <button type="button" onClick={() => setInspectedId(null)} aria-label="Close insight companion"><X size={16} /></button>
