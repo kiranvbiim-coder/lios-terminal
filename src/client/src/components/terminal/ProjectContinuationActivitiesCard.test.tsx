@@ -50,9 +50,9 @@ test("Project Continuity mounts one Watermelon-derived P6 view using canonical q
   const { readFileSync } = await import("node:fs");
   const owner = readFileSync(new URL("./ProjectContinuityPanel.tsx", import.meta.url), "utf8");
   assert.match(owner, /<ProjectContinuationActivitiesCard/);
-  assert.match(owner, /items=\\{snapshot\\?\\.continuationQueue \\?\\? \\[\\]\\}/);
-  assert.match(owner, /onOpenDecision=\\{onFocusArtifact\\}/);
-  assert.match(owner, /onReviewWorkflow=/);
-  assert.doesNotMatch(owner, /continuationQueue \\?\\? \\[\\]\\)\\.slice\\(0, 8\\)\\.map/);
+  assert.ok(owner.includes("items={snapshot?.continuationQueue ?? []}"));
+  assert.ok(owner.includes("onOpenDecision={onFocusArtifact}"));
+  assert.ok(owner.includes("onReviewWorkflow="));
+  assert.equal(owner.includes("(snapshot?.continuationQueue ?? []).slice(0, 8).map"), false);
   assert.match(owner, /<ProjectChangeActivity/);
 });
