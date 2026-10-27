@@ -5,6 +5,7 @@ import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import { trashProjectResource, trashProjectSession, updateProjectResource, updateProjectSession, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
 import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
+import { projectSavedWorkReadPresentation } from "@/lib/projectSavedWorkReadPresentation";
 import {
   VISUAL_ENVIRONMENTS,
   dispatchVisualContext,
@@ -80,6 +81,14 @@ export function ProjectHome({
   const [visibleWorkCount, setVisibleWorkCount] = useState(12);
   const collectionsPending = chatsQuery.isPending || resourcesQuery.isPending || sessionsQuery.isPending;
   const collectionsFailed = chatsQuery.isError || resourcesQuery.isError || sessionsQuery.isError;
+  const collectionsFetching = chatsQuery.isFetching || resourcesQuery.isFetching || sessionsQuery.isFetching;
+  const savedWorkRead = projectSavedWorkReadPresentation({
+    chatsFailed: chatsQuery.isError,
+    resourcesFailed: resourcesQuery.isError,
+    sessionsFailed: sessionsQuery.isError,
+    pending: collectionsPending,
+    fetching: collectionsFetching,
+  });
   const [workQuery, setWorkQuery] = useState("");
   const [pendingContext, setPendingContext] = useState<{ projectId: number; resourceId: string; from: ProjectResourceContextMode; to: ProjectResourceContextMode } | null>(null);
   const [contextBusy, setContextBusy] = useState(false);
@@ -92,7 +101,7 @@ export function ProjectHome({
 
   async function confirmContextUpdate() {
     const draft = pendingContext;
-    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id) return;
+    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id || !savedWorkRead.resourcesWritable) return;
     const resource = projectResources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
     if (!resource || resource.contextMode !== draft.from || !mayEditProjectResourceContext(draft.projectId, resource, draft.to)) {
       setPendingContext(null);
@@ -270,7 +279,14 @@ export function ProjectHome({
         </section>
 
 
-        {collectionsFailed && <p role="alert" className="mt-5 rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">Some saved Project items could not be loaded. Results may be incomplete. <button type="button" className="underline" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry</button></p>}
+        {collectionsFailed && <div role="alert" className="mt-5 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p>{savedWorkRead.label} Resource changes are disabled until the exact saved Project records are verified.</p>
+          <button type="button" disabled={!savedWorkRead.retryAvailable} aria-busy={collectionsFetching}
+            className="min-h-11 rounded-lg border border-border px-3 py-2 text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
+            onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>
+            {collectionsFetching ? "Retrying saved-work read…" : "Retry saved-work read"}
+          </button>
+        </div>}
         <details className="mt-6 rounded-xl border border-border/55" data-testid="project-saved-work">
           <summary className="cursor-pointer select-none px-4 py-3 font-ui text-[14px] font-semibold text-foreground">Saved work</summary>
           <div className="px-4 pb-4">
@@ -278,7 +294,7 @@ export function ProjectHome({
           <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Search saved work</label>
           <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
             placeholder="Search chats, resources and sessions" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
-          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} sessions{collectionsPending ? " · Loading" : ""}</p>
+          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} sessions{savedWorkRead.countQualifier}</p>
         </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
@@ -317,11 +333,11 @@ export function ProjectHome({
                     }`}>{resource.contextMode.toUpperCase()}</span>
                   </div>
                   <div className="mt-1 font-terminal text-[11px] uppercase tracking-wider text-muted-foreground">{resource.kind}</div>
-                  <button type="button" disabled={contextBusy} onClick={() => {
+                  <button type="button" disabled={contextBusy || !savedWorkRead.resourcesWritable} onClick={() => {
                     setContextNotice(null);
                     setPendingContext({ projectId: project.id, resourceId: resource.id, from: resource.contextMode, to: resource.contextMode });
-                  }} className="mt-2 min-h-10 rounded border border-border px-3 py-2 text-xs">Review context inclusion</button>
-                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy}
+                  }} className="mt-2 min-h-11 rounded-lg border border-border px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">Review context inclusion</button>
+                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy || !savedWorkRead.resourcesWritable}
                     rename={async label => {
                       const saved = await updateProjectResource(project.id, resource.id, { label });
                       if (saved.id !== resource.id || saved.projectId !== project.id || saved.label !== label) throw new Error("The exact resource name was not confirmed.");
@@ -331,7 +347,7 @@ export function ProjectHome({
                     onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
                 </div>
               ))}
-              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
+              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{resourcesQuery.isError ? "Resource records could not be verified. Retry before relying on an empty result." : workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
               <p className="font-ui text-xs text-muted-foreground">Automatic, on demand or excluded. Source permissions still apply.</p>
               {pendingContext?.projectId === project.id && (() => {
                 const resource = projectResources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
@@ -344,7 +360,7 @@ export function ProjectHome({
                   </label>
                   <p className="text-xs">{contextChangeConfirmation(resource.label, pendingContext.from, pendingContext.to)}</p>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" disabled={contextBusy || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)} onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm">Save this resource's context mode</button>
+                    <button type="button" disabled={contextBusy || !savedWorkRead.resourcesWritable || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)} onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm">Save this resource's context mode</button>
                     <button type="button" disabled={contextBusy} onClick={() => setPendingContext(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
                   </div>
                 </section>;
