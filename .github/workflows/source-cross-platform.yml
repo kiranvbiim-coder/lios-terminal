@@ -28,9 +28,10 @@ jobs:
           - platform: Linux
             runner: ubuntu-24.04
           - platform: macOS
-            # Standard hosted Intel capacity; macos-15 arm64 repeatedly failed
-            # before runner acquisition. Source checks are not native arm64 release proof.
-            runner: macos-15-intel
+            # Source-only Intel acquisition experiment: macos-15-intel stayed
+            # queued across consecutive PR runs. macOS 26 Intel is also a
+            # standard hosted runner; installed macOS ARM64 QA remains required.
+            runner: macos-26-intel
           - platform: Windows
             runner: windows-2022
     runs-on: ${{ matrix.runner }}
@@ -68,6 +69,13 @@ jobs:
       OLLAMA_BASE_URL: ""
       LM_STUDIO_BASE_URL: ""
     steps:
+      - name: Record macOS source runner OS and architecture
+        if: matrix.platform == 'macOS'
+        run: |
+          uname -m
+          sw_vers -productVersion
+          echo "ImageOS=${ImageOS:-unknown}"
+
       - name: Checkout unprivileged source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
