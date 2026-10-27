@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Activity, ArrowRight, BrainCircuit, BriefcaseBusiness, Check, GitCompareArrows, History, Layers3,
   Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2, X,
@@ -72,13 +73,20 @@ function StudioNav({ tab, onTab }: { tab: StudioTab; onTab: (tab: StudioTab) => 
 }
 
 export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose, selectedTab: tab, onSelectTab, spatialCanvasReturn, onSpatialCanvasReturn }: Props) {
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const quietMotion = preferences.reducedMotion || preferences.lowResourceMode ? { animation: "none" } : undefined;
   return (
-    <div className="fixed inset-0 z-[82] flex items-center justify-center bg-black/72 p-3 backdrop-blur-[3px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="LiOS Analytical Studio"
+        className="lios-v4-overlay !z-[82] !flex h-[min(820px,94dvh)] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-2xl !p-0 !pr-0"
+        style={quietMotion}
+        overlayProps={{ className: "!z-[81] bg-black/72 backdrop-blur-[3px]", style: quietMotion }}
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}
+      >
         <header className="flex items-start gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><BrainCircuit className="h-4 w-4 text-amber-300" /></div>
-          <div className="min-w-0 flex-1"><div className="font-ui text-base font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
-          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1 pr-10"><DialogTitle className="font-ui text-base font-semibold text-foreground">LiOS Analytical Studio</DialogTitle><DialogDescription className="mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>Flow, compare, thesis, spatial research, packages, replay and safe UI orchestration</span></DialogDescription></div>
         </header>
         <StudioNav tab={tab} onTab={onSelectTab} />
         <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin">
@@ -92,8 +100,8 @@ export default function AnalyticalStudio({ activeView, activeSymbol, workspace, 
           {tab === "ai-preview" && <AiPreviewTab activeSymbol={activeSymbol} isInternal={isInternal} onOpen={onOpen} />}
           {tab === "meeting" && <MeetingTab preferences={preferences} onPreferencesChange={onPreferencesChange} />}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
