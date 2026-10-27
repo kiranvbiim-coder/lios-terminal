@@ -37,7 +37,7 @@ test("selection and featured presentation are explicit and keyboard accessible",
   assert.match(html, /type="button"/);
   assert.match(html, /aria-pressed="true"/);
   assert.match(html, /focus-visible:outline/);
-  assert.match(html, /Latest from sources/);
+  assert.match(html, /Story overview/);
   assert.match(html, /Reading in the source pane/);
 });
 
