@@ -30,7 +30,7 @@ export function pulseStoryMediaSourceIds(evidence: readonly { id: string; url?: 
   for (const source of evidence) {
     identities.push(source.id);
     const url = safePulseSourceUrl(source.url);
-    if (url && url.length <= 240) identities.push(url);
+    if (url && url.length <= 2048) identities.push(url);
   }
   return identities;
 }
