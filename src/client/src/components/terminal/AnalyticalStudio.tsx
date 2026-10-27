@@ -23,6 +23,7 @@ import {
   type ThesisCaseId, type ThesisMap,
 } from "@/lib/terminalThesisMap";
 import SpatialResearchCanvas from "./SpatialResearchCanvas";
+import { RecordedAnalyticalDifference } from "./AnalyticalChangeStories";
 import { loadResearchTray } from "@/lib/terminalResearchTray";
 import {
   createResearchPackage, loadResearchPackages, removeResearchPackage, subscribeResearchPackages, type ResearchPackage,
@@ -111,7 +112,14 @@ function FlowTab({ activeView, activeSymbol, workspace, onOpen, onApplyWorkspace
     </div>
     <div className="space-y-4">
       <section className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between gap-2"><div className="font-ui text-[10px] font-semibold text-foreground">Data-State Atmosphere</div><span className="lios-pane-code text-[7px] text-cyan-300">{atmosphere.state.toUpperCase()}</span></div><div className="font-ui mt-2 text-[9px] text-foreground">{atmosphere.label}</div><p className="font-ui mt-1 text-[8px] leading-relaxed text-muted-foreground">{atmosphere.explanation}</p></section>
-      <section className="rounded-2xl border border-border/55 p-4"><div className="font-ui text-[10px] font-semibold text-foreground">Change Intelligence</div><div className="mt-3 space-y-1.5">{changes.length ? changes.slice(0, 12).map((change) => <ChangeRow key={change.key} change={change} />) : <div className="rounded-xl border border-dashed border-border/55 p-4 font-ui text-[8px] text-muted-foreground">No prior comparable snapshot yet. Hero panels publish snapshots automatically; you can also capture the current state in Compare.</div>}</div></section>
+      <section className="rounded-2xl border border-border/55 p-4">
+        <div className="font-ui text-sm font-semibold text-foreground">Recorded insight changes</div>
+        <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Exact differences between local analytical captures. Not live alerts, independent evidence or explanations of cause.</p>
+        <div className="mt-3 space-y-2">{changes.length
+          ? changes.slice(0, 6).map(change => <RecordedAnalyticalDifference key={change.key} change={change} />)
+          : <p role="status" className="rounded-xl border border-dashed border-border/55 p-4 font-ui text-xs text-muted-foreground">No prior comparable capture yet. Open Compare to inspect recorded fields; missing history is not inferred.</p>}</div>
+        {changes.length > 6 && <p className="mt-2 font-ui text-xs text-muted-foreground">Showing 6 of {changes.length} recorded changes. Open What Changed for additional saved contexts.</p>}
+      </section>
     </div>
   </div>;
 }
