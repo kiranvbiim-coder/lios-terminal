@@ -31,8 +31,10 @@ export function LicensedEditorialImage({
       onError={() => setFailedPath(asset)}
       className={variant === "compact" ? "block h-20 w-full object-cover sm:h-24" : "block h-40 w-full object-cover sm:h-48"} />
     <figcaption className={variant === "compact" ? "space-y-0.5 px-2 py-1 font-ui text-[10px] leading-4 text-muted-foreground" : "space-y-0.5 px-3 py-2 font-ui text-xs leading-5 text-muted-foreground"}>
+      {eligible.usageContext === "illustrative" && <span className="block font-semibold text-amber-200" data-testid="media-illustrative-label">Context illustration · not a photograph of this news event</span>}
       {eligible.caption && <span className="block text-foreground/80">{eligible.caption}</span>}
       <span className="block">Image: {eligible.attribution} · {eligible.licenseName}</span>
+      {eligible.mediaSourcePage && <a href={eligible.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="inline-block underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">Image source and license</a>}
     </figcaption>
   </figure>;
 }
