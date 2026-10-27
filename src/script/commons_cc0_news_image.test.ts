@@ -49,6 +49,7 @@ test("search uses Wikimedia-only API, confines to File namespace and bounds matc
   assert.equal(p.searchParams.get("iiurlwidth"), "640");
   const requester = (async (target: URL | RequestInfo) => {
     assert.equal(new URL(String(target)).hostname, "commons.wikimedia.org");
+    assert.equal(new URL(String(target)).searchParams.get("gsrlimit"), "30");
     return new Response(JSON.stringify({ query: { pages: [sample(), sample("CC BY 4.0")] } }),
       { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
