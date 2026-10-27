@@ -33,3 +33,13 @@ test("the existing non-eviction and original pane content remain intact", () => 
   assert.match(composer, /Remove \$\{getTerminalCapability\(slot\.pane\.view\)\.label\} from \$\{paneId\} pane/);
   assert.match(composer, /onClick=\{\(\) => \{ setSlots\(current => removeWorkspaceSlot\(current, index\)\); setNotice\(""\);/);
 });
+
+test("keyboard focus follows the reordered object to an enabled control", () => {
+  assert.match(composer, /const focusAfterMove = useRef<\{ target: number; direction: -1 \| 1 \} \| null>\(null\)/);
+  assert.match(composer, /focusAfterMove\.current = \{ target, direction \}/);
+  assert.match(composer, /const moved = focusAfterMove\.current/);
+  assert.match(composer, /moved\.direction === -1[\s\S]*laterButtons\.current\[moved\.target\][\s\S]*earlierButtons\.current\[moved\.target\]/);
+  assert.match(composer, /targetButton\?\.focus\(\)/);
+  assert.match(composer, /ref=\{node => \{ earlierButtons\.current\[index\] = node; \}\}/);
+  assert.match(composer, /ref=\{node => \{ laterButtons\.current\[index\] = node; \}\}/);
+});
