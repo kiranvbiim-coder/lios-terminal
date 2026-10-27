@@ -58,3 +58,20 @@ npm run build
 ```
 
 Run on supported CI OSes; retain real logs. Native beta validation stays **separate** and cannot be certified by this recipe. A source-only fix cannot independently justify closing the product readiness issue [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91). Re-open/fix any newly revealed compiler or test error before continuing donor or UX expansion.
+
+
+## Continued exact-source repair after initial audit (same draft PR)
+
+The first TSX repair closed the SyntaxError on the original Sprint B branch, but the **new** #313 hosted jobs still showed Typecheck failure on their first head `0cd7cf5`. An independent cumulative CI recovery effort, [#311](https://github.com/kiranvbiim-coder/lios-terminal/pull/311), documented a concrete next diagnostic: `ConversationRuntimeTrace.tsx` passes an existing `ConversationRuntimeEvent[]` whose `stepId` may be `null`, whereas the imported `observedRunActivity` originally accepted only `stepId?: string` (TS2345). Do not create a second agent state owner; the display-only helper can simply accept nullable source event identifiers and continue to ignore them.
+
+### Additional corrections committed on this draft
+
+- [x] Reused the **exact #311 source blobs** for `sprintAObservedActivity.ts` (`3664fae`) and its nullable-status regression (`0ea7d3e`): `stepId?: string | null`, zero invented completed steps. This does not bypass governed approvals.
+- [x] Reused exact #311 `server/acp/runtime-capabilities.ts` blob (`49d7e6c`) plus added its existing test: the actual built server uses CommonJS; default capability read must not dereference unsupported `import.meta.url`. The read-only inventory still reports no executable agent authority.
+- [x] Reused exact #311 `desktopPythonSidecar.cjs` (`56d3048`) and `desktopPythonSidecar.test.cjs` (`410a008`): redact diagnostic bodies and captured stderr, preserve safe route/status classification, drain worker pipes, and cover HTTP 502/secret-leak regressions. This improves diagnostic security **without** proving the old packaged 502 is resolved.
+- [ ] Verify all of the above on **the updated exact PR head**, not the earlier failed `0cd7cf5`. The GitHub source write confirms bytes, not test execution.
+- [ ] Native installed Electron → Node → authenticated Python route and real user-level visual/keyboard/accessibility acceptance remain separate hard blocks.
+
+### Consolidation guard
+
+#311 is itself a divergent main-targeting cumulative draft containing additional Sprint C/D/E changes. Only the **verified-needed, narrowly overlapping** helper, capability and diagnostic files above were selectively carried here. Do **not** call #311 completely integrated or close/merge it merely because these bugs were fixed on this branch. Its remainder needs separate file-level reconciliation with #306/#309/#312/#313.
