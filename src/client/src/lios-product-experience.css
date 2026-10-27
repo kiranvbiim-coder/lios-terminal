@@ -430,3 +430,36 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-project-ex
     transition: none;
   }
 }
+
+
+/*
+ * Deterministic visual-smoke fixtures. The real UI uses the selectors above;
+ * only the test harness carries data-ux-flagship-smoke. These overrides let
+ * screenshot reviewers compare light/dark surfaces on the same seeded content
+ * without making a fixture the owner of the actual production UI.
+ */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root[data-visual-smoke-palette] {
+  background: var(--lios-bg-app) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] > div:last-child > aside:first-child {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] :is(
+  [class*="bg-[#"], [class*="bg-black"]
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] .lios-conversation-composer {
+  background: var(--lios-bg-elevated) !important;
+  color: var(--lios-text-primary);
+  border-radius: 18px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] .lios-artifact-frame {
+  background: var(--lios-bg-panel) !important;
+  color: var(--lios-text-primary);
+  border-color: var(--lios-border-default);
+}
