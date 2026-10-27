@@ -276,7 +276,7 @@ function ProjectsTab() {
         <div className="flex items-center gap-2 flex-wrap">
           {engagements.map((e) => (
             <button key={e.id} onClick={() => setSelectedEngagementId(e.id)}
-              className={`font-terminal px-3 py-1.5 border text-[10px] uppercase tracking-wider transition-colors ${e.id === selectedEngagementId ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
+              className={`inline-flex min-h-11 items-center rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${e.id === selectedEngagementId ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
               {e.title}
             </button>
           ))}
@@ -549,14 +549,14 @@ export default function AdvisoryPanel() {
         </div>
         <button type="button" onClick={() => { setSubmitError(null); setShowNewModal(true); }}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-          <Plus className="w-3 h-3" /> SUBMIT QUERY
+          <Plus aria-hidden="true" className="h-4 w-4" /> Request advisory review
         </button>
       </div>
 
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-[#070707] shrink-0">
         {(["projects", "requests", "invoices"] as const).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`font-terminal px-3 py-1.5 border text-[10px] uppercase tracking-wider transition-colors ${activeTab === tab ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
+            className={`inline-flex min-h-11 items-center rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${activeTab === tab ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
             {tab === "projects" ? "Projects" : tab === "requests" ? `Advisory Requests (${requests.length})` : "Invoices & Billing"}
           </button>
         ))}
@@ -700,12 +700,12 @@ export default function AdvisoryPanel() {
       </div>
 
       {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 overflow-y-auto" onClick={() => setShowNewModal(false)}>
-          <div className="w-full max-w-lg my-8 p-6 bg-[#0d0d0d] border border-border shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-foreground">Submit New Advisory Query</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4" onClick={() => { if (!submitting) setShowNewModal(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="lios-advisory-request-heading" className="my-8 w-full max-w-lg space-y-4 rounded-xl border border-border bg-background p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 id="lios-advisory-request-heading" className="text-lg font-semibold text-foreground">Request advisory review</h3>
             <form onSubmit={handleCreateRequest} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Domain Specialty</label>
+                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Domain Specialty</label>
                 {domains.length > 1 ? (
                   <select
                     value={formDomainId ?? ""}
@@ -719,7 +719,7 @@ export default function AdvisoryPanel() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Start From a Pack (optional)</label>
+                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Start From a Pack (optional)</label>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(PACK_TEMPLATES).map(([key, pack]) => (
                     <button
@@ -730,7 +730,7 @@ export default function AdvisoryPanel() {
                         setTitle(pack.title);
                         setDescription(pack.description);
                       }}
-                      className={`px-2 py-1 border text-[10px] font-terminal uppercase tracking-wider transition-colors ${
+                      className={`min-h-11 rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${
                         packType === key
                           ? "border-[hsl(38,95%,50%)/50%] bg-[hsl(38,95%,50%)/10%] text-[hsl(38,95%,55%)]"
                           : "border-border text-muted-foreground hover:text-foreground"
@@ -741,19 +741,19 @@ export default function AdvisoryPanel() {
                   ))}
                   {packType && (
                     <button type="button" onClick={() => { setPackType(null); setTitle(""); setDescription(""); }}
-                      className="px-2 py-1 border border-border text-[10px] font-terminal uppercase tracking-wider text-muted-foreground hover:text-foreground">
+                      className="min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                       Clear
                     </button>
                   )}
                 </div>
-                {packType && <p className="text-[10px] text-muted-foreground mt-1">Template loaded below — edit freely before submitting.</p>}
+                {packType && <p className="mt-2 text-sm text-muted-foreground">Template loaded below — edit freely before submitting.</p>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Query Title</label>
+                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Query Title</label>
                 <Input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Q3 Hedging strategy for Forex exposure" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Query Description &amp; Details</label>
+                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Query Description &amp; Details</label>
                 <textarea required rows={packType ? 8 : 4} value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Provide context, metrics, or specific questions for our advisory team..."
                   className="w-full px-3 py-2 border border-input bg-background focus:outline-none focus:ring-1 focus:ring-[hsl(38,95%,50%)] text-foreground" />
@@ -761,7 +761,7 @@ export default function AdvisoryPanel() {
               <p className="text-sm leading-5 text-muted-foreground">Submitting this form explicitly sends the details above to the Limuria advisory team for review. No engagement is started or automatically billed: a consultant will propose scope, pricing and timeline before work begins.</p>
               {submitError && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{submitError}</p>}
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowNewModal(false)}>Cancel</Button>
+                <Button type="button" variant="outline" disabled={submitting} onClick={() => setShowNewModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
               </div>
             </form>
