@@ -21,6 +21,7 @@ test("Phase 3 plugin browser lives in Chat and never replaces P13 installer or M
   assert.match(shell, /<ChatExtensionsDialog/);
   assert.ok(shell.includes('projectAvailable={chatMode === "project"'));
   assert.match(ui, /Inspect in Chat/);
+  assert.match(ui, /canInspectMcpInChat\(projectId, mcp\)/);
   assert.match(ui, /Do not call the remote server/);
   assert.match(shell, /Never overwrite a pending user draft/);
   assert.ok(shell.includes("setInput(current => current.trim()"));
