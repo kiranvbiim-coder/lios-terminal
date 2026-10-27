@@ -17,6 +17,8 @@ import ConversationTrustPanel from "./ConversationTrustPanel";
 import ResearchSourceList from "./ResearchSourceList";
 import ResearchRunProgress from "./ResearchRunProgress";
 import ResearchCheckpointCard from "./ResearchCheckpointCard";
+import { GovernedVisualAnswer } from "./GovernedVisualAnswer";
+import { visualRequestFromRuntimeArtifact } from "@shared/governedVisualAnswer";
 import type { ResumableCheckpointView } from "@/lib/researchCheckpoint";
 import { collectCitationSources } from "@/lib/chatMarkdown";
 import ProfessionalAssumptionsForm from "./ProfessionalAssumptionsForm";
@@ -246,6 +248,7 @@ export default function ConversationRuntimeTrace({
     onRecoveryAction?.(action);
   };
   const unsavedArtifact = artifact?.type === "artifact" && !artifact.persistedArtifact ? artifact : null;
+  const visualAnswerRequest = artifact?.type === "artifact" ? visualRequestFromRuntimeArtifact(artifact) : null;
   const working = busy && !terminal;
   const waitingForApproval = Boolean(legacyApproval || governedApproval);
   const canShowWork = !!plan || !!observedReceipt || trust?.type === "trust" || recordedSources.length > 0 || activity.receipts.length > 0 || activity.mismatched > 0;
@@ -556,6 +559,10 @@ export default function ConversationRuntimeTrace({
             : "This run was stopped before it finished. Any partial answer above may be incomplete."}
         </div>
       )}
+
+      {visualAnswerRequest && <GovernedVisualAnswer
+        key={visualAnswerRequest.artifactId + ":" + visualAnswerRequest.version}
+        request={visualAnswerRequest} />}
 
       {unsavedArtifact && (
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.025] px-3 py-2" data-testid="trace-keep-artifact">
