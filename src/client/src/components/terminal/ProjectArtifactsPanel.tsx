@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useState } from "react";
 import { Box, FileBarChart, FileUp, Package, Plus } from "lucide-react";
 import type { ProjectResource, ProjectSession } from "@/lib/useProjects";
@@ -16,6 +17,8 @@ import type { LifecycleAction } from "@shared/objectLifecycle";
 import type { ArtifactContent, ArtifactRefreshSpec } from "@shared/artifactContracts";
 import { ArtifactPane } from "./ArtifactPane";
 import { ObjectActionMenu } from "./ObjectActionMenu";
+import { ProjectArtifactGalleryCard } from "./ProjectArtifactGalleryCard";
+import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 
 function starter(kind: ArtifactContent["kind"]): ArtifactContent {
   if (kind === "spreadsheet") return { kind, sheets: [{ id: "sheet-1", name: "Model", cells: {}, names: {}, rowCount: 60, columnCount: 15 }], activeSheetId: "sheet-1", rendererPreference: "builtin", calculationMode: "automatic" };
@@ -75,8 +78,22 @@ export function ProjectArtifactsPanel({
   const [error, setError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [importingSpreadsheet, setImportingSpreadsheet] = useState(false);
+  const [galleryQuery, setGalleryQuery] = useState("");
+  const [galleryKind, setGalleryKind] = useState<"all" | ArtifactContent["kind"]>("all");
+  const [visibleGalleryCount, setVisibleGalleryCount] = useState(18);
+  const [visibleArchivedCount, setVisibleArchivedCount] = useState(18);
+  const [preview, setPreview] = useState<{ id: string; version: number } | null>(null);
   const rows = artifacts.data ?? [];
   const archivedRows = archivedArtifacts.data ?? [];
+  const availableKinds = [...new Set(rows.map(artifact => artifact.kind))].sort();
+  const filteredRows = rows.filter(artifact =>
+    (galleryKind === "all" || artifact.kind === galleryKind) &&
+    artifact.title.toLocaleLowerCase().includes(galleryQuery.trim().toLocaleLowerCase()),
+  );
+  const togglePreview = (artifact: ProjectArtifactRecord) => setPreview(current =>
+    current?.id === artifact.id && current.version === artifact.headVersion
+      ? null : { id: artifact.id, version: artifact.headVersion },
+  );
 
   const handleArtifactAction = async (artifact: ProjectArtifactRecord, action: LifecycleAction) => {
     try {
@@ -141,6 +158,7 @@ export function ProjectArtifactsPanel({
   if (selected) {
     if (selected === initialArtifactId && ![...rows, ...archivedRows].some((artifact) => artifact.id === selected && artifact.projectId === projectId)) {
       if (archivedArtifacts.isLoading) return <p role="status">Loading exact Artifact…</p>;
+      if (artifacts.isError || archivedArtifacts.isError) return <section className="mt-4"><p role="alert">This Artifact's availability could not be checked. No substitute was opened.</p><button type="button" disabled={artifacts.isFetching || archivedArtifacts.isFetching} onClick={() => void Promise.all([artifacts.refetch(), archivedArtifacts.refetch()])} className="lios-section-action mt-3">Retry Artifact lookup</button><button type="button" className="lios-section-action mt-3" onClick={() => setSelected(null)}>Back to Library</button></section>;
       return <section className="mt-4"><p role="alert">This exact Artifact is no longer available in this Project. No substitute was opened.</p><button type="button" className="lios-section-action mt-3" onClick={() => setSelected(null)}>Back to Library</button></section>;
     }
     return (
@@ -166,9 +184,9 @@ export function ProjectArtifactsPanel({
         <div>
           <div className="flex items-center gap-2">
             <Box className="h-3.5 w-3.5 text-amber-300" />
-            <div className="font-ui text-[10px] font-semibold">Project Artifacts</div>
+            <div className="font-ui text-lg font-semibold">Intelligence Library</div>
           </div>
-          <div className="mt-1 font-ui text-[8px] text-muted-foreground">Persistent, versioned work products shared by chat and direct manipulation.</div>
+          <div className="mt-1 font-ui text-[8px] text-muted-foreground">Explore and preview your saved work. Every card opens the same versioned Artifact shared with Chat and Workbench.</div>
         </div>
         <div className="flex gap-2">
           <select value={newKind} onChange={(event) => setNewKind(event.target.value as ArtifactContent["kind"])} className="rounded border border-border/60 bg-[#090909] px-2 py-1.5 font-terminal text-[7px]" aria-label="New Artifact type">
@@ -177,12 +195,13 @@ export function ProjectArtifactsPanel({
           <button onClick={() => void (async () => { try { setError(null); const created = await createArtifact(projectId, { title: `New ${newKind} Artifact`, content: starter(newKind) }); invalidate(projectId); setSelected(created.artifact.id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create Artifact."); } })()} className="flex items-center gap-1 rounded border border-amber-300/20 px-2.5 py-1.5 font-ui text-[7px] text-amber-200">
             <Plus className="h-3 w-3" /> New
           </button>
-          <label className={`flex cursor-pointer items-center gap-1 rounded border border-cyan-300/20 px-2.5 py-1.5 font-ui text-[7px] text-cyan-200 ${importingSpreadsheet ? "pointer-events-none opacity-50" : ""}`}>
+          <label className={`flex cursor-pointer items-center gap-1 rounded border border-cyan-300/20 px-2.5 py-1.5 font-ui text-[7px] text-cyan-200 focus-within:outline focus-within:outline-2 focus-within:outline-primary ${importingSpreadsheet ? "pointer-events-none opacity-50" : ""}`}>
             <FileUp className="h-3 w-3" /> {importingSpreadsheet ? "Importing…" : "Import spreadsheet"}
             <input
               type="file"
               accept=".xlsx,.csv,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              className="hidden"
+              className="sr-only"
+              aria-label="Import spreadsheet"
               disabled={importingSpreadsheet}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -194,44 +213,81 @@ export function ProjectArtifactsPanel({
           <button onClick={() => void exportProjectArtifactPackage(projectId).then((pkg) => downloadPackage(projectId, pkg)).catch((cause) => setError(cause instanceof Error ? cause.message : "Package export failed."))} className="flex items-center gap-1 rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground">
             <Package className="h-3 w-3" /> Export package
           </button>
-          <label className="cursor-pointer rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground">
+          <label className="cursor-pointer rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground focus-within:outline focus-within:outline-2 focus-within:outline-primary">
             Import package
-            <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void file.text().then(JSON.parse).then((pkg) => importProjectArtifactPackage(projectId, pkg)).then((result) => { setImportSummary(`Imported ${result.importedArtifacts} Artifacts and ${result.importedSessions} Sessions`); invalidate(projectId); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Package import failed.")); event.currentTarget.value = ""; }} />
+            <input type="file" accept=".json,application/json" className="sr-only" aria-label="Import Artifact package" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void file.text().then(JSON.parse).then((pkg) => importProjectArtifactPackage(projectId, pkg)).then((result) => { setImportSummary(`Imported ${result.importedArtifacts} Artifacts and ${result.importedSessions} Sessions`); invalidate(projectId); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Package import failed.")); event.currentTarget.value = ""; }} />
           </label>
         </div>
       </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {rows.slice(0, 18).map((artifact) => (
-          <div key={artifact.id} className="flex items-center gap-1 rounded-lg border border-border/50 p-2 hover:border-amber-300/25 hover:bg-white/[0.025]">
-            <button onClick={() => setSelected(artifact.id)} className="flex min-w-0 flex-1 gap-2 p-1 text-left">
-              <FileBarChart className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/70" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-ui text-[9px]">{artifact.title}</span>
-                <span className="mt-1 block font-terminal text-[6px] text-muted-foreground">{artifact.kind.toUpperCase()} · V{artifact.headVersion} · {artifact.origin.toUpperCase()}</span>
-              </span>
-            </button>
-            <ObjectActionMenu kind="artifact" status={artifact.status} hidden={["rename", "compare", "export", "delete", "share"]} label={`Actions for ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
+      {!!rows.length && (
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-border/50 pt-4" aria-label="Find saved Artifacts">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="lios-artifact-gallery-search" className="sr-only">Search Project Artifacts</label>
+            <input
+              id="lios-artifact-gallery-search"
+              type="search"
+              value={galleryQuery}
+              onChange={event => { setGalleryQuery(event.target.value); setVisibleGalleryCount(18); }}
+              placeholder="Find saved reports, charts, research…"
+              className="min-h-10 w-full min-w-[175px] rounded-lg border border-border/70 bg-background/60 px-3 font-ui text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+            />
           </div>
-        ))}
-      </div>
-      {!!archivedRows.length && (
-        <div className="mt-4 border-t border-border/50 pt-3">
-          <div className="font-terminal text-[6px] uppercase tracking-[0.18em] text-muted-foreground">Archived artifacts</div>
-          <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {archivedRows.slice(0, 18).map((artifact) => (
-              <div key={`archived-${artifact.id}`} className="flex items-center gap-1 rounded-lg border border-border/40 p-2 text-muted-foreground">
-                <button onClick={() => setSelected(artifact.id)} className="flex min-w-0 flex-1 gap-2 p-1 text-left hover:text-foreground">
-                  <FileBarChart className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-50" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-ui text-[9px]">{artifact.title}</span>
-                    <span className="mt-1 block font-terminal text-[6px]">ARCHIVED · {artifact.kind.toUpperCase()} · V{artifact.headVersion}</span>
-                  </span>
-                </button>
-                <ObjectActionMenu kind="artifact" status="archived" hidden={["delete"]} label={`Actions for archived ${artifact.title}`} onAction={(action) => void handleArtifactAction(artifact, action)} />
-              </div>
-            ))}
-          </div>
+          <label className="flex items-center gap-2 font-ui text-xs text-muted-foreground">
+            <span>Type</span>
+            <select
+              aria-label="Filter saved Artifacts by type"
+              value={galleryKind}
+              onChange={event => { setGalleryKind(event.target.value as typeof galleryKind); setVisibleGalleryCount(18); }}
+              className="min-h-10 rounded-lg border border-border/70 bg-background px-3 font-ui text-xs text-foreground"
+            >
+              <option value="all">All types</option>
+              {availableKinds.map(kind => <option key={kind} value={kind}>{kind[0].toUpperCase() + kind.slice(1)}</option>)}
+            </select>
+          </label>
+          <span className="font-ui text-xs text-muted-foreground">{filteredRows.length} of {rows.length} saved</span>
         </div>
+      )}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3" aria-label="Saved Artifact gallery" data-testid="project-artifact-visual-gallery">
+        {filteredRows.slice(0, visibleGalleryCount).map(artifact => {
+          const isPreviewOpen = preview?.id === artifact.id && preview.version === artifact.headVersion;
+          return <React.Fragment key={artifact.id}>
+            <ProjectArtifactGalleryCard
+              artifact={artifact}
+              previewOpen={isPreviewOpen}
+              onOpen={() => { setVersionView(null); setSelected(artifact.id); }}
+              onPreview={() => togglePreview(artifact)}
+              actions={<ObjectActionMenu kind="artifact" status={artifact.status} hidden={["rename", "compare", "export", "delete", "share"]} label={`Actions for ${artifact.title}`} onAction={action => void handleArtifactAction(artifact, action)} />}
+            />
+            {isPreviewOpen && <div className="col-span-full"><ProjectArtifactGalleryPreview artifact={artifact} onOpen={() => { setVersionView(null); setSelected(artifact.id); }} /></div>}
+          </React.Fragment>;
+        })}
+      </div>
+      {filteredRows.length > visibleGalleryCount && (
+        <button type="button" onClick={() => setVisibleGalleryCount(count => count + 18)} className="mt-4 min-h-10 rounded-lg border border-border/70 px-4 font-ui text-sm text-foreground hover:bg-white/[0.04]">
+          Show more saved work ({filteredRows.length - visibleGalleryCount} remaining)
+        </button>
+      )}
+      {!!rows.length && !filteredRows.length && <p role="status" className="mt-4 text-sm text-muted-foreground">No saved Artifacts match those filters.</p>}
+      {!!archivedRows.length && (
+        <section aria-label="Archived Artifacts" className="mt-6 border-t border-border/50 pt-4">
+          <h3 className="font-ui text-sm font-semibold text-muted-foreground">Archived work · {archivedRows.length}</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+            {archivedRows.slice(0, visibleArchivedCount).map(artifact => {
+              const isPreviewOpen = preview?.id === artifact.id && preview.version === artifact.headVersion;
+              return <React.Fragment key={artifact.id}>
+                <ProjectArtifactGalleryCard
+                  artifact={artifact}
+                  previewOpen={isPreviewOpen}
+                  onOpen={() => { setVersionView(null); setSelected(artifact.id); }}
+                  onPreview={() => togglePreview(artifact)}
+                  actions={<ObjectActionMenu kind="artifact" status="archived" hidden={["delete"]} label={`Actions for archived ${artifact.title}`} onAction={action => void handleArtifactAction(artifact, action)} />}
+                />
+                {isPreviewOpen && <div className="col-span-full"><ProjectArtifactGalleryPreview artifact={artifact} onOpen={() => { setVersionView(null); setSelected(artifact.id); }} /></div>}
+              </React.Fragment>;
+            })}
+          </div>
+          {archivedRows.length > visibleArchivedCount && <button type="button" onClick={() => setVisibleArchivedCount(count => count + 18)} className="mt-4 min-h-10 rounded-lg border border-border/70 px-4 font-ui text-sm text-foreground">Show more archived work</button>}
+        </section>
       )}
       {!rows.length && !archivedRows.length && !artifacts.isLoading && !archivedArtifacts.isLoading && <div className="mt-3 rounded-lg border border-dashed border-border/50 px-4 py-6 font-ui text-[8px] text-muted-foreground">No persistent Artifacts yet. Keep one from chat or create one here.</div>}
       {importSummary && <div className="mt-3 rounded border border-emerald-300/20 px-2 py-1.5 font-ui text-[7px] text-emerald-200">{importSummary}</div>}

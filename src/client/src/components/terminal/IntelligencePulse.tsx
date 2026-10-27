@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target, X } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
-import { subscribeChangeIntelligence } from "@/lib/terminalChangeIntelligence";
+import { getRecentAnalyticalContextChanges, subscribeChangeIntelligence } from "@/lib/terminalChangeIntelligence";
+import { AnalyticalChangeStories } from "./AnalyticalChangeStories";
 import { subscribeDecisionObjects } from "@/lib/terminalDecisionObjects";
 import { subscribeIntelligenceObjects } from "@/lib/terminalIntelligenceObjects";
 import { buildIntelligencePulse, buildScenarioMatrix, type IntelligencePulseItem, type PulsePriority } from "@/lib/terminalIntelligencePulse";
@@ -15,7 +16,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = "pulse" | "matrix";
+type Tab = "pulse" | "changes" | "matrix";
 
 const PRIORITY_STYLE: Record<PulsePriority, string> = {
   critical: "border-red-500/35 bg-red-500/[.045] text-red-300",
@@ -54,6 +55,7 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
 
   const pulse = useMemo(() => buildIntelligencePulse(100), [revision]);
   const matrix = useMemo(() => buildScenarioMatrix(), [revision]);
+  const recordedChanges = useMemo(() => getRecentAnalyticalContextChanges(80), [revision]);
 
   const openItem = (item: IntelligencePulseItem) => {
     if (item.kind === "decision-risk" || item.kind === "reversal") {
@@ -77,8 +79,8 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <div className="grid h-9 w-9 place-items-center border border-[hsl(38,100%,50%)/32%] bg-[hsl(38,100%,50%)/7%]"><Radar className="h-4 w-4 text-[hsl(38,100%,60%)]" /></div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold tracking-[.14em] text-foreground">INTELLIGENCE PULSE</div>
-            <div className="mt-1 text-[8px] tracking-wide text-muted-foreground">WHAT CHANGED · WHAT IS AT RISK · WHAT NEEDS ATTENTION</div>
+            <h2 className="font-ui text-base font-semibold text-foreground">Intelligence Pulse</h2>
+            <p className="mt-1 font-ui text-xs text-muted-foreground">What needs attention · What Changed · Scenario comparison</p>
           </div>
           <div className="hidden items-center gap-1.5 lg:flex">
             {(["critical", "high", "medium", "low"] as PulsePriority[]).map((priority) => <span key={priority} className={`border px-2 py-1 text-[7px] font-bold tracking-wider ${PRIORITY_STYLE[priority]}`}>{priority.toUpperCase()} {pulse.counts[priority]}</span>)}
@@ -87,9 +89,10 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
           <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         </header>
 
-        <div className="flex items-center border-b border-border/60 bg-black/20 px-2">
-          <button onClick={() => setTab("pulse")} className={`border-b-2 px-3 py-2 text-[8px] font-bold tracking-widest ${tab === "pulse" ? "border-[hsl(38,100%,50%)] text-[hsl(38,100%,60%)]" : "border-transparent text-muted-foreground"}`}>ATTENTION QUEUE</button>
-          <button onClick={() => setTab("matrix")} className={`border-b-2 px-3 py-2 text-[8px] font-bold tracking-widest ${tab === "matrix" ? "border-cyan-400 text-cyan-300" : "border-transparent text-muted-foreground"}`}>SCENARIO MATRIX</button>
+        <div className="flex flex-wrap items-center border-b border-border/60 bg-black/20 px-2">
+          <button type="button" aria-pressed={tab === "pulse"} onClick={() => setTab("pulse")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "pulse" ? "border-amber-300 text-amber-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Attention queue</button>
+          <button type="button" aria-pressed={tab === "changes"} onClick={() => setTab("changes")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "changes" ? "border-amber-300 text-amber-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>What Changed</button>
+          <button type="button" aria-pressed={tab === "matrix"} onClick={() => setTab("matrix")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "matrix" ? "border-cyan-300 text-cyan-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Scenario matrix</button>
           <div className="ml-auto px-2 text-[7px] text-muted-foreground">{pulse.activeScenario ? `SCENARIO ${pulse.activeScenario.name}` : "NO ACTIVE SCENARIO"}</div>
         </div>
 
@@ -122,6 +125,8 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
               </div>
             </aside>
           </div>
+        ) : tab === "changes" ? (
+          <AnalyticalChangeStories entries={recordedChanges} onOpen={(view, symbol) => onOpen(view, "tab", symbol)} />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-4 scrollbar-thin">
             <div className="mb-3 flex items-center justify-between"><div><div className="text-[9px] font-bold">SCENARIO ASSUMPTION MATRIX</div><div className="mt-1 text-[7px] text-muted-foreground">Compare assumptions across Base / Bull / Bear / Stress / custom branches. Largest numeric spreads rise to the top.</div></div><button onClick={() => openTerminalUxSurface("scenario-workbench")} className="lios-v5-hero-action"><GitCompareArrows className="h-3 w-3" /> EDIT SCENARIOS</button></div>

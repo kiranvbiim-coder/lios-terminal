@@ -5,10 +5,11 @@ import ConsensusIntelligencePanel from "./ConsensusIntelligencePanel";
 import FilingIntelligencePanel from "./FilingIntelligencePanel";
 import FinancialStatementsPanel from "./FinancialStatementsPanel";
 import ResearchInvestigationPanel from "./ResearchInvestigationPanel";
+import PerspectivesExplorer from "./PerspectivesExplorer";
 import { InstitutionalWorkspaceShell, MethodologyCard } from "./workstations/InstitutionalWorkspaceShell";
 import { WORKSTATION_DEFINITIONS } from "./workstations/workstationDefinitions";
 
-type Section = "investigation" | "filings" | "consensus" | "financials" | "fundamentals" | "methodology";
+type Section = "investigation" | "perspectives" | "filings" | "consensus" | "financials" | "fundamentals" | "methodology";
 
 interface Props {
   symbol: string;
@@ -30,7 +31,8 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
   }, [starterSymbol, symbol]);
 
   let body: ReactNode;
-  if (section === "filings") body = <FilingIntelligencePanel symbol={researchSymbol} onSymbol={setResearchSymbol} />;
+  if (section === "perspectives") body = <PerspectivesExplorer symbol={researchSymbol} onOpenInvestigation={() => setSection("investigation")} />;
+  else if (section === "filings") body = <FilingIntelligencePanel symbol={researchSymbol} onSymbol={setResearchSymbol} />;
   else if (section === "consensus") body = <ConsensusIntelligencePanel symbol={researchSymbol} role={role} />;
   else if (section === "financials") body = <FinancialStatementsPanel symbol={researchSymbol} />;
   else if (section === "fundamentals") body = <CompanyFundamentalsPanel symbol={researchSymbol} />;
