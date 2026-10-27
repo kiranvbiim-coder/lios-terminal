@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Mic, XCircle } from "lucide-react";
 import { getDesktopWorkspaceBridge, type VoiceRuntimeFileKind } from "@/lib/desktopWorkspace";
 import { apiRequest } from "@/lib/queryClient";
+import { checkedVoiceSetup, voiceReadVerified, voiceSetupStatus } from "@/lib/voiceSetupPresentation";
 
 interface VoiceRuntimeSetup {
   transcriptionProviderReady: boolean;
@@ -58,7 +59,7 @@ export default function LocalVoiceRuntimeSettings() {
         setupQuery.refetch(),
         queryClient.invalidateQueries({ queryKey: ["/api/voice/providers"] }),
       ]);
-      if (readiness.isError || !readiness.data) {
+      if (!voiceReadVerified(readiness)) {
         setError("Voice file selection may have been saved, but readiness could not be verified. Retry the read-only check before recording.");
         return;
       }
@@ -73,16 +74,14 @@ export default function LocalVoiceRuntimeSettings() {
   }
 
   // Cached data after a failed read is not evidence of current runtime health.
-  const setup = setupQuery.isError ? undefined : setupQuery.data;
-  const overallStatus = setupQuery.isLoading
-    ? "CHECKING"
-    : setupQuery.isError
-      ? "UNAVAILABLE"
-      : setup?.recordingReady
-        ? "READY"
-        : setup?.transcriptionProviderReady
-          ? "NEEDS FFMPEG"
-          : "OPTIONAL SETUP";
+  const setup = checkedVoiceSetup(setupQuery.data, setupQuery.isError);
+  const overallStatus = voiceSetupStatus({
+    loading: setupQuery.isLoading,
+    failed: setupQuery.isError,
+    hasData: Boolean(setup),
+    recordingReady: setup?.recordingReady,
+    transcriptionProviderReady: setup?.transcriptionProviderReady,
+  });
 
   return (
     <section className="space-y-4 rounded-xl border border-border/60 bg-card/50 p-4" data-testid="connection-local-voice-settings">
