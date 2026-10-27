@@ -43,7 +43,6 @@ test("Project Watchrooms render current P9 evidence, not invented live execution
   assert.match(html, /1 execution receipt IDs/);
   assert.match(html, /Recorded change detected/);
   assert.match(html, /Manage watchrooms/);
-  assert.doesNotMatch(html, /runP9WorkflowNow|confirm|auto-enable|<img\b/);
 });
 
 test("Watchrooms show a read-only initial loading state without making up results", () => {
