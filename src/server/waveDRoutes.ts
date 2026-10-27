@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
+import { filterPreferredPulseCards, normalizePulseSubject, normalizePulseSubjectPreferences, setPulseSubjectChoice } from "@shared/pulseSubjectPreferences";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
 import { storage } from "./storage";
@@ -161,6 +162,11 @@ const communicationConnectionSchema = z.object({
 
 const inboxActionSchema = z.object({
   status: z.enum(["open", "snoozed", "resolved"]),
+}).strict();
+
+const pulseSubjectPreferenceUpdateSchema = z.object({
+  subjectKey: z.string().trim().min(1).max(240),
+  choice: z.enum(["follow", "mute", "clear"]),
 }).strict();
 
 const pulseFilterSchema = z.object({
@@ -422,15 +428,44 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     res.json({ wave: "D", ...getWaveDReadiness() });
   });
 
+  // Same authenticated tenant+user state owner as Wave D Pulse/Signals.
+  // Following a topic has no permission to create P9 monitors or notifications.
+  app.get("/api/wave-d/pulse/preferences", requireWaveDRetailRead, async (req, res) => {
+    try {
+      const state = await getWaveDState(waveUser(req));
+      res.json({ preferences: normalizePulseSubjectPreferences(state.pulsePreferences), updatedAt: state.updatedAt });
+    } catch {
+      res.status(502).json({ error: "Discovery preferences unavailable." });
+    }
+  });
+
+  app.put("/api/wave-d/pulse/preferences", requireWaveDRetailRead, async (req, res) => {
+    const parsed = pulseSubjectPreferenceUpdateSchema.safeParse(req.body);
+    if (!parsed.success || !normalizePulseSubject(parsed.data?.subjectKey))
+      return res.status(400).json({ error: "Select a valid subject and Follow, Mute or Clear." });
+    try {
+      const state = await updateWaveDState(waveUser(req), current => ({
+        ...current,
+        pulsePreferences: setPulseSubjectChoice(current.pulsePreferences, parsed.data.subjectKey, parsed.data.choice),
+      }));
+      res.json({ preferences: state.pulsePreferences, persisted: true, updatedAt: state.updatedAt });
+    } catch (error) {
+      const maxReached = error instanceof Error && error.message.includes("Maximum");
+      res.status(maxReached ? 409 : 502).json({
+        error: maxReached ? "Too many saved discovery subjects; clear an existing preference first." : "Could not save discovery preferences.",
+      });
+    }
+  });
+
   app.get("/api/wave-d/pulse", requireWaveDRetailRead, async (req, res) => {
     try {
       const result = await buildPulseForUser(req, sources);
       const requestedFilter = pulseFilterFromRequest(req);
-      const filter = requestedFilter.channel === "following" && !requestedFilter.subjectKeys?.length
-        ? { ...requestedFilter, subjectKeys: result.watchlist.map((item) => item.symbol.toUpperCase()) }
-        : requestedFilter;
-      const cards = filterPulseCards(result.cards, filter);
-      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
+      const preferences = normalizePulseSubjectPreferences(result.storedState.pulsePreferences);
+      const watchlistSubjects = result.watchlist.map(item => item.symbol.toUpperCase());
+      const cards = filterPreferredPulseCards(result.cards, requestedFilter, preferences, watchlistSubjects);
+      // Discovery-only mute never alters the user's Action Inbox or P9 monitor rules.
+      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter: requestedFilter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Pulse data unavailable." });
     }
@@ -441,7 +476,10 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     if (mode !== "morning" && mode !== "evening") return res.status(400).json({ error: "Brief mode must be morning or evening." });
     try {
       const result = await buildPulseForUser(req, sources);
-      res.json(buildPulseBrief(mode, result.cards, result.actionInbox, result.now));
+      const visibleBriefCards = filterPreferredPulseCards(
+        result.cards, { channel: "for_you" }, normalizePulseSubjectPreferences(result.storedState.pulsePreferences),
+      );
+      res.json(buildPulseBrief(mode, visibleBriefCards, result.actionInbox, result.now));
     } catch (error) { res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Brief unavailable." }); }
   });
 
