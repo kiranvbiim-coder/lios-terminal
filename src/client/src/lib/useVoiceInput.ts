@@ -57,49 +57,71 @@ function pickRecorderMimeType(): string {
   return "";
 }
 
-export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) => void) {
+export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) => void, ownerKey = "") {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const owner = useRef({ key: ownerKey, generation: 0 });
+  if (owner.current.key !== ownerKey) owner.current = { key: ownerKey, generation: owner.current.generation + 1 };
+  const pending = useRef(false);
+  const transcription = useRef<AbortController | null>(null);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }, []);
 
-  useEffect(() => () => stopStream(), [stopStream]);
+  const cancel = useCallback(() => {
+    owner.current.generation += 1;
+    transcription.current?.abort(); transcription.current = null;
+    const recorder = recorderRef.current;
+    if (recorder) { recorder.onstop = null; recorder.ondataavailable = null; if (recorder.state !== "inactive") recorder.stop(); }
+    recorderRef.current = null; chunksRef.current = []; pending.current = false;
+    stopStream(); setIsRecording(false); setIsTranscribing(false); setError(null);
+  }, [stopStream]);
+  useEffect(() => { cancel(); return cancel; }, [ownerKey, cancel]);
 
   const start = useCallback(async () => {
+    if (pending.current) return;
+    const generation = owner.current.generation;
+    const current = () => owner.current.generation === generation;
     setError(null);
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setError("Microphone access is not available in this environment.");
       return;
     }
+    pending.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!current()) { stream.getTracks().forEach(track => track.stop()); return; }
       streamRef.current = stream;
       const mimeType = pickRecorderMimeType();
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
+        if (current() && event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
+        if (!current()) return;
+        setIsRecording(false);
         stopStream();
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         chunksRef.current = [];
         if (blob.size === 0) {
           setError("No audio was captured.");
+          pending.current = false;
           return;
         }
         setIsTranscribing(true);
         try {
           const form = new FormData();
           form.append("audio", blob, "voice-input.webm");
-          const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
+          const controller = new AbortController();
+          transcription.current = controller;
+          const res = await fetch("/api/voice/transcribe", { method: "POST", body: form, signal: controller.signal });
           // The server can include provider diagnostics, system paths, or
           // credential-bearing details in error bodies. Never surface them.
           if (!res.ok) throw new Error(voiceFailureCopy(res.status));
@@ -111,19 +133,22 @@ export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) =
           );
           if (!parsed.success) throw new Error(voiceFailureCopy("invalid"));
           const transcript = parsed.data;
-          onTranscript(transcript);
+          if (current()) onTranscript(transcript);
         } catch (transcribeError) {
+          if (!current()) return;
           setError(transcribeError instanceof Error
             && Object.values(VOICE_PUBLIC_FAILURES).includes(transcribeError.message)
             ? transcribeError.message : voiceFailureCopy("network"));
         } finally {
-          setIsTranscribing(false);
+          if (current()) { pending.current = false; transcription.current = null; setIsTranscribing(false); }
         }
       };
       recorderRef.current = recorder;
       recorder.start();
       setIsRecording(true);
     } catch (permissionError) {
+      if (!current()) return;
+      pending.current = false;
       setError(voiceFailureCopy("microphone"));
       stopStream();
     }
@@ -141,7 +166,7 @@ export function useVoiceRecorder(onTranscript: (result: VoiceTranscriptResult) =
     else void start();
   }, [isRecording, start, stop]);
 
-  return { isRecording, isTranscribing, error, start, stop, toggle };
+  return { isRecording, isTranscribing, error, start, stop, toggle, cancel, isPending: () => pending.current };
 }
 
 export async function speakText(text: string, preference?: { providerId?: string | null; voiceId?: string | null; rate?: number }): Promise<void> {

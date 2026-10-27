@@ -578,7 +578,7 @@ export default function ProjectExperienceShell({
     setVoiceTranscriptReviewed(false);
     setInput((current) => (current.trim() ? `${current.trim()} ${result.text}` : result.text));
     requestAnimationFrame(() => composerRef.current?.focus());
-  });
+  }, `${account.email ?? ""}:${account.name}:${chatMode}:${selection.projectId ?? ""}:${selection.chatId ?? ""}`);
   const voiceInputHint = voiceRecorder.isRecording ? "Stop recording to upload this clip to LiOS Home for transcription. Review the transcript before Send."
     : voiceInputAvailable ? "Record speech; stopping uploads it to LiOS Home for transcription, never automatically to Chat."
     : voiceStatus.label;
@@ -813,11 +813,13 @@ export default function ProjectExperienceShell({
       return false;
     }
     setInput(""); setPendingAttachmentFiles([]); setPendingAttachmentRefs([]); setVoiceTranscripts([]); setVoiceTranscriptReviewed(false);
+    voiceRecorder.cancel();
     setPendingPersonalFinance(null);
     return true;
   };
   const confirmConversationSwitch = async (deferDiscard = false, allowCreation = false) => {
     if (sendInFlightRef.current || ((chatCreationInFlightRef.current || projectCreationInFlightRef.current) && !allowCreation)) { setLifecycleNotice("Finish the pending request before switching conversations."); return false; }
+    if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before switching conversations."); return false; }
     if (busy || busyRef.current) { setLifecycleNotice("Stop the current response before switching conversations."); return false; }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before switching conversations. Your draft remains in this Chat."); return false; }
     const expected = currentDraftRef.current;
@@ -1303,6 +1305,7 @@ export default function ProjectExperienceShell({
     const message = (override?.message ?? input).trim()
       || (hasStagedAttachments ? "Analyze the attached file(s). Cite each file by name and clearly identify any missing or unreadable content." : "");
     if (!message || busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) return;
+    if (voiceRecorder.isPending()) { setLifecycleNotice("Finish voice recording and transcription before Send. Your typed draft and clip remain in this Chat."); return; }
     if (chatMode === "project" && selection.projectId && transmissionPolicy.allowResourceReferences && (sourceScope === "auto" || sourceScope === "my_data")) {
       const owned = resources.filter(resource => resource.projectId === selection.projectId && resource.status === "active" && !resource.trashedAt);
       if (ambiguousMentionTokens(owned, message).length) {
@@ -1459,7 +1462,7 @@ export default function ProjectExperienceShell({
           body: {
             ...payload,
             ...(voiceReview ? { voiceReview } : {}),
-            history: temporaryMessages.map(({ role, content }) => ({ role, content })),
+            history: temporaryMessages.slice(-20).map(({ role, content }) => ({ role, content })),
             ...(temporaryWorkingContextRef.current ? { workingContext: temporaryWorkingContextRef.current } : {}),
           },
           onEvent: (runtimeEvent) => {
@@ -1773,7 +1776,7 @@ export default function ProjectExperienceShell({
   };
 
   const applySelectionAiAction = (prompt: string) => {
-    setInput(prompt);
+    setInput(current => stageSafeRunRetry(current, prompt));
     requestAnimationFrame(() => composerRef.current?.focus());
   };
 
@@ -2752,16 +2755,17 @@ export default function ProjectExperienceShell({
                     onAsk={(id, title, prompt) => {
                       if (id !== conversationArtifactRef) setConversationArtifactRef(id);
                       setArtifactFocusMode(false);
-                      setInput(prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`);
+                      setInput(current => stageSafeRunRetry(current, prompt ?? `Work on Artifact "${title}". Use ${id} as the active object and propose changes for review before mutating it.`));
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}
                     onRerun={(id, title, spec) => {
+                      if (currentDraftRef.current.input.trim()) { setLifecycleNotice("Your composer already has a draft. Clear or send it before staging this Artifact replay; its source scope and execution mode are unchanged."); return; }
                       if (id !== conversationArtifactRef) setConversationArtifactRef(id);
                       setArtifactFocusMode(false);
                       const replay = artifactReplayDraft(title, spec);
                       updateSourceScope(replay.sourceScope);
                       setExecutionMode(replay.executionMode);
-                      setInput(replay.message);
+                      setInput(current => stageSafeRunRetry(current, replay.message));
                       setLifecycleNotice(`Restored the saved replay posture for "${title}". Review or send the staged request.`);
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}

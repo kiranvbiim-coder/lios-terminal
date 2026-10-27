@@ -14,7 +14,7 @@ import { listEntitlementPolicies } from "./dataEntitlementStore";
 import {
   createArtifact,
   createArtifactReference,
-  createArtifactVersion,
+  replayArtifactPackageHistory,
   listArtifactReferences,
   listArtifactVersions,
   listProjectArtifacts,
@@ -249,25 +249,7 @@ export async function importArtifactPackage(
       note: `Imported from Project package ${pkg.sourceProject.name}`,
     });
     artifactIdMap[bundle.identity.id] = created.artifact.id;
-    let head = 1;
-    for (const sourceVersion of versions.slice(1)) {
-      if (sourceVersion.version !== head + 1) throw new Error(`Artifact ${bundle.identity.id} has a non-contiguous version history.`);
-      await createArtifactVersion(ctx, {
-        artifactId: created.artifact.id,
-        baseVersion: head,
-        content: sourceVersion.content,
-        adapterId: sourceVersion.adapterId,
-        sourceRefs: sourceVersion.sourceRefs,
-        executionReceiptIds: sourceVersion.executionReceiptIds,
-        assumptionRefs: sourceVersion.assumptionRefs,
-        trustManifest: sourceVersion.trustManifest,
-        dependencyRefs: sourceVersion.dependencyRefs,
-        refreshSpec: sourceVersion.refreshSpec,
-        note: sourceVersion.note ?? `Imported source v${sourceVersion.version}`,
-        action: "import",
-      });
-      head += 1;
-    }
+    await replayArtifactPackageHistory(ctx, created.artifact.id, pkg, bundle.identity.id);
     if (bundle.identity.status === "archived") {
       await setArtifactStatus(ctx, created.artifact.id, "archived");
     }
