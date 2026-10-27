@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { approvedNewsMediaByUrl } from "./newsEditorialMedia";
+import { approvedNewsMediaByUrl, resolveEditorialPublicRoot } from "./newsEditorialMedia";
 
 const AS_OF = "2026-10-27T08:00:00.000Z";
 const SRC = "https://news.google.com/rss/articles/exact-story";
@@ -58,4 +58,22 @@ test("missing/invalid grants and assets fail closed with no unrelated article im
   assert.equal(approvedNewsMediaByUrl(root, AS_OF).size, 0);
   fs.writeFileSync(path.join(root, "editorial-media", "manifest.json"), JSON.stringify([{ ...media(), assetPath: "https://evil.example/track.png" }]));
   assert.equal(approvedNewsMediaByUrl(root, AS_OF).size, 0);
+});
+
+test("bundled dist/public has precedence and works independently of launch cwd", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "lios-media-paths-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const bundle = path.join(cwd, "pack", "dist");
+  const bundledRoot = path.join(bundle, "public");
+  const developmentRoot = path.join(cwd, "client", "public");
+  for (const directory of [bundledRoot, developmentRoot]) {
+    fs.mkdirSync(path.join(directory, "editorial-media"), { recursive: true });
+    fs.writeFileSync(path.join(directory, "editorial-media", "manifest.json"), "[]");
+  }
+  assert.equal(resolveEditorialPublicRoot("/", bundle), bundledRoot);
+  assert.equal(resolveEditorialPublicRoot(cwd, null), developmentRoot);
+  const output = path.join(cwd, "dist", "public");
+  fs.mkdirSync(path.join(output, "editorial-media"), { recursive: true });
+  fs.writeFileSync(path.join(output, "editorial-media", "manifest.json"), "[]");
+  assert.equal(resolveEditorialPublicRoot(cwd, null), output);
 });
