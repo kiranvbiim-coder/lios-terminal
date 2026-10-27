@@ -133,6 +133,11 @@ jobs:
         # outside that runner's roots and do not certify native observations.
         run: npm run test:ws65
 
+      - name: Phase 4 source evidence boundaries (never native qualification)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run phase4:source
+
       - name: Desktop source and syntax contracts
         if: ${{ !cancelled() }}
         timeout-minutes: 10
@@ -149,6 +154,11 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 15
         run: npm run build
+
+      - name: Phase 4 built client asset size ceiling (not installed performance)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run phase4:assets
 
       # No uploads, release assets, signing, deployment or credentialed live tests.
       # A failed install/typecheck/test/build remains a failed platform job.
