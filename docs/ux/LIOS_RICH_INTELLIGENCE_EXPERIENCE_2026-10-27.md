@@ -184,3 +184,37 @@ This annex is a bounded TC/CA UX proposal, not a new SI program. Register the F0
 ### Integration security gate
 
 **Skill read != component import != product feature delivery.** A skill cannot instruct agents to disable safeguards, install dependencies without review, run arbitrary shell/browser scripts, fetch third-party data or send project secrets, upgrade frameworks, edit canonical owner files without coordination, or claim source-only review equals real native acceptance. Prefer vendoring exact inspected Markdown guidance (with notices) or referencing a pinned reviewed upstream commit within the agent workflow, never a floating self-updating skill command in CI. This annex does not authorize a live installation, paid upgrade or executing untrusted skill-provided code.
+
+
+## 11. PromptMotion.org: evaluated motion design / briefing workflow resource (2026-10-27)
+
+**Source:** https://promptmotion.org/ — a curated creator-attributed gallery of AI motion design briefs, reusable workflows, launch films, UI motion and explainers. At inspection the home page advertises ~230 films and the prompt index >1,300 prompts. Prompts, videos, skill-like brief descriptions and source posts are **not a drop-in React UI library or licensed commercial application code**. Their creators retain rights as disclosed on the site. Evaluate original links and reuse only ideas/workflows with permission where needed; do not package, scrape, copy or republish another creator's finished videos, images, artwork or proprietary brand visuals. A public copy button does not establish a standalone MIT license.
+
+### Relevant reviewed examples
+
+| Reference | Source | LiOS application | Decision |
+| --- | --- | --- | --- |
+| Sahi trading terminal reveal | https://promptmotion.org/dale-vaz-cc612a | Study cinema-style product walkthrough of real charts, watchlists and panes; create original, truthful LiOS product reveal from captured real UI | **Use as design inspiration, not imported video/UI** |
+| Article-to-video six-file harness | https://promptmotion.org/prompts/p-a1aab88a | Source-verified \`spec.md\`, \`data.json\`, \`story.md\`, code-rendered \`Scene.tsx\` and \`timing.ts\` process for intelligence storytelling | **High priority for Phase 4 F11 briefing** |
+| Modular animated chart-to-camera workflow | https://promptmotion.org/prompts/p-f21127ea | Motion chart explainer where source-backed data flows through existing ECharts/P4 views into a reviewed storyboard | **High priority for Phase 4 F11/N05** |
+| Developer portfolio product showreel | https://promptmotion.org/wani-shola-16ca7a | Real captured app screens, three-color restraint, one idea per shot, measured easing and typography; premium external marketing | **Useful for LiOS release/demo, not core UX donor** |
+| Shape/morphing UI, timeline and data-viz examples | https://promptmotion.org/prompts | Review visual pacing, meaning-bearing transitions, annotated timelines, coherent movement | **Secondary Phase 1/3 inspiration** |
+
+### Technical strategy and anti-gimmick gate
+
+- **Keep actual desktop UX quiet.** UI microinteractions should communicate causal change: feed card expands into inspection; timeline focus maps to selected chart point; evidence view reveals supporting source; saved Artifact acknowledges completion. Avoid continuous animation, confetti, kinetic typography over data, forced full-screen intros, excessive 3D and motion that obstructs analysis.
+- **Reuse current stack rather than import a new runtime.** Existing \`src/package.json\` already includes \`framer-motion\`, \`echarts\`, and Remotion scripts. Motion graphics are a controlled renderer of approved content, not a replacement for component contracts, charts, signed data, source rights or existing TC/P4 state.
+- **Content-to-video should be built from canonical data.** An authorized saved source/Artifact provides structured \`sourceRefs\`, units, snapshots, times, claims and rights -> user-reviewable storyboard -> render parameters -> optional local Remotion/export -> finished brief and original provenance. No unsourced invented metrics, fabricated documentary images, or impermissible media redistribution.
+- **Permissioned execution.** All media rendering is explicit user action; process/workspace constraints and sandbox/secret/network policies remain under existing GM/P4. No mandatory cloud AI, paid video provider or new hosted infrastructure; if optional render dependency unavailable, retain static visual storyboard/PDF/PPTX fallback.
+- **Performance and accessibility.** No auto-play on Home or workspace; pause, reduced motion, low-power budget, render cancellability, keyboard operation, alt text/captions and honest progress and failure states.
+- **No dependency on any particular model.** Many site examples mention Claude, but any chosen local/BYOAI agent capable of structured storyboards can participate in the existing reviewed workflow without relaxing deterministic source verification.
+- **Donor classification:** workflow/prompt inspiration; commercial reuse rights are not established; zero automatic source-code import. A separate permissively licensed Remotion component source could be imported only after exact file and license audit.
+
+### Phase inclusion
+
+**Phase 1:** add intentional motion tokens + reduced-motion and card-to-evidence transition acceptance.  
+**Phase 2:** subtle Pulse feed-to-investigation, What Changed and watchroom state transitions.  
+**Phase 3:** map/graph/storyline motion representing verified temporal and relationship changes.  
+**Phase 4:** F11 AI Briefing Studio, chart animations and external product demo from real captured LiOS UI; source/evidence/time/rights and original creator licenses audited.
+
+**Recommendation:** adopt Prompt Motion as a **curated motion/briefing inspiration source**, especially F11, rather than modifying core architecture or wholesale importing animation prompts/assets into production.
