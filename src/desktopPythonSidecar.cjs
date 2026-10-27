@@ -228,7 +228,9 @@ async function probeBundledPythonSidecar(options) {
     }),
     stdio: ["ignore", "pipe", "pipe"],
   });
-  // Drain rather than retaining arbitrary traceback or sensitive output in memory.
+  // Neither stdout nor stderr may backpressure the worker into hanging.
+  // Sidecar output is not retained as it may contain private tracebacks/paths.
+  child.stdout.on("data", () => {});
   let observedStderr = false;
   child.stderr.on("data", () => { observedStderr = true; });
 
