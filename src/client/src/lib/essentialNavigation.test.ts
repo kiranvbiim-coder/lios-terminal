@@ -98,6 +98,11 @@ test("Connections and Settings cannot hide active work or local unsaved Artifact
   assert.match(guard, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current/);
   assert.match(guard, /artifactDraftDirtyRef\.current/);
   assert.match(guard, /action\(\)/);
+  assert.match(shell, /const openSafeConnections = \(\) => openSafeDestination\("Connections", onOpenEnvironment\)/);
+  assert.match(shell, /onClick=\{openSafeConnections\}/);
+  assert.match(shell, /onConfigureAI=\{openSafeConnections\}/);
+  assert.match(shell, /onOpenConnections=\{openSafeConnections\}/);
+  assert.match(shell, /openSafeConnections\(\);\s*return;/);
 });
 
 test("Sign out reviews staged unsent work and never silently discards an in-flight response", () => {
