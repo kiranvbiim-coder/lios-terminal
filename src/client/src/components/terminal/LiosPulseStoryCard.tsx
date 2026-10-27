@@ -12,9 +12,10 @@ import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "@/lib/pulseStoryPresentation";
+import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 
 interface Props {
-  card: PulseStoryView;
+  card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
@@ -67,6 +68,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><BookOpenText className="h-3.5 w-3.5" />{evidence.length ? `${evidence.length} recorded source${evidence.length === 1 ? "" : "s"}` : "Sources not attached"}</span>
           {timestamp && <time dateTime={timestamp}>{new Date(timestamp).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</time>}
+          {(card.clusteredCount ?? 1) > 1 && <span className="font-ui text-xs text-muted-foreground">{card.clusteredCount} matching records</span>}
           <span className="ml-auto inline-flex items-center gap-1.5 font-medium text-foreground/80">{expanded ? "Close details" : "Inspect"}<ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} /></span>
         </div>
       </button>
@@ -91,6 +93,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                   <p className="mt-1.5 font-ui text-sm leading-6 text-foreground/85">{card.whyItMattersToUser || card.whyItMatters}</p>
                 </div>
               )}
+              {(card.clusteredCount ?? 1) > 1 && <p className="font-ui text-xs leading-5 text-muted-foreground">{card.clusteredCount} retained cards share an exact headline, subject, event date and evidence identity. This grouping is not independent corroboration.</p>}
               <section aria-label="Recorded evidence">
                 <div className="mb-2 flex items-center gap-2 font-ui text-xs font-semibold text-foreground">
                   <BookOpenText className="h-4 w-4 text-cyan-200" /> Sources
@@ -115,6 +118,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                     })}
                   </div>
                 ) : <p className="font-ui text-sm text-muted-foreground">No attributed evidence was provided for this item. Verify independent sources before acting.</p>}
+                {(card.omittedEvidenceCount ?? 0) > 0 && <p className="mt-2 font-ui text-xs text-muted-foreground">{card.omittedEvidenceCount} additional recorded evidence item(s) are outside this bounded view.</p>}
               </section>
               <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
                 <button type="button" onClick={() => onAsk(pulseStoryQuestion(card))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:bg-amber-300/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><Sparkles className="h-4 w-4 text-amber-200" />Ask LiOS</button>
