@@ -115,3 +115,32 @@ test("C04 rejected model binding does not claim a successful input write", () =>
     assert.match(out.skipped[0].reason, /inspect actual model state/i);
   } finally { dispose(); }
 });
+
+test("C04 replacing a model binding invalidates old review even if ID and values are identical", () => {
+  let callsA = 0, callsB = 0;
+  const original = registerAssumptionBinding({
+    id: "c04-replacement", view: "valuation", key: "discount", label: "Discount",
+    unit: "%", value: 6, apply: () => { callsA++; },
+  });
+  let replacement: (() => void) | null = null;
+  try {
+    const item = scenario([{ key: "discount", label: "Discount", value: 7, unit: "%" }]);
+    const oldPlan = previewScenarioBindingApplication(item, { view: "valuation" });
+    const first = scenarioBindingReviewKey(item, "valuation", undefined, oldPlan);
+    replacement = registerAssumptionBinding({
+      id: "c04-replacement", view: "valuation", key: "discount", label: "Discount",
+      unit: "%", value: 6, apply: () => { callsB++; },
+    });
+    const freshPlan = previewScenarioBindingApplication(item, { view: "valuation" });
+    assert.notEqual(scenarioBindingReviewKey(item, "valuation", undefined, freshPlan), first);
+    assert.notEqual(freshPlan.matched[0].registrationVersion, oldPlan.matched[0].registrationVersion);
+    original(); // The old component cannot unregister the replacement.
+    const result = applyScenarioToBindings(item, { view: "valuation" });
+    assert.equal(result.applied.length, 1);
+    assert.equal(callsA, 0);
+    assert.equal(callsB, 1);
+  } finally {
+    original();
+    replacement?.();
+  }
+});
