@@ -51,7 +51,9 @@ test("Phase 4 service discovery offers actual editable templates and explains sc
 });
 
 test("Phase 4 actual request submission is explicit, accessible and confirmed by server identity", () => {
-  assert.match(advisory, /<Dialog open onOpenChange=\{open => \{ if \(!open && !submitting\) setShowNewModal\(false\); \}\}>/);
+  assert.match(advisory, /<Dialog open=\{showNewModal\} onOpenChange=\{next => \{ if \(!next && !submitting\) setShowNewModal\(false\); \}\}>/);
+  assert.match(advisory, /onEscapeKeyDown=\{event => \{ if \(submitting\) event\.preventDefault\(\); \}\}/);
+  assert.match(advisory, /onInteractOutside=\{event => \{ if \(submitting\) event\.preventDefault\(\); \}\}/);
   assert.match(advisory, /<DialogTitle/);
   assert.match(advisory, /<DialogDescription/);
   assert.match(advisory, /<form onSubmit=\{handleCreateRequest\}/);

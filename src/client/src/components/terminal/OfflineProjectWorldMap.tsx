@@ -10,7 +10,10 @@ const MAX_ZOOM = 4;
 const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 const ATLAS = "/maps/natural-earth-110m-world.svg";
 
-export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGeographicPoint[] }) {
+export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: {
+  points: readonly RecordedGeographicPoint[];
+  origin?: "P7 Project graph" | "P4 saved table";
+}) {
   const [sourceOnly, setSourceOnly] = useState(false);
   const [withEventDate, setWithEventDate] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -168,6 +171,6 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
           </> : <p className="text-muted-foreground">Select a marker or a location from the keyboard-accessible list to inspect the source reference and recorded time.</p>}
         </section>
       </div>}
-    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact P7 Project-recorded coordinates directly linked to the selected insight, not geocoded names or device location. No online tiles or external location API.</p>
+    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact {origin === "P7 Project graph" ? "P7 Project-recorded" : "P4 saved-table"} coordinates with retained source IDs, not geocoded names or device location. No online tiles or external location API.</p>
   </div>;
 }

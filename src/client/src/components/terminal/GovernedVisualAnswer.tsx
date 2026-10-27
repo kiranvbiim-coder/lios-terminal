@@ -2,8 +2,11 @@ import * as React from "react";
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import type { GovernedVisualAnswerRequest, GovernedVisualAnswerDecision } from "@shared/governedVisualAnswer";
 import { resolveGovernedVisualAnswer } from "@shared/governedVisualAnswer";
+import { projectSavedTableGeography } from "@/lib/governedTableGeography";
 
 const ArtifactChart = lazy(() => import("./ArtifactChart"));
+const OfflineProjectWorldMap = lazy(() => import("./OfflineProjectWorldMap")
+  .then(module => ({ default: module.OfflineProjectWorldMap })));
 
 class GovernedChartBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -24,8 +27,10 @@ function recordedValue(value: unknown): string {
 
 export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswerRequest }) {
   const [expanded, setExpanded] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "blocked"; signature?: string; decision?: GovernedVisualAnswerDecision }>({ phase: "idle" });
   const signature = JSON.stringify([request.artifactId, request.version, request.projectId, request.kind, request.sourceRefs]);
+  useEffect(() => { setMapOpen(false); }, [signature]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -50,6 +55,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
 
   const current: typeof state = state.signature === signature ? state : { phase: "loading" };
   const decision = current.decision?.status === "ready" ? current.decision : null;
+  const mapProjection = decision && decision.kind === "table" ? projectSavedTableGeography(decision) : null;
   return <section aria-label="Governed visual answer from saved Artifact" data-testid="governed-chat-visual-answer"
     className="mb-2 min-w-0 rounded-xl border border-border/55 bg-card/45 p-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -88,6 +94,22 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
             </tr>)}</tbody>
           </table>
         </div>}
+        {decision.kind === "table" && mapProjection && mapProjection.points.length > 0 && <section
+          className="rounded-lg border border-border/55 p-3" aria-label="Source-backed saved geography">
+          <button type="button" aria-expanded={mapOpen}
+            onClick={() => setMapOpen(open => !open)}
+            className="min-h-11 rounded-lg border border-amber-300/40 px-3 font-ui text-sm text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">
+            {mapOpen ? "Hide recorded locations" : "View recorded locations"} ({mapProjection.eligibleCount})
+          </button>
+          <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">
+            Offline visualization of exact numeric latitude/longitude cells with authorized row source IDs.
+            Scanned {mapProjection.scannedRows} recorded rows; no geocoding or inferred locations.
+            {mapProjection.omittedCount > 0 ? " " + mapProjection.omittedCount + " eligible locations beyond the first 60 are not shown." : ""}
+          </p>
+          {mapOpen && <Suspense fallback={<p role="status" className="mt-3 font-ui text-sm text-muted-foreground">Loading the bundled offline world map…</p>}>
+            <OfflineProjectWorldMap points={mapProjection.points} origin="P4 saved table" />
+          </Suspense>}
+        </section>}
         {decision.kind === "table" && (decision.content.rows.length > 40 || decision.content.columns.length > 12) &&
           <p role="status" className="font-ui text-xs text-muted-foreground">
             Displaying {Math.min(40,decision.content.rows.length)} of {decision.content.rows.length} recorded rows and

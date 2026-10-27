@@ -286,7 +286,9 @@ export function useNewsArticle(item?: NewsArticleRequest | null) {
       if (!res.ok) throw new Error("Failed to fetch article");
       return res.json();
     },
-    staleTime: 5 * 60_000,
+    // Fallback summaries are successfully delivered metadata, not successful
+    // publisher extraction. Retry them sooner without refetching good articles.
+    staleTime: query => query.state.data?.readThrough === "feed_summary" ? 30_000 : 5 * 60_000,
     enabled: Boolean(item?.url),
   });
 }

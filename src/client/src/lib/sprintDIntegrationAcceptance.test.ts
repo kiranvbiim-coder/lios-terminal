@@ -33,8 +33,12 @@ test("Sprint D: main analytical modal traps focus while the nonmodal evidence dr
   const studio = component("AnalyticalStudio");
   const drawer = component("ProvenanceDrawer");
   const hook = readFileSync(new URL("../hooks/useManagedOverlayFocus.ts", import.meta.url), "utf8");
-  assert.match(studio, /useManagedOverlayFocus\(onClose, true\)/);
-  assert.match(studio, /aria-modal="true"/);
+  // Radix Dialog now owns the focus trap and Escape behavior for this modal;
+  // do not install a competing manual focus trap over its primitive.
+  assert.match(studio, /<Dialog open onOpenChange=\{open => \{ if \(!open\) onClose\(\); \}\}>/);
+  assert.match(studio, /<DialogContent/);
+  assert.match(studio, /onCloseAutoFocus=\{event => \{ event\.preventDefault\(\); if \(opener\?\.isConnected\) opener\.focus\(\); \}\}/);
+  assert.doesNotMatch(studio, /useManagedOverlayFocus\(onClose, true\)/);
   assert.match(drawer, /useManagedOverlayFocus\(onClose, false\)/);
   assert.match(drawer, /aria-modal="false"/);
   assert.match(hook, /event\.key === "Escape"/);

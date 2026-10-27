@@ -15,6 +15,7 @@ import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles 
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { RecordedContextPicture } from "./RecordedContextPicture";
 import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulseSubjectPreferences";
 import { eligibleEditorialMedia } from "@shared/editorialMedia";
 
@@ -106,6 +107,8 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                 </div>
               )}
               {(card.clusteredCount ?? 1) > 1 && <p className="font-ui text-xs leading-5 text-muted-foreground">{card.clusteredCount} retained cards share an exact headline, subject, event date and evidence identity. This grouping is not independent corroboration.</p>}
+              {!approvedMedia && <RecordedContextPicture title={card.title}
+                hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />}
               {approvedMedia?.mediaSourcePage && (
                 <a href={approvedMedia.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
                   className="inline-block font-ui text-sm text-amber-200 underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">
