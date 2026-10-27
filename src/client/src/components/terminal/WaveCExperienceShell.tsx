@@ -129,7 +129,8 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
-      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
+      // Bound the already-authorized source read before evidence-safe clustering and six-card display.
+      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : []);
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
