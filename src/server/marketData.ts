@@ -2205,10 +2205,12 @@ export function buildNewsWindowQuery(
   const explicitFrom = isoDateOnly(options.from);
   const explicitTo = isoDateOnly(options.to);
   const today = new Date().toISOString().slice(0, 10);
-  const end = explicitTo ?? shiftDate(today, -(boundedPage - 1) * windowDays);
-  const start = explicitFrom && boundedPage === 1
-    ? explicitFrom
-    : shiftDate(end, -windowDays);
+  // An explicit lower bound defines ONE fixed provider window: later pages
+  // paginate items in that window, never silently search before "from".
+  // Without "from", pages are consecutive older windows anchored to "to".
+  const anchor = explicitTo ?? today;
+  const end = explicitFrom ? anchor : shiftDate(anchor, -(boundedPage - 1) * windowDays);
+  const start = explicitFrom ?? shiftDate(end, -windowDays);
   const withoutRelativeWindow = query.replace(/\bwhen:\d+[dwmy]\b/gi, "").replace(/\s+/g, " ").trim();
   const clauses = [withoutRelativeWindow, `after:${start}`, `before:${shiftDate(end, 1)}`].filter(Boolean);
   return clauses.join(" ");
@@ -2233,7 +2235,10 @@ export function dedupeNewsItems(items: NewsItem[]): NewsItem[] {
 
 async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options: NewsPageOptions = {}) {
   const page = Math.max(1, Math.floor(options.page ?? 1));
-  const pagedKey = `${cacheKey}:${page}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
+  // Every explicit-from page uses the same bounded provider feed. Cache its
+  // fetched records once, then apply local offsets for page 2 and onward.
+  const cachePage = options.from ? "bounded" : String(page);
+  const pagedKey = `${cacheKey}:${cachePage}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
   const cached = getCached(newsCache, pagedKey);
   if (cached) return cached;
 
@@ -2272,10 +2277,15 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     });
   }
   items = filterNewsItems(items, query);
-  const pageItems = items.slice(0, limit);
   const explicitTo = isoDateOnly(options.to);
   const explicitFrom = isoDateOnly(options.from);
-  const hasMore = items.length > limit || (items.length === limit && !explicitFrom);
+  // Fixed date ranges use normal in-window offsets; rolling windows each
+  // fetch one older time slice and must not skip the first items in that slice.
+  const offset = explicitFrom ? (page - 1) * limit : 0;
+  const pageItems = items.slice(offset, offset + limit);
+  const hasMore = explicitFrom
+    ? items.length > offset + limit
+    : items.length >= limit;
   return {
     items: pageItems,
     page,
