@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -181,4 +181,9 @@ test("inactive donors, generic catch-all waves, and fork mirrors cannot silently
  catchall.ledger.executionPriorities.push({
   wave:3,donors:["all_other_registered_donors"],userJourney:"Use every open source reference for the entire application",gate:"Review every repo eventually"});
  assert.throws(()=>validateUniversalDonorAdoption(catchall),/small, named queue/);
+});
+
+test("OSS audit must execute universal donor adoption gate before source registry review",()=>{
+ const packageData=JSON.parse(readFileSync(new URL("../package.json",import.meta.url),"utf8"));
+ assert.match(packageData.scripts["audit:oss"],/^node script\/validate_universal_donor_adoption\.mjs && node script\/audit_oss_registry\.mjs$/);
 });

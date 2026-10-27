@@ -95,7 +95,7 @@
     "acceptance:accessibility": "tsx script/validate_desktop_accessibility.ts",
     "acceptance:production": "tsx script/validate_production_acceptance.ts",
     "acceptance:security": "tsx script/validate_security_acceptance.ts",
-    "audit:oss": "node script/audit_oss_registry.mjs",
+    "audit:oss": "node script/validate_universal_donor_adoption.mjs && node script/audit_oss_registry.mjs",
     "audit:supply-chain": "tsx script/audit_supply_chain.ts",
     "audit:licenses": "tsx script/audit_supply_chain.ts --static",
     "test:p1": "node --import tsx --test shared/projectContracts.test.ts shared/identityContracts.test.ts client/src/lib/projectWorkspaceDirectives.test.ts client/src/lib/livingWorkspaceAdapter.test.ts client/src/lib/projectExperienceVisualState.test.ts client/src/lib/analyticalWorkspaceSnapshot.test.ts client/src/lib/p1Shell.test.ts server/projectStore.test.ts server/projectP1Store.test.ts server/tenantContext.test.ts server/desktopOidcPkce.test.ts server/effectiveAccess.test.ts server/sessionRestoration.test.ts server/p1cSourceScope.test.ts server/routesAccessBoundary.test.ts",
