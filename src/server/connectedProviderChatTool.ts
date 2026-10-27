@@ -9,9 +9,8 @@ import { getDb } from "./db";
 import { getProject } from "./projectStore";
 import { listSourceConnections } from "./sourceConnectionService";
 import { createProviderRegistryForUser } from "./providerRuntimeRegistry";
-import { createCanonicalDataRequest } from "./providerSdk";
+import { createCanonicalDataRequest, executeCanonicalDataRequest } from "./providerSdk";
 import { authorizeCanonicalDataRequests } from "./canonicalDataRequestGate";
-import { executeCanonicalDataRequestCached } from "./providerExecutionCache";
 import { getLatestExternalRightsAssessment } from "./externalRightsStore";
 import { isCredentialSafeReference } from "@shared/dataFabric";
 import { hashLedgerValue } from "./ledgerStore";
@@ -243,9 +242,12 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
     await authorizeCanonicalDataRequests([request], tenant);
     assertNotAborted(signal);
     const registry = await createProviderRegistryForUser(tenant, actor);
-    const execution = await executeCanonicalDataRequestCached(request, tenant, registry);
+    // A Chat preview is an explicit, user-approved read of the current
+    // source. Do not reuse TTL-cached file rows or remote API observations:
+    // local files can change without a connector-settings mutation.
+    const response = await executeCanonicalDataRequest(request, tenant, registry);
     assertNotAborted(signal);
-    const observed = execution.response.observation;
+    const observed = response.observation;
     if (!observed || observed.providerId !== `source:${source.id}`) {
       throw new Error("This connected source did not return an attributable observation.");
     }
@@ -264,7 +266,7 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
         retrievedAt: observed.clocks.retrievedAt,
         normalized: observed.normalized,
         rightsReviewed: true as const,
-        cache: execution.cache,
+        cache: "miss" as const,
       },
       summary: previewRows.length
         ? `Retrieved ${previewRows.length} preview row(s) from verified ${source.name}; truncated to the authorized preview size. Original sources are linked in this tool's source references.`
