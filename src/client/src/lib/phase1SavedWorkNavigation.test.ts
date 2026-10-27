@@ -55,8 +55,8 @@ test("a canceled or rejected search navigation remains open and preserves the dr
 });
 
 test("secondary navigation preserves active response, unsaved Artifact, and direct Chat return", () => {
-  assert.match(shell, /onTrash=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
-  assert.match(shell, /onMigrate=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
+  assert.match(shell, /onTrash=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
+  assert.match(shell, /onMigrate=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
   assert.match(shell, /onClick=\{\(\) => \{ setSection\("conversation"\); setProjectHomeRequested\(false\); setShowLifecycleCenter\(false\); \}\}>Back to chat/);
 });
 
