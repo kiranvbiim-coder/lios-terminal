@@ -112,7 +112,8 @@ test("existing Wave D → Watermelon-style card handoff uses one shared grouping
   const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
   const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
   const storyCard = readFileSync(new URL("../components/terminal/LiosPulseStoryCard.tsx", import.meta.url), "utf8");
-  assert.match(shell, /setWaveDPulseCards\(Array\.isArray\(pulse\.cards\) \? pulse\.cards\.slice\(0, 24\) : \[\]\)/);
+  assert.match(shell, /const authorizedCards = Array\.isArray\(pulse\.cards\) \? pulse\.cards\.slice\(0, 24\) : \[\]/);
+  assert.match(shell, /setWaveDPulseCards\(authorizedCards\)/);
   assert.match(board, /clusterRecordedPulseStories\(pulseCards, 24\)/);
   assert.match(board, /LiosPulseStoryCard/);
   assert.match(storyCard, /clusteredCount/);

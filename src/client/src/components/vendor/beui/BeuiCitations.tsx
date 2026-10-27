@@ -8,6 +8,7 @@
  * pattern with local LiOS components. No remote favicon requests, second
  * citation store, automatic navigation, or additional animation dependency.
  */
+import * as React from "react";
 import { useState } from "react";
 import { BookOpenText, ChevronDown, ExternalLink, Globe2 } from "lucide-react";
 import type { TrustCitationItem } from "@/lib/trustCitationPresentation";

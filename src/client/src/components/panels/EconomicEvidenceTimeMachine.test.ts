@@ -9,7 +9,7 @@ test("B06 economics reuses the real frozen FRED data fabric and shows true befor
     'Compare saved economic vintages','Retained source revision pairs',
     'result.baseline.contentHash !== savedThen.contentHash',
     'result.current.contentHash !== latestSeriesCapture.contentHash',
-    'comparisonAbort.current?.abort()','type="date"',
+    'compareAbort.current?.abort()','type="date"',
     'No immutable {seriesId} snapshot was retained as available on that day',
   ])assert.ok(source.includes(item),"missing economics historical UX: "+item);
   assert.doesNotMatch(source,/fakeMacroHistory|fabricateVintage|Math\.random/);
