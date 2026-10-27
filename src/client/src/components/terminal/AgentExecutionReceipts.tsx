@@ -78,7 +78,7 @@ export default function AgentExecutionReceipts({ activity }: Props) {
                   <ShieldCheck aria-hidden="true" className="h-4 w-4 text-foreground/70" />
                   Exact receipt identity and hashes
                 </summary>
-                <dl className="mt-2 grid gap-1.5 overflow-wrap-anywhere rounded-md border border-border/50 bg-black/10 p-3 font-mono text-xs">
+                <dl className="mt-2 grid gap-1.5 rounded-md border border-border/50 bg-black/10 p-3 font-mono text-xs">
                   <div className="min-w-0 break-all"><dt className="inline font-semibold">Receipt</dt><dd className="ml-2 inline">{receipt.id}</dd></div>
                   <div className="min-w-0 break-all"><dt className="inline font-semibold">Run</dt><dd className="ml-2 inline">{receipt.requestId}</dd></div>
                   <div className="min-w-0 break-all"><dt className="inline font-semibold">Started</dt><dd className="ml-2 inline">{receipt.startedAt}</dd></div>
