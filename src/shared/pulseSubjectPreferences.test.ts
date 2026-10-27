@@ -48,6 +48,8 @@ test("Following uses only saved own follows and watchlist, ignoring injected cli
   const filter={channel:"following" as const,subjectKeys:["OIL"]};
   assert.deepEqual(filterPreferredPulseCards(cards,filter,prefs).map(x=>x.id),["a"]);
   assert.deepEqual(filterPreferredPulseCards(cards,{channel:"following"},prefs,["wind"]).map(x=>x.id),["a","b"]);
+  const symbolOnly = {...card("legacy","IGNORED"),subjectKey:undefined,symbol:"SOLAR"};
+  assert.deepEqual(filterPreferredPulseCards([symbolOnly],{channel:"following"},prefs).map(x=>x.id),["legacy"]);
   assert.deepEqual(filterPreferredPulseCards(cards,{channel:"following"}, {followed:[],muted:[]}).map(x=>x.id),[]);
 });
 
