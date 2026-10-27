@@ -34,7 +34,7 @@ export const TARGET_PACKAGE_NAMES = Object.freeze({
   "assistant-ui": ["@assistant-ui/react", "assistant-ui"],
   "tool-ui": ["@assistant-ui/tool-ui"],
   "langgraphjs": ["@langchain/langgraph"],
-  "perspective": ["@finos/perspective", "@finos/perspective-viewer"],
+  "perspective": ["@perspective-dev/client", "@perspective-dev/viewer", "@perspective-dev/viewer-datagrid", "@perspective-dev/react"],
   "polars": ["nodejs-polars"],
   "univer": ["@univerjs/presets", "@univerjs/preset-sheets-core"],
   "tiptap": ["@tiptap/core", "@tiptap/react"],
