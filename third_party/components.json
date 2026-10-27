@@ -2881,6 +2881,70 @@
         "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
       "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
+    },
+    {
+      "id": "beui-motion",
+      "name": "beUI animated button (bounded UI source)",
+      "repository": "starc007/ui-components",
+      "commitSha": "fa3393a3891723d4d2daec1f1d82ead175442f44",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "TC-Workspace-Composer",
+        "accessible-motion-actions"
+      ],
+      "importedPaths": [
+        "components/motion/button/base.tsx",
+        "lib/ease.ts",
+        "lib/hooks/use-hover-capable.ts"
+      ],
+      "destinationPaths": [
+        "client/src/components/vendor/beui/BeuiButton.tsx",
+        "client/src/components/vendor/beui/motionTokens.ts",
+        "client/src/components/vendor/beui/useHoverCapable.ts"
+      ],
+      "modifications": [
+        "Preserves beUI action motion in the original accessible Workspace Composer, retaining unsaved Artifact protection and original apply handler.",
+        "Adapts React Motion to preinstalled Framer Motion; hover capability and reduced-motion guards; no new production dependencies."
+      ],
+      "notes": "Public lios-terminal follow-on to upstream PR #302. Source code integrated but neither local TypeScript/typecheck nor installed Electron smoke is verified."
+    },
+    {
+      "id": "kibo-ui",
+      "name": "Kibo UI Status and searchable Tags (bounded UI sources)",
+      "repository": "shadcnblocks/kibo",
+      "commitSha": "3d63cdb15b79d972e3dc38a10997987672f9b263",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Kibo UI",
+      "externalRights": "verified_not_applicable",
+      "roles": [
+        "TC-Workspace-Composer-Tag-Filter",
+        "P9-Workflow-Status",
+        "GM-Execution-Session-Status"
+      ],
+      "importedPaths": [
+        "packages/status/index.tsx",
+        "packages/tags/index.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/vendor/kibo/Status.tsx",
+        "client/src/components/vendor/kibo/Tags.tsx"
+      ],
+      "modifications": [
+        "Adapted compound status primitive to locally rendered status text and reduced-motion respectful indicators; state bound to existing P9 and GM session truth.",
+        "Reused Kibo compound tag picker to filter existing published intelligence-object tags without adding Project/data authority or npm dependencies.",
+        "Adapted to existing React 18/Tailwind 3/Radix primitives instead of Kibo React 19 monorepo."
+      ],
+      "notes": "Full MIT license at client/src/components/vendor/kibo/LICENSE. Native and source acceptance unverified."
     }
   ]
 }
