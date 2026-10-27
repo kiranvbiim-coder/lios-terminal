@@ -123,4 +123,34 @@ test("Phase 2: connected local file verifies, appears in Chat and supplies an ap
     }, new AbortController().signal, { ...call, resourceTransmissionAllowed: false }),
     /transmission.*disabled/i,
   );
+
+  // Current owner explicitly revokes external AI release of this source.
+  // A prior approval must not permanently authorize future Chat retrieval.
+  await recordExternalRightsAssessment(tenant, {
+    subjectId: `source-connection:${source.id}`,
+    subjectKind: "data",
+    rights: {
+      softwareLicense: { spdx: null, reviewed: true },
+      apiTerms: { provider: "owner-supplied local file", reviewed: true, termsUrl: null },
+      dataRights: { redistribution: "restricted", internalUse: "permitted", attributionRequired: false },
+      trademarkReviewed: true,
+    },
+    notes: "Synthetic test data: user revoked AI release after an earlier approved preview.",
+    reviewedAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  await assert.rejects(noRights, /not approved|rights review/i, "latest rights revocation must stop further retrieval");
+
+  const [other] = await getDb().insert(users).values({
+    email: `other-connected-chat-${crypto.randomUUID()}@example.test`,
+    passwordHash: "test-hash", role: "client_user", name: "Other Project User",
+  }).returning();
+  const foreignCall = {
+    ...call, userId: other.id,
+    tenant: { userId: other.id, organizationId: null, role: other.role },
+  };
+  await assert.rejects(
+    () => connectedProviderListChatTool.invoke({}, new AbortController().signal, foreignCall),
+    /not owned|does not exist|not found|not accessible/i,
+    "another user cannot inspect source identities through an inaccessible Project",
+  );
 });
