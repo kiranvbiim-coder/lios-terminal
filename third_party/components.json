@@ -2881,6 +2881,38 @@
         "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
       "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
+    },
+    {
+      "id": "opensourceui-project-spreadsheet-dropzone",
+      "name": "Opensource UI single-file Project spreadsheet dropzone and explicit import review",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT",
+      "posture": "pinned_source_adaptation",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Opensource UI — Project spreadsheet upload interaction (MIT)",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "Project-Artifacts-import-spreadsheet",
+        "accessible-file-browse-and-drag-drop",
+        "user-confirmed-source-review"
+      ],
+      "importedPaths": [
+        "components/inputs/file-upload-field-input.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectSpreadsheetImportField.tsx",
+        "client/src/components/terminal/ProjectSpreadsheetImportField.test.tsx",
+        "client/src/components/terminal/ProjectArtifactsPanel.tsx"
+      ],
+      "modifications": [
+        "Adapted drag/drop, native labelled input, explicit selected-file display and remove action to the existing ProjectArtifactsPanel, using current React 18, Tailwind 3 and Lucide dependencies.",
+        "Restricts selection to one XLSX/XLSM/CSV, nonempty and <=20 MiB matching existing server uploadPolicy/SpreadsheetImportMaxFileBytes. Import only after explicit second confirmation, through existing Project-scoped importSpreadsheetArtifact endpoint; server independently verifies file and Project access.",
+        "No parallel storage, browser workbook parsing, upstream blob URL preview, demo images, new dependencies, automatic file transmission or weakened source policy."
+      ],
+      "notes": "Original file at pinned blob e0a22b94cfd01ffbf99541739991b4678a93d179. MIT copyright 2026 Bidyut Kundu, full grant third_party/licenses/opensourceui-MIT.txt. Source CI and installed drag/drop, keyboard, 390px/200%-zoom acceptance pending stacked PR; existing source search record is a different earlier actual component import."
     }
   ]
 }

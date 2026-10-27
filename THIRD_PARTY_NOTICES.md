@@ -11,6 +11,24 @@ This file is the human-readable notice entry point. The machine-readable source 
 - `third_party/upstream-lock.json`
 - `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
 
+
+### Opensource UI — Project spreadsheet upload interaction (MIT)
+
+LIOS `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`
+adapts file-selection review, accessible dropzone and remove controls from
+`bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`,
+`components/inputs/file-upload-field-input.tsx` (Git blob
+`e0a22b94cfd01ffbf99541739991b4678a93d179`).
+Copyright (c) 2026 Bidyut Kundu; complete permission/notice retained in
+`third_party/licenses/opensourceui-MIT.txt`.
+
+This component replaces the tiny native spreadsheet-import picker in the
+existing LIOS Project Intelligence Library. It does not import a second
+uploader, run a workbook parser or send data on drop. The user confirms
+the exact selected file before the existing Project-scoped governed import
+endpoint checks format/signature, server size limit and authorization. No
+sample media, remote vendor assets or new runtime packages are imported.
+
 ### Watermelon UI — adapted News editorial card (MIT)
 
 The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the
