@@ -45,6 +45,22 @@ test("Sprint B provenance panel is parseable TSX before checking only source-tex
   assert.match(ui, /\{visibleSources\.length\} of \{review\.recorded\} recorded sources shown/);
 });
 
+test("Analytical Studio compares only the exact explicitly reviewed capture pair and distinct recorded receipts", () => {
+  const ui = screen("AnalyticalStudio");
+  const parsed = ts.transpileModule(ui, {
+    fileName: "AnalyticalStudio.tsx",
+    reportDiagnostics: true,
+    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  });
+  assert.deepEqual((parsed.diagnostics ?? []).filter(item => item.category === ts.DiagnosticCategory.Error)
+    .map(item => ts.flattenDiagnosticMessageText(item.messageText, "\n")), []);
+  assert.match(ui, /comparisonReviewKey\(leftSnapshot, rightSnapshot\)/);
+  assert.match(ui, /reviewedPairKey === pairKey/);
+  assert.match(ui, /expandedPairKey === pairKey/);
+  assert.match(ui, /resolveRecordedReceiptPair\(evidence\.receipts, receiptA, receiptB\)/);
+  assert.doesNotMatch(ui, /Math\.min\(receiptA|Math\.min\(receiptB|setAllowCrossContext/);
+});
+
 test("Sprint B comparisons and rich insights stay on the canonical capture and receipt surfaces", () => {
   const ui = screen("AnalyticalStudio");
   assert.match(ui, /describeSnapshotPair\(/);
