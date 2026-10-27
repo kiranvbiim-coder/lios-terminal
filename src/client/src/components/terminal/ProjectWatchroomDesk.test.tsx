@@ -84,6 +84,7 @@ test("Watchrooms offer the real event timeline only when at least two source-bou
   const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
     createElement(ProjectWatchroomDesk, { projectId: 7 })));
   assert.match(html, /Explore run timeline/);
+  assert.doesNotMatch(html, /Interactive timeline unavailable/);
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /2 recent recorded runs/);
   assert.match(html, /skipped at/);

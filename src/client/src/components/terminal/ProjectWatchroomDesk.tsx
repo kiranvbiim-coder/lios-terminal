@@ -4,6 +4,7 @@ import { BellRing, CircleAlert, Clock3, Workflow } from "lucide-react";
 import { useP9Notifications, useP9Runs, useP9Workflows, type P9RunRecord } from "@/lib/useP9Automation";
 import { projectWatchroomSummary, watchroomRecordedHistory } from "@/lib/phase2ProjectPresentation";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
+import { OptionalTimelineBoundary } from "./OptionalTimelineBoundary";
 
 const WatchroomRecordedRunTimeline = React.lazy(() => import("./WatchroomRecordedRunTimeline"));
 
@@ -97,10 +98,12 @@ export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
                     className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
                     {timelineWorkflowId === room.workflow.id ? "Hide run timeline" : "Explore run timeline"}
                   </button>
-                  {timelineWorkflowId === room.workflow.id && <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading recorded run timeline…</p>}>
-                    <WatchroomRecordedRunTimeline projectId={projectId}
-                      workflowId={room.workflow.id} runs={recordedRuns} />
-                  </React.Suspense>}
+                  {timelineWorkflowId === room.workflow.id && <OptionalTimelineBoundary key={projectId + ":" + room.workflow.id}>
+                    <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading recorded run timeline…</p>}>
+                      <WatchroomRecordedRunTimeline projectId={projectId}
+                        workflowId={room.workflow.id} runs={recordedRuns} />
+                    </React.Suspense>
+                  </OptionalTimelineBoundary>}
                 </>}
               </section>}
               <button type="button" onClick={() => setManaging(true)}

@@ -54,6 +54,7 @@ test("real free MIT beUI source is wired to existing Framer Motion without a sec
   assert.doesNotMatch(beui, /from "motion\/react"|from "@\/lib\/touch"/);
   assert.match(timeline, /Timeline as BeuiTimeline/);
   assert.match(news, /React\.lazy\(\(\) => import\("\.\/NewsObservedRevisionTimeline"\)\)/);
+  assert.match(news, /OptionalTimelineBoundary key=\{exactUrl\}/);
 });
 
 test("multiple related source headlines can offer a distinct chronology without merging publishers", () => {

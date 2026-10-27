@@ -42,6 +42,7 @@ test("existing Watchrooms own a single lazy imported timeline and an explicit co
   assert.match(shell, /aria-expanded=\{timelineWorkflowId === room\.workflow\.id\}/);
   assert.match(shell, /setTimelineWorkflowId\(null\)/);
   assert.match(shell, /<WatchroomRecordedRunTimeline projectId=\{projectId\}/);
+  assert.match(shell, /<OptionalTimelineBoundary key=\{projectId \+ ":" \+ room\.workflow\.id\}/);
   assert.doesNotMatch(shell, /<BeuiTimeline|from ["']motion\/react/);
   const adapter = source("./WatchroomRecordedRunTimeline.tsx");
   assert.match(adapter, /from "\.\.\/vendor\/beui\/BeuiTimeline"/);

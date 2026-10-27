@@ -5,6 +5,7 @@ import {
 import { relatedNewsCoverage } from "@/lib/newsRelatedCoverage";
 import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import type { NewsStoryObservation } from "@/lib/newsStoryEvolution";
+import { OptionalTimelineBoundary } from "../terminal/OptionalTimelineBoundary";
 
 const NewsObservedRevisionTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline"));
 const RelatedPublisherTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline")
@@ -66,9 +67,11 @@ export function NewsStoryEvolution({
             className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
             {timelineVisible ? "Hide visual timeline" : "Explore visual timeline"}
           </button>
-          {timelineVisible && <React.Suspense fallback={<p role="status" className="mt-3 font-ui text-xs text-muted-foreground">Loading recorded timeline…</p>}>
-            <NewsObservedRevisionTimeline versions={versions} />
-          </React.Suspense>}
+          {timelineVisible && <OptionalTimelineBoundary key={exactUrl}>
+            <React.Suspense fallback={<p role="status" className="mt-3 font-ui text-xs text-muted-foreground">Loading recorded timeline…</p>}>
+              <NewsObservedRevisionTimeline versions={versions} />
+            </React.Suspense>
+          </OptionalTimelineBoundary>}
           <ol className="mt-3 space-y-3 border-l border-border/70 pl-3">
             {changes.map(({ later, before, fields }) => (
               <li key={later.observedAt + later.url} className="space-y-1 font-ui text-xs text-muted-foreground">
@@ -99,9 +102,11 @@ export function NewsStoryEvolution({
             className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
             {relatedTimelineVisible ? "Hide publication timeline" : "Explore publication timeline"}
           </button>
-          {relatedTimelineVisible && <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading publisher chronology…</p>}>
-            <RelatedPublisherTimeline headlines={related} />
-          </React.Suspense>}
+          {relatedTimelineVisible && <OptionalTimelineBoundary key={exactUrl}>
+            <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading publisher chronology…</p>}>
+              <RelatedPublisherTimeline headlines={related} />
+            </React.Suspense>
+          </OptionalTimelineBoundary>}
         </>}
         <ul className="mt-3 space-y-2">{related.map(item => (
           <li key={item.url} className="rounded-lg border border-border/60 p-2">
