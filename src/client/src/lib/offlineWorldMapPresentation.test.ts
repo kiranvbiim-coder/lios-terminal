@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { RecordedGeographicPoint } from "./offlineWorldMapPresentation";
-import { projectOfflineWorldPoints, worldPointCoordinates } from "./offlineWorldMapPresentation";
+import { projectOfflineWorldPoints, worldPointCoordinates, worldMapCenterPreservingPan } from "./offlineWorldMapPresentation";
 
 const at = "2026-10-27T12:00:00Z";
 const locations: RecordedGeographicPoint[] = [
@@ -100,4 +100,19 @@ test("B01 geography search respects source and date layers without inventing loc
   assert.deepEqual(projectOfflineWorldPoints(locations, { withEventDate: true, query: "Western" })
     .points.map(row => row.id), ["west"]);
   assert.deepEqual(projectOfflineWorldPoints(locations, { query: "  WESTERN  " }).points.map(row => row.id), ["west"]);
+});
+
+
+test("B01 centre-preserving pan keeps the identical saved map coordinate while zooming", () => {
+  const viewport = { width: 600, height: 400 };
+  const old = { x: -170, y: 20 };
+  const next = worldMapCenterPreservingPan(old, viewport, 0.5, 1);
+  const oldWorldCentre = { x: (300 - old.x) / 0.5, y: (200 - old.y) / 0.5 };
+  assert.deepEqual({ x: (300 - next.x) / 1, y: (200 - next.y) / 1 }, oldWorldCentre);
+  const back = worldMapCenterPreservingPan(next, viewport, 1, 0.5);
+  assert.deepEqual(back, old);
+  for (const invalid of [0, NaN, Infinity, -1]) {
+    assert.deepEqual(worldMapCenterPreservingPan(old, viewport, 0.5, invalid), old);
+  }
+  assert.deepEqual(worldMapCenterPreservingPan(old, { width: 0, height: 300 }, 0.5, 1), old);
 });
