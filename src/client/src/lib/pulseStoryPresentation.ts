@@ -6,7 +6,7 @@ import type { IntelligenceCard } from "@shared/waveDContracts";
  */
 export type PulseStoryView =
   Pick<IntelligenceCard, "id" | "title" | "whatHappened" | "priority" | "score"> &
-  Partial<Pick<IntelligenceCard, "kind" | "symbol" | "subjectKey" | "createdAt" | "whyItMatters" | "whyItMattersToUser" | "evidence">>;
+  Partial<Pick<IntelligenceCard, "kind" | "symbol" | "subjectKey" | "createdAt" | "whyItMatters" | "whyItMattersToUser" | "evidence" | "media">>;
 
 export function safePulseSourceUrl(raw: string | undefined): string | null {
   if (!raw) return null;
