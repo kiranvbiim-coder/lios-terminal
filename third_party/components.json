@@ -48,7 +48,8 @@
         "client/src/components/vendor/beui/BeuiCitations.tsx",
         "client/src/lib/trustCitationPresentation.ts",
         "client/src/lib/trustCitationPresentation.test.ts",
-        "client/src/components/terminal/ConversationTrustPanel.tsx"
+        "client/src/components/terminal/ConversationTrustPanel.tsx",
+        "client/src/components/vendor/beui/BeuiCitations.test.tsx"
       ],
       "pathMappingNote": "Pinned beUI citation list / row and disclosure patterns adapted to recorded P3 TrustManifest; no second evidence authority.",
       "modifications": [
