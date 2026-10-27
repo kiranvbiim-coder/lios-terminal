@@ -126,6 +126,18 @@ jobs:
         timeout-minutes: ${{ matrix.platform == 'macOS' && 45 || 30 }}
         run: npm run test:offline
 
+      # One explicit closure gate on an existing standard public runner.
+      # These tests also run in test:offline; this compact gate gives a named
+      # review signal and checks beta manifest logic not covered by that suite.
+      # No packaging, signing keys, paid runners or release uploads.
+      - name: Four-phase UX integration and beta integrity (source only)
+        if: ${{ !cancelled() && matrix.platform == 'Linux' }}
+        timeout-minutes: 10
+        run: |
+          npm run test:phase-closure
+          npm run beta:manifest:test
+          npm run release:preflight:ci
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
