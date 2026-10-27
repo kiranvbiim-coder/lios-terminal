@@ -12,6 +12,7 @@ import {
   getMarketMovers,
   getMarketSentiment,
   getNews,
+  getNewsPage,
   getNewsArticle,
   getOHLCV,
   getOHLCVSeries,
@@ -24,6 +25,7 @@ import {
   getForexQuotes,
 } from "./marketData";
 import { getGeminiNewsAnalysis } from "./geminiNewsService";
+import { InvalidNewsRequest, parseNewsPageRequest } from "./newsPageRequest";
 import { getCapeSnapshot } from "./shillerCapeService";
 import { getRateCycleImpact } from "./crossDomainService";
 import { getEconomicCalendar, getEconomicEventDetail } from "./economicsData";
@@ -443,11 +445,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/finance/active", handleFinance(async (req) => getMarketMovers("active", req.query.region as any), 60));
   app.get("/api/finance/sentiment", handleFinance(async () => getMarketSentiment(), 60));
 
-  app.get("/api/finance/news", handleFinance(async (req) => {
-    const symbol = typeof req.query.symbol === "string" ? req.query.symbol.toUpperCase() : undefined;
-    const query = typeof req.query.query === "string" ? req.query.query : undefined;
-    return getNews(symbol, query);
-  }, 300));
+  // Only explicit pagination/window parameters select the structured page
+  // contract; legacy useNews() callers continue receiving a NewsItem[].
+  app.get("/api/finance/news", (req, res) => {
+    let requested;
+    try {
+      requested = parseNewsPageRequest(req.query as Record<string, unknown>);
+    } catch (error) {
+      if (error instanceof InvalidNewsRequest) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(400).json({ error: "Invalid news query." });
+      return;
+    }
+    void handleFinance(async () => requested.paged
+      ? getNewsPage(requested.symbol, requested.query, requested.options)
+      : getNews(requested.symbol, requested.query), 300)(req, res);
+  });
 
   app.get("/api/finance/news/ai-smart-search", handleFinance(async (req) => {
     const q = String(req.query.q || req.query.symbol || "NUVAMA").trim();
