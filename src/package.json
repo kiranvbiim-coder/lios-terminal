@@ -144,7 +144,8 @@
     "beta:acceptance:test": "node --test script/beta_release_acceptance.test.cjs",
     "media:verify": "node --import tsx script/verifyEditorialMedia.ts",
     "media:verify:test": "node --import tsx --test shared/editorialMedia.test.ts script/verifyEditorialMedia.test.ts client/src/components/terminal/LicensedEditorialImage.test.tsx",
-    "test:website-a3": "node --import tsx --test shared/pulseSubjectPreferences.test.ts client/src/lib/pulseFollowMuteIntegration.test.ts"
+    "test:website-a3": "node --import tsx --test shared/pulseSubjectPreferences.test.ts client/src/lib/pulseFollowMuteIntegration.test.ts",
+    "test:website-a4": "node --import tsx --test server/pulseReviewContinuity.test.ts client/src/components/terminal/HomeAttentionPanel.test.tsx client/src/lib/phase2HomeDiscoveryIntegration.test.ts client/src/lib/phase2VisualSearchIntegration.test.ts client/src/lib/websiteA4Integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
