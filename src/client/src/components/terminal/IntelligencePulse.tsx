@@ -59,6 +59,7 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
   useEffect(() => () => {
     handoffAbort.current?.abort();
     handoffAbort.current = null;
+    setHandoffBusyId(null);
   }, [tab, proactiveEnabled]);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
