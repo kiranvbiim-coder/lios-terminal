@@ -19,6 +19,7 @@ import {
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { useAudience } from "@/lib/audience";
 import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
+import { normalizePulseSubjectPreferences, type PulseSubjectChoice, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY,
@@ -99,6 +100,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const [waveDMonitoringCount, setWaveDMonitoringCount] = useState(0);
   const [waveDStatus, setWaveDStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [pulseChannel, setPulseChannel] = useState<PulseChannel>("for_you");
+  const [pulsePreferences, setPulsePreferences] = useState<PulseSubjectPreferences>({ followed: [], muted: [] });
+  const [pulsePreferenceBusy, setPulsePreferenceBusy] = useState(false);
+  const [pulsePreferenceError, setPulsePreferenceError] = useState<string | null>(null);
+  const [pulsePreferenceRevision, setPulsePreferenceRevision] = useState(0);
   const [briefHeadline, setBriefHeadline] = useState<string | null>(null);
   const [libraryRecents, setLibraryRecents] = useState<RecentAnalyticalContext[]>(() => loadRecentAnalyticalContexts().slice(0, 6));
   const [libraryFavorites, setLibraryFavorites] = useState<ViewMode[]>(() => loadTerminalFavorites().slice(0, 6));
@@ -125,12 +130,13 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
       if (!pulseResponse.ok) { setWaveDStatus("unavailable"); return; }
-      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number } };
+      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
       // Bound the already-authorized source read before evidence-safe clustering and six-card display.
       setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : []);
+      setPulsePreferences(normalizePulseSubjectPreferences(pulse.preferences));
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
@@ -139,7 +145,24 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDStatus("ready");
     }).catch(() => { if (!cancelled) setWaveDStatus("unavailable"); });
     return () => { cancelled = true; };
-  }, [pulseChannel]);
+  }, [pulseChannel, pulsePreferenceRevision]);
+
+  const changePulseSubject = async (subjectKey: string, choice: PulseSubjectChoice) => {
+    if (pulsePreferenceBusy || waveDStatus !== "ready") return;
+    setPulsePreferenceBusy(true);
+    setPulsePreferenceError(null);
+    try {
+      const response = await apiRequest("PUT", "/api/wave-d/pulse/preferences", { subjectKey, choice });
+      const payload = await response.json() as { persisted?: boolean; preferences?: PulseSubjectPreferences };
+      if (payload.persisted !== true || !payload.preferences) throw new Error("The server did not confirm your discovery choice.");
+      setPulsePreferences(normalizePulseSubjectPreferences(payload.preferences));
+      setPulsePreferenceRevision(revision => revision + 1);
+    } catch {
+      setPulsePreferenceError("Follow/Mute could not be saved. Your existing choices are unchanged.");
+    } finally {
+      setPulsePreferenceBusy(false);
+    }
+  };
 
   const toggleMetric = (id: string) => setSelectedFieldIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id].slice(-6));
   const selectedLabels = selectedFieldIds.map((id) => catalog.find((field) => field.id === id)?.label ?? id);
@@ -190,6 +213,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               favorites={libraryFavorites}
               pulseChannel={pulseChannel}
               pulseStatus={waveDStatus}
+              pulsePreferences={pulsePreferences}
+              pulsePreferenceBusy={pulsePreferenceBusy}
+              pulsePreferenceError={pulsePreferenceError}
+              onPulseSubjectChange={(subjectKey, choice) => { void changePulseSubject(subjectKey, choice); }}
               briefHeadline={!isClient && briefHeadline ? briefHeadline : null}
               onPulseChannelChange={setPulseChannel}
             />
