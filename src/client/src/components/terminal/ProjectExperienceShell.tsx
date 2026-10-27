@@ -923,13 +923,22 @@ export default function ProjectExperienceShell({
       if (!matchesSavedSearchChat(result, chat) || detail.artifact.id !== result.artifactId || detail.artifact.projectId !== null || detail.artifact.owningChatId !== chat.id) throw new Error("Artifact ownership no longer matches this Chat.");
       if (busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) return false;
       if (selection.chatId !== chat.id && (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before))) return false;
-      if (selection.chatId === chat.id) {
+      if (selection.chatId === chat.id && chatMode === "quick") {
         pendingArtifactOpenRef.current = null; pendingArtifactFocusRef.current = false;
         setConversationArtifactRef(result.artifactId); setArtifactFocusMode(false);
+        setArtifactViewVersion(detail.version.version);
       } else {
-        pendingArtifactOpenRef.current = result.artifactId; pendingArtifactFocusRef.current = false;
+        // The destination Chat owns this bookmark. Never write its selected
+        // Artifact/revision into the *currently mounted* Chat's local state.
+        // The canonical P4 load still verifies exact ownership and access.
+        rememberConversationArtifactView(chat.ownerUserId, null, chat.id, {
+          artifactId: result.artifactId,
+          revision: detail.version.version,
+          focus: false,
+        });
+        pendingArtifactOpenRef.current = null;
+        pendingArtifactFocusRef.current = false;
       }
-      setArtifactViewVersion(detail.version.version);
       return await openChat(chat, true);
     }
     if (result.kind === "chat" && result.chatId) {
