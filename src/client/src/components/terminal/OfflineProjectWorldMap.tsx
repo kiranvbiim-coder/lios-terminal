@@ -14,6 +14,7 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
   const [sourceOnly, setSourceOnly] = useState(false);
   const [withEventDate, setWithEventDate] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [atlasUnavailable, setAtlasUnavailable] = useState(false);
   const [zoom, setZoom] = useState(0.7);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -119,6 +120,7 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
       }}>
         <img src={ATLAS} alt="" aria-hidden="true" draggable={false}
           width={WIDTH} height={HEIGHT} decoding="async"
+          onLoad={() => setAtlasUnavailable(false)} onError={() => setAtlasUnavailable(true)}
           className="absolute inset-0 h-full w-full select-none" />
         {projection.points.map(point => <button key={point.id} type="button"
           aria-label={`Inspect recorded map location ${point.label}`}
@@ -136,6 +138,7 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
       </div>
       <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border/50 bg-[#07131c]/90 px-2 py-1 font-ui text-[11px] text-white/75">Natural Earth · offline · {Math.round(zoom * 100)}%</span>
     </div>
+    {atlasUnavailable && <p role="alert" className="rounded-lg border border-amber-300/40 p-3 font-ui text-sm text-amber-200">Bundled world outline unavailable. Recorded coordinates remain accessible below; no online basemap will be requested.</p>}
     {projection.points.length === 0
       ? <p role="status" className="font-ui text-sm text-muted-foreground">No recorded locations meet the selected source/date filters.</p>
       : <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
