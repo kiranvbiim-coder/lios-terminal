@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Clock, Plus, MessageSquare, Send, CheckCircle2, ChevronRight, ReceiptText,
   Circle, CircleDot, CircleSlash, Calendar, FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Briefcase,
@@ -466,6 +466,7 @@ export default function AdvisoryPanel() {
   const [description, setDescription] = useState("");
   const [packType, setPackType] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -509,7 +510,8 @@ export default function AdvisoryPanel() {
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !formDomainId) return;
-    if (submitting) return;
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -525,6 +527,7 @@ export default function AdvisoryPanel() {
     } catch {
       setSubmitError("The advisory request was not confirmed. Your draft remains here; check existing requests before retrying to avoid duplicates.");
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -816,7 +819,7 @@ export default function AdvisoryPanel() {
               <p className="text-xs text-muted-foreground">A consultant will review this request and send you a scoped quote with pricing and turnaround time before any work begins.</p>
               {submitError && <p role="alert" className="rounded-lg border border-amber-500/35 p-3 font-ui text-sm text-amber-200">{submitError}</p>}
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowNewModal(false)}>Cancel</Button>
+                <Button type="button" variant="outline" disabled={submitting} onClick={() => setShowNewModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
               </div>
             </form>
