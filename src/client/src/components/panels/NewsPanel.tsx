@@ -92,9 +92,14 @@ export default function NewsPanel({ symbol }: Props) {
   }, [filtered, selectedUrl, newsQuery.isSuccess, newsQuery.isFetching, newsQuery.isError]);
 
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
-  // Ref tracks the currently committed read-through target across asynchronous
-  // license rechecks. A late response can never overwrite another article.
-  activeNewsStoryRef.current = selectedItem?.url ?? null;
+  // Invalidate an in-flight image recheck on EVERY read-through identity change,
+  // including A → B → A and artifact-restored selection changes. Without this,
+  // an old response can reappear after the same article is selected again.
+  const selectedStoryUrl = selectedItem?.url ?? null;
+  if (activeNewsStoryRef.current !== selectedStoryUrl) {
+    recheckGenerationRef.current++;
+    activeNewsStoryRef.current = selectedStoryUrl;
+  }
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedSourceHref = selectedItem ? safePulseSourceUrl(selectedItem.url) : null;
