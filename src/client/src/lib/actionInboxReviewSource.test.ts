@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const pulse = read("../components/terminal/IntelligencePulse.tsx");
+const overlays = read("../components/terminal/TerminalUxOverlays.tsx");
+const terminal = read("../pages/Terminal.tsx");
+const handoff = read("./universalChatHandoff.ts");
 const hook = read("./useProactivePulse.ts");
 const routes = read("../../../server/waveDRoutes.ts");
 const shared = read("../../../shared/waveDContracts.ts");
@@ -40,4 +43,17 @@ test("Phase 3 unavailable is not misrepresented as zero alerts or generated cert
   assert.match(pulse, /target="_blank" rel="noopener noreferrer"/);
   assert.match(pulse, /This does not start an AI agent/);
   assert.match(hook, /response\.status === 401 \|\| response\.status === 403/);
+});
+
+test("Phase 3 AI alert review only stages canonical unsent Chat draft after a user click", () => {
+  assert.match(pulse, /buildActionInboxChatDraft\(item, proactive\.review\.asOf!\)/);
+  assert.match(pulse, /if \(onStageAiReview\(drafted\)\) onClose\(\)/);
+  assert.match(pulse, /Draft review in Chat/);
+  assert.match(pulse, /Keep or review your unsaved Workbench edits/);
+  assert.match(overlays, /onStageAiReview=\{onStageAiReview\}/);
+  assert.match(terminal, /onStageAiReview=\{\(draft\) => \{/);
+  assert.match(terminal, /if \(workbenchDirtyRef\.current \|\| !draft\.trim\(\)\) return false/);
+  assert.match(terminal, /handleAskLios\(draft\)/);
+  assert.match(handoff, /stageUniversalChatQuestion\(existing: string, incoming: string \| null\)/);
+  assert.doesNotMatch(pulse, /runConversation\(|sendMessage\(|submitPrompt\(/);
 });
