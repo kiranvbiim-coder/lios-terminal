@@ -6,6 +6,16 @@ import { projectRecordedEvidenceFlow } from "@/lib/recordedEvidenceFlow";
 
 const RecordedEvidenceSankey = lazy(() => import("./RecordedEvidenceSankey"));
 
+class FlowPlotBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed
+      ? <p role="alert" className="p-3 font-ui text-xs text-amber-200">The flow chart could not render. Every available recorded link is still inspectable in the table below.</p>
+      : this.props.children;
+  }
+}
+
 /** Optional Kibo/beUI-inspired source-first compare+flow view. One canonical
  * Investigation remains responsible for evidence authoring and permissions.
  * List remains accessible when visual ECharts is loading or unavailable. */
@@ -48,9 +58,11 @@ export function RecordedEvidenceFlowPanel({
       </div>
       <div className="h-[280px] min-w-0 rounded-xl border border-border/50 bg-background/55 p-2 sm:h-[380px]"
         data-testid="recorded-evidence-flow-plot">
-        <Suspense fallback={<p role="status" className="p-3 font-ui text-xs text-muted-foreground">Preparing recorded flow visualization…</p>}>
-          <RecordedEvidenceSankey projection={model}/>
-        </Suspense>
+        <FlowPlotBoundary>
+          <Suspense fallback={<p role="status" className="p-3 font-ui text-xs text-muted-foreground">Preparing recorded flow visualization…</p>}>
+            <RecordedEvidenceSankey projection={model}/>
+          </Suspense>
+        </FlowPlotBoundary>
       </div>
       <p className="font-ui text-xs leading-5 text-muted-foreground">
         Colored links are a layout of recorded directions and types. Paths are not causal chains.
