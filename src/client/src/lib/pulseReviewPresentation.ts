@@ -29,6 +29,8 @@ export function normalizePulseReviewPresentation(
   } else if (typeof input.reviewedAt !== "string" ||
       !/^\d{4}-\d{2}-\d{2}T/.test(input.reviewedAt) ||
       !Number.isFinite(Date.parse(input.reviewedAt))) return null;
+  // Reject repeated receipt IDs instead of silently deduplicating a malformed source history.
+  if (new Set(input.newCardIds as string[]).size !== input.newCardIds.length) return null;
   const visibleIds = new Set(visibleCards.map(card => card.id));
   const ids: string[] = [...new Set(input.newCardIds as string[])];
   if (ids.length !== input.newCount) return null;

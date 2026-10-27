@@ -220,7 +220,7 @@ export default function FusionPulseBoard({
             </button>
             <p className="w-full font-ui text-xs text-muted-foreground">Review records source-card identity changes, not proof that real-world events changed. This action marks the currently accessible unmuted Pulse as reviewed.</p>
           </div>}
-          {reviewError && <p role="alert" className="mb-3 font-ui text-xs text-rose-200">{reviewError}</p>
+          {reviewError && <p role="alert" className="mb-3 font-ui text-xs text-rose-200">{reviewError}</p>}
           {preferenceError && <p role="alert" className="mb-3 rounded-lg border border-rose-300/35 px-3 py-2 font-ui text-sm text-rose-200">{preferenceError}</p>}
           {pulseStatus === "ready" && pulsePreferences.followed.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Followed subjects ({pulsePreferences.followed.length})</summary>
