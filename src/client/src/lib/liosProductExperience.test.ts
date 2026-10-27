@@ -75,6 +75,9 @@ test("chat skin is a final imported layer while canonical structural shell remai
 
 test("chat, composer, markdown, palette swatches and mounted artifact retain canonical ownership", () => {
   assert.match(experience, /data-lios-message=\{message\.role\}/);
+  assert.match(experience, /className="lios-conversation-message lios-conversation-stream/);
+  assert.match(experience, /aria-label="LiOS response in progress"/);
+  assert.match(polishCss, /lios-conversation-stream\[data-lios-message="assistant"\]/);
   assert.match(experience, /aria-label=\{message\.role === "assistant"/);
   assert.match(experience, /className="lios-chat-suggestion-menu/);
   assert.match(experience, /id="lios-chat-empty-title"[^\n]*text-foreground/);
