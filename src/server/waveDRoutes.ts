@@ -2,7 +2,7 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { editorialMediaSchema } from "@shared/editorialMedia";
+import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
 import { storage } from "./storage";
@@ -448,6 +448,9 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
   app.post("/api/wave-d/pulse/cards", requireRole(...AUTHOR_ROLES), async (req, res) => {
     const parsed = pulseCardSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid Pulse card.", issues: parsed.error.issues });
+    if (parsed.data.media && !eligibleEditorialMedia(
+      parsed.data.media, parsed.data.evidence.map(evidence => evidence.id), new Date().toISOString(),
+    )) return res.status(400).json({ error: "Media rights are unverified, expired, revoked or not linked to an attached evidence ID." });
     const card: PulseCardDraft = { ...parsed.data, id: id("pulse", parsed.data.id), createdAt: parsed.data.createdAt ?? new Date().toISOString(), evidence: parsed.data.evidence };
     try {
       const state = await updateWaveDState(waveUser(req), (current) => ({ ...current, pulseCards: [...current.pulseCards.filter((item) => item.id !== card.id), card] }));
