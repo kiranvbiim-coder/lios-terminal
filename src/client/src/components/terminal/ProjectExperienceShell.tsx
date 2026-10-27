@@ -32,6 +32,7 @@ import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycl
 import { resolveEntrySurface, resolveInitialChatMode } from "@/lib/projectEntry";
 import { ProjectHome, relativeTime } from "./ProjectHome";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { HomeAttentionPanel } from "./HomeAttentionPanel";
 import { AuthenticatedNavigation, type NavigationSection } from "./AuthenticatedNavigation";
 import WorkSearchDialog from "./WorkSearchDialog";
 import type { WorkSearchResult } from "@shared/workSearch";
@@ -2374,6 +2375,7 @@ export default function ProjectExperienceShell({
                     </div>
                   </section>
                 )}
+                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel />}
                 {hiddenMessageCount > 0 && (
                   <div className="flex justify-center" role="group" aria-label="Earlier messages">
                     <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {
