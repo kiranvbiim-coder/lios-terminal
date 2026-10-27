@@ -1,7 +1,7 @@
 import type { ResearchTrayItem } from "./terminalResearchTray";
 import type { ResearchCanvasPosition } from "./terminalResearchCanvas";
 
-export type SpatialLayoutMode = "map" | "timeline";
+export type SpatialLayoutMode = "map" | "timeline" | "list";
 export interface SpatialPoint { x: number; y: number }
 export interface SpatialNode { item: ResearchTrayItem; point: SpatialPoint }
 export interface SpatialEdge { fromId: string; toId: string; group: string }
