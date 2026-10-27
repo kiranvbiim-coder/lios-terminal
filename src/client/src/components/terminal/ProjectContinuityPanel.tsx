@@ -27,7 +27,7 @@ export function ProjectContinuityPanel({
   const currentProjectRef = useRef(projectId);
   currentProjectRef.current = projectId;
   const inFlightProjectsRef = useRef<Set<number>>(new Set());
-  const [refreshingProjects, setRefreshingProjects] = useState<ReadonlySet<number>>(() => new Set());
+  const [refreshingProjects, setRefreshingProjects] = useState<Set<number>>(() => new Set<number>());
   const [notice, setNotice] = useState<ProjectRefreshNotice | null>(null);
   const refreshing = refreshingProjects.has(projectId);
   const message = visibleProjectRefreshNotice(notice, projectId);
@@ -37,7 +37,11 @@ export function ProjectContinuityPanel({
     const requestedProjectId = projectId;
     if (!canBeginProjectRefresh(inFlightProjectsRef.current, requestedProjectId)) return;
     inFlightProjectsRef.current.add(requestedProjectId);
-    setRefreshingProjects(previous => new Set(previous).add(requestedProjectId));
+    setRefreshingProjects(previous => {
+      const next = new Set<number>(previous);
+      next.add(requestedProjectId);
+      return next;
+    });
     setNotice(null);
     try {
       const next = await refreshP6ProjectContinuity(requestedProjectId);
@@ -62,7 +66,7 @@ export function ProjectContinuityPanel({
     } finally {
       inFlightProjectsRef.current.delete(requestedProjectId);
       setRefreshingProjects(previous => {
-        const next = new Set(previous);
+        const next = new Set<number>(previous);
         next.delete(requestedProjectId);
         return next;
       });
