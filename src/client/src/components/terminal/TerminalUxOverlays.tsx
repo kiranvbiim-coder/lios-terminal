@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AnalyticalContextMenu from "./AnalyticalContextMenu";
 import AnalyticalPeek from "./AnalyticalPeek";
 import AnalyticalStudio from "./AnalyticalStudio";
+import {
+  INITIAL_SPATIAL_CANVAS_RETURN_STATE, INITIAL_SPATIAL_STUDIO_TAB,
+  type SpatialCanvasReturnState, type SpatialStudioTab,
+} from "@/lib/spatialStudioContinuity";
 import CognitiveCore from "./CognitiveCore";
 import DecisionCenter from "./DecisionCenter";
 import DecisionCheckpointCoordinator from "./DecisionCheckpointCoordinator";
@@ -78,6 +82,10 @@ function snapshotValuesFromEvidence(evidence: EvidenceSnapshot): Record<string, 
 
 export default function TerminalUxOverlays({ experienceSurface, activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace }: Props) {
   const [surface, setSurface] = useState<TerminalUxSurface | null>(null);
+  // Overlay-local only: survives a Studio → Workbench → Studio handoff while
+  // this authenticated terminal remains mounted; never enters disk or P4 storage.
+  const [studioTab, setStudioTab] = useState<SpatialStudioTab>(INITIAL_SPATIAL_STUDIO_TAB);
+  const [spatialCanvasReturn, setSpatialCanvasReturn] = useState<SpatialCanvasReturnState>(INITIAL_SPATIAL_CANVAS_RETURN_STATE);
   const [contextMenu, setContextMenu] = useState<TerminalContextMenuRequest | null>(null);
   const [peek, setPeek] = useState<TerminalPeekRequest | null>(null);
   const [inspector, setInspector] = useState<TerminalInspectorRequest | null>(null);
@@ -260,7 +268,8 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {surface === "object-workbench" && <ObjectWorkbench onClose={() => setSurface(null)} />}
       {surface === "graph-explorer" && <GraphExplorer activeSymbol={activeSymbol} onClose={() => setSurface(null)} />}
       {surface === "workspace-composer" && <WorkspaceComposer workspace={workspace} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
-      {surface === "innovation-studio" && <AnalyticalStudio activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} isInternal={isInternal} preferences={preferences} onPreferencesChange={onPreferencesChange} onOpen={onOpen} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
+      {surface === "innovation-studio" && <AnalyticalStudio activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} isInternal={isInternal} preferences={preferences} onPreferencesChange={onPreferencesChange} onOpen={onOpen} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)}
+        selectedTab={studioTab} onSelectTab={setStudioTab} spatialCanvasReturn={spatialCanvasReturn} onSpatialCanvasReturn={setSpatialCanvasReturn} />}
       {surface === "research-tray" && <ResearchTray activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
       {surface === "shortcuts" && <ShortcutOverlay onClose={() => setSurface(null)} />}
       {surface === "macros" && <TerminalMacroManager activeSymbol={activeSymbol} isInternal={isInternal} onRunStep={runMacroStep} onClose={() => setSurface(null)} />}
