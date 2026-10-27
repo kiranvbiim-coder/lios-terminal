@@ -1,4 +1,5 @@
 import type { CrossDomainEdge, CrossDomainGraph, CrossDomainNode } from "./terminalCrossDomainGraph";
+import { inferDomain } from "./terminalCrossDomainGraph";
 import type { IntelligenceObject } from "./terminalIntelligenceObjects";
 
 /** This selector is display-only. Every shown line must already exist in the published object graph. */
@@ -115,7 +116,7 @@ export function selectRecordedCrossDomainGraphObjects(
   if (!needle && !selectedId) return objects.slice(0, limit);
   const matches = objects.filter(object =>
     object.id === selectedId || (!!needle && [
-      object.id, object.label, object.symbol ?? "", object.kind, ...object.tags,
+      object.id, object.label, object.symbol ?? "", object.kind, inferDomain(object), ...object.tags,
     ].some(value => value.toLocaleLowerCase().includes(needle))));
   if (!matches.length) return needle ? [] : objects.slice(0, limit);
   const focus = new Set(matches.map(object => object.id));
