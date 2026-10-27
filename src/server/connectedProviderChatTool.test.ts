@@ -72,7 +72,8 @@ test("P5 Chat: single governed provider SDK and Project/rights boundaries are us
   const source = readFileSync(new URL("./connectedProviderChatTool.ts", import.meta.url), "utf8");
   const runtime = readFileSync(new URL("./conversationRuntime.ts", import.meta.url), "utf8");
   assert.match(source, /createProviderRegistryForUser\(tenant, actor\)/);
-  assert.match(source, /executeCanonicalDataRequestCached\(request, tenant, registry\)/);
+  assert.match(source, /executeCanonicalDataRequest\(request, tenant, registry\)/);
+  assert.doesNotMatch(source, /executeCanonicalDataRequestCached\(request, tenant, registry\)/, "an explicit Chat preview must never return a stale file cache hit");
   assert.match(source, /await authorizeCanonicalDataRequests\(\[request\], tenant\)/);
   assert.match(source, /await getProject\(tenant, projectId\)/);
   assert.match(source, /resourceTransmissionAllowed !== true/);
