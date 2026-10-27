@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { importLicensedNewsPhoto } from "./import_licensed_editorial_image";
+import type { CommonsCandidate } from "../shared/commonsMedia";
 
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const CC0_URL = "https://creativecommons.org/publicdomain/zero/1.0/";
@@ -35,15 +36,6 @@ type ImageInfo = {
 type CommonsFile = { title?: string; imageinfo?: ImageInfo[] };
 type CommonsPayload = { query?: { pages?: Record<string, CommonsFile> } };
 
-export type CommonsCandidate = {
-  fileTitle: string;
-  filePage: string;
-  previewUrl: string;
-  creator: string;
-  licenseUrl: typeof CC0_URL;
-  license: "CC0 1.0";
-  mime: "image/jpeg" | "image/png" | "image/webp" | "image/avif";
-};
 
 function strippedText(value: unknown, max = 180): string {
   if (typeof value !== "string") return "";
