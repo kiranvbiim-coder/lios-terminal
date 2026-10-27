@@ -48,7 +48,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
     return () => { controller.abort(); };
   }, [expanded, signature]);
 
-  const current = state.signature === signature ? state : { phase: "loading" as const };
+  const current: typeof state = state.signature === signature ? state : { phase: "loading" };
   const decision = current.decision?.status === "ready" ? current.decision : null;
   return <section aria-label="Governed visual answer from saved Artifact" data-testid="governed-chat-visual-answer"
     className="mb-2 min-w-0 rounded-xl border border-border/55 bg-card/45 p-3">
