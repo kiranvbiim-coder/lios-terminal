@@ -1,0 +1,54 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { NewsImageDiscovery, CommonsContextIllustration } from "./NewsImageDiscovery";
+import NewsEditorialStoryCard from "./NewsEditorialStoryCard";
+import type { CommonsCandidate } from "@shared/commonsMedia";
+
+const candidate: CommonsCandidate = {
+  fileTitle: "File:Illustrative solar field.jpg",
+  previewUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/solar.jpg/640px-solar.jpg",
+  filePage: "https://commons.wikimedia.org/wiki/File:Illustrative_solar_field.jpg",
+  creator: "Commons contributor",
+  license: "CC0 1.0",
+  licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+  mime: "image/jpeg",
+};
+const render = (value: React.ReactElement) => renderToStaticMarkup(value);
+
+test("closed image discovery renders no third-party images or network-side effects", () => {
+  const html = render(React.createElement(NewsImageDiscovery, {
+    articleTitle: "Solar innovation", selected: null, onSelect: () => undefined, onClear: () => undefined,
+  }));
+  assert.match(html, /Find context image/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.doesNotMatch(html, /<img\b|upload\.wikimedia\.org|commons-context-illustration/);
+});
+
+test("user-selected context image visibly denies event-photo status and exposes no fake license grant", () => {
+  const html = render(React.createElement(CommonsContextIllustration, { candidate }));
+  assert.match(html, /Illustration only/);
+  assert.match(html, /not a photograph of the news event/);
+  assert.match(html, /referrerPolicy="no-referrer"|referrerpolicy="no-referrer"/i);
+  assert.match(html, /src="https:\/\/upload\.wikimedia\.org\/wikipedia\/commons/);
+  const denied = render(React.createElement(CommonsContextIllustration, {
+    candidate: { ...candidate, previewUrl: "https://evil.example.org/track.png" },
+  }));
+  assert.doesNotMatch(denied, /<img\b/);
+});
+
+test("existing news card may preview selected context without persisting it as licensed editorial media", () => {
+  const props = {
+    title: "Reported market development", summary: "Sourced news from the publisher",
+    source: "Original publisher", publishedAt: "2026-10-27T06:00:00Z", ageLabel: "Today",
+    statusBadge: React.createElement("span", null, "Feed"), active: true, lead: true,
+    sourceEvidenceId: "https://news.example.org/exact-article", onSelect: () => undefined,
+  };
+  const withPreview = render(React.createElement(NewsEditorialStoryCard, { ...props, contextIllustration: candidate }));
+  assert.match(withPreview, /commons-context-illustration/);
+  assert.match(withPreview, /not a photograph of the news event/);
+  assert.match(withPreview, /aria-pressed="true"/);
+  const without = render(React.createElement(NewsEditorialStoryCard, props));
+  assert.doesNotMatch(without, /commons-context-illustration|upload\.wikimedia\.org|<img\b/);
+});
