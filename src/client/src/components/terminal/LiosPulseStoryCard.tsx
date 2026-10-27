@@ -15,12 +15,16 @@ import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles 
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { normalizePulseSubject, type PulseSubjectChoice } from "@shared/pulseSubjectPreferences";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
+  subjectChoice?: PulseSubjectChoice | null;
+  preferenceBusy?: boolean;
+  onSubjectChoice?: (subjectKey: string, choice: PulseSubjectChoice) => void;
 }
 
 const priorityTone = {
@@ -29,9 +33,11 @@ const priorityTone = {
   fyi: "border-cyan-300/25 text-cyan-200",
 } as const;
 
-export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol }: Props) {
+export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol,
+  subjectChoice = null, preferenceBusy = false, onSubjectChoice }: Props) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
+  const subject = normalizePulseSubject(card.subjectKey ?? card.symbol);
   const reduceMotion = useReducedMotion();
   const evidence = card.evidence ?? [];
   const timestamp = pulseStoryTimestamp(card.createdAt);
@@ -126,6 +132,20 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
               <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
                 <button type="button" onClick={() => onAsk(pulseStoryQuestion(card))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:bg-amber-300/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><Sparkles className="h-4 w-4 text-amber-200" />Ask LiOS</button>
                 {card.symbol && onOpenSymbol && <button type="button" onClick={() => onOpenSymbol(card.symbol!)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Open analysis<ArrowUpRight className="h-4 w-4" /></button>}
+                {subject && onSubjectChoice && <>
+                  <button type="button" disabled={preferenceBusy}
+                    aria-pressed={subjectChoice === "follow"}
+                    onClick={() => onSubjectChoice(subject, subjectChoice === "follow" ? "clear" : "follow")}
+                    className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:border-amber-300/40 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                    {subjectChoice === "follow" ? "Unfollow" : "Follow"} {subject}
+                  </button>
+                  <button type="button" disabled={preferenceBusy}
+                    aria-pressed={subjectChoice === "mute"}
+                    onClick={() => onSubjectChoice(subject, subjectChoice === "mute" ? "clear" : "mute")}
+                    className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:border-amber-300/40 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                    {subjectChoice === "mute" ? "Unmute" : "Mute"} {subject}
+                  </button>
+                </>}
               </div>
             </div>
           </motion.div>
