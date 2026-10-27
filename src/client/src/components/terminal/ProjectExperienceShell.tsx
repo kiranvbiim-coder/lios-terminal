@@ -1,7 +1,7 @@
 import { ChatTerminalControl, type ChatTerminalRenderer } from "./ChatTerminalSurface";
 import TerminalScreenArtifact from "./TerminalScreenArtifact";
 import { initialTerminalScreenState, readTerminalScreenState } from "@shared/terminalArtifact";
-import { captureChatWorkbenchOrigin, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
+import { captureChatWorkbenchOrigin, returnChangesChatIdentity, type ChatWorkbenchOrigin } from "@/lib/chatWorkbenchHandoff";
 import { useArtifact, createArtifactVersion, type ArtifactDetail } from "@/lib/useArtifacts";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 import { apiRequest } from "@/lib/queryClient";
@@ -520,7 +520,7 @@ export default function ProjectExperienceShell({
     const { origin, request } = chatWorkbenchReturn;
     // The return target, including Temporary's null scope, is authoritative.
     // Returning to a different Chat must never silently clear an unsent draft.
-    if (chatMode !== origin.mode || selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+    if (returnChangesChatIdentity({ mode: chatMode, projectId: selection.projectId, chatId: selection.chatId }, origin)) {
       if (reviewingChatReturn.current === request) return;
       reviewingChatReturn.current = request;
       void (async () => {
@@ -564,7 +564,7 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
     const { context, prompt, request } = workbenchReturn;
-    if (chatMode !== (context.projectId === null ? "quick" : "project") || selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
+    if (returnChangesChatIdentity({ mode: chatMode, projectId: selection.projectId, chatId: selection.chatId }, { mode: context.projectId === null ? "quick" : "project", projectId: context.projectId, chatId: context.chatId })) {
       if (reviewingArtifactReturn.current === request) return;
       reviewingArtifactReturn.current = request;
       void (async () => {
