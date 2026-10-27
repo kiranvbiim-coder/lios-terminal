@@ -51,6 +51,8 @@ async function main() {
     sidecarPath: path.relative(root, executable),
     python: health.python,
     requiredPackages: health.packages,
+    representativeRoute: health.representativeRoute,
+    valuationRoute: health.valuationRoute,
     status: "verified",
   };
   // Never add evidence to sealed app resources after signature verification.
