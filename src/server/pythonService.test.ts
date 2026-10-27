@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { AddressInfo } from "node:net";
 import {
   SIDECAR_TOKEN_HEADER,
@@ -9,6 +12,7 @@ import {
   createSidecarToken,
   isOwnedSidecar,
   reserveLoopbackPort,
+  resolvePackagedPythonSidecar,
 } from "./pythonService";
 
 test("Python sidecar environment inherits only safe runtime values and never parent secrets", (t) => {
@@ -89,5 +93,49 @@ test("a sidecar that does not enforce our token is never trusted", async () => {
   } finally {
     enforcing.server.close();
     foreign.server.close();
+  }
+});
+
+test("packaged desktop never falls back to an unverified host Python interpreter", () => {
+  assert.equal(resolvePackagedPythonSidecar(undefined), null, "source checkout still uses its configured interpreter");
+  assert.throws(() => resolvePackagedPythonSidecar("./relative-resources", "darwin"),
+    /host-interpreter fallback refused/);
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-frozen-sidecar-"));
+  const binDir = path.join(root, "python-sidecar-dist", "lios-python-sidecar");
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+      /host-interpreter fallback refused/, "packaged macOS must not use the system python3");
+    assert.throws(() => resolvePackagedPythonSidecar(root, "win32"),
+      /host-interpreter fallback refused/, "packaged Windows must not use the system python");
+
+    // POSIX execute permission bits have no equivalent in Node's Win32 stat.
+    // Exercise those assertions on actual POSIX runners, not simulated chmod.
+    if (process.platform !== "win32") {
+      const macBinary = path.join(binDir, "lios-python-sidecar");
+      fs.writeFileSync(macBinary, "synthetic frozen executable", { mode: 0o700 });
+      fs.chmodSync(macBinary, 0o700);
+      assert.equal(resolvePackagedPythonSidecar(root, "darwin"), macBinary);
+      assert.equal(resolvePackagedPythonSidecar(root, "linux"), macBinary);
+      fs.chmodSync(macBinary, 0o600);
+      assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+        /host-interpreter fallback refused/, "non-executable packaged binary must be refused");
+
+      // A symlink cannot turn a mutable user-local python into an accepted package.
+      fs.unlinkSync(macBinary);
+      fs.symlinkSync(path.join(root, "outside-not-bundled"), macBinary);
+      assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+        /host-interpreter fallback refused/);
+    }
+
+    const winBinary = path.join(binDir, "lios-python-sidecar.exe");
+    fs.writeFileSync(winBinary, "synthetic frozen Windows executable");
+    assert.equal(resolvePackagedPythonSidecar(root, "win32"), winBinary);
+    fs.writeFileSync(winBinary, "");
+    assert.throws(() => resolvePackagedPythonSidecar(root, "win32"),
+      /host-interpreter fallback refused/, "empty packaged executable must be refused");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
