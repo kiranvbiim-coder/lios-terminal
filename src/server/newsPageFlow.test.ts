@@ -22,8 +22,7 @@ test("first-page Next is available when the provider reports another window", ()
   assert.match(panel, /disabled=\{!pagedNews\?\.hasMore \|\| page >= 52/);
   assert.doesNotMatch(panel, /disabled=\{page === 1 \|\| !pagedNews\?\.hasMore/);
   assert.match(panel, /Math\.min\(52, value \+ 1\)/);
-  assert.match(panel, /params\.set\("page", String\(page\)\)/);
-  assert.match(panel, /params\.set\("limit", "20"\)/);
+  assert.match(panel, /new URLSearchParams\(\{ page: String\(page\), limit: "20" \}\)/);
 });
 
 test("rolling dated pages move into disjoint earlier provider windows", () => {
