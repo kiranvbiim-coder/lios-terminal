@@ -218,3 +218,53 @@ This annex is a bounded TC/CA UX proposal, not a new SI program. Register the F0
 **Phase 4:** F11 AI Briefing Studio, chart animations and external product demo from real captured LiOS UI; source/evidence/time/rights and original creator licenses audited.
 
 **Recommendation:** adopt Prompt Motion as a **curated motion/briefing inspiration source**, especially F11, rather than modifying core architecture or wholesale importing animation prompts/assets into production.
+
+
+## 12. Watermelon UI — direct permissive component donor, selective source-port approval (2026-10-27)
+
+**Sources:** https://ui.watermelon.sh/ ; https://github.com/WatermelonCorp/watermellon-registry ; https://github.com/WatermelonCorp/watermelon-platform ; https://ui.watermelon.sh/framework-support  
+**Status:** SOURCE-INSPECTED ADAPTATION SHORTLIST, not yet imported, tested, accepted or shipped.
+
+### Observed source/licensing/compatibility facts
+
+- Registry repository \`WatermelonCorp/watermellon-registry\` has a root MIT license (copyright Watermelon Contributors) and supplies component implementations as shadcn-style registry JSON under \`public/r/*.json\`. Each JSON contains dependency lists and one or more actual TSX file bodies; copying permitted original code requires preserving copyright/license notices and auditing any bundled media, fonts, icons, trademarks and transitive libraries **independently**.
+- Website advertises 600+ components/100+ animations; registry and current platform are separate upstream repositories. Counts are upstream claims, **not** a measure of quality/completeness of locally inspected examples.
+- Current registry package uses React 19.2.7, Tailwind 4.3.1, \`motion\` 12, \`framer-motion\` 12, Radix/shadcn and Vite; site compatibility notes say component React 18 or 19 **but Tailwind v4 is required as published**. LiOS current \`src/package.json\` uses React ^18.3.1, Tailwind ^3.4.17, \`framer-motion\` ^11.13.1, \`embla-carousel-react\` ^8.6.0, ECharts and existing Radix UI. **Do not bulk-install upstream registry or upgrade React/Tailwind/Zod/Motion.** Source-port single vetted TSX at a time, replacing Tailwind4-only syntax and imports while keeping canonical LiOS tokens, icons, owner boundaries, reduced-motion and installed Electron viability.
+- Registry samples include toy-looking styles, hard-coded sample amounts and URLs. \`expandable-event-card\` defaults to \`https://assets.watermelon.sh/event.avif\` and a festival headline; \`revealing-cards\` embeds fictional credit-card amounts; \`command-search\` embeds default menu items; \`portfolio-dashboard\` is mostly example layout/data and pulls many shadcn registry dependencies. None may be shown as real LiOS observations or fetched remotely by default.
+- Some samples use clickable \`div\` instead of keyboard-operable button/anchor (e.g. expandable-event-card). Fix keyboard operation, focus/escape, dialog labeling, reduced motion, alt text and source scope before shipping. Recheck all code line-by-line before importing.
+
+### Ranked component-level donor matrix
+
+| Upstream registry file / component | Intended LiOS owner + experience | Decision | Evidence/gates |
+| --- | --- | --- | --- |
+| \`public/r/expandable-event-card.json\` | Existing Wave D/FusionPulseBoard and News card: rich story opens evidence in-place | **P1 top pilot** | Reuse layout/shared-transition idea, replace fake title/image with rights-aware source data; repair clickable-div keyboard semantics, modal/focus and user-action routing |
+| \`public/r/motion-carousel.json\`, \`minimal-carousel.json\`, \`carousel-navigator.json\` | F01 Pulse highlights, F11 briefing slides, N05 storyboards | **P1/P2 adapt narrowly** | Embla already installed; prefer one existing carousel ownership, avoid redundant Motion 12 dependency; no autoplay, carousel keyboard controls and reduced-motion |
+| \`public/r/activities-card.json\` | F07 What Changed, F12 Watchrooms, Project activity | **P2 selective port** | Remove decorative pastel/icon tiles; bind actual P3/P9 event receipts, timestamps and ordered entries |
+| \`public/r/morphing-discovery-bar.json\` | F10 Visual Search/F01 topic navigation within Chat/Home | **P2 design prototype only** | Keep existing Cmd/Ctrl+K and canonical search owner; inspect actual triggers/focus/escape and do not create parallel command/search routes |
+| \`public/r/preview-link-card.json\`, \`hover-card.json\` | F08 Perspectives/F05 visual evidence preview | **P2/P3 guarded port** | Source/media URL safety, rights, popup focus, no background remote image fetches; adapt Tailwind4 origin utilities and \`radix-ui\` meta-package to LiOS existing primitives |
+| \`public/r/continuous-tabs.json\` | F01 existing For You/Following/Markets/Research switching | **P2 optional only** | Existing tabs may already be better; preserve aria tablist, keyboard operation and context continuity |
+| \`public/r/range-selection-slider.json\` | F09 Scenario Playground numeric range interactions | **P3 adapt controlled input** | No business logic or fabricated calculations in UI; validation/units/canonical P11/P4 recalculation, accessible slider handles |
+| \`public/r/collection-grid-disclosure.json\` | F06 My Intelligence Desk, F10 visual result galleries | **P2/P3 conditional** | Avoid heavy icon sets / duplicate disclosure; keyboard+scroll focus, lazy imagery, readable metadata |
+| \`public/r/portfolio-dashboard.json\` and other whole dashboards | Inspiration for professional grids and information hierarchy only | **Do NOT bulk copy shell** | Demo content, alternative navigation/state/copy and large dependencies conflict with canonical LiOS; borrow specific audited layout sections only |
+| \`public/r/revealing-cards.json\`, assorted flashy buttons/flip-card | Only if deliberate UX proves practical | **Mostly reject for everyday terminal** | Fictional amounts, drag gimmicks and bright decorations risk childish presentation; avoid arbitrary motion |
+
+These registry names and several full TSX bodies were verified in upstream source on 2026-10-27. No component code was imported in this planning step.
+
+### Concrete import method — copy the right parts, never build an isolated UI kit
+
+1. Choose a specific LiOS use case and capture baseline of existing real screen, user navigation and density controls.
+2. Inventory current LiOS equivalent (Radix, Motion, Embla, Wave D, P4 Artifact, ECharts). Determine whether reuse of **existing** code is already sufficient.
+3. Fetch upstream **exact pinned commit, registry JSON and embedded TSX**, audit MIT+third-party licenses and any sample images; record source path/hash and notice.
+4. Port only the needed component into the existing TC UI owner; adapt React18/Tailwind3/Motion11 imports, graphite/gold tokens, typography and mobile/focus/reduced-motion rules. Remove demo state/content and all hard-coded external media.
+5. Bind every card/chart/action to current user-scoped, source-backed Wave D/P3/P5/P4/P9 data, keep canonical request and permission pipeline; no parallel stores, search, navigators or data clients.
+6. Test TypeScript, license/OSS gate, unit behavior, source/rights, 390px/desktop/200% zoom, keyboard, screen reader, stale/offline, reduced-motion, actual Electron rendering and regression screenshot against a genuine UX baseline.
+7. Import only if it measurably improves the intended journey and avoids compatibility/security regressions. Reject with evidence when the incumbent LiOS primitive does better.
+
+### Four-phase integration
+
+- **Phase 1:** port one professional, sourced \`ExpandableStoryCard\` adaptation from \`expandable-event-card\` into existing Wave D/FusionPulseBoard as a controlled trial; establish shared tokens and component provenance.
+- **Phase 2:** enrich feed carousel/activity/discovery controls with selective Motion/Embla adapters, preserving the current Home/Search/Watchrooms authority.
+- **Phase 3:** use vetted evidence previews and scenario slider affordances when native LiOS primitives fall short; charts/maps/graphs still require separate specialist donor evaluations.
+- **Phase 4:** refine transitions and briefing carousels; mature accessibility, source rights, performance, memory, native installed Mac/Windows regression and the existing $0 beta release contract.
+
+**Recommendation:** Watermelon is a **priority permissive source-code donor** for small, polished interactive UI parts, but **not** a blanket replacement for LiOS's visual design system, desktop application shell, analytics, evidence model or backend. Its own marketing claim "production ready" is not LiOS native acceptance.
