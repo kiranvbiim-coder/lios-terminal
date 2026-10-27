@@ -415,3 +415,8 @@ Whole-dashboard imports, cloned interactions, multiple upstream component collec
 ### 13.9 Architectural recommendation
 
 The central source insight: LiOS's weakness is not the absence of many analytical engines, but how evidence and data **appear, connect, flow and feel**. Reuse Watermelon's rich interaction families at scale, specialize with Kibo + React Flow + MapLibre + source-safe article ingestion, enforce skills/screenshot critique across development, and promote verified insights to the existing P4/P9 execution layer. **One premium intelligence product**; immersive when discovering, fast and exact when working, transparent when citing, and never childish.
+
+
+## 14. Owner-supplied 20-site premium source and UX research annex (2026-10-27)
+
+The complete [20-site premium donor audit and LiOS reuse plan](LIOS_20_SITE_PREMIUM_DONOR_AUDIT_2026-10-27.md) extends this plan. Key new source: **beUI — MIT direct-code donor** (actual TSX citation, streaming, approval, timelines, charts, rich controls); **Watermelon remains a major complementary UI donor**. Mobbin/Recent/60fps are UX benchmarks, Modulify/MotionIn/HorizonX/Wonderlist are generator or licensed references, and Sent/CloseIt are optional service connections. No source/framework size cap; imported code must serve existing owners, evidence, $0 beta and verified native UX. **All original F01–F12 and N01–N08 remain in scope.**
