@@ -40,6 +40,7 @@ const listingOutputSchema = z.object({
       connectorId: z.string(),
       sourceType: z.string(),
       verified: z.literal(true),
+      previewAvailable: z.boolean(),
     }).strict()).max(50),
     dataFetchPerformed: z.literal(false),
   }).strict(),
@@ -160,7 +161,7 @@ export function safePreviewRows(data: unknown, maxRows: number): Array<Record<st
 export const connectedProviderListChatTool: ConversationToolDefinition = {
   id: "lios.provider.connected_sources",
   label: "List my verified connected data sources (identities only; no data fetch or secret values)",
-  planningHint: "Call with {} to inspect the current Project owner's verified connected sources. Only source IDs, labels and types are returned; never guess connection IDs.",
+  planningHint: "Call with {} to inspect the current Project owner's verified connected sources. Only source IDs, labels and types are returned; use previewAvailable=true for the connected_preview tool, and never guess IDs.",
   kind: "resolve", permissionClass: "safe_auto", access: "read", sideEffect: "none", replaySafe: true,
   inputSchema: listSchema,
   outputSchema: listingOutputSchema.transform((v): ConversationToolResult => v),
@@ -177,7 +178,7 @@ export const connectedProviderListChatTool: ConversationToolDefinition = {
     assertNotAborted(signal);
     return {
       output: {
-        sources: permitted.map((s) => ({ id: s.id, label: s.name, connectorId: s.connectorId, sourceType: s.sourceType, verified: true as const })),
+        sources: permitted.map((s) => ({ id: s.id, label: s.name, connectorId: s.connectorId, sourceType: s.sourceType, verified: true as const, previewAvailable: s.sourceType === "file" || s.sourceType === "private_api" })),
         dataFetchPerformed: false as const,
       },
       summary: `${permitted.length} verified, owner-scoped connected source(s); no data was retrieved.`,
