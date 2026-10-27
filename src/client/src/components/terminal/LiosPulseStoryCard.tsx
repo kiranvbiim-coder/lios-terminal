@@ -15,12 +15,16 @@ import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles 
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulseSubjectPreferences";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
+  followed?: boolean;
+  preferencePending?: boolean;
+  onPreferenceChange?: (cardId: string, action: PulseSubjectAction) => void;
 }
 
 const priorityTone = {
@@ -29,11 +33,12 @@ const priorityTone = {
   fyi: "border-cyan-300/25 text-cyan-200",
 } as const;
 
-export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol }: Props) {
+export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const reduceMotion = useReducedMotion();
   const evidence = card.evidence ?? [];
+  const subjectKey = normalizePulseSubjectKey(card.subjectKey ?? card.symbol);
   const timestamp = pulseStoryTimestamp(card.createdAt);
   const focusLabel = card.kind === "news" ? "News" : card.kind === "research" ? "Research" : card.kind === "alert" ? "Signal" : card.kind === "market_move" ? "Market" : "Intelligence";
 
@@ -124,6 +129,21 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                 {(card.omittedEvidenceCount ?? 0) > 0 && <p className="mt-2 font-ui text-xs text-muted-foreground">{card.omittedEvidenceCount} additional recorded evidence item(s) are outside this bounded view.</p>}
               </section>
               <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
+                {subjectKey && onPreferenceChange && <button type="button"
+                  disabled={preferencePending}
+                  aria-label={`${followed ? "Unfollow" : "Follow"} ${subjectKey}`}
+                  aria-pressed={followed}
+                  onClick={() => onPreferenceChange(card.id, followed ? "clear" : "follow")}
+                  className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  {followed ? "Following · Unfollow" : "Follow"}
+                </button>}
+                {subjectKey && onPreferenceChange && <button type="button"
+                  disabled={preferencePending}
+                  aria-label={`Mute ${subjectKey} in discovery`}
+                  onClick={() => onPreferenceChange(card.id, "mute")}
+                  className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-muted-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Mute
+                </button>}
                 <button type="button" onClick={() => onAsk(pulseStoryQuestion(card))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:bg-amber-300/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><Sparkles className="h-4 w-4 text-amber-200" />Ask LiOS</button>
                 {card.symbol && onOpenSymbol && <button type="button" onClick={() => onOpenSymbol(card.symbol!)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Open analysis<ArrowUpRight className="h-4 w-4" /></button>}
               </div>
