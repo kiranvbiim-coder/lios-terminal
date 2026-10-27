@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveSpatialPresentation, SPATIAL_STACKED_MAX_WIDTH } from "./spatialPresentationPolicy";
+import { resolveSpatialPresentation, bucketSpatialPaneWidth, SPATIAL_STACKED_MAX_WIDTH } from "./spatialPresentationPolicy";
 
 test("Phase 2 preserves movable map on sufficiently wide Studio panes only", () => {
   const map = resolveSpatialPresentation("map", 1160);
@@ -33,4 +33,16 @@ test("Phase 2 list is reading-only even in giant panes, and timeline never moves
   assert.equal(timeline.canMoveNodes, false);
   assert.equal(timeline.canMoveCompanion, true);
   assert.equal(timeline.showDecorativeEdges, true);
+});
+
+test("Phase 2 continuous resizing redraws only on genuine breakpoint crossings", () => {
+  const narrowSizes = [260, 320, 540, 700, 760];
+  const wideSizes = [761, 900, 1280, 1920, 3840];
+  assert.deepEqual(narrowSizes.map(bucketSpatialPaneWidth), narrowSizes.map(() => SPATIAL_STACKED_MAX_WIDTH));
+  assert.deepEqual(wideSizes.map(bucketSpatialPaneWidth), wideSizes.map(() => SPATIAL_STACKED_MAX_WIDTH + 1));
+  assert.equal(bucketSpatialPaneWidth(Number.NaN), null);
+  assert.equal(bucketSpatialPaneWidth(Number.POSITIVE_INFINITY), null);
+  assert.equal(bucketSpatialPaneWidth(-10), null);
+  assert.equal(resolveSpatialPresentation("map", bucketSpatialPaneWidth(790)).canMoveNodes, true);
+  assert.equal(resolveSpatialPresentation("map", bucketSpatialPaneWidth(720)).canMoveNodes, false);
 });
