@@ -6,18 +6,19 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const canvas = read("../components/terminal/SpatialResearchCanvas.tsx");
 const styles = read("../visual-intelligence-canvas.css");
 const shell = read("../components/terminal/AnalyticalStudio.tsx");
+const overlays = read("../components/terminal/TerminalUxOverlays.tsx");
 const visualCanvas = read("../components/terminal/VisualCanvas.tsx");
 const uxSettings = read("../components/terminal/TerminalUxSettings.tsx");
 
 test("Phase 2 spatial research stays inside the existing Studio and opens the existing Workbench", () => {
-  assert.match(shell, /<SpatialResearchCanvas onOpen=\{onOpen\}/);
+  assert.match(shell, /<SpatialResearchCanvas initialReturnState=\{spatialCanvasReturn\}/);
   assert.match(canvas, /onOpen\(item\.view, "tab", item\.symbol \|\| undefined\)/);
   assert.match(canvas, /onOpen\(selected\.view, "tab", selected\.symbol \|\| undefined\)/);
   assert.doesNotMatch(canvas, /fetch\(|WebSocket|navigator\.geolocation|Math\.random\(/);
 });
 
 test("Phase 2 Map, Timeline and List require explicit user selection", () => {
-  assert.match(canvas, /useState<SpatialLayoutMode>\("map"\)/);
+  assert.match(canvas, /useState<SpatialLayoutMode>\(initialReturnState\?\.mode \?\? "map"\)/);
   for (const mode of ["map", "timeline", "list"]) {
     assert.ok(canvas.includes(`aria-pressed={mode === "${mode}"}`));
   }
@@ -43,7 +44,7 @@ test("Phase 2 pointer movement previews locally and commits once, while keyboard
 });
 
 test("Phase 2 Insight companion is single, removable, movable and reads exact pinned object", () => {
-  assert.match(canvas, /const \[inspectedId, setInspectedId\] = useState<string \| null>\(null\)/);
+  assert.match(canvas, /const \[inspectedId, setInspectedId\] = useState<string \| null>\(initialReturnState\?\.inspectedId \?\? null\)/);
   assert.match(canvas, /model\.nodes\.find\(node => node\.item\.id === inspectedId\)/);
   assert.match(canvas, /aria-label="Insight companion"/);
   assert.match(canvas, /onPointerDown=\{event => startDrag\(event, "companion", selected\.id\)\}/);
@@ -102,4 +103,16 @@ test("Phase 2 provenance inspector opens only a chosen visible graph connection,
   assert.match(styles, /\.lios-spatial-connections-summary/);
   assert.match(styles, /\.lios-spatial-node\[data-connection-member="true"\]/);
   assert.match(styles, /@container \(max-width: 540px\)/);
+});
+
+test("Phase 2 Studio to Workbench to Studio restores only on-mount presentation", () => {
+  assert.match(overlays, /const \[studioTab, setStudioTab\] = useState<SpatialStudioTab>\(INITIAL_SPATIAL_STUDIO_TAB\)/);
+  assert.match(overlays, /const \[spatialCanvasReturn, setSpatialCanvasReturn\] = useState<SpatialCanvasReturnState>\(INITIAL_SPATIAL_CANVAS_RETURN_STATE\)/);
+  assert.match(overlays, /selectedTab=\{studioTab\} onSelectTab=\{setStudioTab\}/);
+  assert.match(overlays, /spatialCanvasReturn=\{spatialCanvasReturn\} onSpatialCanvasReturn=\{setSpatialCanvasReturn\}/);
+  assert.match(shell, /<StudioNav tab=\{tab\} onTab=\{onSelectTab\}/);
+  assert.match(shell, /onOpen=\{\(view, mode, symbol\) => \{ onOpen\(view, mode, symbol\); onClose\(\); \}\}/);
+  assert.match(canvas, /reconcileSpatialCanvasReturnState\(/);
+  assert.match(canvas, /onReturnStateChange\(/);
+  assert.doesNotMatch(overlays, /localStorage\.setItem\(["']lios\.spatial/i);
 });
