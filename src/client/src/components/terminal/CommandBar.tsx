@@ -406,12 +406,24 @@ export default function CommandBar({ onClose, onExecute, onAskLios, onExploreFie
     // Preserve native Tab focus order. Alt+ArrowRight cycles palette filters without trapping keyboard users.
     if (event.altKey && event.key === "ArrowRight") { event.preventDefault(); const current = availableModes.findIndex((item) => item.id === mode); setMode(availableModes[(current + 1) % availableModes.length].id); setSelected(0); return; }
     if (event.key === "Enter" && selectedResult) { event.preventDefault(); execute(selectedResult); return; }
-    if (event.key === "Escape") onClose();
+    if (event.key === "Escape") { event.stopPropagation(); onClose(); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-3 pt-[7vh] backdrop-blur-[5px]" onMouseDown={onClose}>
-      <section className={`lios-v4-overlay w-full overflow-hidden rounded-2xl ${isClient ? "max-w-3xl" : "max-w-5xl"}`} onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }} role="dialog" aria-modal="true" aria-label="LiOS Omnibox">
+      <section className={`lios-v4-overlay w-full overflow-hidden rounded-2xl ${isClient ? "max-w-3xl" : "max-w-5xl"}`} onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => {
+          if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
+          if (event.key !== "Tab") return;
+          // This is a modal overlay: keep focus within visible controls while
+          // allowing Tab to move normally between filters, results and Close.
+          const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          )).filter(element => element.getClientRects().length > 0);
+          if (!focusable.length) return;
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }} role="dialog" aria-modal="true" aria-label="LiOS Omnibox">
         <header className="border-b border-border/55">
           <div className="flex items-center gap-3 px-4 py-4 sm:px-5">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><Command className="h-4 w-4 text-amber-300" /></div>
