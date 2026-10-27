@@ -96,7 +96,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
       }}>
       <div className="pointer-events-none absolute inset-0 opacity-20" aria-hidden="true"
         style={{ backgroundImage: "linear-gradient(to right,currentColor 1px,transparent 1px),linear-gradient(to bottom,currentColor 1px,transparent 1px)", backgroundSize: "38px 38px" }}/>
-      <div className="absolute left-0 top-0" style={{
+      <div className="pointer-events-none absolute left-0 top-0" style={{
         width: WIDTH, height: HEIGHT, transform: `translate(${offset.x}px,${offset.y}px) scale(${zoom})`,
         transformOrigin: "top left",
       }}>
@@ -114,7 +114,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
         {result.nodes.map(item => <button key={item.id} type="button"
           data-testid="p7-recorded-graph-node" aria-pressed={chosenNode === item.id}
           title={item.label} onClick={() => selectNode(item.id)}
-          className={`absolute flex h-[68px] w-[156px] flex-col justify-center overflow-hidden rounded-lg border bg-zinc-950/95 px-2 text-left font-ui shadow-sm outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 ${chosenNode === item.id
+          className={`pointer-events-auto absolute flex h-[68px] w-[156px] flex-col justify-center overflow-hidden rounded-lg border bg-zinc-950/95 px-2 text-left font-ui shadow-sm outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 ${chosenNode === item.id
             ? "border-amber-300 text-foreground" : item.directlyMatched ? "border-amber-300/55 text-foreground" : "border-border/70 text-muted-foreground"}`}
           style={{ left: item.x - 78, top: item.y - 34 }}>
           <span className="block truncate text-[10px] capitalize text-amber-200">{item.kind.replaceAll("_", " ")}</span>
