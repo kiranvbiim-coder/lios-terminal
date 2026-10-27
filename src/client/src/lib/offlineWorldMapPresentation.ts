@@ -1,4 +1,5 @@
 import type { recordedGeographicPoints } from "./phase3InvestigationPresentation";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 export type RecordedGeographicPoint = ReturnType<typeof recordedGeographicPoints>[number];
 export type WorldPoint = RecordedGeographicPoint & { x: number; y: number; hasSourceId: boolean };
@@ -6,16 +7,21 @@ const MAX_POINTS = 60;
 
 export function projectOfflineWorldPoints(
   points: readonly RecordedGeographicPoint[],
-  options: { sourceOnly?: boolean; withEventDate?: boolean } = {},
+  options: { sourceOnly?: boolean; withEventDate?: boolean; query?: string } = {},
 ) {
   const knownIds = new Set<string>();
-  const eligible = points.flatMap(point => {
+  // Search is a local, exact-record text projection over already authorized
+  // point labels/source IDs. No geocoding, location history or network calls.
+  const query = (options.query ?? "").trim().toLocaleLowerCase().slice(0, 120);
+  const sourceEligible = points.flatMap(point => {
     if (typeof point.id !== "string" || !point.id.trim() || knownIds.has(point.id)) return [];
     if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude) ||
       point.latitude < -90 || point.latitude > 90 || point.longitude < -180 || point.longitude > 180) return [];
     const hasSourceId = typeof point.sourceRef === "string" && point.sourceRef.trim().length > 0;
     if (options.sourceOnly && !hasSourceId) return [];
-    if (options.withEventDate && (!point.occurredAt || !Number.isFinite(Date.parse(point.occurredAt)))) return [];
+    // Date.parse alone accepts ambiguous local dates, rollovers and strings
+    // such as "1". Use the existing canonical zoned event gate.
+    if (options.withEventDate && !recordedIsoTimestamp(point.occurredAt)) return [];
     knownIds.add(point.id);
     return [{
       ...point,
@@ -24,10 +30,17 @@ export function projectOfflineWorldPoints(
       hasSourceId,
     } satisfies WorldPoint];
   });
+  const matched = query
+    ? sourceEligible.filter(point =>
+      point.label.toLocaleLowerCase().includes(query) ||
+      point.id.toLocaleLowerCase().includes(query) ||
+      (point.sourceRef ?? "").toLocaleLowerCase().includes(query))
+    : sourceEligible;
   return {
-    points: eligible.slice(0, MAX_POINTS),
-    eligibleCount: eligible.length,
-    omittedCount: Math.max(0, eligible.length - MAX_POINTS),
+    points: matched.slice(0, MAX_POINTS),
+    eligibleCount: matched.length,
+    omittedCount: Math.max(0, matched.length - MAX_POINTS),
+    filteredOutCount: sourceEligible.length - matched.length,
   };
 }
 
