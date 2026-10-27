@@ -5,7 +5,7 @@
  * middleware in routes.ts like the rest of this registration group.
  */
 import type { Express } from "express";
-import { searchCommonsCC0 } from "../script/commons_cc0_news_image";
+import { searchCommonsCC0 } from "./commonsCc0Media";
 import { requireAuth } from "./auth";
 import { getMediaQuotes, getMediaHistory, getMediaVolume, getMediaCatalog, getMediaTopicProfile } from "./gdeltData";
 
