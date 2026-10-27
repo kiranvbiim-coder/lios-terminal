@@ -1086,6 +1086,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               renderTerminalPanel={(context, controls) => renderPaneContent("primary", { view: context.view, symbol: context.symbol ?? "" }, controls)}
               chatWorkbenchReturn={chatWorkbenchReturn}
               onOpenEnvironment={onOpenEnvironment}
+              focusMode={focusMode}
+              presentationMode={presentationMode}
+              onExploreAdvisory={() => {
+                if (!canOpenView("advisory") || workbenchDirtyRef.current) return false;
+                handleOpenAction("advisory", "tab");
+                return true;
+              }}
             />
           </div>
           {isProjectsSurface ? null : isExperienceHomeSurface(experienceSurface) ? (
