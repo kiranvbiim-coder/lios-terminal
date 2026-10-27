@@ -25,7 +25,7 @@ export function visibleAnalyticalChanges(
         .some(value => value.toLocaleLowerCase().includes(needle))),
     );
     return changes.length ? [{ ...entry, changes }] : [];
-  });
+  }).sort((a, b) => b.capturedAt - a.capturedAt || a.contextKey.localeCompare(b.contextKey));
 }
 
 export function displayRecordedValue(value: ComparableValue | undefined): string {
