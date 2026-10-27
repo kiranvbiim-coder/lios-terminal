@@ -11,20 +11,23 @@ This file is the human-readable notice entry point. The machine-readable source 
 - `third_party/upstream-lock.json`
 - `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
 
-### Watermelon UI — adapted News editorial card (MIT)
 
-The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the
-expandable event card interaction from
-[`WatermelonCorp/watermellon-registry`](https://github.com/WatermelonCorp/watermellon-registry),
-source file `src/components/watermelon-ui/expandable-event-card-base.tsx` pinned
-to commit `86052b8fd12bc19bf3bac07625a7f93736c42b17`.
-Copyright (c) 2025-present Watermelon Contributors. The complete MIT notice
-is retained at `third_party/licenses/watermellon-registry-MIT.txt`.
-The adapted component uses LIOS's existing Framer Motion, React 18, story
-selection, source status and reader. It excludes upstream demo media, remote
-assets, modal, standalone store, paid packages and new runtime dependencies.
-This grants code reuse only; it does not grant publisher photograph or article rights.
+### Opensource UI — Project spreadsheet upload interaction (MIT)
 
+LIOS `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`
+adapts file-selection review, accessible dropzone and remove controls from
+`bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`,
+`components/inputs/file-upload-field-input.tsx` (Git blob
+`e0a22b94cfd01ffbf99541739991b4678a93d179`).
+Copyright (c) 2026 Bidyut Kundu; complete permission/notice retained in
+`third_party/licenses/opensourceui-MIT.txt`.
+
+This component replaces the tiny native spreadsheet-import picker in the
+existing LIOS Project Intelligence Library. It does not import a second
+uploader, run a workbook parser or send data on drop. The user confirms
+the exact selected file before the existing Project-scoped governed import
+endpoint checks format/signature, server size limit and authorization. No
+sample media, remote vendor assets or new runtime packages are imported.
 
 ### Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
 
@@ -56,6 +59,20 @@ LIOS uses its existing React 18, Framer Motion and Tailwind 3 components,
 with Wave D's exact four channel controls and callbacks, keyboard/RTL and
 reduced-motion support. The donor's Motion 12 runtime, unrelated tabs panels,
 demo content and alternative feed or routing authority are not imported.
+
+### Watermelon UI — adapted News editorial card (MIT)
+
+The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the
+expandable event card interaction from
+[`WatermelonCorp/watermellon-registry`](https://github.com/WatermelonCorp/watermellon-registry),
+source file `src/components/watermelon-ui/expandable-event-card-base.tsx` pinned
+to commit `86052b8fd12bc19bf3bac07625a7f93736c42b17`.
+Copyright (c) 2025-present Watermelon Contributors. The complete MIT notice
+is retained at `third_party/licenses/watermellon-registry-MIT.txt`.
+The adapted component uses LIOS's existing Framer Motion, React 18, story
+selection, source status and reader. It excludes upstream demo media, remote
+assets, modal, standalone store, paid packages and new runtime dependencies.
+This grants code reuse only; it does not grant publisher photograph or article rights.
 
 The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook selects the locked production/optional/peer dependency closure plus the explicitly retained TypeScript operator-tool root, preserving original installation paths. This is not a `dev`-flag filter: any development-marked package reached by that closure remains included, and the auditor inventories **every package actually copied**, including unexpected extras. Build-only exclusion is a reachability decision, never a license ignore list.
 

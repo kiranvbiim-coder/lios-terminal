@@ -1,0 +1,31 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
+const studio = source("../components/terminal/ProjectBriefingStudio.tsx");
+const owner = source("../components/terminal/ProjectArtifactsPanel.tsx");
+const pptx = source("./nativeArtifactPptx.ts");
+const storyboard = source("./projectBriefingStoryboard.ts");
+const client = source("./useArtifacts.ts");
+test("D1 runs inside the existing saved-Artifact storyboard, not a replaced Project briefing owner", () => {
+  assert.match(owner, /<ProjectBriefingStudio key=\{projectId\} projectId=\{projectId\} artifacts=\{rows\}/);
+  assert.match(studio, /Storyboard · review order/);
+  assert.match(studio, /Include native visual/);
+  assert.match(studio, /captureBriefingVisual\(detail, projectId\)/);
+  assert.match(studio, /credentials: "same-origin", cache: "no-store"/);
+  assert.match(studio, /onSave\(chosen, title, introduction, pinnedVisuals\)/);
+  assert.match(owner, /verifyCurrentPinnedVisual\(visual, detail\)/);
+  assert.match(owner, /assertSavedBriefingArtifact\(created, projectId, draft\.content, draft\.dependencyRefs, draft\.sourceRefs\)/);
+  assert.match(owner, /createArtifact\(projectId, draft\)/);
+  assert.match(client, /sourceRefs\?: string\[\]/);
+});
+test("existing Office exporter uses the same native chart_ref and table payloads", () => {
+  assert.match(storyboard, /type: "chart_ref"/);
+  assert.match(storyboard, /type: "table"/);
+  assert.match(storyboard, /attrs: \{ \.\.\.attrs, chart: visual\.content \}/);
+  assert.match(storyboard, /attrs: \{ \.\.\.attrs, table: visual\.content \}/);
+  assert.match(pptx, /block\.type === "chart_ref"/);
+  assert.match(pptx, /readRecordedDocumentTable\(attrs\)/);
+  assert.match(pptx, /addNativeChart/);
+  assert.match(pptx, /addNativeTable/);
+});

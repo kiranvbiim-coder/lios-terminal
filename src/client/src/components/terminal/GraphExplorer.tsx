@@ -62,6 +62,24 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   // Keep the Escape handler current without re-running the modal focus trap on parent renders.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const viewportRef = useRef<HTMLElement>(null);
+  const dragRef = useRef<{pointer: number; clientX: number; clientY: number; originX: number; originY: number} | null>(null);
+  const [zoom, setZoom] = useState(0.7);
+  const [pan, setPan] = useState({x: 0, y: 0});
+  const zoomClamp = (value: number) => Math.min(1.8, Math.max(0.35, value));
+  const fit = () => {
+    const width = viewportRef.current?.clientWidth ?? 700;
+    const height = viewportRef.current?.clientHeight ?? 440;
+    const size = zoomClamp(Math.min(1, (width - 24) / 900, (height - 24) / 600));
+    setZoom(size);
+    setPan({x: Math.max(0, (width - 900 * size) / 2), y: Math.max(0, (height - 600 * size) / 2)});
+  };
+  useEffect(() => {
+    fit();
+    const resized = () => fit();
+    window.addEventListener("resize", resized);
+    return () => window.removeEventListener("resize", resized);
+  }, []);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -181,7 +199,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
         </header>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(180px,0.6fr)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
           <main ref={viewportRef} role="region" tabIndex={0}
-            className="relative min-h-0 touch-none overflow-hidden bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+            className="relative min-h-0 touch-pan-y overflow-y-auto bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 md:touch-none md:overflow-hidden"
             aria-label="Intelligence graph canvas. Drag empty space to pan, use zoom and fit controls, Tab to inspect objects."
             onWheel={event => {
               if (document.activeElement !== event.currentTarget && !event.currentTarget.contains(document.activeElement)) return;
@@ -207,7 +225,9 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
               if(dx||dy){event.preventDefault();setPan(position=>({x:position.x+dx,y:position.y+dy}));}
               if(event.key==="Home"){event.preventDefault();fit();}
             }}>
-            <div className="pointer-events-none absolute left-0 top-0 h-[600px] w-[900px]"
+            <GraphExplorerCompactList nodes={presentation.nodes} selectedId={selectedId} onSelect={setSelectedId}
+              emptyMessage={graph.nodes.length ? "No matching recorded objects. Reset search or filters." : "Capture or publish intelligence objects to build the graph."} />
+            <div className="pointer-events-none absolute left-0 top-0 hidden h-[600px] w-[900px] md:block"
               style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:"top left"}}>
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Recorded object relationships">
                 {presentation.edges.map((edge, index) => {

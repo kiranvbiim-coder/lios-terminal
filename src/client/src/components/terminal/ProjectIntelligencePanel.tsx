@@ -98,8 +98,10 @@ export function ProjectIntelligencePanel({ projectId, onInvestigate }: { project
       <Metric label="Snapshots" value={snapshotRows.length}/>
     </div>
 
-    {(intelligence.isError || insights.isError) && <p role="alert" className="mt-3 rounded-lg border border-amber-300/25 p-3 font-ui text-sm text-amber-100">Current Project Intelligence is unavailable. Retained results, if any, must not be treated as fresh.</p>}
-    {(summary?.graph && lens) && <ProjectInvestigationDesk projectId={projectId} graph={summary.graph} lens={lens} onInvestigate={onInvestigate} />}
+    {(intelligence.isError || insights.isError) && <p role="alert" className="mt-3 rounded-lg border border-amber-300/25 p-3 font-ui text-sm text-amber-100">Current Project Intelligence is unavailable. Previously retained evidence must not be treated as fresh.</p>}
+    {!intelligence.isError && !insights.isError && summary?.graph && lens && (
+      <ProjectInvestigationDesk projectId={projectId} graph={summary.graph} lens={lens} onInvestigate={onInvestigate} />
+    )}
 
     <div className="mt-3 flex gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 rounded border border-border/60 bg-black/20 px-2"><Search className="h-3 w-3 text-muted-foreground"/><input value={query} onChange={(e)=>setQuery(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter")void search()}} placeholder="Search across permitted Project chats, resources, Artifacts, evidence and ledger…" className="min-w-0 flex-1 bg-transparent py-2 font-ui text-[8px] outline-none"/></div>

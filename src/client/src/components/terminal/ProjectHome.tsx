@@ -21,7 +21,7 @@ import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { ProjectResumeDesk } from "./ProjectResumeDesk";
 import { ProjectWatchroomDesk } from "./ProjectWatchroomDesk";
-import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
+import { ProjectEvidenceBriefingStudio } from "./ProjectEvidenceBriefingStudio";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 
 export function relativeTime(value: string): string {
@@ -332,7 +332,7 @@ export function ProjectHome({
                 className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${briefingOpen ? "border-amber-300/35 text-foreground" : "border-border/55 text-muted-foreground"}`}>Briefing Studio</button>
             </div>
             {briefingOpen
-              ? <ProjectBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
+              ? <ProjectEvidenceBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
               : <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
           </div>}
         </section>
@@ -476,6 +476,7 @@ export function ProjectHome({
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
+
               <ProjectArtifactsPanel
                 projectId={project.id}
                 sessions={sessions}
