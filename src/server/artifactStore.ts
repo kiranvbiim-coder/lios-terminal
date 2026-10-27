@@ -1003,6 +1003,7 @@ async function validateModelMaintenanceWrite(ctx: TenantContext, artifact: Proje
 }
 
 const terminalEngineWrites = new WeakMap<object, { kind: "execution" | "restore"; userId: number; artifactId: string; baseVersion: number; hash: string }>();
+const packageHistoryWrites = new WeakMap<object, { userId:number; artifactId:string; baseVersion:number; contentHash:string; metadataHash:string }>();
 
 /** The original native executor supplies the result; P4 remains the only immutable result store. */
 export async function createTerminalArtifactEngineVersion(ctx: TenantContext, rawTarget: TerminalExecutionTarget, execution: AdvancedQuantExecution) {
@@ -1039,6 +1040,22 @@ export async function createTerminalArtifactEngineVersion(ctx: TenantContext, ra
   } finally { terminalEngineWrites.delete(proof); }
 }
 
+/** Authored content is unverified; recorded source access remains a historical veto. */
+function invalidateAuthoredArtifactTrust(recorded: unknown): TrustManifest | null {
+  if (!recorded) return null;
+  const base = trustManifestSchema.parse(recorded);
+  const evidence = base.evidence.filter(item => item.access && (item.access.entitlementRequired === true || !["allowed","public","licensed","current"].includes(item.access.state.trim().toLowerCase())));
+  if (!evidence.length) return null;
+  const warning = "Edited content is unverified. Retained source access records are historical custody, not current-content verification or new authorization.";
+  return trustManifestSchema.parse({
+    ...base, trustId: crypto.randomUUID(),
+    summary: { freshness:"unknown", quality:"unknown", confidence:"unknown", conflictState:"not_evaluated_single_source", evidenceCoveragePct:0, sourceCount:evidence.length, receiptCount:0, missingCount:1 },
+    evidence:evidence.map(item=>({...item,freshness:"unknown",quality:"unknown",confidence:"unknown",fields:[],valueHash:null,notes:[warning]})),
+    claims:[],conflicts:[],methodology:[],assumptions:[],
+    missing:[{field:"edited_content",reason:warning,recoveryActions:[]}],warnings:[warning],
+  });
+}
+
 export async function createArtifactVersion(
   ctx: TenantContext,
   input: {
@@ -1059,6 +1076,7 @@ export async function createArtifactVersion(
   },
   maintenanceProof?: ArtifactModelWriteProof,
   terminalEngineProof?: object,
+  packageHistoryProof?: object,
 ): Promise<ProjectArtifactVersion> {
   const artifact = await getArtifact(ctx, input.artifactId);
   let content = await bindTerminalArtifactIdentity(artifactContentSchema.parse(input.content));
@@ -1108,16 +1126,27 @@ export async function createArtifactVersion(
       || input.refreshSpec?.engineRef !== `integrated_financial_model:${verified.run.modelVersion}:run:${verified.run.id}`
       || input.trustManifest !== null || (input.executionReceiptIds?.length ?? 0) !== 0) throw new Error("Maintenance metadata must bind the new native run, never prior trust or execution authority.");
   } else if (content.kind === "spreadsheet") content = guardSpreadsheetCellLineage(baseContent.kind === "spreadsheet" ? baseContent : null, content);
-  const trustManifest = input.trustManifest === undefined
-    ? (base.trustManifest ? trustManifestSchema.parse(base.trustManifest) : null)
-    : input.trustManifest == null ? null : trustManifestSchema.parse(input.trustManifest);
+  const importedProof = packageHistoryProof ? packageHistoryWrites.get(packageHistoryProof) : null;
+  const importedHistoryAuthorized = Boolean(importedProof && importedProof.userId === ctx.userId && importedProof.artifactId === artifact.id && importedProof.baseVersion === input.baseVersion && importedProof.contentHash === contentHash(content) && importedProof.metadataHash === hashLedgerValue({sourceRefs:input.sourceRefs,executionReceiptIds:input.executionReceiptIds,assumptionRefs:input.assumptionRefs,trustManifest:input.trustManifest,dependencyRefs:input.dependencyRefs,refreshSpec:input.refreshSpec}));
+  const governedWrite = Boolean(maintenanceProof || nativeWriteAuthorized || importedHistoryAuthorized);
+  const baseTrust = base.trustManifest ? trustManifestSchema.parse(base.trustManifest) : null;
+  const changedContent = contentHash(baseContent) !== contentHash(content);
+  if (!governedWrite && !changedContent && input.trustManifest !== undefined && hashLedgerValue(input.trustManifest) !== hashLedgerValue(baseTrust)) {
+    throw new Error("Generic Artifact metadata cannot mint or replace current-content verification.");
+  }
+  const trustManifest = governedWrite
+    ? input.trustManifest === undefined ? baseTrust : input.trustManifest == null ? null : trustManifestSchema.parse(input.trustManifest)
+    : changedContent ? invalidateAuthoredArtifactTrust(baseTrust) : baseTrust;
   if (trustManifest) assertArtifactTrustSafe(trustManifest);
+  const sourceRefs = governedWrite ? input.sourceRefs ?? base.sourceRefs
+    : [...new Set([...base.sourceRefs, ...artifactTrustSourceRefs(baseTrust), ...(input.sourceRefs ?? [])])];
   const dependencyRefs = resolveArtifactDependencyRefs(
-    input.dependencyRefs === undefined ? (base.dependencyRefs ?? []) : input.dependencyRefs,
+    governedWrite ? input.dependencyRefs === undefined ? base.dependencyRefs ?? [] : input.dependencyRefs
+      : [...new Set([...(base.dependencyRefs ?? []), ...artifactTrustSourceRefs(baseTrust), ...(input.dependencyRefs ?? [])])],
     trustManifest,
   );
   await assertQuickChatAttachmentProvenance(ctx, artifact.owningChatId, artifact.projectId,
-    [...(input.sourceRefs ?? base.sourceRefs), ...dependencyRefs], [...base.sourceRefs, ...(base.dependencyRefs ?? [])]);
+    [...sourceRefs, ...dependencyRefs], [...base.sourceRefs, ...(base.dependencyRefs ?? [])]);
   const refreshSpec = input.refreshSpec === undefined
     ? (base.refreshSpec ? artifactRefreshSpecSchema.parse(base.refreshSpec) : null)
     : input.refreshSpec == null ? null : artifactRefreshSpecSchema.parse(input.refreshSpec);
@@ -1159,7 +1188,7 @@ export async function createArtifactVersion(
       adapterId,
       content: content as unknown as Record<string, unknown>,
       contentHash: hash,
-      sourceRefs: input.sourceRefs ?? base.sourceRefs,
+      sourceRefs,
       executionReceiptIds: input.executionReceiptIds ?? base.executionReceiptIds,
       assumptionRefs: input.assumptionRefs ?? base.assumptionRefs,
       trustManifest: trustManifest as unknown as Record<string, unknown> | null,
@@ -1193,7 +1222,7 @@ export async function createArtifactVersion(
       contentHash: hash,
       actorType: input.actorType === "conversation" ? "system" : "user",
       requestId: input.requestId ?? null,
-      sourceRefs: input.sourceRefs ?? base.sourceRefs,
+      sourceRefs,
       content,
       payload: {
         fromVersion: input.baseVersion,
@@ -1691,7 +1720,7 @@ export async function decideArtifactProposal(ctx: TenantContext, proposalId: str
   assertArtifactRefsSafe(dependencyRefs, "dependencyRefs");
   // Proposal review authorizes the edit; it is not a new source verification or deterministic execution.
   const changedContent = contentHash(baseContent) !== contentHash(proposedContent);
-  const trustManifest = changedContent ? null : base.trustManifest;
+  const trustManifest = changedContent ? invalidateAuthoredArtifactTrust(base.trustManifest) : base.trustManifest;
   const trustNote = changedContent
     ? " Current edited content is unverified; prior trust and execution receipts remain historical source custody only."
     : "";
@@ -1768,15 +1797,34 @@ export async function decideArtifactProposal(ctx: TenantContext, proposalId: str
   });
 }
 
+/** Validated portable history is historical custody, not a newly authorized engine run. */
+export async function replayArtifactPackageHistory(ctx:TenantContext,targetArtifactId:string,rawPackage:unknown,sourceArtifactId:string) {
+  const {verifyArtifactPackage}=await import("./artifactPackage");
+  const pkg=verifyArtifactPackage(rawPackage);
+  const bundle=pkg.artifacts.find(item=>item.identity.id===sourceArtifactId);
+  if(!bundle)throw new Error("Artifact package history identity is missing.");
+  const target=await getArtifact(ctx,targetArtifactId);
+  const first=await getArtifactVersion(ctx,target.id,1);
+  const versions=[...bundle.versions].sort((a,b)=>a.version-b.version);
+  if(target.origin!=="import"||target.headVersion!==1||versions[0]?.version!==1||contentHash(versions[0].content)!==first.contentHash)throw new Error("Artifact package replay must start from its exact imported first revision.");
+  for(const version of versions.slice(1)) {
+    const baseVersion=version.version-1;
+    if(versions[baseVersion]?.version!==version.version)throw new Error("Artifact package history is not contiguous.");
+    const metadata={sourceRefs:version.sourceRefs,executionReceiptIds:version.executionReceiptIds,assumptionRefs:version.assumptionRefs,trustManifest:version.trustManifest,dependencyRefs:version.dependencyRefs,refreshSpec:version.refreshSpec};
+    const proof={};
+    packageHistoryWrites.set(proof,{userId:ctx.userId,artifactId:target.id,baseVersion,contentHash:contentHash(version.content),metadataHash:hashLedgerValue(metadata)});
+    try {await createArtifactVersion(ctx,{artifactId:target.id,baseVersion,content:version.content,adapterId:version.adapterId,...metadata,note:version.note??`Imported source v${version.version}`,action:"import"},undefined,undefined,proof);}
+    finally{packageHistoryWrites.delete(proof);}
+  }
+}
+
 export async function restoreArtifactRevision(ctx: TenantContext, artifactId: string, baseVersion: number, targetVersion: number) {
   const artifact = await getArtifact(ctx, artifactId);
   if (targetVersion >= baseVersion) throw new Error("Select an earlier revision to restore.");
   const revision = await getArtifactVersion(ctx, artifact.id, targetVersion);
   const restoredContent = artifactContentSchema.parse(revision.content);
   const proof = {};
-  if (restoredContent.kind === "screen" && restoredContent.state.terminal !== undefined) {
-    terminalEngineWrites.set(proof, { kind: "restore", userId: ctx.userId, artifactId: artifact.id, baseVersion, hash: contentHash(restoredContent) });
-  }
+  terminalEngineWrites.set(proof, { kind: "restore", userId: ctx.userId, artifactId: artifact.id, baseVersion, hash: contentHash(restoredContent) });
   try { return await createArtifactVersion(ctx, {
     artifactId: artifact.id, baseVersion,
     content: restoredContent,

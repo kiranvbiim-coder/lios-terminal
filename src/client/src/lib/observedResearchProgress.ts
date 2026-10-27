@@ -37,10 +37,10 @@ export function observedResearchProgress(
   if (plan.type !== "plan" || !plan.plan.steps.length) return null;
 
   const steps = plan.plan.steps;
-  const known = new Map(steps.map((step) => [step.id, step.label]));
+  const known = new Map(steps.map((step) => [step.id, step]));
   // A malformed plan with duplicate step IDs cannot support an honest denominator.
   if (known.size !== steps.length) return null;
-  const lastState = new Map<string, "queued" | "running" | "completed" | "cancelled">();
+  const lastState = new Map<string, "queued" | "running" | "completed" | "cancelled" | "failed" | "skipped" | "denied" | "approval_required" | "unknown">();
   const latestResults = new Map<string, ObservedResearchResult>();
   const activeOrder = new Map<string, number>();
   let runOutcome: ObservedResearchProgress["runOutcome"];
@@ -70,11 +70,15 @@ export function observedResearchProgress(
     } else if (event.type === "tool_result" && known.has(event.stepId)) {
       // A late result arriving after cancellation must not be counted as successful.
       if (lastState.get(event.stepId) === "cancelled") continue;
-      lastState.set(event.stepId, "completed");
       latestResults.delete(event.stepId);
+      activeOrder.delete(event.stepId);
+      // Historical agent results did not record outcomes; they cannot establish success.
+      const outcome = event.outcome ?? (known.get(event.stepId)?.kind === "agent" ? "unknown" : "completed");
+      lastState.set(event.stepId, outcome);
+      if (outcome !== "completed") continue;
       latestResults.set(event.stepId, {
         stepId: event.stepId,
-        label: known.get(event.stepId) ?? event.label,
+        label: known.get(event.stepId)?.label ?? event.label,
         summary: event.summary,
         referenceCount: new Set(event.sourceRefs ?? []).size,
       });
@@ -85,7 +89,7 @@ export function observedResearchProgress(
   const active = [...activeOrder.entries()]
     .filter(([id]) => lastState.get(id) === "running")
     .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  const activeLabel = runOutcome ? null : active ? known.get(active) ?? null : null;
+  const activeLabel = runOutcome ? null : active ? known.get(active)?.label ?? null : null;
   const currentResults = [...latestResults.values()]
     .filter((result) => lastState.get(result.stepId) === "completed")
     .slice(-3).reverse();

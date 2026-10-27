@@ -96,9 +96,9 @@ function DecisionApprovalInspector({ artifactId, version, contentHash, blocked }
     {notice && <p role="status" className="text-sm text-amber-200">{notice}</p>}
   </section>;
 }
-export default function DecisionArtifactEditor({ artifactId, content: rawIncomingContent, revision, contentHash, onSave }: {
+export default function DecisionArtifactEditor({ artifactId, content: rawIncomingContent, revision, contentHash, onSave, onDirtyChange }: {
   artifactId: string; content: DecisionContent; revision: number; contentHash: string;
-  onSave: (content: ArtifactContent) => Promise<void>;
+  onSave: (content: ArtifactContent) => Promise<void>; onDirtyChange?: (dirty: boolean) => void;
 }) {
   // Read projection supplies historical defaults; the raw canonical version/hash stays unchanged.
   const incomingContent = useMemo(() => ({
@@ -127,6 +127,8 @@ export default function DecisionArtifactEditor({ artifactId, content: rawIncomin
   baselineRef.current = baseline;
   const draftSignature = useMemo(() => decisionDraftSignature(content), [content]);
   const dirty = draftSignature !== baseline;
+  useEffect(() => { onDirtyChange?.(dirty || saving || pending || conflict); }, [dirty, saving, pending, conflict, onDirtyChange]);
+  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]);
   useEffect(() => {
     const incoming = incomingSignature;
     const arrival = decisionDraftArrival({ baseVersion, incomingVersion: revision, baseline: baselineRef.current, draft: decisionDraftSignature(draftRef.current), incoming, submitted: submittedRef.current });

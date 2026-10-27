@@ -1,4 +1,5 @@
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
+import { observedResearchProgress } from "./observedResearchProgress";
 
 /**
  * Pure summary of a Conversation Runtime run for the chat: what state it ended in, how much work it
@@ -42,13 +43,10 @@ export function summarizeRuntimeTrace(events: readonly ConversationRuntimeEvent[
   const hasGap = events.some((event) => event.type === "data_gap");
   const hasError = events.some((event) => event.type === "error");
 
-  const settled = new Set<string>();
+  const progress = observedResearchProgress(events, plan?.requestId);
   const sources: string[] = [];
   let resolvedSymbol: string | null = null;
   for (const event of events) {
-    if (event.type === "tool_result" || (event.type === "status" && event.state === "completed" && event.stepId)) {
-      if (event.stepId) settled.add(event.stepId);
-    }
     if (event.type === "tool_result") {
       for (const ref of event.sourceRefs ?? []) {
         const label = humanizeSourceRef(ref);
@@ -78,7 +76,7 @@ export function summarizeRuntimeTrace(events: readonly ConversationRuntimeEvent[
   return {
     status,
     stepCount: planSteps.length,
-    settledSteps: planSteps.filter((step) => settled.has(step.id)).length,
+    settledSteps: progress?.completed ?? 0,
     sources,
     durationMs,
     resolvedSymbol,

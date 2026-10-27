@@ -182,3 +182,25 @@ test("WS-27 concurrent work shows another still-running step after the latest on
 test("WS-27 ambiguous duplicate step identities are not reported as valid observed progress", () => {
   assert.equal(observedResearchProgress([plan(["fetch", "fetch"])]), null);
 });
+
+test("agent outcomes distinguish executed success from permission waits, denial, failure and skipped dependencies", () => {
+  const agentPlan = event({ type: "plan", plan: { steps: [{
+    id: "inspect", label: "Inspect recorded research", kind: "agent", permissionClass: "user_confirm",
+  }], capabilities: [] } });
+  for (const outcome of ["approval_required", "denied", "failed", "skipped", undefined] as const) {
+    const events = [
+      agentPlan,
+      event({ type: "tool_start", stepId: "inspect", label: "Inspect", componentId: "lios.memory.inspect" }),
+      event({ type: "tool_result", stepId: "inspect", label: "Inspect", summary: "No successful inspection", deterministic: true, sourceRefs: [], ...(outcome ? { outcome } : {}) }),
+    ];
+    assert.deepEqual(observedResearchProgress(events), { total: 1, completed: 0, activeLabel: null, results: [] }, String(outcome));
+    assert.match(markup(events, "inline"), /0 of 1 steps completed/);
+    assert.doesNotMatch(markup(events, "findings"), /No successful inspection/);
+    const succeeded = [...events, event({
+      type: "tool_result", stepId: "inspect", label: "Inspect", summary: "Recorded inspection",
+      deterministic: true, sourceRefs: [], outcome: "completed",
+    })];
+    assert.equal(observedResearchProgress(succeeded)?.completed, 1);
+    assert.equal(observedResearchProgress(succeeded)?.results[0]?.summary, "Recorded inspection");
+  }
+});

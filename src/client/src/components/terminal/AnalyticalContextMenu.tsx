@@ -1,4 +1,6 @@
-import { ArrowRight, Columns2, Database, ExternalLink, Layers3, MonitorUp, X } from "lucide-react";
+import { useRef } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ArrowRight, Columns2, Database, ExternalLink, Layers3, MonitorUp } from "lucide-react";
 import {
   createAnalyticalContext, getOpenWithActions, getSendToActions,
   type AnalyticalOpenMode, type CompatibleAnalyticalAction,
@@ -28,6 +30,7 @@ function ActionRow({ action, onChoose }: { action: CompatibleAnalyticalAction; o
 }
 
 export default function AnalyticalContextMenu({ x, y, view, symbol, isInternal, onOpen, onEvidence, onClose }: Props) {
+  const opener = useRef(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const capability = getTerminalCapability(view);
   const universalContext = useTerminalContextProjection({ view, symbol });
   const context = createAnalyticalContext(view, universalContext.entity?.symbol ?? symbol);
@@ -46,13 +49,15 @@ export default function AnalyticalContextMenu({ x, y, view, symbol, isInternal, 
     : "LATEST CONTEXT";
 
   return (
-    <div className="fixed inset-0 z-[90]" onMouseDown={onClose}>
-      <section className="absolute w-[360px] max-w-[calc(100vw-16px)] border border-border bg-[#080808] shadow-2xl" style={{ left, top }} onMouseDown={(event) => event.stopPropagation()} role="menu" aria-label="Analytical context actions">
-        <header className="flex items-start gap-2 border-b border-border p-2.5"><Layers3 className="mt-0.5 h-3.5 w-3.5 text-cyan-300" /><div className="min-w-0 flex-1"><div className="truncate font-terminal text-[9px] font-bold text-foreground">{context.symbol ? `${context.symbol} · ` : ""}{capability.label}</div><div className="mt-1 font-terminal text-[7px] text-muted-foreground">Context-aware actions from the Tool Graph · {timeLabel}. No hidden data transformations.</div></div><button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button></header>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="w-[360px] max-w-[calc(100vw-16px)] gap-0 bg-[#080808] p-0 pr-0" style={{ left, top, transform: "none" }} onCloseAutoFocus={(event) => {
+        if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus({ preventScroll: true }); }
+      }}>
+        <header className="flex items-start gap-2 border-b border-border p-2.5 pr-12"><Layers3 className="mt-0.5 h-3.5 w-3.5 text-cyan-300" /><div className="min-w-0 flex-1"><DialogTitle className="truncate font-terminal text-sm font-bold text-foreground">{context.symbol ? `${context.symbol} · ` : ""}{capability.label}</DialogTitle><DialogDescription className="mt-1 font-terminal text-xs text-muted-foreground">Context-aware actions from the Tool Graph · {timeLabel}. No hidden data transformations.</DialogDescription></div></header>
         <button onClick={() => { onEvidence(); onClose(); }} className="flex w-full items-center gap-2 border-b border-border px-2.5 py-2 text-left font-terminal text-[8px] text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"><Database className="h-3 w-3 text-cyan-300" /> INSPECT EVIDENCE & CALC RECEIPTS</button>
         {openWith.length > 0 && <section><div className="flex items-center gap-1.5 border-b border-border bg-black/30 px-2 py-1.5 font-terminal text-[7px] tracking-widest text-muted-foreground"><ArrowRight className="h-3 w-3" /> OPEN WITH</div>{openWith.slice(0, 6).map((action) => <ActionRow key={`open-${action.view}`} action={action} onChoose={(mode) => choose(action, mode)} />)}</section>}
         {sendTo.length > 0 && <section><div className="flex items-center gap-1.5 border-y border-border bg-black/30 px-2 py-1.5 font-terminal text-[7px] tracking-widest text-muted-foreground"><MonitorUp className="h-3 w-3" /> SEND TO / MONITOR</div>{sendTo.slice(0, 6).map((action) => <ActionRow key={`send-${action.view}`} action={action} onChoose={(mode) => choose(action, mode)} />)}</section>}
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

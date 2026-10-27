@@ -5,6 +5,7 @@ import { ResponsiveContainer, ComposedChart, Scatter, Line, XAxis, YAxis, Toolti
 import { Grid3X3, ArrowRight, Star, Info, Plus, X } from "lucide-react";
 import type { OHLCVSeries } from "@/lib/finance";
 import { Skeleton } from "@/components/ui/skeleton";
+import { dailyReturnsFromBars, pearsonCorrelation, type PairCorrelation } from "@/lib/correlationMatrix";
 
 interface Props {
   onSymbol: (sym: string) => void;
@@ -25,31 +26,11 @@ const DEFAULT_CORRELATION_ASSETS = [
 const MIN_CORR_ASSETS = 3;
 const MAX_CORR_ASSETS = 14;
 
-// Helper to compute Pearson correlation
-function calculatePearson(x: number[], y: number[]) {
-  const n = x.length;
-  if (n === 0) return 0;
-  const meanX = x.reduce((s, v) => s + v, 0) / n;
-  const meanY = y.reduce((s, v) => s + v, 0) / n;
-
-  let num = 0;
-  let denX = 0;
-  let denY = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = x[i] - meanX;
-    const dy = y[i] - meanY;
-    num += dx * dy;
-    denX += dx * dx;
-    denY += dy * dy;
-  }
-  if (denX === 0 || denY === 0) return 0;
-  return num / Math.sqrt(denX * denY);
-}
 
 // Helper to compute linear regression (y = alpha + beta * x)
 function calculateRegression(x: number[], y: number[]) {
   const n = x.length;
-  if (n === 0) return { alpha: 0, beta: 0, r2: 0 };
+  if (n < 20 || n !== y.length || x.some(value => !Number.isFinite(value)) || y.some(value => !Number.isFinite(value))) return null;
 
   const meanX = x.reduce((s, v) => s + v, 0) / n;
   const meanY = y.reduce((s, v) => s + v, 0) / n;
@@ -63,11 +44,13 @@ function calculateRegression(x: number[], y: number[]) {
     denX += dx * dx;
   }
 
-  const beta = denX === 0 ? 0 : num / denX;
+  if (!(denX > 0)) return null;
+  const beta = num / denX;
   const alpha = meanY - beta * meanX;
 
   // R-squared is Pearson correlation squared
-  const r = calculatePearson(x, y);
+  const r = pearsonCorrelation(x.map((value,index) => ({date:String(index),value})), y.map((value,index) => ({date:String(index),value}))).value;
+  if (r === null) return null;
   const r2 = r * r;
 
   return { alpha, beta, r2 };
@@ -112,38 +95,26 @@ export default function CorrelationPanel({ onSymbol }: Props) {
     })),
   });
 
-  const isLoading = results.some((r) => r.isLoading);
+  const isLoading = results.every((r) => r.isLoading);
   const hasError = results.some((r) => r.isError);
 
   // Compute daily returns mapped by date
   const returnsData = useMemo(() => {
-    if (isLoading || hasError) return null;
-
     const returnsByAsset: Record<string, Map<string, number>> = {};
     assets.forEach((symbol, index) => {
-      const bars = results[index].data?.bars || [];
-      const returnsMap = new Map<string, number>();
-
-      for (let i = 1; i < bars.length; i++) {
-        const prev = bars[i - 1].close;
-        const curr = bars[i].close;
-        if (prev > 0) {
-          const ret = (curr - prev) / prev;
-          const dateStr = bars[i].date.split("T")[0];
-          returnsMap.set(dateStr, ret);
-        }
-      }
-      returnsByAsset[symbol] = returnsMap;
+      const bars = results[index].data?.bars ?? [];
+      const observations = dailyReturnsFromBars(bars, 366);
+      returnsByAsset[symbol] = new Map(observations.map(point => [point.date, point.value]));
     });
 
     return returnsByAsset;
-  }, [results, isLoading, hasError]);
+  }, [results, assets]);
 
   // Compute correlation matrix and scatter series
   const correlationMatrix = useMemo(() => {
     if (!returnsData) return null;
 
-    const matrix: Record<string, Record<string, number>> = {};
+    const matrix: Record<string, Record<string, PairCorrelation>> = {};
     assets.forEach((a) => {
       matrix[a] = {};
       assets.forEach((b) => {
@@ -156,10 +127,10 @@ export default function CorrelationPanel({ onSymbol }: Props) {
           if (returnsB.has(date)) commonDates.push(date);
         });
 
-        const x = commonDates.map((d) => returnsA.get(d)!);
-        const y = commonDates.map((d) => returnsB.get(d)!);
-
-        matrix[a][b] = calculatePearson(x, y);
+        matrix[a][b] = pearsonCorrelation(
+          commonDates.map(date => ({ date, value: returnsA.get(date)! })),
+          commonDates.map(date => ({ date, value: returnsB.get(date)! })),
+        );
       });
     });
 
@@ -190,17 +161,20 @@ export default function CorrelationPanel({ onSymbol }: Props) {
     // Regression stats (using percentages)
     const xPct = x.map((v) => v * 100);
     const yPct = y.map((v) => v * 100);
-    const { alpha, beta, r2 } = calculateRegression(xPct, yPct);
+    const regression = calculateRegression(xPct, yPct);
+    const alpha = regression?.alpha ?? null;
+    const beta = regression?.beta ?? null;
+    const r2 = regression?.r2 ?? null;
 
     // Generate trend line points
     const minX = Math.min(...xPct, -2);
     const maxX = Math.max(...xPct, 2);
-    const trendLine = [
-      { x: minX, y: alpha + beta * minX },
-      { x: maxX, y: alpha + beta * maxX },
-    ];
+    const trendLine = regression ? [
+      { x: minX, y: regression.alpha + regression.beta * minX },
+      { x: maxX, y: regression.alpha + regression.beta * maxX },
+    ] : [];
 
-    const correlation = calculatePearson(x, y);
+    const correlation = pearsonCorrelation(commonDates.map(date => ({date,value:returnsA.get(date)!})),commonDates.map(date => ({date,value:returnsB.get(date)!}))).value;
 
     return {
       scatterData,
@@ -236,6 +210,8 @@ export default function CorrelationPanel({ onSymbol }: Props) {
 
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden text-foreground">
+      {hasError && <p role="alert" className="p-3 text-sm text-amber-200">Some price histories could not be loaded. Unavailable pairs are not zero correlation. <button type="button" onClick={() => void Promise.all(results.filter(result => result.isError).map(result => result.refetch()))} className="min-h-10 underline">Retry failed histories</button></p>}
+      <p className="px-3 text-xs text-muted-foreground">At least 20 matched finite daily returns and nonzero variance are required. An unavailable statistic is shown as —, not zero.</p>
       {/* Title Header Bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-[#070707] shrink-0 flex-wrap">
         <Grid3X3 className="w-4 h-4 text-[hsl(38,95%,55%)]" />
@@ -298,13 +274,16 @@ export default function CorrelationPanel({ onSymbol }: Props) {
 
                 {/* Heatmap cells */}
                 {assets.map((colAsset) => {
-                  const r = correlationMatrix?.[rowAsset]?.[colAsset] ?? 0;
+                  const pair = correlationMatrix?.[rowAsset]?.[colAsset];
+                  const r = pair?.value ?? null;
                   const isSelected = selectedA === rowAsset && selectedB === colAsset;
-                  const cellStyle = getCellBg(r);
+                  const cellStyle = r === null ? { backgroundColor: "transparent", color: "#888" } : getCellBg(r);
 
                   return (
                     <button
                       key={colAsset}
+                      aria-label={`${rowAsset} / ${colAsset}: ${r === null ? "correlation unavailable" : r.toFixed(2)}; ${pair?.observations ?? 0} paired observations`}
+                      title={`${pair?.observations ?? 0} paired observations`}
                       onClick={() => {
                         setSelectedA(rowAsset);
                         setSelectedB(colAsset);
@@ -314,7 +293,7 @@ export default function CorrelationPanel({ onSymbol }: Props) {
                         isSelected ? "ring-1 ring-inset ring-amber-500 font-bold bg-white/5" : ""
                       }`}
                     >
-                      {r.toFixed(2)}
+                      {r === null ? "—" : r.toFixed(2)}
                     </button>
                   );
                 })}
@@ -338,6 +317,8 @@ export default function CorrelationPanel({ onSymbol }: Props) {
           {/* Scatter Chart */}
           <div className="p-4 border-b border-border flex flex-col">
             <span className="font-terminal text-[8px] text-muted-foreground tracking-widest mb-2">DAILY RETURNS SCATTER & REGRESSION</span>
+            <p className="text-xs text-muted-foreground">{regressionDetails?.scatterData.length ?? 0} paired observations</p>
+            {regressionDetails?.beta == null && <p role="status" className="text-sm text-muted-foreground">Regression unavailable: insufficient matched observations or zero variance. Available paired observations remain plotted.</p>}
             <div className="h-[220px] w-full relative">
               {regressionDetails && (
                 <ResponsiveContainer width="100%" height="100%">
@@ -399,14 +380,14 @@ export default function CorrelationPanel({ onSymbol }: Props) {
                   (regressionDetails?.correlation ?? 0) > 0.1 ? "text-up" :
                   (regressionDetails?.correlation ?? 0) < -0.1 ? "text-down" : "text-muted-foreground"
                 }`}>
-                  {regressionDetails ? (regressionDetails.correlation >= 0 ? "+" : "") + regressionDetails.correlation.toFixed(4) : "—"}
+                  {regressionDetails?.correlation != null ? (regressionDetails.correlation >= 0 ? "+" : "") + regressionDetails.correlation.toFixed(4) : "—"}
                 </div>
               </div>
 
               <div className="bg-[#080808] border border-border/60 p-3">
                 <div className="font-terminal text-[8px] text-muted-foreground tracking-widest mb-1">R-SQUARED (R²)</div>
                 <div className="font-terminal text-lg font-bold font-mono text-foreground">
-                  {regressionDetails ? regressionDetails.r2.toFixed(4) : "—"}
+                  {regressionDetails?.r2 != null ? regressionDetails.r2.toFixed(4) : "—"}
                 </div>
                 <div className="font-terminal text-[7px] text-muted-foreground mt-0.5">Variance explained</div>
               </div>
@@ -420,13 +401,13 @@ export default function CorrelationPanel({ onSymbol }: Props) {
               <div className="flex items-center justify-between font-terminal text-[10px]">
                 <span className="text-muted-foreground">BETA (SLOPE / β)</span>
                 <span className="text-foreground font-mono font-bold">
-                  {regressionDetails ? regressionDetails.beta.toFixed(4) : "—"}
+                  {regressionDetails?.beta != null ? regressionDetails.beta.toFixed(4) : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between font-terminal text-[10px]">
                 <span className="text-muted-foreground">ALPHA (INTERCEPT / α)</span>
                 <span className="text-foreground font-mono font-bold">
-                  {regressionDetails ? regressionDetails.alpha.toFixed(4) + "%" : "—"}
+                  {regressionDetails?.alpha != null ? regressionDetails.alpha.toFixed(4) + "%" : "—"}
                 </span>
               </div>
             </div>

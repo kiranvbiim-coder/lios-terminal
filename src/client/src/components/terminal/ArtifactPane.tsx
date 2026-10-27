@@ -302,27 +302,69 @@ function BuiltinSpreadsheetEditor({content,onSave,onDraft,onDirtyChange,disabled
     {!reviewRef && <p role="status" className="mt-1 font-ui text-[12px] text-amber-200">Enter a cell within the saved worksheet bounds to create a review diff.</p>}
   </div>;
 }
-function ThesisEditor({content,onSave,onRefresh,onPostmortem}:{content:Extract<ArtifactContent,{kind:"thesis"}>;onSave:(c:ArtifactContent)=>Promise<void>;onRefresh:()=>Promise<void>;onPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>}) {
-  const [summary,setSummary]=useState(content.summary);
+/** Same canonical acknowledgement/reconciliation used by document and terminal drafts. */
+function useAuthoredArtifactDraft<T extends ArtifactContent>(incoming:T,revision:number,onSave:(content:ArtifactContent)=>Promise<void>,onDirtyChange:((dirty:boolean)=>void)|undefined,additionalDirty=false) {
+  const [draft,setDraft]=useState(incoming);
+  const [base,setBase]=useState(incoming);
+  const [baseRevision,setBaseRevision]=useState(revision);
+  const [baseline,setBaseline]=useState(()=>stableSerialize(incoming));
+  const [saving,setSaving]=useState(false);
+  const [pending,setPending]=useState(false);
+  const [conflict,setConflict]=useState(false);
+  const [notice,setNotice]=useState<string|null>(null);
+  const draftRef=useRef(draft); draftRef.current=draft;
+  const submitted=useRef<string|null>(null);
+  const saveRef=useRef(onSave);
+  const dirty=stableSerialize(draft)!==baseline;
+  const callback=useRef(onDirtyChange);callback.current=onDirtyChange;
+  useEffect(()=>{callback.current?.(dirty||additionalDirty||saving||pending||conflict);},[dirty,additionalDirty,saving,pending,conflict]);
+  useEffect(()=>()=>callback.current?.(false),[]);
+  useEffect(()=>{
+    if(revision===baseRevision&&stableSerialize(incoming)===baseline)return;
+    const transition=reconcileTerminalDraft(incoming,draftRef.current,baseline,submitted.current);
+    if(transition.conflict||(additionalDirty&&!transition.acknowledged)){setConflict(true);return;}
+    setBase(incoming);setBaseline(transition.baseline);setBaseRevision(revision);saveRef.current=onSave;
+    if(transition.replaceDraft)setDraft(incoming);
+    if(transition.acknowledged){submitted.current=null;setPending(false);}
+    setConflict(false);
+  },[incoming,revision,baseRevision,baseline,onSave,additionalDirty]);
+  const save=async(next:T=draftRef.current)=>{
+    if(saving||pending||conflict||baseRevision!==revision||submitted.current!==null)throw new Error("Reload or finish the current save before saving this draft.");
+    submitted.current=stableSerialize(next);setDraft(next);setSaving(true);setNotice(null);
+    try{await saveRef.current(next);setPending(submitted.current!==null);}
+    catch(error){submitted.current=null;setNotice(error instanceof Error?error.message:"Save failed; draft retained.");throw error;}
+    finally{setSaving(false);}
+  };
+  const reset=()=>{setDraft(incoming);setBase(incoming);setBaseline(stableSerialize(incoming));setBaseRevision(revision);saveRef.current=onSave;submitted.current=null;setPending(false);setConflict(false);setNotice(null);};
+  return{draft,setDraft,base,baseRevision,dirty,saving,pending,conflict,notice,save,reset,blocked:saving||pending||conflict||baseRevision!==revision};
+}
+
+function ThesisEditor({content,revision,onSave,onRefresh,onPostmortem,onDirtyChange,disabled=false}:{content:Extract<ArtifactContent,{kind:"thesis"}>;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onRefresh:()=>Promise<void>;onPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean}) {
+  const [advancedDirty,setAdvancedDirty]=useState(false);
+  const [advancedReset,setAdvancedReset]=useState(0);
   const [postmortemOpen,setPostmortemOpen]=useState(false);
   const [postmortemSummary,setPostmortemSummary]=useState("");
   const [postmortemOutcome,setPostmortemOutcome]=useState<"validated"|"partially_validated"|"invalidated"|"closed">("partially_validated");
-  useEffect(()=>setSummary(content.summary),[content.summary]);
+  const editor=useAuthoredArtifactDraft(content,revision,onSave,onDirtyChange,advancedDirty||Boolean(postmortemSummary.trim()));
+  const summary=editor.draft.summary;
+  const setSummary=(value:string)=>editor.setDraft(current=>({...current,summary:value}));
   const statusTone=content.status==="invalidated"?"text-red-300":content.status==="active"?"text-emerald-300":"text-amber-200";
   return <div className="space-y-3">
+    {(editor.conflict||editor.notice)&&<p role="alert" className="text-sm text-amber-200">{editor.notice??"A newer revision arrived. Your draft is retained; reload explicitly to discard it."}</p>}
+    {(editor.dirty||advancedDirty||editor.conflict||editor.pending)&&<button type="button" disabled={editor.saving} onClick={()=>{editor.reset();setAdvancedReset(value=>value+1);setAdvancedDirty(false);setPostmortemSummary("");}} className="min-h-10 underline">Reload saved thesis</button>}
     <div className="flex flex-wrap items-center gap-2">
       <span className={`rounded border border-border/50 px-2 py-1 font-terminal text-[12px] ${statusTone}`}>{content.status.toUpperCase()}</span>
       {content.entityRef&&<span className="font-terminal text-[13px] text-cyan-300">{content.entityRef}</span>}
       <span className="font-terminal text-[12px] text-muted-foreground">{content.expectedOutcomes.length} EXPECTED OUTCOMES · {content.claims.length} CLAIMS · {content.catalysts.length} CATALYSTS · {content.risks.length} RISKS</span>
       <div className="ml-auto flex gap-1">
-        <button onClick={()=>void onRefresh()} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200">Refresh from Project evidence</button>
+        <button disabled={disabled||editor.blocked||editor.dirty||advancedDirty||Boolean(postmortemSummary.trim())} onClick={()=>void onRefresh()} className="rounded border border-cyan-300/20 px-2 py-1 font-ui text-[13px] text-cyan-200 disabled:opacity-40">Refresh from Project evidence</button>
         <button onClick={()=>setPostmortemOpen((v)=>!v)} className="rounded border border-fuchsia-300/20 px-2 py-1 font-ui text-[13px] text-fuchsia-200">Postmortem</button>
       </div>
     </div>
     <div>
       <div className="mb-1 font-terminal text-[12px] text-muted-foreground">THESIS SUMMARY</div>
-      <textarea value={summary} onChange={(e)=>setSummary(e.target.value)} className="min-h-24 w-full rounded-lg border border-border/50 bg-black/15 p-3 font-ui text-[14px] leading-5 outline-none"/>
-      <div className="mt-2 flex justify-end"><button onClick={()=>void onSave({...content,summary})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save thesis revision</button></div>
+      <textarea aria-label="Thesis summary" disabled={disabled||editor.blocked||advancedDirty} value={summary} onChange={(e)=>setSummary(e.target.value)} className="min-h-24 w-full rounded-lg border border-border/50 bg-black/15 p-3 font-ui text-[14px] leading-5 outline-none"/>
+      <div className="mt-2 flex justify-end"><button disabled={disabled||editor.blocked||advancedDirty||!editor.dirty} onClick={()=>void editor.save().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Save thesis revision</button></div>
     </div>
     {postmortemOpen&&<div className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/[0.02] p-3">
       <div className="font-terminal text-[12px] text-fuchsia-200">APPEND IMMUTABLE THESIS POSTMORTEM</div>
@@ -331,7 +373,7 @@ function ThesisEditor({content,onSave,onRefresh,onPostmortem}:{content:Extract<A
           <option value="validated">Validated</option><option value="partially_validated">Partially validated</option><option value="invalidated">Invalidated</option><option value="closed">Closed</option>
         </select>
         <input value={postmortemSummary} onChange={(e)=>setPostmortemSummary(e.target.value)} placeholder="What happened, and what did the thesis get right or wrong?" className="min-w-[280px] flex-1 rounded border border-border/50 bg-black/20 px-2 py-1.5 font-ui text-[14px] outline-none"/>
-        <button disabled={!postmortemSummary.trim()} onClick={()=>void onPostmortem({outcome:postmortemOutcome,summary:postmortemSummary.trim()}).then(()=>{setPostmortemSummary("");setPostmortemOpen(false)})} className="rounded bg-fuchsia-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Append</button>
+        <button disabled={disabled||editor.blocked||editor.dirty||advancedDirty||!postmortemSummary.trim()} onClick={()=>void onPostmortem({outcome:postmortemOutcome,summary:postmortemSummary.trim()}).then(()=>{setPostmortemSummary("");setPostmortemOpen(false)})} className="rounded bg-fuchsia-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Append</button>
       </div>
     </div>}
     <div className="grid gap-3 lg:grid-cols-2">
@@ -348,17 +390,20 @@ function ThesisEditor({content,onSave,onRefresh,onPostmortem}:{content:Extract<A
       <div className="mt-2 space-y-1">{content.refresh.contradictions.map((x,i)=><div key={`x-${i}`} className="font-ui text-[13px] text-red-300">• {x}</div>)}</div>
     </div>}
     {!!content.postmortems.length&&<div className="rounded-lg border border-border/50 p-3"><div className="font-terminal text-[12px] text-muted-foreground">POSTMORTEMS</div>{content.postmortems.slice().reverse().slice(0,10).map((p,i)=><div key={i} className="mt-2 border-t border-border/35 pt-2"><div className="flex gap-2"><span className="font-terminal text-[12px] text-fuchsia-300">{p.outcome.toUpperCase()}</span><span className="font-terminal text-[12px] text-muted-foreground">{new Date(p.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px]">{p.summary}</div></div>)}</div>}
-    <details className="rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED STRUCTURED EDITOR</summary><div className="mt-2"><JsonEditor content={content} onSave={onSave}/></div></details>
+    <details className="rounded-lg border border-border/40 p-2"><summary className="cursor-pointer font-terminal text-[12px] text-muted-foreground">ADVANCED STRUCTURED EDITOR</summary><div className="mt-2"><JsonEditor key={`${editor.baseRevision}:${advancedReset}`} content={editor.base} disabled={disabled||editor.blocked||editor.dirty} onDirtyChange={setAdvancedDirty} onSave={async next=>{if(next.kind!=="thesis")throw new Error("Thesis kind cannot change.");await editor.save(next);}}/></div></details>
   </div>;
 }
 function ThesisList({title,rows}:{title:string;rows:Array<{id:string;text:string;status:string;refs:string[]}>}) {
   return <div className="rounded-lg border border-border/50 p-3"><div className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">{title}</div><div className="mt-2 space-y-2">{rows.length?rows.map((row)=><div key={row.id} className="rounded border border-border/35 p-2"><div className="flex gap-2"><span className="font-terminal text-[12px] text-cyan-300">{row.status.toUpperCase()}</span><span className="font-ui text-[14px]">{row.text}</span></div>{row.refs.length>0&&<div className="mt-1 font-terminal text-[12px] text-muted-foreground">{row.refs.length} EVIDENCE REF{row.refs.length===1?"":"S"}</div>}</div>):<div className="font-ui text-[13px] text-muted-foreground">None yet.</div>}</div></div>;
 }
 
-function StrategyEditor({content,onSave}:{content:Extract<ArtifactContent,{kind:"strategy"}>;onSave:(c:ArtifactContent)=>Promise<void>}) {
-  const [source,setSource]=useState(content.source);
-  useEffect(()=>setSource(content.source),[content.source]);
-  return <div><div className="mb-2 font-terminal text-[12px] text-muted-foreground">STRATEGY STUDIO · {content.language.toUpperCase()} · {content.validation.status.toUpperCase()}</div><textarea value={source} onChange={(e)=>setSource(e.target.value)} className="min-h-[320px] w-full rounded-lg border border-border/50 bg-black/20 p-3 font-terminal text-[14px] leading-5 text-foreground outline-none"/><div className="mt-2 flex justify-end"><button onClick={()=>void onSave({...content,source,validation:{status:"unvalidated",errors:[]}})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black">Save strategy revision</button></div></div>;
+function StrategyEditor({content,revision,onSave,onDirtyChange,disabled=false}:{content:Extract<ArtifactContent,{kind:"strategy"}>;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDirtyChange?:(dirty:boolean)=>void;disabled?:boolean}) {
+  const editor=useAuthoredArtifactDraft(content,revision,onSave,onDirtyChange);
+  const source=editor.draft.source;
+  return <div><div className="mb-2 font-terminal text-[12px] text-muted-foreground">STRATEGY STUDIO · {content.language.toUpperCase()} · {content.validation.status.toUpperCase()}</div>
+    {(editor.conflict||editor.notice)&&<p role="alert" className="text-sm text-amber-200">{editor.notice??"A newer revision arrived. Your draft is retained; reload explicitly to discard it."}</p>}
+    <textarea aria-label="Strategy source" disabled={disabled||editor.blocked} value={source} onChange={event=>editor.setDraft(current=>({...current,source:event.target.value,validation:{status:"unvalidated",errors:[]}}))} className="min-h-[320px] w-full rounded-lg border border-border/50 bg-black/20 p-3 font-terminal text-[14px] leading-5 text-foreground outline-none"/>
+    <div className="mt-2 flex justify-end gap-2"><button type="button" disabled={editor.saving} onClick={editor.reset} className="min-h-10 underline">Reload saved strategy</button><button disabled={disabled||editor.blocked||!editor.dirty} onClick={()=>void editor.save().catch(()=>{})} className="rounded bg-amber-300 px-3 py-1.5 font-ui text-[13px] font-semibold text-black disabled:opacity-40">Save strategy revision</button></div></div>;
 }
 function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRefresh,onThesisPostmortem,onSpreadsheetDirtyChange,spreadsheetDisabled,facts,artifactSourceRefs,onOpenExport,onAsk,owner,onNativeVersion}:{artifactId:string;contentHash:string;content:ArtifactContent;revision:number;onSave:(c:ArtifactContent)=>Promise<void>;onDraft:(d:SpreadsheetCellDiff)=>Promise<void>;onThesisRefresh:()=>Promise<void>;onThesisPostmortem:(input:{outcome:"validated"|"partially_validated"|"invalidated"|"closed";summary:string})=>Promise<void>;onSpreadsheetDirtyChange?:(dirty:boolean)=>void;spreadsheetDisabled?:boolean;facts?:ArtifactProvenanceFacts;artifactSourceRefs?:readonly string[];onOpenExport?:()=>void;onAsk:(id:string,title:string,stagedPrompt?:string)=>void;owner:{projectId:number|null;owningChatId:number|null};onNativeVersion:(version:number)=>void}) {
   const recoveryOwner = useNativeArtifactDraftOwner();
@@ -382,9 +427,9 @@ function Body({artifactId,contentHash,content,revision,onSave,onDraft,onThesisRe
   if(content.kind==="table") return <TableArtifactTable content={content}/>;
   if(content.kind==="timeline") return <div className="space-y-2">{content.events.slice().reverse().map((e)=><div key={e.id} className="rounded-lg border border-border/50 p-3"><div className="flex gap-2"><span className="font-terminal text-[12px] text-amber-300">{e.type.toUpperCase()}</span><span className="font-ui text-[14px]">{e.title}</span><span className="ml-auto font-terminal text-[12px] text-muted-foreground">{new Date(e.at).toLocaleString()}</span></div><div className="mt-1 font-ui text-[14px] text-muted-foreground">{e.summary}</div></div>)}</div>;
   if(content.kind==="backtest") return <BacktestArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
-  if(content.kind==="thesis") return <ThesisEditor content={content} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem}/>;
-  if(content.kind==="strategy") return <StrategyEditor content={content} onSave={onSave}/>;
-  if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave}/></Suspense>;
+  if(content.kind==="thesis") return <ThesisEditor content={content} revision={revision} onSave={onSave} onRefresh={onThesisRefresh} onPostmortem={onThesisPostmortem} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="strategy") return <StrategyEditor content={content} revision={revision} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
+  if(content.kind==="decision") return <Suspense fallback={<p role="status">Loading native decision editor…</p>}><DecisionArtifactEditor artifactId={artifactId} content={content} revision={revision} contentHash={contentHash} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange}/></Suspense>;
   if(content.kind==="valuation") return <ValuationArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled} onRequestRecalculation={(waccPct) => onAsk(artifactId, `Recalculate valuation · ${content.symbol || content.modelId}`, prepareValuationRecalculationPrompt(content, { artifactId, version: revision, contentHash }, waccPct))}/>;
   if(content.kind==="portfolio") return <PortfolioArtifactView content={content} facts={facts} onSave={onSave} onDirtyChange={onSpreadsheetDirtyChange} disabled={spreadsheetDisabled}/>;
   return <ArtifactViewerFallback kind={content.kind} content={content} onSave={onSave} onOpenExport={onOpenExport} facts={content.kind==="screen"?[{label:"Screen",value:content.view},...(content.symbol?[{label:"Symbol",value:content.symbol}]:[])]:[]}/>;
@@ -875,7 +920,7 @@ function ArtifactPaneWorkspace({
         if (data.version.version !== data.artifact.headVersion) throw new Error("Reload the current saved spreadsheet head before saving.");
         const saved = await createArtifactVersion(artifactId, {
           baseVersion: data.version.version, content: next, actorType: "user",
-          trustManifest: data.version.trustManifest, dependencyRefs: data.version.dependencyRefs, refreshSpec: data.version.refreshSpec,
+          dependencyRefs: data.version.dependencyRefs, refreshSpec: data.version.refreshSpec,
         });
         if (mounted.current) setSpreadsheetPendingRevision(true);
         onVersionChange?.(saved.version);
@@ -889,13 +934,13 @@ function ArtifactPaneWorkspace({
       }
       return;
     }
-    if(next.kind==="research" || next.kind==="report" || next.kind==="decision" || next.kind==="screen") {
+    if(next.kind==="research" || next.kind==="report" || next.kind==="decision" || next.kind==="screen" || next.kind==="thesis" || next.kind==="strategy") {
       setError(null);
       try {
         if(data.version.version!==data.artifact.headVersion) throw new Error("This Artifact is not the current revision. Reload before saving.");
         const saved = await createArtifactVersion(artifactId,{
           baseVersion:data.version.version,content:next,actorType:"user",
-          trustManifest:data.version.trustManifest,dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
+          dependencyRefs:data.version.dependencyRefs,refreshSpec:data.version.refreshSpec,
         });
         onVersionChange?.(saved.version);
         invalidate(projectId,artifactId);
