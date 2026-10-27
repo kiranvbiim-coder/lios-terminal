@@ -1,21 +1,24 @@
 import * as React from "react";
 import { useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpenCheck, FileText, Layers3, Plus, Trash2, X } from "lucide-react";
+import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import {
   buildProjectBriefingReport, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "@/lib/projectBriefingStoryboard";
 
 export function ProjectBriefingStudio({
-  projectId, artifacts, onSave, onClose,
+  projectId, artifacts, onSave, onClose, onOpenSource,
 }: {
   projectId: number;
   artifacts: readonly BriefingSource[];
   onSave: (sources: readonly BriefingSource[], title: string, introduction: string) => Promise<void>;
   onClose: () => void;
+  onOpenSource: (artifactId: string) => void;
 }) {
   const [title, setTitle] = useState("My intelligence briefing");
   const [introduction, setIntroduction] = useState("");
   const [search, setSearch] = useState("");
+  const [previewId, setPreviewId] = useState<string | null>(null);
   // Preserve the version/title captured at explicit selection, not just its ID.
   const [selectedSources, setSelectedSources] = useState<BriefingSource[]>([]);
   const [busy, setBusy] = useState(false);
@@ -156,9 +159,16 @@ export function ProjectBriefingStudio({
                       onClick={() => move(index, 1)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 disabled:opacity-35"><ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
                     <button type="button" disabled={busy} aria-label={`Remove ${source.title} from briefing`}
                       onClick={() => toggle(source.id)} className="grid min-h-9 min-w-9 place-items-center rounded border border-border/70 text-rose-200 disabled:opacity-35"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                    <button type="button" disabled={busy || !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)}
+                      aria-expanded={previewId === source.id} onClick={() => setPreviewId(current => current === source.id ? null : source.id)}
+                      className="min-h-9 rounded border border-cyan-300/25 px-3 text-xs text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-40">
+                      {previewId === source.id ? "Hide exact preview" : "Inspect saved content"}
+                    </button>
                   </div>
                 </div>
               </div>
+              {previewId === source.id && isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId)
+                && <ProjectArtifactGalleryPreview key={`${source.id}:${source.headVersion}`} artifact={source} onOpen={() => onOpenSource(source.id)} />}
             </li>)}
           </ol> : <p className="rounded-lg border border-dashed border-border/60 p-6 text-center text-sm leading-6 text-muted-foreground">
             Add one or more saved sources to build a briefing outline. Nothing is created until you choose Save.
