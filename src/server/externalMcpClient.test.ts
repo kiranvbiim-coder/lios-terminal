@@ -35,12 +35,12 @@ test("P5 future MCP server exposure contract cannot expose filesystem or secrets
 test("the data-fabric MCP adapter cannot be approved by a request parameter: approval-required servers fail closed", async () => {
   const { createMcpProviderAdapter } = await import("./sourceConnectionProviderAdapter");
   const connection = {
-    id: 1, name: "Quotes MCP", sourceType: "mcp", credentialRef: null,
+    id: 1, userId: 17, organizationId: null, name: "Quotes MCP", sourceType: "mcp", credentialRef: null,
     config: { endpoint: "https://mcp.example.test", projectId: 1, allowedToolIds: "quotes.read" },
   } as unknown as Parameters<typeof createMcpProviderAdapter>[0];
   const adapter = createMcpProviderAdapter(connection);
   await assert.rejects(
-    () => adapter.fetch!({ parameters: { toolId: "quotes.read", arguments: {}, approved: true } } as never),
+    () => adapter.fetch!({ parameters: { toolId: "quotes.read", arguments: {}, approved: true } } as never, { userId: 17, organizationId: null, role: "internal_admin" }),
     /governed tool path/i,
   );
 });
