@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { EvidenceObservation, TrustManifest } from "@shared/trustContracts";
 import {
@@ -20,6 +20,7 @@ export default function EvidencePrism({ manifest }: { manifest: TrustManifest })
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [observedBy, setObservedBy] = useState<string>("");
   const prefix = useId();
+  useEffect(() => { setSelectedId(null); setObservedBy(""); }, [manifest.trustId]);
   if (!manifest.claims.length) return null;
   const selected = selectedId ? inspectEvidenceClaimObservedBy(manifest, selectedId, observedBy || null) : null;
   const observedTimes = selectedId ? claimObservedTimeChoices(manifest, selectedId) : [];
