@@ -2880,7 +2880,8 @@
         "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported.",
         "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
-      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
+      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     },
     {
       "id": "opensourceui-project-spreadsheet-dropzone",
