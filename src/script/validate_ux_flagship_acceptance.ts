@@ -85,11 +85,11 @@ for (const file of environmentFiles) {
 }
 
 assert.ok(project.includes("<ProjectHome") && project.includes('from "./ProjectHome"'), "Project shell must mount the extracted Project Home surface.");
-assert.ok(projectHome.includes("Continue the work with LiOS"), "Project Home must expose the dominant conversational entry.");
+assert.ok(projectHome.includes("Start a conversation") && projectHome.includes('data-testid="project-saved-work"'), "Project Home must offer a clear Chat entry and an accessible saved-work disclosure.");
 assert.ok(projectHome.includes("Research a company and show what changed"), "Project starter intents are missing.");
 assert.ok(project.includes("dispatchVisualContext"), "Project/chat state must drive visual intensity.");
 assert.ok(projectHome.includes("Environment · Auto"), "Project visual environment control is missing.");
-assert.ok(projectHome.includes("Project intelligence & saved work"), "Advanced Project depth must be progressively disclosed.");
+assert.ok(projectHome.includes("Advanced tools"), "Advanced Project depth must remain accessible but collapsed initially.");
 assert.ok(projectHome.includes("aria-expanded={projectDepthOpen}"), "Project depth reveal must expose accessible expanded state.");
 assert.ok(project.includes("ArtifactPane"), "Persistent Artifacts must be able to open beside Project conversation.");
 assert.ok(project.includes("lios-artifact-sidecar") && project.includes("w-[42%]"), "Conversation + Artifact split must size the side pane to the available surface.");
