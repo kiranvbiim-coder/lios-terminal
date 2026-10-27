@@ -92,9 +92,14 @@ test("artifact contents must be retained, byte-identical, regular files within e
     assert.match(verifyEvidenceFiles(input, root)[0].reason, /contained/);
     input.evidence[0].artifactPath = "missing.json";
     assert.match(verifyEvidenceFiles(input, root)[0].reason, /does not exist/);
-    symlinkSync(join(root, "reports", "source.json"), join(root, "linked.json"));
-    input.evidence[0].artifactPath = "linked.json";
-    assert.match(verifyEvidenceFiles(input, root)[0].reason, /non-symlinked/);
+    try {
+      symlinkSync(join(root, "reports", "source.json"), join(root, "linked.json"));
+      input.evidence[0].artifactPath = "linked.json";
+      assert.match(verifyEvidenceFiles(input, root)[0].reason, /non-symlinked/);
+    } catch (error) {
+      // Unprivileged Windows CI may not have SeCreateSymbolicLinkPrivilege.
+      if (!["EPERM", "EACCES", "ENOTSUP"].includes(error?.code)) throw error;
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
