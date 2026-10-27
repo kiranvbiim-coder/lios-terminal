@@ -20,7 +20,7 @@ test("late P9 manual results, draft receipts and error notices use guarded prese
   const manual = panel.slice(start, end);
   assert.ok(start >= 0 && end > start);
   for (const operation of ["runP9WorkflowNow(", "prepareP9ManualRunConfirmation(", "checkP9ManualRunAttempt(", "markP9NotificationRead("]) {
-    assert.ok(manual.includes(operation), \`expected original manual-action integration: \${operation}\`);
+    assert.ok(manual.includes(operation), "expected original manual-action integration: " + operation);
   }
   assert.ok((manual.match(/\bsetMessage\(/g) ?? []).length >= 9);
   assert.doesNotMatch(manual, /setMessageReceipt\(/);
