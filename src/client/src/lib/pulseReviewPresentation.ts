@@ -18,8 +18,8 @@ export function normalizePulseReviewPresentation(
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const input = raw as Record<string, unknown>;
   if (input.status !== "not_reviewed" && input.status !== "compared") return null;
-  if (!Number.isSafeInteger(input.newCount) || (input.newCount as number) < 0 ||
-      !Number.isSafeInteger(input.sourceBackedCount) || (input.sourceBackedCount as number) < 0 ||
+  if (typeof input.newCount !== "number" || !Number.isSafeInteger(input.newCount) || input.newCount < 0 ||
+      typeof input.sourceBackedCount !== "number" || !Number.isSafeInteger(input.sourceBackedCount) || input.sourceBackedCount < 0 ||
       (input.newCount as number) > (input.sourceBackedCount as number) ||
       (input.sourceBackedCount as number) > 120 ||
       !Array.isArray(input.newCardIds) || input.newCardIds.length > 120 ||

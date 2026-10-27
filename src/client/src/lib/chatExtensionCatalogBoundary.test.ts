@@ -46,5 +46,5 @@ test("A10 MCP verification and setup never offer cross-Project actions in Chat",
   assert.ok(dialog.includes('projectAvailable && projectId && <button'));
   assert.ok(dialog.includes('connectMcp && projectAvailable && projectId && <ChatMcpConnectForm'));
   assert.ok(!dialog.includes('mcp.status !== "invalid" && <button'), "All verification actions must be Project scoped");
-  assert.match(dialog, /explicit user-approved operation/);
+  assert.match(dialog, /exact user-approved operation/);
 });
