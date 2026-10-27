@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
+import { capturePulseReviewedSnapshot, comparePulseWithReviewedSnapshot } from "./pulseReviewContinuity";
 import { effectivePulseFollowingSubjects, normalizePulseSubjectKey, suppressMutedPulseCards, updatePulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
@@ -449,9 +450,31 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
             : permittedFollowing }
         : requestedFilter;
       const cards = filterPulseCards(suppressMutedPulseCards(result.cards, preferences), filter);
-      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
+      const discoveryChanges = comparePulseWithReviewedSnapshot(cards, result.storedState.pulseReview);
+      res.json({ discoveryChanges, contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Pulse data unavailable." });
+    }
+  });
+
+  app.post("/api/wave-d/pulse/review", requireWaveDRetailRead, async (req, res) => {
+    // Source identities and hashes are always recomputed server-side from the
+    // current authenticated Pulse; never trust client-provided card IDs.
+    if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length))
+      return res.status(400).json({ error: "Review capture takes no client-supplied source claims." });
+    try {
+      const current = await buildPulseForUser(req, sources);
+      const visible = suppressMutedPulseCards(current.cards, current.storedState.pulseSubjects);
+      const snapshot = capturePulseReviewedSnapshot(visible, current.now);
+      const stored = await updateWaveDState(waveUser(req), state => ({
+        ...state,
+        pulseReview: snapshot,
+      }));
+      res.json({ status: "saved", persisted: true,
+        discoveryChanges: comparePulseWithReviewedSnapshot(visible, stored.pulseReview),
+        updatedAt: stored.updatedAt });
+    } catch {
+      res.status(502).json({ status: "unavailable", reason: "Current intelligence could not be reviewed and saved." });
     }
   });
 
