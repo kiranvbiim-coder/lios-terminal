@@ -63,6 +63,19 @@ export default function TerminalUxSettings({ preferences, onChange, onClose }: P
               <Toggle checked={preferences.adaptiveCalm} label="Intelligent Calm" description="When modeling, valuing, reading statements, researching or using a spreadsheet, LiOS automatically quiets nonessential visual noise while keeping alerts and truth-state signals visible." onChange={(adaptiveCalm) => update({ adaptiveCalm })} />
               <Toggle checked={preferences.ambientContext} label="Ambient context" description="Keep subtle graphite/amber/cyan atmospheric depth behind analytical work. This remains subordinate to charts, models and reading." onChange={(ambientContext) => update({ ambientContext })} />
               <Toggle checked={preferences.visualEnvironmentsEnabled} label="Contextual visual environments" description="Use LiOS-owned Project environments on launch, Project Home and conversation edges. Dense analytical surfaces automatically recede into Focus mode." onChange={(visualEnvironmentsEnabled) => update({ visualEnvironmentsEnabled })} />
+              <div className="rounded-xl border border-border/55 bg-white/[0.012] p-3">
+                <h3 className="font-ui text-sm font-semibold text-foreground">Visual atmosphere intensity</h3>
+                <p className="my-2 font-ui text-sm leading-5 text-muted-foreground">Optional. Focus remains matte, and Immersive never overrides a reading or Workbench surface.</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Visual atmosphere intensity">
+                  {(["auto", "immersive", "contextual", "focus"] as const).map(visualIntensity => (
+                    <button key={visualIntensity} type="button" aria-pressed={preferences.visualIntensity === visualIntensity}
+                      onClick={() => update({ visualIntensity })}
+                      className="min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm capitalize aria-pressed:border-primary aria-pressed:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                      {visualIntensity === "auto" ? "Adaptive" : visualIntensity}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Toggle checked={preferences.visualEnvironmentMotion} label="Subtle environment motion" description="Allow very slow light/parallax drift in Immersive and Contextual states. Reduced Motion and Low-resource mode always override this." onChange={(visualEnvironmentMotion) => update({ visualEnvironmentMotion })} />
               <Toggle checked={preferences.lowResourceMode} label="Low-resource visual mode" description="Disable environmental light/grain motion layers and prefer lightweight assets for lower GPU, memory and battery use." onChange={(lowResourceMode) => update({ lowResourceMode })} />
               <Toggle checked={preferences.showImmersiveDock} label="Immersive context dock" description="Keep Pin, Research, Evidence, Focus and advanced analysis tools close to the active pane without another permanent sidebar." onChange={(showImmersiveDock) => update({ showImmersiveDock })} />
