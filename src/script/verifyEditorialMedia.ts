@@ -40,6 +40,8 @@ export function verifyBundledEditorialAssets(
   for (const asset of ledger.assets) {
     if (!eligibleEditorialMedia(asset, [asset.sourceEvidenceId], asOf))
       throw new Error("Unapproved, expired or unlinked editorial rights record: " + asset.assetPath);
+    // Installed/offline copies cannot be retroactively retracted at license expiry.
+    if (asset.expiresAt) throw new Error("Time-limited editorial rights cannot be bundled in user-owned offline installers.");
     const fileName = basename(asset.assetPath);
     if (listed.has(fileName)) throw new Error("Repeated licensed asset in the rights ledger.");
     listed.add(fileName);
