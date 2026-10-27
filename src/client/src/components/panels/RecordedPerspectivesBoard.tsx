@@ -45,7 +45,7 @@ export function PerspectiveSource({ item }: { item: PerspectiveEvidence }) {
     <p className="break-words font-ui text-xs leading-5 text-muted-foreground">
       {item.sourceName || "Publisher not recorded"}{item.provider && item.provider !== item.sourceName ? ` · ${item.provider}` : ""}
     </p>
-    <time className="block font-ui text-[11px] text-muted-foreground" dateTime={item.publishedAt ?? undefined}>
+    <time className="block font-ui text-[11px] text-muted-foreground" dateTime={item.publishedAt && Number.isFinite(Date.parse(item.publishedAt)) ? item.publishedAt : undefined}>
       {perspectivePublishedDate(item.publishedAt)}
     </time>
     <div className="max-h-52 overflow-y-auto rounded-lg border-l-2 border-amber-300/35 bg-white/[0.015] py-2 pl-3 pr-2">
