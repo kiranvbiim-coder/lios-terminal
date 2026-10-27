@@ -150,7 +150,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <label className="flex min-h-10 min-w-[190px] flex-1 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="sr-only">Search graph objects</span>
-              <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
+              <input ref={searchRef} type="search" value={query} onChange={event => { setQuery(event.target.value); setSelectedId(null); setNeighborsOnly(false); }}
                 placeholder="Search objects, symbols or domains"
                 className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground" />
             </label>
