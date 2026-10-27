@@ -1,9 +1,9 @@
 # LiOS Terminal — Unified Rich Intelligence Experience: 12-Feature Coverage and Four-Phase Plan
 
 **Decision date:** 2026-10-27  
-**Repository:** \`kiranvbiim-coder/lios-terminal\` public workstream.  
+**Repository:** `kiranvbiim-coder/lios-terminal` public workstream.  
 **State:** Proposed feature-specific TC experience annex, NOT implemented or accepted, NOT a separate product or SI master plan.  
-**Existing authorities:** \`AGENTS.md\`, \`docs/LIOS_UX_SYSTEM.md\`, \`docs/ux/LIOS_ADAPTIVE_EXPERIENCE_EXECUTION_PLAN_2026-10-23.md\`, \`docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md\`, \`docs/PENDING_WORK.md\`, existing TC/GM/CA/P2/P3/P4/P5/P9/P11/P13 owners, SI-07 and P14 gates, $0 beta contract \`docs/technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md\` and existing master #91.
+**Existing authorities:** `AGENTS.md`, `docs/LIOS_UX_SYSTEM.md`, `docs/ux/LIOS_ADAPTIVE_EXPERIENCE_EXECUTION_PLAN_2026-10-23.md`, `docs/LIOS_SUPER_INTELLIGENCE_EXECUTION_PLAN.md`, `docs/PENDING_WORK.md`, existing TC/GM/CA/P2/P3/P4/P5/P9/P11/P13 owners, SI-07 and P14 gates, $0 beta contract `docs/technical/LIOS_ZERO_COST_RELEASE_EXECUTION.md` and existing master #91.
 
 ## 0. Product decision (locked)
 
@@ -14,12 +14,12 @@ Design for both emotionally compelling discovery and professional calm. Prioriti
 ## 1. Evidence observed in public source
 
 Directly inspected:
-- \`src/shared/waveDContracts.ts\`: existing \`PulseCardDraft\`, \`IntelligenceCard\`, \`PulseEvidence\`, ranking and next-actions. **Extend compatibly, do not create rival cards or stores.**
-- \`src/client/src/components/terminal/FusionPulseBoard.tsx\`: existing For You/Following/Markets/Research channels, market hero, pulse-card grid, market and macro context. Market-centric; small labels and many numeric surfaces remain.
-- \`src/client/src/components/terminal/IntelligencePulse.tsx\` and \`src/client/src/lib/terminalIntelligencePulse.ts\`: change, decision-risk, reversal, monitoring and scenario context. Keep its existing owner; align visible presentation via adapter.
-- \`src/client/src/components/terminal/HomeAttentionPanel.tsx\`: existing Wave D attention cards, evidence and action inbox.
-- \`src/client/src/components/panels/NewsPanel.tsx\` and \`src/client/src/lib/finance.ts\`: text-heavy news and readthrough; \`NewsItem\` lacks media metadata.
-- Existing \`VisualCanvas\`, Artifact chart/readable views, P4 Artifact sidecar, Dockview and Chat surfaces. \`src/package.json\` already includes ECharts, Recharts, lightweight-charts, Framer Motion, Embla, Tiptap, Dockview and Lucide.
+- `src/shared/waveDContracts.ts`: existing `PulseCardDraft`, `IntelligenceCard`, `PulseEvidence`, ranking and next-actions. **Extend compatibly, do not create rival cards or stores.**
+- `src/client/src/components/terminal/FusionPulseBoard.tsx`: existing For You/Following/Markets/Research channels, market hero, pulse-card grid, market and macro context. Market-centric; small labels and many numeric surfaces remain.
+- `src/client/src/components/terminal/IntelligencePulse.tsx` and `src/client/src/lib/terminalIntelligencePulse.ts`: change, decision-risk, reversal, monitoring and scenario context. Keep its existing owner; align visible presentation via adapter.
+- `src/client/src/components/terminal/HomeAttentionPanel.tsx`: existing Wave D attention cards, evidence and action inbox.
+- `src/client/src/components/panels/NewsPanel.tsx` and `src/client/src/lib/finance.ts`: text-heavy news and readthrough; `NewsItem` lacks media metadata.
+- Existing `VisualCanvas`, Artifact chart/readable views, P4 Artifact sidecar, Dockview and Chat surfaces. `src/package.json` already includes ECharts, Recharts, lightweight-charts, Framer Motion, Embla, Tiptap, Dockview and Lucide.
 
 Current public open PR coordination (as inspected Oct 27): #223 theme, #226 quiet Chat/Project Home, #227 navigation, #225 plugins, #228 release, among others. Re-read live heads and avoid overlapping blind edits. Earlier source observations are not native or visual acceptance.
 
@@ -77,7 +77,7 @@ All phases must retain F01–F12 contract coverage; Phase 1 lays reusable founda
 1. **No duplicate owners.** Extend Wave D intelligence card model through a backwards-compatible presentation envelope; reconcile existing FusionPulseBoard/IntelligencePulse only at visible and read-only adapter seams. Do not merge stores or copy ranked state blindly.
 2. **Media contract:** media kind/URL/thumbnail or asset ID, alt, caption, source, license/rights/attribution, cache permission, timestamp, integrity and optional focus point. A metadata image URL is NOT a license. Hide if unauthorized; graceful non-image layout always available.
 3. **Sourced story identity:** source URL fingerprint, source/provider ID, observed/published/updated times, cluster ID, P5 canonical entity refs, citations, cross-domain relevance and traceable prioritization. Never invent news, photos, certainty or metric values. Dedupe before scoring.
-4. **Card visual registry:** approved \`hero\`, \`editorial\`, \`compact\`, \`metric\`, \`chart\`, \`map\`, \`timeline\`, \`comparison\`, \`graph\`, \`artifact\` projections. No arbitrary model-generated JSX/HTML, script, remote image execution, unapproved outgoing link, executable callback, plugin permission or standalone state authority.
+4. **Card visual registry:** approved `hero`, `editorial`, `compact`, `metric`, `chart`, `map`, `timeline`, `comparison`, `graph`, `artifact` projections. No arbitrary model-generated JSX/HTML, script, remote image execution, unapproved outgoing link, executable callback, plugin permission or standalone state authority.
 5. **Actions:** open evidence, ask, analyse, compare, monitor, save and create report use existing permission checks and P2/P4/P5/P9/GM routes. No no-op cards. Consequential edits require current existing review+receipt.
 6. **Privacy and integrity:** source scopes, tenant/project access, connected-provider authorizations, offline/cache rights, untrusted link previews sandboxing, CSP and safe image retrieval/SSRF protections; no exfiltration of Project context to ad partners.
 7. **Delivery:** user-owned desktop, one installer, no mandatory central compute beyond existing control-plane boundaries, optional BYOAI/local model, existing $0 beta contract; no paid data/feed/API/CDN/hosting prerequisite.
@@ -87,14 +87,14 @@ All phases must retain F01–F12 contract coverage; Phase 1 lays reusable founda
 **Reuse currently installed before new dependencies:** ECharts, Recharts, lightweight-charts, Embla, Framer Motion, Dockview, Tiptap and Radix/shadcn-compatible primitives. Validate real compatibility and bundle effects on current React/Tailwind/Zod before adopting any donor.
 
 **Evaluate selectively:**
-- \`microlinkhq/metascraper\` MIT for extracted link metadata (not image rights);
-- \`miniflux/v2\` Apache-2.0 feed parsing/caching patterns (Go server is not a drop-in Electron dependency);
-- \`xyflow/xyflow\` MIT React Flow for interactive relationship graphs if existing rendering inadequate;
-- \`maplibre/maplibre-gl-js\` BSD-3-Clause for maps; validate legally usable tiles and offline bundles separately;
-- \`protomaps/PMTiles\` reader/storage mechanisms if map tiles can be acquired/licensed without fee;
-- \`apache/echarts\` already integrated; deep reuse for cross-domain interactive visuals;
-- \`kagisearch/kite-public\` frontend design inspiration/source review; Kagi news data CC BY-NC **not importable into proprietary commercial feed without separate license**;
-- \`karakeep-app/karakeep\` AGPL-3.0: study patterns only pending legal review; do not copy source into LiOS.
+- `microlinkhq/metascraper` MIT for extracted link metadata (not image rights);
+- `miniflux/v2` Apache-2.0 feed parsing/caching patterns (Go server is not a drop-in Electron dependency);
+- `xyflow/xyflow` MIT React Flow for interactive relationship graphs if existing rendering inadequate;
+- `maplibre/maplibre-gl-js` BSD-3-Clause for maps; validate legally usable tiles and offline bundles separately;
+- `protomaps/PMTiles` reader/storage mechanisms if map tiles can be acquired/licensed without fee;
+- `apache/echarts` already integrated; deep reuse for cross-domain interactive visuals;
+- `kagisearch/kite-public` frontend design inspiration/source review; Kagi news data CC BY-NC **not importable into proprietary commercial feed without separate license**;
+- `karakeep-app/karakeep` AGPL-3.0: study patterns only pending legal review; do not copy source into LiOS.
 
 Donor audit: exact upstream commit/file, license, third-party assets, transitive dependencies, security, package footprint, proposed owner/adapter, alternative already present, evidence of real user experience improvement, tests and notices. Never copy paid visual designs or scraped premium datasets.
 
