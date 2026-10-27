@@ -42,6 +42,7 @@ import { rejectIfMasterAiOff } from "./masterAiGate";
 import { isAuthenticatedSelfServiceRoute } from "./apiAccessPolicy";
 import { resolvePersistedInstrument } from "./globalInstrumentMasterStore";
 import { providerIngestedUniversePath } from "./providerIngestedCatalog";
+import { isUsableCatalogIdentityRow } from "@shared/catalogIdentityRows";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerContentRoutes } from "./contentRoutes";
 import { registerClientRoutes } from "./clientRoutes";
@@ -999,7 +1000,18 @@ Welcome to the Limuria Intelligence Terminal command engine. I can help you anal
       ? path.resolve(resourcesBase, "server", "data", "tickers.json")
       : path.resolve(process.cwd(), "server", "data", "tickers.json");
     if (fs.existsSync(dataPath)) {
-      tickersList = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+      const parsed: unknown = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+      if (!Array.isArray(parsed)) throw new Error("Legacy instrument catalog must be an array");
+      // The original snapshot contains a FILE CREATION TIME footer.
+      // Reject invalid identity/venue rows before directory search and filters.
+      tickersList = parsed.filter((row) =>
+        isUsableCatalogIdentityRow(row)
+        && typeof row.exchange === "string"
+        && Boolean(row.exchange.trim())
+      ).map((row) => ({
+        ...row,
+        sector: typeof row.sector === "string" ? row.sector : "",
+      }));
     }
     const mutualFunds = [
       { symbol: "VFIAX", name: "Vanguard 500 Index Fund Admiral", exchange: "NASDAQ", sector: "Blended Large Cap", assetClass: "mutual_fund", region: "US" },
