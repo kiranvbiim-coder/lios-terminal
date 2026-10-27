@@ -27,6 +27,7 @@ import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
 import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import { observedRunActivity } from "@/lib/sprintAObservedActivity";
 import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
 import type {
@@ -255,7 +256,8 @@ export default function ConversationRuntimeTrace({
   const canResume = !busy && !!resumableRequestId && !!onResume;
   const stepCount = summary.stepCount || summary.settledSteps;
   const duration = formatDuration(summary.durationMs);
-  const quietControlClass = "inline-flex min-h-7 items-center gap-1 rounded-md px-2 py-1 font-ui text-[12px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
+  const observed = observedRunActivity(events, steps.length, working, waitingForApproval);
+  const quietControlClass = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-ui text-sm text-muted-foreground hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50";
 
   return (
     <div className="mx-auto mb-2 max-w-3xl" data-testid="conversation-trace">
@@ -269,6 +271,11 @@ export default function ConversationRuntimeTrace({
             <span role="status" className="inline-flex items-center gap-1.5 px-1">
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" aria-hidden="true" />
               {waitingForApproval ? "Waiting for your approval" : "Working"}
+            </span>
+          )}
+          {working && observed.label && (
+            <span data-testid="trace-observed-progress" aria-live="polite" className="max-w-full truncate rounded-lg border border-border/50 bg-white/[0.018] px-2 py-1 font-ui text-xs text-muted-foreground">
+              {observed.label}
             </span>
           )}
           {working && (

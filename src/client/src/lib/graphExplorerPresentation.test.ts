@@ -75,6 +75,18 @@ test("bounded graph never silently adds more nodes and makes omitted count expli
   assert.deepEqual(view.edges, many.edges);
   assert.equal(presentCrossDomainGraph(many, { query: "unknown" }).omittedCount, 0);
 });
+test("relation lens uses only recorded links and excludes nodes not participating in that relation", () => {
+  const graph = fixture();
+  const view = presentCrossDomainGraph(graph, { relation: "supports" });
+  assert.deepEqual(view.edges.map(edge => edge.relation), ["supports"]);
+  assert.deepEqual(new Set(view.nodes.map(node => node.objectId)), new Set(["e:market", "e:decision"]));
+  assert.equal(view.matchingCount, 2);
+  assert.deepEqual(presentCrossDomainGraph(graph, { relation: "contradicts" }).nodes, []);
+  const focused = presentCrossDomainGraph(graph, { relation: "supports", query: "Market" });
+  assert.deepEqual(focused.edges.map(edge => [edge.sourceId, edge.targetId]), [["e:market", "e:decision"]]);
+  assert.equal(focused.nodes.length, 2);
+});
+
 test("view transforms do not mutate the canonical graph", () => {
   const graph = fixture();
   const before = JSON.stringify(graph);
