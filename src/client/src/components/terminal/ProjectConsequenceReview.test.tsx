@@ -23,3 +23,19 @@ test("unsourced review does not expose an action",()=>{
   assert.match(html,/No saved source supports/);
   assert.doesNotMatch(html,/Review path in Chat/);
 });
+
+test("C03 saved consequence review labels evidence counts and never executes a tool", () => {
+  const html = renderToStaticMarkup(createElement(ProjectConsequenceReview, {
+    projectId: 7, insight, onInvestigate: () => { throw new Error("SSR must not act"); },
+    review: { status: "ready", graphHash: "a".repeat(64), total: 1, omitted: 0, targets: [{
+      id: "linked", kind: "portfolio", label: "Saved reference",
+      steps: [{ id: "edge-1", from: "saved:filing", to: "linked",
+        relation: "mentions", forward: true, evidenceRefs: ["filing:001"] }],
+    }] },
+  }));
+  assert.match(html, /1 saved adjacency link/);
+  assert.match(html, /1 distinct recorded edge source ID/);
+  assert.match(html, /requires its own user approval/);
+  assert.match(html, /Review path in Chat/);
+  assert.doesNotMatch(html, /<form|<script|portfolio holdings confirmed|execute action/);
+});
