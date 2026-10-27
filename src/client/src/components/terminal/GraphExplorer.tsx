@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Network, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
@@ -37,11 +37,32 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [bridgesOnly, setBridgesOnly] = useState(false);
   const [neighborsOnly, setNeighborsOnly] = useState(false);
   const [query, setQuery] = useState("");
+  const dialogRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    searchRef.current?.focus();
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]),input:not([disabled]),a[href],select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      )).filter(element => element.getClientRects().length > 0);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!dialogRef.current.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("keydown", keyboard);
+      previouslyFocused?.focus();
+    };
   }, [onClose]);
 
   // The existing local Intelligence Object store is the sole graph authority.
@@ -59,7 +80,6 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
   const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id) : [], [graph, selected]);
-  const visibleNodeIds = useMemo(() => new Set(presentation.nodes.map(node => node.objectId)), [presentation.nodes]);
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
     for (const domain of DOMAIN_ORDER) {
@@ -77,6 +97,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[92] bg-black/80 p-2 backdrop-blur-[5px] sm:p-3" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="LiOS Cross-Domain Intelligence Graph Explorer"
@@ -99,7 +120,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <label className="flex min-h-10 min-w-[190px] flex-1 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="sr-only">Search graph objects</span>
-              <input type="search" value={query} onChange={event => setQuery(event.target.value)}
+              <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
                 placeholder="Search objects, symbols or domains"
                 className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground" />
             </label>
