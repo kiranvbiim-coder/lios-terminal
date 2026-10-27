@@ -463,3 +463,42 @@ html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-fla
   color: var(--lios-text-primary);
   border-color: var(--lios-border-default);
 }
+
+
+/* Accessible semantic statuses for light reference themes only.
+ * Keep up/down market signals, colorblind modes and the analytical
+ * Workbench's domain-specific color system owned by the canonical shell. */
+html[data-lios-palette="chatgpt-light"],
+html[data-lios-palette="claude-light"] {
+  --lios-theme-error-text: #B42318;
+  --lios-theme-success-text: #137547;
+  --lios-theme-info-text: #12578A;
+  --lios-theme-violet-text: #6941A5;
+  --lios-theme-fuchsia-text: #873B8C;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-red-200,.text-red-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-red-200,.text-red-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-red-200,.text-red-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-red-200,.text-red-300) {
+  color: var(--lios-theme-error-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-emerald-100,.text-emerald-200,.text-emerald-300) {
+  color: var(--lios-theme-success-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-cyan-100,.text-cyan-200,.text-cyan-300) {
+  color: var(--lios-theme-info-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-violet-100,.text-violet-200),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-violet-100,.text-violet-200) {
+  color: var(--lios-theme-violet-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300) {
+  color: var(--lios-theme-fuchsia-text) !important;
+}
