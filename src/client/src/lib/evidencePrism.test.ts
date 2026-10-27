@@ -12,7 +12,7 @@ import {
   claimObservedTimeChoices,
   readableAssumptionValue,
 } from "./evidencePrism";
-import EvidencePrism from "../components/terminal/EvidencePrism";
+import EvidencePrism, { recordedClaimObservationTimestamp } from "../components/terminal/EvidencePrism";
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const CLAIM_ID = "22222222-2222-4222-8222-222222222222";
@@ -154,3 +154,16 @@ test("B05–B06 Evidence Time Machine selects exact recorded P3 observations wit
 function requirePrismTimeExports() {
   return { inspectEvidenceClaimObservedBy, claimObservedTimeChoices };
 }
+
+test("B06 Claim Lens refuses malformed source-observed/as-of display dates", () => {
+  for (const invalid of [
+    null, "1", "2026-10-27", "2026-10-27T12:00:00",
+    "2026-02-30T09:00:00Z", "2026-10-27T24:00:00Z",
+  ]) {
+    assert.equal(recordedClaimObservationTimestamp(invalid), "Not recorded", String(invalid));
+  }
+  assert.equal(recordedClaimObservationTimestamp("2026-10-27T15:30:00+05:30"),
+    "2026-10-27T10:00:00.000Z");
+  assert.equal(recordedClaimObservationTimestamp("2026-10-27T10:00:00.123Z"),
+    "2026-10-27T10:00:00.123Z");
+});
