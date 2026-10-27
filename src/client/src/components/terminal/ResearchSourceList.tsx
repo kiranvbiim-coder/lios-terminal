@@ -79,8 +79,8 @@ export default function ResearchSourceList({ sources }: { sources: readonly Chat
             onClick={() => setExpanded((current) => !current)}
             className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-border/65 px-3 py-2 font-ui text-xs font-medium text-foreground hover:border-amber-200/30 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
           >
-            {expanded ? "Show fewer sources" : `Show all ${sources.length} sources`}
             <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            {expanded ? "Show fewer sources" : `Show all ${sources.length} sources`}
           </button>
         )}
       </div>
