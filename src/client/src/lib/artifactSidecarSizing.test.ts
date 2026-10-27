@@ -107,7 +107,8 @@ test("sidecar refuses stale callbacks before notifying the parent or enabling ex
   const start = sidecar.indexOf("onDisplayedVersionChange={(version, artifactId, loadedRequest) => {");
   const end = sidecar.indexOf("props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);", start);
   assert.ok(start > 0 && end > start);
-  const region = sidecar.slice(start, end);
+  const region = sidecar.slice(start, end + "props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);".length);
+  assert.ok(region.indexOf("isCurrentArtifactLoad(") >= 0);
   assert.ok(region.indexOf("isCurrentArtifactLoad(") < region.indexOf("setDisplayed("));
   assert.ok(region.indexOf("isCurrentArtifactLoad(") < region.indexOf("props.onDisplayedVersionChange"), "stale loads never reach the parent");
   assert.match(sidecar, /disabled=\{!canExpand\}/);
