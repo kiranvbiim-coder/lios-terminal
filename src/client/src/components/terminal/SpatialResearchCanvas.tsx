@@ -9,7 +9,7 @@ import { getTerminalCapability } from "@/lib/terminalCatalog";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { isSoftwareRendered } from "@/lib/desktopRendering";
 import { resolveSpatialMotionBudget } from "@/lib/spatialMotionPolicy";
-import { resolveSpatialPresentation } from "@/lib/spatialPresentationPolicy";
+import { resolveSpatialPresentation, bucketSpatialPaneWidth } from "@/lib/spatialPresentationPolicy";
 import { reconcileSpatialCanvasReturnState, type SpatialCanvasReturnState } from "@/lib/spatialStudioContinuity";
 
 interface Props {
@@ -66,7 +66,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
     const container = sectionRef.current;
     if (!container) return;
     const measure = () => {
-      const next = container.getBoundingClientRect().width;
+      const next = bucketSpatialPaneWidth(container.getBoundingClientRect().width);
       setContentWidth(previous => previous === next ? previous : next);
     };
     measure();
