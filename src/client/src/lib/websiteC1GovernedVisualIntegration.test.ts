@@ -24,7 +24,7 @@ test("C1 uses current authenticated P4 GET and original renderer, not client-tru
   assert.match(view,/credentials: "same-origin"/);
   assert.match(view,/cache: "no-store"/);
   assert.match(view,/resolveGovernedVisualAnswer\(request, remote\)/);
-  assert.match(view,/<ArtifactChart content=\{decision\.content\} readOnly\s*\/>/);
+  assert.match(view,/<ArtifactChart content=\{decision\.content\} artifactSourceRefs=\{decision\.sourceRefs\} readOnly\s*\/>/);
   assert.match(view,/Not recorded/);
   assert.match(view,/Recorded source IDs/);
   assert.match(view,/current\.decision\?\.status === "ready"/);
