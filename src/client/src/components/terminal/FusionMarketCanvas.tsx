@@ -47,6 +47,7 @@ function MoveTile({ quote, onOpen }: { quote: Quote; onOpen: Props["onOpen"] }) 
       className="fusion-market-tile group"
       style={{ background: moveColor(move) }}
       title={`${quote.name} · ${move >= 0 ? "+" : ""}${move.toFixed(2)}%`}
+      aria-label={`Open recorded quote for ${quote.name} (${quote.symbol}), ${move >= 0 ? "up" : "down"} ${Math.abs(move).toFixed(2)} percent`}
     >
       <span className="truncate font-terminal text-[8px] font-bold text-white/95">{quote.symbol.replace(/\.(NS|BO|T|HK)$/, "")}</span>
       <span className="mt-1 font-terminal text-[10px] font-bold tabular-nums text-white">{move >= 0 ? "+" : ""}{move.toFixed(2)}%</span>
@@ -198,12 +199,12 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          ) : <div className="fusion-visual-empty">No live mover data available.</div>}
+          ) : <div className="fusion-visual-empty">No recorded mover observations available.</div>}
         </div>
 
         <div className="fusion-canvas-panel fusion-map-panel">
-          <div className="fusion-canvas-panel-head"><span>LIVE MOVER MAP</span><span className="text-amber-200/75">CLICK TO DRILL IN</span></div>
-          {tiles.length ? <div className="fusion-market-map">{tiles.map((quote) => <MoveTile key={quote.symbol} quote={quote} onOpen={onOpen} />)}</div> : <div className="fusion-visual-empty">No live mover data available.</div>}
+          <div className="fusion-canvas-panel-head"><span>RECORDED MOVER MAP</span><span className="text-amber-200/75">CLICK TO DRILL IN</span></div>
+          {tiles.length ? <div className="fusion-market-map">{tiles.map((quote) => <MoveTile key={quote.symbol} quote={quote} onOpen={onOpen} />)}</div> : <div className="fusion-visual-empty">No recorded mover observations available.</div>}
           <div className="mt-auto border-t border-white/[0.07] pt-2 font-terminal text-[6.5px] leading-relaxed text-white/40">Tile color shows observed move intensity. Data stays tied to the visible provider universe and keeps its source state in the detail view.</div>
         </div>
       </div>
