@@ -29,3 +29,21 @@ export function resolveVisualCanvasPolicy(input: VisualCanvasPolicyInput): Visua
     preloadScene: renderScene && !useLowResourceAsset,
   };
 }
+
+export type VisualIntensityPreference = "auto" | "immersive" | "contextual" | "focus";
+
+/**
+ * The user can lower environmental intensity at any time. Even an explicit
+ * Immersive selection cannot escalate an active reading/Workbench view beyond
+ * its semantic baseline: charts and text always take priority over a scene.
+ */
+export function resolveVisualIntensity(
+  baseline: VisualIntensity,
+  preference: VisualIntensityPreference,
+  forceFocus: boolean,
+): VisualIntensity {
+  if (forceFocus || preference === "focus") return "focus";
+  if (preference === "contextual") return "contextual";
+  if (preference === "immersive") return baseline === "immersive" ? "immersive" : "contextual";
+  return baseline;
+}
