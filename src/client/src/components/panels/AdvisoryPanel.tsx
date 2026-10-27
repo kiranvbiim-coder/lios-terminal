@@ -587,7 +587,7 @@ export default function AdvisoryPanel() {
                   className="mt-2 block min-h-11 rounded-lg border border-border px-3 py-2 text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
                   {loading ? "Retrying request list…" : "Retry request list (read-only)"}
                 </button>
-              </div>
+              </div>}
               {loading && !requestsLoadError ? (
                 <div role="status" className="p-8 text-center text-sm text-muted-foreground">Loading saved advisory requests…</div>
               ) : requests.length === 0 && !requestsLoadError ? (
