@@ -22,5 +22,6 @@ export const chatExtensionCatalogSchema = z.object({
     explicitApprovalRequired: z.literal(true),
   }).strict()).max(100),
   installationManagedByHomeOwner: z.literal(true),
+  managementAvailable: z.boolean(),
 }).strict();
 export type ChatExtensionCatalog = z.infer<typeof chatExtensionCatalogSchema>;
