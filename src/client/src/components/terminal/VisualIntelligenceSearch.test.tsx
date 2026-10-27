@@ -94,3 +94,23 @@ test("Visual Search refreshes exact authorized Pulse on foreground return withou
   assert.ok(!source.includes('[searchReady, activeQuery]'), "Do not refetch provider for each keystroke");
   assert.ok(!source.includes('localStorage.setItem('), "No duplicate browser-side intelligence cache");
 });
+
+test("A07 shows optional rights-safe context when a recorded image fails source-rights checks", () => {
+  const invalid = {
+    kind: "image", assetPath: "/editorial-media/" + "a".repeat(64) + ".webp",
+    sha256: "a".repeat(64), alt: "Rights not linked to this source",
+    attribution: "Unknown", owner: "Unknown", licenseName: "unverified",
+    licenseEvidenceRef: "none", sourceEvidenceId: "unrelated",
+    verifiedBy: "none", verifiedAt: "2026-10-27T00:00:00Z",
+    permission: "commercial_redistribution_and_display", offlineBundlingPermitted: true,
+    state: "approved",
+  };
+  const html = renderToStaticMarkup(createElement(VisualIntelligenceResultCard, {
+    card: { ...card, title: "Solar power stocks rise on report", media: invalid as IntelligenceCard["media"] },
+    disabled: false, onAsk: () => undefined,
+  }));
+  assert.doesNotMatch(html, /<img\b|src="\/editorial-media/);
+  assert.match(html, /Find context picture/);
+  assert.match(html, /after your click/);
+  assert.match(html, /Recorded sources \(3\)/);
+});

@@ -12,16 +12,20 @@ import * as React from "react";
 import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
-import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { pulseMonitorReviewQuestion, pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
 import { RecordedContextPicture } from "./RecordedContextPicture";
 import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulseSubjectPreferences";
 import { eligibleEditorialMedia } from "@shared/editorialMedia";
+import { explainPulsePlacement } from "@/lib/pulsePlacementExplanation";
+import type { PulseChannel } from "./PulseDiscoveryTabs";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
+  changedSinceReview?: boolean;
+  channel?: PulseChannel;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
   followed?: boolean;
@@ -35,7 +39,7 @@ const priorityTone = {
   fyi: "border-cyan-300/25 text-cyan-200",
 } as const;
 
-export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
+export default function LiosPulseStoryCard({ card, featured = false, changedSinceReview = false, channel = "for_you", onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const reduceMotion = useReducedMotion();
@@ -43,6 +47,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
   const subjectKey = normalizePulseSubjectKey(card.subjectKey ?? card.symbol);
   const timestamp = pulseStoryTimestamp(card.createdAt);
   const approvedMedia = eligibleEditorialMedia(card.media, pulseStoryMediaSourceIds(evidence), new Date().toISOString());
+  const monitorQuestion = pulseMonitorReviewQuestion(card);
   const focusLabel = card.kind === "news" ? "News" : card.kind === "research" ? "Research" : card.kind === "alert" ? "Signal" : card.kind === "market_move" ? "Market" : "Intelligence";
 
   return (
@@ -74,6 +79,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
           <span className="rounded-md border border-border/65 px-2 py-1 font-medium text-muted-foreground">{focusLabel}</span>
           <span className={`rounded-md border px-2 py-1 text-xs font-medium capitalize ${priorityTone[card.priority]}`}>{card.priority === "fyi" ? "For review" : card.priority}</span>
           {card.symbol && <span className="font-medium text-foreground/75">{card.symbol}</span>}
+          {changedSinceReview && <span className="rounded-md border border-amber-300/35 px-2 py-1 font-ui text-xs text-amber-200">New since review</span>}
           <span className="ml-auto font-medium tabular-nums text-muted-foreground">{card.score.toFixed(0)} relevance</span>
         </div>
         <h3 className={`mt-3 font-ui font-semibold tracking-tight text-foreground ${featured ? "text-xl leading-snug sm:text-2xl" : "text-base leading-snug"}`}>{card.title}</h3>
@@ -106,6 +112,13 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                   <p className="mt-1.5 font-ui text-sm leading-6 text-foreground/85">{card.whyItMattersToUser || card.whyItMatters}</p>
                 </div>
               )}
+              <section aria-label="Why this story appears" data-testid="pulse-explain-relevance"
+                className="rounded-lg border border-border/60 bg-white/[0.025] p-3">
+                <h4 className="font-ui text-sm font-semibold text-foreground">Why shown</h4>
+                <ul className="mt-2 space-y-1 font-ui text-sm leading-5 text-muted-foreground">
+                  {explainPulsePlacement(card, channel, followed).map((reason, index) => <li key={index}>{reason}</li>)}
+                </ul>
+              </section>
               {(card.clusteredCount ?? 1) > 1 && <p className="font-ui text-xs leading-5 text-muted-foreground">{card.clusteredCount} retained cards share an exact headline, subject, event date and evidence identity. This grouping is not independent corroboration.</p>}
               {!approvedMedia && <RecordedContextPicture title={card.title}
                 hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />}
@@ -157,6 +170,9 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                   className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-muted-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
                   Mute
                 </button>}
+                {monitorQuestion && <button type="button" onClick={() => onAsk(monitorQuestion)}
+                  aria-label={`Review monitoring proposal for ${subjectKey}`}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:border-amber-300/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Propose monitor</button>}
                 <button type="button" onClick={() => onAsk(pulseStoryQuestion(card))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:bg-amber-300/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><Sparkles className="h-4 w-4 text-amber-200" />Ask LiOS</button>
                 {card.symbol && onOpenSymbol && <button type="button" onClick={() => onOpenSymbol(card.symbol!)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Open analysis<ArrowUpRight className="h-4 w-4" /></button>}
               </div>

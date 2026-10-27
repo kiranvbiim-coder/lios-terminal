@@ -30,7 +30,12 @@ function evidenceKeys(card: PulseStoryView): Set<string> {
     const url = safePulseSourceUrl(source.url);
     if (url) keys.add("url:" + url);
     // ID equality may establish the same retained observation, not independent corroboration.
-    if (source.id?.trim()) keys.add("id:" + source.id.trim());
+    if (source.id?.trim() && (source.provider?.trim() || source.source?.trim())) {
+      // Provider-local IDs can repeat across publishers. Exact URL identity
+      // remains a separate and sufficient link when both cards record it.
+      const authority = (source.provider?.trim() || source.source?.trim() || "").toLowerCase();
+      keys.add("id:" + JSON.stringify([authority, source.id.trim()]));
+    }
   }
   return keys;
 }
