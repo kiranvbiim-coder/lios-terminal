@@ -90,7 +90,7 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
   const discoveryChanges = query.data?.discoveryChanges;
   const hasBaseline = discoveryChanges?.status === "compared" && Array.isArray(discoveryChanges.newCardIds);
   const newlyRecorded = useMemo(
-    () => new Set(hasBaseline ? discoveryChanges.newCardIds : []),
+    () => new Set(hasBaseline ? (discoveryChanges?.newCardIds ?? []) : []),
     [hasBaseline, discoveryChanges?.newCardIds],
   );
   const filtered = useMemo(
@@ -166,8 +166,8 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0 font-ui text-sm text-foreground">
                 {hasBaseline ? (
-                  <><strong>{discoveryChanges.newCount}</strong> recorded source-backed item(s) new or revised since your last review
-                    {discoveryChanges.reviewedAt && <span className="mt-1 block text-xs text-muted-foreground">
+                  <><strong>{discoveryChanges?.newCount ?? 0}</strong> recorded source-backed item(s) new or revised since your last review
+                    {discoveryChanges?.reviewedAt && <span className="mt-1 block text-xs text-muted-foreground">
                       Reviewed <time dateTime={discoveryChanges.reviewedAt}>{new Date(discoveryChanges.reviewedAt).toLocaleString()}</time>
                     </span>}</>
                 ) : "No source review checkpoint saved yet."}
