@@ -100,6 +100,13 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
       "native evidence file missing, empty, symlinked or oversized.");
     const bytes = fs.readFileSync(full);
     assert(bytes.length === stat.size, "native evidence changed during inspection.");
+    const extension = path.extname(name).toLowerCase();
+    const png = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+    const jpg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const webp = bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+    if (extension === ".png") assert(png, "native screenshot file lacks a valid PNG signature.");
+    if (extension === ".jpg" || extension === ".jpeg") assert(jpg, "native screenshot file lacks a valid JPEG signature.");
+    if (extension === ".webp") assert(webp, "native screenshot file lacks a valid WebP signature.");
     evidence.push({ path: name, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") });
   }
   assert(evidence.some(row => /\.(png|jpg|jpeg|webp)$/i.test(row.path)) &&
