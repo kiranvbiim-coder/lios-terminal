@@ -545,6 +545,32 @@ export default function ProjectExperienceShell({
     handledChatReturn.current = request;
     setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
   }, [chatWorkbenchReturn, chatMode, selection.projectId, selection.chatId]);
+  // Outside the Chat shell, navigation may visually cover Stop or local Artifact edits.
+  // Keep Connections/Settings recoverable without discarding the unsent composer.
+  const openSafeDestination = (destination: "Connections" | "Settings", action: () => void) => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
+      setLifecycleNotice(`Stop the current response or finish the pending request before opening ${destination}.`);
+      return;
+    }
+    if (artifactDraftDirtyRef.current) {
+      setLifecycleNotice(`Save or reset unsaved Artifact edits before opening ${destination}. Your draft remains in Chat.`);
+      return;
+    }
+    action();
+  };
+  const signOutSafely = async () => {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
+      setLifecycleNotice("Stop the current response or finish the pending request before signing out.");
+      return;
+    }
+    if (artifactDraftDirtyRef.current) {
+      setLifecycleNotice("Save or reset unsaved Artifact edits before signing out.");
+      return;
+    }
+    const before = currentDraftRef.current;
+    if (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before)) return;
+    onLogout();
+  };
   const onOpenWorkbench = () => {
     if (busy || busyRef.current || sendInFlightRef.current) {
       setLifecycleNotice("Stop the current response before opening Work.");
@@ -2030,7 +2056,7 @@ export default function ProjectExperienceShell({
       />
       <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
         onSection={(next) => {
-          if (next !== "conversation" && (busy || sendInFlightRef.current)) {
+          if (next !== "conversation" && (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current)) {
             setLifecycleNotice("Stop the current response before opening another section.");
             return;
           }
@@ -2047,8 +2073,8 @@ export default function ProjectExperienceShell({
         onTemporary={() => void startTemporary()}
         onSearch={requestWorkSearch}
         onWorkbench={onOpenWorkbench}
-        onConnectors={onOpenEnvironment}
-        onSettings={onOpenSettings} onLogout={onLogout}
+        onConnectors={() => openSafeDestination("Connections", onOpenEnvironment)}
+        onSettings={() => openSafeDestination("Settings", onOpenSettings)} onLogout={() => void signOutSafely()}
         onTrash={() => {
           if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
             setLifecycleNotice("Finish the current response or save/reset Artifact edits before opening Trash & archive.");
