@@ -207,7 +207,7 @@ export default function NewsPanel({ symbol }: Props) {
 
                 {selectedItem.media
                   ? <LicensedEditorialImage media={selectedItem.media} sourceIds={[selectedItem.url]} className="my-4" />
-                  : selectedContextImage ? <CommonsContextIllustration candidate={selectedContextImage} /> : null}
+                  : selectedContextImage ? <CommonsContextIllustration candidate={selectedContextImage} showSource /> : null}
                 <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
                   selected={selectedContextImage}
                   onSelect={candidate => setContextImage({ storyUrl: selectedItem.url, candidate })}

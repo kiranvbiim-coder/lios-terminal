@@ -78,7 +78,7 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
   return media;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.url && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [image, grantPath, output = "client/public"] = process.argv.slice(2);
   if (!image || !grantPath) {
     process.stderr.write("Usage: node --import tsx script/import_licensed_editorial_image.ts <approved-local-image> <reviewed-grant.json> [public-root]\n");
