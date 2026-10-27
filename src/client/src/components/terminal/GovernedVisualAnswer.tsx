@@ -106,9 +106,11 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
             Scanned {mapProjection.scannedRows} recorded rows; no geocoding or inferred locations.
             {mapProjection.omittedCount > 0 ? " " + mapProjection.omittedCount + " eligible locations beyond the first 60 are not shown." : ""}
           </p>
-          {mapOpen && <Suspense fallback={<p role="status" className="mt-3 font-ui text-sm text-muted-foreground">Loading the bundled offline world map…</p>}>
-            <OfflineProjectWorldMap points={mapProjection.points} origin="P4 saved table" />
-          </Suspense>}
+          {mapOpen && <GovernedChartBoundary>
+            <Suspense fallback={<p role="status" className="mt-3 font-ui text-sm text-muted-foreground">Loading the bundled offline world map…</p>}>
+              <OfflineProjectWorldMap points={mapProjection.points} origin="P4 saved table" />
+            </Suspense>
+          </GovernedChartBoundary>}
         </section>}
         {decision.kind === "table" && (decision.content.rows.length > 40 || decision.content.columns.length > 12) &&
           <p role="status" className="font-ui text-xs text-muted-foreground">
