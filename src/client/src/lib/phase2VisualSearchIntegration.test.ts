@@ -21,7 +21,7 @@ test("intelligence is read only on user-selected tab and unavailable in Temporar
   assert.match(search, /\{intelligenceEnabled && <button/);
   assert.match(shell, /intelligenceEnabled=\{chatMode !== "temporary"\}/);
   assert.match(visual, /const searchReady = activeQuery\.length >= 2/);
-  assert.match(visual, /if \(!searchReady\) return/);
+  assert.match(visual, /if \(!searchReady\) \{ setPending\(false\); return; \}/);
   assert.match(visual, /controller\.abort\(\)/);
   assert.doesNotMatch(visual, /POST|api\/visual-search|window\.open|new Image/);
 });
