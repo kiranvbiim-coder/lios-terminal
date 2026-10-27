@@ -2,6 +2,7 @@ import * as React from "react";
 import { useMemo, useState } from "react";
 import { Compass, GitBranch, MapPinned, MessageSquareText, Network } from "lucide-react";
 import type { P7ContextGraph, P7InsightLens } from "@shared/p7ResearchContracts";
+import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
 import {
   consequenceTrailChatPrompt,
   investigationViewIntentSchema,
@@ -88,11 +89,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
         {view === "relationships" && <section aria-label="Recorded graph relationships" className="space-y-2 rounded-lg border border-border/50 p-3">
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><Network aria-hidden="true" className="h-4 w-4"/>Linked Project objects</h4>
           <p className="font-ui text-xs text-muted-foreground">{trail.matchedNodes.length} directly identified graph object{trail.matchedNodes.length === 1 ? "" : "s"} · {trail.totalLinks} stored adjacency link{trail.totalLinks === 1 ? "" : "s"}. Adjacency does not prove consequence or exposure.</p>
-          {trail.links.length ? <ul className="space-y-2">{trail.links.map(link => <li key={link.id} className="rounded-lg border border-border/50 px-3 py-2">
-            <p className="break-words font-ui text-sm font-medium text-foreground">{link.from.label} <span className="text-amber-200">→ {link.relation.replaceAll("_", " ")} →</span> {link.to.label}</p>
-            <p className="mt-1 font-ui text-xs text-muted-foreground">{link.evidenceRefs.length} explicit edge evidence reference{link.evidenceRefs.length === 1 ? "" : "s"}</p>
-          </li>)}</ul> : <p className="font-ui text-sm text-muted-foreground">No graph link joins these exact source/entity identifiers. Impact cannot be inferred.</p>}
-          {trail.omittedLinks > 0 && <p className="text-xs text-muted-foreground">{trail.omittedLinks} additional recorded graph links are outside the bounded view.</p>}
+          <ProjectEvidenceGraph key={projectId + ":" + selected.id} projectId={projectId} graph={validGraph} insight={selected} />
         </section>}
         {view === "geography" && <section aria-label="Verified geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><MapPinned aria-hidden="true" className="h-4 w-4"/>Geographic evidence</h4>
