@@ -66,6 +66,23 @@ Every row below requires a real retained report for the **same exact commit**:
 | sp01-packaged-journey | Installed Project/Chat/approval/denial/restore journey including governed runtime |
 | packaged-valuation-http | Real packaged valuation route returns a valid successful result, no HTTP 502 |
 
+### Packaged numerical sidecar coverage (release follow-through)
+
+The existing `desktopPythonSidecar.cjs` and `desktopSelfTest.cjs` now also
+exercise the authenticated HTTP `POST /advanced/valuation/reverse-dcf`
+directly against the **frozen packaged Python sidecar**, using SP-01's
+independently checked numerical fixture. A missing route, 503, wrong
+number, nonfinite value or missing result fails the desktop self-test.
+The native result is recorded under `pythonSidecar.valuationRoute`
+and the sidecar evidence report. This is not a mock runtime probe:
+the unit test's mocked HTTP endpoints only verify the test harness itself.
+
+**This does not finish the packaged valuation HTTP acceptance row.** The
+separate installed Electron → Node server API → numerical runtime pathway
+must still be exercised with the authenticated user/Project context,
+including response and error trace evidence. A green sidecar-only smoke
+must never be relabelled an end-to-end 502 fix.
+
 **Known unresolved risk:** the packaged valuation HTTP 502 reported during
 earlier development has **not** been proven resolved. It is a **hard release
 blocker** until the actual installed packaged route is exercised and its
