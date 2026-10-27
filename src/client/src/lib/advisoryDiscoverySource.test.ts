@@ -57,6 +57,9 @@ test("Phase 4 actual request submission is explicit, accessible and confirmed by
   assert.match(advisory, /<form onSubmit=\{handleCreateRequest\}/);
   assert.match(advisory, /const saved: unknown = await response\.json\(\)/);
   assert.match(advisory, /Number\.isSafeInteger\(saved\.id\)/);
+  assert.match(advisory, /submitInFlight\.current = true/);
+  assert.match(advisory, /submitInFlight\.current = false/);
+  assert.match(advisory, /disabled=\{submitting\} onClick=\{\(\) => setShowNewModal\(false\)\}/);
   assert.match(advisory, /setSubmissionNotice\(/);
   assert.match(advisory, /role="alert"/);
   assert.match(advisory, /check existing requests before retrying to avoid duplicates/);
