@@ -34,6 +34,7 @@ test("exact publisher/package review and rights consent activate canonical decla
   assert.equal(installed.kind, "p13");
   const chatInventory = chatExtensionCatalog({
     plugins: f.host.plugins.list(), connections: [], userId: owner.userId,
+    isPluginLiveTrusted: plugin => f.host.trustStore.verify(plugin.manifest, plugin.trust.packageDigest).state === "trusted",
     organizationId: null, managementAvailable: true,
   });
   assert.deepEqual(chatInventory.plugins.map(row => row.id), ["com.example.owner-finance"]);
@@ -41,6 +42,14 @@ test("exact publisher/package review and rights consent activate canonical decla
   assert.equal(chatInventory.plugins[0].registered, true);
   assert.equal(chatInventory.plugins[0].artifactCount, 1);
   assert.equal(chatInventory.plugins[0].executableFromChat, false);
+  f.host.trustStore.revokeKey("owner.fixture.key");
+  const noLongerTrusted = chatExtensionCatalog({
+    plugins: f.host.plugins.list(), connections: [], userId: owner.userId,
+    organizationId: null,
+    isPluginLiveTrusted: plugin => f.host.trustStore.verify(plugin.manifest, plugin.trust.packageDigest).state === "trusted",
+  });
+  assert.equal(noLongerTrusted.plugins[0].trusted, false);
+  assert.equal(noLongerTrusted.plugins[0].registered, false);
   assert.equal(f.host.registry.require("com.example.owner-finance.chart").descriptor.kind, "artifact_renderer");
   assert.equal(f.service.inspect(owner, "p13", "com.example.owner-finance").kind, "p13");
   assert.throws(() => f.service.install(owner, consent), /review not found/);
