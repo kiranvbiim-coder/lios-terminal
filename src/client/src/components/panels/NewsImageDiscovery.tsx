@@ -19,11 +19,13 @@ function vettedCandidates(value: unknown): CommonsCandidate[] {
 }
 
 /** Preview-only Commons illustration: never a packaged LiOS asset or event photograph. */
-export function CommonsContextIllustration({ candidate, compact = false }: {
+export function CommonsContextIllustration({ candidate, compact = false, showSource = false }: {
   candidate: CommonsCandidate;
   compact?: boolean;
+  showSource?: boolean;
 }) {
   const preview = safeCommonsPreview(candidate);
+  const page = safeCommonsFilePage(candidate);
   if (!preview) return null;
   return <figure data-testid="commons-context-illustration"
     className="min-w-0 overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.025]">
@@ -33,6 +35,8 @@ export function CommonsContextIllustration({ candidate, compact = false }: {
     <figcaption className="px-2 py-2 font-ui text-xs leading-5 text-muted-foreground">
       <span className="block font-semibold text-amber-200">Illustration only · not a photograph of the news event</span>
       {!compact && <span className="block">{candidate.creator} · Wikimedia Commons · CC0 metadata (review source before reuse)</span>}
+      {showSource && page && <a href={page} rel="noopener noreferrer" target="_blank" referrerPolicy="no-referrer"
+        className="inline-block underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">Review Commons image and license</a>}
     </figcaption>
   </figure>;
 }
@@ -101,7 +105,7 @@ export function NewsImageDiscovery({ articleTitle, onSelect, selected, onClear }
       <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); void search(); }}>
         <label htmlFor="news-image-keywords" className="sr-only">Commons image search keywords</label>
         <input id="news-image-keywords" type="search" maxLength={100} value={term}
-          onChange={event => { setTerm(event.target.value); setCandidates(null); setError(null); }}
+          onChange={event => { controller.current?.abort(); setLoading(false); setTerm(event.target.value); setCandidates(null); setError(null); }}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70"
           placeholder="Subject for context illustrations" />
         <button type="submit" disabled={loading || term.trim().length < 3}
