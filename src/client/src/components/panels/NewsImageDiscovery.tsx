@@ -114,9 +114,9 @@ export function NewsImageDiscovery({
           className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
           {rechecking ? "Rechecking CC0…" : "Recheck & show saved"}
         </button>}
-        {canRemember && selected && !saved && onRemember && <button type="button" onClick={onRemember}
+        {canRemember && selected && (!saved || saved.candidate.filePage !== selected.filePage) && onRemember && <button type="button" onClick={onRemember}
           className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
-          Remember illustration
+          {saved ? "Update saved illustration" : "Remember illustration"}
         </button>}
         {canRemember && saved && onForget && <button type="button" onClick={onForget}
           className="min-h-10 rounded-lg border border-border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
