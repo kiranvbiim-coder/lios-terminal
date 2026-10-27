@@ -79,3 +79,11 @@ test("date fallback is honest about unknown or invalid publisher dates", () => {
   assert.equal(perspectivePublishedDate("not-a-date"), "Publication date not recorded");
   assert.notEqual(perspectivePublishedDate("2026-10-20T09:00:00Z"), "Publication date not recorded");
 });
+
+
+test("B04 Perspectives do not turn malformed or local publisher dates into publication chronology",()=>{
+  for(const value of ["1","2026-02-30T09:00:00Z","2026-10-27","2026-10-27T09:00:00","2026-10-27T24:00:00Z"]){
+    assert.equal(perspectivePublishedDate(value),"Publication date not recorded",value);
+  }
+  assert.notEqual(perspectivePublishedDate("2026-10-27T15:30:00+05:30"),"Publication date not recorded");
+});
