@@ -63,10 +63,22 @@ export function approvedNewsMediaByUrl(root: string, asOf: string): Map<string, 
 }
 
 /** Bundled public files differ between development and packaged/static builds. */
-export function resolveEditorialPublicRoot(cwd = process.cwd()): string | null {
-  for (const relative of ["client/public", "src/client/public", "client/dist", "src/client/dist"]) {
-    const root = path.resolve(cwd, relative);
-    if (fs.existsSync(path.join(root, "editorial-media", "manifest.json"))) return root;
+export function resolveEditorialPublicRoot(
+  cwd = process.cwd(),
+  bundledDirectory: string | null = typeof __dirname === "string" ? __dirname : null,
+): string | null {
+  // Packaged Electron starts from an arbitrary cwd (often "/"). The same
+  // __dirname/public directory is used by serveStatic's production entry.
+  // Vite development instead serves the src/client/public directory.
+  const candidates = [
+    bundledDirectory ? path.resolve(bundledDirectory, "public") : null,
+    path.resolve(cwd, "dist/public"),
+    path.resolve(cwd, "src/dist/public"),
+    path.resolve(cwd, "client/public"),
+    path.resolve(cwd, "src/client/public"),
+  ];
+  for (const root of candidates) {
+    if (root && fs.existsSync(path.join(root, "editorial-media", "manifest.json"))) return root;
   }
   return null;
 }
