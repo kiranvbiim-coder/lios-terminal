@@ -322,12 +322,24 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 .lios-spatial-research button:focus-visible {
   outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: 3px;
 }
-@media (hover: hover) and (pointer: fine) {
-  [data-low-resource-mode="false"][data-reduced-motion="false"] .lios-spatial-node:hover {
-    z-index: 7; transform: translate(-50%,-50%) translateZ(24px) rotateX(-1.5deg);
-    box-shadow: 0 22px 46px rgb(0 0 0 / .35);
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .lios-spatial-research[data-motion-budget="subtle"] .lios-spatial-node:hover {
+    z-index: 7; transform: translate(-50%,-50%) translateZ(16px) rotateX(-1deg);
+    box-shadow: 0 18px 40px rgb(0 0 0 / .29);
     border-color: var(--lios-border-strong, #8790a2);
   }
+}
+.lios-spatial-research[data-motion-budget="still"] .lios-spatial-board { perspective: none; }
+.lios-spatial-research[data-motion-budget="still"] .lios-spatial-field {
+  background: linear-gradient(to right, rgb(144 151 170 / .035) 1px, transparent 1px),
+              linear-gradient(to bottom, rgb(144 151 170 / .035) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+.lios-spatial-research[data-motion-budget="still"] .lios-spatial-node {
+  transition: none !important;
+}
+.lios-spatial-research[data-motion-budget="still"] .lios-spatial-companion {
+  box-shadow: 0 8px 24px rgb(0 0 0 / .15); backdrop-filter: none;
 }
 @container (max-width: 760px) {
   .lios-spatial-board, .lios-spatial-board[data-expanded="true"] {
