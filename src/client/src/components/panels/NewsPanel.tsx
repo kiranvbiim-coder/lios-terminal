@@ -13,6 +13,7 @@ import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 import { NewsStoryEvolution } from "./NewsStoryEvolution";
 import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import { observeNewsFeed, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
+import { approvedPhotoCount, newsWithApprovedPhotos } from "@/lib/newsVisualCoverage";
 import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 
 interface Props {
@@ -42,6 +43,7 @@ export default function NewsPanel({ symbol }: Props) {
   const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
+  const [photoOnly, setPhotoOnly] = useState(false);
   // Only real successive feed observations while this view is mounted.
   const [observedRevisions, setObservedRevisions] = useState<NewsStoryRevision[]>([]);
   const activeNewsStoryRef = useRef<string | null>(null);
@@ -78,13 +80,15 @@ export default function NewsPanel({ symbol }: Props) {
     ];
   }, [news]);
 
+  const licensedPhotoCount = useMemo(() => approvedPhotoCount(news, new Date().toISOString()), [news]);
   const filtered = useMemo(() => {
-    return news.filter((item: NewsItem) => {
+    const sourceAndSentiment = news.filter((item: NewsItem) => {
       const sourceOk = sourceFilter === "ALL" || item.source.toUpperCase() === sourceFilter;
       const sentimentOk = sentimentFilter === "ALL" || item.sentiment === sentimentFilter.toLowerCase();
       return sourceOk && sentimentOk;
     });
-  }, [news, sentimentFilter, sourceFilter]);
+    return photoOnly ? newsWithApprovedPhotos(sourceAndSentiment, new Date().toISOString()) : sourceAndSentiment;
+  }, [news, sentimentFilter, sourceFilter, photoOnly]);
 
   useEffect(() => {
     if (!newsQuery.isSuccess || newsQuery.isFetching || newsQuery.isError || selectedUrl || !filtered.length) return;
@@ -92,14 +96,16 @@ export default function NewsPanel({ symbol }: Props) {
   }, [filtered, selectedUrl, newsQuery.isSuccess, newsQuery.isFetching, newsQuery.isError]);
 
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
-  // Invalidate an in-flight image recheck on EVERY read-through identity change,
-  // including A → B → A and artifact-restored selection changes. Without this,
-  // an old response can reappear after the same article is selected again.
+  // Invalidate image rechecks whenever a committed reader target changes,
+  // including A → B → A and restored artifact selections. Never mutate refs
+  // during render: discarded concurrent renders must not change permissions.
   const selectedStoryUrl = selectedItem?.url ?? null;
-  if (activeNewsStoryRef.current !== selectedStoryUrl) {
-    recheckGenerationRef.current++;
-    activeNewsStoryRef.current = selectedStoryUrl;
-  }
+  useEffect(() => {
+    if (activeNewsStoryRef.current !== selectedStoryUrl) {
+      recheckGenerationRef.current++;
+      activeNewsStoryRef.current = selectedStoryUrl;
+    }
+  }, [selectedStoryUrl]);
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedSourceHref = selectedItem ? safePulseSourceUrl(selectedItem.url) : null;
@@ -156,11 +162,16 @@ export default function NewsPanel({ symbol }: Props) {
           <label className="font-terminal text-[8px] text-muted-foreground">FROM <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="ml-1 bg-black/30 border border-border px-1 py-1 text-[8px]" /></label>
           <label className="font-terminal text-[8px] text-muted-foreground">TO <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="ml-1 bg-black/30 border border-border px-1 py-1 text-[8px]" /></label>
           <button type="button" disabled={page === 1 || isLoading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">PREV</button>
-          <button type="button" disabled={page === 1 || !pagedNews?.hasMore || isLoading} onClick={() => setPage((value) => value + 1)} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">NEXT</button>
+          <button type="button" disabled={!pagedNews?.hasMore || page >= 52 || isLoading || newsQuery.isFetching} onClick={() => setPage((value) => Math.min(52, value + 1))} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">NEXT</button>
           <span className="ml-auto font-terminal text-[8px] text-muted-foreground">PAGE {page} · {pagedNews ? `${pagedNews.returnedCount}/${pagedNews.knownCount}` : `${news.length}`} RETURNED</span>
         </div>
 
         <div className="flex items-center gap-px overflow-x-auto scrollbar-thin px-2 py-1.5">
+          <button type="button" aria-pressed={photoOnly} onClick={() => setPhotoOnly(value => !value)}
+            disabled={licensedPhotoCount === 0 && !photoOnly}
+            className="mr-2 shrink-0 border border-border px-2.5 py-1 font-terminal text-[9px] tracking-wider text-amber-200 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-amber-300">
+            VERIFIED PHOTOS {licensedPhotoCount}
+          </button>
           {sources.map((source) => (
             <button
               key={source}
@@ -204,8 +215,16 @@ export default function NewsPanel({ symbol }: Props) {
               <div className="p-4 space-y-3">
                 {Array(6).fill(0).map((_, index) => <Skeleton key={index} className="h-24 bg-border" />)}
               </div>
+            ) : newsQuery.isError ? (
+              <div role="alert" className="space-y-3 p-4 font-ui text-sm text-muted-foreground">
+                <p>News could not be fetched. Check the date filters or source connection.</p>
+                <button type="button" onClick={() => void newsQuery.refetch()}
+                  className="min-h-10 rounded border border-border px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">
+                  Retry news
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
-              <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">NO STORIES MATCH CURRENT FILTERS</div>
+              <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">{photoOnly ? "NO RIGHTS-VERIFIED PHOTOS MATCH THIS FEED" : "NO STORIES MATCH CURRENT FILTERS"}</div>
             ) : (
               filtered.map((item, index) => (
                 <NewsEditorialStoryCard
@@ -222,7 +241,10 @@ export default function NewsPanel({ symbol }: Props) {
                   contextIllustration={!item.media && contextImage?.storyUrl === item.url ? contextImage.candidate : undefined}
                   active={item.url === selectedUrl}
                   lead={index === 0}
-                  onSelect={() => setSelectedUrl(item.url)}
+                  onSelect={() => {
+                    recheckGenerationRef.current++;
+                    setSelectedUrl(item.url);
+                  }}
                 />
               ))
             )}

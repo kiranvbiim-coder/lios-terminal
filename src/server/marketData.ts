@@ -2194,28 +2194,59 @@ function shiftDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/**
+ * One canonical inclusive UTC window for RSS searching AND local verification.
+ * Fixed from/to dates paginate a single bounded provider window; rolling pages
+ * traverse disjoint prior periods. This also keeps page 1 consistent with page 2.
+ */
+export function newsPageWindowBounds(
+  page = 1,
+  options: Pick<NewsPageOptions, "from" | "to" | "windowDays"> = {},
+  asOf = new Date(),
+): { from: string; to: string } {
+  const boundedPage = Math.max(1, Math.floor(page));
+  const windowDays = Math.min(Math.max(Math.floor(options.windowDays ?? 7), 1), 366);
+  const explicitFrom = isoDateOnly(options.from);
+  const anchor = isoDateOnly(options.to) ?? asOf.toISOString().slice(0, 10);
+  const to = explicitFrom ? anchor : shiftDate(anchor, -(boundedPage - 1) * windowDays);
+  // RSS after is exclusive; this is the actual inclusive calendar-day bound.
+  const from = explicitFrom ?? shiftDate(to, -windowDays + 1);
+  return { from, to };
+}
+
+/** Reject out-of-window RSS items even if a provider ignores search date clauses. */
+export function filterNewsPageWindow(
+  items: NewsItem[], page: number,
+  options: Pick<NewsPageOptions, "from" | "to" | "windowDays">,
+  asOf = new Date(),
+): NewsItem[] {
+  const { from, to } = newsPageWindowBounds(page, options, asOf);
+  return items.filter(item => {
+    const timestamp = Date.parse(item.publishedAt);
+    if (!Number.isFinite(timestamp)) return false;
+    const utcDay = new Date(timestamp).toISOString().slice(0, 10);
+    return utcDay >= from && utcDay <= to;
+  });
+}
+
 /** Build a deterministic Google News date window for a chained page. */
 export function buildNewsWindowQuery(
   query: string,
   page = 1,
   options: Pick<NewsPageOptions, "from" | "to" | "windowDays"> = {},
 ): string {
-  const boundedPage = Math.max(1, Math.floor(page));
-  const windowDays = Math.min(Math.max(Math.floor(options.windowDays ?? 7), 1), 366);
-  const explicitFrom = isoDateOnly(options.from);
-  const explicitTo = isoDateOnly(options.to);
-  const today = new Date().toISOString().slice(0, 10);
-  const end = explicitTo ?? shiftDate(today, -(boundedPage - 1) * windowDays);
-  const start = explicitFrom && boundedPage === 1
-    ? explicitFrom
-    : shiftDate(end, -windowDays);
+  const { from, to } = newsPageWindowBounds(page, options);
   const withoutRelativeWindow = query.replace(/\bwhen:\d+[dwmy]\b/gi, "").replace(/\s+/g, " ").trim();
-  const clauses = [withoutRelativeWindow, `after:${start}`, `before:${shiftDate(end, 1)}`].filter(Boolean);
+  // Google News "after" is exclusive, so shift the inclusive FROM back one day.
+  const clauses = [withoutRelativeWindow, `after:${shiftDate(from, -1)}`, `before:${shiftDate(to, 1)}`].filter(Boolean);
   return clauses.join(" ");
 }
 
 function feedUrlForPage(url: string, page: number, options: NewsPageOptions): string {
-  if (page <= 1 && !options.from && !options.to) return url;
+  // Only the legacy unpaged getNews() path retains its original when:1d/7d
+  // provider queries. Paged requests MUST rewrite page 1 too or page 2
+  // overlaps/skips the very first period.
+  if (options.page === undefined && !options.from && !options.to && options.windowDays === undefined) return url;
   try {
     const parsed = new URL(url);
     const query = parsed.searchParams.get("q") ?? "";
@@ -2233,7 +2264,10 @@ export function dedupeNewsItems(items: NewsItem[]): NewsItem[] {
 
 async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options: NewsPageOptions = {}) {
   const page = Math.max(1, Math.floor(options.page ?? 1));
-  const pagedKey = `${cacheKey}:${page}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
+  // Every explicit-from page uses the same bounded provider feed. Cache its
+  // fetched records once, then apply local offsets for page 2 and onward.
+  const cachePage = options.from ? "bounded" : String(page);
+  const pagedKey = `${cacheKey}:${cachePage}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
   const cached = getCached(newsCache, pagedKey);
   if (cached) return cached;
 
@@ -2261,7 +2295,9 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 20), 1), 100);
   const feeds = symbol ? buildSymbolNewsFeeds(symbol.toUpperCase()) : GENERAL_NEWS_FEEDS;
   const feedItems = await fetchNewsFeeds(symbol ? `news:${symbol.toUpperCase()}` : "news:market", feeds, { ...options, page });
-  let items = feedItems;
+  // Provider date operators are advisory. Enforce the requested period on
+  // actual publishedAt values before symbol/search filters and local offsets.
+  let items = filterNewsPageWindow(feedItems, page, options);
   if (symbol) {
     const upper = symbol.toUpperCase();
     const profile = getProfileWithCryptoFallback(upper);
@@ -2272,10 +2308,15 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     });
   }
   items = filterNewsItems(items, query);
-  const pageItems = items.slice(0, limit);
   const explicitTo = isoDateOnly(options.to);
   const explicitFrom = isoDateOnly(options.from);
-  const hasMore = items.length > limit || (items.length === limit && !explicitFrom);
+  // Fixed date ranges use normal in-window offsets; rolling windows each
+  // fetch one older time slice and must not skip the first items in that slice.
+  const offset = explicitFrom ? (page - 1) * limit : 0;
+  const pageItems = items.slice(offset, offset + limit);
+  // An empty/sparse rolling window does NOT prove older windows are empty.
+  // Allow bounded traversal; never imply a provider-reported total.
+  const hasMore = explicitFrom ? items.length > offset + limit : page < 52;
   return {
     items: pageItems,
     page,
@@ -2284,7 +2325,7 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     knownCount: items.length,
     hasMore,
     nextCursor: hasMore ? String(page + 1) : null,
-    coverage: hasMore ? "provider-total-unknown" : "window-exhausted",
+    coverage: explicitFrom && !hasMore ? "window-exhausted" : "provider-total-unknown",
     from: explicitFrom ?? null,
     to: explicitTo ?? null,
   };
