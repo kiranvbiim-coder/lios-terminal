@@ -58,6 +58,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
             <Radar className="relative h-10 w-10 text-amber-200/65" strokeWidth={1} />
             <span className="relative font-ui text-xs font-medium tracking-[0.19em] text-foreground/50">LIOS INTELLIGENCE</span>
           </div>} />}
+        {!featured && <LicensedEditorialImage media={card.media} sourceIds={evidence.map(item => item.id)} variant="compact" className="mb-3 w-28" />}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-md border border-border/65 px-2 py-1 font-medium text-muted-foreground">{focusLabel}</span>
           <span className={`rounded-md border px-2 py-1 text-xs font-medium capitalize ${priorityTone[card.priority]}`}>{card.priority === "fyi" ? "For review" : card.priority}</span>
