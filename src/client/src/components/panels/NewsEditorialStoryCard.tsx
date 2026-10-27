@@ -2,10 +2,11 @@
  * LIOS editorial story card.
  * Adapted from Watermelon UI's expandable-event-card presentation:
  * https://github.com/WatermelonCorp/watermellon-registry/blob/86052b8fd12bc19bf3bac07625a7f93736c42b17/src/components/watermelon-ui/expandable-event-card-base.tsx
- * Upstream: MIT (WatermelonCorp); this adaptation uses the installed framer-motion
+ * Upstream: MIT, Copyright (c) 2025-present Watermelon Contributors; this adaptation uses the installed framer-motion
  * package and selects LIOS's existing read-through instead of creating a second modal.
- * No donor demo images, third-party media, backend state or synthetic content are copied.
+ * Full notice: third_party/licenses/watermellon-registry-MIT.txt.\n * No donor demo images, third-party media, backend state or synthetic content are copied.
  */
+import * as React from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Newspaper } from "lucide-react";
 import type { ReactNode } from "react";
@@ -61,7 +62,7 @@ export default function NewsEditorialStoryCard({
           aria-hidden="true"
         >
           <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200/85">
-            Latest from sources
+            Story overview
           </span>
           <Newspaper className="h-10 w-10 text-amber-200/30" strokeWidth={1.2} />
         </div>
