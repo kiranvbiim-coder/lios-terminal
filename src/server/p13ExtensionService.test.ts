@@ -58,6 +58,7 @@ test("exact publisher/package review and rights consent activate canonical decla
   assert.equal(f.host.registry.get("com.example.owner-finance.chart"), null);
   const afterRevoke = chatExtensionCatalog({
     plugins: f.host.plugins.list(), connections: [], userId: owner.userId,
+    isPluginLiveTrusted: plugin => f.host.trustStore.verify(plugin.manifest, plugin.trust.packageDigest).state === "trusted",
     organizationId: null, managementAvailable: true,
   });
   assert.deepEqual(afterRevoke.plugins, [], "Chat catalog reflects canonical revoke immediately");
