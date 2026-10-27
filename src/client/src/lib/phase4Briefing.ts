@@ -61,15 +61,23 @@ export function composeProjectBriefing(
     sections.push({ id: "briefing-section-" + (index + 1), title: restricted(insight.title, 500), blockIds: ids });
   });
   if (selection.layout === "research" && timeline.length) {
-    const sorted = [...timeline].filter(event => typeof event.at === "string")
+    // A Project-wide timeline is not evidence for an unrelated selected insight.
+    // Include only retained events sharing a selected source or entity reference.
+    const selectedSources = new Set(items.flatMap(insight => insight.sourceRefs));
+    const selectedEntities = new Set(items.flatMap(insight => insight.entityRefs));
+    const sorted = timeline.filter(event => typeof event.at === "string" &&
+        (event.sourceRefs.some(ref => selectedSources.has(ref)) ||
+          event.entityRefs.some(ref => selectedEntities.has(ref))))
       .sort((a,b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 8);
-    const ids = [add("heading", "Recorded Project timeline")];
-    sorted.forEach((event, i) => {
-      event.sourceRefs.slice(0, 20).forEach(ref => dependencies.add(ref));
-      ids.push(add("paragraph", event.at + " · " + restricted(event.title, 1000) + " · " + restricted(event.summary, 3000)
-        + (event.sourceRefs.length ? "\nSource IDs: " + event.sourceRefs.slice(0, 20).join(", ") : "\nNo source ID recorded"), event.sourceRefs.slice(0, 20)));
-    });
-    sections.push({ id: "briefing-section-timeline", title: "Timeline", blockIds: ids });
+    if (sorted.length) {
+      const ids = [add("heading", "Recorded Project timeline")];
+      sorted.forEach(event => {
+        event.sourceRefs.slice(0, 20).forEach(ref => dependencies.add(ref));
+        ids.push(add("paragraph", event.at + " · " + restricted(event.title, 1000) + " · " + restricted(event.summary, 3000)
+          + (event.sourceRefs.length ? "\nSource IDs: " + event.sourceRefs.slice(0, 20).join(", ") : "\nNo source ID recorded"), event.sourceRefs.slice(0, 20)));
+      });
+      sections.push({ id: "briefing-section-timeline", title: "Timeline", blockIds: ids });
+    }
   }
   const closingIds = [
     add("heading", "Verification and next steps"),

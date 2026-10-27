@@ -14,7 +14,8 @@ const lens: P7InsightLens = {
   ],
 };
 const timeline: P7TimelineEvent[] = [
-  { id: "event-1", at: "2026-10-27T07:00:00Z", title: "Filed evidence", type: "filing", summary: "Retained record", sourceRefs: ["P7:source-b"], entityRefs: [], artifactRefs: [], modelRefs: [], decisionRef: null },
+  { id: "event-1", at: "2026-10-27T07:00:00Z", title: "Filed evidence", type: "filing", summary: "Retained record", sourceRefs: ["P7:source-a", "P7:source-b"], entityRefs: [], artifactRefs: [], modelRefs: [], decisionRef: null },
+  { id: "event-2", at: "2026-10-27T08:00:00Z", title: "Unrelated Project event", type: "filing", summary: "Not part of selected evidence", sourceRefs: ["P7:other"], entityRefs: [], artifactRefs: [], modelRefs: [], decisionRef: null },
 ];
 
 test("source-based storyboard is valid canonical editable P4 report, never fictional market content", () => {
@@ -31,6 +32,7 @@ test("source-based storyboard is valid canonical editable P4 report, never ficti
   assert.match(text,/P7:source-b/);
   assert.match(text,/No explicit source IDs recorded/);
   assert.match(text,/Editorial draft/);
+  assert.doesNotMatch(text,/Unrelated Project event|P7:other/);
   assert.doesNotMatch(text,/S&P 500|NVDA|assured gains|verified forecast/);
 });
 
@@ -56,4 +58,12 @@ test("non-research layouts do not silently add unrelated history", () => {
   assert.ok(draft);
   assert.equal(draft.content.sections.some(s=>s.id==="briefing-section-timeline"),false);
   assert.deepEqual(draft.dependencyRefs,["P7:source-a"]);
+});
+
+test("research timeline is absent when no event shares an exact selected source or entity", () => {
+  const irrelevant: P7TimelineEvent[] = [{ ...timeline[1] }];
+  const report=composeProjectBriefing({projectId:42,title:"Scoped",layout:"research",insightIds:["a"],editorNote:""},lens,irrelevant);
+  assert.ok(report);
+  assert.equal(report.content.sections.some(section=>section.id==="briefing-section-timeline"),false);
+  assert.deepEqual(report.dependencyRefs,["P7:source-a"]);
 });
