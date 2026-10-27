@@ -8342,6 +8342,16 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/wave-d/pulse/views",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/wave-d/pulse/views",
    "reachableBy": [

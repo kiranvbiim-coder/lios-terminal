@@ -120,6 +120,17 @@ test("A07 tabular and chronological source disclosure uses gated source URLs", (
   assert.match(missing, /No recorded evidence attached/);
 });
 
+test("A07 relevance graph only charts authorized recorded card scores, never invented financial time series", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  assert.match(source, /Relevance chart/);
+  assert.match(source, /aria-label="Recorded intelligence relevance comparison"/);
+  assert.match(source, /Math\.max\(0, Math\.min\(100, card\.score\)\)/);
+  assert.match(source, /aria-valuenow=\{score\}/);
+  assert.match(source, /source.*rankings|retained Pulse rankings/);
+  assert.match(source, /VisualIntelligenceSourceDisclosure card=\{card\}/);
+  assert.doesNotMatch(source, /generateSyntheticData|Math\.random\(/);
+});
+
 test("A07 shows optional rights-safe context when a recorded image fails source-rights checks", () => {
   const invalid = {
     kind: "image", assetPath: "/editorial-media/" + "a".repeat(64) + ".webp",

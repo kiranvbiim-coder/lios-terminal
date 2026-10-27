@@ -524,6 +524,17 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
 
   // Saved views are scoped to the existing authorized Wave D preference
   // document. The server never persists RSS articles or arbitrary URLs here.
+  app.get("/api/wave-d/pulse/views", requireWaveDRetailRead, async (req, res) => {
+    try {
+      const state = await getWaveDState(waveUser(req));
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ status: "ready", savedViews: state.pulseSavedViews });
+    } catch {
+      res.status(502).json({ status: "unavailable", error: "Saved discovery views unavailable." });
+    }
+  });
+
+  // The server never persists RSS articles or arbitrary URLs here.
   app.post("/api/wave-d/pulse/views", requireWaveDRetailRead, async (req, res) => {
     const parsed = pulseSavedViewCreateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid saved discovery view.", issues: parsed.error.issues });
