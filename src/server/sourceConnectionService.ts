@@ -62,7 +62,7 @@ async function assertConnectorConfig(input: SourceConnectionConfig): Promise<voi
     if (typeof input.config.allowedToolIds !== "string") {
       throw new Error("MCP tool allowlist must be an explicit comma-separated string.");
     }
-    if (input.config.requireApprovalForTools !== true) {
+    if (input.config.requireApprovalForTools === false) {
       throw new Error("MCP tool execution requires explicit user approval.");
     }
   }
