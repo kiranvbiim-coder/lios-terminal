@@ -11,6 +11,7 @@ import type { CommonsCandidate } from "@shared/commonsMedia";
 import { CommonsContextIllustration, NewsImageDiscovery } from "./NewsImageDiscovery";
 import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 import { NewsStoryEvolution } from "./NewsStoryEvolution";
+import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import { observeNewsFeed, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
 import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 
@@ -96,6 +97,7 @@ export default function NewsPanel({ symbol }: Props) {
   activeNewsStoryRef.current = selectedItem?.url ?? null;
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
+  const selectedSourceHref = selectedItem ? safePulseSourceUrl(selectedItem.url) : null;
   const selectedContextImage = selectedItem && contextImage?.storyUrl === selectedItem.url && !selectedItem.media ? contextImage.candidate : null;
   const savedSelection = selectedItem && !selectedItem.media
     ? savedIllustrations.find(saved => saved.storyUrl === selectedItem.url) ?? null : null;
@@ -241,6 +243,13 @@ export default function NewsPanel({ symbol }: Props) {
                         {selectedItem.source.toUpperCase()}
                       </span>
                       <DataStatusBadge status={article?.status ?? selectedItem.status} compact showAsOf />
+                      {selectedSourceHref && (
+                        <a href={selectedSourceHref} target="_blank" rel="noopener noreferrer"
+                          referrerPolicy="no-referrer"
+                          className="font-ui text-xs text-amber-200 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">
+                          Read original publisher
+                        </a>
+                      )}
                       <span className="font-terminal text-[9px] text-muted-foreground">{relativeTime(selectedItem.publishedAt)}</span>
                     </div>
                   </div>
