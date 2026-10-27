@@ -87,7 +87,7 @@ export default function ProvenanceDrawer({ onClose }: { onClose: () => void }) {
           </label>
         </div>
         <p role="status" className="font-ui text-xs text-muted-foreground">{visibleSources.length} of {review.recorded} recorded sources shown</p>
-      </div>
+      </div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-3 scrollbar-thin">
         {tab === "sources" && (
           snapshot.provenance.length === 0 ? (
