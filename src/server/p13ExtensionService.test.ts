@@ -6,6 +6,7 @@ import { liosPluginManifestV1Schema } from "@shared/pluginSdk";
 import { P13PluginRuntimeHost } from "./p13PluginRuntime";
 import { computePluginPackageDigest, signPluginManifest } from "./p13PluginTrust";
 import { P13ExtensionService, type ExtensionPrincipal } from "./p13ExtensionService";
+import { chatExtensionCatalog } from "./chatExtensionCatalog";
 
 const owner: ExtensionPrincipal = { userId: 1, role: "internal_admin", organizationId: null, active: true, mustChangePassword: false, lockedUntil: null, homeOwner: true };
 function fixture() {
@@ -31,12 +32,26 @@ test("exact publisher/package review and rights consent activate canonical decla
   assert.throws(() => f.service.install(owner, { ...consent, packageDigest: "0".repeat(64) }), /bytes/);
   const installed = f.service.install(owner, consent);
   assert.equal(installed.kind, "p13");
+  const chatInventory = chatExtensionCatalog({
+    plugins: f.host.plugins.list(), connections: [], userId: owner.userId,
+    organizationId: null, managementAvailable: true,
+  });
+  assert.deepEqual(chatInventory.plugins.map(row => row.id), ["com.example.owner-finance"]);
+  assert.equal(chatInventory.plugins[0].trusted, true);
+  assert.equal(chatInventory.plugins[0].registered, true);
+  assert.equal(chatInventory.plugins[0].artifactCount, 1);
+  assert.equal(chatInventory.plugins[0].executableFromChat, false);
   assert.equal(f.host.registry.require("com.example.owner-finance.chart").descriptor.kind, "artifact_renderer");
   assert.equal(f.service.inspect(owner, "p13", "com.example.owner-finance").kind, "p13");
   assert.throws(() => f.service.install(owner, consent), /review not found/);
   assert.throws(() => f.service.revoke(owner, "p13", "com.example.owner-finance", "0".repeat(64)), /changed/);
   f.service.revoke(owner, "p13", "com.example.owner-finance", f.digest);
   assert.equal(f.host.registry.get("com.example.owner-finance.chart"), null);
+  const afterRevoke = chatExtensionCatalog({
+    plugins: f.host.plugins.list(), connections: [], userId: owner.userId,
+    organizationId: null, managementAvailable: true,
+  });
+  assert.deepEqual(afterRevoke.plugins, [], "Chat catalog reflects canonical revoke immediately");
   const revoked = f.service.preview(owner, f.input);
   assert.equal(revoked.installable, false);
   assert.equal(revoked.trust, "revoked");
