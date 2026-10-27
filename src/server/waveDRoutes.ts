@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
+import { effectivePulseFollowingSubjects, normalizePulseSubjectKey, suppressMutedPulseCards, updatePulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
 import { storage } from "./storage";
@@ -169,6 +170,20 @@ const pulseFilterSchema = z.object({
   subjectKeys: z.array(z.string().trim().min(1).max(240)).max(100).optional(),
   unreadOnly: z.boolean().default(false),
 }).strict();
+
+const pulseSubjectWriteSchema = z.object({
+  action: z.enum(["follow", "mute", "clear"]),
+  cardId: z.string().trim().min(1).max(240).optional(),
+  subjectKey: z.string().trim().min(1).max(160).optional(),
+}).strict().superRefine((value, context) => {
+  const cardWrite = value.action !== "clear";
+  if (cardWrite && (!value.cardId || value.subjectKey)) context.addIssue({
+    code: z.ZodIssueCode.custom, message: "Follow/Mute must identify one currently authorized Pulse card.", path: ["cardId"],
+  });
+  if (!cardWrite && (Boolean(value.cardId) === Boolean(value.subjectKey))) context.addIssue({
+    code: z.ZodIssueCode.custom, message: "Clear requires exactly one card or already-saved subject.", path: ["subjectKey"],
+  });
+});
 
 const pulseCardSchema = z.object({
   id: z.string().trim().min(1).max(240).optional(),
@@ -426,13 +441,53 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     try {
       const result = await buildPulseForUser(req, sources);
       const requestedFilter = pulseFilterFromRequest(req);
-      const filter = requestedFilter.channel === "following" && !requestedFilter.subjectKeys?.length
-        ? { ...requestedFilter, subjectKeys: result.watchlist.map((item) => item.symbol.toUpperCase()) }
+      const preferences = result.storedState.pulseSubjects;
+      const permittedFollowing = effectivePulseFollowingSubjects(preferences, result.watchlist.map((item) => item.symbol));
+      const filter = requestedFilter.channel === "following"
+        ? { ...requestedFilter, subjectKeys: requestedFilter.subjectKeys?.length
+            ? permittedFollowing.filter(key => requestedFilter.subjectKeys!.map(normalizePulseSubjectKey).includes(key))
+            : permittedFollowing }
         : requestedFilter;
-      const cards = filterPulseCards(result.cards, filter);
-      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
+      const cards = filterPulseCards(suppressMutedPulseCards(result.cards, preferences), filter);
+      res.json({ contractVersion: getWaveDReadiness().contractVersion, asOf: result.now.toISOString(), status: cards.some((card) => card.status === "unread") ? "attention" : "caught_up", filter, cards, preferences, actionInbox: result.actionInbox, monitoring: { activeRules: result.alerts.filter((item) => !item.triggered).length + (result.storedState?.signalRules.filter((item) => item.enabled).length ?? 0), watchlistSymbols: result.watchlist.length } });
     } catch (error) {
       res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Pulse data unavailable." });
+    }
+  });
+
+  app.get("/api/wave-d/pulse/preferences", requireWaveDRetailRead, async (req, res) => {
+    try {
+      const state = await getWaveDState(waveUser(req));
+      res.json({ preferences: state.pulseSubjects, persisted: true, updatedAt: state.updatedAt });
+    } catch (error) { res.status(502).json({ status: "unavailable", reason: "Discovery preferences unavailable." }); }
+  });
+
+  app.post("/api/wave-d/pulse/preferences", requireWaveDRetailRead, async (req, res) => {
+    const parsed = pulseSubjectWriteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid discovery preference action.", issues: parsed.error.issues });
+    try {
+      const change = parsed.data;
+      let key: string | null = null;
+      if (change.cardId) {
+        const currentPulse = await buildPulseForUser(req, sources);
+        const card = currentPulse.cards.find(item => item.id === change.cardId);
+        key = normalizePulseSubjectKey(card?.subjectKey ?? card?.symbol);
+        if (!key) return res.status(404).json({ error: "Selected card has no currently accessible subject." });
+      } else if (change.subjectKey) {
+        key = normalizePulseSubjectKey(change.subjectKey);
+        const owned = (await getWaveDState(waveUser(req))).pulseSubjects;
+        if (!key || !(owned.muted.includes(key) || owned.followed.includes(key)))
+          return res.status(404).json({ error: "No saved discovery preference matches this subject." });
+      }
+      if (!key) return res.status(400).json({ error: "A recorded subject is required." });
+      const subject = key;
+      const next = await updateWaveDState(waveUser(req), state => ({
+        ...state,
+        pulseSubjects: updatePulseSubjectPreferences(state.pulseSubjects, subject, change.action),
+      }));
+      res.json({ status: "saved", persisted: true, preferences: next.pulseSubjects, updatedAt: next.updatedAt });
+    } catch (error) {
+      res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Discovery preference could not be saved." });
     }
   });
 
