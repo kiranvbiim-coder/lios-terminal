@@ -43,7 +43,7 @@ test("P3 Chat extension catalog exposes only non-executable plugin metadata and 
       connection(4, 7, null, "file", "healthy"),
       connection(5, 7, null, "mcp", "configured"),
     ],
-    userId: 7, organizationId: null,
+    userId: 7, organizationId: null, managementAvailable: true,
   });
   assert.equal(chatExtensionCatalogSchema.safeParse(catalog).success, true);
   assert.deepEqual(catalog.mcpConnections.map(row => row.id), [1, 5]);
@@ -55,6 +55,7 @@ test("P3 Chat extension catalog exposes only non-executable plugin metadata and 
   assert.equal(catalog.mcpConnections[0].projectRequired, true);
   assert.equal(catalog.mcpConnections[1].status, "configured");
   assert.equal(catalog.installationManagedByHomeOwner, true);
+  assert.equal(catalog.managementAvailable, true);
   const json = JSON.stringify(catalog);
   for (const forbidden of ["secret.example", "DO_NOT_SEND", "vault:sensitive", "signatureBase64", "secret-publisher-key", "unsafe.permission.hidden", "secret-digest"]) {
     assert.equal(json.includes(forbidden), false, `${forbidden} must not be exposed to Chat`);
