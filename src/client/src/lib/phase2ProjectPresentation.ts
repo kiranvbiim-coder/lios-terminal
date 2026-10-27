@@ -16,6 +16,38 @@ export function projectResumeSelection(projectId: number, chats: readonly Projec
   };
 }
 
+/**
+ * A09: bounded, owner-safe Project return choices beyond the single most
+ * recent Chat/Session. Only active, non-trashed records belonging to the exact
+ * selected Project are eligible; no title guessing, cross-Project fallback,
+ * fabricated activity or silently created conversation.
+ */
+export function projectResumeRecentWork(
+  projectId: number,
+  chats: readonly ProjectChat[],
+  sessions: readonly ProjectSession[],
+  limit = 4,
+): { chats: ProjectChat[]; sessions: ProjectSession[] } {
+  if (!Number.isSafeInteger(projectId) || projectId <= 0) return { chats: [], sessions: [] };
+  const count = Number.isFinite(limit) ? Math.max(1, Math.min(8, Math.floor(limit))) : 4;
+  const sortRecent = <T>(rows: readonly T[], timestamp: (item: T) => string, id: (item: T) => string): T[] =>
+    [...rows].sort((left, right) => {
+      const leftMs = Date.parse(timestamp(left));
+      const rightMs = Date.parse(timestamp(right));
+      const l = Number.isFinite(leftMs) ? leftMs : 0;
+      const r = Number.isFinite(rightMs) ? rightMs : 0;
+      return r - l || id(left).localeCompare(id(right));
+    });
+  return {
+    chats: sortRecent(chats.filter(row => row.projectId === projectId && row.scope === "project" &&
+      row.status === "active" && !row.trashedAt && Number.isSafeInteger(row.id) && row.id > 0),
+    row => row.lastActivityAt, row => String(row.id)).slice(0, count),
+    sessions: sortRecent(sessions.filter(row => row.projectId === projectId && row.status === "active" &&
+      !row.trashedAt && !!row.id),
+    row => row.updatedAt, row => row.id).slice(0, count),
+  };
+}
+
 /** This is an existing, identity-checked P6 retained snapshot, not a recomputed task plan. */
 export function projectResumeItems(projectId: number, snapshot: P6ProjectContinuitySnapshot | undefined) {
   if (!snapshot || snapshot.projectId !== projectId || snapshot.graph.projectId !== projectId || snapshot.dependencies.projectId !== projectId) return [];

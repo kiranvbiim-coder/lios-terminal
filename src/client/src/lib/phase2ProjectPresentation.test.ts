@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { ProjectChat, ProjectSession } from "@/lib/useProjects";
 import type { P6ProjectContinuitySnapshot } from "@shared/p6ContinuityContracts";
 import type { P9NotificationRecord, P9RunRecord, P9WorkflowRecord } from "@/lib/useP9Automation";
-import { projectResumeItems, projectResumeSelection, projectWatchroomSummary, watchroomRecordedHistory } from "./phase2ProjectPresentation";
+import { projectResumeItems, projectResumeRecentWork, projectResumeSelection, projectWatchroomSummary, watchroomRecordedHistory } from "./phase2ProjectPresentation";
 
 const chat = (id: number, projectId: number, lastActivityAt: string): ProjectChat => ({
   id, projectId, ownerUserId: 11, organizationId: null, scope: "project", title: "Saved chat " + id, pinned: false,
@@ -48,6 +48,37 @@ test("Project resume chooses only current active, non-trashed work, never anothe
   assert.equal(selected.session?.id, "c");
   assert.equal(chats[0].id, 1);
   assert.equal(projectResumeSelection(7, chats, sessions).chat, null);
+});
+
+test("A09 multiple Project resume choices stay bounded, sorted, scoped and immutable", () => {
+  const chats = [
+    chat(1, 4, "2026-10-24T08:00:00Z"), chat(2, 4, "2026-10-26T08:00:00Z"),
+    chat(3, 4, "2026-10-27T08:00:00Z"), chat(4, 4, "2026-10-25T08:00:00Z"),
+    chat(5, 4, "2026-10-20T08:00:00Z"), chat(6, 7, "2026-10-28T08:00:00Z"),
+    { ...chat(7, 4, "2026-10-29T08:00:00Z"), trashedAt: "2026-10-29T08:00:00Z" },
+    { ...chat(8, 4, "2026-10-30T08:00:00Z"), status: "archived" as const },
+    { ...chat(9, 4, "2026-10-31T08:00:00Z"), scope: "quick" as const },
+  ];
+  const sessions = [
+    session("old", 4, "2026-10-24T08:00:00Z"),
+    session("latest", 4, "2026-10-27T08:00:00Z"),
+    session("other", 7, "2026-10-30T08:00:00Z"),
+    { ...session("trashed", 4, "2026-10-31T08:00:00Z"), trashedAt: "2026-10-31T08:00:00Z" },
+  ];
+  const result = projectResumeRecentWork(4, chats, sessions, 4);
+  assert.deepEqual(result.chats.map(row => row.id), [3, 2, 4, 1]);
+  assert.deepEqual(result.sessions.map(row => row.id), ["latest", "old"]);
+  assert.deepEqual(chats.map(row => row.id), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(projectResumeRecentWork(7, chats, sessions).chats.map(row => row.id), [6]);
+  assert.deepEqual(projectResumeRecentWork(0, chats, sessions), { chats: [], sessions: [] });
+  assert.equal(projectResumeRecentWork(4, chats, sessions, 999).chats.length, 5);
+  assert.equal(projectResumeRecentWork(4, chats, sessions, Number.NaN).chats.length, 4);
+});
+
+test("A09 invalid timestamps sort last without guessing a date or leaking foreign work", () => {
+  const rows = [chat(20, 4, "invalid-date"), chat(21, 4, "2026-10-27T08:00:00Z"),
+    chat(22, 4, "2026-10-26T08:00:00Z")];
+  assert.deepEqual(projectResumeRecentWork(4, rows, []).chats.map(row => row.id), [21, 22, 20]);
 });
 
 test("P6 recorded follow-ups require exact Project identity; all recommendations remain source-owned", () => {
