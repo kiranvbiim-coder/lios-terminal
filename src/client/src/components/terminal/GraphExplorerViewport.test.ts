@@ -24,7 +24,8 @@ test("graph viewport changes are presentation-only and do not bypass explicit ob
   assert.match(graph, /actionsForIntelligenceObject\(selected\)/);
   assert.match(graph, /requestIntelligenceObjectAction\(action\)/);
   assert.match(graph, /maxNodes: 48/);
-  assert.match(graph, /contextualObjects\.slice\(0, 120\)/);
+  assert.match(graph, /selectRecordedCrossDomainGraphObjects\(contextualObjects, deferredQuery, selectedId, 120\)/);
+  assert.match(graph, /const deferredQuery = useDeferredValue\(query\)/);
   assert.match(graph, /Math\.min\(1\.8, Math\.max\(0\.35, value\)\)/);
   assert.match(graph, /originX:pan\.x,originY:pan\.y/);
   assert.doesNotMatch(graph, /fetch\(|setProjectId\(|eval\(/);
