@@ -7,6 +7,9 @@ import NewsEditorialStoryCard from "./NewsEditorialStoryCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { NewsItem } from "@/lib/finance";
 import { useNewsArticle } from "@/lib/useFinance";
+import type { CommonsCandidate } from "@shared/commonsMedia";
+import { CommonsContextIllustration, NewsImageDiscovery } from "./NewsImageDiscovery";
+import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 
 interface Props {
   symbol?: string;
@@ -27,6 +30,9 @@ export default function NewsPanel({ symbol }: Props) {
   const [page, setPage] = useTerminalArtifactState("NewsPanel.page", 1);
   const [from, setFrom] = useTerminalArtifactState("NewsPanel.from", "");
   const [to, setTo] = useTerminalArtifactState("NewsPanel.to", "");
+  // A user-selected Commons preview is session-only. Never persist, publish, or
+  // silently transfer it to another article when selection changes.
+  const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
     queryKey: ["/api/finance/news", symbol ?? "market", query, page, from, to],
@@ -70,6 +76,7 @@ export default function NewsPanel({ symbol }: Props) {
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
+  const selectedContextImage = selectedItem && contextImage?.storyUrl === selectedItem.url && !selectedItem.media ? contextImage.candidate : null;
 
   const missingSelection = selectedUrl !== null && !selectedItem && newsQuery.isSuccess && !newsQuery.isFetching;
   return (
@@ -155,6 +162,7 @@ export default function NewsPanel({ symbol }: Props) {
                   statusBadge={<DataStatusBadge status={item.status} compact />}
                   media={item.media}
                   sourceEvidenceId={item.url}
+                  contextIllustration={!item.media && contextImage?.storyUrl === item.url ? contextImage.candidate : undefined}
                   active={item.url === selectedUrl}
                   lead={index === 0}
                   onSelect={() => setSelectedUrl(item.url)}
@@ -196,6 +204,14 @@ export default function NewsPanel({ symbol }: Props) {
                   </span>
                   <span>AGE · {relativeTime(selectedItem.publishedAt).toUpperCase()}</span>
                 </div>
+
+                {selectedItem.media
+                  ? <LicensedEditorialImage media={selectedItem.media} sourceIds={[selectedItem.url]} className="my-4" />
+                  : selectedContextImage ? <CommonsContextIllustration candidate={selectedContextImage} /> : null}
+                <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
+                  selected={selectedContextImage}
+                  onSelect={candidate => setContextImage({ storyUrl: selectedItem.url, candidate })}
+                  onClear={() => setContextImage(null)} />
 
                 <p className="mt-4 border-b border-border/60 pb-4 font-ui text-sm leading-6 text-muted-foreground">
                   {article?.excerpt || selectedItem.summary}
