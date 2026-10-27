@@ -1,4 +1,3 @@
-import * as React from "react";
 /**
  * Adapted from beUI (starc007/ui-components), components/agents/citations.tsx.
  * MIT source @601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1
@@ -9,6 +8,7 @@ import * as React from "react";
  * pattern with local LiOS components. No remote favicon requests, second
  * citation store, automatic navigation, or additional animation dependency.
  */
+import * as React from "react";
 import { useState } from "react";
 import { BookOpenText, ChevronDown, ExternalLink, Globe2 } from "lucide-react";
 import type { TrustCitationItem } from "@/lib/trustCitationPresentation";

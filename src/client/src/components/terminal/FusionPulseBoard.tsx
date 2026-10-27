@@ -1,7 +1,9 @@
 import * as React from "react";
 import { useId, useMemo, useState } from "react";
+import type { PulseSavedView } from "@shared/pulseSavedViews";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
+import type { PulseReviewPresentation } from "@/lib/pulseReviewPresentation";
 import { normalizePulseSubjectKey, type PulseSubjectAction, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { PulseDiscoveryTabs } from "./PulseDiscoveryTabs";
@@ -28,9 +30,21 @@ interface Props {
   recents: RecentAnalyticalContext[];
   favorites: ViewMode[];
   pulseChannel: "for_you" | "following" | "markets" | "research";
+  pulseSavedViews: PulseSavedView[];
+  activeSavedSubject: string | null;
+  savedViewPending: boolean;
+  savedViewError: string | null;
+  onSavePulseView: (name: string) => Promise<boolean>;
+  onDeletePulseView: (id: string) => void;
+  onActivatePulseView: (view: PulseSavedView) => void;
+  onSelectSavedSubject: (subject: string | null) => void;
   pulseStatus: "loading" | "ready" | "unavailable";
   briefHeadline?: string | null;
   pulsePreferences: PulseSubjectPreferences;
+  pulseReview: PulseReviewPresentation | null;
+  reviewPending: boolean;
+  reviewError: string | null;
+  onMarkPulseReviewed: () => void;
   preferencePending: boolean;
   preferenceError: string | null;
   onPulsePreferenceChange: (cardId: string, action: PulseSubjectAction) => void;
@@ -142,9 +156,21 @@ export default function FusionPulseBoard({
   recents,
   favorites,
   pulseChannel,
+  pulseSavedViews,
+  activeSavedSubject,
+  savedViewPending,
+  savedViewError,
+  onSavePulseView,
+  onDeletePulseView,
+  onActivatePulseView,
+  onSelectSavedSubject,
   pulseStatus,
   briefHeadline,
   pulsePreferences,
+  pulseReview,
+  reviewPending,
+  reviewError,
+  onMarkPulseReviewed,
   preferencePending,
   preferenceError,
   onPulsePreferenceChange,
@@ -152,6 +178,7 @@ export default function FusionPulseBoard({
   onPulseRetry,
   onPulseChannelChange,
 }: Props) {
+  const [viewName, setViewName] = useState("");
   const { data: gainers = [], isLoading: gainersLoading } = useMarketGainers();
   const { data: losers = [], isLoading: losersLoading } = useMarketLosers();
   const { data: sentiment } = useMarketSentiment();
@@ -165,6 +192,7 @@ export default function FusionPulseBoard({
   // from quote-derived synthetic cards; Market State remains independently live.
   const groupedPulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
   const visiblePulseCards = groupedPulseCards;
+  const changedSourceCardIds = new Set(pulseReview?.newCardIds ?? []);
   const visiblePulseStatus = pulseStatus;
   // Market detail stays available, but does not push source-backed stories
   // below the fold for a user browsing For You, Following or Research.
@@ -192,6 +220,52 @@ export default function FusionPulseBoard({
       <div className="border-b border-border/60 px-3 py-2">
         <div className="flex flex-wrap items-center gap-3">
           <PulseDiscoveryTabs channel={pulseChannel} onChange={onPulseChannelChange} />
+          <details className="min-w-[12rem] rounded-lg border border-border/60 px-3 py-2" data-testid="pulse-saved-discovery-views">
+            <summary className="min-h-8 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              Saved views ({pulseSavedViews.length})
+            </summary>
+            <div className="mt-2 space-y-2 border-t border-border/50 pt-2">
+              {pulseStatus === "ready" && <>
+                <label className="block font-ui text-xs text-muted-foreground">
+                  Followed subject
+                  <select aria-label="Filter Pulse by a followed subject" value={activeSavedSubject ?? ""}
+                    onChange={event => onSelectSavedSubject(event.target.value || null)}
+                    className="mt-1 min-h-10 w-full rounded-md border border-border/70 bg-background px-2 text-sm text-foreground">
+                    <option value="">All subjects</option>
+                    {pulsePreferences.followed.map(subject => <option key={subject} value={subject}>{subject}</option>)}
+                  </select>
+                </label>
+                <form onSubmit={event => {
+                  event.preventDefault();
+                  const label = viewName.trim() || [pulseChannel.replaceAll("_", " "), activeSavedSubject].filter(Boolean).join(" · ");
+                  void onSavePulseView(label.slice(0, 60)).then(saved => {
+                    if (saved) setViewName("");
+                  });
+                }} className="flex flex-wrap items-center gap-2">
+                  <label htmlFor="pulse-view-name" className="sr-only">Saved view name</label>
+                  <input id="pulse-view-name" value={viewName} onChange={event => setViewName(event.target.value)}
+                    maxLength={60} placeholder="Name this view"
+                    className="min-h-10 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-2 font-ui text-sm text-foreground" />
+                  <button type="submit" disabled={savedViewPending || pulseSavedViews.length >= 12}
+                    className="min-h-10 rounded-md border border-amber-300/40 px-3 font-ui text-xs font-medium text-foreground disabled:opacity-40">Save view</button>
+                </form>
+              </>}
+              {savedViewError && <p role="alert" className="font-ui text-xs text-rose-200">{savedViewError}</p>}
+              <ul aria-label="Saved discovery filters" className="space-y-1.5">
+                {pulseSavedViews.map(view => <li key={view.id} className="flex min-w-0 items-center gap-2">
+                  <button type="button" onClick={() => onActivatePulseView(view)} disabled={savedViewPending || pulseStatus !== "ready"}
+                    className="min-h-10 min-w-0 flex-1 truncate rounded-md border border-border/60 px-2 text-left font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+                    {view.name}
+                    <span className="ml-2 text-muted-foreground">{view.channel.replaceAll("_", " ")}{view.subjectKey ? " · " + view.subjectKey : ""}</span>
+                  </button>
+                  <button type="button" onClick={() => onDeletePulseView(view.id)} disabled={savedViewPending}
+                    aria-label={`Delete saved view ${view.name}`}
+                    className="min-h-10 rounded-md border border-border/60 px-2 font-ui text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Remove</button>
+                </li>)}
+                {!pulseSavedViews.length && <li className="font-ui text-xs text-muted-foreground">Save a discovery selection to reopen it after restart.</li>}
+              </ul>
+            </div>
+          </details>
           {briefHeadline && <div className="min-w-0 flex-1 truncate font-ui text-xs leading-5 text-amber-100/90" title={briefHeadline}>{briefHeadline}</div>}
         </div>
       </div>
@@ -199,6 +273,19 @@ export default function FusionPulseBoard({
       <div className="p-3">
         <div data-testid="lios-pulse-discovery-stories">
         <FusionSection title="Your recorded intelligence" eyebrow="DISCOVER · WHY IT MATTERS · SOURCES · ASK · FOLLOW" className="mb-4" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">OPEN MONITORS</FusionActionButton>}>
+          {pulseStatus === "ready" && pulseReview && <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border/60 px-3 py-3 font-ui text-xs text-foreground" data-testid="pulse-reviewed-continuity">
+            <div className="min-w-0 flex-1" role="status">
+              {pulseReview.status === "not_reviewed" ? "No source review recorded yet." :
+                `${pulseReview.newCount} source-backed card${pulseReview.newCount === 1 ? "" : "s"} added or revised since your saved review.`}
+              {pulseReview.reviewedAt && <span className="ml-2 text-muted-foreground">Last reviewed <time dateTime={pulseReview.reviewedAt}>{new Date(pulseReview.reviewedAt).toLocaleString()}</time></span>}
+            </div>
+            <button type="button" disabled={reviewPending || pulseStatus !== "ready"} onClick={onMarkPulseReviewed}
+              className="min-h-10 rounded-lg border border-amber-300/35 px-3 py-2 font-ui text-xs font-medium text-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              {reviewPending ? "Saving review…" : "Mark accessible sources reviewed"}
+            </button>
+            <p className="w-full font-ui text-xs text-muted-foreground">Review records source-card identity changes, not proof that real-world events changed. This action marks the currently accessible unmuted Pulse as reviewed.</p>
+          </div>}
+          {reviewError && <p role="alert" className="mb-3 font-ui text-xs text-rose-200">{reviewError}</p>}
           {preferenceError && <p role="alert" className="mb-3 rounded-lg border border-rose-300/35 px-3 py-2 font-ui text-sm text-rose-200">{preferenceError}</p>}
           {pulseStatus === "ready" && pulsePreferences.followed.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Followed subjects ({pulsePreferences.followed.length})</summary>
@@ -232,6 +319,7 @@ export default function FusionPulseBoard({
                   featured={index === 0}
                   onAsk={(question) => onAskLios ? onAskLios(question) : onOpen("agent", "current", card.symbol ?? activeSymbol)}
                   onOpenSymbol={(symbol) => onOpen("quote", "current", symbol)}
+                  changedSinceReview={card.clusteredCardIds.some(id => changedSourceCardIds.has(id))}
                   followed={Boolean(normalizePulseSubjectKey(card.subjectKey ?? card.symbol) && pulsePreferences.followed.includes(normalizePulseSubjectKey(card.subjectKey ?? card.symbol)!))}
                   preferencePending={preferencePending}
                   onPreferenceChange={onPulsePreferenceChange}

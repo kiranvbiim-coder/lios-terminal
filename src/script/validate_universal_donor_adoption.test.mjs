@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -153,4 +153,37 @@ test("bundled source admission checks actual regular files and exact package loc
  symlinkSync(path.join(fixture,"outside"),path.join(checkout,"src/linked"),"junction");
  assert.throws(()=>verifyBundledDonorDestinations(manifest(["linked/escape.ts"]),options),/linked/);
  assert.deepEqual(verifyBundledDonorDestinations({components:[{id:"reference",bundled:false,destinationPaths:["server/missing.ts"]}]},options),{sourcePaths:0,npmReferences:0});
+});
+
+test("inactive donors, generic catch-all waves, and fork mirrors cannot silently become active import tasks",()=>{
+ const base=copy();
+ const active=base.ledger.executionPriorities.flatMap(x=>x.donors);
+ assert.equal(active.length,10);
+ assert.equal(new Set(active).size,10);
+ assert.ok(!active.includes("all_other_registered_donors"));
+ assert.ok(!active.includes("FinGPT"));
+ assert.ok(!active.includes("dexter-js"));
+ assert.ok(!active.includes("flexlayout"));
+ assert.ok(base.ledger.baselineDonors.length===92,"preserve source/rights inventory");
+ assert.ok(base.ledger.forkWorkQueue.length===10,"preserve fork provenance");
+ for(const id of ["flexlayout","monaco-editor","all_other_registered_donors","FinGPT","dexter-js"]){
+  const candidate=copy();
+  candidate.ledger.executionPriorities[1].donors.push(id);
+  assert.throws(()=>validateUniversalDonorAdoption(candidate),/Donor has no accepted source adoption|Unknown or unapproved supplemental donor/);
+ }
+ const duplicate=copy();
+ duplicate.ledger.executionPriorities[1].donors.push("openclaw");
+ assert.throws(()=>validateUniversalDonorAdoption(duplicate),/Duplicate active donor/);
+ const noJourney=copy();
+ noJourney.ledger.executionPriorities[0].userJourney="adopt everything";
+ assert.throws(()=>validateUniversalDonorAdoption(noJourney),/named LiOS user journey/);
+ const catchall=copy();
+ catchall.ledger.executionPriorities.push({
+  wave:3,donors:["all_other_registered_donors"],userJourney:"Use every open source reference for the entire application",gate:"Review every repo eventually"});
+ assert.throws(()=>validateUniversalDonorAdoption(catchall),/small, named queue/);
+});
+
+test("OSS audit must execute universal donor adoption gate before source registry review",()=>{
+ const packageData=JSON.parse(readFileSync(new URL("../package.json",import.meta.url),"utf8"));
+ assert.match(packageData.scripts["audit:oss"],/^node script\/validate_universal_donor_adoption\.mjs && node script\/audit_oss_registry\.mjs$/);
 });

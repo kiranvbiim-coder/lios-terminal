@@ -34,4 +34,17 @@ test("Wave D state persists under the existing user preference boundary", async 
   const state = await getWaveDState(actor);
   assert.equal(state.inboxStatuses["inbox:signal:price"], "snoozed");
   assert.ok(state.updatedAt);
+
+  // A05 selected discovery views survive a fresh server-side read from the
+  // existing RLS-bound preference row; nothing is stored in browser storage.
+  const key = "44444444-4444-4444-8444-444444444444";
+  const saved = await updateWaveDState(actor, (current) => ({
+    ...current, pulseSavedViews: [{
+      id: key, name: "Following power", channel: "following",
+      subjectKey: "POWER:SECTOR", createdAt: "2026-10-27T10:00:00.000Z",
+    }],
+  }));
+  assert.equal(saved.pulseSavedViews.length, 1);
+  const restored = await getWaveDState(actor);
+  assert.deepEqual(restored.pulseSavedViews, saved.pulseSavedViews);
 });

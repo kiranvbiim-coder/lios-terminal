@@ -8343,6 +8343,36 @@
   },
   {
    "method": "GET",
+   "path": "/api/wave-d/pulse/views",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/pulse/views",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/pulse/views/:id",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
    "path": "/api/wave-d/report-templates",
    "reachableBy": [
     "internal_analyst",

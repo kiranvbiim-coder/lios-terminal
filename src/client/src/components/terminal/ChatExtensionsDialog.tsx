@@ -94,16 +94,16 @@ export default function ChatExtensionsDialog({
           <section aria-label="MCP connections">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold">MCP connections</h3>
-              {projectId && <button type="button" className="min-h-9 rounded-md border border-border px-2 text-xs" onClick={() => setConnectMcp(value => !value)}>
+              {projectAvailable && projectId && <button type="button" className="min-h-9 rounded-md border border-border px-2 text-xs" onClick={() => setConnectMcp(value => !value)}>
                 {connectMcp ? "Hide setup" : "Connect MCP"}
               </button>}
             </div>
-            {connectMcp && projectId && <ChatMcpConnectForm projectId={projectId} onSaved={() => { void queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] }); }} onCancel={() => setConnectMcp(false)} />}
+            {connectMcp && projectAvailable && projectId && <ChatMcpConnectForm projectId={projectId} onSaved={() => { void queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] }); }} onCancel={() => setConnectMcp(false)} />}
             {verificationNotice && <p role="status" className="mb-2 text-xs">{verificationNotice}</p>}
             {visible.mcp.length ? <ul className="space-y-1.5">{visible.mcp.map(mcp => <li key={mcp.id} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
               <span className="truncate text-sm font-medium">{mcp.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{mcp.status === "healthy" ? "Verified" : "Needs verification"}</span>
-              {mcp.status !== "invalid" && <button type="button" disabled={verifyingId !== null} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50" onClick={() => void verifyMcp(mcp.id)}>{verifyingId === mcp.id ? "Verifying…" : "Verify"}</button>}
+              {projectAvailable && canInspectMcpInChat(projectId, mcp) && <button type="button" disabled={verifyingId !== null} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50" onClick={() => void verifyMcp(mcp.id)}>{verifyingId === mcp.id ? "Verifying…" : "Verify"}</button>}
               {projectAvailable && projectId !== mcp.projectId && <span className="shrink-0 text-xs text-muted-foreground">Another Project</span>}
               {projectAvailable && canInspectMcpInChat(projectId, mcp) && <button
                 type="button"

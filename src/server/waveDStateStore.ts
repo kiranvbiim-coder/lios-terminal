@@ -10,6 +10,7 @@
 import { eq } from "drizzle-orm";
 import { normalizePulseReviewedSnapshot, type PulseReviewedSnapshot } from "./pulseReviewContinuity";
 import { normalizePulseSubjectPreferences, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
+import { normalizePulseSavedViews, type PulseSavedView } from "@shared/pulseSavedViews";
 import { userPersonaPreferences } from "@shared/schema";
 import type {
   CommunicationConnectionRecord,
@@ -34,6 +35,7 @@ const MAX_STATE_BYTES = 48_000;
 export interface WaveDStoredState {
   pulseCards: PulseCardDraft[];
   pulseSubjects: PulseSubjectPreferences;
+  pulseSavedViews: PulseSavedView[];
   pulseReview: PulseReviewedSnapshot;
   signalRules: StoredSignalRule[];
   theses: LivingThesisRecord[];
@@ -52,6 +54,7 @@ export interface WaveDStoredState {
 const EMPTY_STATE: WaveDStoredState = {
   pulseCards: [],
   pulseSubjects: { followed: [], muted: [] },
+  pulseSavedViews: [],
   pulseReview: { reviewedAt: null, fingerprints: [] },
   signalRules: [],
   theses: [],
@@ -77,6 +80,7 @@ function normalizeState(value: unknown): WaveDStoredState {
   const state: WaveDStoredState = {
     pulseCards: Array.isArray(value.pulseCards) ? value.pulseCards.filter(isRecord) as unknown as PulseCardDraft[] : [],
     pulseSubjects: normalizePulseSubjectPreferences(value.pulseSubjects),
+    pulseSavedViews: normalizePulseSavedViews(value.pulseSavedViews),
     pulseReview: normalizePulseReviewedSnapshot(value.pulseReview),
     signalRules: Array.isArray(value.signalRules) ? value.signalRules.filter(isRecord) as unknown as StoredSignalRule[] : [],
     theses: Array.isArray(value.theses) ? value.theses.filter(isRecord) as unknown as LivingThesisRecord[] : [],
@@ -98,6 +102,7 @@ function boundedState(state: WaveDStoredState): WaveDStoredState {
   const next = {
     ...state,
     pulseCards: state.pulseCards.slice(-200),
+    pulseSavedViews: normalizePulseSavedViews(state.pulseSavedViews),
     signalRules: state.signalRules.slice(-100),
     theses: state.theses.slice(-50),
     eventRooms: state.eventRooms.slice(-100),
