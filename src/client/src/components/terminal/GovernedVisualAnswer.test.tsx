@@ -35,6 +35,7 @@ test("C01 reopened Chat visuals require explicit exact-source reauthorization an
   assert.match(source, /cache: "no-store"/);
   assert.match(source, /credentials: "same-origin"/);
   assert.match(source, /controller\.abort\(\)/);
+  assert.match(source, /activeReadRef\.current\?\.abort\(\)/);
   assert.match(source, /const decision = current\.decision\?\.status === "ready" \? current\.decision : null/);
   assert.doesNotMatch(source, /eval\(|dangerouslySetInnerHTML|localStorage|window\.open/);
 });
