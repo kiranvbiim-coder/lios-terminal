@@ -8,6 +8,7 @@ Follow the canonical [UX contract](../LIOS_UX_SYSTEM.md), issue #91, and
 ## Source regression and contrast
 
 - `npm run check`
+- `npm run test:palette:source`
 - `node --import tsx --test client/src/lib/liosProductPalette.test.ts client/src/lib/liosProductExperience.test.ts client/src/lib/terminalThemeLock.test.ts`
 - `npm run test:ux`
 - `npm run test:offline`
@@ -39,6 +40,47 @@ before capturing a screenshot. Capture the DOM's `data-lios-palette`
 and `data-theme` together with the screenshot. These are
 **deterministic source fixtures**, not authenticated real-user journeys;
 native acceptance below remains mandatory.
+
+## Local Electron screenshot matrix (optional; source-fixture only)
+
+There is now an **opt-in, local** capture command built on the existing
+Electron visual-smoke surface. It requires no Playwright dependency, sign-in,
+API key, cloud endpoint, account connector, or private release workflow.
+It must run in a desktop session capable of showing Electron windows.
+
+From the repository's `src/` directory, after installing existing dependencies:
+
+```sh
+# Terminal A: the existing Vite fixture on local loopback only
+npx vite --host 127.0.0.1 --port 4173 --strictPort
+
+# Terminal B: capture 35 fixture screenshots and their measured CSS state
+npm run test:palette:source
+npm run visual:palette:capture
+```
+
+The command covers each of the five palettes with **Project Home, Chat,
+Chat + Artifact and real Dockview on 1440×900**; it also captures
+**Project Home, Chat and Chat + Artifact at 390×844**. Each PNG is saved in
+the new `src/palette-smoke-artifacts/` directory with an SHA-256 digest,
+measured CSS palette variables, computed normal-text contrast, an exact
+viewport/case, and a source-fixture-only qualification label in `manifest.json`.
+Set `LIOS_PALETTE_SMOKE_OUTPUT_DIR` to a **different, unused** absolute path
+for a fresh attempt. Existing evidence directories are never overwritten
+or deleted.
+
+A wrong palette, wrong light/dark setting, unreadable text, missing real
+Dockview, or a stale fixture fails the local source audit. Horizontal
+overflow is recorded as a **review finding** in the manifest, not silently
+treated as good UI. Review **all** warnings and PNGs manually before native
+acceptance. Source-fixture captures do not prove font fidelity on another OS,
+licensed fonts are not bundled, and no authenticated/persisted Artifact path
+is exercised. A manifest that says SOURCE_FIXTURES_PASSED is **not**
+a release certification.
+
+The public distribution intentionally withholds native/signed-app screenshot
+CI workflows. Do **not** add a privileged/release workflow to source-only CI
+or interpret these 35 fixtures as packaged SP/P14 evidence.
 
 ## Rendered journey / native acceptance checklist (evidence pending)
 
