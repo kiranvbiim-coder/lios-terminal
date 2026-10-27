@@ -158,7 +158,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setPulsePreferences(normalizePulseSubjectPreferences(payload.preferences));
       setPulsePreferenceRevision(revision => revision + 1);
     } catch {
-      setPulsePreferenceError("Follow/Mute could not be saved. Your existing choices are unchanged.");
+      setPulsePreferenceError("Could not confirm your Follow/Mute change. Refresh the feed before relying on it.");
     } finally {
       setPulsePreferenceBusy(false);
     }
