@@ -171,4 +171,45 @@ test("proactive attention follows the owner's durable resolve, snooze and reopen
     assert.equal((await call("/api/wave-d/pulse?channel=following")).cards.some((card:{id:string})=>card.id===ownedId),false);
   });
 
+  await t.test("explicit Home review checkpoint persists source-backed revisions per account and never touches Inbox", async () => {
+    const before = await call("/api/wave-d/pulse");
+    assert.equal(before.discoveryChanges.status, "not_reviewed");
+    assert.deepEqual(before.discoveryChanges.newCardIds, []);
+
+    const denied = await fetch(base + "/api/wave-d/pulse/review",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({cardIds:[cardId],sourceClaim:"I reviewed this"}),
+    });
+    assert.equal(denied.status,400,"clients cannot forge reviewed source identities");
+
+    const confirmed = await call("/api/wave-d/pulse/review","POST",{});
+    assert.equal(confirmed.status,"saved");
+    assert.equal(confirmed.persisted,true);
+    assert.equal(confirmed.discoveryChanges.status,"compared");
+    assert.equal((await call("/api/wave-d/pulse")).discoveryChanges.newCount,0);
+
+    const next = await call("/api/wave-d/pulse/cards","POST",{
+      kind:"research", title:"A4 recorded next source revision",
+      whatHappened:"Source metadata was retained",whyItMatters:"Review needed",
+      whyItMattersToUser:"Source-linked issue",nextActions:["analyse"],
+      subjectKey:"A4-WATER",unread:true,thesisRelevance:1,
+      evidence:[{id:"source:a4-water",source:"Actual test fixture source"}],
+    });
+    const after = await call("/api/wave-d/pulse");
+    assert.equal(after.discoveryChanges.status,"compared");
+    assert.equal(after.discoveryChanges.newCardIds.includes(next.card.id),true);
+    assert.equal(after.discoveryChanges.newCount >= 1,true);
+    const secondUser = await call("/api/wave-d/pulse","GET",undefined,"other");
+    assert.equal(secondUser.discoveryChanges.status,"not_reviewed",
+      "one user's acknowledged source hashes cannot appear in another account");
+
+    const inboxBefore=(await call("/api/wave-d/action-inbox")).items;
+    await call("/api/wave-d/pulse/review","POST",{});
+    const refreshed=await call("/api/wave-d/pulse");
+    assert.equal(refreshed.discoveryChanges.newCount,0);
+    assert.equal(refreshed.discoveryChanges.sourceBackedCount >= 1,true);
+    const inboxAfter=(await call("/api/wave-d/action-inbox")).items;
+    assert.deepEqual(inboxAfter,inboxBefore,"reviewed source checkpoint is separate from actionable alert review");
+  });
+
 });
