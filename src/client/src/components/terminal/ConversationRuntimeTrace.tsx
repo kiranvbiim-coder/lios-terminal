@@ -686,12 +686,12 @@ export default function ConversationRuntimeTrace({
       )}
 
       {legacyApproval && (
-        <div className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" data-testid="trace-approval">
+        <div className="mb-3 rounded-xl border border-amber-300/25 bg-gradient-to-br from-amber-300/[0.055] to-transparent p-3 sm:p-4" data-testid="trace-approval">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <div className="font-ui text-[13px] font-semibold text-foreground">Approval required</div>
-              <div className="mt-1 font-ui text-[13px] leading-5 text-muted-foreground">{legacyApproval.message}</div>
+              <div className="font-ui text-sm font-semibold text-foreground">Approval required</div>
+              <div className="mt-2 font-ui text-sm leading-6 text-muted-foreground">{legacyApproval.message}</div>
               <div aria-label="Legacy approval scope and impact" data-testid="legacy-approval-risk" className="mt-2 space-y-1 rounded border border-border/50 p-2 font-ui text-[12px] text-muted-foreground">
                 <p>Action: {legacyReviewFacts(legacyApproval).action} · Component: {legacyReviewFacts(legacyApproval).component} · Target: {legacyReviewFacts(legacyApproval).target}</p>
                 <p>Permission: {legacyReviewFacts(legacyApproval).permission} · {legacyReviewFacts(legacyApproval).sideEffect}</p>
@@ -699,15 +699,15 @@ export default function ConversationRuntimeTrace({
               </div>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => onDeny(legacyApproval.action)} className="flex items-center gap-1 rounded px-2 py-1.5 font-ui text-[12px] text-muted-foreground hover:bg-white/5 hover:text-foreground">
+          <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border/55 pt-3">
+            <button type="button" onClick={() => onDeny(legacyApproval.action)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/60 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70">
               <X className="h-2.5 w-2.5" aria-hidden="true" /> Deny
             </button>
-            <button type="button" onClick={() => onApprove(legacyApproval.action, "once")} disabled={!legacyApproval.choices.includes("allow_once")} className="rounded border border-amber-300/20 px-2 py-1.5 font-ui text-[12px] text-amber-200 hover:bg-amber-300/[0.06]">
+            <button type="button" onClick={() => onApprove(legacyApproval.action, "once")} disabled={!legacyApproval.choices.includes("allow_once")} className="min-h-10 rounded-lg border border-amber-300/35 bg-amber-300/[0.075] px-3 py-2 font-ui text-sm font-semibold text-amber-100 hover:bg-amber-300/[0.13] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">
               Allow once
             </button>
             {allowProjectApproval && legacyApproval.choices.includes("allow_project") && (
-              <button type="button" onClick={() => onApprove(legacyApproval.action, "project")} className="rounded bg-amber-300 px-2 py-1.5 font-ui text-[12px] font-semibold text-black hover:bg-amber-200">
+              <button type="button" onClick={() => onApprove(legacyApproval.action, "project")} className="min-h-10 rounded-lg bg-amber-300 px-3 py-2 font-ui text-sm font-semibold text-black hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70">
                 Allow for Project
               </button>
             )}
