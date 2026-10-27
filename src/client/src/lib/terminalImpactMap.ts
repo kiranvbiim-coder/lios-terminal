@@ -56,9 +56,10 @@ export function matchScenarioAssumptionsToBindings(scenario: TerminalScenario, b
   return scenario.assumptions.flatMap((assumption) => {
     const targetValue = assumption.value;
     if (typeof targetValue !== "number" || !Number.isFinite(targetValue)) return [];
-    const tokens = new Set([normalize(assumption.key), normalize(assumption.label)]);
+    const tokens = new Set([normalize(assumption.key), normalize(assumption.label)].filter(Boolean));
+    if (!tokens.size) return [];
     return bindings.filter(binding =>
-      (tokens.has(normalize(binding.key)) || tokens.has(normalize(binding.label))) &&
+      [normalize(binding.key), normalize(binding.label)].some(token => !!token && tokens.has(token)) &&
       (assumption.unit?.trim().toLocaleLowerCase() ?? "") === (binding.unit?.trim().toLocaleLowerCase() ?? "")
     ).map((binding) => {
       const absoluteDelta = targetValue - binding.value;
