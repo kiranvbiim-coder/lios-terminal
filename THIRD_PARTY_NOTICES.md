@@ -5,6 +5,15 @@
 
 LiOS uses open-source software aggressively, but code licenses, external API/data rights, model-weight licenses, assets, trademarks and service terms are tracked as separate concerns.
 
+
+## beUI — MIT (Workspace Composer motion action)
+
+LiOS selectively adapts `starc007/ui-components` (source snapshot pinned to repository commit `fa3393a3891723d4d2daec1f1d82ead175442f44`), with source paths `components/motion/button/base.tsx`, `lib/ease.ts` and `lib/hooks/use-hover-capable.ts`. The complete MIT license is retained at `src/client/src/components/vendor/beui/LICENSE`. This adaptation uses existing Framer Motion and applies to the existing accessible Workspace Composer's Apply Workspace action; it does not replace the workspace handler, dialog or Artifact safety guard, bundle paid Pro assets, or add an npm dependency. Exact Electron/keyboard/reduced-motion visual qualification is pending.
+
+## Kibo UI — MIT (Workspace tag filtering and governed runtime status)
+
+LiOS selectively adapts `shadcnblocks/kibo` pinned to commit `3d63cdb15b79d972e3dc38a10997987672f9b263` from `packages/status/index.tsx` and `packages/tags/index.tsx`. The complete MIT license is retained at `src/client/src/components/vendor/kibo/LICENSE`. The adaptations drive searchable existing-object tag selection inside Workspace Composer and status indicators reflecting existing Project P9 automation enablement and governed execution-session states. No Kibo app, React 19 upgrade, alternate Project/workflow store, external service, or additional production dependency is included. Source integration is not native/release acceptance.
+
 This file is the human-readable notice entry point. The machine-readable source of truth for major donor/runtime intake is:
 
 - `third_party/components.json`
