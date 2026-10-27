@@ -15,8 +15,8 @@ test("Sprint A retains immutable source pins and full legal notices for reused U
     "openclaw-gm22-byoai-failover",
     "mcp-typescript-sdk-v2-client",
   ];
-  // Each donor has a distinct review scope; a generic allowed-posture list
-  // would let a bounded provider adaptation silently become a full runtime.
+  // Posture is pinned for EACH donor. An allowed-set test could accidentally
+  // relabel a bounded OpenClaw adaptation as a full bundled runtime.
   const expectedPosture = {
     "beui-pulse-discovery-tabs": "adapted_source_component",
     "watermelon-ui-p6-activities": "adapted_source_component",

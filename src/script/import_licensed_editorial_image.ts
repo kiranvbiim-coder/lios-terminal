@@ -20,6 +20,8 @@ import { safePublicSourceUrl } from "../shared/publicSourceUrl";
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 const MAX_MANIFEST = 128 * 1024;
+const MAX_RELEASE_IMAGE_BYTES = 32 * 1024 * 1024;
+const MAX_RELEASE_IMAGES = 128;
 const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
 
 export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publicRoot: string): EditorialMedia {
@@ -46,26 +48,56 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
   }
 
   const folder = path.join(publicRoot, "editorial-media");
-  fs.mkdirSync(folder, { recursive: true });
   const manifest = path.join(folder, "manifest.json");
   let existing: unknown = [];
   if (fs.existsSync(manifest)) {
     if (fs.statSync(manifest).size > MAX_MANIFEST) throw new Error("Image manifest exceeds size limit.");
     existing = JSON.parse(fs.readFileSync(manifest, "utf8"));
   }
-  if (!Array.isArray(existing) || existing.length >= 128) throw new Error("Image manifest must be a bounded JSON array.");
+  if (!Array.isArray(existing) || existing.length >= MAX_RELEASE_IMAGES) {
+    throw new Error("Image manifest must be a bounded JSON array.");
+  }
   if (existing.some(row => row?.sourceEvidenceId === media.sourceEvidenceId)) {
     throw new Error("Article already has a reviewed image; do not overwrite its grant without separate review.");
   }
+
+  // Release verifier must accept every existing record before we append one.
+  // Do not mutate the manifest or leave an orphan binary on a failed preflight.
+  if (existing.length && approvedNewsMediaByUrl(publicRoot, new Date().toISOString()).size !== existing.length) {
+    throw new Error("Existing editorial release manifest contains unapproved or missing media.");
+  }
   const destination = path.join(folder, path.basename(assetPath));
+  const currentFiles = fs.existsSync(folder)
+    ? fs.readdirSync(folder, { withFileTypes: true }).filter(entry => entry.name !== "manifest.json")
+    : [];
+  const currentImageBytes = currentFiles.reduce((bytes, entry) => {
+    const file = path.join(folder, entry.name);
+    if (!entry.isFile()) throw new Error("Existing editorial assets must be regular files.");
+    return bytes + fs.statSync(file).size;
+  }, 0);
+  // A stale file from a failed import is not a licensed ship target. Reject
+  // the bundle until the operator explicitly reconciles it; never hide it in
+  // an otherwise valid manifest or create another unreferenced binary.
+  const referenced = new Set(existing.map(row => row.assetPath?.split("/").at(-1)));
+  if (currentFiles.some(entry => !referenced.has(entry.name))) {
+    throw new Error("Existing editorial assets include unreferenced or orphaned files.");
+  }
+  const alreadyBundled = currentFiles.some(entry => entry.name === path.basename(destination));
+  if (currentImageBytes + (alreadyBundled ? 0 : bytes.length) > MAX_RELEASE_IMAGE_BYTES) {
+    throw new Error("Editorial images would exceed the 32 MiB release-size budget.");
+  }
+  // New grant text is fully validated before copying any binary.
+  const next = JSON.stringify([...existing, media], null, 2) + "\n";
+  if (Buffer.byteLength(next) > MAX_MANIFEST) {
+    throw new Error("New manifest would exceed maximum size.");
+  }
+  fs.mkdirSync(folder, { recursive: true });
   if (fs.existsSync(destination)) {
     const saved = fs.readFileSync(destination);
     if (!saved.equals(bytes)) throw new Error("Existing content-addressed image differs from the approved bytes.");
   } else {
     fs.writeFileSync(destination, bytes, { flag: "wx" });
   }
-  const next = JSON.stringify([...existing, media], null, 2) + "\n";
-  if (Buffer.byteLength(next) > MAX_MANIFEST) throw new Error("New manifest would exceed maximum size.");
   const temporary = manifest + ".pending-" + process.pid;
   try {
     fs.writeFileSync(temporary, next, { flag: "wx" });
