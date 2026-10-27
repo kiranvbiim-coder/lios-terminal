@@ -47,9 +47,13 @@ export interface OHLCVSeries {
   supportsIntraday: boolean;
 }
 
+import type { EditorialMedia } from "@shared/editorialMedia";
+
 export interface NewsItem {
   title: string;
   summary: string;
+  /** Only eligible, locally bundled, rights-verified assets may render. */
+  media?: EditorialMedia;
   url: string;
   source: string;
   feedProvider: string;
