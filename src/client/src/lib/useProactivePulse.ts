@@ -45,6 +45,24 @@ export type ProactiveInboxReviewState =
   | { state: "ready"; review: ActionInboxReview }
   | { state: "unavailable" | "not_authorized"; review: null };
 
+/**
+ * The same server endpoint and parser power passive checks and explicit
+ * user-clicked revalidation. Denial is not "zero alerts"; no retry or action
+ * submission happens here.
+ */
+export async function readEntitledActionInbox(signal: AbortSignal): Promise<ProactiveInboxReviewState> {
+  const response = await fetch("/api/wave-d/action-inbox", {
+    method: "GET", credentials: "same-origin", cache: "no-store", signal,
+  });
+  if (!response.ok) {
+    return { state: response.status === 401 || response.status === 403
+      ? "not_authorized" : "unavailable", review: null };
+  }
+  const parsed = parseActionInboxReview(await response.json() as unknown);
+  return parsed.status === "ready" ? { state: "ready", review: parsed }
+    : { state: "unavailable", review: null };
+}
+
 export function useProactiveInboxReview(enabled: boolean): {
   result: ProactiveInboxReviewState;
   refresh: () => void;
@@ -67,18 +85,9 @@ export function useProactiveInboxReview(enabled: boolean): {
       pending = true;
       setResult({ state: "loading", review: null });
       try {
-        const response = await fetch("/api/wave-d/action-inbox", {
-          method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
-        });
+        const next = await readEntitledActionInbox(controller.signal);
         if (!current || controller.signal.aborted) return;
-        if (!response.ok) {
-          setResult({ state: response.status === 401 || response.status === 403 ? "not_authorized" : "unavailable", review: null });
-          return;
-        }
-        const parsed = parseActionInboxReview(await response.json() as unknown);
-        if (!current || controller.signal.aborted) return;
-        setResult(parsed.status === "ready" ? { state: "ready", review: parsed }
-          : { state: "unavailable", review: null });
+        setResult(next);
       } catch {
         if (current && !controller.signal.aborted) setResult({ state: "unavailable", review: null });
       } finally {
