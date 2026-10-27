@@ -1153,7 +1153,11 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         </div>
       )}
 
-      <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onApplyWorkspace={applyWorkspace} />
+      <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onStageAiReview={(draft) => {
+        if (workbenchDirtyRef.current || !draft.trim()) return false;
+        handleAskLios(draft);
+        return true;
+      }} onApplyWorkspace={applyWorkspace} />
     </div>
     </NativeArtifactDraftOwnerContext.Provider>
     </TerminalArtifactRendererProvider>

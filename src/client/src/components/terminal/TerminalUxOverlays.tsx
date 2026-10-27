@@ -60,6 +60,7 @@ interface Props {
   preferences: TerminalUxPreferences;
   onPreferencesChange: (preferences: TerminalUxPreferences) => void;
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+  onStageAiReview: (draft: string) => boolean;
   onApplyWorkspace?: (workspace: WorkspaceState, label?: string) => boolean | void;
 }
 
@@ -80,7 +81,7 @@ function snapshotValuesFromEvidence(evidence: EvidenceSnapshot): Record<string, 
   ]));
 }
 
-export default function TerminalUxOverlays({ experienceSurface, activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace }: Props) {
+export default function TerminalUxOverlays({ experienceSurface, activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onStageAiReview, onApplyWorkspace }: Props) {
   const [surface, setSurface] = useState<TerminalUxSurface | null>(null);
   const [researchOpened, setResearchOpened] = useState(false);
   // Overlay-local only: survives a Studio → Workbench → Studio handoff while
@@ -261,7 +262,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {peek && !surface && !contextMenu && !inspector && <AnalyticalPeek request={peek} isInternal={isInternal} onOpen={onOpen} onClose={() => setPeek(null)} />}
       {inspector && !surface && !contextMenu && <MiniInspector request={inspector} onOpen={onOpen} onClose={() => setInspector(null)} />}
       {surface === "cognitive-core" && <CognitiveCore activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
-      {surface === "intelligence-pulse" && <IntelligencePulse onOpen={onOpen} onClose={() => setSurface(null)} />}
+      {surface === "intelligence-pulse" && <IntelligencePulse onOpen={onOpen} onStageAiReview={onStageAiReview} onClose={() => setSurface(null)} />}
       {surface === "impact-map" && <ImpactMap onOpen={onOpen} onClose={() => setSurface(null)} />}
       {surface === "trust-ledger" && <TrustLedger onClose={() => setSurface(null)} />}
       {surface === "decision-drift" && <DecisionDrift onClose={() => setSurface(null)} />}
