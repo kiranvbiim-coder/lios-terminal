@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
 const search = readFileSync(new URL("../components/terminal/WorkSearchDialog.tsx", import.meta.url), "utf8");
 const bookmark = readFileSync(new URL("./conversationArtifactView.ts", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../lios-product-experience.css", import.meta.url), "utf8");
 
 test("saved-work search is accessible from both navigation and the Artifact directory", () => {
   assert.match(shell, /onSearch=\{requestWorkSearch\}/);
@@ -57,4 +58,9 @@ test("secondary navigation preserves active response, unsaved Artifact, and dire
   assert.match(shell, /onTrash=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
   assert.match(shell, /onMigrate=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
   assert.match(shell, /onClick=\{\(\) => \{ setSection\("conversation"\); setProjectHomeRequested\(false\); setShowLifecycleCenter\(false\); \}\}>Back to chat/);
+});
+
+test("History actions remain operable without hover on touch while desktop stays quiet", () => {
+  assert.match(shell, /className="lios-history-action-menu opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"/);
+  assert.match(styles, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*\.terminal-root \.lios-history-action-menu,[\s\S]*opacity: 1 !important/);
 });
