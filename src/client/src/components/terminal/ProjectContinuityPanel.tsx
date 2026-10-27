@@ -107,7 +107,25 @@ export function ProjectContinuityPanel({
       </div>
 
       {message && <div role="status" className="mt-3 rounded border border-border/50 bg-background/60 px-3 py-2 font-ui text-[13px] leading-5 text-foreground">{message}</div>}
-      {continuity.isError && <div role="alert" className="mt-3 rounded border border-red-400/20 bg-red-400/[0.03] px-3 py-2 font-ui text-sm text-destructive">This Project's continuity could not be loaded or did not match its identity. Reload before acting.</div>}
+      {continuity.isError && (
+        <div role="alert" className="mt-3 space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3 font-ui text-sm">
+          <p className="text-destructive">
+            This Project's Continuity could not be loaded or did not match its identity. Recorded work is unavailable until a verified read succeeds.
+          </p>
+          <button
+            type="button"
+            disabled={continuity.isFetching}
+            aria-busy={continuity.isFetching}
+            onClick={() => void continuity.refetch()}
+            className="inline-flex min-h-11 items-center rounded-lg border border-border px-3 py-2 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
+          >
+            {continuity.isFetching ? "Retrying read…" : "Retry read-only load"}
+          </button>
+          <p className="text-xs text-muted-foreground">
+            Retry only requests this Project's existing saved Continuity. It does not recompute or create a snapshot, run a workflow, or act on other Projects.
+          </p>
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
         <Metric label="Continue" value={snapshot ? snapshot.counts.continuationItems : "—"} />
