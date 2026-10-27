@@ -1,5 +1,6 @@
 /** Wave D continuous-intelligence contracts backed by existing terminal data. */
 import crypto from "node:crypto";
+import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { requireRole } from "./auth";
@@ -170,6 +171,7 @@ const pulseFilterSchema = z.object({
 }).strict();
 
 const pulseCardSchema = z.object({
+  media: editorialMediaSchema.optional(),
   id: z.string().trim().min(1).max(240).optional(),
   kind: z.enum(["news", "market_move", "earnings", "portfolio", "valuation", "research", "email", "alert", "macro", "ai_insight", "workflow", "report", "community_idea"]),
   title: z.string().trim().min(1).max(240),
@@ -446,6 +448,9 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
   app.post("/api/wave-d/pulse/cards", requireRole(...AUTHOR_ROLES), async (req, res) => {
     const parsed = pulseCardSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid Pulse card.", issues: parsed.error.issues });
+    if (parsed.data.media && !eligibleEditorialMedia(parsed.data.media, parsed.data.evidence.map(item => item.id), new Date().toISOString())) {
+      return res.status(400).json({ error: "Editorial image not approved, expired or unlinked from recorded evidence." });
+    }
     const card: PulseCardDraft = { ...parsed.data, id: id("pulse", parsed.data.id), createdAt: parsed.data.createdAt ?? new Date().toISOString(), evidence: parsed.data.evidence };
     try {
       const state = await updateWaveDState(waveUser(req), (current) => ({ ...current, pulseCards: [...current.pulseCards.filter((item) => item.id !== card.id), card] }));
