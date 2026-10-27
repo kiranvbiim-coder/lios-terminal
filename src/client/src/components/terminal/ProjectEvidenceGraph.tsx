@@ -179,7 +179,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
         </div> : <p className="mt-2 text-muted-foreground">Select a node or an edge from the lists. Source IDs are references, not public URLs or proof of causality.</p>}
       </section>
       <section aria-label="Recorded relationship list" className="min-w-0 space-y-2 rounded-lg border border-border/55 p-3">
-        <h5 className="font-ui text-sm font-semibold text-foreground">Visible recorded relationships ({visibleEdges.length})</h5>
+        <h5 className="font-ui text-sm font-semibold text-foreground">Recorded relationships (visible {visibleEdges.length})</h5>
         {visibleEdges.length ? <ul className="max-h-48 space-y-1 overflow-y-auto">
           {visibleEdges.map(item => <li key={item.id}>
             <button type="button" aria-pressed={chosenEdge === item.id} onClick={() => selectEdge(item.id)}
