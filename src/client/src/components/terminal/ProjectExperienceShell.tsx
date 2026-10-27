@@ -33,6 +33,7 @@ import { resolveEntrySurface, resolveInitialChatMode } from "@/lib/projectEntry"
 import { ProjectHome, relativeTime } from "./ProjectHome";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { HomeAttentionPanel } from "./HomeAttentionPanel";
+import { pulseStoryQuestion } from "@/lib/pulseStoryPresentation";
 import { AuthenticatedNavigation, type NavigationSection } from "./AuthenticatedNavigation";
 import WorkSearchDialog from "./WorkSearchDialog";
 import type { WorkSearchResult } from "@shared/workSearch";
@@ -2062,6 +2063,20 @@ export default function ProjectExperienceShell({
         opener={workSearchOpener.current}
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
+        intelligenceEnabled={chatMode !== "temporary"}
+        onAskIntelligence={(card) => {
+          // A search discovery never runs a model or changes Project scope.
+          // Existing unsent Chat work is preserved and the user must press Send.
+          if (chatMode === "temporary" || busy || busyRef.current || sendInFlightRef.current ||
+            chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) return false;
+          setInput(current => stageUniversalChatQuestion(current, pulseStoryQuestion(card)));
+          setSection("conversation");
+          setProjectHomeRequested(false);
+          setShowLifecycleCenter(false);
+          setContextOpen(false);
+          requestAnimationFrame(() => composerRef.current?.focus());
+          return true;
+        }}
       />
       <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
         onSection={(next) => {
