@@ -10,6 +10,8 @@ import * as React from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Newspaper } from "lucide-react";
 import type { ReactNode } from "react";
+import type { EditorialMedia } from "@shared/editorialMedia";
+import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 
 type Sentiment = "positive" | "negative" | "neutral";
 
@@ -24,6 +26,8 @@ interface NewsEditorialStoryCardProps {
   active: boolean;
   lead: boolean;
   onSelect: () => void;
+  media?: EditorialMedia;
+  sourceEvidenceId?: string;
 }
 
 const tone: Record<Sentiment, string> = {
@@ -35,7 +39,7 @@ const tone: Record<Sentiment, string> = {
 /** Presentation only: the parent remains the sole owner of selection and the article. */
 export default function NewsEditorialStoryCard({
   title, summary, source, publishedAt, ageLabel, sentiment = "neutral",
-  statusBadge, active, lead, onSelect,
+  statusBadge, active, lead, onSelect, media, sourceEvidenceId,
 }: NewsEditorialStoryCardProps) {
   const reduceMotion = useReducedMotion();
 
@@ -56,7 +60,8 @@ export default function NewsEditorialStoryCard({
         ? "border-amber-300/50 bg-amber-300/[0.065] shadow-[inset_3px_0_0_rgba(252,211,77,0.75)]"
         : "border-border/60 bg-white/[0.015] hover:border-border hover:bg-white/[0.035]"}`}
     >
-      {lead && (
+      {lead && media && sourceEvidenceId && <LicensedEditorialImage media={media} sourceIds={[sourceEvidenceId]} className="mb-3" />}
+      {lead && !media && (
         <div
           className="pointer-events-none relative mb-3 flex h-16 items-center justify-between overflow-hidden rounded-lg border border-border/35 bg-[radial-gradient(circle_at_85%_25%,rgba(251,191,36,0.13),transparent_64%)] px-4"
           aria-hidden="true"
