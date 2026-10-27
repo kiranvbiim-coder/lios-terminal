@@ -55,7 +55,16 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const notificationsQuery = useP9Notifications(projectId);
   const invalidate = useInvalidateP9Automation();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  // Manual runs and receipt checks can finish after this mounted panel switches
+  // Projects. Keep every presentation receipt bound to its originating Project.
+  const selectedProject = useRef(projectId);
+  selectedProject.current = projectId;
+  const [messageReceipt, setMessageReceipt] = useState<{ projectId: number; text: string } | null>(null);
+  const message = messageReceipt?.projectId === projectId ? messageReceipt.text : null;
+  const setMessage = (text: string | null) => {
+    if (selectedProject.current !== projectId) return;
+    setMessageReceipt(text === null ? null : { projectId, text });
+  };
   const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
   const [attempts, setAttempts] = useState(() => listP9ManualRunAttempts(projectId));
   const confirming = useRef(false);
@@ -68,8 +77,6 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     try { return p9EventFiltersSchema.safeParse(JSON.parse(eventFiltersDraft)); }
     catch { return null; }
   }, [eventFiltersDraft]);
-  const selectedProject = useRef(projectId);
-  selectedProject.current = projectId;
   const managementInFlight = useRef(false);
   useEffect(() => {
     setCreateKind(null); setReview(null); setMessage(null);
