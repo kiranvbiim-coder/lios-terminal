@@ -9,8 +9,8 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "7563600059e7d93cae03462ecb4df28da3a1b82d",
-    "upstreamPinsSha": "612fb9fef1502260f837dd193f284cb1a8b93c3b",
+    "componentsSha": "56d4b6d31f7379240a74240f8727c4243f344991",
+    "upstreamPinsSha": "ff540d7100d389797e4e6fcc32780d65bafcf52a",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
   "releaseClaims": {
@@ -4191,45 +4191,35 @@
         "openclaw",
         "qlib",
         "tradingagents",
-        "langalpha"
+        "univer",
+        "echarts",
+        "docling"
       ],
-      "mode": "finish_canonical_in_flight_adaptations",
-      "gate": "GM owner, P11 math, P5/P7 permission and model rights; no overlapping branch merges"
+      "mode": "finish_existing_canonical_integrations_not_expand_donor_count",
+      "userJourney": "Reliable governed AI/execution, quantitative analysis, evidence-backed research, spreadsheet/chart artifacts and local document ingestion",
+      "gate": "complete current exact-head CI, scoped consumer tests, local native runtime and installed-app acceptance before promoting imported code"
     },
     {
       "wave": 2,
       "donors": [
+        "langalpha",
         "FinRobot",
-        "FinGPT",
         "graphrag",
-        "browser-use",
-        "cua"
+        "browser-use"
       ],
-      "mode": "verify_existent_forks_and_select_complete_packages",
-      "gate": "source path licenses/model and market data rights; no alternate execution or knowledge authority"
-    },
-    {
-      "wave": 3,
-      "donors": [
-        "dexter-js",
-        "dexter",
-        "fin-agent",
-        "pydantic-ai",
-        "docling",
-        "univer"
-      ],
-      "mode": "compare_overlap_and_select_specialized_mechanics",
-      "gate": "fork lineage, source license, donor dependency closure, canonical user journey"
-    },
-    {
-      "wave": 4,
-      "donors": [
-        "all_other_registered_donors"
-      ],
-      "mode": "work_through_remaining_92_by_canonical_owner_and_shipping_point",
-      "gate": "no adoption by quota; preserve rejected/optional/reference-only with evidence"
+      "mode": "finish_already_selected_bounded_adaptations_only_where_existing_lios_consumer_needs_them",
+      "userJourney": "Source-backed research provenance, defensible financial briefings, evidence relationships and contained browser research",
+      "gate": "verify existing P7/P4/GM ownership, source rights, source-consumer behavior, permission gates and native qualification; no new agent/store/browser authority"
     }
   ],
+  "activeQueuePolicy": {
+    "purpose": "Only named LiOS capability gaps with verified existing source adoption may be scheduled; inventory is not a task list",
+    "maxActiveDonors": 12,
+    "historicalDonorsRetainedFor": ["upstream source provenance", "license and attribution", "audit decisions", "revisiting a specific proved user need"],
+    "promotionRequired": ["named LiOS user journey and demonstrated gap", "current existing component benchmark", "exact source/pin and rights review", "canonical consumer and negative tests", "installed-target acceptance plan"],
+    "automaticPromotionFromDocumentedOrReference": false,
+    "forkExistenceIsAdoption": false
+  },
   "supplementalSelectedSourceAdoptions": [
     {
       "id": "graphrag",
