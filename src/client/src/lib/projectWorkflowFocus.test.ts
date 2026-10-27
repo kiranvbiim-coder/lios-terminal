@@ -75,6 +75,7 @@ test("actual Project Continuity consumer and P9 rows preserve exact identity and
 test("continuity surrounding controls no longer rely on illegibly small 6–8px typography", () => {
   const continuity = readFileSync(new URL("../components/terminal/ProjectContinuityPanel.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(continuity, /text-\[(?:6|7|8)px\]/);
-  assert.match(continuity, /min-h-10/);
+  assert.match(continuity, /min-h-11/);
+  assert.match(continuity, /motion-safe:animate-spin/);
   assert.match(continuity, /text-muted-foreground/);
 });
