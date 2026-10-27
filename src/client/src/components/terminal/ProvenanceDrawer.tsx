@@ -5,6 +5,7 @@ import {
   type CalculationReceipt, type EvidenceSnapshot, type ProvenanceRecord,
 } from "@/lib/terminalEvidence";
 import { filterPublishedSources, safePublishedSourceUrl, summarizePublishedSources, type SourceReviewFilter } from "@/lib/sprintBSourceReview";
+import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 
 function ProvenanceCard({ item }: { item: ProvenanceRecord }) {
   const safeUrl = safePublishedSourceUrl(item.sourceUrl);
@@ -56,10 +57,11 @@ export default function ProvenanceDrawer({ onClose }: { onClose: () => void }) {
   const review = useMemo(() => summarizePublishedSources(snapshot.provenance), [snapshot.provenance]);
   const visibleSources = useMemo(() => filterPublishedSources(snapshot.provenance, query, filter), [snapshot.provenance, query, filter]);
   useEffect(() => subscribeEvidence(setSnapshot), []);
+  const drawerRef = useManagedOverlayFocus(onClose, false);
 
   return (
-    <aside className="fixed bottom-0 right-0 top-0 z-[75] flex w-full max-w-xl flex-col border-l border-border bg-[#080808] shadow-2xl" aria-label="Evidence and provenance drawer">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3"><Database className="h-4 w-4 text-cyan-300" /><div className="min-w-0 flex-1"><div className="font-terminal text-[10px] font-bold tracking-widest text-foreground">EVIDENCE & PROVENANCE</div><div className="mt-1 font-terminal text-[8px] text-muted-foreground">Inspect real source metadata published by the active analytical surface.</div></div><button onClick={onClose} className="border border-border p-1.5 text-muted-foreground hover:text-foreground" aria-label="Close evidence drawer"><X className="h-3.5 w-3.5" /></button></header>
+    <aside ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="false" data-sprint-c-visual="evidence" className="fixed bottom-0 right-0 top-0 z-[75] flex w-full max-w-xl flex-col border-l border-border bg-[#080808] shadow-2xl" aria-label="Evidence and provenance drawer">
+      <header className="flex items-center gap-2 border-b border-border px-4 py-3"><Database className="h-4 w-4 text-cyan-300" /><div className="min-w-0 flex-1"><div className="font-terminal text-[10px] font-bold tracking-widest text-foreground">EVIDENCE & PROVENANCE</div><div className="mt-1 font-terminal text-[8px] text-muted-foreground">Inspect real source metadata published by the active analytical surface.</div></div><button type="button" data-overlay-initial-focus onClick={onClose} className="min-h-11 min-w-11 border border-border p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" aria-label="Close evidence drawer"><X className="h-3.5 w-3.5" /></button></header>
       <nav className="flex border-b border-border" aria-label="Evidence sections">{(["sources", "receipts"] as const).map((item) => <button key={item} type="button" aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)} className={`min-h-11 flex-1 px-3 py-2 font-ui text-xs ${tab === item ? "bg-cyan-500/[0.06] text-cyan-300" : "text-muted-foreground hover:text-foreground"}`}>{item === "sources" ? `Sources (${snapshot.provenance.length})` : `Calculation receipts (${snapshot.receipts.length})`}</button>)}</nav>
       {tab === "sources" && <div className="space-y-3 border-b border-border/70 p-3">
         <p className="font-ui text-xs leading-5 text-muted-foreground">These counts describe published metadata, not independent verification, a source-quality score or a live feed.</p>
@@ -87,7 +89,36 @@ export default function ProvenanceDrawer({ onClose }: { onClose: () => void }) {
         <p role="status" className="font-ui text-xs text-muted-foreground">{visibleSources.length} of {review.recorded} recorded sources shown</p>
       </div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-3 scrollbar-thin">
-        {tab === "sources" ? snapshot.provenance.length ? visibleSources.length ? <div className="space-y-2">{visibleSources.map((item) => <ProvenanceCard key={item.id} item={item} />)}</div> : <p role="status" className="rounded-lg border border-dashed border-border/70 p-5 font-ui text-sm text-muted-foreground">No published sources match this search and review filter. Clear filters to inspect all recorded sources.</p> : <div className="flex min-h-64 flex-col items-center justify-center border border-dashed border-border p-6 text-center"><RefreshCw className="h-5 w-5 text-muted-foreground" /><div className="mt-3 font-terminal text-[9px] text-foreground">NO SOURCE METADATA PUBLISHED YET</div><p className="mt-2 max-w-sm font-terminal text-[8px] leading-relaxed text-muted-foreground">This drawer does not invent provenance. Panels publish provider, freshness, lineage, assumptions, conflicts, and fallback information when they actually have it.</p></div> : snapshot.receipts.length ? <div className="space-y-2">{snapshot.receipts.map((receipt) => <ReceiptCard key={receipt.id} receipt={receipt} />)}</div> : <div className="flex min-h-64 flex-col items-center justify-center border border-dashed border-border p-6 text-center"><FileCheck2 className="h-5 w-5 text-muted-foreground" /><div className="mt-3 font-terminal text-[9px] text-foreground">NO CALCULATION RECEIPTS PUBLISHED YET</div><p className="mt-2 max-w-sm font-terminal text-[8px] leading-relaxed text-muted-foreground">Deterministic engines can publish inputs, parameters, outputs, diagnostics, warnings, versions, and reproducibility IDs here.</p></div>}
+        {tab === "sources" && (
+          snapshot.provenance.length === 0 ? (
+            <div role="status" className="flex min-h-64 flex-col items-center justify-center border border-dashed border-border p-6 text-center">
+              <RefreshCw className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 font-ui text-sm font-semibold text-foreground">No source metadata published yet</h3>
+              <p className="mt-2 max-w-sm font-ui text-xs leading-5 text-muted-foreground">
+                Only panels with recorded provider metadata, freshness, lineage, assumptions or conflicts can publish evidence.
+              </p>
+            </div>
+          ) : visibleSources.length === 0 ? (
+            <p role="status" className="rounded-lg border border-dashed border-border/70 p-5 font-ui text-sm text-muted-foreground">
+              No published sources match this search and review filter. Clear filters to inspect all recorded sources.
+            </p>
+          ) : (
+            <div className="space-y-2">{visibleSources.map(item => <ProvenanceCard key={item.id} item={item} />)}</div>
+          )
+        )}
+        {tab === "receipts" && (
+          snapshot.receipts.length === 0 ? (
+            <div role="status" className="flex min-h-64 flex-col items-center justify-center border border-dashed border-border p-6 text-center">
+              <FileCheck2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 font-ui text-sm font-semibold text-foreground">No calculation receipts published yet</h3>
+              <p className="mt-2 max-w-sm font-ui text-xs leading-5 text-muted-foreground">
+                Deterministic engines can publish inputs, parameters, outputs, diagnostics, warnings, versions and reproducibility IDs here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">{snapshot.receipts.map(receipt => <ReceiptCard key={receipt.id} receipt={receipt} />)}</div>
+          )
+        )}
       </div>
     </aside>
   );

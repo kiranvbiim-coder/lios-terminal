@@ -45,6 +45,7 @@ import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
 import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
 
+
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
 type StudioTab = SpatialStudioTab;
 
