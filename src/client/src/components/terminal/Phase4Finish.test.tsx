@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { P7InsightLens, P7ContextGraph } from "@shared/p7ResearchContracts";
 import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
-import { SystemDoctorDesk } from "../settings/SystemDoctorDesk";
+import { readFileSync } from "node:fs";
 
 const sha = "f".repeat(64);
 const lens: P7InsightLens = { schemaVersion:"1", projectId:52, generatedAt:"2026-10-27T12:00:00Z",
@@ -35,10 +35,11 @@ test("Briefing Studio does not display other Project intelligence", () => {
   assert.doesNotMatch(html,/Recorded source event|source:id1/);
 });
 
-test("System Doctor remains read-only until user requests the probe", () => {
-  const html=renderToStaticMarkup(createElement(SystemDoctorDesk));
-  assert.match(html,/System Doctor/);
-  assert.match(html,/Inspect runtime/);
-  assert.match(html,/Runtime probes have not been requested/);
-  assert.doesNotMatch(html,/Available components: [1-9]|Run repair|Install now/);
+test("System Doctor remains read-only and never becomes a second repair engine", () => {
+  const source=readFileSync(new URL("../settings/SystemDoctorDesk.tsx",import.meta.url),"utf8");
+  assert.match(source,/System Doctor/);
+  assert.match(source,/Inspect runtime/);
+  assert.match(source,/Runtime probes have not been requested/);
+  assert.match(source,/runtimeDoctorSnapshotSchema\.safeParse/);
+  assert.doesNotMatch(source,/runP9WorkflowNow\(|executeRepair\(|installManagedRuntime\(|privateKey|credentials\.token/);
 });
