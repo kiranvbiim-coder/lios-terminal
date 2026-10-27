@@ -25,6 +25,38 @@ selection, source status and reader. It excludes upstream demo media, remote
 assets, modal, standalone store, paid packages and new runtime dependencies.
 This grants code reuse only; it does not grant publisher photograph or article rights.
 
+
+### Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`
+adapts Watermelon's open/close spring-card and icon/activity-row composition
+from `WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17`,
+source `src/components/watermelon-ui/activities-card-base.tsx` (Git blob
+`fac632b2675dff9d1199b038285ef4e58a520601`).
+Copyright (c) 2025-present Watermelon Contributors; full MIT grant:
+`third_party/licenses/watermellon-registry-MIT.txt`.
+
+LIOS replaces demo activities, speculative timestamps, mobile window-size
+observers and donor-only styling with the real P6 Project continuation queue,
+bounded and permission-aware existing decision/workflow actions, reduced-motion
+support and honest unavailable/empty states. No parallel Project event store or
+third-party images are imported.
+
+### beUI — Pulse discovery navigation adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` adapts
+the controlled tabs, directional keyboard movement and selected spring-indicator
+patterns from `starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a`,
+source `components/motion/tabs.tsx` (Git blob
+`ed65ffad1ea648850ce29a874ea6eee28d032896`).
+Copyright (c) 2026 Saurabh Chauhan; full MIT grant retained at
+`third_party/licenses/beui-MIT.txt`.
+
+LIOS uses its existing React 18, Framer Motion and Tailwind 3 components,
+with Wave D's exact four channel controls and callbacks, keyboard/RTL and
+reduced-motion support. The donor's Motion 12 runtime, unrelated tabs panels,
+demo content and alternative feed or routing authority are not imported.
+
 The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook selects the locked production/optional/peer dependency closure plus the explicitly retained TypeScript operator-tool root, preserving original installation paths. This is not a `dev`-flag filter: any development-marked package reached by that closure remains included, and the auditor inventories **every package actually copied**, including unexpected extras. Build-only exclusion is a reachability decision, never a license ignore list.
 
 The desktop ASAR rebuild retains this notice file, the root proprietary original-code `LICENSE`, the complete `third_party/licenses/` tree and full selected package payloads, including LICENSE/COPYING/NOTICE files, README grants, legal directories and source attribution headers. Binary resources also carry an ordinary-text copy of these root legal materials under `Resources/legal` (`resources/legal` on platforms using that directory spelling), so accompanying notices can be read without extracting ASAR. Unknown/restricted terms, missing metadata, missing/tampered reviewed grants, lock drift and untracked copied packages block binary packaging. Preserved bytes and source rights reviews do not establish signing, exact-target release qualification or complete sidecar/sandbox/model/data/asset rights.
