@@ -151,6 +151,11 @@ jobs:
         timeout-minutes: 5
         run: npm run test:website-d1
 
+      - name: D2 actual Office roundtrip and bounded P4 provenance
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: npm run test:website-d2
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5

@@ -59,7 +59,9 @@ export function buildProjectBriefingReport(input: BriefingDraftInput): {
     const owner = input.sources.find(source => source.id === visual.artifactId);
     if (!owner || owner.projectId !== input.projectId || visual.projectId !== input.projectId ||
         owner.headVersion !== visual.version || owner.kind !== visual.content.kind ||
-        !/^[a-f0-9]{64}$/.test(visual.contentHash) || !visual.sourceRefs.length) {
+        !/^[a-f0-9]{64}$/.test(visual.contentHash) ||
+        !Array.isArray(visual.sourceRefs) || visual.sourceRefs.length < 1 || visual.sourceRefs.length > 100 ||
+        visual.sourceRefs.some(ref => typeof ref !== "string" || !ref.trim() || ref.length > 1000)) {
       throw new Error("A saved visual must match an explicitly selected exact Project source version.");
     }
   }
