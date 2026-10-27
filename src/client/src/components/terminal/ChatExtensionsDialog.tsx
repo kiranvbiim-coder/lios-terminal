@@ -78,9 +78,9 @@ export default function ChatExtensionsDialog({
         </section>}
       </div>
       <div className="flex shrink-0 items-center justify-between border-t border-border pt-3">
-        <button type="button" className="min-h-10 rounded-md border border-border px-3 text-sm" onClick={() => setManage(current => !current)}>
+        {catalog.data?.managementAvailable ? <button type="button" className="min-h-10 rounded-md border border-border px-3 text-sm" onClick={() => setManage(current => !current)}>
           {manage ? "Hide management" : "Manage installed plugins"}
-        </button>
+        </button> : <p className="text-xs text-muted-foreground">Installation is managed by the Home owner.</p>}
         <button type="button" className="min-h-10 rounded-md px-3 text-sm" onClick={() => onOpenChange(false)}>Done</button>
       </div>
     </DialogContent>
