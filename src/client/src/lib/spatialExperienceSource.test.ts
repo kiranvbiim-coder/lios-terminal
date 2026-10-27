@@ -6,12 +6,13 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const canvas = read("../components/terminal/SpatialResearchCanvas.tsx");
 const styles = read("../visual-intelligence-canvas.css");
 const shell = read("../components/terminal/AnalyticalStudio.tsx");
+const motionPolicy = read("./spatialMotionPolicy.ts");
 const overlays = read("../components/terminal/TerminalUxOverlays.tsx");
 const visualCanvas = read("../components/terminal/VisualCanvas.tsx");
 const uxSettings = read("../components/terminal/TerminalUxSettings.tsx");
 
 test("Phase 2 spatial research stays inside the existing Studio and opens the existing Workbench", () => {
-  assert.match(shell, /<SpatialResearchCanvas initialReturnState=\{spatialCanvasReturn\}/);
+  assert.match(shell, /<SpatialResearchCanvas preferences=\{preferences\} initialReturnState=\{spatialCanvasReturn\}/);
   assert.match(canvas, /onOpen\(item\.view, "tab", item\.symbol \|\| undefined\)/);
   assert.match(canvas, /onOpen\(selected\.view, "tab", selected\.symbol \|\| undefined\)/);
   assert.doesNotMatch(canvas, /fetch\(|WebSocket|navigator\.geolocation|Math\.random\(/);
@@ -117,4 +118,23 @@ test("Phase 2 Studio to Workbench to Studio restores only on-mount presentation"
   assert.match(canvas, /selectedConnectionKey, expanded/);
   assert.match(canvas, /onReturnStateChange\(/);
   assert.doesNotMatch(overlays, /localStorage\.setItem\(["']lios\.spatial/i);
+});
+
+test("Phase 2 Studio uses the shared focus-trapped dialog and returns keyboard focus safely", () => {
+  assert.match(shell, /<Dialog open onOpenChange=\{open => \{ if \(!open\) onClose\(\); \}\}>/);
+  assert.match(shell, /<DialogContent/);
+  assert.match(shell, /<DialogTitle/);
+  assert.match(shell, /<DialogDescription/);
+  assert.match(shell, /onCloseAutoFocus=\{event => \{ event.preventDefault\(\); if \(opener\?\.isConnected\) opener.focus\(\); \}\}/);
+  assert.doesNotMatch(shell, /onMouseDown=\{onClose\}/);
+  assert.match(shell, /preferences.reducedMotion \|\| preferences.lowResourceMode/);
+});
+
+test("Phase 2 depth obeys user opt-in, software renderer, low-resource and reduced motion budgets", () => {
+  assert.match(canvas, /resolveSpatialMotionBudget\(\{ \.\.\.preferences, softwareRendered: isSoftwareRendered\(\) \}\)/);
+  assert.match(canvas, /data-motion-budget=/);
+  assert.match(motionPolicy, /input.reducedMotion \|\| input.lowResourceMode \|\| input.softwareRendered/);
+  assert.match(styles, /\.lios-spatial-research\[data-motion-budget="still"\] \.lios-spatial-board/);
+  assert.match(styles, /\.lios-spatial-research\[data-motion-budget="subtle"\] \.lios-spatial-node:hover/);
+  assert.match(styles, /prefers-reduced-motion: no-preference/);
 });
