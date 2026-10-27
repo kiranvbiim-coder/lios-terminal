@@ -14,6 +14,13 @@ export interface BriefingDraftInput {
 
 export const MAX_BRIEFING_SOURCES = 8;
 
+export function isReviewedBriefingSourceCurrent(source: BriefingSource, live: BriefingSource | undefined, projectId: number): boolean {
+  return Boolean(live && source.projectId === projectId && live.projectId === projectId
+    && live.status === "active" && source.status === "active"
+    && live.id === source.id && live.headVersion === source.headVersion
+    && live.kind === source.kind && live.title === source.title);
+}
+
 /**
  * A user-reviewed, immutable outline referencing exact versions of authorized
  * existing Project Artifacts. This function does not access source contents,
