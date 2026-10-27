@@ -24,7 +24,8 @@ import { P5_GUIDED_INPUTS_ACTION } from "@shared/p5GuidedInputs";
 import { presentRuntimeError } from "@/lib/runtimeErrorKit";
 import { reviewEvidenceExceptions, sourceExceptionCaveats } from "@/lib/evidenceExceptions";
 import { followUpPrompts, formatDuration, summarizeRuntimeTrace } from "@/lib/runtimeTraceSummary";
-import { inspectAgentReceiptActivity, receiptPresentation } from "@/lib/agentReceiptActivity";
+import { inspectAgentReceiptActivity } from "@/lib/agentReceiptActivity";
+import AgentExecutionReceipts from "./AgentExecutionReceipts";
 import { governedReviewRisk, legacyReviewFacts } from "@/lib/approvalReviewTruth";
 import type {
   ApprovalGrant,
@@ -341,39 +342,7 @@ export default function ConversationRuntimeTrace({
 
         {workVisible && recordedSources.length > 0 && <ResearchSourceList key={requestId ?? "no-run"} sources={recordedSources} />}
         {workVisible && !!steps.length && <ResearchRunProgress events={events} requestId={requestId} view="findings" />}
-        {workVisible && activity.receipts.length > 0 && (
-          <section aria-label="Observed execution receipts" data-testid="trace-agent-receipts" className="space-y-2 rounded-lg border border-border/45 p-3">
-            <div className="font-ui text-[13px] font-semibold text-foreground">Recorded execution receipts · {activity.receipts.length}</div>
-            <p className="font-ui text-[12px] text-muted-foreground">Observed from this exact runtime request: {activity.completed} completed · {activity.failed} failed · {activity.cancelled} cancelled. Step reports, model plans and text are not execution receipts. Receipts do not grant approval or prove an external action occurred; check the original governed review and external system before relying on side effects.</p>
-            <ol className="space-y-2">
-              {activity.receipts.map(receipt => {
-                const info = receiptPresentation(receipt);
-                return <li key={receipt.id} className="space-y-1 rounded border border-border/40 px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2 font-ui text-[12px]">
-                    <span className="font-semibold text-foreground">{info.component} · {info.operation}</span>
-                    <span className={receipt.status === "completed" ? "text-emerald-200" : "text-amber-200"}>{receipt.status}</span>
-                    <span className="text-muted-foreground">{info.kind}</span>
-                  </div>
-                  <div className="font-ui text-[12px] text-muted-foreground">
-                    {info.sourceCount} recorded source ref{info.sourceCount === 1 ? "" : "s"} · input hash {info.hasInputHash ? "recorded" : "absent"} · output hash {info.hasOutputHash ? "recorded" : "absent"} · {info.warnings} warning{info.warnings === 1 ? "" : "s"}
-                  </div>
-                  <details className="font-ui text-[12px] text-muted-foreground">
-                    <summary className="cursor-pointer text-foreground">Exact receipt identity and hashes</summary>
-                    <dl className="mt-1 space-y-1 break-all font-terminal text-[11px]">
-                      <div><dt className="inline">Receipt</dt><dd className="ml-2 inline">{receipt.id}</dd></div>
-                      <div><dt className="inline">Run</dt><dd className="ml-2 inline">{receipt.requestId}</dd></div>
-                      <div><dt className="inline">Started</dt><dd className="ml-2 inline">{receipt.startedAt}</dd></div>
-                      <div><dt className="inline">Finished</dt><dd className="ml-2 inline">{receipt.completedAt}</dd></div>
-                      <div><dt className="inline">Input SHA-256</dt><dd className="ml-2 inline">{receipt.inputHash ?? "not recorded"}</dd></div>
-                      <div><dt className="inline">Output SHA-256</dt><dd className="ml-2 inline">{receipt.outputHash ?? "not recorded"}</dd></div>
-                    </dl>
-                    <p className="mt-1">Raw request/response evidence, provider credentials, and source URI values are not exposed by this summary.</p>
-                  </details>
-                </li>;
-              })}
-            </ol>
-          </section>
-        )}
+        {workVisible && <AgentExecutionReceipts activity={activity} />}
 
 
         {workVisible && !!capabilities.length && (
