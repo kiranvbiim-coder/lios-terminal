@@ -16,7 +16,7 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Pick<Response, "
 const PREFIX = "lios.p9-notification-read-outbox.v1.";
 const LIMIT = 50;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ID = /^workflow-notification:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let activeKey: string | null = null;
 let activeOnline = false;
 let generation = 0;
