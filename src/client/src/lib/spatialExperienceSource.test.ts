@@ -177,5 +177,5 @@ test("Phase 2 narrow and zoomed panes are readable, undraggable and never alloca
   assert.match(canvas, /announcement \|\| presentation\.layoutHint/);
   assert.match(presentationPolicy, /SPATIAL_STACKED_MAX_WIDTH = 760/);
   assert.match(presentationPolicy, /canMoveNodes: mode === "map" && !stacked/);
-  assert.match(presentationPolicy, /showDecorativeEdges: !stacked && mode !== "list"/);
+  assert.match(presentationPolicy, /showDecorativeEdges: !stacked/);
 });
