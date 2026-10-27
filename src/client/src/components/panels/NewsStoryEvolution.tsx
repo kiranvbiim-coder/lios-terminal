@@ -6,6 +6,8 @@ import { relatedNewsCoverage } from "@/lib/newsRelatedCoverage";
 import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import type { NewsStoryObservation } from "@/lib/newsStoryEvolution";
 
+const NewsObservedRevisionTimeline = React.lazy(() => import("./NewsObservedRevisionTimeline"));
+
 function utcDateTime(value: string): string {
   const time = Date.parse(value);
   return Number.isFinite(time)
@@ -22,6 +24,7 @@ export function NewsStoryEvolution({
   coverage?: readonly NewsStoryObservation[];
   onSelectRelated?: (url: string) => void;
 }) {
+  const [timelineVisible, setTimelineVisible] = React.useState(false);
   const versions = newsStoryRevisions(history, exactUrl);
   const anchor = coverage.find(item => item.url === exactUrl);
   const related = anchor ? relatedNewsCoverage(anchor, coverage) : [];
@@ -51,6 +54,14 @@ export function NewsStoryEvolution({
           <summary className="cursor-pointer font-ui text-xs font-semibold text-amber-200 focus-visible:outline-2 focus-visible:outline-amber-300">
             Inspect recorded changes
           </summary>
+          <button type="button" aria-expanded={timelineVisible}
+            onClick={() => setTimelineVisible(visible => !visible)}
+            className="mt-3 min-h-10 rounded-md border border-border/60 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+            {timelineVisible ? "Hide visual timeline" : "Explore visual timeline"}
+          </button>
+          {timelineVisible && <React.Suspense fallback={<p role="status" className="mt-3 font-ui text-xs text-muted-foreground">Loading recorded timeline…</p>}>
+            <NewsObservedRevisionTimeline versions={versions} />
+          </React.Suspense>}
           <ol className="mt-3 space-y-3 border-l border-border/70 pl-3">
             {changes.map(({ later, before, fields }) => (
               <li key={later.observedAt + later.url} className="space-y-1 font-ui text-xs text-muted-foreground">
