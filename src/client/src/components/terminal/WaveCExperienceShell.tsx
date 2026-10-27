@@ -21,6 +21,8 @@ import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { useAudience } from "@/lib/audience";
 import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
 import { normalizePulseReviewPresentation, type PulseReviewPresentation } from "@/lib/pulseReviewPresentation";
+import { normalizePulseSavedViews, type PulseSavedView, type PulseViewChannel } from "@shared/pulseSavedViews";
+import { normalizePulseSubjectKey } from "@shared/pulseSubjectPreferences";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY,
@@ -103,6 +105,11 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const [pulseChannel, setPulseChannel] = useState<PulseChannel>("for_you");
   const [pulsePreferences, setPulsePreferences] = useState<PulseSubjectPreferences>(EMPTY_PULSE_SUBJECT_PREFERENCES);
   const [pulseRevision, setPulseRevision] = useState(0);
+  const [pulseSavedViews, setPulseSavedViews] = useState<PulseSavedView[]>([]);
+  const [activeSavedSubject, setActiveSavedSubject] = useState<string | null>(null);
+  const [savedViewPending, setSavedViewPending] = useState(false);
+  const savedViewRequestPending = useRef(false);
+  const [savedViewError, setSavedViewError] = useState<string | null>(null);
   const [preferencePending, setPreferencePending] = useState(false);
   const preferenceRequestPending = useRef(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
@@ -133,13 +140,13 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     setPulseReview(null);
     if (document.visibilityState === "hidden") return () => controller.abort();
     void Promise.all([
-      fetch(`/api/wave-d/pulse?channel=${pulseChannel}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
+      fetch(`/api/wave-d/pulse?channel=${pulseChannel}${activeSavedSubject ? `&subjectKeys=${encodeURIComponent(activeSavedSubject)}` : ""}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
       fetch("/api/wave-d/action-inbox", { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
       isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
-      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); return; }
-      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences; discoveryChanges?: unknown };
+      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); return; }
+      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences; discoveryChanges?: unknown; savedViews?: unknown };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
@@ -147,6 +154,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const authorizedCards = Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : [];
       setWaveDPulseCards(authorizedCards);
       setPulseReview(normalizePulseReviewPresentation(pulse.discoveryChanges, authorizedCards));
+      setPulseSavedViews(normalizePulseSavedViews(pulse.savedViews));
       setPulsePreferences(normalizePulseSubjectPreferences(pulse.preferences));
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
@@ -154,9 +162,9 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDMonitoringCount(Number(pulse.monitoring?.activeRules ?? 0));
       setBriefHeadline(typeof brief.headline === "string" ? brief.headline : null);
       setWaveDStatus("ready");
-    }).catch(() => { if (!cancelled) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); } });
+    }).catch(() => { if (!cancelled) { setWaveDPulseCards([]); setPulseReview(null); setPulseSavedViews([]); setWaveDStatus("unavailable"); } });
     return () => { cancelled = true; controller.abort(); };
-  }, [pulseChannel, pulseRevision]);
+  }, [pulseChannel, activeSavedSubject, pulseRevision]);
 
   useEffect(() => {
     if (surface !== "pulse") return;
@@ -183,6 +191,46 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     };
   }, [surface]);
 
+  const activateSavedView = (view: PulseSavedView) => {
+    const subject = view.subjectKey;
+    if (subject && !pulsePreferences.followed.includes(subject)) {
+      setSavedViewError("Follow this subject again before reopening the saved view.");
+      return;
+    }
+    setSavedViewError(null);
+    setPulseChannel(view.channel);
+    setActiveSavedSubject(subject);
+    setPulseRevision(value => value + 1);
+  };
+  const changeSavedView = async (change: { action: "save"; name: string } | { action: "delete"; id: string }): Promise<boolean> => {
+    if (savedViewRequestPending.current || waveDStatus !== "ready") return false;
+    savedViewRequestPending.current = true;
+    setSavedViewPending(true);
+    setSavedViewError(null);
+    try {
+      const saving = change.action === "save";
+      const url = saving ? "/api/wave-d/pulse/views" : `/api/wave-d/pulse/views/${encodeURIComponent(change.id)}`;
+      const response = await fetch(url, {
+        method: saving ? "POST" : "DELETE", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        ...(saving ? { body: JSON.stringify({ name: change.name, channel: pulseChannel as PulseViewChannel, subjectKey: activeSavedSubject }) } : {}),
+      });
+      if (!response.ok) throw new Error("Saved view change was rejected or is unavailable.");
+      const payload: unknown = await response.json();
+      if (!payload || typeof payload !== "object" || !("persisted" in payload) || payload.persisted !== true ||
+          !("savedViews" in payload) || !Array.isArray(payload.savedViews)) throw new Error("Server did not confirm this saved view change.");
+      // The authenticated write returned the entire current saved-view list;
+      // do not call market/news providers again just to display this change.
+      setPulseSavedViews(normalizePulseSavedViews(payload.savedViews));
+      return true;
+    } catch {
+      setSavedViewError("Saved view could not be changed. Previous server-saved views are unchanged.");
+      return false;
+    } finally {
+      savedViewRequestPending.current = false;
+      setSavedViewPending(false);
+    }
+  };
   const changePulseSubject = async (change: { action: PulseSubjectAction; cardId?: string; subjectKey?: string }) => {
     if (preferenceRequestPending.current || waveDStatus !== "ready") return;
     preferenceRequestPending.current = true;
@@ -197,7 +245,9 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const saved = await response.json() as { status?: string; persisted?: boolean; preferences?: PulseSubjectPreferences };
       if (saved.status !== "saved" || saved.persisted !== true || !saved.preferences)
         throw new Error("Server did not confirm a persisted discovery preference.");
-      setPulsePreferences(normalizePulseSubjectPreferences(saved.preferences));
+      const ownedSubjects = normalizePulseSubjectPreferences(saved.preferences);
+      setPulsePreferences(ownedSubjects);
+      if (activeSavedSubject && !ownedSubjects.followed.includes(activeSavedSubject)) setActiveSavedSubject(null);
       setPulseRevision(value => value + 1);
     } catch (error) {
       setPreferenceError(error instanceof Error ? error.message : "Discovery preference could not be saved.");
@@ -278,9 +328,17 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               recents={libraryRecents}
               favorites={libraryFavorites}
               pulseChannel={pulseChannel}
+              pulseSavedViews={pulseSavedViews}
+              activeSavedSubject={activeSavedSubject}
+              savedViewPending={savedViewPending}
+              savedViewError={savedViewError}
+              onSavePulseView={(name) => changeSavedView({ action: "save", name })}
+              onDeletePulseView={(id) => void changeSavedView({ action: "delete", id })}
+              onActivatePulseView={activateSavedView}
+              onSelectSavedSubject={setActiveSavedSubject}
               pulseStatus={waveDStatus}
               briefHeadline={!isClient && briefHeadline ? briefHeadline : null}
-              onPulseChannelChange={setPulseChannel}
+              onPulseChannelChange={(next) => { setPulseChannel(next); setActiveSavedSubject(null); }}
               pulsePreferences={pulsePreferences}
               pulseReview={pulseReview}
               reviewPending={reviewPending}

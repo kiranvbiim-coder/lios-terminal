@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { IntelligenceCard } from "@shared/waveDContracts";
-import VisualIntelligenceSearch, { VisualIntelligenceResultCard } from "./VisualIntelligenceSearch";
+import VisualIntelligenceSearch, { VisualIntelligenceResultCard, VisualIntelligenceSourceDisclosure } from "./VisualIntelligenceSearch";
 
 const card: IntelligenceCard = {
   id: "evidence-case", kind: "research", priority: "important", title: "Water source publication",
@@ -93,6 +93,31 @@ test("Visual Search refreshes exact authorized Pulse on foreground return withou
   ]) assert.ok(source.includes(exact), "Missing scoped foreground freshness safeguard: " + exact);
   assert.ok(!source.includes('[searchReady, activeQuery]'), "Do not refetch provider for each keystroke");
   assert.ok(!source.includes('localStorage.setItem('), "No duplicate browser-side intelligence cache");
+});
+
+test("A07 search can present exact source results as cards, tabular rows and recorded chronology", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  assert.match(source, /"cards" \| "table" \| "timeline"/);
+  assert.match(source, /aria-label="Intelligence results presentation"/);
+  assert.match(source, /aria-label="Recorded intelligence table"/);
+  assert.match(source, /aria-label="Recorded intelligence chronology"/);
+  assert.match(source, /datedResults\.length < found\.results\.length/);
+  assert.match(source, /Ordered by the source card's recorded timestamp/);
+  assert.ok(source.includes("<time dateTime={at}"), "timeline uses the source recorded time");
+  assert.doesNotMatch(source, /syntheticChart|inferredCoordinates|fetch\("https?:/);
+});
+
+test("A07 tabular and chronological source disclosure uses gated source URLs", () => {
+  const available = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, { card }));
+  assert.match(available, /<details/);
+  assert.match(available, /3 sources/);
+  assert.match(available, /https:\/\/example.org\/public-report/);
+  assert.doesNotMatch(available, /href="javascript:|api_key=PRIVATE|PRIVATE/);
+  assert.match(available, /&lt;unsafe&gt;/);
+  const missing = renderToStaticMarkup(createElement(VisualIntelligenceSourceDisclosure, {
+    card: { ...card, evidence: [] },
+  }));
+  assert.match(missing, /No recorded evidence attached/);
 });
 
 test("A07 shows optional rights-safe context when a recorded image fails source-rights checks", () => {
