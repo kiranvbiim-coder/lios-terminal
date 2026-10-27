@@ -69,6 +69,28 @@ Every agent working this plan must report: **canonical owner + existing issue/PR
 
 Do not change signed-production validators or bypass security policy to obtain a green beta status. Existing P14 issues including visual-count disagreement (9/13/15), shared release-asset overwrite names and missing actual Windows visual proof remain release-path issues; resolve under their current owners.
 
+## R3 implementation — offline beta release-asset integrity (2026-10-27, Phase 4 draft)
+
+This implementation reuses the existing P10 desktop build and updater; it is **not** a new release authority, a CI release job, a key-generation service, or P14 acceptance. The canonical source gate is `npm run test:beta:release` under `src/`, included in `npm run test:desktop`.
+
+- Existing `npm run app:beta:mac` and `npm run app:beta:win` must first produce real macOS ARM64 DMG+ZIP and Windows x64 NSIS files with the same exact `LIOS_BETA_VERSION` and source commit. Collect copies into one trusted staging directory on an owner-controlled computer **outside the public repository**. The canonical filenames are `LiOS-<version>-mac-arm64-beta.dmg`, `LiOS-<version>-mac-arm64-beta.zip`, and `LiOS-<version>-win-x64-beta.exe`. The integrity gate refuses missing, duplicate, symlink, empty, over-2,000,000,000-byte or altered assets. This upper bound is intentionally below the free Releases per-asset size ceiling. **The historical sandbox build was too large for the chosen free distribution method until genuinely optimized**; the manifest gate must fail, not silently split/omit a required engine.
+- The owner generates and protects an **Ed25519 key pair** independently of the repository, signing assets on the owner machine only. No private key, secret environment value, signing token or publisher certificate is uploaded to public GitHub CI. A copy of the **trusted public key** and its verified fingerprint must be established through a separately authenticated owner-controlled channel before relying on a downloaded manifest; a public key merely bundled alongside its own manifest does not confer trust. Key rotation/recovery and compromise response remain R3 publication blockers until operationally rehearsed.
+- From `src/`, sign **only after** the actual cross-platform staging and native/rights review (do not use fake assets as release proof):
+
+```sh
+npm run release:beta:sign -- --version 1.0.0-beta.1 --commit FULL_40_HEX_SOURCE_SHA --assets-dir /owner/release-staging --private-key /owner/secure/off-repo/ed25519-private.pem --out /owner/release-staging/beta-manifest.json
+```
+
+- The downloaded public beta remains **manual-upgrade-only**. Before treating the candidate installer bytes as authenticated, independently obtain the owner's public key and exact reviewed commit, then run:
+
+```sh
+npm run release:beta:verify -- --manifest /download/beta-manifest.json --assets-dir /download --trusted-public-key /independent/trusted-public.pem --commit FULL_40_HEX_SOURCE_SHA --current-version 1.0.0-beta.1
+```
+
+  Omit `--current-version` only for a new installation. An already installed version must not accept same-version replays or downgrades. Verify checks the Ed25519 signature, pinned public-key fingerprint, reviewed commit, declared exact version/platform filenames, current-version ordering, asset sizes and streaming SHA-256 hashes. It does **not** install binaries, modify an app, download anything, or bypass OS security. It returns `qualification: release_asset_integrity_only` and explicit `productionCodeSigning:false`, `macNotarized:false`, `installApproved:false`.
+- The manifest and tests establish **source-level integrity logic only**. Passing source CI, a synthetic manifest, or even genuine signed installer-byte hashes **does not** complete R3–R6, native clean-install acceptance, platform certificates, publisher identity outside independently verified key custody, legal rights, update/rollback, or P14 production. The owner's trusted key pin, two real platform installer files, download verification, and `beta.1 → beta.2` user-controlled upgrade remain unverified until exercised with exact asset SHA-256 and device observations.
+- Never make production updater `autoDownload` or `quitAndInstall` trust unsigned beta assets. Never weaken P14 production signing/notarization gates for this beta.
+
 ## 6. Agent coordination
 
 - **Agent entry point:** `AGENTS.md` → this contract → `docs/PENDING_WORK.md` → issue [#91](https://github.com/kiranvbiim-coder/lios-terminal/issues/91) → existing SI-07/P10/P14 and UX/security owners.
