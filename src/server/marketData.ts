@@ -2302,7 +2302,7 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     const upper = symbol.toUpperCase();
     const profile = getProfileWithCryptoFallback(upper);
     const tokens = [upper, profile?.name?.split(" ")[0]].filter(Boolean).map((token) => String(token).toLowerCase());
-    items = feedItems.filter((item) => {
+    items = items.filter((item) => {
       const haystack = `${item.title} ${item.summary}`.toLowerCase();
       return tokens.some((token) => haystack.includes(token));
     });
