@@ -153,7 +153,8 @@
     "test:website-c2": "node --import tsx --test client/src/lib/reviewedModelRunArtifact.test.ts client/src/lib/websiteC2ReviewedModelIntegration.test.ts client/src/lib/integratedModelArtifactSave.test.ts server/integratedModelArtifact.test.ts",
     "test:website-c3": "node --import tsx --test client/src/lib/recordedConsequenceReview.test.ts client/src/components/terminal/ProjectConsequenceReview.test.tsx client/src/components/terminal/ProjectInvestigationDesk.test.tsx",
     "test:website-d1": "node --import tsx --test client/src/lib/phase4BriefingVisuals.test.ts client/src/lib/phase4BriefingNative.test.ts client/src/lib/websiteD1Integration.test.ts client/src/lib/phase4Briefing.test.ts",
-    "test:website-d2": "node --import tsx --test client/src/lib/websiteD2NativePptx.test.ts client/src/lib/websiteD2Provenance.test.ts script/beta_release_acceptance.test.cjs"
+    "test:website-d2": "node --import tsx --test client/src/lib/websiteD2NativePptx.test.ts client/src/lib/websiteD2Provenance.test.ts script/beta_release_acceptance.test.cjs",
+    "test:website-closure": "node --import tsx --test client/src/lib/websiteReleaseIntegration.test.ts server/p7CurrentEligibility.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

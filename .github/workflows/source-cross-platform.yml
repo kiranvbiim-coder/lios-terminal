@@ -149,6 +149,7 @@ jobs:
           npm run test:website-c3
           npm run test:website-d1
           npm run test:website-d2
+          npm run test:website-closure
           npm run release:preflight:ci
 
       - name: Installed UX evidence negative controls (source only)

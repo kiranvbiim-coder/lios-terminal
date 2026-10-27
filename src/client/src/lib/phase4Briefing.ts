@@ -49,7 +49,7 @@ export function composeProjectBriefing(
   };
   const introIds = [
     add("heading", restricted(selection.title, 160)),
-    add("paragraph", "Project intelligence briefing · " + selection.layout + " · recorded index " + lens.generatedAt),
+    add("paragraph", "Project intelligence briefing · " + selection.layout + " · selected recorded evidence"),
     add("callout", "Editorial draft from retained Project records. Recorded insight summaries are not independently re-verified facts. Confirm source rights, dates, uncertainty and claims before distribution."),
   ];
   if (selection.editorNote.trim()) introIds.push(add("paragraph", "Editor note: " + restricted(selection.editorNote, 2000)));

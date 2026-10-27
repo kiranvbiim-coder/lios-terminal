@@ -92,6 +92,15 @@ export function ProjectBriefingStudio({ projectId, onOpenArtifact }: {
     setMessage(null);
     setSaved(null);
     try {
+      // Refresh the actual P7 source owners as well as pinned P4 visuals.
+      // React Query's cached insight/timeline is a preview, not save authorization.
+      const [freshLens, freshContext] = await Promise.all([lens.refetch(), context.refetch()]);
+      if (currentProject.current !== expectedProject) return;
+      if (freshLens.isError || freshContext.isError ||
+          freshLens.data?.projectId !== expectedProject ||
+          freshContext.data?.graph.projectId !== expectedProject) {
+        throw new Error("Current Project evidence could not be revalidated. The briefing was not saved.");
+      }
       // Re-read every pinned P4 version immediately before the only write.
       // Denied, changed or archived sources must never fall back to an old local snapshot.
       const checked = await Promise.all(chosenVisuals.map(async visual => {
@@ -103,7 +112,7 @@ export function ProjectBriefingStudio({ projectId, onOpenArtifact }: {
       }));
       if (currentProject.current !== expectedProject) return;
       const reviewed = composeProjectBriefing({ projectId: expectedProject, title, layout, insightIds: selected, editorNote },
-        actualLens, actualContext?.timeline ?? [], checked);
+        freshLens.data, freshContext.data.timeline, checked);
       if (!reviewed || stableSerialize(reviewed.content) !== stableSerialize(draft.content))
         throw new Error("The briefing changed since preview. Review the current evidence before saving.");
       const result = await createArtifact(expectedProject, {
