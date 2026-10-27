@@ -9,8 +9,13 @@ const component = (name: string) =>
 test("Sprint D: graphical overlays and market component must parse as real TypeScript JSX", () => {
   for (const name of ["ProvenanceDrawer", "AnalyticalStudio", "GraphExplorer", "FusionMarketCanvas"]) {
     const src = component(name);
-    const parsed = ts.createSourceFile(name + ".tsx", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-    assert.deepEqual(parsed.parseDiagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, " ")), [], name + " invalid JSX");
+    const result = ts.transpileModule(src, {
+      fileName: name + ".tsx",
+      reportDiagnostics: true,
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    });
+    const errors = (result.diagnostics ?? []).filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
+    assert.deepEqual(errors.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")), [], name + " invalid JSX");
   }
 });
 
