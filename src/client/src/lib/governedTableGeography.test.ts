@@ -46,8 +46,8 @@ test("reject inferred coordinates, source mismatch, invalid range and missing so
   }).points.length, 0);
   const chart: AuthorizedVisualAnswer = {
     status: "ready", kind: "chart", title: "Series", version: 1, sourceRefs: ["evidence:p7:one"],
-    content: { kind: "chart", chartType: "line", xLabel: "Time", yLabel: "Score",
-      series: [{ name: "series", points: [{ x: 1, y: 2 }] }] },
+    content: { kind: "chart", chartType: "line", rendererPreference: "recharts",
+      series: [{ id: "s1", label: "Recorded series", points: [{ x: 1, y: 2 }] }], options: {} },
   };
   assert.equal(projectSavedTableGeography(chart).points.length, 0);
 });
