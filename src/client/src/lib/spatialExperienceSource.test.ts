@@ -138,3 +138,21 @@ test("Phase 2 depth obeys user opt-in, software renderer, low-resource and reduc
   assert.match(styles, /\.lios-spatial-research\[data-motion-budget="subtle"\] \.lios-spatial-node:hover/);
   assert.match(styles, /prefers-reduced-motion: no-preference/);
 });
+
+
+test("Phase 2 Spotlight only searches local saved pins before graph truncation", () => {
+  assert.ok(canvas.includes('const [searchQuery, setSearchQuery] = useState("");'));
+  assert.match(canvas, /findSpatialResearchPins\(kindItems, searchQuery\)/);
+  assert.match(canvas, /buildSpatialResearchModel\(visibleItems, positions, mode\)/);
+  assert.match(canvas, /searchQuery\.trim\(\) \? visibleItems\.slice\(0, 5\) : \[\]/);
+  assert.match(canvas, /role="search" aria-label="Find in pinned research"/);
+  assert.match(canvas, /type="search" id="lios-spatial-find"/);
+  assert.match(canvas, /maxLength=\{80\} autoComplete="off"/);
+  assert.match(canvas, /if \(event\.key === "Enter" && visibleItems\.length\)/);
+  assert.match(canvas, /event\.key === "Escape" && searchQuery/);
+  assert.match(canvas, /onClick=\{\(\) => openInspection\(item\.id\)\}/);
+  assert.match(canvas, /No matching pinned research/);
+  assert.match(styles, /\.lios-spatial-spotlight-controls/);
+  assert.match(styles, /\.lios-spatial-quick-hit:focus-visible/);
+  assert.doesNotMatch(canvas, /fetch\(|createArtifact|runConversation|localStorage\.setItem/);
+});
