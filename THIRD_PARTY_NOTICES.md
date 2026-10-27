@@ -14,6 +14,18 @@ LiOS selectively adapts `starc007/ui-components` (source snapshot pinned to repo
 
 LiOS selectively adapts `shadcnblocks/kibo` pinned to commit `3d63cdb15b79d972e3dc38a10997987672f9b263` from `packages/status/index.tsx` and `packages/tags/index.tsx`. The complete MIT license is retained at `src/client/src/components/vendor/kibo/LICENSE`. The adaptations drive searchable existing-object tag selection inside Workspace Composer and status indicators reflecting existing Project P9 automation enablement and governed execution-session states. No Kibo app, React 19 upgrade, alternate Project/workflow store, external service, or additional production dependency is included. Source integration is not native/release acceptance.
 
+## beUI — MIT (accessible Pulse discovery channels)
+
+LiOS also adapts the pinned beUI segmented-tabs motion and keyboard pattern from `starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a`, `components/motion/tabs.tsx` (source blob `ed65ffad1ea648850ce29a874ea6eee28d032896`), to `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` and its source test. Full MIT grant at `third_party/licenses/beui-MIT.txt`. The control uses existing four Wave D channel state and the established `onPulseChannelChange` callback, not a second Pulse or data feed. Keyboard Home/End/arrow and reduced-motion behavior follow the pinned adaptation. Installed app validation remains separate.
+
+## Watermelon UI — MIT (Project Continuity activities)
+
+LiOS adapts `WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17`, `src/components/watermelon-ui/activities-card-base.tsx` (source blob `fac632b2675dff9d1199b038285ef4e58a520601`) into `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`. Complete MIT grant at `third_party/licenses/watermellon-registry-MIT.txt`. The component replaces the former P6 Project continuation mini-list and uses the canonical recorded queue. Clicking a decision uses the existing Artifact handler; reviewing a workflow only focuses the matching exact P9 workflow if currently visible, without approving, running or modifying it. It does not add synthetic events, state authority or an alternate task queue.
+
+## Opensource UI — MIT (reviewed Project spreadsheet import)
+
+LiOS adapts `bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`, `components/inputs/file-upload-field-input.tsx` (source blob `e0a22b94cfd01ffbf99541739991b4678a93d179`) into `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`. Full MIT grant at `third_party/licenses/opensourceui-MIT.txt`. The Project Library now requires explicit file selection, validation, review and confirmation before invoking the existing `importSpreadsheetArtifact` Project-owned endpoint. It removes the old immediate file-input uploader. No second importer, external storage, provider, or Next.js/React19/Tailwind4 dependency is added.
+
 This file is the human-readable notice entry point. The machine-readable source of truth for major donor/runtime intake is:
 
 - `third_party/components.json`
