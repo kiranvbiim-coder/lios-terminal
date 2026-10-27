@@ -92,6 +92,7 @@ test("chat, composer, markdown, palette swatches and mounted artifact retain can
   assert.match(polishCss, /--dv-tabs-and-actions-container-background-color: var\(--lios-bg-panel\)/);
   assert.match(polishCss, /lios-visual-canvas__veil/);
   assert.match(polishCss, /lios-chat-suggestion-menu/);
+  assert.match(polishCss, /main\[data-ux-flagship-smoke\]/);
   assert.match(typeCss, /"Anthropic Sans", "Inter"/);
   assert.match(typeCss, /"Anthropic Serif", Georgia/);
 });
@@ -99,4 +100,16 @@ test("chat, composer, markdown, palette swatches and mounted artifact retain can
 test("theme regression contract never re-creates AI routing, source catalogs or artifact stores", () => {
   assert.doesNotMatch(polishCss, /fetch\(|localStorage|@keyframes|:root\s*\{/);
   assert.doesNotMatch(typeCss, /@font-face|url\(https?:/i);
+});
+
+
+test("deterministic screenshot harness supports palettes without altering real appearance storage", () => {
+  const smoke = read("../visualSmoke.tsx");
+  assert.match(smoke, /get\("palette"\)/);
+  assert.match(smoke, /data-visual-smoke-palette=\{smokePalette\}/);
+  assert.match(smoke, /setAttribute\("data-lios-palette", smokePalette\)/);
+  assert.match(smoke, /setAttribute\("data-theme", smokeIsLight \? "light" : "dark"\)/);
+  assert.match(smoke, /LIOS_PRODUCT_PALETTES\.find/);
+  assert.match(smoke, /\?\? "lios-classic"/);
+  assert.doesNotMatch(smoke, /localStorage\.setItem\("lios-product-palette-v1"/);
 });
