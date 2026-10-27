@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { users } from "@shared/schema";
+import { getDb } from "./db";
+import { createProviderRegistryForUser } from "./providerRuntimeRegistry";
 import {
   canonicalDataCapabilitySchema,
   providerAccessPostureSchema,
@@ -60,12 +64,15 @@ export const providerAccessTool: ConversationToolDefinition = {
     await getProject(tenant, projectId);
 
     const parsed = providerAccessToolInputSchema.parse(input);
+    const [actor] = await getDb().select({ id: users.id, email: users.email }).from(users).where(eq(users.id, tenant.userId)).limit(1);
+    if (!actor) throw new Error("Authenticated provider owner is unavailable.");
+    const registry = await createProviderRegistryForUser(tenant, actor);
     const providers = describeProviderAccess({
       capability: parsed.capability,
       pointInTimeMode: parsed.pointInTimeMode,
       providerAllow: parsed.providerAllow,
       providerDeny: parsed.providerDeny,
-    });
+    }, registry);
     assertNotAborted(signal);
 
     return {
