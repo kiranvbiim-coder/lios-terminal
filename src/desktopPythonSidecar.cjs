@@ -120,6 +120,50 @@ async function runRepresentativeCalculation(port, token) {
   return validateRepresentativeCalculation(await response.json());
 }
 
+// The installed sidecar's existing statistics probe cannot prove that
+// the advanced valuation route is registered, importable or numerically sound.
+// This known-answer input matches SP-01's independently checked reverse-DCF.
+const PACKAGED_VALUATION_ROUTE = "/advanced/valuation/reverse-dcf";
+const PACKAGED_VALUATION_INPUT = Object.freeze({
+  currentRevenue: 100,
+  marketEquityValue: 100,
+  years: 1,
+  waccPct: 10,
+  terminalGrowthPct: 0,
+  ebitMarginPct: 20,
+  taxRatePct: 0,
+  reinvestmentPctOfRevenue: 10,
+  solveFor: "revenue_growth",
+});
+
+function validateRepresentativeValuation(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("Packaged valuation route returned no typed numerical result.");
+  }
+  const values = [["impliedRevenueGrowthPct", 0], ["repricedEquityValue", 100]];
+  for (const [name, expected] of values) {
+    if (typeof result[name] !== "number" || !Number.isFinite(result[name]) || Math.abs(result[name] - expected) > 1e-7) {
+      throw new Error("Packaged valuation failed independently verified " + name + " result.");
+    }
+  }
+  return { verified: true, route: PACKAGED_VALUATION_ROUTE,
+    impliedRevenueGrowthPct: result.impliedRevenueGrowthPct, repricedEquityValue: result.repricedEquityValue };
+}
+
+async function runRepresentativeValuation(port, token) {
+  const response = await fetch(`http://127.0.0.1:${port}${PACKAGED_VALUATION_ROUTE}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", [SIDECAR_TOKEN_HEADER]: token },
+    body: JSON.stringify(PACKAGED_VALUATION_INPUT),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    // No private Python tracebacks or local system paths in a public release log.
+    throw new Error(`Packaged valuation route failed with HTTP ${response.status}.`);
+  }
+  return validateRepresentativeValuation(await response.json());
+}
+
 // The sidecar must enforce its per-launch token: an unauthenticated or wrongly
 // authenticated request to a real route is rejected with 401, /health alone is
 // open and minimal (no package versions), and the correct token is accepted.
@@ -179,7 +223,8 @@ async function probeBundledPythonSidecar(options) {
     if (!runtimeInfo.ok) throw new Error(`Bundled Python sidecar authenticated runtime-info request failed with HTTP ${runtimeInfo.status}.`);
     const health = validateHealth(await runtimeInfo.json());
     const representativeRoute = await runRepresentativeCalculation(port, token);
-    return { ...health, authentication, representativeRoute, executable };
+    const valuationRoute = await runRepresentativeValuation(port, token);
+    return { ...health, authentication, representativeRoute, valuationRoute, executable };
   } catch (error) {
     if (stderr.trim()) {
       throw new Error(`${error instanceof Error ? error.message : String(error)} Sidecar stderr: ${stderr.trim().slice(0, 2_000)}`);
@@ -212,3 +257,7 @@ module.exports = {
 };
 module.exports.SIDECAR_TOKEN_HEADER = SIDECAR_TOKEN_HEADER;
 module.exports.verifySidecarAuthentication = verifySidecarAuthentication;
+module.exports.PACKAGED_VALUATION_ROUTE = PACKAGED_VALUATION_ROUTE;
+module.exports.PACKAGED_VALUATION_INPUT = PACKAGED_VALUATION_INPUT;
+module.exports.validateRepresentativeValuation = validateRepresentativeValuation;
+module.exports.runRepresentativeValuation = runRepresentativeValuation;
