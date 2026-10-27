@@ -16,7 +16,6 @@ import { getLatestExternalRightsAssessment } from "./externalRightsStore";
 import { isCredentialSafeReference } from "@shared/dataFabric";
 import { hashLedgerValue } from "./ledgerStore";
 import type { TenantContext } from "./tenantContext";
-import type { GovernedToolCall } from "./governedToolRegistry";
 
 const tenantSchema = z.object({
   userId: z.number().int().positive(),
