@@ -91,3 +91,23 @@ test("a Commons image without confirmed CC0 metadata never causes a download or 
   assert.equal(calls, 1);
   assert.equal(fs.existsSync(path.join(dir, "editorial-media", "manifest.json")), false);
 });
+
+
+test("Commons CC0 metadata accepts exact deed URL variants, never mistaken BY licenses", () => {
+  const base = sample();
+  assert.ok(cc0Candidate({
+    ...base,
+    imageinfo: [{ ...base.imageinfo[0], extmetadata: {
+      ...base.imageinfo[0].extmetadata,
+      LicenseShortName: { value: "CC0" },
+      LicenseUrl: { value: "http://creativecommons.org/publicdomain/zero/1.0/deed.en" },
+    } }],
+  }));
+  assert.equal(cc0Candidate({
+    ...base,
+    imageinfo: [{ ...base.imageinfo[0], extmetadata: {
+      ...base.imageinfo[0].extmetadata,
+      LicenseUrl: { value: "https://creativecommons.org/licenses/by/4.0/" },
+    } }],
+  }), null);
+});
