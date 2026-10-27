@@ -20,6 +20,7 @@ import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulse
 import { eligibleEditorialMedia } from "@shared/editorialMedia";
 import { explainPulsePlacement } from "@/lib/pulsePlacementExplanation";
 import type { PulseChannel } from "./PulseDiscoveryTabs";
+import { PulseProjectMonitorReview } from "./PulseProjectMonitorReview";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
@@ -41,6 +42,7 @@ const priorityTone = {
 
 export default function LiosPulseStoryCard({ card, featured = false, changedSinceReview = false, channel = "for_you", onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [monitorReviewOpen, setMonitorReviewOpen] = useState(false);
   const detailsId = useId();
   const reduceMotion = useReducedMotion();
   const evidence = card.evidence ?? [];
@@ -170,12 +172,20 @@ export default function LiosPulseStoryCard({ card, featured = false, changedSinc
                   className="min-h-10 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-muted-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
                   Mute
                 </button>}
-                {monitorQuestion && <button type="button" onClick={() => onAsk(monitorQuestion)}
+                {followed && subjectKey && evidence.some(source => !!source.id?.trim()) && onPreferenceChange && <button type="button"
+                  aria-expanded={monitorReviewOpen}
+                  onClick={() => setMonitorReviewOpen(open => !open)}
+                  className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm font-medium text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+                  {monitorReviewOpen ? "Close Project monitor review" : "Review Project change monitor"}
+                </button>}
+                {!followed && monitorQuestion && <button type="button" onClick={() => onAsk(monitorQuestion)}
                   aria-label={`Review monitoring proposal for ${subjectKey}`}
                   className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:border-amber-300/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Propose monitor</button>}
                 <button type="button" onClick={() => onAsk(pulseStoryQuestion(card))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:bg-amber-300/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><Sparkles className="h-4 w-4 text-amber-200" />Ask LiOS</button>
                 {card.symbol && onOpenSymbol && <button type="button" onClick={() => onOpenSymbol(card.symbol!)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Open analysis<ArrowUpRight className="h-4 w-4" /></button>}
               </div>
+              {monitorReviewOpen && followed && subjectKey && evidence.some(source => !!source.id?.trim()) && onPreferenceChange &&
+                <PulseProjectMonitorReview key={card.id} card={card} onClose={() => setMonitorReviewOpen(false)} />}
             </div>
           </motion.div>
         )}
