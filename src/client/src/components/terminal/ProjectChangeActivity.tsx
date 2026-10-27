@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { P6ChangeSummary } from "@shared/p6ContinuityContracts";
 import { GitCompareArrows } from "lucide-react";
 import { projectChangePresentation } from "@/lib/projectChangePresentation";
