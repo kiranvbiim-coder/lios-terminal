@@ -2786,11 +2786,11 @@
       "repository": "bidyut10/opensourceui",
       "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
       "license": "MIT",
-      "posture": "component_donor",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "Opensource UI — MIT (source catalogue search)",
+      "noticeHeading": "Opensourceui",
       "externalRights": "separate_review_required",
       "roles": [
         "source-catalogue-search",
@@ -2814,7 +2814,7 @@
       "releaseTag": "v2.3.1",
       "commitSha": "fcef852f6cdafea07f36cf6fae69b37c8adf85be",
       "license": "Apache-2.0",
-      "posture": "pinned_package_integration_source_gate_pending",
+      "posture": "bundled",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
@@ -2840,7 +2840,8 @@
         "LiOS retains source endpoint/SSRF policy, credential reference resolution, per-Project tool/resource allowlists, user cancellation, redacted remote errors and bounded response handling.",
         "The original injected test transport remains stable; no OAuth or stdio connection is enabled in this slice."
       ],
-      "notes": "Stacked draft PR #121 over #120. Exact-head source gate and actual isolated test MCP server/packaged authorization, permission revocation and cancellation acceptance remain unverified. The npm package contains its upstream Apache license; external service, data and credentials rights remain separate. No SP/P14 completion."
+      "notes": "Stacked draft PR #121 over #120. Exact-head source gate and actual isolated test MCP server/packaged authorization, permission revocation and cancellation acceptance remain unverified. The npm package contains its upstream Apache license; external service, data and credentials rights remain separate. No SP/P14 completion.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     },
     {
       "id": "openclaw-gm22-byoai-failover",
@@ -2849,11 +2850,11 @@
       "releaseTag": "v2026.9.7",
       "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
       "license": "MIT",
-      "posture": "pinned_source_adaptation",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "OpenClaw (MIT)",
+      "noticeHeading": "OpenClaw",
       "externalRights": "separate_review_required",
       "baselineDonorId": "openclaw",
       "roles": [
@@ -2880,7 +2881,8 @@
         "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported.",
         "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
-      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
+      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     },
     {
       "id": "opensourceui-project-spreadsheet-dropzone",
@@ -2920,11 +2922,11 @@
       "repository": "WatermelonCorp/watermellon-registry",
       "commitSha": "86052b8fd12bc19bf3bac07625a7f93736c42b17",
       "license": "MIT",
-      "posture": "pinned_source_adaptation",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)",
+      "noticeHeading": "Watermelon UI",
       "externalRights": "separate_review_required",
       "roles": [
         "P6-project-continuity-followups",
@@ -2944,7 +2946,8 @@
         "Replaced donor mock activities/time strings/window.resize/mobile-sniffing and new styling with real priority, saved source counts and truthful unavailable/loading/empty states.",
         "Preserved current P7 Project Intelligence Timeline; no duplicate event model, runtime packages, persistence, data rights or autonomous actions."
       ],
-      "notes": "Donor file blob fac632b2675dff9d1199b038285ef4e58a520601 at exact MIT pin. Full copyright/permission under third_party/licenses/watermellon-registry-MIT.txt. Hosted source and installed desktop UX acceptance are tracked on stacked draft PR #259, not implicitly complete."
+      "notes": "Donor file blob fac632b2675dff9d1199b038285ef4e58a520601 at exact MIT pin. Full copyright/permission under third_party/licenses/watermellon-registry-MIT.txt. Hosted source and installed desktop UX acceptance are tracked on stacked draft PR #259, not implicitly complete.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     },
     {
       "id": "beui-pulse-discovery-tabs",
@@ -2952,11 +2955,11 @@
       "repository": "starc007/ui-components",
       "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
       "license": "MIT",
-      "posture": "pinned_source_adaptation",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "beUI — Pulse discovery navigation adaptation (MIT)",
+      "noticeHeading": "beUI",
       "externalRights": "separate_review_required",
       "roles": [
         "P1-Pulse-discovery-navigation",
@@ -2977,7 +2980,8 @@
         "Reimplemented using existing React 18, Framer Motion 11, Tailwind 3 and Lucide; no Motion 12 upgrade, separate panel/data/store, new network route or extra permission owner.",
         "44px controls, RTL-aware arrows/Home/End and reduced-motion support; source integration tests updated to inspect the actual extracted channel component."
       ],
-      "notes": "Donor file blob ed65ffad1ea648850ce29a874ea6eee28d032896 at exact MIT pin; Copyright 2026 Saurabh Chauhan. Full grant under third_party/licenses/beui-MIT.txt. Stacked draft PR #259 installed app QA remains required."
+      "notes": "Donor file blob ed65ffad1ea648850ce29a874ea6eee28d032896 at exact MIT pin; Copyright 2026 Saurabh Chauhan. Full grant under third_party/licenses/beui-MIT.txt. Stacked draft PR #259 installed app QA remains required.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     }
   ]
 }

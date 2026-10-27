@@ -471,3 +471,13 @@ test("Phase 1 approval presentation labels only pending server-governed review, 
   assert.doesNotMatch(markup, /Allow for Project/);
   assert.doesNotMatch(markup, /Submitting review|Accepted by server|Action completed/);
 });
+
+test("Sprint A live AI activity reports only observed work, not an inferred execution success", () => {
+  const markup = render([planEvent, event({ type: "tool_start", stepId: "step-1" })], { busy: true });
+  assert.match(markup, /data-testid="trace-observed-progress"/);
+  assert.match(markup, /1 observed step of 1 planned/);
+  assert.match(markup, /0 tool results recorded/);
+  assert.doesNotMatch(markup, /1 successful|1 completed|100% complete/);
+  assert.match(markup, /data-testid="agent-run-cancel"/);
+  assert.match(markup, /data-testid="trace-show-work"/);
+});
