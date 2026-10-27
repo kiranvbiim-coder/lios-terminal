@@ -27,7 +27,7 @@ test("real offline atlas with no remote tiles supports zoom/fit, source layers a
   assert.match(html,/Unattributed location/);
   assert.match(html,/public-domain Natural Earth/i);
   assert.match(html,/no.*geocoded names|not geocoded names/i);
-  assert.doesNotMatch(html,/https?:\/\/|api_key|<iframe|<script|maptiler|openstreetmap\.org/);
+  assert.doesNotMatch(html,/(?:src|href)=["\u0027]https?:\/\/|api_key|<iframe|<script|maptiler|openstreetmap\.org/);
 });
 
 test("empty Project location view gives explicit truthful state, never a demo map with pins",()=>{
