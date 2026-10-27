@@ -6,8 +6,13 @@ import { loadResearchTray, subscribeResearchTray, type ResearchTrayItem } from "
 import { loadResearchCanvasPositions, removeResearchCanvasPosition, setResearchCanvasPosition, subscribeResearchCanvas } from "@/lib/terminalResearchCanvas";
 import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, listExplicitResearchConnections, inspectExplicitResearchConnection, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
+import { reconcileSpatialCanvasReturnState, type SpatialCanvasReturnState } from "@/lib/spatialStudioContinuity";
 
-interface Props { onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void; }
+interface Props {
+  onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+  initialReturnState?: SpatialCanvasReturnState;
+  onReturnStateChange?: (state: SpatialCanvasReturnState) => void;
+}
 interface DragState { id: string; pointerId: number; kind: "node" | "companion" }
 const MOVE_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as const;
 
@@ -15,15 +20,15 @@ const MOVE_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", Arrow
  * A local visualization of user-pinned research, not another Workbench or Artifact store.
  * Edges exist only for an explicit group name. All object opens use the existing callback.
  */
-export default function SpatialResearchCanvas({ onOpen }: Props) {
+export default function SpatialResearchCanvas({ onOpen, initialReturnState, onReturnStateChange }: Props) {
   const [items, setItems] = useState<ResearchTrayItem[]>(() => loadResearchTray());
   const [version, setVersion] = useState(0);
-  const [mode, setMode] = useState<SpatialLayoutMode>("map");
-  const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>("all");
-  const [trailGroup, setTrailGroup] = useState("");
+  const [mode, setMode] = useState<SpatialLayoutMode>(initialReturnState?.mode ?? "map");
+  const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>(initialReturnState?.kindFilter ?? "all");
+  const [trailGroup, setTrailGroup] = useState(initialReturnState?.trailGroup ?? "");
   const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [inspectedId, setInspectedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(initialReturnState?.expanded ?? false);
+  const [inspectedId, setInspectedId] = useState<string | null>(initialReturnState?.inspectedId ?? null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
   const [announcement, setAnnouncement] = useState("");
   const [dragPreview, setDragPreview] = useState<{ id: string; point: SpatialPoint } | null>(null);
@@ -48,6 +53,16 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   useEffect(() => subscribeResearchCanvas(() => setVersion(value => value + 1)), []);
   useEffect(() => { if (inspectedId && !selected) setInspectedId(null); }, [inspectedId, selected]);
   useEffect(() => { if (trailGroup && !selectedTrail) setTrailGroup(""); }, [trailGroup, selectedTrail]);
+  // A return to Studio should restore the exact presentation without retaining
+  // removed/filtered pin IDs or stale group names. This does not persist data.
+  useEffect(() => {
+    if (!onReturnStateChange) return;
+    onReturnStateChange(reconcileSpatialCanvasReturnState(
+      { mode, kindFilter, trailGroup, inspectedId, expanded },
+      model.nodes.map(node => node.item.id),
+      trails.map(trail => trail.group),
+    ));
+  }, [mode, kindFilter, trailGroup, inspectedId, expanded, model, trails, onReturnStateChange]);
   useEffect(() => { if (selectedConnectionKey && !inspectedConnection) setSelectedConnectionKey(null); }, [selectedConnectionKey, inspectedConnection]);
 
   const fromPointer = (clientX: number, clientY: number): SpatialPoint | null => {
