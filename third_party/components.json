@@ -24,6 +24,42 @@
   },
   "components": [
     {
+      "id": "beui-p3-trust-citations",
+      "name": "beUI cited evidence presentation in canonical P3 Trust panel",
+      "repository": "starc007/ui-components",
+      "commitSha": "601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P3-trust-source-display",
+        "accessible-numbered-citations",
+        "user-initiated-provider-navigation",
+        "no-remote-favicon"
+      ],
+      "importedPaths": [
+        "components/agents/citations.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/vendor/beui/BeuiCitations.tsx",
+        "client/src/lib/trustCitationPresentation.ts",
+        "client/src/lib/trustCitationPresentation.test.ts",
+        "client/src/components/terminal/ConversationTrustPanel.tsx"
+      ],
+      "pathMappingNote": "Pinned beUI citation list / row and disclosure patterns adapted to recorded P3 TrustManifest; no second evidence authority.",
+      "modifications": [
+        "Keep beUI numbered list, keyboard-link semantics and progressive source disclosure while mapping existing P3 evidence.",
+        "Replace upstream remote favicon hook with local Lucide icon; avoid cross-origin metadata requests.",
+        "Only link explicit non-restricted HTTPS provider observations without credentialed query; no permission escalation or auto-fetch.",
+        "Use existing LiOS React 18 and Tailwind 3; no new installed runtime or package."
+      ],
+      "notes": "Upstream blob 81e5b9be45c248de16645c1554d37d7d33d8960b; copyright 2026 Saurabh Chauhan, MIT license in third_party/licenses/beui-MIT.txt. Browser/installed accessibility, 200% zoom, release verification pending."
+    },
+    {
       "id": "openclaw",
       "name": "OpenClaw",
       "repository": "openclaw/openclaw",
