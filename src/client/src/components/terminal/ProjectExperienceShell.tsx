@@ -2781,7 +2781,16 @@ export default function ProjectExperienceShell({
         )}
       </main>
 
-      <ChatExtensionsDialog open={showChatExtensions} onOpenChange={setShowChatExtensions} />
+      <ChatExtensionsDialog
+        open={showChatExtensions}
+        onOpenChange={setShowChatExtensions}
+        projectAvailable={chatMode === "project" && Boolean(selection.projectId)}
+        onStagePrompt={(prompt) => {
+          // Never overwrite a pending user draft or send an MCP call implicitly.
+          setInput(current => current.trim() ? `${current.trimEnd()}\n\n${prompt}` : prompt);
+          requestAnimationFrame(() => composerRef.current?.focus());
+        }}
+      />
       {showSaveWorkflow && chatMode === "project" && selection.projectId && activeChat?.scope === "project" && lastWorkflowRequest && runtimeRequestId && (
         <SaveWorkflowDialog
           projectId={selection.projectId}
