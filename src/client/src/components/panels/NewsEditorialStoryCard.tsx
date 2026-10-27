@@ -60,9 +60,10 @@ export default function NewsEditorialStoryCard({
         ? "border-amber-300/50 bg-amber-300/[0.065] shadow-[inset_3px_0_0_rgba(252,211,77,0.75)]"
         : "border-border/60 bg-white/[0.015] hover:border-border hover:bg-white/[0.035]"}`}
     >
-      {lead && media && sourceEvidenceId && <LicensedEditorialImage media={media} sourceIds={[sourceEvidenceId]} className="mb-3" />}
-      {lead && !media && (
-        <div
+      {lead && <LicensedEditorialImage media={media}
+        sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []}
+        className="mb-3"
+        fallback={<div
           className="pointer-events-none relative mb-3 flex h-16 items-center justify-between overflow-hidden rounded-lg border border-border/35 bg-[radial-gradient(circle_at_85%_25%,rgba(251,191,36,0.13),transparent_64%)] px-4"
           aria-hidden="true"
         >
@@ -70,8 +71,7 @@ export default function NewsEditorialStoryCard({
             Story overview
           </span>
           <Newspaper className="h-10 w-10 text-amber-200/30" strokeWidth={1.2} />
-        </div>
-      )}
+        </div>} />}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone[sentiment]}`} aria-hidden="true" />
         <span className="max-w-full truncate font-ui text-[11px] font-semibold text-amber-200">{source}</span>
