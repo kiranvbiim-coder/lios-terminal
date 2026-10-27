@@ -20,6 +20,7 @@ import {
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { useAudience } from "@/lib/audience";
 import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
+import { normalizePulseReviewPresentation, type PulseReviewPresentation } from "@/lib/pulseReviewPresentation";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY,
@@ -106,6 +107,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   const preferenceRequestPending = useRef(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [briefHeadline, setBriefHeadline] = useState<string | null>(null);
+  const [pulseReview, setPulseReview] = useState<PulseReviewPresentation | null>(null);
+  const [reviewPending, setReviewPending] = useState(false);
+  const reviewRequestPending = useRef(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [libraryRecents, setLibraryRecents] = useState<RecentAnalyticalContext[]>(() => loadRecentAnalyticalContexts().slice(0, 6));
   const [libraryFavorites, setLibraryFavorites] = useState<ViewMode[]>(() => loadTerminalFavorites().slice(0, 6));
   const catalog = useMemo(() => buildDynamicAnalyticsCatalog(), []);
@@ -124,19 +129,22 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   useEffect(() => {
     let cancelled = false;
     setWaveDStatus("loading");
+    setPulseReview(null);
     void Promise.all([
       fetch(`/api/wave-d/pulse?channel=${pulseChannel}`),
       fetch("/api/wave-d/action-inbox"),
       isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`),
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
-      if (!pulseResponse.ok) { setWaveDStatus("unavailable"); return; }
-      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences };
+      if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); return; }
+      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences; discoveryChanges?: unknown };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
       // Bound the already-authorized source read before evidence-safe clustering and six-card display.
-      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : []);
+      const authorizedCards = Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : [];
+      setWaveDPulseCards(authorizedCards);
+      setPulseReview(normalizePulseReviewPresentation(pulse.discoveryChanges, authorizedCards));
       setPulsePreferences(normalizePulseSubjectPreferences(pulse.preferences));
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
@@ -144,7 +152,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDMonitoringCount(Number(pulse.monitoring?.activeRules ?? 0));
       setBriefHeadline(typeof brief.headline === "string" ? brief.headline : null);
       setWaveDStatus("ready");
-    }).catch(() => { if (!cancelled) setWaveDStatus("unavailable"); });
+    }).catch(() => { if (!cancelled) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); } });
     return () => { cancelled = true; };
   }, [pulseChannel, pulseRevision]);
 
@@ -169,6 +177,29 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     } finally {
       preferenceRequestPending.current = false;
       setPreferencePending(false);
+    }
+  };
+
+  const markPulseReviewed = async () => {
+    if (reviewRequestPending.current || waveDStatus !== "ready" || !pulseReview) return;
+    reviewRequestPending.current = true;
+    setReviewPending(true);
+    setReviewError(null);
+    try {
+      const response = await fetch("/api/wave-d/pulse/review", {
+        method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error("Could not save the current source review.");
+      const saved = await response.json() as { status?: unknown; persisted?: unknown };
+      if (saved.status !== "saved" || saved.persisted !== true)
+        throw new Error("The server did not confirm a saved review.");
+      setPulseRevision(value => value + 1);
+    } catch {
+      setReviewError("Review could not be saved. Earlier source changes remain unreviewed.");
+    } finally {
+      reviewRequestPending.current = false;
+      setReviewPending(false);
     }
   };
 
@@ -224,6 +255,10 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               briefHeadline={!isClient && briefHeadline ? briefHeadline : null}
               onPulseChannelChange={setPulseChannel}
               pulsePreferences={pulsePreferences}
+              pulseReview={pulseReview}
+              reviewPending={reviewPending}
+              reviewError={reviewError}
+              onMarkPulseReviewed={() => void markPulseReviewed()}
               preferencePending={preferencePending || waveDStatus !== "ready"}
               preferenceError={preferenceError}
               onPulsePreferenceChange={(cardId, action) => void changePulseSubject({ cardId, action })}

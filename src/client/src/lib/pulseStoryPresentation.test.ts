@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pulseStoryMediaSourceIds, pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "./pulseStoryPresentation";
+import { pulseStoryMediaSourceIds, pulseMonitorReviewQuestion, pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "./pulseStoryPresentation";
 
 test("only ordinary external web schemes are navigable as citations", () => {
   assert.equal(safePulseSourceUrl("javascript:alert(1)"), null);
@@ -103,4 +103,20 @@ test("a 300+ character Google News source URL remains eligible as an exact media
   const sourceIds = pulseStoryMediaSourceIds([{ id: "historic-source", url: longUrl }]);
   assert.ok(sourceIds.includes(longUrl));
   assert.ok(sourceIds.includes("historic-source"));
+});
+
+test("A08 Pulse → Chat proposes, never activates, an evidence-backed watchroom", () => {
+  const based = { id: "source", title: "Transmission capacity report", whatHappened: "Reported",
+    priority: "important" as const, score: 50, subjectKey: "power:sector", evidence: [
+      { id: "public:record", source: "First report", url: "https://example.org/report" },
+      { id: "private", source: "Private", url: "https://example.org/report?token=DO_NOT_LEAK" },
+    ] };
+  const prompt = pulseMonitorReviewQuestion(based)!;
+  assert.match(prompt, /monitoring rule for subject/);
+  assert.match(prompt, /explicit review and permission/);
+  assert.match(prompt, /authorized Project/);
+  assert.match(prompt, /https:\/\/example\.org\/report/);
+  assert.doesNotMatch(prompt, /DO_NOT_LEAK/);
+  assert.equal(pulseMonitorReviewQuestion({ ...based, evidence: [] }), null);
+  assert.equal(pulseMonitorReviewQuestion({ ...based, subjectKey: "", symbol: undefined }), null);
 });

@@ -120,3 +120,16 @@ test("existing Wave D → Watermelon-style card handoff uses one shared grouping
   assert.match(storyCard, /safePulseSourceUrl\(source\.url\)/);
   assert.doesNotMatch(board, /Math\.random|createP9Workflow|fetch\("https?:/);
 });
+
+test("A04 same source-local ID from different publishers never merges unrelated articles", () => {
+  const lead = story("publisher-a", { evidence: [
+    { id: "123", source: "Publisher A", provider: "publisher-a", url: "https://example.org/a" },
+  ] });
+  const other = story("publisher-b", { evidence: [
+    { id: "123", source: "Publisher B", provider: "publisher-b", url: "https://example.org/b" },
+  ] });
+  assert.equal(clusterRecordedPulseStories([lead, other]).length, 2);
+  assert.equal(clusterRecordedPulseStories([lead, { ...other,
+    evidence: [{ ...other.evidence![0], url: "https://example.org/a" }],
+  }]).length, 1);
+});
