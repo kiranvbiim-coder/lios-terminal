@@ -15,6 +15,7 @@ import {
   selectedModelArtifactProject,
 } from "@/lib/integratedModelArtifactSave";
 import type { SavedModelArtifact, ModelArtifactSaveRequest } from "@/lib/integratedModelArtifactSave";
+import { modelRunReviewKey, verifiedReopenedModelRun, savedModelArtifactMatchesReceipt } from "@/lib/reviewedModelRunArtifact";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
 const ArtifactPane = lazy(() => import("@/components/terminal/ArtifactPane").then((module) => ({ default: module.ArtifactPane })));
@@ -223,6 +224,8 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
     ? { request: savedOutput.request, detail: savedOutputQuery.data } : null;
   const artifactSave = { ...localArtifactSave, saved: localArtifactSave.saved ?? reopenedSaved };
   const [openedArtifact, setOpenedArtifact] = useState<SavedModelArtifact | null>(null);
+  const [reviewedSaveKey, setReviewedSaveKey] = useState<string | null>(null);
+  const [saveReviewError, setSaveReviewError] = useState<string | null>(null);
   const sessionsQuery = useProjectSessions(openedArtifact?.detail.artifact.projectId ?? null);
   const saveInFlight = useRef(false);
   const saveRequestId = useRef(0);
@@ -231,6 +234,10 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   const chatDestination = destination === "chat" && terminalContext?.target?.projectId === null ? terminalContext.target.owningChatId : null;
   const selectedDestination = chatDestination ? { projectId: null, owningChatId: chatDestination, destinationLabel: "this Chat" }
     : destinationProject ? { projectId: destinationProject.id, destinationLabel: destinationProject.name } : null;
+  const currentSaveReviewKey = modelRunReviewKey(model, selectedDestination);
+  const currentSaveReviewKeyRef = useRef(currentSaveReviewKey);
+  currentSaveReviewKeyRef.current = currentSaveReviewKey;
+  const saveIsReviewed = currentSaveReviewKey !== null && reviewedSaveKey === currentSaveReviewKey;
   const saveNotice = modelArtifactSaveNotice(artifactSave, model?.receipt.runId ?? null);
   const displayedRunSaved = isDisplayedModelSaved(artifactSave.saved, model?.receipt.runId ?? null, selectedDestination?.projectId ?? null, chatDestination ?? undefined);
   const setEditing = terminalContext?.setEditing;
@@ -305,22 +312,44 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
   }
 
   async function saveCompletedRun() {
-    if (!model || !selectedDestination || busy || saveInFlight.current || !chatDestination && projectsQuery.isError) return;
+    if (!model || !selectedDestination || !saveIsReviewed || busy || saveInFlight.current ||
+      !chatDestination && projectsQuery.isError) return;
+    const capturedKey = currentSaveReviewKey;
+    if (!capturedKey) return;
     saveInFlight.current = true;
+    setSaveReviewError(null);
+    const displayed = model;
     const request = {
       id: ++saveRequestId.current,
-      runId: model.receipt.runId,
+      runId: displayed.receipt.runId,
       ...selectedDestination,
     };
     dispatchArtifactSave({ type: "started", request });
     try {
-      const detail = await saveIntegratedModelRunArtifact(request.runId, { projectId: request.projectId, ...("owningChatId" in request ? { owningChatId: request.owningChatId } : {}) });
+      // The P11 server reopens the actual owned run and rechecks the current
+      // dataset/source entitlement, financial outputs and calculated hashes.
+      const res = await apiRequest("GET", `/api/financial-models/integrated/runs/${encodeURIComponent(request.runId)}`);
+      const reopened = await res.json() as ModelResponse;
+      if (!verifiedReopenedModelRun(displayed, reopened) ||
+        currentSaveReviewKeyRef.current !== capturedKey)
+        throw new Error("The selected run, approved destination, source access or receipt changed. Review again; no save was submitted.");
+      const detail = await saveIntegratedModelRunArtifact(request.runId, {
+        projectId: request.projectId,
+        ...("owningChatId" in request ? { owningChatId: request.owningChatId } : {}),
+      });
+      // A successful response is not enough to declare which run was saved:
+      // require the engine-produced immutable P4 source/version references.
+      if (!savedModelArtifactMatchesReceipt(detail, displayed.receipt, request)) {
+        throw new Error("Save returned a workbook with an unexpected run/dataset receipt or destination. Check the Library before retrying; the server may have committed it.");
+      }
       invalidateArtifacts(detail.artifact.projectId, detail.artifact.id);
       invalidateProjects(detail.artifact.projectId);
       dispatchArtifactSave({ type: "saved", request, detail });
       setSavedOutput({ request, artifactId: detail.artifact.id, version: detail.version.version });
+      setReviewedSaveKey(null);
     } catch (cause) {
-      dispatchArtifactSave({ type: "failed", request, message: cause instanceof Error ? cause.message : "Unable to save this completed model run." });
+      dispatchArtifactSave({ type: "failed", request, message: cause instanceof Error ? cause.message : "Unable to verify this reviewed engine run before saving." });
+      setReviewedSaveKey(null);
     } finally {
       saveInFlight.current = false;
     }
@@ -391,7 +420,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
               </select>
             </label>
             <button type="button" data-testid="integrated-model-save-artifact" onClick={() => void saveCompletedRun()}
-              disabled={busy || Boolean(artifactSave.pending) || !selectedDestination || !chatDestination && projectsQuery.isError} aria-busy={Boolean(artifactSave.pending)}
+              disabled={busy || Boolean(artifactSave.pending) || !saveIsReviewed || !selectedDestination || !chatDestination && projectsQuery.isError} aria-busy={Boolean(artifactSave.pending)}
               className="flex h-8 items-center gap-1.5 border border-[hsl(38,95%,45%)] px-3 text-[9px] text-[hsl(38,95%,58%)] disabled:opacity-40">
               {artifactSave.pending ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
               {artifactSave.pending ? "Saving model Artifact…" : displayedRunSaved ? "Save same run again" : "Save completed run"}
@@ -400,6 +429,27 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
               className="flex h-8 items-center gap-1.5 border border-border px-3 text-[9px] text-foreground">
               <ExternalLink className="h-3 w-3" /> Open saved Artifact
             </button>}
+          </div>
+          <div className="mt-3 rounded-lg border border-border/65 bg-background/45 p-3" data-testid="integrated-model-save-review">
+            <p className="font-ui text-xs font-semibold text-foreground">Review the completed calculation before saving</p>
+            <dl className="mt-2 grid gap-2 font-ui text-xs sm:grid-cols-2">
+              <div><dt className="text-muted-foreground">Run ID</dt><dd className="break-all font-mono">{model.receipt.runId}</dd></div>
+              <div><dt className="text-muted-foreground">Result SHA-256</dt><dd className="break-all font-mono">{model.receipt.resultHash}</dd></div>
+              <div><dt className="text-muted-foreground">Dataset snapshot</dt><dd className="break-all font-mono">{model.receipt.datasetSnapshotId}</dd></div>
+              <div><dt className="text-muted-foreground">Dataset SHA-256</dt><dd className="break-all font-mono">{model.receipt.datasetContentHash}</dd></div>
+              <div><dt className="text-muted-foreground">Destination</dt><dd className="break-words">{selectedDestination?.destinationLabel ?? "Choose a Chat or Project"}</dd></div>
+              <div><dt className="text-muted-foreground">Engine checks</dt><dd>{model.result.checks.passed && model.result.checks.circularConverged ? "Passed · converged" : "Failed or not converged"}</dd></div>
+            </dl>
+            <p className="mt-2 font-ui text-xs text-muted-foreground">Only the completed P11 run will be saved, not any later unsent assumptions. Verify the current destination and hashes. P4 rechecks your present source access before writing a versioned workbook.</p>
+            <button type="button" data-testid="integrated-model-confirm-review"
+              disabled={busy || Boolean(artifactSave.pending) || !currentSaveReviewKey}
+              aria-pressed={saveIsReviewed}
+              onClick={() => { setReviewedSaveKey(currentSaveReviewKey); setSaveReviewError(null); }}
+              className="mt-3 min-h-10 rounded-lg border border-amber-300/40 px-3 font-ui text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+              {saveIsReviewed ? "Receipt and destination reviewed" : "Confirm this receipt and destination"}
+            </button>
+            {saveReviewError && <p role="alert" className="mt-2 text-xs text-red-400">{saveReviewError}</p>}
+            {!currentSaveReviewKey && <p role="alert" className="mt-2 font-ui text-xs text-amber-200">Saving is unavailable until the deterministic engine receipt, dataset hashes, destination and model checks are valid.</p>}
           </div>
           <p className="mt-2 text-[9px] text-muted-foreground">Saves the displayed completed run, not unsent edits. Run Scenario first to include edited assumptions or schedules.</p>
           {projectsQuery.isLoading && <p role="status" className="mt-2 text-[10px] text-muted-foreground">Loading destination Projects…</p>}
