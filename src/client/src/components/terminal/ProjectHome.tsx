@@ -17,7 +17,7 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectLedgerPanel } from "./ProjectLedgerPanel";
 import { ProjectArtifactsPanel } from "./ProjectArtifactsPanel";
 import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
-import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
+import { ProjectWatchroomDesk } from "./ProjectWatchroomDesk";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
@@ -421,7 +421,7 @@ export function ProjectHome({
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
               <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
               <ProjectIntelligencePanel key={project.id} projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />
-              <ProjectAutomationPanel projectId={project.id} />
+              <ProjectWatchroomDesk key={project.id} projectId={project.id} />
               <ProjectArtifactsPanel
                 projectId={project.id}
                 sessions={sessions}
