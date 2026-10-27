@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
@@ -161,7 +162,8 @@ export default function FusionPulseBoard({
         symbol: quote.symbol,
       };
     }), [gainers, losers]);
-  const visiblePulseCards = pulseCards.length ? pulseCards : derivedPulseCards;
+  const groupedPulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
+  const visiblePulseCards = pulseCards.length ? groupedPulseCards : derivedPulseCards;
   const visiblePulseStatus = visiblePulseCards.length ? "ready" : pulseStatus;
 
   return (
@@ -174,7 +176,7 @@ export default function FusionPulseBoard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <FusionFreshnessBadge state={pulseStatus === "loading" ? "loading" : pulseStatus === "unavailable" ? "stale" : "live"} />
-          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" && visiblePulseCards.length ? "MARKET DATA LIVE" : `${visiblePulseCards.length} CARDS`}</span>
+          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" && visiblePulseCards.length ? "MARKET DATA LIVE" : `${visiblePulseCards.length} STORIES`}</span>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
         </div>
       </div>
