@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { parseActionInboxReview, type ActionInboxReview } from "./actionInboxReview";
 
 /**
  * Opt-in ambient signal for the "LiOS Power" clean landing (and any other
@@ -56,4 +57,70 @@ export function useProactivePulse(enabled: boolean): ProactivePulseState {
   }, [enabled]);
 
   return state;
+}
+
+/**
+ * Phase 3 review of the SAME Wave D Action Inbox. Fetch only after a foreground
+ * opt-in, pause on hidden tabs, abort when closed, and never write alerts to
+ * another cache or initiate the suggested (potentially consequential) actions.
+ */
+export type ProactiveInboxReviewState =
+  | { state: "idle" | "loading"; review: null }
+  | { state: "ready"; review: ActionInboxReview }
+  | { state: "unavailable" | "not_authorized"; review: null };
+
+export function useProactiveInboxReview(enabled: boolean): {
+  result: ProactiveInboxReviewState;
+  refresh: () => void;
+} {
+  const [result, setResult] = useState<ProactiveInboxReviewState>({ state: "idle", review: null });
+  const [generation, setGeneration] = useState(0);
+  const refresh = useCallback(() => setGeneration(n => n + 1), []);
+
+  useEffect(() => {
+    if (!enabled) {
+      setResult({ state: "idle", review: null });
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    let pending = false;
+
+    const load = async () => {
+      if (!current || controller.signal.aborted || pending || document.visibilityState === "hidden") return;
+      pending = true;
+      setResult({ state: "loading", review: null });
+      try {
+        const response = await fetch("/api/wave-d/action-inbox", {
+          method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal,
+        });
+        if (!current || controller.signal.aborted) return;
+        if (!response.ok) {
+          setResult({ state: response.status === 401 || response.status === 403 ? "not_authorized" : "unavailable", review: null });
+          return;
+        }
+        const parsed = parseActionInboxReview(await response.json() as unknown);
+        if (!current || controller.signal.aborted) return;
+        setResult(parsed.status === "ready" ? { state: "ready", review: parsed }
+          : { state: "unavailable", review: null });
+      } catch {
+        if (current && !controller.signal.aborted) setResult({ state: "unavailable", review: null });
+      } finally {
+        pending = false;
+      }
+    };
+
+    const visibilityChanged = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    void load();
+    const interval = window.setInterval(() => void load(), POLL_INTERVAL_MS);
+    return () => {
+      current = false;
+      controller.abort();
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.clearInterval(interval);
+    };
+  }, [enabled, generation]);
+
+  return { result, refresh };
 }
