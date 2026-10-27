@@ -10,6 +10,8 @@ import { useNewsArticle } from "@/lib/useFinance";
 import type { CommonsCandidate } from "@shared/commonsMedia";
 import { CommonsContextIllustration, NewsImageDiscovery } from "./NewsImageDiscovery";
 import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
+import { NewsStoryEvolution } from "./NewsStoryEvolution";
+import { observeNewsFeed, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
 import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 
 interface Props {
@@ -39,6 +41,9 @@ export default function NewsPanel({ symbol }: Props) {
   const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
+  // Only real successive feed observations from the current mounted News view.
+  // Never persist this as authoritative publisher history.
+  const [observedRevisions, setObservedRevisions] = useState<NewsStoryRevision[]>([]);
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
     queryKey: ["/api/finance/news", symbol ?? "market", query, page, from, to],
@@ -58,6 +63,10 @@ export default function NewsPanel({ symbol }: Props) {
   const newsPayload = newsQuery.data;
   const news = Array.isArray(newsPayload) ? newsPayload : newsPayload?.items ?? [];
   const isLoading = newsQuery.isLoading;
+  useEffect(() => {
+    if (!newsQuery.isSuccess || !newsQuery.dataUpdatedAt) return;
+    setObservedRevisions(current => observeNewsFeed(current, news, newsQuery.dataUpdatedAt));
+  }, [newsQuery.isSuccess, newsQuery.dataUpdatedAt, newsQuery.data]);
   const pagedNews = Array.isArray(newsPayload) ? null : newsPayload;
   const sources = useMemo(() => {
     return [
@@ -253,6 +262,8 @@ export default function NewsPanel({ symbol }: Props) {
                 <p className="mt-4 border-b border-border/60 pb-4 font-ui text-sm leading-6 text-muted-foreground">
                   {article?.excerpt || selectedItem.summary}
                 </p>
+
+                <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions} />
 
                 <div className="mt-5 space-y-3">
                   {(article?.content.length ? article.content : [selectedItem.summary]).map((paragraph, index) => (
