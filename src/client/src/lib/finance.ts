@@ -71,6 +71,8 @@ export interface NewsArticle {
   publishedAt: string;
   excerpt: string;
   content: string[];
+  /** Actual article extraction or fallback RSS summary, never inferred from text length by the client. */
+  readThrough: "publisher_text" | "feed_summary";
   status: DataStatus;
 }
 
