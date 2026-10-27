@@ -215,6 +215,7 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
               )}
             </div>
           </main>
+        )}
       </section>
     </div>
   );
