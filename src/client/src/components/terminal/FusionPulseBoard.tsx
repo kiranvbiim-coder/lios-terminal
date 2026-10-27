@@ -50,7 +50,7 @@ function QuoteRow({ quote, onOpen }: { quote: Quote; onOpen: Props["onOpen"] }) 
     <button onClick={() => onOpen("quote", "current", quote.symbol)} className="fusion-table-row grid grid-cols-[minmax(0,1.2fr)_0.8fr_0.65fr] items-center gap-2">
       <span className="min-w-0">
         <span className="block truncate font-semibold text-foreground">{quote.symbol}</span>
-        <span className="block truncate text-[7px] text-muted-foreground">{quote.name}</span>
+        <span className="block truncate text-xs text-muted-foreground">{quote.name}</span>
       </span>
       <span className="text-right tabular-nums text-foreground">{getCurrencySymbol(quote.symbol)}{formatPrice(quote.price)}</span>
       <span className={`flex items-center justify-end gap-1 tabular-nums ${pctClass(change)}`}>
@@ -181,12 +181,12 @@ export default function FusionPulseBoard({
       <div className="flex flex-wrap items-start gap-3 border-b border-border/70 px-3 py-2.5">
         <div className="flex h-8 w-8 items-center justify-center border border-amber-400/25 bg-amber-400/[0.045] text-amber-300"><Radar className="h-4 w-4" /></div>
         <div className="min-w-0 flex-1">
-          <div className="font-terminal text-[9px] font-bold tracking-[0.16em] text-amber-300">LIOS PULSE · MARKET INTELLIGENCE BOARD</div>
-          <div className="mt-0.5 font-ui text-[8px] text-muted-foreground">Markets, macro, monitoring and your active research context in one live surface.</div>
+          <div className="font-terminal text-xs font-bold tracking-[0.16em] text-amber-300">LIOS PULSE · MARKET INTELLIGENCE BOARD</div>
+          
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <FusionFreshnessBadge state={pulseStatus === "loading" ? "loading" : pulseStatus === "unavailable" ? "stale" : "live"} />
-          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" ? "PULSE UNAVAILABLE" : `${visiblePulseCards.length} STORIES`}</span>
+          <span className="font-terminal text-xs tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" ? "PULSE UNAVAILABLE" : `${visiblePulseCards.length} STORIES`}</span>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
         </div>
       </div>
