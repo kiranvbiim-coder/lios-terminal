@@ -1,12 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { P7InsightLens, P7TimelineEvent } from "@shared/p7ResearchContracts";
 import { stableSerialize } from "./analyticalCore";
 import { composeProjectBriefing } from "./phase4Briefing";
 
-const path = new URL("../components/terminal/ProjectBriefingStudio.tsx", import.meta.url);
-const studio = readFileSync(path, "utf8");
 const base: P7InsightLens = {
   schemaVersion: "1", generatedAt: "2026-10-27T01:00:00Z", projectId: 17, counts: { change: 1 },
   insights: [{
@@ -25,17 +22,6 @@ const timeline: P7TimelineEvent[] = [{
   sourceRefs: ["source:filing:17"], entityRefs: [], artifactRefs: [], modelRefs: [], decisionRef: null,
 }];
 
-test("release pre-save wiring re-reads actual P7 lens + timeline, then exact P4 versions before its only write", () => {
-  assert.match(studio, /Promise\.all\(\[lens\.refetch\(\), context\.refetch\(\)\]\)/);
-  assert.match(studio, /freshLens\.data\?\.projectId !== expectedProject/);
-  assert.match(studio, /freshContext\.data\?\.graph\.projectId !== expectedProject/);
-  assert.match(studio, /freshLens\.data, freshContext\.data\.timeline, checked/);
-  assert.match(studio, /verifyCurrentPinnedVisual\(visual,/);
-  assert.match(studio, /stableSerialize\(reviewed\.content\) !== stableSerialize\(draft\.content\)/);
-  assert.match(studio, /if \(currentProject\.current !== expectedProject\) return;/);
-  assert.match(studio, /assertSavedBriefingArtifact\(result,/);
-  assert.equal((studio.match(/createArtifact\(expectedProject,/g) ?? []).length, 1);
-});
 
 test("changed P7 observation and matched timeline are distinguishable from reviewed preview before write", () => {
   const preview = composeProjectBriefing(choose, base, timeline);

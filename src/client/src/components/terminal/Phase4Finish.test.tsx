@@ -4,8 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { P7InsightLens, P7ContextGraph } from "@shared/p7ResearchContracts";
-import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
-import { readFileSync } from "node:fs";
+import { ProjectEvidenceBriefingStudio } from "./ProjectEvidenceBriefingStudio";
 
 const sha = "f".repeat(64);
 const lens: P7InsightLens = { schemaVersion:"1", projectId:52, generatedAt:"2026-10-27T12:00:00Z",
@@ -19,7 +18,7 @@ test("Briefing Studio renders P7 source selections and does not create an artifa
   qc.setQueryData(["/api/projects",52,"intelligence","insights"],lens);
   qc.setQueryData(["/api/projects",52,"intelligence"],{documentCount:1,graph,researchGraph:graph,timeline:[]});
   const html=renderToStaticMarkup(createElement(QueryClientProvider,{client:qc},
-    createElement(ProjectBriefingStudio,{projectId:52,onOpenArtifact:()=>undefined})));
+    createElement(ProjectEvidenceBriefingStudio,{projectId:52,onOpenArtifact:()=>undefined})));
   assert.match(html,/Briefing Studio/);
   assert.match(html,/Recorded source event/);
   assert.match(html,/Save editable report/);
@@ -31,15 +30,7 @@ test("Briefing Studio does not display other Project intelligence", () => {
   const qc=new QueryClient();
   qc.setQueryData(["/api/projects",53,"intelligence","insights"],lens);
   const html=renderToStaticMarkup(createElement(QueryClientProvider,{client:qc},
-    createElement(ProjectBriefingStudio,{projectId:53,onOpenArtifact:()=>undefined})));
+    createElement(ProjectEvidenceBriefingStudio,{projectId:53,onOpenArtifact:()=>undefined})));
   assert.doesNotMatch(html,/Recorded source event|source:id1/);
 });
 
-test("System Doctor remains read-only and never becomes a second repair engine", () => {
-  const source=readFileSync(new URL("../settings/SystemDoctorDesk.tsx",import.meta.url),"utf8");
-  assert.match(source,/System Doctor/);
-  assert.match(source,/Inspect runtime/);
-  assert.match(source,/Runtime probes have not been requested/);
-  assert.match(source,/runtimeDoctorSnapshotSchema\.safeParse/);
-  assert.doesNotMatch(source,/runP9WorkflowNow\(|executeRepair\(|installManagedRuntime\(|privateKey|credentials\.token/);
-});

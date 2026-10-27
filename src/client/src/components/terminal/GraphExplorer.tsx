@@ -62,24 +62,6 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   // Keep the Escape handler current without re-running the modal focus trap on parent renders.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const viewportRef = useRef<HTMLElement>(null);
-  const dragRef = useRef<{pointer: number; clientX: number; clientY: number; originX: number; originY: number} | null>(null);
-  const [zoom, setZoom] = useState(0.7);
-  const [pan, setPan] = useState({x: 0, y: 0});
-  const zoomClamp = (value: number) => Math.min(1.8, Math.max(0.35, value));
-  const fit = () => {
-    const width = viewportRef.current?.clientWidth ?? 700;
-    const height = viewportRef.current?.clientHeight ?? 440;
-    const size = zoomClamp(Math.min(1, (width - 24) / 900, (height - 24) / 600));
-    setZoom(size);
-    setPan({x: Math.max(0, (width - 900 * size) / 2), y: Math.max(0, (height - 600 * size) / 2)});
-  };
-  useEffect(() => {
-    fit();
-    const resized = () => fit();
-    window.addEventListener("resize", resized);
-    return () => window.removeEventListener("resize", resized);
-  }, []);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
