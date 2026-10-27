@@ -39,6 +39,7 @@ import {
   type UiActionProposal,
 } from "@/lib/terminalUiActionPreview";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
+import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
 type StudioTab = typeof TABS[number];
@@ -124,11 +125,15 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
   const [evidence, setEvidence] = useState<EvidenceSnapshot>(() => getEvidenceSnapshot());
   const [receiptA, setReceiptA] = useState(0);
   const [receiptB, setReceiptB] = useState(1);
+  const [allowCrossContext, setAllowCrossContext] = useState(false);
+  const [showAllChanges, setShowAllChanges] = useState(false);
   useEffect(() => subscribeComparison(setSlots), []);
   useEffect(() => subscribeEvidence(setEvidence), []);
   const snapshots = getAnalyticalSnapshots(activeView, activeSymbol);
-  const slotChanges = compareSlots();
-  const receiptDiff = evidence.receipts.length >= 2 ? diffCalculationReceipts(evidence.receipts[Math.min(receiptA, evidence.receipts.length - 1)], evidence.receipts[Math.min(receiptB, evidence.receipts.length - 1)]) : null;
+  const context = describeSnapshotPair(slots.find(slot => slot.id === "A")?.snapshot ?? null, slots.find(slot => slot.id === "B")?.snapshot ?? null);
+  const slotChanges = context.kind === "same-context" || (context.kind === "cross-context" && allowCrossContext) ? compareSlots() : [];
+  const visibleChanges = showAllChanges ? slotChanges : slotChanges.slice(0, 12);
+  const receiptDiff = evidence.receipts.length >= 2 && receiptA !== receiptB ? diffCalculationReceipts(evidence.receipts[Math.min(receiptA, evidence.receipts.length - 1)], evidence.receipts[Math.min(receiptB, evidence.receipts.length - 1)]) : null;
 
   const captureNow = () => {
     const latestReceipt = evidence.receipts[0];
@@ -140,9 +145,39 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-ui text-[11px] font-semibold text-foreground">Comparison Mode & Model Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Compare contexts, scenarios or two calculation receipts without losing the active workspace.</p></div><div className="flex gap-2"><button onClick={captureNow} className="font-ui rounded-lg border border-amber-400/25 bg-amber-400/[0.045] px-3 py-2 text-[8px] font-semibold text-amber-200">Capture current</button><button onClick={clearComparisonSlots} className="font-ui rounded-lg border border-border/60 px-3 py-2 text-[8px] text-muted-foreground hover:text-foreground">Clear A/B</button></div></div>
-    <div className="grid gap-3 md:grid-cols-2">{slots.map((slot) => <div key={slot.id} className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between"><span className="lios-pane-code text-[9px] text-fuchsia-300">SLOT {slot.id}</span>{slot.snapshot && <button onClick={() => setComparisonSlot(slot.id, null)} className="font-ui text-[7px] text-muted-foreground hover:text-foreground">Clear</button>}</div>{slot.snapshot ? <><div className="font-ui mt-2 text-[10px] font-semibold text-foreground">{slot.snapshot.label}</div><div className="font-ui mt-1 text-[7px] text-muted-foreground">{new Date(slot.snapshot.capturedAt).toLocaleString()} · {Object.keys(slot.snapshot.values).length} fields</div><div className="mt-3 grid grid-cols-2 gap-1">{Object.entries(slot.snapshot.values).slice(0, 8).map(([key, value]) => <div key={key} className="rounded-lg bg-white/[0.02] p-2"><div className="font-ui text-[6px] text-muted-foreground">{key}</div><div className="lios-number mt-1 text-[7px] text-foreground">{fmt(value)}</div></div>)}</div></> : <div className="font-ui mt-4 rounded-xl border border-dashed border-border/50 p-4 text-[8px] text-muted-foreground">Empty. Use Capture current or a pane Compare button.</div>}</div>)}</div>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="font-ui text-[10px] font-semibold text-foreground">A → B deterministic diff</div><div className="mt-3 grid gap-1.5 md:grid-cols-2">{slotChanges.length ? slotChanges.map((change) => <ChangeRow key={change.key} change={change} />) : <div className="font-ui text-[8px] text-muted-foreground">Fill both slots to calculate a field-by-field diff.</div>}</div></section>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{evidence.receipts.length >= 2 && <div className="flex gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <div className="mt-4 grid gap-3 lg:grid-cols-3"><DiffSection title="Inputs" items={receiptDiff.inputs} /><DiffSection title="Parameters" items={receiptDiff.parameters} /><DiffSection title="Outputs" items={receiptDiff.outputs} /></div> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-[8px] text-muted-foreground">At least two calculation receipts are required.</div>}</section>
+    <div className="grid gap-3 md:grid-cols-2">{slots.map((slot) => <div key={slot.id} className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between"><span className="lios-pane-code text-[9px] text-fuchsia-300">SLOT {slot.id}</span>{slot.snapshot && <button onClick={() => setComparisonSlot(slot.id, null)} className="font-ui text-[7px] text-muted-foreground hover:text-foreground">Clear</button>}</div>{slot.snapshot ? <><div className="font-ui mt-2 text-[10px] font-semibold text-foreground">{slot.snapshot.label}</div><div className="font-ui mt-1 text-[11px] text-muted-foreground">{new Date(slot.snapshot.capturedAt).toLocaleString()} · {Object.keys(slot.snapshot.values).length} fields · {slot.snapshot.metadata.source === "context-only" ? "Context only — no calculation receipt" : slot.snapshot.metadata.source?.startsWith("receipt:") ? "Recorded calculation receipt" : "Source context unspecified"}</div><div className="mt-3 grid grid-cols-2 gap-1">{Object.entries(slot.snapshot.values).slice(0, 8).map(([key, value]) => <div key={key} className="rounded-lg bg-white/[0.02] p-2"><div className="font-ui text-[6px] text-muted-foreground">{key}</div><div className="lios-number mt-1 text-[7px] text-foreground">{fmt(value)}</div></div>)}</div></> : <div className="font-ui mt-4 rounded-xl border border-dashed border-border/50 p-4 text-[8px] text-muted-foreground">Empty. Use Capture current or a pane Compare button.</div>}</div>)}</div>
+    <section className="rounded-2xl border border-border/55 p-4">
+      <div className="font-ui text-sm font-semibold text-foreground">A → B recorded field diff</div>
+      <p role="status" className="mt-2 font-ui text-xs leading-5 text-muted-foreground">{context.message}</p>
+      {context.kind === "cross-context" && <button type="button" aria-pressed={allowCrossContext}
+        onClick={() => setAllowCrossContext(value => !value)}
+        className="mt-2 min-h-11 rounded-lg border border-amber-300/30 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        {allowCrossContext ? "Hide cross-context field differences" : "Show cross-context fields with caution"}
+      </button>}
+      <div className="mt-3 grid gap-1.5 md:grid-cols-2">{visibleChanges.length
+        ? visibleChanges.map(change => <ChangeRow key={change.key} change={change} />)
+        : <p className="font-ui text-xs text-muted-foreground">{context.kind === "cross-context" && !allowCrossContext
+          ? "Field differences are hidden until explicitly requested."
+          : context.kind === "incomplete" ? "Fill both slots to inspect a comparison." : "No differing recorded fields."}</p>}</div>
+      {slotChanges.length > 12 && <button type="button" aria-expanded={showAllChanges}
+        onClick={() => setShowAllChanges(value => !value)}
+        className="mt-3 min-h-11 w-full rounded-lg border border-border/70 font-ui text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        {showAllChanges ? "Show fewer fields" : `Show all ${slotChanges.length} changed fields`}
+      </button>}
+    </section>
+    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{evidence.receipts.length >= 2 && <div className="flex gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
+      <div className="mt-3 flex flex-wrap gap-3 font-ui text-xs text-muted-foreground">
+        <span>{[...receiptDiff.inputs, ...receiptDiff.parameters, ...receiptDiff.outputs].filter(item => item.changed).length} changed fields</span>
+        <span>{receiptDiff.warningsAdded.length} warnings added</span>
+        <span>{receiptDiff.warningsRemoved.length} warnings removed</span>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-3"><DiffSection title="Inputs" items={receiptDiff.inputs} /><DiffSection title="Parameters" items={receiptDiff.parameters} /><DiffSection title="Outputs" items={receiptDiff.outputs} /></div>
+      {(receiptDiff.warningsAdded.length > 0 || receiptDiff.warningsRemoved.length > 0) && <div className="mt-3 rounded-lg border border-amber-300/20 p-3 font-ui text-xs text-amber-200">
+        {receiptDiff.warningsAdded.map(warning => <p key={`added:${warning}`}>New warning: {warning}</p>)}
+        {receiptDiff.warningsRemoved.map(warning => <p key={`removed:${warning}`}>No longer recorded: {warning}</p>)}
+      </div>}
+      </> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-xs text-muted-foreground">{evidence.receipts.length < 2
+        ? "At least two published calculation receipts are required." : "Select two different published receipts to compare."}</div>}</section>
     {snapshots.length > 0 && <div className="font-ui text-[7px] text-muted-foreground">{snapshots.length} stored snapshots available for {activeSymbol || "global"} {getTerminalCapability(activeView).label}.</div>}
   </div>;
 }
