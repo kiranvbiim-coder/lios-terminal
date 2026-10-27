@@ -2983,5 +2983,41 @@
       "notes": "Donor file blob ed65ffad1ea648850ce29a874ea6eee28d032896 at exact MIT pin; Copyright 2026 Saurabh Chauhan. Full grant under third_party/licenses/beui-MIT.txt. Stacked draft PR #259 installed app QA remains required.",
       "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
     }
+    ,{
+      "id": "beui-motion",
+      "name": "beUI animated button (bounded UI source)",
+      "repository": "starc007/ui-components",
+      "commitSha": "fa3393a3891723d4d2daec1f1d82ead175442f44",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "verified_not_applicable",
+      "roles": ["TC-Workspace-Composer", "accessible-motion-actions"],
+      "importedPaths": ["components/motion/button/base.tsx", "lib/ease.ts", "lib/hooks/use-hover-capable.ts"],
+      "destinationPaths": ["client/src/components/vendor/beui/BeuiButton.tsx", "client/src/components/vendor/beui/motionTokens.ts", "client/src/components/vendor/beui/useHoverCapable.ts"],
+      "modifications": ["Preserves beUI action motion in the original accessible Workspace Composer, retaining unsaved Artifact protection and original apply handler.", "Adapts React Motion to preinstalled Framer Motion; hover capability and reduced-motion guards; no new production dependencies."],
+      "notes": "Public-repository port from PR305. Full MIT grant in client/src/components/vendor/beui/LICENSE. Source integration is not installed acceptance."
+    },
+    {
+      "id": "kibo-ui",
+      "name": "Kibo UI Status and searchable Tags (bounded UI sources)",
+      "repository": "shadcnblocks/kibo",
+      "commitSha": "3d63cdb15b79d972e3dc38a10997987672f9b263",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Kibo UI",
+      "externalRights": "verified_not_applicable",
+      "roles": ["TC-Workspace-Composer-Tag-Filter", "P9-Workflow-Status", "GM-Execution-Session-Status"],
+      "importedPaths": ["packages/status/index.tsx", "packages/tags/index.tsx"],
+      "destinationPaths": ["client/src/components/vendor/kibo/Status.tsx", "client/src/components/vendor/kibo/Tags.tsx"],
+      "modifications": ["Adapted compound status primitive to existing P9/GM status truth and reduced-motion indicators.", "Reused searchable tag picker for existing published intelligence-object tags without adding data authority or dependencies.", "Adapted to existing React 18/Tailwind 3/Radix primitives."],
+      "notes": "Full MIT grant at client/src/components/vendor/kibo/LICENSE. Source integration is not native acceptance."
+    }
   ]
 }

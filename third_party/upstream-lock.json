@@ -343,5 +343,17 @@
       "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
       "license": "MIT"
     }
+    ,{
+      "id": "beui-motion",
+      "repository": "starc007/ui-components",
+      "commitSha": "fa3393a3891723d4d2daec1f1d82ead175442f44",
+      "license": "MIT"
+    },
+    {
+      "id": "kibo-ui",
+      "repository": "shadcnblocks/kibo",
+      "commitSha": "3d63cdb15b79d972e3dc38a10997987672f9b263",
+      "license": "MIT"
+    }
   ]
 }

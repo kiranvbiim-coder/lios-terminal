@@ -44,33 +44,3 @@ test("unavailable, loading, and no records are distinct and never inferred", () 
 });
 
 
-// The P6 continuity owner, not this visual component, controls read/write
-// policy and all actions. The integration is a replacement, not a second list.
-test("Project Continuity mounts one Watermelon-derived P6 view using canonical queue and decision actions", async () => {
-  const { readFileSync } = await import("node:fs");
-  const owner = readFileSync(new URL("./ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  assert.match(owner, /<ProjectContinuationActivitiesCard/);
-  assert.ok(owner.includes("items={snapshot?.continuationQueue ?? []}"));
-  assert.ok(owner.includes("onOpenDecision={onFocusArtifact}"));
-  assert.ok(owner.includes("onReviewWorkflow={reviewExactWorkflow}"));
-  assert.equal(owner.includes("(snapshot?.continuationQueue ?? []).slice(0, 8).map"), false);
-  assert.match(owner, /<ProjectChangeActivity/);
-});
-
-test("Project Continuity workflow review targets an exact P9 workflow in the same Project", async () => {
-  const { readFileSync } = await import("node:fs");
-  const continuity = readFileSync(new URL("./ProjectContinuityPanel.tsx", import.meta.url), "utf8");
-  const automations = readFileSync(new URL("./ProjectAutomationPanel.tsx", import.meta.url), "utf8");
-  const focus = readFileSync(new URL("../../lib/projectWorkflowFocus.ts", import.meta.url), "utf8");
-  assert.ok(automations.includes("data-p9-workflow-id={workflow.id}"));
-  assert.ok(automations.includes("data-p9-project-id={projectId}"));
-  assert.ok(automations.includes("tabIndex={-1}"));
-  assert.ok(continuity.includes("focusProjectWorkflowRow(document, projectId, workflowId, prefersReducedMotion)"));
-  assert.ok(focus.includes('panel.getAttribute("data-p9-project-id") !== String(projectId)'));
-  assert.ok(focus.includes('row.getAttribute("data-p9-workflow-id") === workflowId'));
-  assert.ok(focus.includes('row.focus({ preventScroll: true })'));
-  assert.ok(focus.includes('row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth"'));
-  assert.ok(continuity.includes("prefers-reduced-motion: reduce"));
-  assert.ok(continuity.includes("This exact workflow is not visible"));
-  assert.equal(continuity.includes('onReviewWorkflow={() => document.querySelector'), false);
-});

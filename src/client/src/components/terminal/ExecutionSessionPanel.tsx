@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Square, SquareTerminal, X } from "lucide-react";
+import { Status, StatusIndicator, StatusLabel, type KiboStatus } from "@/components/vendor/kibo/Status";
 import { useGateway } from "@/lib/gateway/GatewayProvider";
 import { GatewayRequestError } from "@/lib/gateway/gatewayErrors";
 import type { ConversationRuntimeEvent } from "@shared/conversationRuntime";
@@ -218,6 +219,13 @@ export default function ExecutionSessionPanel({
   };
 
   const statusLabel = persisted?.status ?? status;
+  const statusTone: KiboStatus = statusLabel === "running"
+    ? "online"
+    : statusLabel === "connecting" || statusLabel === "waiting_approval"
+      ? "maintenance"
+      : ["unavailable", "failed", "denied", "interrupted"].includes(statusLabel)
+        ? "degraded"
+        : "offline";
   return (
     <aside
       className="mx-auto mb-3 max-w-4xl overflow-hidden rounded-xl border border-border/70 bg-[#050505]"
@@ -228,9 +236,10 @@ export default function ExecutionSessionPanel({
         <SquareTerminal className="h-3.5 w-3.5 text-cyan-300" />
         <span className="font-ui text-[13px] font-medium text-foreground">Execution Terminal</span>
         <code className="hidden font-terminal text-[10px] text-muted-foreground md:inline">{sessionId.slice(0, 8)}</code>
-        <span className="ml-auto font-terminal text-[10px] uppercase tracking-wider text-muted-foreground">
-          {statusLabel}
-        </span>
+        <Status status={statusTone} className="ml-auto" data-testid="execution-session-status">
+          <StatusIndicator />
+          <StatusLabel>{statusLabel.replaceAll("_", " ")}</StatusLabel>
+        </Status>
         {status === "connecting" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
         {status === "running" && (
           <button
