@@ -28,6 +28,8 @@ export function chatExtensionCatalog(input: {
   userId: number;
   organizationId: number | null;
   managementAvailable?: boolean;
+  /** Mandatory live check: a revocation can invalidate a captured install snapshot. */
+  isPluginLiveTrusted: (plugin: InstalledPluginSnapshot) => boolean;
 }): ChatExtensionCatalog {
   return chatExtensionCatalogSchema.parse({
     plugins: input.plugins.slice(0, 100).map((plugin) => ({
@@ -36,8 +38,9 @@ export function chatExtensionCatalog(input: {
       version: plugin.version,
       skillCount: plugin.manifest.skills.length,
       artifactCount: plugin.manifest.artifacts.length,
-      trusted: plugin.trust.state === "trusted",
-      registered: plugin.trust.state === "trusted" && plugin.componentIds.length > 0,
+      trusted: plugin.trust.state === "trusted" && input.isPluginLiveTrusted(plugin),
+      registered: plugin.trust.state === "trusted"
+        && input.isPluginLiveTrusted(plugin) && plugin.componentIds.length > 0,
       // A P13 component is not automatically a canonical Chat tool.
       executableFromChat: false as const,
     })),
