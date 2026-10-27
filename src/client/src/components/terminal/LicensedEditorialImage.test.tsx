@@ -93,5 +93,5 @@ test("a nonfeatured news card shows verified image thumbnail instead of an empty
     publishedAt:"2026-10-27T03:00:00Z",ageLabel:"Today",statusBadge:React.createElement("span",null,"Recorded"),
     active:false,lead:false,onSelect:()=>undefined,media,sourceEvidenceId:"other",
   }));
-  assert.doesNotMatch(noGrant, /<img\\b/);
+  assert.doesNotMatch(noGrant, /<img\b/);
 });
