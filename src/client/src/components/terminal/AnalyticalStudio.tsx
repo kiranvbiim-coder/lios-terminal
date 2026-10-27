@@ -63,7 +63,7 @@ function fmt(value: unknown): string {
 }
 
 function StudioNav({ tab, onTab }: { tab: StudioTab; onTab: (tab: StudioTab) => void }) {
-  return <nav className="flex gap-1 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} onClick={() => onTab(item)} className={`font-ui shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-semibold uppercase tracking-[0.1em] ${tab === item ? "border-amber-400/25 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item.replace("-", " ")}</button>)}</nav>;
+  return <nav aria-label="Analytical studio views" className="flex gap-1.5 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => onTab(item)} className={`font-ui min-h-10 shrink-0 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tab === item ? "border-amber-400/35 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item === "canvas" ? "Spatial research" : item.replace("-", " ")}</button>)}</nav>;
 }
 
 export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose }: Props) {
@@ -73,7 +73,7 @@ export default function AnalyticalStudio({ activeView, activeSymbol, workspace, 
       <section className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
         <header className="flex items-start gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><BrainCircuit className="h-4 w-4 text-amber-300" /></div>
-          <div className="min-w-0 flex-1"><div className="font-ui text-[13px] font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-[8px] text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
+          <div className="min-w-0 flex-1"><div className="font-ui text-base font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
           <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
         </header>
         <StudioNav tab={tab} onTab={setTab} />
