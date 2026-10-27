@@ -131,3 +131,26 @@ test("CC0 context image is explicitly illustrative with an attributable Commons 
   assert.match(html, /href="https:\/\/commons\.wikimedia\.org\/wiki\/File:Generic_context_photo\.jpg"/);
   assert.match(html, /rel="noopener noreferrer"/);
 });
+
+test("news selection buttons do not nest a source link; full read-through retains it", () => {
+  const illustrated: EditorialMedia = {
+    ...media, usageContext: "illustrative",
+    mediaSourcePage: "https://commons.wikimedia.org/wiki/File:Solar_context.jpg",
+  };
+  for (const lead of [true, false]) {
+    const html = render(React.createElement(NewsEditorialStoryCard, {
+      title: "Solar installation", summary: "Publisher context", source: "Publisher",
+      publishedAt: "2026-10-27T03:00:00Z", ageLabel: "Today",
+      statusBadge: React.createElement("span", null, "Recorded"),
+      active: false, lead, onSelect: () => undefined,
+      media: illustrated, sourceEvidenceId: "evidence:solar:1",
+    }));
+    assert.match(html, /<button\\b/);
+    assert.match(html, /licensed-editorial-image/);
+    assert.doesNotMatch(html, /<a\\b/, "attribution link must not be nested within selection button");
+  }
+  const readthrough = render(React.createElement(LicensedEditorialImage, {
+    media: illustrated, sourceIds: ["evidence:solar:1"],
+  }));
+  assert.match(readthrough, /href="https:\\/\\/commons\\.wikimedia\\.org\\/wiki\\/File:Solar_context\\.jpg"/);
+});
