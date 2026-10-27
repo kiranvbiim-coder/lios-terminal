@@ -65,6 +65,7 @@ test("fresh P11 read requires identical receipt and model checks before P4 submi
   assert.equal(verifiedReopenedModelRun(model,{...model,receipt:{...model.receipt,resultHash:"e".repeat(64)}}),false);
   assert.equal(verifiedReopenedModelRun(model,{...model,receipt:{...model.receipt,inputHash:"f".repeat(64)}}),false);
   assert.equal(verifiedReopenedModelRun(model,{...model,result:{...model.result,checks:{passed:false,circularConverged:true}}}),false);
+  assert.equal(verifiedReopenedModelRun(model,{...model,result:{...model.result,datasetSnapshotId:"different-snapshot"}}),false);
   assert.equal(verifiedReopenedModelRun(model,{...model,receipt:{...model.receipt,deterministic:false}}),false);
 });
 
