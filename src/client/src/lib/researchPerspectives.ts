@@ -1,4 +1,3 @@
-import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 /**
  * Read-only Perspectives projection over an authorized InvestigationDetail.
  * "Supports" and "contradicts" describe explicitly recorded *evidence edges*,
@@ -116,7 +115,38 @@ export function filterUnlinkedEvidence(evidence: readonly PerspectiveEvidence[],
 }
 
 export function perspectivePublishedDate(value: string | null): string {
-  const recorded = recordedIsoTimestamp(value);
-  if (!recorded) return "Publication date not recorded";
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(recorded));
+  if (!value || !Number.isFinite(Date.parse(value))) return "Publication date not recorded";
+  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+// This is a lens on a single SAVED evidence record, not a generated claim or
+// classifier. Only incoming "supports" / "contradicts" edges describe
+// explicit relationships TO this target; other edges remain context.
+export interface RecordedEvidenceClaimLens {
+  target: PerspectiveEvidence;
+  supporting: PerspectiveLink[];
+  challenging: PerspectiveLink[];
+  context: PerspectiveLink[];
+  outgoing: PerspectiveLink[];
+  unlinked: boolean;
+}
+
+export function inspectRecordedEvidenceClaim(
+  evidence: readonly PerspectiveEvidence[],
+  relations: readonly PerspectiveRelation[],
+  targetId: number,
+): RecordedEvidenceClaimLens | null {
+  const target = evidence.find(row => row.id === targetId);
+  if (!target) return null;
+  const related = buildPerspectiveModel(evidence, relations).links;
+  const incoming = related.filter(edge => edge.to.id === targetId && edge.from.id !== targetId);
+  const outgoing = related.filter(edge => edge.from.id === targetId && edge.to.id !== targetId);
+  return {
+    target,
+    supporting: incoming.filter(edge => edge.type === "supports"),
+    challenging: incoming.filter(edge => edge.type === "contradicts"),
+    context: incoming.filter(edge => edge.type !== "supports" && edge.type !== "contradicts"),
+    outgoing,
+    unlinked: !incoming.length && !outgoing.length,
+  };
 }

@@ -4,7 +4,6 @@
  * relationship inference. A different URL is always a different story.
  */
 import { safePulseSourceUrl } from "./pulseStoryPresentation";
-import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 export interface NewsStoryObservation {
   url: string;
@@ -34,9 +33,9 @@ function validObservation(item: NewsStoryObservation): NewsStoryObservation | nu
   const title = clean(item.title, 240);
   const source = clean(item.source, 160);
   const summary = clean(item.summary, 1400);
-  const published = recordedIsoTimestamp(item.publishedAt);
-  if (!title || !source || !published) return null;
-  return { url, title, source, summary, publishedAt: published };
+  const published = Date.parse(item.publishedAt);
+  if (!title || !source || !Number.isFinite(published)) return null;
+  return { url, title, source, summary, publishedAt: new Date(published).toISOString() };
 }
 
 /** Comparison of two recorded feed observations, NOT claims about the event. */
@@ -71,8 +70,8 @@ export function observeNewsFeed(
     // Switching between cached React Query keys can surface an older response
     // after a newer one. Never reclassify old feed data as a fresh revision.
     if (latest) {
-      const lastSeen = recordedIsoTimestamp(latest.lastObservedAt ?? latest.observedAt);
-      if (!lastSeen || observationTime <= Date.parse(lastSeen)) continue;
+      const lastSeen = Date.parse(latest.lastObservedAt ?? latest.observedAt);
+      if (!Number.isFinite(lastSeen) || observationTime <= lastSeen) continue;
       if (changedNewsFields(latest, item).length === 0) {
         next = next.map(record => record === latest ? { ...record, lastObservedAt: observedAt } : record);
         continue;
@@ -94,4 +93,29 @@ export function observeNewsFeed(
 
 export function newsStoryRevisions(history: readonly NewsStoryRevision[], exactUrl: string): NewsStoryRevision[] {
   return history.filter(item => item.url === exactUrl).slice(0, MAX_NEWS_REVISIONS_PER_STORY);
+}
+
+/**
+ * B03: exact-URL "as observed then" comparison over the existing bounded
+ * in-session feed observations. Not a publisher revision ledger or evidence
+ * of what the world knew before the panel opened.
+ */
+export interface NewsObservedComparison {
+  earlier: NewsStoryRevision;
+  later: NewsStoryRevision;
+  changedFields: StoryChangedField[];
+}
+export function compareRecordedNewsObservations(
+  history: readonly NewsStoryRevision[],
+  exactUrl: string,
+  earlierObservedAt: string,
+): NewsObservedComparison | null {
+  const versions = newsStoryRevisions(history, exactUrl)
+    .filter(version => Number.isFinite(Date.parse(version.observedAt)))
+    .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt));
+  const earlier = versions.find(version => version.observedAt === earlierObservedAt);
+  const later = versions[0];
+  if (!earlier || !later || later.observedAt === earlier.observedAt ||
+    Date.parse(earlier.observedAt) >= Date.parse(later.observedAt)) return null;
+  return { earlier, later, changedFields: changedNewsFields(earlier, later) };
 }

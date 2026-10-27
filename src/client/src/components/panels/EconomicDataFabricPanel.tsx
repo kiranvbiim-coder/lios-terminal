@@ -3,6 +3,7 @@ import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Activity, Database, RefreshCw, TriangleAlert } from "lucide-react";
 import type { PointInTimeScalarSeriesSnapshot, PointInTimeYieldCurveSnapshot } from "@shared/pointInTimeData";
+import { economicCaptureKnownOn, eligibleEconomicCaptures, type EconomicEvidenceComparison } from "@shared/economicEvidenceTimeMachine";
 import { AdvancedManualWorkflow, ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
@@ -48,12 +49,12 @@ function NowcastRunner({ series }: { series: PointInTimeScalarSeriesSnapshot | n
     finally { setLoading(false); }
   };
   return <section className="space-y-2 border border-border p-3">
-    <div className="font-terminal text-[9px]">LINEAR NOWCAST — FROZEN TARGET SERIES</div>
-    <div className="font-mono text-[7px] text-muted-foreground">{series ? `${targetHistory.length} frozen observations bound as targetHistory from ${series.payload.seriesId} (SNAPSHOT ${series.id.slice(0, 8)} / HASH ${series.contentHash.slice(0, 12)}).` : "NO FROZEN SERIES. CAPTURE ONE ON THE SERIES TAB FIRST."} Paste an aligned indicatorHistory (time × indicators, same row count) and currentIndicators — this manual-import path never infers indicator alignment.</div>
+    <div className="font-terminal text-xs">LINEAR NOWCAST — FROZEN TARGET SERIES</div>
+    <div className="font-mono text-xs text-muted-foreground">{series ? `${targetHistory.length} frozen observations bound as targetHistory from ${series.payload.seriesId} (SNAPSHOT ${series.id.slice(0, 8)} / HASH ${series.contentHash.slice(0, 12)}).` : "NO FROZEN SERIES. CAPTURE ONE ON THE SERIES TAB FIRST."} Paste an aligned indicatorHistory (time × indicators, same row count) and currentIndicators — this manual-import path never infers indicator alignment.</div>
     <StructuredJsonEditor schema={NOWCAST_INPUTS_SCHEMA} value={nowcastInputs} onChange={setNowcastInputs} />
-    <button type="button" onClick={() => void run()} disabled={!series || loading || !Array.isArray(nowcastInputs.indicatorHistory) || (nowcastInputs.indicatorHistory as unknown[]).length === 0 || !Array.isArray(nowcastInputs.currentIndicators) || (nowcastInputs.currentIndicators as unknown[]).length === 0} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-[8px] text-amber-300 disabled:opacity-40">{loading ? "RUNNING…" : "RUN NOWCAST"}</button>
-    {error && <div role="alert" className="font-mono text-[8px] text-red-300">{error}</div>}
-    {result && <><pre className="max-h-36 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-[7px] text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={result.receipt} /></>}
+    <button type="button" onClick={() => void run()} disabled={!series || loading || !Array.isArray(nowcastInputs.indicatorHistory) || (nowcastInputs.indicatorHistory as unknown[]).length === 0 || !Array.isArray(nowcastInputs.currentIndicators) || (nowcastInputs.currentIndicators as unknown[]).length === 0} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-xs text-amber-300 disabled:opacity-40">{loading ? "RUNNING…" : "RUN NOWCAST"}</button>
+    {error && <div role="alert" className="font-mono text-xs text-red-300">{error}</div>}
+    {result && <><pre className="max-h-36 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-xs text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={result.receipt} /></>}
   </section>;
 }
 
@@ -86,16 +87,16 @@ function MacroModelTab({ curve, series }: { curve: PointInTimeYieldCurveSnapshot
     finally { setCurveLoading(false); }
   };
   return <div className="space-y-3 p-4">
-    <div className="font-terminal text-[9px] text-amber-300">ADVANCED MACRO WORKFLOWS</div>
-    <div className={`border p-2 font-mono text-[8px] ${fred?.state === "configured" ? "border-emerald-400/30 text-emerald-300" : "border-amber-400/30 text-amber-200"}`}>
+    <div className="font-terminal text-xs text-amber-300">ADVANCED MACRO WORKFLOWS</div>
+    <div className={`border p-2 font-mono text-xs ${fred?.state === "configured" ? "border-emerald-400/30 text-emerald-300" : "border-amber-400/30 text-amber-200"}`}>
       {fred?.state === "configured" ? "FRED CONNECTOR CONFIGURED — ONLY FROZEN SNAPSHOTS ARE USED AS SOURCED INPUTS." : `FRED CONNECTOR UNAVAILABLE — ${fred?.setup ?? "Configure it before capturing new observations."} Existing frozen snapshots may still be calculated only when current linked rights permit. Manual imports remain manual.`}
     </div>
     <section className="space-y-2 border border-border p-3">
-      <div className="font-terminal text-[9px]">YIELD-CURVE SIGNALS — FROZEN FRED UST CURVE</div>
-      <div className="font-mono text-[7px] text-muted-foreground">{curve ? `SNAPSHOT ${curve.id} / AS-OF ${curve.effectiveAt} / HASH ${curve.contentHash}` : "NO FROZEN UST CURVE. CAPTURE ONE AFTER CONFIGURING FRED."}</div>
-      <button type="button" onClick={() => void runCurve()} disabled={!curve?.entitlementPolicyId || curveLoading} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-[8px] text-amber-300 disabled:opacity-40">{curveLoading ? "RUNNING…" : "RUN SOURCED CURVE SIGNALS"}</button>
-      {curveError && <div role="alert" className="font-mono text-[8px] text-red-300">{curveError}</div>}
-      {curveResult && <><pre className="max-h-36 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-[7px] text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(curveResult).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={curveResult.receipt} /></>}
+      <div className="font-terminal text-xs">YIELD-CURVE SIGNALS — FROZEN FRED UST CURVE</div>
+      <div className="font-mono text-xs text-muted-foreground">{curve ? `SNAPSHOT ${curve.id} / AS-OF ${curve.effectiveAt} / HASH ${curve.contentHash}` : "NO FROZEN UST CURVE. CAPTURE ONE AFTER CONFIGURING FRED."}</div>
+      <button type="button" onClick={() => void runCurve()} disabled={!curve?.entitlementPolicyId || curveLoading} className="border border-amber-400/40 px-3 py-1.5 font-terminal text-xs text-amber-300 disabled:opacity-40">{curveLoading ? "RUNNING…" : "RUN SOURCED CURVE SIGNALS"}</button>
+      {curveError && <div role="alert" className="font-mono text-xs text-red-300">{curveError}</div>}
+      {curveResult && <><pre className="max-h-36 overflow-auto whitespace-pre-wrap border border-border p-2 font-mono text-xs text-muted-foreground">{JSON.stringify(Object.fromEntries(Object.entries(curveResult).filter(([key]) => key !== "receipt")), null, 2)}</pre><ReceiptSummary receipt={curveResult.receipt} /></>}
     </section>
     <NowcastRunner series={series} />
     <AdvancedManualWorkflow spec={{ family: "macro", model: "financial-conditions-index", label: "FINANCIAL CONDITIONS INDEX", instructions: "Paste indicatorNames, historicalValues (time × indicators, at least 30 rows), tighteningDirection, and optional latestValues from a reviewed import." }} />
@@ -109,6 +110,11 @@ export default function EconomicDataFabricPanel() {
   const [seriesId, setSeriesId] = useTerminalArtifactState("EconomicDataFabricPanel.seriesId", "FEDFUNDS");
   const [series, setSeries] = useState<PointInTimeScalarSeriesSnapshot[]>([]);
   const [curves, setCurves] = useState<PointInTimeYieldCurveSnapshot[]>([]);
+  const [knownOnDay, setKnownOnDay] = useState("");
+  const [historicalComparison, setHistoricalComparison] = useState<EconomicEvidenceComparison | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const compareAbort = useRef<AbortController | null>(null);
   const [selectedSeriesId, setSelectedSeriesId] = useTerminalArtifactState<string | null>("EconomicDataFabricPanel.selectedSeriesSnapshot", null);
   const [selectedCurveId, setSelectedCurveId] = useTerminalArtifactState<string | null>("EconomicDataFabricPanel.selectedCurveSnapshot", null);
   const loadOwner = `${seriesId}:${selectedSeriesId ?? ""}:${selectedCurveId ?? ""}`;
@@ -122,6 +128,51 @@ export default function EconomicDataFabricPanel() {
   const [error, setError] = useState<string | null>(null);
   const currentSeries = selectedSeriesId ? series.find(item => item.id === selectedSeriesId) ?? null : series[0] ?? null;
   const currentCurve = selectedCurveId ? curves.find(item => item.id === selectedCurveId) ?? null : curves[0] ?? null;
+  const recordedCaptures = eligibleEconomicCaptures(series,seriesId);
+  const latestSeriesCapture = recordedCaptures[0] ?? null;
+  const savedThen = knownOnDay ? economicCaptureKnownOn(series,seriesId,knownOnDay) : null;
+  const shownComparison = historicalComparison &&
+    historicalComparison.baseline.id === savedThen?.id && historicalComparison.current.id === latestSeriesCapture?.id &&
+    historicalComparison.baseline.entityKey === seriesId ? historicalComparison : null;
+  useEffect(() => {
+    compareAbort.current?.abort();
+    setHistoricalComparison(null);
+    setCompareError(null);
+    setComparing(false);
+    return () => compareAbort.current?.abort();
+  }, [seriesId,knownOnDay,savedThen?.id,latestSeriesCapture?.id]);
+  const compareSavedEconomicCaptures = async () => {
+    if (!savedThen || !latestSeriesCapture || savedThen.id === latestSeriesCapture.id || comparing) return;
+    compareAbort.current?.abort();
+    const controller = new AbortController();
+    compareAbort.current = controller;
+    setComparing(true);
+    setCompareError(null);
+    setHistoricalComparison(null);
+    try {
+      const selectedSeries = seriesId;
+      const pair = new URLSearchParams({baselineId:savedThen.id,currentId:latestSeriesCapture.id});
+      const result = await json<EconomicEvidenceComparison>(
+        `/api/data-snapshots/economics/${encodeURIComponent(seriesId)}/compare?${pair}`,
+        {credentials:"same-origin",cache:"no-store",signal:controller.signal});
+      if (controller.signal.aborted || selectedSeries !== latestLoadOwner.current.split(":")[0]) return;
+      if (result.status !== "compared" || result.baseline.id !== savedThen.id ||
+        result.current.id !== latestSeriesCapture.id ||
+        result.baseline.entityKey !== selectedSeries || result.current.entityKey !== selectedSeries ||
+        result.baseline.contentHash !== savedThen.contentHash ||
+        result.current.contentHash !== latestSeriesCapture.contentHash)
+        throw new Error("Saved economic evidence changed while comparing; reload current captures.");
+      setHistoricalComparison(result);
+    } catch (cause) {
+      if (!controller.signal.aborted && seriesId === latestLoadOwner.current.split(":")[0])
+        setCompareError(cause instanceof Error ? cause.message : "Saved economic comparison unavailable.");
+    } finally {
+      if (compareAbort.current === controller) {
+        compareAbort.current = null;
+        setComparing(false);
+      }
+    }
+  };
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     const owner = loadOwner;
@@ -163,18 +214,18 @@ export default function EconomicDataFabricPanel() {
     catch (cause) { if (owner === latestLoadOwner.current) setError(cause instanceof Error ? cause.message : "Explicit policy linkage failed."); }
   };
   return <div className="h-full min-h-0 flex flex-col bg-background overflow-hidden">
-    <header className="shrink-0 border-b border-border px-4 py-3 flex flex-wrap items-center gap-3"><Activity className="w-4 h-4 text-amber-300" /><div><div className="font-terminal text-[10px]">MACRO, RATES AND CURVE DATA FABRIC</div><div className="font-mono text-[7px] text-muted-foreground">FRED VINTAGES / IMMUTABLE AVAILABILITY / AS-OF REPLAY</div></div>
-      <form onSubmit={(event) => { event.preventDefault(); setSelectedSeriesId(null); setSeries([]); setSeriesId(seriesInput.trim().toUpperCase()); }} className="ml-auto flex"><input aria-label="FRED series ID" value={seriesInput} onChange={(event) => setSeriesInput(event.target.value)} className="h-8 w-32 border border-border bg-black px-2 font-mono text-[9px] uppercase outline-none focus:border-amber-400/50" /><button title="Load FRED series" className="w-8 h-8 border border-l-0 border-border text-amber-300"><RefreshCw className="w-3.5 h-3.5 mx-auto" /></button></form>
-      <button onClick={() => capture("series")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-[7px] text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "series" ? "CAPTURING" : "CAPTURE SERIES"}</button>
-      <button onClick={() => capture("curve")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-[7px] text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "curve" ? "CAPTURING" : "CAPTURE UST CURVE"}</button>
+    <header className="shrink-0 border-b border-border px-4 py-3 flex flex-wrap items-center gap-3"><Activity className="w-4 h-4 text-amber-300" /><div><div className="font-terminal text-xs">MACRO, RATES AND CURVE DATA FABRIC</div><div className="font-mono text-xs text-muted-foreground">FRED VINTAGES / IMMUTABLE AVAILABILITY / AS-OF REPLAY</div></div>
+      <form onSubmit={(event) => { event.preventDefault(); setSelectedSeriesId(null); setSeries([]); setSeriesId(seriesInput.trim().toUpperCase()); }} className="ml-auto flex"><input aria-label="FRED series ID" value={seriesInput} onChange={(event) => setSeriesInput(event.target.value)} className="h-8 w-32 border border-border bg-black px-2 font-mono text-xs uppercase outline-none focus:border-amber-400/50" /><button title="Load FRED series" className="w-8 h-8 border border-l-0 border-border text-amber-300"><RefreshCw className="w-3.5 h-3.5 mx-auto" /></button></form>
+      <button onClick={() => capture("series")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-xs text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "series" ? "CAPTURING" : "CAPTURE SERIES"}</button>
+      <button onClick={() => capture("curve")} disabled={busy !== null} className="h-8 border border-amber-400/40 px-3 font-terminal text-xs text-amber-300 disabled:opacity-40"><Database className="inline w-3.5 h-3.5 mr-2" />{busy === "curve" ? "CAPTURING" : "CAPTURE UST CURVE"}</button>
     </header>
-    {error && <div className="shrink-0 border-b border-red-400/30 px-4 py-2 font-mono text-[8px] text-red-300"><TriangleAlert className="inline w-3.5 h-3.5 mr-2" />{error}</div>}
+    {error && <div className="shrink-0 border-b border-red-400/30 px-4 py-2 font-mono text-xs text-red-300"><TriangleAlert className="inline w-3.5 h-3.5 mr-2" />{error}</div>}
     <div className="shrink-0 grid grid-cols-2 md:grid-cols-6 border-b border-border">{[
       ["SERIES", seriesId], ["SERIES VERSIONS", series.length], ["OBSERVATIONS", currentSeries?.quality.validObservationCount ?? 0],
       ["VINTAGE COVERAGE", currentSeries ? `${(currentSeries.quality.vintageCoverage * 100).toFixed(0)}%` : "--"],
       ["CURVE VERSIONS", curves.length], ["CURVE TENORS", currentCurve?.quality.validObservationCount ?? 0],
-    ].map(([label, value]) => <div key={label} className="border-r border-border px-3 py-2"><div className="font-mono text-[7px] text-muted-foreground">{label}</div><div className="font-terminal text-[9px] truncate">{value}</div></div>)}</div>
-    <nav className="shrink-0 border-b border-border px-4 py-2 flex gap-1">{(["series", "curve", "macro", "lineage"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`h-7 border px-3 font-terminal text-[7px] ${tab === item ? "border-amber-400/50 text-amber-300" : "border-border text-muted-foreground"}`}>{item.toUpperCase()}</button>)}</nav>
+    ].map(([label, value]) => <div key={label} className="border-r border-border px-3 py-2"><div className="font-mono text-xs text-muted-foreground">{label}</div><div className="font-terminal text-xs truncate">{value}</div></div>)}</div>
+    <nav className="shrink-0 border-b border-border px-4 py-2 flex gap-1">{(["series", "curve", "macro", "lineage"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`h-7 border px-3 font-terminal text-xs ${tab === item ? "border-amber-400/50 text-amber-300" : "border-border text-muted-foreground"}`}>{item.toUpperCase()}</button>)}</nav>
     <div className="flex flex-wrap gap-3 border-b border-border p-3 text-xs">
       <label>Recorded series <select aria-label="Recorded economic series snapshot" value={currentSeries?.id ?? ""} onChange={event=>setSelectedSeriesId(event.target.value)}><option value="" disabled>Unavailable</option>{series.map(item=><option key={item.id} value={item.id}>{item.id} · {item.availableAt}</option>)}</select></label>
       <label>Recorded curve <select aria-label="Recorded economic curve snapshot" value={currentCurve?.id ?? ""} onChange={event=>setSelectedCurveId(event.target.value)}><option value="" disabled>Unavailable</option>{curves.map(item=><option key={item.id} value={item.id}>{item.id} · {item.availableAt}</option>)}</select></label>
@@ -183,10 +234,86 @@ export default function EconomicDataFabricPanel() {
       <p>Only current admin/compliance can link an existing matching policy. No rights are created from a configured connector; immutable historical hashes are unchanged.</p>
     </div>
     <div className="min-h-0 flex-1 overflow-auto">
-      {tab === "series" && (!currentSeries ? <div className="p-8 font-terminal text-[9px] text-muted-foreground">NO FROZEN SERIES. CAPTURE {seriesId} TO BEGIN.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-[7px] text-muted-foreground">{currentSeries.payload.name} / {currentSeries.payload.unit || "UNITLESS"} / {currentSeries.payload.frequency.toUpperCase()} / AVAILABLE {new Date(currentSeries.availableAt).toLocaleString()} / HASH {currentSeries.contentHash.slice(0, 12)}</div><table className="w-full font-mono text-[8px]"><thead className="sticky top-0 bg-black text-muted-foreground"><tr>{["OBSERVATION", "VALUE", "VINTAGE START", "VINTAGE END", "SOURCE AVAILABLE"].map((item) => <th key={item} className="border-b border-border px-3 py-2 text-right first:text-left">{item}</th>)}</tr></thead><tbody>{[...currentSeries.payload.observations].reverse().map((row) => <tr key={row.date} className="border-b border-border/50"><td className="px-3 py-1.5">{row.date}</td><td className="px-3 py-1.5 text-right">{row.value.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td><td className="px-3 py-1.5 text-right">{row.realtimeStart ?? "--"}</td><td className="px-3 py-1.5 text-right">{row.realtimeEnd ?? "--"}</td><td className="px-3 py-1.5 text-right">{new Date(row.availableAt).toLocaleDateString()}</td></tr>)}</tbody></table></>)}
-      {tab === "curve" && (!currentCurve ? <div className="p-8 font-terminal text-[9px] text-muted-foreground">NO FROZEN TREASURY CURVE.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-[7px] text-muted-foreground">UST NOMINAL / {currentCurve.payload.curveDate} / AVAILABLE {new Date(currentCurve.availableAt).toLocaleString()} / HASH {currentCurve.contentHash.slice(0, 12)}</div><div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6">{currentCurve.payload.points.map((point) => <div key={point.label} className="border-r border-b border-border p-4"><div className="font-terminal text-[8px] text-muted-foreground">{point.label} / {point.seriesId}</div><div className="mt-2 font-mono text-lg">{point.yield === null ? "--" : `${point.yield.toFixed(3)}%`}</div><div className="mt-1 font-mono text-[7px] text-muted-foreground">{point.observationDate ?? "NO DATE"}</div></div>)}</div></>)}
+      {tab === "series" && <section data-testid="b06-economic-evidence-time-machine"
+        aria-label="Economic Evidence Time Machine" className="space-y-3 border-b border-border/70 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-ui text-sm font-semibold text-foreground">Economic Evidence Time Machine</h3>
+            <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+              Compare recorded FRED series snapshots actually available by a selected UTC day.
+              Older observation dates do not establish that values were captured then.
+            </p>
+          </div>
+          <label className="font-ui text-xs text-muted-foreground">
+            As known on (UTC)
+            <input aria-label="Recorded economic snapshot as known on UTC day" type="date"
+              value={knownOnDay} onChange={event=>setKnownOnDay(event.target.value)}
+              className="mt-1 block min-h-11 rounded-md border border-border/60 bg-background px-3 font-ui text-sm text-foreground"/>
+          </label>
+        </div>
+        {knownOnDay && (!savedThen || !latestSeriesCapture
+          ? <p role="status" className="font-ui text-xs text-amber-200">
+              No immutable {seriesId} snapshot was retained as available on that day. This view cannot reconstruct missing evidence.
+            </p>
+          : <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Retained economic source captures">
+                {([{name:"Captured then",snapshot:savedThen},{name:"Latest retained",snapshot:latestSeriesCapture}] as const).map(({name,snapshot})=>
+                  <article key={name} className="min-w-0 space-y-1 rounded-lg border border-border/60 p-3 font-ui text-xs">
+                    <h4 className="font-semibold text-foreground">{name}</h4>
+                    <p className="text-muted-foreground">Available <time dateTime={snapshot.availableAt}>{new Date(snapshot.availableAt).toLocaleString()}</time></p>
+                    <p className="text-muted-foreground">{snapshot.payload.unit || "Unspecified unit"} · {snapshot.payload.frequency}</p>
+                    <p className="break-all text-muted-foreground">Snapshot <code>{snapshot.id}</code></p>
+                    <p className="break-all text-muted-foreground">SHA-256 <code>{snapshot.contentHash}</code></p>
+                  </article>)}
+              </div>
+              {savedThen.id === latestSeriesCapture.id
+                ? <p role="status" className="font-ui text-xs text-muted-foreground">The saved capture was already the latest retained version. There is no newer snapshot.</p>
+                : <button type="button" disabled={comparing} onClick={()=>void compareSavedEconomicCaptures()}
+                    className="min-h-11 rounded-md border border-amber-300/50 px-3 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+                    {comparing ? "Comparing recorded vintages…" : "Compare saved economic vintages"}
+                  </button>}
+              {compareError && <p role="alert" className="font-ui text-xs text-rose-200">{compareError}</p>}
+              {shownComparison && <div className="space-y-2" data-testid="b06-economic-snapshot-comparison">
+                <p role="status" className="font-ui text-xs leading-5 text-muted-foreground">
+                  {shownComparison.changes.changedObservations} revised recorded observation(s) ·
+                  {" "}{shownComparison.changes.totalAddedDates} new observation date(s) ·
+                  {" "}{shownComparison.changes.totalRemovedDates} removed date(s).
+                  Differences may reflect value revisions or FRED vintage metadata changes, not a causal event.
+                </p>
+                <div className="max-h-64 overflow-auto rounded-md border border-border/60">
+                  <table className="w-full min-w-[560px] text-left font-ui text-xs">
+                    <caption className="p-2 text-left text-muted-foreground">
+                      Retained source revision pairs, first 24 shown. Values share the recorded unit.
+                    </caption>
+                    <thead className="sticky top-0 bg-background text-muted-foreground"><tr>
+                      {["Observation","Then","Latest","Difference","Vintage start (then / latest)"].map(label=>
+                        <th key={label} scope="col" className="border-b border-border/50 px-3 py-2">{label}</th>)}
+                    </tr></thead>
+                    <tbody>{shownComparison.changes.revisions.slice(0,24).map((item,index)=><tr key={item.date+":"+index} className="border-b border-border/35">
+                      <th scope="row" className="px-3 py-2">{item.date}</th>
+                      <td className="px-3 py-2 tabular-nums">{item.before}</td>
+                      <td className="px-3 py-2 tabular-nums">{item.after}</td>
+                      <td className="px-3 py-2 tabular-nums">{item.absoluteChange}</td>
+                      <td className="px-3 py-2">{item.beforeVintage.realtimeStart || "unknown"} / {item.afterVintage.realtimeStart || "unknown"}</td>
+                    </tr>)}</tbody>
+                  </table>
+                </div>
+                {shownComparison.changes.changedObservations > 24 && <p className="font-ui text-xs text-muted-foreground">
+                  {shownComparison.changes.changedObservations-24} additional source-revision rows omitted from this preview.
+                </p>}
+                {(shownComparison.changes.totalAddedDates > 0 || shownComparison.changes.totalRemovedDates > 0) &&
+                  <p className="font-ui text-xs text-muted-foreground">
+                    Added: {shownComparison.changes.addedDates.join(", ") || "none shown"} ·
+                    Removed: {shownComparison.changes.removedDates.join(", ") || "none shown"}.
+                    {shownComparison.omitted.addedDates+shownComparison.omitted.removedDates} further dates omitted.
+                  </p>}
+              </div>}
+            </div>)}
+      </section>}
+      {tab === "series" && (!currentSeries ? <div className="p-8 font-terminal text-xs text-muted-foreground">NO FROZEN SERIES. CAPTURE {seriesId} TO BEGIN.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-xs text-muted-foreground">{currentSeries.payload.name} / {currentSeries.payload.unit || "UNITLESS"} / {currentSeries.payload.frequency.toUpperCase()} / AVAILABLE {new Date(currentSeries.availableAt).toLocaleString()} / HASH {currentSeries.contentHash.slice(0, 12)}</div><table className="w-full font-mono text-xs"><thead className="sticky top-0 bg-black text-muted-foreground"><tr>{["OBSERVATION", "VALUE", "VINTAGE START", "VINTAGE END", "SOURCE AVAILABLE"].map((item) => <th key={item} className="border-b border-border px-3 py-2 text-right first:text-left">{item}</th>)}</tr></thead><tbody>{[...currentSeries.payload.observations].reverse().map((row) => <tr key={row.date} className="border-b border-border/50"><td className="px-3 py-1.5">{row.date}</td><td className="px-3 py-1.5 text-right">{row.value.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td><td className="px-3 py-1.5 text-right">{row.realtimeStart ?? "--"}</td><td className="px-3 py-1.5 text-right">{row.realtimeEnd ?? "--"}</td><td className="px-3 py-1.5 text-right">{new Date(row.availableAt).toLocaleDateString()}</td></tr>)}</tbody></table></>)}
+      {tab === "curve" && (!currentCurve ? <div className="p-8 font-terminal text-xs text-muted-foreground">NO FROZEN TREASURY CURVE.</div> : <><div className="px-4 py-2 border-b border-border font-mono text-xs text-muted-foreground">UST NOMINAL / {currentCurve.payload.curveDate} / AVAILABLE {new Date(currentCurve.availableAt).toLocaleString()} / HASH {currentCurve.contentHash.slice(0, 12)}</div><div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6">{currentCurve.payload.points.map((point) => <div key={point.label} className="border-r border-b border-border p-4"><div className="font-terminal text-xs text-muted-foreground">{point.label} / {point.seriesId}</div><div className="mt-2 font-mono text-lg">{point.yield === null ? "--" : `${point.yield.toFixed(3)}%`}</div><div className="mt-1 font-mono text-xs text-muted-foreground">{point.observationDate ?? "NO DATE"}</div></div>)}</div></>)}
       {tab === "macro" && <MacroModelTab curve={currentCurve} series={currentSeries} />}
-      {tab === "lineage" && <pre className="p-4 whitespace-pre-wrap font-mono text-[8px] leading-5 text-muted-foreground">{JSON.stringify({ series: currentSeries && { id: currentSeries.id, parent: currentSeries.parentSnapshotId, clocks: { effectiveAt: currentSeries.effectiveAt, publishedAt: currentSeries.publishedAt, retrievedAt: currentSeries.retrievedAt, availableAt: currentSeries.availableAt }, quality: currentSeries.quality, lineage: currentSeries.lineage }, curve: currentCurve && { id: currentCurve.id, parent: currentCurve.parentSnapshotId, clocks: { effectiveAt: currentCurve.effectiveAt, publishedAt: currentCurve.publishedAt, retrievedAt: currentCurve.retrievedAt, availableAt: currentCurve.availableAt }, quality: currentCurve.quality, lineage: currentCurve.lineage }, fxWorkflow: "Use EURUSD=X PITDATA (or another Yahoo-format FX pair) for immutable FX OHLCV and returns." }, null, 2)}</pre>}
+      {tab === "lineage" && <pre className="p-4 whitespace-pre-wrap font-mono text-xs leading-5 text-muted-foreground">{JSON.stringify({ series: currentSeries && { id: currentSeries.id, parent: currentSeries.parentSnapshotId, clocks: { effectiveAt: currentSeries.effectiveAt, publishedAt: currentSeries.publishedAt, retrievedAt: currentSeries.retrievedAt, availableAt: currentSeries.availableAt }, quality: currentSeries.quality, lineage: currentSeries.lineage }, curve: currentCurve && { id: currentCurve.id, parent: currentCurve.parentSnapshotId, clocks: { effectiveAt: currentCurve.effectiveAt, publishedAt: currentCurve.publishedAt, retrievedAt: currentCurve.retrievedAt, availableAt: currentCurve.availableAt }, quality: currentCurve.quality, lineage: currentCurve.lineage }, fxWorkflow: "Use EURUSD=X PITDATA (or another Yahoo-format FX pair) for immutable FX OHLCV and returns." }, null, 2)}</pre>}
     </div>
   </div>;
 }

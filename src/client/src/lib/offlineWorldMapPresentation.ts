@@ -7,21 +7,30 @@ const MAX_POINTS = 60;
 
 export function projectOfflineWorldPoints(
   points: readonly RecordedGeographicPoint[],
-  options: { sourceOnly?: boolean; withEventDate?: boolean; query?: string } = {},
+  options: { sourceOnly?: boolean; withEventDate?: boolean; fromDate?: string; throughDate?: string } = {},
 ) {
+  // A date window is always UTC-calendar-day based. Malformed bounds must not
+  // silently widen the map and reveal outside-window records.
+  const from = options.fromDate === undefined ? null : recordedIsoTimestamp(options.fromDate, true);
+  const through = options.throughDate === undefined ? null : recordedIsoTimestamp(options.throughDate, true);
+  const invalidWindow = (options.fromDate !== undefined && !from) ||
+    (options.throughDate !== undefined && !through) ||
+    (from !== null && through !== null && from > through);
   const knownIds = new Set<string>();
-  // Search is a local, exact-record text projection over already authorized
-  // point labels/source IDs. No geocoding, location history or network calls.
-  const query = (options.query ?? "").trim().toLocaleLowerCase().slice(0, 120);
-  const sourceEligible = points.flatMap(point => {
+  const eligible = points.flatMap(point => {
     if (typeof point.id !== "string" || !point.id.trim() || knownIds.has(point.id)) return [];
     if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude) ||
       point.latitude < -90 || point.latitude > 90 || point.longitude < -180 || point.longitude > 180) return [];
     const hasSourceId = typeof point.sourceRef === "string" && point.sourceRef.trim().length > 0;
     if (options.sourceOnly && !hasSourceId) return [];
-    // Date.parse alone accepts ambiguous local dates, rollovers and strings
-    // such as "1". Use the existing canonical zoned event gate.
-    if (options.withEventDate && !recordedIsoTimestamp(point.occurredAt)) return [];
+    const occurred = recordedIsoTimestamp(point.occurredAt, true);
+    if (options.withEventDate && !occurred) return [];
+    if (invalidWindow) return [];
+    // Boundaries are inclusive on UTC calendar dates, not locally guessed event
+    // dates or publication dates. Undated pins are unknown, never "current".
+    const day = occurred?.slice(0, 10) ?? null;
+    if ((from || through) && (!day || (from && day < from.slice(0, 10)) ||
+      (through && day > through.slice(0, 10)))) return [];
     knownIds.add(point.id);
     return [{
       ...point,
@@ -30,17 +39,10 @@ export function projectOfflineWorldPoints(
       hasSourceId,
     } satisfies WorldPoint];
   });
-  const matched = query
-    ? sourceEligible.filter(point =>
-      point.label.toLocaleLowerCase().includes(query) ||
-      point.id.toLocaleLowerCase().includes(query) ||
-      (point.sourceRef ?? "").toLocaleLowerCase().includes(query))
-    : sourceEligible;
   return {
-    points: matched.slice(0, MAX_POINTS),
-    eligibleCount: matched.length,
-    omittedCount: Math.max(0, matched.length - MAX_POINTS),
-    filteredOutCount: sourceEligible.length - matched.length,
+    points: eligible.slice(0, MAX_POINTS),
+    eligibleCount: eligible.length,
+    omittedCount: Math.max(0, eligible.length - MAX_POINTS),
   };
 }
 
@@ -51,24 +53,14 @@ export function worldPointCoordinates(longitude: number, latitude: number) {
   return { x: (longitude + 180) / 360 * 100, y: (90 - latitude) / 180 * 100 };
 }
 
-
-/**
- * Keep the same recorded geographic coordinate under the viewport centre
- * while zooming. Pure view math only: no source transformation or lookup.
+/** Available time controls arise only from recorded and parseable P7 event dates.
+ * They do not infer when an undated place was visited or when news was published.
  */
-export function worldMapCenterPreservingPan(
-  pan: { x: number; y: number },
-  viewport: { width: number; height: number },
-  oldZoom: number,
-  newZoom: number,
-) {
-  if (![pan.x, pan.y, viewport.width, viewport.height, oldZoom, newZoom].every(Number.isFinite) ||
-    viewport.width <= 0 || viewport.height <= 0 || oldZoom <= 0 || newZoom <= 0) return pan;
-  const ratio = newZoom / oldZoom;
-  const midX = viewport.width / 2;
-  const midY = viewport.height / 2;
-  return {
-    x: midX - (midX - pan.x) * ratio,
-    y: midY - (midY - pan.y) * ratio,
-  };
+export function recordedWorldMapDays(points: readonly RecordedGeographicPoint[]): string[] {
+  return [...new Set(points.flatMap(point => {
+    if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude) ||
+      point.latitude < -90 || point.latitude > 90 || point.longitude < -180 || point.longitude > 180) return [];
+    const at = recordedIsoTimestamp(point.occurredAt, true);
+    return at ? [at.slice(0, 10)] : [];
+  }))].sort();
 }

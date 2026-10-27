@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PerspectiveSource, RecordedPerspectivesBoard } from "./RecordedPerspectivesBoard";
 import type { PerspectiveEvidence, PerspectiveRelation } from "@/lib/researchPerspectives";
@@ -83,4 +84,29 @@ test("invalid source relation endpoints remain undisplayed while count is visibl
   const html = render({ evidence: records.slice(0,1), relationships: relations });
   assert.match(html, /2 relationships have unavailable evidence endpoints/);
   assert.doesNotMatch(html, /data-perspective-link=/);
+});
+
+test("B04 source citations reject public URLs containing authentication tokens and basic auth",()=>{
+  for (const url of [
+    "https://recorded.example.org/doc?api_key=TOP_SECRET",
+    "https://recorded.example.org/doc?access_token=TOP_SECRET",
+    "https://alice:TOP_SECRET@recorded.example.org/doc",
+    "javascript:alert(1)",
+  ]) {
+    const html=renderToStaticMarkup(React.createElement(PerspectiveSource,{item:{...records[0],sourceUrl:url}}));
+    assert.doesNotMatch(html,/href=/);
+    assert.match(html,/No safe source URL recorded/);
+  }
+});
+test("B05 Claim Lens is an explicit evidence-based UI, never an inferred publisher verdict",()=>{
+  const html=render();
+  assert.match(html,/recorded-claim-lens/);
+  assert.match(html,/Claim Lens/);
+  assert.match(html,/Select an evidence record/);
+  assert.match(html,/not an AI verdict/);
+  assert.doesNotMatch(html,/Automatically true|Publisher is lying/);
+  const source=readFileSync(new URL("./RecordedPerspectivesBoard.tsx",import.meta.url),"utf8");
+  assert.match(source,/inspectRecordedEvidenceClaim/);
+  assert.match(source,/Incoming recorded relationship only/);
+  assert.match(source,/Open the Investigation for the complete ledger/);
 });

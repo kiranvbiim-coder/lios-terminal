@@ -22,11 +22,6 @@ test("real offline atlas with no remote tiles supports zoom/fit, source layers a
   assert.match(html,/Recorded geography layers/);
   assert.match(html,/Only points with recorded source IDs/);
   assert.match(html,/Only points with recorded event dates/);
-  assert.match(html,/Find a recorded location or source/);
-  assert.match(html,/Search saved locations, IDs or source references/);
-  assert.match(html,/No place lookup, device location or network request/);
-  assert.match(html,/type="search"/);
-
   assert.match(html,/data-testid="recorded-map-location"/);
   assert.match(html,/Recorded station/);
   assert.match(html,/Unattributed location/);
@@ -53,15 +48,16 @@ test("bundled Natural Earth asset is pinned and safe to display offline",()=>{
 });
 
 
-test("B01 single offline map uses the same approved point projection for search and pins", () => {
+test("B01 actual UTC time-window and scrubber live inside the existing offline map",()=>{
+  const html=render(pins);
+  assert.match(html,/data-testid="world-map-time-controls"/);
+  assert.match(html,/Filter by recorded event time/);
+  assert.match(html,/1 distinct recorded UTC day/);
+  assert.doesNotMatch(html, /http[s]?:\/\/[^"]+\.tile|mapbox-gl|maptiler/);
   const source=readFileSync(new URL("./OfflineProjectWorldMap.tsx",import.meta.url),"utf8");
-  assert.match(source,/projectOfflineWorldPoints\(points, \{ sourceOnly, withEventDate, query \}\)/);
-  assert.match(source,/onChange=\{event => \{ setQuery\(event\.target\.value\); setSelectedId\(null\); \}\}/);
-  assert.match(source,/setQuery\(""\)/);
-  assert.match(source,/Focus first match/);
-  assert.match(source,/worldMapCenterPreservingPan/);
-  assert.match(source,/recordedIsoTimestamp\(selected\.occurredAt\)/);
-  assert.match(source,/No event date was recorded/);
-  assert.match(source,/aria-label="Map location list"/);
-  assert.doesNotMatch(source,/fetch\(|navigator\.geolocation|mapboxgl|maplibregl|localStorage/);
+  assert.match(source,/type="date"/);
+  assert.match(source,/type="range"/);
+  assert.match(source,/recordedWorldMapDays/);
+  assert.match(source,/setSelectedId\(null\)/);
+  assert.match(source,/fromDate: selectedFrom, throughDate: selectedThrough/);
 });

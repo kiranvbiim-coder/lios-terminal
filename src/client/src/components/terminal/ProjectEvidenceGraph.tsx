@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Focus, Minus, Move, Plus, Search, X } from "lucide-react";
+import { Focus, Minus, Move, Plus } from "lucide-react";
 import type { P7ContextGraph, P7Insight } from "@shared/p7ResearchContracts";
 import { projectEvidenceGraphProjection } from "@/lib/projectEvidenceGraphPresentation";
 
@@ -20,22 +20,12 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
   const result = useMemo(() => projectEvidenceGraphProjection(projectId, graph, insight), [projectId, graph, insight]);
   const [chosenNode, setChosenNode] = useState<string | null>(null);
   const [chosenEdge, setChosenEdge] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [sourceOnly, setSourceOnly] = useState(false);
   const [zoom, setZoom] = useState(0.65);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const hostRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<{ pointer: number; x: number; y: number; startX: number; startY: number } | null>(null);
   const node = result.nodes.find(item => item.id === chosenNode) ?? null;
   const edge = result.edges.find(item => item.id === chosenEdge) ?? null;
-  // The 40-node/48-edge P7 projection already enforces the authorized data bound.
-  // Filtering is read-only and never claims to search omitted graph records.
-  const needle = query.trim().toLocaleLowerCase().slice(0, 120);
-  const visibleNodes = useMemo(() => result.nodes.filter(item =>
-    (!sourceOnly || !!item.sourceRef) && (!needle || [item.id, item.label, item.kind, item.sourceRef ?? ""].some(value => value.toLocaleLowerCase().includes(needle)))),
-    [result.nodes, needle, sourceOnly]);
-  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(item => item.id)), [visibleNodes]);
-  const visibleEdges = useMemo(() => result.edges.filter(item => visibleNodeIds.has(item.from) && visibleNodeIds.has(item.to)), [result.edges, visibleNodeIds]);
 
   const fit = () => {
     const width = hostRef.current?.clientWidth ?? 700;
@@ -51,17 +41,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
     return () => window.removeEventListener("resize", update);
   }, [projectId, insight?.id, graph?.contentHash]);
 
-  const selectNode = (id: string) => {
-    setChosenNode(id); setChosenEdge(null);
-    const item = result.nodes.find(entry => entry.id === id);
-    if (item) {
-      const width = hostRef.current?.clientWidth ?? 700;
-      const height = hostRef.current?.clientHeight ?? 420;
-      const next = clamp(Math.max(zoom, 0.75));
-      setZoom(next);
-      setOffset({ x: width / 2 - item.x * next, y: height / 2 - item.y * next });
-    }
-  };
+  const selectNode = (id: string) => { setChosenNode(id); setChosenEdge(null); };
   const selectEdge = (id: string) => { setChosenEdge(id); setChosenNode(null); };
 
   if (!result.nodes.length) return <p role="status" className="rounded-lg border border-dashed border-border/60 p-3 font-ui text-sm text-muted-foreground">
@@ -71,7 +51,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
   return <div data-testid="project-evidence-graph" className="min-w-0 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p role="status" className="font-ui text-xs leading-5 text-muted-foreground">
-        {visibleNodes.length} of {result.nodes.length} Project nodes · {visibleEdges.length} of {result.edges.length} recorded links
+        {result.nodes.length} Project nodes · {result.edges.length} recorded links
         {result.omittedNodes + result.omittedEdges > 0 ? ` · ${result.omittedNodes} nodes, ${result.omittedEdges} links outside view` : ""}
       </p>
       <div role="group" aria-label="Graph viewport controls" className="flex flex-wrap gap-1.5">
@@ -83,23 +63,6 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
           className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70"><Focus className="h-4 w-4" aria-hidden="true"/>Fit</button>
       </div>
     </div>
-    <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Find in recorded Project graph">
-      <label className="flex min-h-11 min-w-[180px] flex-1 items-center gap-2 rounded-lg border border-border/60 px-3">
-        <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="sr-only">Find recorded graph node or source ID</span>
-        <input type="search" maxLength={120} value={query} onChange={event => {setQuery(event.target.value);setChosenNode(null);setChosenEdge(null);}}
-          placeholder="Find a visible node, kind or source ID"
-          className="min-w-0 w-full bg-transparent py-2 font-ui text-sm text-foreground outline-none" />
-      </label>
-      <label className="inline-flex min-h-11 items-center gap-2 font-ui text-sm text-foreground">
-        <input type="checkbox" checked={sourceOnly} onChange={event => {setSourceOnly(event.target.checked);setChosenNode(null);setChosenEdge(null);}}
-          className="h-4 w-4 accent-amber-300" /> Source IDs only
-      </label>
-      {query && <button type="button" onClick={() => setQuery("")}
-        className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-border/60 px-3 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70"><X className="h-4 w-4" aria-hidden="true"/>Clear</button>}
-    </div>
-    <p className="font-ui text-xs leading-5 text-muted-foreground">Find only within the currently bounded P7 insight projection; omitted records are available through the original Project investigation, not guessed here.</p>
-    {visibleNodes.length === 0 && <p role="status" className="font-ui text-sm text-muted-foreground">No visible saved graph nodes match the selected filters.</p>}
     <div ref={hostRef} role="region" aria-label="Interactive recorded Project graph. Drag empty space to pan, use zoom buttons, Tab between nodes."
       tabIndex={0} data-testid="project-evidence-graph-viewport"
       className="relative h-[320px] min-w-0 touch-none overflow-hidden rounded-lg border border-border/55 bg-background/80 outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 sm:h-[440px]"
@@ -142,23 +105,23 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
           <defs><marker id="lios-evidence-arrow" markerWidth="8" markerHeight="8" refX="8" refY="3" orient="auto">
             <path d="M0 0 L8 3 L0 6" fill="none" stroke="currentColor" strokeOpacity=".65"/>
           </marker></defs>
-          {visibleEdges.map(item => <line key={item.id}
+          {result.edges.map(item => <line key={item.id}
             x1={item.fromX} y1={item.fromY} x2={item.toX} y2={item.toY}
             stroke="currentColor" strokeOpacity={item.evidenceRefs.length ? ".53" : ".25"}
             strokeDasharray={item.evidenceRefs.length ? undefined : "5 5"}
             strokeWidth="1.6" markerEnd="url(#lios-evidence-arrow)"/>)}
         </svg>
-        {visibleNodes.map(item => <button key={item.id} type="button"
+        {result.nodes.map(item => <button key={item.id} type="button"
           data-testid="p7-recorded-graph-node" aria-pressed={chosenNode === item.id}
           title={item.label} onClick={() => selectNode(item.id)}
           className={`pointer-events-auto absolute flex h-[68px] w-[156px] flex-col justify-center overflow-hidden rounded-lg border bg-zinc-950/95 px-2 text-left font-ui shadow-sm outline-none focus-visible:ring-4 focus-visible:ring-amber-300/70 ${chosenNode === item.id
             ? "border-amber-300 text-foreground" : item.directlyMatched ? "border-amber-300/55 text-foreground" : "border-border/70 text-muted-foreground"}`}
           style={{ left: item.x - 78, top: item.y - 34 }}>
-          <span className="block truncate text-[10px] capitalize text-amber-200">{item.kind.replaceAll("_", " ")}</span>
+          <span className="block truncate text-xs capitalize text-amber-200">{item.kind.replaceAll("_", " ")}</span>
           <span className="block line-clamp-2 text-xs font-semibold">{item.label}</span>
         </button>)}
       </div>
-      <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-border/45 bg-background/90 px-2 py-1 font-ui text-[11px] text-muted-foreground" aria-hidden="true">
+      <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-border/45 bg-background/90 px-2 py-1 font-ui text-xs text-muted-foreground" aria-hidden="true">
         <Move className="h-3 w-3"/>Pan · {Math.round(zoom * 100)}%
       </div>
     </div>
@@ -170,7 +133,7 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
           <p>Type: {node.kind.replaceAll("_", " ")}</p>
           <p>{node.directlyMatched ? "Directly referenced by this insight" : "Recorded neighboring object"}</p>
           {node.sourceRef ? <p className="break-all">Source ID: <code>{node.sourceRef}</code></p> : <p>No source ID attached to this node.</p>}
-          {node.occurredAt && <p>Source-recorded time: <code>{node.occurredAt}</code> (not independently verified)</p>}
+          {node.occurredAt && <p>Recorded time: <time dateTime={node.occurredAt}>{new Date(node.occurredAt).toLocaleString()}</time></p>}
         </div> : edge ? <div className="mt-2 space-y-2 text-muted-foreground">
           <p className="break-words font-medium text-foreground">{result.nodes.find(item => item.id === edge.from)?.label} → {edge.type.replaceAll("_", " ")} → {result.nodes.find(item => item.id === edge.to)?.label}</p>
           {edge.evidenceRefs.length ? <ul className="list-disc space-y-1 pl-4">
@@ -179,9 +142,9 @@ export function ProjectEvidenceGraph({ projectId, graph, insight }: {
         </div> : <p className="mt-2 text-muted-foreground">Select a node or an edge from the lists. Source IDs are references, not public URLs or proof of causality.</p>}
       </section>
       <section aria-label="Recorded relationship list" className="min-w-0 space-y-2 rounded-lg border border-border/55 p-3">
-        <h5 className="font-ui text-sm font-semibold text-foreground">Recorded relationships (visible {visibleEdges.length})</h5>
-        {visibleEdges.length ? <ul className="max-h-48 space-y-1 overflow-y-auto">
-          {visibleEdges.map(item => <li key={item.id}>
+        <h5 className="font-ui text-sm font-semibold text-foreground">Recorded relationships ({result.edges.length})</h5>
+        {result.edges.length ? <ul className="max-h-48 space-y-1 overflow-y-auto">
+          {result.edges.map(item => <li key={item.id}>
             <button type="button" aria-pressed={chosenEdge === item.id} onClick={() => selectEdge(item.id)}
               className="min-h-10 w-full break-words rounded-md border border-border/50 px-2 py-2 text-left font-ui text-xs text-foreground hover:border-amber-300/40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
               {result.nodes.find(node => node.id === item.from)?.label} · {item.type.replaceAll("_", " ")} · {result.nodes.find(node => node.id === item.to)?.label}

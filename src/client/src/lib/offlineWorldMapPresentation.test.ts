@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { RecordedGeographicPoint } from "./offlineWorldMapPresentation";
-import { projectOfflineWorldPoints, worldPointCoordinates, worldMapCenterPreservingPan } from "./offlineWorldMapPresentation";
+import { projectOfflineWorldPoints, worldPointCoordinates, recordedWorldMapDays } from "./offlineWorldMapPresentation";
 
 const at = "2026-10-27T12:00:00Z";
 const locations: RecordedGeographicPoint[] = [
@@ -61,58 +61,19 @@ test("show at most 60 points but report actual omissions; do not mutate source r
 });
 
 
-test("B01 map search finds later authorized records before the 60-pin cap", () => {
-  const large = Array.from({ length: 115 }, (_, index) => ({
-    ...locations[0],
-    id: "p7-node-" + index,
-    label: index === 110 ? "Target Station 110" : "Recorded Station " + index,
-    sourceRef: index === 110 ? "source:unique-110" : "source:common",
-    longitude: -170 + index,
-  }));
-  const result = projectOfflineWorldPoints(large, { query: "target station" });
-  assert.deepEqual(result.points.map(point => point.id), ["p7-node-110"]);
-  assert.equal(result.eligibleCount, 1);
-  assert.equal(result.filteredOutCount, 114);
-  assert.equal(result.omittedCount, 0);
-  assert.deepEqual(projectOfflineWorldPoints(large, { query: "SOURCE:UNIQUE-110" }).points.map(point => point.id), ["p7-node-110"]);
-  assert.deepEqual(projectOfflineWorldPoints(large, { query: "p7-node-110" }).points.map(point => point.id), ["p7-node-110"]);
-  assert.deepEqual(projectOfflineWorldPoints(large, { query: "not-existing" }).points, []);
-  assert.equal(projectOfflineWorldPoints(large).omittedCount, 55);
-  assert.equal(large[110].label, "Target Station 110");
-});
-
-test("B01 recorded date layer rejects guessed, local-only and rolled-over date values", () => {
-  const base = locations[0];
-  const bad = ["1", "2026-02-30T10:00:00Z", "2026-10-27", "2026-10-27T12:00:00", "invalid", "2026-10-27T24:00:00Z"];
-  const input = [
-    { ...base, id: "valid", occurredAt: "2026-10-27T12:00:00+05:30" },
-    ...bad.map((occurredAt, i) => ({ ...base, id: "invalid-" + i, occurredAt })),
-  ];
-  assert.deepEqual(projectOfflineWorldPoints(input, { withEventDate: true }).points.map(row => row.id), ["valid"]);
-  assert.equal(projectOfflineWorldPoints(input).points.length, 7);
-});
-
-test("B01 geography search respects source and date layers without inventing location evidence", () => {
-  const filtered = projectOfflineWorldPoints(locations, { sourceOnly: true, query: "Northern" });
-  assert.equal(filtered.eligibleCount, 0);
-  assert.equal(filtered.points.length, 0);
-  assert.equal(filtered.filteredOutCount, 2);
-  assert.deepEqual(projectOfflineWorldPoints(locations, { withEventDate: true, query: "Western" })
-    .points.map(row => row.id), ["west"]);
-  assert.deepEqual(projectOfflineWorldPoints(locations, { query: "  WESTERN  " }).points.map(row => row.id), ["west"]);
-});
-
-
-test("B01 centre-preserving pan keeps the identical saved map coordinate while zooming", () => {
-  const viewport = { width: 600, height: 400 };
-  const old = { x: -170, y: 20 };
-  const next = worldMapCenterPreservingPan(old, viewport, 0.5, 1);
-  const oldWorldCentre = { x: (300 - old.x) / 0.5, y: (200 - old.y) / 0.5 };
-  assert.deepEqual({ x: (300 - next.x) / 1, y: (200 - next.y) / 1 }, oldWorldCentre);
-  const back = worldMapCenterPreservingPan(next, viewport, 1, 0.5);
-  assert.deepEqual(back, old);
-  for (const invalid of [0, NaN, Infinity, -1]) {
-    assert.deepEqual(worldMapCenterPreservingPan(old, viewport, 0.5, invalid), old);
+test("B01 time slider uses recorded UTC event days only and inclusive date boundaries", () => {
+  const newer = { ...locations[0], id:"later", occurredAt:"2026-10-28T01:00:00+05:30" };
+  const invalid = { ...locations[0], id:"fake", occurredAt:"2026-02-30T12:00:00Z" };
+  const input=[...locations,newer,invalid];
+  assert.deepEqual(recordedWorldMapDays(input), ["2026-10-27"]);
+  assert.deepEqual(projectOfflineWorldPoints(input,{fromDate:"2026-10-27",throughDate:"2026-10-27"}).points.map(x=>x.id),
+    ["west","north","later"]);
+  assert.equal(projectOfflineWorldPoints(input,{fromDate:"2026-10-28",throughDate:"2026-10-28"}).points.length,0);
+  for (const range of [{fromDate:"2026-02-30"}, {fromDate:"bad"}, {fromDate:"2026-10-28",throughDate:"2026-10-27"}]) {
+    assert.equal(projectOfflineWorldPoints(input,range).points.length,0);
   }
-  assert.deepEqual(worldMapCenterPreservingPan(old, { width: 0, height: 300 }, 0.5, 1), old);
+});
+test("B01 explicit time-window never reintroduces source-free or undated points",()=>{
+  const x=projectOfflineWorldPoints(locations,{sourceOnly:true,fromDate:"2026-10-27",throughDate:"2026-10-27"});
+  assert.deepEqual(x.points.map(item=>item.id),["west"]);
 });

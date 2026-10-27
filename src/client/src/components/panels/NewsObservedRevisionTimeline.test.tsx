@@ -105,3 +105,20 @@ test("pinned MIT donor timeline preserves exact registered source and parses as 
   const problems = (result.diagnostics ?? []).filter(x => x.category === ts.DiagnosticCategory.Error);
   assert.deepEqual(problems.map(p => ts.flattenDiagnosticMessageText(p.messageText, " ")), []);
 });
+
+test("B03 users can compare exact earlier and latest observed news text without inventing publication history",()=>{
+  const history=observeNewsFeed(observeNewsFeed([], [item], at),
+    [{ ...item,title:"Recorded energy report clarified",summary:"Publisher feed changed" }],at+60_000);
+  const html=renderToStaticMarkup(React.createElement(NewsStoryEvolution,{exactUrl:url,history}));
+  assert.match(html,/news-as-observed-comparison/);
+  assert.match(html,/Compare as observed then/);
+  assert.match(html,/Earlier observation/);
+  assert.match(html,/Latest observation/);
+  assert.match(html,/First feed summary/);
+  assert.match(html,/Publisher feed changed/);
+  assert.match(html,/not independently verified article corrections/);
+  const sourceText=source("./NewsStoryEvolution.tsx");
+  assert.match(sourceText,/compareRecordedNewsObservations/);
+  assert.match(sourceText,/setBaselineObservedAt\(null\)/);
+  assert.match(sourceText,/Choose an earlier recorded feed observation/);
+});

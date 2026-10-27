@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildCrossDomainGraph, type CrossDomainGraph } from "./terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph, selectRecordedCrossDomainGraphObjects } from "./graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, summarizeRecordedGraphLinks } from "./graphExplorerPresentation";
 import type { IntelligenceObject } from "./terminalIntelligenceObjects";
 
 const object = (id: string, label: string, relations: IntelligenceObject["relations"] = []): IntelligenceObject => ({
@@ -95,24 +95,31 @@ test("view transforms do not mutate the canonical graph", () => {
   assert.equal(JSON.stringify(graph), before);
 });
 
-test("B07 saved cross-domain radar finds recorded matches beyond the first 120 without inventing links", () => {
-  const list=Array.from({length:220},(_,i)=>object("node:"+i,i===215?"Recorded Solar Evidence":"Saved source "+i));
-  list[215].relations=[{targetId:"node:9",kind:"supports",note:"Stored relation"}];
-  const chosen=selectRecordedCrossDomainGraphObjects(list,"solar",null,120);
-  assert.deepEqual(chosen.map(x=>x.id),["node:215","node:9"]);
-  const graph=buildCrossDomainGraph(chosen);
-  assert.deepEqual(graph.edges.map(x=>[x.sourceId,x.targetId]),[["node:215","node:9"]]);
-  assert.deepEqual(selectRecordedCrossDomainGraphObjects(list,"missing",null),[]);
-  assert.equal(selectRecordedCrossDomainGraphObjects(list,"",null).length,120);
-  assert.deepEqual(selectRecordedCrossDomainGraphObjects(list,"", "node:215",3).map(x=>x.id),["node:215","node:9"]);
-  assert.equal(list[215].relations.length,1);
+test("B07 domain-bridge-only lens hides unrelated objects as well as same-domain edges",()=>{
+  const graph: CrossDomainGraph = {
+    nodes:[
+      {objectId:"a",label:"Policy rule",domain:"policy",strength:.6},
+      {objectId:"b",label:"Market price",domain:"market",strength:.6},
+      {objectId:"c",label:"Other market",domain:"market",strength:.6},
+      {objectId:"d",label:"Isolated source",domain:"research",strength:.6},
+    ],
+    edges:[
+      {sourceId:"a",targetId:"b",relation:"affects",strength:.5},
+      {sourceId:"b",targetId:"c",relation:"supports",strength:.5},
+    ],
+  };
+  const bridges=presentCrossDomainGraph(graph,{bridgesOnly:true});
+  assert.deepEqual(bridges.nodes.map(x=>x.objectId),["a","b"]);
+  assert.deepEqual(bridges.edges.map(x=>[x.sourceId,x.targetId]),[["a","b"]]);
+  assert.equal(bridges.matchingCount,2);
+  assert.deepEqual(presentCrossDomainGraph(graph,{bridgesOnly:true,relation:"supports"}).nodes,[]);
+  assert.deepEqual(presentCrossDomainGraph(graph,{bridgesOnly:true,query:"market"}).nodes.map(x=>x.objectId),["a","b"]);
 });
-
-test("B07 search resolves canonical recorded domain labels even when object title omits the domain", () => {
-  const saved=[object("macro:1","Inflation reading"),object("other:1","Publication")];
-  const subset=selectRecordedCrossDomainGraphObjects(saved,"macro",null);
-  assert.deepEqual(subset.map(item=>item.id),["macro:1"]);
-  const graph=buildCrossDomainGraph(subset);
-  assert.equal(graph.nodes[0].domain,"macro");
-  assert.equal(presentCrossDomainGraph(graph,{query:"macro"}).nodes[0].objectId,"macro:1");
+test("B08 source-only relationship distribution counts edges rather than summed strengths",()=>{
+  const graph=fixture();
+  const grouped=summarizeRecordedGraphLinks(graph);
+  assert.deepEqual(grouped,[
+    {relation:"affects",count:1},{relation:"supports",count:1},
+  ]);
+  assert.deepEqual(summarizeRecordedGraphLinks({nodes:[],edges:graph.edges}),[]);
 });
