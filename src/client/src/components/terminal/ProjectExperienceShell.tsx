@@ -2318,7 +2318,7 @@ export default function ProjectExperienceShell({
                 ))}
                 {streaming && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3">
+                    <div className="lios-conversation-message lios-conversation-stream max-w-[85%] rounded-xl border border-border/60 bg-white/[0.018] px-4 py-3" data-lios-message="assistant" role="group" aria-label="LiOS response in progress">
                       <div className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3 w-3 text-amber-300" /><span className="font-terminal text-[12px] uppercase tracking-wider text-muted-foreground">LIOS</span></div>
                       <ChatMarkdown text={streaming} streaming sources={citationSources} />
                     </div>
