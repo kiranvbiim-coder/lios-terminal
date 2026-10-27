@@ -27,7 +27,13 @@ test("Phase 1 Pulse preserves channel selection and truthful source states", () 
   assert.match(shell, /pulseChannel=\{pulseChannel\}/);
   assert.match(shell, /pulseStatus=\{waveDStatus\}/);
   assert.match(shell, /onPulseChannelChange=\{setPulseChannel\}/);
-  assert.match(pulse, /"for_you", "following", "markets", "research"/);
+  const tabs = read("../components/terminal/PulseDiscoveryTabs.tsx");
+  assert.match(pulse, /<PulseDiscoveryTabs channel=\\{pulseChannel\\} onChange=\\{onPulseChannelChange\\}/);
+  for (const channel of ["for_you", "following", "markets", "research"]) {
+    assert.match(tabs, new RegExp(`id: "${channel}"`));
+  }
+  assert.match(tabs, /nextPulseChannel/);
+  assert.match(tabs, /min-h-11/);
   assert.match(pulse, /PULSE UNAVAILABLE/);
   assert.match(pulse, /WHY IT MATTERS/);
 });
