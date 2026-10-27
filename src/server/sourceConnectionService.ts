@@ -54,6 +54,18 @@ async function assertConnectorConfig(input: SourceConnectionConfig): Promise<voi
   if (!connector && !customConnector) throw new Error("Connector is not registered.");
   if (connector && connector.sourceType !== input.sourceType) throw new Error("Source type does not match the registered connector.");
   if (input.credentialRef && connector?.vaultKey && connector.vaultKey !== input.credentialRef && input.sourceType !== "database") throw new Error("Credential reference does not match the registered connector.");
+  if (input.sourceType === "mcp") {
+    const projectId = input.config.projectId;
+    if (!Number.isSafeInteger(projectId) || typeof projectId !== "number" || projectId <= 0) {
+      throw new Error("MCP connection requires an owned Project.");
+    }
+    if (typeof input.config.allowedToolIds !== "string") {
+      throw new Error("MCP tool allowlist must be an explicit comma-separated string.");
+    }
+    if (input.config.requireApprovalForTools !== true) {
+      throw new Error("MCP tool execution requires explicit user approval.");
+    }
+  }
   if (input.sourceType === "private_api" || input.sourceType === "cloud_storage" || input.sourceType === "mcp") {
     const endpoint = input.config.endpoint;
     if (typeof endpoint !== "string") throw new Error("An endpoint is required for this source type.");
@@ -273,6 +285,13 @@ export async function upsertSourceConnection(
   actor: Pick<User, "id" | "email">,
 ): Promise<SourceConnection> {
   await assertConnectorConfig(input);
+  if (input.sourceType === "mcp") {
+    // An untrusted source form must not bind an MCP server to another user's
+    // Project even temporarily. The owner check runs before config storage.
+    await getProject({
+      userId, organizationId, role: "internal_analyst",
+    }, Number(input.config.projectId));
+  }
   const db = getDb();
   const now = new Date();
   const config = await normalizeSourceConfig(input.sourceType, input.config);
