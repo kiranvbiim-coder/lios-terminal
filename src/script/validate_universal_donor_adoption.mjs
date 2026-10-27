@@ -244,7 +244,39 @@ export function validateUniversalDonorAdoption({ledger,baseline,forks,components
    assert.ok(Number.isSafeInteger(item.mergedPR));
  }
  assert.ok(Array.isArray(ledger.universalGate)&&ledger.universalGate.length>=10);
- assert.equal(ledger.executionPriorities.length,4);
+ // The 92-donor register remains legal/history evidence, not an import-all backlog.
+ // Only source-adopted, named user journeys are eligible for active work.
+ assert.ok(Array.isArray(ledger.executionPriorities)&&ledger.executionPriorities.length>=1&&ledger.executionPriorities.length<=2,
+  "Active donor work must be a small, named queue, not four open-ended harvesting waves");
+ assert.equal(ledger.activeQueuePolicy?.automaticPromotionFromDocumentedOrReference,false);
+ assert.equal(ledger.activeQueuePolicy?.forkExistenceIsAdoption,false);
+ assert.ok(ledger.activeQueuePolicy.maxActiveDonors>0&&ledger.activeQueuePolicy.maxActiveDonors<=12);
+ const selectedBaselineDonors=new Set((ledger.selectedBaselineSourceAdoptions??[]).map(x=>x.baselineDonorId));
+ const selectedSupplementalDonors=new Set((ledger.supplementalSelectedSourceAdoptions??[]).map(x=>x.id));
+ const supplementalById=new Map(ledger.supplementalControlledForks.map(x=>[x.id,x]));
+ const activeDonorIds=new Set();
+ for(const [index,wave] of ledger.executionPriorities.entries()){
+  assert.equal(wave.wave,index+1,"Active donor waves must be sequential");
+  assert.ok(Array.isArray(wave.donors)&&wave.donors.length>0);
+  assert.ok(typeof wave.userJourney==="string"&&wave.userJourney.length>=35,"An active donor needs a named LiOS user journey");
+  assert.ok(typeof wave.gate==="string"&&wave.gate.length>=35,"An active donor needs concrete verification gates");
+  for(const id of wave.donors){
+   assert.equal(typeof id,"string");
+   assert.ok(!activeDonorIds.has(id),"Duplicate active donor: "+id);
+   activeDonorIds.add(id);
+   const candidate=realBaseline.get(id);
+   if(candidate){
+    const historical=candidate.currentTruthStatus;
+    const activeTruth=/^(?:runtime_integrated|runtime_integrated_optional|runtime_integrated_connector|partially_integrated|provider_integrated_external_runtime)$/.test(historical);
+    assert.ok(activeTruth||selectedBaselineDonors.has(id),
+     "Donor has no accepted source adoption or active user journey: "+id);
+   }else{
+    assert.ok(supplementalById.has(id)&&selectedSupplementalDonors.has(id),
+     "Unknown or unapproved supplemental donor in active queue: "+id);
+   }
+  }
+ }
+ assert.ok(activeDonorIds.size<=ledger.activeQueuePolicy.maxActiveDonors,"Donor active queue exceeds approved small-workstream cap");
  assert.equal(ledger.blockers.length>=6,true);
  return {
   status:"policy_queue_validated_with_exhaustive_harvesting_gates",
