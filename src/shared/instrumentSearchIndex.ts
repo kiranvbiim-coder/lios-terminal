@@ -176,7 +176,15 @@ export interface InstrumentSearchFederatedFallback {
 
 export function instrumentSearchGroupKey(candidate: InstrumentMasterCandidate): string {
   if (candidate.entityId) return candidate.entityId;
-  return `legacy:${normalizeText(candidate.name)}:${normalizeText(candidate.symbol)}`;
+  // An unlinked reference ticker is NOT a unique issuer identity. The same
+  // symbol/name may trade on multiple venues, in different quote currencies,
+  // or represent different products. Group only venue-qualified provisional
+  // rows; lack of a venue must not falsely merge across providers.
+  const venue = normalizeText(candidate.mic || candidate.exchange);
+  const identity = [normalizeText(candidate.name), normalizeText(candidate.symbol),
+    venue, normalizeText(candidate.currency)];
+  if (!venue) identity.push(normalizeText(candidate.source));
+  return `legacy:${identity.join(":")}`;
 }
 
 /**

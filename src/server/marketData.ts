@@ -1,4 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
+import type { EditorialMedia } from "@shared/editorialMedia";
+import { extractRssImageCandidate } from "./newsFeedImageCandidates";
+import { fetchPublicNewsArticleHtml, validatePublicNewsUrl } from "./publicNewsArticleFetch";
+import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
 import { buildDataStatus, type DataStatus } from "./dataStatus";
 import { fetchText, fetchWithRetry, getCached, setCached } from "./providerUtils";
@@ -104,6 +108,9 @@ export interface OHLCVWithProvenance {
 }
 
 export interface NewsItem {
+  /** Independently approved publisher media only, never RSS URL metadata. */
+  media?: EditorialMedia;
+  imageCandidate?: ReturnType<typeof extractRssImageCandidate>;
   title: string;
   summary: string;
   url: string;
@@ -581,11 +588,7 @@ export function filterNewsItems(items: NewsItem[], query?: string): NewsItem[] {
 }
 
 function sanitizeArticleUrl(url: string) {
-  const parsed = new URL(url);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error(`Unsupported article protocol: ${parsed.protocol}`);
-  }
-  return parsed.toString();
+  return validatePublicNewsUrl(url).href;
 }
 
 function inferSentiment(text: string): NewsItem["sentiment"] {
@@ -1038,6 +1041,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
       const url = stripHtml(String(item?.link?.href ?? item?.link ?? ""));
       const publishedAt = new Date(String(item?.pubDate ?? item?.published ?? item?.updated ?? Date.now())).toISOString();
       if (!title || !url) return null;
+      const imageCandidate = extractRssImageCandidate(item);
 
       return {
         title,
@@ -1046,6 +1050,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         source,
         feedProvider: "Limuria Intelligence",
         publishedAt,
+        ...(imageCandidate ? { imageCandidate } : {}),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,
@@ -2186,28 +2191,59 @@ function shiftDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/**
+ * One canonical inclusive UTC window for RSS searching AND local verification.
+ * Fixed from/to dates paginate a single bounded provider window; rolling pages
+ * traverse disjoint prior periods. This also keeps page 1 consistent with page 2.
+ */
+export function newsPageWindowBounds(
+  page = 1,
+  options: Pick<NewsPageOptions, "from" | "to" | "windowDays"> = {},
+  asOf = new Date(),
+): { from: string; to: string } {
+  const boundedPage = Math.max(1, Math.floor(page));
+  const windowDays = Math.min(Math.max(Math.floor(options.windowDays ?? 7), 1), 366);
+  const explicitFrom = isoDateOnly(options.from);
+  const anchor = isoDateOnly(options.to) ?? asOf.toISOString().slice(0, 10);
+  const to = explicitFrom ? anchor : shiftDate(anchor, -(boundedPage - 1) * windowDays);
+  // RSS after is exclusive; this is the actual inclusive calendar-day bound.
+  const from = explicitFrom ?? shiftDate(to, -windowDays + 1);
+  return { from, to };
+}
+
+/** Reject out-of-window RSS items even if a provider ignores search date clauses. */
+export function filterNewsPageWindow(
+  items: NewsItem[], page: number,
+  options: Pick<NewsPageOptions, "from" | "to" | "windowDays">,
+  asOf = new Date(),
+): NewsItem[] {
+  const { from, to } = newsPageWindowBounds(page, options, asOf);
+  return items.filter(item => {
+    const timestamp = Date.parse(item.publishedAt);
+    if (!Number.isFinite(timestamp)) return false;
+    const utcDay = new Date(timestamp).toISOString().slice(0, 10);
+    return utcDay >= from && utcDay <= to;
+  });
+}
+
 /** Build a deterministic Google News date window for a chained page. */
 export function buildNewsWindowQuery(
   query: string,
   page = 1,
   options: Pick<NewsPageOptions, "from" | "to" | "windowDays"> = {},
 ): string {
-  const boundedPage = Math.max(1, Math.floor(page));
-  const windowDays = Math.min(Math.max(Math.floor(options.windowDays ?? 7), 1), 366);
-  const explicitFrom = isoDateOnly(options.from);
-  const explicitTo = isoDateOnly(options.to);
-  const today = new Date().toISOString().slice(0, 10);
-  const end = explicitTo ?? shiftDate(today, -(boundedPage - 1) * windowDays);
-  const start = explicitFrom && boundedPage === 1
-    ? explicitFrom
-    : shiftDate(end, -windowDays);
+  const { from, to } = newsPageWindowBounds(page, options);
   const withoutRelativeWindow = query.replace(/\bwhen:\d+[dwmy]\b/gi, "").replace(/\s+/g, " ").trim();
-  const clauses = [withoutRelativeWindow, `after:${start}`, `before:${shiftDate(end, 1)}`].filter(Boolean);
+  // Google News "after" is exclusive, so shift the inclusive FROM back one day.
+  const clauses = [withoutRelativeWindow, `after:${shiftDate(from, -1)}`, `before:${shiftDate(to, 1)}`].filter(Boolean);
   return clauses.join(" ");
 }
 
 function feedUrlForPage(url: string, page: number, options: NewsPageOptions): string {
-  if (page <= 1 && !options.from && !options.to) return url;
+  // Only the legacy unpaged getNews() path retains its original when:1d/7d
+  // provider queries. Paged requests MUST rewrite page 1 too or page 2
+  // overlaps/skips the very first period.
+  if (options.page === undefined && !options.from && !options.to && options.windowDays === undefined) return url;
   try {
     const parsed = new URL(url);
     const query = parsed.searchParams.get("q") ?? "";
@@ -2223,45 +2259,73 @@ export function dedupeNewsItems(items: NewsItem[]): NewsItem[] {
     .sort((a, b) => +new Date(b.publishedAt) - +new Date(a.publishedAt) || a.url.localeCompare(b.url));
 }
 
+function attachCurrentNewsMedia(items: NewsItem[]): NewsItem[] {
+  const licensed = approvedNewsMediaForFeed();
+  return items.map(({ media: _previousGrant, ...item }) => {
+    const media = licensed.get(item.url);
+    return media ? { ...item, media } : item;
+  });
+}
+
 async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options: NewsPageOptions = {}) {
   const page = Math.max(1, Math.floor(options.page ?? 1));
-  const pagedKey = `${cacheKey}:${page}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
+  // Every explicit-from page uses the same bounded provider feed. Cache its
+  // fetched records once, then apply local offsets for page 2 and onward.
+  const cachePage = options.from ? "bounded" : String(page);
+  const pagedKey = `${cacheKey}:${cachePage}:${options.from ?? ""}:${options.to ?? ""}:${options.windowDays ?? ""}`;
   const cached = getCached(newsCache, pagedKey);
-  if (cached) return cached;
+  if (cached) return attachCurrentNewsMedia(cached);
 
   const settled = await Promise.allSettled(feeds.map(async (feed) => {
     const xml = await fetchText(feedUrlForPage(feed.url, page, options));
     return parseNewsFeed(xml, feed.fallbackSource);
   }));
 
+  // An outage of every configured provider is not a genuinely empty News feed.
+  // The existing Finance handler reports the failure and the News reader offers
+  // retry. Leave the legacy unpaged behavior unchanged.
+  if (options.page !== undefined && settled.length > 0 && settled.every(result => result.status === "rejected")) {
+    throw new Error("All configured news feeds are temporarily unavailable.");
+  }
   const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
   const normalized = dedupeNewsItems(items);
 
   // Don't cache empty results — let the next request retry live feeds.
   if (!normalized.length) return [];
-  return setCached(newsCache, pagedKey, normalized, NEWS_TTL_MS);
+  setCached(newsCache, pagedKey, normalized, NEWS_TTL_MS);
+  return attachCurrentNewsMedia(normalized);
 }
 
 export async function getNewsPage(symbol?: string, query?: string, options: NewsPageOptions = {}): Promise<NewsPage> {
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 20), 1), 100);
   const feeds = symbol ? buildSymbolNewsFeeds(symbol.toUpperCase()) : GENERAL_NEWS_FEEDS;
-  const feedItems = await fetchNewsFeeds(symbol ? `news:${symbol.toUpperCase()}` : "news:market", feeds, { ...options, page });
-  let items = feedItems;
+  // Capture one UTC anchor per request so a midnight rollover cannot make
+  // the RSS query window disagree with the post-fetch date validation.
+  const effectiveOptions = { ...options, page, to: options.to ?? new Date().toISOString().slice(0, 10) };
+  const feedItems = await fetchNewsFeeds(symbol ? `news:${symbol.toUpperCase()}` : "news:market", feeds, effectiveOptions);
+  // Provider date operators are advisory. Enforce the requested period on
+  // actual publishedAt values before symbol/search filters and local offsets.
+  let items = filterNewsPageWindow(feedItems, page, effectiveOptions);
   if (symbol) {
     const upper = symbol.toUpperCase();
     const profile = getProfileWithCryptoFallback(upper);
     const tokens = [upper, profile?.name?.split(" ")[0]].filter(Boolean).map((token) => String(token).toLowerCase());
-    items = feedItems.filter((item) => {
+    items = items.filter((item) => {
       const haystack = `${item.title} ${item.summary}`.toLowerCase();
       return tokens.some((token) => haystack.includes(token));
     });
   }
   items = filterNewsItems(items, query);
-  const pageItems = items.slice(0, limit);
   const explicitTo = isoDateOnly(options.to);
   const explicitFrom = isoDateOnly(options.from);
-  const hasMore = items.length > limit || (items.length === limit && !explicitFrom);
+  // Fixed date ranges use normal in-window offsets; rolling windows each
+  // fetch one older time slice and must not skip the first items in that slice.
+  const offset = explicitFrom ? (page - 1) * limit : 0;
+  const pageItems = items.slice(offset, offset + limit);
+  // An empty/sparse rolling window does NOT prove older windows are empty.
+  // Allow bounded traversal; never imply a provider-reported total.
+  const hasMore = explicitFrom ? items.length > offset + limit : page < 52;
   return {
     items: pageItems,
     page,
@@ -2270,7 +2334,7 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
     knownCount: items.length,
     hasMore,
     nextCursor: hasMore ? String(page + 1) : null,
-    coverage: hasMore ? "provider-total-unknown" : "window-exhausted",
+    coverage: explicitFrom && !hasMore ? "window-exhausted" : "provider-total-unknown",
     from: explicitFrom ?? null,
     to: explicitTo ?? null,
   };
@@ -2313,7 +2377,7 @@ export async function getNewsArticle(input: {
   });
 
   try {
-    const html = await fetchText(url);
+    const html = await fetchPublicNewsArticleHtml(url);
     const content = extractArticleContent(html);
     const article: NewsArticle = {
       title: input.title,

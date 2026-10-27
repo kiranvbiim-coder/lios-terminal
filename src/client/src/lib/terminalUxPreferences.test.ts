@@ -228,3 +228,18 @@ test("preference persistence failures do not break the current UI session", () =
 test("explicit saved visual-environment choice survives the matte reference default", () => {
   assert.equal(normalizeTerminalUxPreferences({ visualEnvironmentsEnabled: true }).visualEnvironmentsEnabled, true);
 });
+
+test("Phase 2 visual intensity is user-owned, defaults adaptive and validates persisted input", () => {
+  assert.equal(DEFAULT_TERMINAL_UX_PREFERENCES.visualIntensity, "auto");
+  for (const visualIntensity of ["auto", "immersive", "contextual", "focus"] as const) {
+    assert.equal(patchTerminalUxPreferences(DEFAULT_TERMINAL_UX_PREFERENCES, { visualIntensity }).visualIntensity, visualIntensity);
+  }
+  assert.equal(normalizeTerminalUxPreferences({ visualIntensity: "cinematic-unbounded" }).visualIntensity, "auto");
+  const quiet = patchTerminalUxPreferences(DEFAULT_TERMINAL_UX_PREFERENCES, {
+    visualIntensity: "focus", reducedMotion: true, lowResourceMode: true,
+  });
+  assert.equal(quiet.visualIntensity, "focus");
+  assert.equal(quiet.lowResourceMode, true);
+  assert.equal(quiet.reducedMotion, true);
+  assert.equal(quiet.visualEnvironmentsEnabled, false, "intensity never silently enables image loading");
+});

@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import {
@@ -25,6 +26,7 @@ import { getTerminalCapability } from "@/lib/terminalCatalog";
 import type { TerminalDensity } from "@/lib/terminalUxPreferences";
 import {
   loadDockviewLayoutState,
+  requestDockviewLayoutRestore,
   saveDockviewLayoutState,
   subscribeDockviewLayoutRestore,
   resolveWorkspaceRendererState,
@@ -143,6 +145,8 @@ function syncWorkspace(api: DockviewApi, workspace: WorkspaceState, suppress: { 
 
 export default function DockviewWorkspaceGrid(props: Props) {
   const apiRef = useRef<DockviewApi | null>(null);
+  const [layoutNotice, setLayoutNotice] = useState("");
+  useEffect(() => setLayoutNotice(""), [props.layoutScope]);
   const latestPropsRef = useRef(props);
   latestPropsRef.current = props;
   const suppressSyncRef = useRef(false);
@@ -279,13 +283,55 @@ export default function DockviewWorkspaceGrid(props: Props) {
     }
   }, []);
 
+  const saveCurrentArrangement = () => {
+    const api = apiRef.current;
+    if (!api) { setLayoutNotice("Pane layout is not available yet."); return; }
+    try {
+      const layout = api.toJSON() as unknown;
+      if (!layout || typeof layout !== "object" || Array.isArray(layout)) throw new Error("Invalid layout");
+      saveDockviewLayoutState(layout as DockviewLayoutState, props.layoutScope);
+      const saved = loadDockviewLayoutState(props.layoutScope);
+      setLayoutNotice(saved && JSON.stringify(saved) === JSON.stringify(layout)
+        ? "Pane arrangement saved for this workspace tab."
+        : "Layout storage could not be verified. Current panes remain unchanged.");
+    } catch {
+      setLayoutNotice("Could not save pane arrangement. Existing workspace content is unchanged.");
+    }
+  };
+  const restoreDefaultArrangement = () => {
+    // Geometry reset can remount views: refuse it while an Artifact draft is dirty.
+    if (props.preserveArtifactDraft) {
+      setLayoutNotice("Save or discard your Artifact draft before resetting pane geometry.");
+      return;
+    }
+    requestDockviewLayoutRestore(null, props.layoutScope);
+    setLayoutNotice("Default pane arrangement requested for this workspace tab.");
+  };
+
   if (rendererState.current.isMobile || rendererState.current.maximizedPane) {
     return <ProfessionalWorkspaceGrid {...props} isMobile={rendererState.current.isMobile} maximizedPane={rendererState.current.maximizedPane} />;
   }
 
   return (
     <RuntimeContext.Provider value={runtimeValue}>
-      <div className="lios-dockview-workspace h-full min-h-0 min-w-0 overflow-hidden bg-[#050505]" data-workspace-engine="dockview">
+      <div className="lios-dockview-workspace flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#050505]" data-workspace-engine="dockview">
+        <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-border/55 bg-background/70 px-3 py-1">
+          <span role="status" aria-live="polite" className="min-w-0 flex-1 truncate font-ui text-xs text-muted-foreground">
+            {layoutNotice || "Drag pane tabs to arrange, or save this tab's geometry."}
+          </span>
+          <div role="group" aria-label="Workbench pane arrangement" className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={saveCurrentArrangement}
+              className="min-h-11 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              Save layout
+            </button>
+            <button type="button" onClick={restoreDefaultArrangement} disabled={Boolean(props.preserveArtifactDraft)}
+              title={props.preserveArtifactDraft ? "Save or discard unsaved Artifact edits before resetting" : "Reset only this tab's pane geometry"}
+              className="min-h-11 rounded-lg border border-border/70 px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-40">
+              Default layout
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1">
         <DockviewReact
           theme={themeDark}
           components={components}
@@ -294,6 +340,7 @@ export default function DockviewWorkspaceGrid(props: Props) {
           disableFloatingGroups
           floatingGroupBounds="boundedWithinViewport"
         />
+        </div>
       </div>
     </RuntimeContext.Provider>
   );

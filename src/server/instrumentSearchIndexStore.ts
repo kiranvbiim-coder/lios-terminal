@@ -30,6 +30,7 @@ import type { InstrumentMasterCandidate } from "@shared/globalInstrumentMaster";
 import { loadAllPersistedInstrumentCandidates } from "./globalInstrumentMasterStore";
 import { loadLegacyTickerCatalog } from "./legacyTickerCatalog";
 import { loadProviderIngestedCatalog } from "./providerIngestedCatalog";
+import { loadFinanceDatabaseCatalog } from "./financeDatabaseCatalog";
 import { fetchSecTickerUniverse } from "./instrumentUniverseIngestion";
 import { openFigiCredential, searchOpenFigi } from "./openFigiConnector";
 import { lseFederatedInstrumentFallback, searchLseCatalogCandidates } from "./lseDataProvider";
@@ -48,13 +49,16 @@ let cachedIndex: InstrumentSearchIndex | null = null;
 async function loadCommonInstrumentSearchIndex(): Promise<InstrumentSearchIndex> {
   if (cachedIndex) return cachedIndex;
 
-  const [persisted, legacy, providerIngested] = await Promise.all([
+  const [persisted, legacy, providerIngested, financeDatabase] = await Promise.all([
     loadAllPersistedInstrumentCandidates(),
     Promise.resolve(loadLegacyTickerCatalog()),
     Promise.resolve(loadProviderIngestedCatalog()),
+    Promise.resolve(loadFinanceDatabaseCatalog()),
   ]);
 
-  cachedIndex = buildInstrumentSearchIndex([...persisted, ...legacy, ...providerIngested]);
+  // FinanceDatabase extends the SAME canonical search index: it does not
+  // create a duplicate master, and never turns provisional rows into IDs.
+  cachedIndex = buildInstrumentSearchIndex([...persisted, ...legacy, ...providerIngested, ...financeDatabase]);
   return cachedIndex;
 }
 

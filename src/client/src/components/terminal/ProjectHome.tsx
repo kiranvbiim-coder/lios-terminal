@@ -5,6 +5,7 @@ import type { ArtifactRefreshSpec } from "@shared/artifactContracts";
 import type { P6PersonalFinanceRequest } from "@shared/p6FinanceContracts";
 import { trashProjectResource, trashProjectSession, updateProjectResource, updateProjectSession, useProjectChats, useProjectResources, useProjectSessions, type Project, type ProjectChat, type ProjectResource, type ProjectSession } from "@/lib/useProjects";
 import { contextChangeConfirmation, findProjectHomeItems, mayEditProjectResourceContext, PROJECT_RESOURCE_CONTEXT_OPTIONS, type ProjectResourceContextMode } from "@/lib/projectHomeKnowledge";
+import { projectSavedWorkReadPresentation } from "@/lib/projectSavedWorkReadPresentation";
 import {
   VISUAL_ENVIRONMENTS,
   dispatchVisualContext,
@@ -16,10 +17,13 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectLedgerPanel } from "./ProjectLedgerPanel";
 import { ProjectArtifactsPanel } from "./ProjectArtifactsPanel";
 import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
-import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
+import { ProjectResumeDesk } from "./ProjectResumeDesk";
+import { ProjectWatchroomDesk } from "./ProjectWatchroomDesk";
+import { ProjectEvidenceBriefingStudio } from "./ProjectEvidenceBriefingStudio";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
+import { QuietAdvisoryInvite } from "./QuietAdvisoryInvite";
 
 export function relativeTime(value: string): string {
   const ms = Math.max(0, Date.now() - new Date(value).getTime());
@@ -50,6 +54,9 @@ export function ProjectHome({
   onRerunArtifact,
   onAnalyzePersonalFinance,
   onOpenContext,
+  showQuietAdvisoryInvite,
+  onExploreAdvisory,
+  onDismissAdvisory,
 }: {
   project: Project;
   chats: ProjectChat[];
@@ -69,6 +76,9 @@ export function ProjectHome({
   onRerunArtifact: (id: string, title: string, spec: ArtifactRefreshSpec) => void;
   onAnalyzePersonalFinance: (profile: P6PersonalFinanceRequest) => void;
   onOpenContext: () => void;
+  showQuietAdvisoryInvite: boolean;
+  onExploreAdvisory: () => void;
+  onDismissAdvisory: () => void;
 }) {
   const queryClient = useQueryClient();
   const chatsQuery = useProjectChats(project.id);
@@ -80,6 +90,14 @@ export function ProjectHome({
   const [visibleWorkCount, setVisibleWorkCount] = useState(12);
   const collectionsPending = chatsQuery.isPending || resourcesQuery.isPending || sessionsQuery.isPending;
   const collectionsFailed = chatsQuery.isError || resourcesQuery.isError || sessionsQuery.isError;
+  const collectionsFetching = chatsQuery.isFetching || resourcesQuery.isFetching || sessionsQuery.isFetching;
+  const savedWorkRead = projectSavedWorkReadPresentation({
+    chatsFailed: chatsQuery.isError,
+    resourcesFailed: resourcesQuery.isError,
+    sessionsFailed: sessionsQuery.isError,
+    pending: collectionsPending,
+    fetching: collectionsFetching,
+  });
   const [workQuery, setWorkQuery] = useState("");
   const [pendingContext, setPendingContext] = useState<{ projectId: number; resourceId: string; from: ProjectResourceContextMode; to: ProjectResourceContextMode } | null>(null);
   const [contextBusy, setContextBusy] = useState(false);
@@ -92,7 +110,7 @@ export function ProjectHome({
 
   async function confirmContextUpdate() {
     const draft = pendingContext;
-    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id) return;
+    if (!draft || contextSaveInFlight.current || draft.projectId !== project.id || !savedWorkRead.resourcesWritable) return;
     const resource = projectResources.find(row => row.projectId === draft.projectId && row.id === draft.resourceId);
     if (!resource || resource.contextMode !== draft.from || !mayEditProjectResourceContext(draft.projectId, resource, draft.to)) {
       setPendingContext(null);
@@ -123,6 +141,10 @@ export function ProjectHome({
 
   const [editingName, setEditingName] = useState(false);
   const [projectDepthOpen, setProjectDepthOpen] = useState(false);
+  const [watchroomsOpen, setWatchroomsOpen] = useState(false);
+  const [continuityOpen, setContinuityOpen] = useState(false);
+  const [investigationOpen, setInvestigationOpen] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const renameInFlight = useRef(false);
   const [renameBusy, setRenameBusy] = useState(false);
@@ -155,6 +177,10 @@ export function ProjectHome({
     setContextBusy(false);
     setEditingName(false);
     setProjectDepthOpen(false);
+    setWatchroomsOpen(false);
+    setContinuityOpen(false);
+    setInvestigationOpen(false);
+    setBriefingOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
     setRenameBusy(false);
     setRenameError(null);
@@ -166,7 +192,6 @@ export function ProjectHome({
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 pb-5">
           <div>
-            <div className="font-terminal text-[12px] uppercase tracking-[0.22em] text-amber-300/80">Project Home</div>
             {editingName ? (
               <div className="mt-2 flex items-center gap-2">
                 <input
@@ -203,11 +228,12 @@ export function ProjectHome({
               </div>
             )}
             {renameError && <p role="alert" className="mt-2 text-sm text-red-200">{renameError}</p>}
-            <p className="mt-2 max-w-2xl font-ui text-[14px] leading-5 text-muted-foreground">
-              {project.instructions || "Keep this Project focused. Add instructions, connected resources and Sessions as the work develops."}
-            </p>
+            {project.instructions && <p className="mt-2 max-w-2xl font-ui text-[14px] leading-5 text-muted-foreground">{project.instructions}</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <details className="lios-project-options relative rounded-md border border-border/60" data-testid="project-options">
+              <summary className="min-h-10 cursor-pointer select-none px-3 py-2 font-ui text-[13px] text-muted-foreground hover:text-foreground">Project options</summary>
+              <div className="absolute right-0 z-20 mt-2 flex w-[min(280px,calc(100vw-40px))] flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-lg">
             <label className="sr-only" htmlFor={`project-environment-${project.id}`}>Project visual environment</label>
             <select
               id={`project-environment-${project.id}`}
@@ -223,7 +249,7 @@ export function ProjectHome({
                   semanticContext: "general",
                 });
               }}
-              className="rounded-md border border-border/65 bg-[#090909]/85 px-2.5 py-2 font-ui text-[12px] text-muted-foreground outline-none hover:text-foreground"
+              className="rounded-md border border-border/65 bg-card px-2.5 py-2 font-ui text-[12px] text-muted-foreground outline-none hover:text-foreground"
               title="Pin a visual environment to this Project, or keep automatic context selection"
             >
               <option value="">Environment · Auto</option>
@@ -231,25 +257,23 @@ export function ProjectHome({
                 <option key={environment.id} value={environment.id}>{environment.name}</option>
               ))}
             </select>
-            <button onClick={() => onNewChat()} className="rounded-md border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2 font-ui text-[13px] font-medium text-amber-200 hover:bg-amber-400/[0.12]">
-              + New chat
-            </button>
-            <button onClick={onOpenContext} className="lios-section-action">Project context</button>
+                <button onClick={onOpenContext} className="lios-section-action text-left">Project context</button>
+              </div>
+            </details>
             <button onClick={onOpenWorkbench} className="rounded-md border border-border/70 px-3 py-2 font-ui text-[13px] text-foreground hover:bg-white/[0.04]">
               Expand workspace
             </button>
           </div>
         </div>
 
-        <section className="mt-6 rounded-2xl border border-border/55 bg-black/20 p-4 backdrop-blur-sm">
+        <section className="mt-6">
           <button
             type="button"
             onClick={() => onNewChat()}
-            className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/60 bg-[#090909]/80 px-4 py-4 text-left shadow-[0_18px_60px_rgba(0,0,0,.2)] hover:border-amber-300/25"
+            className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-4 text-left shadow-[0_18px_60px_rgba(0,0,0,.2)] hover:border-amber-300/25"
           >
             <span>
-              <span className="block font-display text-[16px] font-semibold tracking-[-0.02em] text-foreground">Continue the work with LiOS</span>
-              <span className="mt-1 block font-ui text-[14px] leading-5 text-muted-foreground">Ask naturally. LiOS brings in sources, calculations, artifacts and workspace depth only when the task benefits from them.</span>
+              <span className="block font-display text-[16px] font-semibold tracking-[-0.02em] text-foreground">Start a conversation</span>
             </span>
             <Send className="h-4 w-4 shrink-0 text-amber-300" />
           </button>
@@ -258,14 +282,12 @@ export function ProjectHome({
               "Research a company and show what changed",
               "Build a valuation from my connected data",
               "Analyze portfolio risk and downside scenarios",
-              "Explore markets and explain the important moves",
-              "Plan personal finances and long-term goals",
             ].map((starter) => (
               <button
                 key={starter}
                 type="button"
                 onClick={() => onNewChat(starter)}
-                className="rounded-full border border-border/55 bg-black/25 px-3 py-1.5 font-ui text-[13px] text-muted-foreground transition-colors hover:border-amber-300/25 hover:text-foreground"
+                className="rounded-full border border-border/55 bg-card px-3 py-1.5 font-ui text-[13px] text-muted-foreground transition-colors hover:border-amber-300/25 hover:text-foreground"
               >
                 {starter}
               </button>
@@ -273,13 +295,70 @@ export function ProjectHome({
           </div>
         </section>
 
+        <ProjectResumeDesk key={project.id} projectId={project.id} chats={projectChats} sessions={projectSessions}
+          onOpenChat={onOpenChat} onOpenSession={onOpenSession} onFocusArtifact={onFocusArtifact}
+          onInspectContinuity={() => setContinuityOpen(true)}
+          onOpenWatchrooms={() => setWatchroomsOpen(true)} />
 
-        <section aria-label="Find work within this Project" className="mt-6 space-y-2 rounded-xl border border-border/55 p-4">
-          <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Find this Project's chats, context and Sessions</label>
+        <section className="mt-5 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-watchrooms-entry">
+          <button type="button" aria-expanded={watchroomsOpen}
+            aria-controls={`project-watchrooms-${project.id}`}
+            onClick={() => setWatchroomsOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Watchrooms</span><span className="text-sm font-normal text-muted-foreground">{watchroomsOpen ? "Hide" : "Open"}</span>
+          </button>
+          {watchroomsOpen && <div id={`project-watchrooms-${project.id}`} className="border-t border-border/55 px-2 pb-2 pt-4">
+            <ProjectWatchroomDesk key={project.id} projectId={project.id} />
+          </div>}
+        </section>
+
+        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-continuity-entry">
+          <button type="button" aria-expanded={continuityOpen}
+            aria-controls={`project-continuity-${project.id}`}
+            onClick={() => setContinuityOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Project history</span><span className="text-sm font-normal text-muted-foreground">{continuityOpen ? "Hide" : "Open"}</span>
+          </button>
+          {continuityOpen && <div id={`project-continuity-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
+            <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
+          </div>}
+        </section>
+
+        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-investigation-entry">
+          <button type="button" aria-expanded={investigationOpen}
+            aria-controls={`project-investigation-${project.id}`}
+            onClick={() => setInvestigationOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Investigation</span><span className="text-sm font-normal text-muted-foreground">{investigationOpen ? "Hide" : "Open"}</span>
+          </button>
+          {investigationOpen && <div id={`project-investigation-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
+            <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Investigation workspace">
+              <button type="button" aria-pressed={!briefingOpen} onClick={() => setBriefingOpen(false)}
+                className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${!briefingOpen ? "border-amber-300/35 text-foreground" : "border-border/55 text-muted-foreground"}`}>Research</button>
+              <button type="button" aria-pressed={briefingOpen} onClick={() => setBriefingOpen(true)}
+                className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${briefingOpen ? "border-amber-300/35 text-foreground" : "border-border/55 text-muted-foreground"}`}>Briefing Studio</button>
+            </div>
+            {briefingOpen
+              ? <ProjectEvidenceBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
+              : <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
+          </div>}
+        </section>
+        {collectionsFailed && <div role="alert" className="mt-5 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
+          <p>{savedWorkRead.label} Resource changes are disabled until the exact saved Project records are verified.</p>
+          <button type="button" disabled={!savedWorkRead.retryAvailable} aria-busy={collectionsFetching}
+            className="min-h-11 rounded-lg border border-border px-3 py-2 text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
+            onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>
+            {collectionsFetching ? "Retrying saved-work read…" : "Retry saved-work read"}
+          </button>
+        </div>}
+        <details className="mt-6 rounded-xl border border-border/55" data-testid="project-saved-work">
+          <summary className="cursor-pointer select-none px-4 py-3 font-ui text-[14px] font-semibold text-foreground">Saved work</summary>
+          <div className="px-4 pb-4">
+            <section aria-label="Find work within this Project" className="space-y-2 rounded-lg border border-border/55 p-4">
+          <label htmlFor={`project-work-search-${project.id}`} className="block font-ui text-sm font-semibold">Search saved work</label>
           <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
-            placeholder="Search this Project's titles and resource kinds" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
-          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} Sessions match in this Project.{collectionsPending ? " Loading the complete active collections; recent work remains visible." : " Search covers the active collections loaded from this Project."}</p>
-          {collectionsFailed && <p role="alert" className="text-sm text-amber-200">The complete Project collections could not be refreshed. Showing available records; a missing match is not proof no saved item exists. <button type="button" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry Project collections</button></p>}
+            placeholder="Search chats, resources and sessions" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
+          <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} sessions{savedWorkRead.countQualifier}</p>
         </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
@@ -307,7 +386,7 @@ export function ProjectHome({
               <div className="font-ui text-[14px] font-semibold">Project memory &amp; context</div>
               <span className="font-terminal text-[11px] text-muted-foreground">{found.resources.length} MATCHING</span>
             </div>
-            <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Chats here use the Project's instructions, these resources and their own history. LiOS does not automatically recall other Chats; saved memories change only when you confirm a memory action in Chat, where you can also ask to inspect, correct or delete them.</p>
+            <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Eligible Project resources can support conversations. Saved chats and memories remain separate.</p>
             <div className="mt-3 space-y-2">
               {found.resources.slice(0, visibleWorkCount).map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-border/45 px-3 py-2">
@@ -318,11 +397,11 @@ export function ProjectHome({
                     }`}>{resource.contextMode.toUpperCase()}</span>
                   </div>
                   <div className="mt-1 font-terminal text-[11px] uppercase tracking-wider text-muted-foreground">{resource.kind}</div>
-                  <button type="button" disabled={contextBusy} onClick={() => {
+                  <button type="button" disabled={contextBusy || !savedWorkRead.resourcesWritable} onClick={() => {
                     setContextNotice(null);
                     setPendingContext({ projectId: project.id, resourceId: resource.id, from: resource.contextMode, to: resource.contextMode });
-                  }} className="mt-2 min-h-10 rounded border border-border px-3 py-2 text-xs">Review context inclusion</button>
-                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy}
+                  }} className="mt-2 min-h-11 rounded-lg border border-border px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">Review context inclusion</button>
+                  <ProjectWorkActions key={resource.id} kind="source" label={resource.label} disabled={contextBusy || !savedWorkRead.resourcesWritable}
                     rename={async label => {
                       const saved = await updateProjectResource(project.id, resource.id, { label });
                       if (saved.id !== resource.id || saved.projectId !== project.id || saved.label !== label) throw new Error("The exact resource name was not confirmed.");
@@ -332,8 +411,8 @@ export function ProjectHome({
                     onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] }); }} />
                 </div>
               ))}
-              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
-              <p className="font-ui text-xs text-muted-foreground">Project = eligible for automatic context; on demand = only when requested; excluded = retained but not routinely retrieved. Server source rights still apply.</p>
+              {!found.resources.length && <div className="rounded-lg border border-dashed border-border/50 p-3 font-ui text-sm text-muted-foreground">{resourcesQuery.isError ? "Resource records could not be verified. Retry before relying on an empty result." : workQuery.trim() ? "No matching saved resources in this Project." : "No resources connected yet."}</div>}
+              <p className="font-ui text-xs text-muted-foreground">Automatic, on demand or excluded. Source permissions still apply.</p>
               {pendingContext?.projectId === project.id && (() => {
                 const resource = projectResources.find(row => row.projectId === project.id && row.status === "active" && row.id === pendingContext.resourceId);
                 if (!resource) return <p role="alert">The selected resource is no longer active. Reopen this Project's context.</p>;
@@ -345,7 +424,7 @@ export function ProjectHome({
                   </label>
                   <p className="text-xs">{contextChangeConfirmation(resource.label, pendingContext.from, pendingContext.to)}</p>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" disabled={contextBusy || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)} onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm">Save this resource's context mode</button>
+                    <button type="button" disabled={contextBusy || !savedWorkRead.resourcesWritable || !mayEditProjectResourceContext(project.id, resource, pendingContext.to)} onClick={() => void confirmContextUpdate()} className="min-h-10 rounded border border-amber-300/40 px-3 py-2 text-sm">Save this resource's context mode</button>
                     <button type="button" disabled={contextBusy} onClick={() => setPendingContext(null)} className="min-h-10 rounded border border-border px-3 py-2 text-sm">Cancel</button>
                   </div>
                 </section>;
@@ -359,11 +438,10 @@ export function ProjectHome({
           <section className="mt-8 border-t border-border/45 pt-4">
             <div className="flex items-center justify-between">
               <div className="font-ui text-[14px] font-semibold">Resume a Session</div>
-              <span className="font-terminal text-[11px] text-muted-foreground">FORKABLE ANALYTICAL STATE</span>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {found.sessions.slice(0, visibleWorkCount).map((session) => (
-                <div key={session.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+                <div key={session.id} className="rounded-lg border border-border/50 bg-card p-3">
                 <button type="button" onClick={() => onOpenSession(session)} className="w-full text-left hover:text-fuchsia-200">
                   <div className="font-ui text-[13px] text-foreground">{session.name}</div>
                   <div className="mt-2 flex items-center justify-between">
@@ -387,6 +465,9 @@ export function ProjectHome({
         {Math.max(found.chats.length, found.resources.length, found.sessions.length) > visibleWorkCount
           && <button type="button" onClick={() => setVisibleWorkCount(count => count + 40)} className="mt-4 min-h-11 rounded border border-border px-4 py-2 text-sm">Show more matching Project work</button>}
 
+          </div>
+        </details>
+
         <section className="mt-8 border-t border-border/45 pt-4">
           <button
             type="button"
@@ -395,17 +476,14 @@ export function ProjectHome({
             className="flex w-full items-center justify-between gap-4 rounded-lg px-1 py-2 text-left text-muted-foreground hover:text-foreground"
           >
             <span>
-              <span className="block font-ui text-[13px] font-semibold text-foreground">Project intelligence & saved work</span>
-              <span className="mt-1 block font-ui text-[12px] text-muted-foreground">Continue work across decisions, Project context, automations, intelligence snapshots and reproducibility history.</span>
+              <span className="block font-ui text-[13px] font-semibold text-foreground">Advanced tools</span>
             </span>
-            <span className="font-terminal text-[12px] text-amber-200">{projectDepthOpen ? "HIDE" : "SHOW"}</span>
+            <span className="font-terminal text-[12px] text-amber-200">{projectDepthOpen ? "Hide" : "Show"}</span>
           </button>
           {projectDepthOpen && (
             <div className="mt-3 space-y-3">
               <ProjectPersonalFinancePanel projectId={project.id} onAnalyze={onAnalyzePersonalFinance} />
-              <ProjectContinuityPanel key={project.id} projectId={project.id} onFocusArtifact={onFocusArtifact} />
-              <ProjectIntelligencePanel projectId={project.id} />
-              <ProjectAutomationPanel projectId={project.id} />
+
               <ProjectArtifactsPanel
                 projectId={project.id}
                 sessions={sessions}
@@ -417,6 +495,9 @@ export function ProjectHome({
             </div>
           )}
         </section>
+        {showQuietAdvisoryInvite && !editingName && !renameBusy && !pendingContext && !contextBusy && (
+          <QuietAdvisoryInvite onExplore={onExploreAdvisory} onDismiss={onDismissAdvisory} />
+        )}
       </div>
     </div>
   );

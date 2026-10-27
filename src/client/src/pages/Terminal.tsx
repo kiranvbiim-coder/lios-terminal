@@ -1086,6 +1086,13 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
               renderTerminalPanel={(context, controls) => renderPaneContent("primary", { view: context.view, symbol: context.symbol ?? "" }, controls)}
               chatWorkbenchReturn={chatWorkbenchReturn}
               onOpenEnvironment={onOpenEnvironment}
+              focusMode={focusMode}
+              presentationMode={presentationMode}
+              onExploreAdvisory={() => {
+                if (!canOpenView("advisory") || workbenchDirtyRef.current) return false;
+                handleOpenAction("advisory", "tab");
+                return true;
+              }}
             />
           </div>
           {isProjectsSurface ? null : isExperienceHomeSurface(experienceSurface) ? (
@@ -1153,7 +1160,11 @@ export default function Terminal({ session, onLogout, onOpenEnvironment, domain,
         </div>
       )}
 
-      <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onApplyWorkspace={applyWorkspace} />
+      <TerminalUxOverlays experienceSurface={experienceSurface} activeView={activePane.view} activeSymbol={getTerminalCapability(activePane.view).symbolAware ? activePane.symbol : undefined} workspace={workspace} isInternal={isInternal} preferences={uxPreferences} onPreferencesChange={updatePreferences} onOpen={handleOpenAction} onStageAiReview={(draft) => {
+        if (workbenchDirtyRef.current || !draft.trim()) return false;
+        handleAskLios(draft);
+        return true;
+      }} onApplyWorkspace={applyWorkspace} />
     </div>
     </NativeArtifactDraftOwnerContext.Provider>
     </TerminalArtifactRendererProvider>

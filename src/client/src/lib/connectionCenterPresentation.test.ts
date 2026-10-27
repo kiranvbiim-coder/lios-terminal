@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connectionRecoveryPresentation, isConnectorConnectable, summarizeConnectionCenter } from "./connectionCenterPresentation";
+import { connectionRecoveryPresentation, countLiveVerifiedConnectors, isConnectorConnectable, summarizeConnectionCenter } from "./connectionCenterPresentation";
 
 test("first entry remains available for empty, loading, failed and unusable connections without promoting configuration to verification", () => {
   const empty = summarizeConnectionCenter([]);
@@ -54,4 +54,19 @@ test("catalog-only connectors stay discoverable without being connectable", () =
   assert.equal(isConnectorConnectable({ adapterImplemented: true }), true);
   assert.equal(isConnectorConnectable({}), true);
   assert.equal(isConnectorConnectable({ adapterImplemented: false }), false);
+});
+
+
+test("connector registry counts live-verified sources, never configured credentials or stale health", () => {
+  const connectors = [{ id: "fred" }, { id: "oecd" }, { id: "custom_research" }];
+  const health = [
+    { connectorId: "fred", state: "live_verified" },
+    { connectorId: "fred", state: "live_verified" },
+    { connectorId: "oecd", state: "credential_configured" },
+    { connectorId: "custom_research", state: "catalog_only" },
+    { connectorId: "removed_source", state: "live_verified" },
+  ];
+  assert.equal(countLiveVerifiedConnectors(connectors, health), 1);
+  assert.equal(countLiveVerifiedConnectors(connectors, health.filter(item => item.state !== "live_verified")), 0);
+  assert.equal(countLiveVerifiedConnectors([], health), 0);
 });

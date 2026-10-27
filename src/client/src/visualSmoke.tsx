@@ -12,6 +12,7 @@ import { DEFAULT_TERMINAL_UX_PREFERENCES } from "@/lib/terminalUxPreferences";
 import { DOCKVIEW_LAYOUT_STORAGE_KEY } from "@/lib/dockviewWorkspaceState";
 import { dispatchVisualContext } from "@/lib/visualEnvironment";
 import type { PaneId, PaneState, WorkspaceState } from "@/lib/terminalTypes";
+import { LIOS_PRODUCT_PALETTES, isLiosLightPalette } from "@/lib/liosProductPalette";
 import "./terminalStyles";
 
 type SmokeCase =
@@ -266,8 +267,15 @@ try {
   // Visual smoke must remain deterministic even in hardened/private storage contexts.
 }
 
-document.documentElement.classList.add("dark");
-document.documentElement.setAttribute("data-theme", "dark");
+// The visual smoke runs without user credentials and must never read or write
+// the real Appearance preference. Unknown inputs deterministically use Classic.
+const requestedSmokePalette = new URLSearchParams(window.location.search).get("palette");
+const smokePalette = LIOS_PRODUCT_PALETTES.find((value) => value.id === requestedSmokePalette)?.id ?? "lios-classic";
+document.documentElement.setAttribute("data-lios-palette", smokePalette);
+document.documentElement.setAttribute("data-visual-smoke-palette", smokePalette);
+const smokeIsLight = isLiosLightPalette(smokePalette);
+document.documentElement.classList.toggle("dark", !smokeIsLight);
+document.documentElement.setAttribute("data-theme", smokeIsLight ? "light" : "dark");
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -579,10 +587,10 @@ function Harness() {
   }, [smokeCase, density]);
 
   return (
-    <div className="terminal-root h-screen min-h-0 overflow-hidden bg-[#030303] text-foreground" data-density={density} data-visual-smoke-ready={ready ? "true" : "false"}>
+    <div className="terminal-root h-screen min-h-0 overflow-hidden bg-[#030303] text-foreground" data-density={density} data-visual-smoke-ready={ready ? "true" : "false"} data-visual-smoke-palette={smokePalette}>
       <div className="flex h-8 items-center border-b border-border bg-[#080808] px-3">
         <span className="font-terminal text-[9px] font-bold tracking-[0.18em] text-amber-300">LIOS · VISUAL SMOKE</span>
-        <span className="ml-3 font-terminal text-[8px] tracking-widest text-muted-foreground">{smokeCase.toUpperCase()} · {density.toUpperCase()}</span>
+        <span className="ml-3 font-terminal text-[8px] tracking-widest text-muted-foreground">{smokeCase.toUpperCase()} · {density.toUpperCase()} · {smokePalette.toUpperCase()}</span>
         <span className="ml-auto font-terminal text-[7px] tracking-widest text-cyan-300">DETERMINISTIC FIXTURE · DESKTOP 1440×900</span>
       </div>
       <div className="h-[calc(100vh-32px)] min-h-0 overflow-hidden">

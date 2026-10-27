@@ -1,0 +1,664 @@
+/*
+ * TC / SI-07 — LiOS palette acceptance layer.
+ * Loaded AFTER canonical shell, one authorized VisualCanvas and typography.
+ * Chat and Project UI only; dense Workbench and code/data semantics are unchanged.
+ * The reference palettes are independently selectable, not endorsed by the
+ * products that inspired their publicly observable colors.
+ */
+
+/* Semantic *text* accent is intentionally distinct from the reference brand
+ * color: Claude's #D97757 fails WCAG AA for small text on its ivory surface. */
+html[data-lios-palette="chatgpt-dark"] {
+  --lios-theme-accent-text: #F5F5F5;
+  --lios-theme-action: #F5F5F5;
+  --lios-theme-action-foreground: #171717;
+  --lios-theme-link: #E6E6E6;
+  --lios-theme-user-bg: #303030;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #191919;
+}
+html[data-lios-palette="chatgpt-light"] {
+  --lios-theme-accent-text: #171717;
+  --lios-theme-action: #171717;
+  --lios-theme-action-foreground: #FFFFFF;
+  --lios-theme-link: #244B98;
+  --lios-theme-user-bg: #F0F0F0;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #F3F3F3;
+}
+html[data-lios-palette="claude-light"] {
+  --lios-theme-accent-text: #A44527;
+  --lios-theme-action: #D97757;
+  --lios-theme-action-foreground: #141413;
+  --lios-theme-link: #8D3B20;
+  --lios-theme-user-bg: #F0EEE6;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #F0EEE6;
+}
+html[data-lios-palette="claude-dark"] {
+  --lios-theme-accent-text: #E9947A;
+  --lios-theme-action: #D97757;
+  --lios-theme-action-foreground: #141413;
+  --lios-theme-link: #FFC5B1;
+  --lios-theme-user-bg: #393935;
+  --lios-theme-assistant-bg: transparent;
+  --lios-theme-code-bg: #1F1E1D;
+}
+
+/* Classic remains the unchanged professional-terminal theme. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-experience-shell {
+  --lios-chat-surface: var(--lios-bg-app);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-project-experience-shell > aside,
+  .lios-reference-navigation-projects,
+  .lios-reference-expand-sidebar,
+  .lios-reference-navigation-rail,
+  .lios-navigation-sheet
+) {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects {
+  background: var(--lios-bg-panel-2) !important;
+  border-color: var(--lios-border-default) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-titlebar {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-reference-titlebar button,
+  .lios-reference-titlebar-brand .lios-reference-brand,
+  .lios-reference-navigation-brand,
+  .lios-reference-expand-sidebar
+) {
+  color: var(--lios-text-secondary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-primary-navigation button {
+  min-height: 38px;
+  border-radius: 9px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-primary-navigation .lios-new-chat {
+  border: 1px solid var(--lios-border-default);
+  border-radius: 10px;
+  font-family: var(--lios-chat-font) !important;
+  font-size: .875rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-projects .lios-account-avatar {
+  border-radius: 10px;
+  background: var(--lios-bg-elevated);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-primary-navigation button[aria-current],
+  .lios-reference-navigation-rail button[aria-current]
+) {
+  color: var(--lios-theme-accent-text);
+  background: var(--lios-bg-selected);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-reference-navigation-rail button[aria-current] {
+  color: var(--lios-theme-accent-text);
+  border-color: var(--lios-brand);
+}
+
+/* Preserve the existing VisualCanvas as the only environmental layer, but
+ * prevent its dark veil/image from tinting readable light themes. */
+html[data-lios-palette="chatgpt-light"] .lios-visual-canvas,
+html[data-lios-palette="claude-light"] .lios-visual-canvas {
+  background: var(--lios-bg-app) !important;
+}
+html[data-lios-palette="chatgpt-light"] .lios-visual-canvas :is(.lios-visual-canvas__image, .lios-visual-canvas__veil, .lios-visual-canvas__light, .lios-visual-canvas__grain),
+html[data-lios-palette="claude-light"] .lios-visual-canvas :is(.lios-visual-canvas__image, .lios-visual-canvas__veil, .lios-visual-canvas__light, .lios-visual-canvas__grain) {
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+/* Consistent surfaces for the Chat home, Project home and suggestions. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-starter {
+  background: var(--lios-bg-panel) !important;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 12px !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-starter:hover {
+  background: var(--lios-bg-elevated) !important;
+  border-color: var(--lios-border-strong) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-home-surface,
+  .lios-section-surface,
+  .lios-project-chat-content
+) {
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-home-surface [class*="bg-black"],
+  .lios-project-home-surface [class*="bg-[#"],
+  .lios-project-experience-shell .lios-chat-empty-state__mark
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root #lios-chat-empty-title {
+  color: var(--lios-text-primary) !important;
+  font-size: clamp(1.7rem, 3.5vw, 2.2rem) !important;
+  max-width: 34ch;
+  text-wrap: balance;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-empty-state > p {
+  max-width: 55ch;
+}
+
+/* Mature Chat message rhythm: user gets a quiet filled bubble; assistant
+ * prose stays almost borderless, with markdown/code/cards visually separated. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-chat-content {
+  max-width: 48rem;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message {
+  background: var(--lios-theme-assistant-bg) !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px;
+  color: var(--lios-text-primary);
+  box-shadow: none !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message[data-lios-message="user"] {
+  background: var(--lios-theme-user-bg) !important;
+  border-radius: 17px 17px 5px 17px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message[data-lios-message="assistant"] {
+  padding-inline: .1rem;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message .lios-chat-markdown {
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(h1, h2, h3) {
+  letter-spacing: -.02em;
+  font-family: var(--lios-chat-font);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown a[href] {
+  color: var(--lios-theme-link);
+  text-decoration-color: currentColor;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(a, button)[data-citation] {
+  color: var(--lios-theme-link);
+  background: var(--lios-bg-panel);
+  border: 1px solid var(--lios-border-default);
+  border-radius: 5px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown :is(code, kbd, samp) {
+  background: var(--lios-theme-code-bg);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-markdown blockquote {
+  border-color: var(--lios-border-strong);
+}
+
+/* Streaming uses the same quiet assistant material as the saved response.
+ * The existing markdown streaming/cancellation semantics remain untouched. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+  .lios-conversation-stream[data-lios-message="assistant"] {
+  background: var(--lios-theme-assistant-bg) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Tables/copy/code stay keyboard reachable and contrast-safe on light themes. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-code-block] {
+  background: var(--lios-theme-code-bg);
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] {
+  background: var(--lios-bg-panel-2);
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] :is(thead, section > div:first-child) {
+  background: var(--lios-bg-elevated);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root [data-chat-table-block] th {
+  color: var(--lios-text-primary);
+}
+
+/* The composer is the main focus point: no dark glass overlay on ivory/white. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+  background: var(--lios-bg-panel) !important;
+  border: 1px solid var(--lios-border-strong) !important;
+  border-radius: 18px !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .09) !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer:focus-within {
+  border-color: var(--lios-text-muted) !important;
+  box-shadow: 0 9px 26px rgb(0 0 0 / .12) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer textarea {
+  background: transparent !important;
+  color: var(--lios-text-primary) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer textarea::placeholder {
+  color: var(--lios-text-muted);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer + * {
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-suggestion-menu {
+  background: var(--lios-bg-elevated) !important;
+  border: 1px solid var(--lios-border-default);
+  color: var(--lios-text-primary);
+  box-shadow: 0 10px 34px rgb(0 0 0 / .16);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-chat-suggestion-menu button:hover {
+  background: var(--lios-bg-hover) !important;
+}
+
+/* Explicit action foreground avoids using white on mid-tone Claude terracotta. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  [data-first-use-primary="ask"], .lios-primary-ask-action
+) {
+  background: var(--lios-theme-action) !important;
+  color: var(--lios-theme-action-foreground) !important;
+  border-color: transparent !important;
+  border-radius: 10px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell, .lios-project-home-surface
+) :is(.text-amber-300,.text-amber-200,.text-amber-100) {
+  color: var(--lios-theme-accent-text) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-experience-shell .lios-chat-empty-state__mark :is(svg) {
+  color: var(--lios-theme-accent-text);
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell [class*="text-cyan-100"],
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell [class*="text-cyan-100"] {
+  color: #165A7D !important;
+}
+
+/* Artifact ownership is unchanged. Only surfaces in the existing sidecar,
+ * its tabs, Project cards, and theme-aware dialogs/drawers are recolored. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell .lios-artifact-sidecar,
+  .lios-project-experience-shell .lios-artifact-frame,
+  .lios-artifact-frame,
+  .lios-project-context
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-reference-artifact-tabs {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-reference-artifact-tabs button[aria-selected="true"] {
+  color: var(--lios-theme-accent-text);
+  background: var(--lios-bg-panel);
+  border-color: var(--lios-brand);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  [role="dialog"][data-state],
+  [data-radix-popper-content-wrapper] [role="menu"],
+  [data-radix-popper-content-wrapper] [role="listbox"],
+  .lios-navigation-sheet,
+  [data-testid="connect-data"]
+) {
+  background-color: var(--lios-bg-panel-2);
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) [data-testid="connect-data"] :is(
+  input, select, textarea
+) {
+  background-color: var(--lios-bg-panel);
+  color: var(--lios-text-primary);
+  border-color: var(--lios-border-default);
+}
+
+/* All prominent calls to action require foreground contrast, not just hero. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root :is(
+  .lios-project-experience-shell button.bg-amber-400,
+  .lios-artifact-frame button.bg-amber-300
+) {
+  color: var(--lios-theme-action-foreground) !important;
+}
+
+/* Keep assistant attribution available to screen readers via role=group and
+ * aria-label in ProjectExperienceShell, but reduce repeated visual badges. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+  .lios-conversation-message:is([data-lios-message="assistant"], [data-lios-message="user"]) > div:first-child {
+  display: none;
+}
+
+/* Compact, unambiguous theme previews inside existing Appearance menu. */
+.lios-palette-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.lios-palette-swatch i {
+  display: block;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--lios-palette-preview-surface);
+}
+.lios-palette-swatch i:nth-child(2) {
+  background: var(--lios-palette-preview-panel);
+  border: 1px solid rgb(128 128 128 / .2);
+}
+.lios-palette-swatch i:nth-child(3) {
+  width: 5px;
+  background: var(--lios-palette-preview-accent);
+}
+.lios-palette-swatch[data-lios-preview="chatgpt-dark"] {
+  --lios-palette-preview-surface: #212121;
+  --lios-palette-preview-panel: #303030;
+  --lios-palette-preview-accent: #FFFFFF;
+}
+.lios-palette-swatch[data-lios-preview="chatgpt-light"] {
+  --lios-palette-preview-surface: #FFFFFF;
+  --lios-palette-preview-panel: #F4F4F4;
+  --lios-palette-preview-accent: #0D0D0D;
+}
+.lios-palette-swatch[data-lios-preview="claude-light"] {
+  --lios-palette-preview-surface: #FAF9F5;
+  --lios-palette-preview-panel: #F0EEE6;
+  --lios-palette-preview-accent: #D97757;
+}
+.lios-palette-swatch[data-lios-preview="claude-dark"] {
+  --lios-palette-preview-surface: #262624;
+  --lios-palette-preview-panel: #30302C;
+  --lios-palette-preview-accent: #D97757;
+}
+.lios-palette-swatch[data-lios-preview="lios-classic"] {
+  --lios-palette-preview-surface: #09090B;
+  --lios-palette-preview-panel: #111115;
+  --lios-palette-preview-accent: #D4A017;
+}
+
+/* Recolor the *existing* Dockview groups; keep installed professional
+ * Workbench geometry, tab sizes, layout state and data typography unchanged.
+ * Canonical shell remains the only structural authority for Dockview. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) :is(
+  .lios-dockview-workspace.dockview-theme-dark,
+  .lios-dockview-workspace .dockview-theme-dark
+) {
+  --dv-group-view-background-color: var(--lios-bg-app);
+  --dv-tabs-and-actions-container-background-color: var(--lios-bg-panel);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--lios-bg-app);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--lios-bg-panel-2);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--lios-bg-panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--lios-bg-shell);
+  --dv-activegroup-visiblepanel-tab-color: var(--lios-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--lios-text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--lios-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--lios-text-muted);
+  --dv-tab-divider-color: var(--lios-border-subtle);
+  --dv-separator-border: var(--lios-border-default);
+  --dv-paneview-header-border-color: var(--lios-border-default);
+  --dv-paneview-active-outline-color: var(--lios-brand);
+  --dv-active-sash-color: var(--lios-brand);
+  --dv-drag-over-background-color: var(--lios-bg-selected);
+  --dv-drag-over-border-color: var(--lios-border-strong);
+  --dv-edge-dock-indicator-color: var(--lios-brand);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-dockview-workspace .dv-sash:is(:hover,.dv-active-sash) {
+  background-color: color-mix(in srgb, var(--lios-brand) 28%, transparent);
+}
+
+/* Accessibility and narrow layouts: preserve existing switch / same sidecar. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .lios-project-experience-shell :where(
+  button, a, input, textarea, select, [tabindex]
+):focus-visible {
+  outline: 2px solid var(--lios-theme-accent-text) !important;
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-chat-content {
+    max-width: 100%;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-message {
+    max-width: 94%;
+    overflow-wrap: anywhere;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+    border-radius: 14px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+    transition: none;
+  }
+}
+
+
+/*
+ * Deterministic visual-smoke fixtures. The real UI uses the selectors above;
+ * only the test harness carries data-ux-flagship-smoke. These overrides let
+ * screenshot reviewers compare light/dark surfaces on the same seeded content
+ * without making a fixture the owner of the actual production UI.
+ */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root[data-visual-smoke-palette] {
+  background: var(--lios-bg-app) !important;
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] > div:last-child > aside:first-child {
+  background: var(--lios-bg-shell) !important;
+  border-color: var(--lios-border-default);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] :is(
+  [class*="bg-[#"], [class*="bg-black"]
+) {
+  background: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] .lios-conversation-composer {
+  background: var(--lios-bg-elevated) !important;
+  color: var(--lios-text-primary);
+  border-radius: 18px;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) main[data-ux-flagship-smoke] .lios-artifact-frame {
+  background: var(--lios-bg-panel) !important;
+  color: var(--lios-text-primary);
+  border-color: var(--lios-border-default);
+}
+
+
+/* Accessible semantic statuses for light reference themes only.
+ * Keep up/down market signals, colorblind modes and the analytical
+ * Workbench's domain-specific color system owned by the canonical shell. */
+html[data-lios-palette="chatgpt-light"],
+html[data-lios-palette="claude-light"] {
+  --lios-theme-error-text: #B42318;
+  --lios-theme-success-text: #137547;
+  --lios-theme-info-text: #12578A;
+  --lios-theme-violet-text: #6941A5;
+  --lios-theme-fuchsia-text: #873B8C;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-red-200,.text-red-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-red-200,.text-red-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-red-200,.text-red-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-red-200,.text-red-300) {
+  color: var(--lios-theme-error-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-emerald-100,.text-emerald-200,.text-emerald-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-emerald-100,.text-emerald-200,.text-emerald-300) {
+  color: var(--lios-theme-success-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-home-surface :is(.text-cyan-100,.text-cyan-200,.text-cyan-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface :is(.text-cyan-100,.text-cyan-200,.text-cyan-300) {
+  color: var(--lios-theme-info-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-violet-100,.text-violet-200),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-violet-100,.text-violet-200) {
+  color: var(--lios-theme-violet-text) !important;
+}
+html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300),
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300) {
+  color: var(--lios-theme-fuchsia-text) !important;
+}
+
+/* Professional default: secondary message actions are revealed when the
+ * user engages with a message. Keyboard focus still reveals the controls;
+ * touch/pointer-coarse surfaces always show them. Do not hide warnings,
+ * approval requests, citations or execution provenance. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message [data-testid="chat-message-actions"] {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message:hover [data-testid="chat-message-actions"],
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message:focus-within [data-testid="chat-message-actions"] {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message [data-testid="chat-message-actions"] {
+    transition: none;
+  }
+}
+
+
+/* SI-07 navigation foundation: readable names first, icon rail only by choice.
+ * Applies to all five themes, including Classic, without changing route ownership.
+ * The 260px sidebar is one named navigation + history column, not two rails. */
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="false"] {
+  width: 260px !important;
+  flex-basis: 260px !important;
+  border-right: 1px solid var(--lios-border-default);
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-rail[hidden],
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-projects[hidden] {
+  display: none !important;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="false"] .lios-reference-navigation-projects {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  border-right: 0;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="true"] .lios-reference-navigation-rail {
+  display: flex;
+  width: 60px;
+  min-width: 60px;
+  align-items: center;
+  padding: 8px 5px;
+  background: var(--lios-bg-shell);
+  border-right: 1px solid var(--lios-border-default);
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-brand {
+  color: var(--lios-text-primary);
+  letter-spacing: normal;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation {
+  padding: 10px 12px;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button,
+.lios-navigation-sheet .lios-primary-navigation button {
+  min-height: 38px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: var(--lios-chat-font, inherit);
+  font-size: 14px !important;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation .lios-new-chat,
+.lios-navigation-sheet .lios-primary-navigation .lios-new-chat {
+  min-height: 40px;
+  border: 1px solid var(--lios-border-default);
+  border-radius: 9px;
+  font-family: var(--lios-chat-font, inherit) !important;
+  font-size: 14px !important;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.terminal-root .lios-navigation-section-links,
+.lios-navigation-sheet .lios-navigation-section-links {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--lios-border-subtle);
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button[aria-current="page"],
+.lios-navigation-sheet .lios-primary-navigation button[aria-current="page"] {
+  background: var(--lios-bg-selected);
+  color: var(--lios-text-primary);
+  font-weight: 600;
+}
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation button:focus-visible,
+.lios-navigation-sheet .lios-primary-navigation button:focus-visible,
+.terminal-root .lios-reference-navigation-rail button:focus-visible {
+  outline: 2px solid var(--lios-brand) !important;
+  outline-offset: -2px;
+}
+.terminal-root .lios-authenticated-navigation .lios-reference-navigation-rail button {
+  min-width: 42px;
+  min-height: 40px;
+  border-radius: 8px;
+}
+.lios-navigation-sheet .lios-primary-navigation {
+  max-height: 57vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .terminal-root .lios-authenticated-navigation { display: none !important; }
+}
+
+
+/* Phase 1: short application windows still reach every named destination and
+ * the compact-account menu without clipping or changing layout ownership. */
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation {
+  max-height: min(58vh, 490px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="true"] .lios-reference-navigation-rail {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.terminal-root .lios-authenticated-navigation .lios-compact-account-trigger {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  color: var(--lios-text-primary);
+}
+.terminal-root .lios-authenticated-navigation .lios-compact-account-trigger:focus-visible {
+  outline: 2px solid var(--lios-brand);
+  outline-offset: -2px;
+}
+
+
+/* Phase 1 accessibility: hover-only History menus disappear on touch devices.
+ * Preserve quiet desktop hover behavior while keeping touch actions discoverable. */
+@media (hover: none), (pointer: coarse) {
+  .terminal-root .lios-history-action-menu,
+  .lios-navigation-sheet .lios-history-action-menu {
+    opacity: 1 !important;
+  }
+}

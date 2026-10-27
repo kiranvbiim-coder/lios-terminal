@@ -8,6 +8,7 @@ import type {
   PulseEvidence,
   StoredEventRoom,
 } from "./waveDContracts";
+import { normalizePulseSubjectKey } from "./pulseSubjectPreferences";
 
 export type PulseChannel = "for_you" | "following" | "markets" | "research";
 
@@ -19,14 +20,17 @@ export interface PulseFilter {
 }
 
 export function filterPulseCards(cards: readonly IntelligenceCard[], filter: PulseFilter): IntelligenceCard[] {
-  const following = new Set((filter.subjectKeys ?? []).map((key) => key.toUpperCase()));
+  const following = new Set((filter.subjectKeys ?? []).map(normalizePulseSubjectKey).filter((key): key is string => key !== null));
   return cards.filter((card) => {
+    // The source UI permits Following a symbol when there is no subjectKey.
+    // Apply that same identity here so the explicit action is never a no-op.
+    const identity = normalizePulseSubjectKey(card.subjectKey ?? card.symbol);
     if (filter.kinds?.length && !filter.kinds.includes(card.kind)) return false;
     if (filter.unreadOnly && card.status !== "unread") return false;
-    if (following.size && (!card.subjectKey || !following.has(card.subjectKey.toUpperCase()))) return false;
+    if (following.size && (!identity || !following.has(identity))) return false;
     if (filter.channel === "markets") return ["market_move", "macro", "portfolio", "valuation"].includes(card.kind);
     if (filter.channel === "research") return ["research", "earnings", "news", "email", "ai_insight", "community_idea"].includes(card.kind);
-    if (filter.channel === "following") return following.size > 0 && !!card.subjectKey && following.has(card.subjectKey.toUpperCase());
+    if (filter.channel === "following") return following.size > 0 && !!identity && following.has(identity);
     return true;
   });
 }

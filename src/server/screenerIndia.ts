@@ -115,12 +115,11 @@ function loadTickerNames(): Map<string, string> {
       ? path.resolve(resourcesBase, "server", "data", "tickers.json")
       : path.resolve(process.cwd(), "server", "data", "tickers.json");
     if (fs.existsSync(dataPath)) {
-      const list = JSON.parse(fs.readFileSync(dataPath, "utf8")) as Array<{ symbol: string; name: string }>;
-      // A vendor file-creation footer is not a company/scrip name.
-      for (const t of list) {
-        if (isUsableCatalogIdentityRow(t)) {
-          tickerNameBySymbol.set(t.symbol.toUpperCase(), t.name);
-        }
+      const parsed: unknown = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+      if (!Array.isArray(parsed)) throw new Error("Invalid ticker catalog");
+      for (const row of parsed) {
+        if (!isUsableCatalogIdentityRow(row)) continue;
+        tickerNameBySymbol.set(row.symbol.toUpperCase(), row.name);
       }
     }
   } catch (err) {

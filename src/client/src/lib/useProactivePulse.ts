@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { parseActionInboxReview, type ActionInboxReview } from "./actionInboxReview";
 
 /**
  * Opt-in ambient signal for the "LiOS Power" clean landing (and any other
@@ -22,38 +23,89 @@ const POLL_INTERVAL_MS = 60_000;
 
 /** Pure so it can be tested without mocking fetch/timers -- see useProactivePulse.test.ts. */
 export function parseActionInboxResponse(data: unknown): ProactivePulseState {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return { count: 0, status: "unavailable" };
-  const items = (data as { items?: unknown }).items;
-  return { count: Array.isArray(items) ? items.length : 0, status: "ready" };
+  const review = parseActionInboxReview(data);
+  return review.status === "ready" ? { count: review.openCount, status: "ready" }
+    : { count: 0, status: "unavailable" };
 }
 
+/** Both ambient and detailed review now share one source-validated polling policy. */
 export function useProactivePulse(enabled: boolean): ProactivePulseState {
-  const [state, setState] = useState<ProactivePulseState>({ count: 0, status: "loading" });
+  const { result } = useProactiveInboxReview(enabled);
+  return result.state === "ready" ? { count: result.review.openCount, status: "ready" }
+    : { count: 0, status: result.state === "unavailable" || result.state === "not_authorized" ? "unavailable" : "loading" };
+}
+
+/**
+ * Phase 3 review of the SAME Wave D Action Inbox. Fetch only after a foreground
+ * opt-in, pause on hidden tabs, abort when closed, and never write alerts to
+ * another cache or initiate the suggested (potentially consequential) actions.
+ */
+export type ProactiveInboxReviewState =
+  | { state: "idle" | "loading"; review: null }
+  | { state: "ready"; review: ActionInboxReview }
+  | { state: "unavailable" | "not_authorized"; review: null };
+
+/**
+ * The same server endpoint and parser power passive checks and explicit
+ * user-clicked revalidation. Denial is not "zero alerts"; no retry or action
+ * submission happens here.
+ */
+export async function readEntitledActionInbox(signal: AbortSignal): Promise<ProactiveInboxReviewState> {
+  const response = await fetch("/api/wave-d/action-inbox", {
+    method: "GET", credentials: "same-origin", cache: "no-store", signal,
+  });
+  if (!response.ok) {
+    return { state: response.status === 401 || response.status === 403
+      ? "not_authorized" : "unavailable", review: null };
+  }
+  const parsed = parseActionInboxReview(await response.json() as unknown);
+  return parsed.status === "ready" ? { state: "ready", review: parsed }
+    : { state: "unavailable", review: null };
+}
+
+export function useProactiveInboxReview(enabled: boolean): {
+  result: ProactiveInboxReviewState;
+  refresh: () => void;
+} {
+  const [result, setResult] = useState<ProactiveInboxReviewState>({ state: "idle", review: null });
+  const [generation, setGeneration] = useState(0);
+  const refresh = useCallback(() => setGeneration(n => n + 1), []);
 
   useEffect(() => {
     if (!enabled) {
-      setState({ count: 0, status: "loading" });
+      setResult({ state: "idle", review: null });
       return;
     }
-    let cancelled = false;
-    const load = () => {
-      fetch("/api/wave-d/action-inbox")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: unknown) => {
-          if (cancelled) return;
-          setState(parseActionInboxResponse(data));
-        })
-        .catch(() => {
-          if (!cancelled) setState({ count: 0, status: "unavailable" });
-        });
+    const controller = new AbortController();
+    let current = true;
+    let pending = false;
+
+    const load = async () => {
+      if (!current || controller.signal.aborted || pending || document.visibilityState === "hidden") return;
+      pending = true;
+      setResult({ state: "loading", review: null });
+      try {
+        const next = await readEntitledActionInbox(controller.signal);
+        if (!current || controller.signal.aborted) return;
+        setResult(next);
+      } catch {
+        if (current && !controller.signal.aborted) setResult({ state: "unavailable", review: null });
+      } finally {
+        pending = false;
+      }
     };
-    load();
-    const interval = window.setInterval(load, POLL_INTERVAL_MS);
+
+    const visibilityChanged = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    void load();
+    const interval = window.setInterval(() => void load(), POLL_INTERVAL_MS);
     return () => {
-      cancelled = true;
+      current = false;
+      controller.abort();
+      document.removeEventListener("visibilitychange", visibilityChanged);
       window.clearInterval(interval);
     };
-  }, [enabled]);
+  }, [enabled, generation]);
 
-  return state;
+  return { result, refresh };
 }

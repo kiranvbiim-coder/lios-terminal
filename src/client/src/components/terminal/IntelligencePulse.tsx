@@ -1,21 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
-import { subscribeChangeIntelligence } from "@/lib/terminalChangeIntelligence";
+import { getRecentAnalyticalContextChanges, subscribeChangeIntelligence } from "@/lib/terminalChangeIntelligence";
+import { AnalyticalChangeStories } from "./AnalyticalChangeStories";
 import { subscribeDecisionObjects } from "@/lib/terminalDecisionObjects";
 import { subscribeIntelligenceObjects } from "@/lib/terminalIntelligenceObjects";
 import { buildIntelligencePulse, buildScenarioMatrix, type IntelligencePulseItem, type PulsePriority } from "@/lib/terminalIntelligencePulse";
 import { setActiveScenario, subscribeScenarioUniverse } from "@/lib/terminalScenarioUniverse";
 import { subscribeTerminalTimeContext } from "@/lib/terminalTimeTravel";
 import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
+import { readEntitledActionInbox, useProactiveInboxReview } from "@/lib/useProactivePulse";
+import { assessActionInboxSnapshotFreshness, buildActionInboxChatDraft, confirmActionInboxHandoff } from "@/lib/actionInboxReview";
 import type { ViewMode } from "@/lib/terminalTypes";
 
 interface Props {
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+  onStageAiReview: (draft: string) => boolean;
   onClose: () => void;
 }
 
-type Tab = "pulse" | "matrix";
+type Tab = "pulse" | "changes" | "matrix" | "proactive";
 
 const PRIORITY_STYLE: Record<PulsePriority, string> = {
   critical: "border-red-500/35 bg-red-500/[.045] text-red-300",
@@ -41,8 +46,22 @@ function PulseIcon({ item }: { item: IntelligencePulseItem }) {
   return <Activity className="h-3.5 w-3.5" />;
 }
 
-export default function IntelligencePulse({ onOpen, onClose }: Props) {
+export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("pulse");
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const [proactiveEnabled, setProactiveEnabled] = useState(false);
+  const [expandedInboxItemId, setExpandedInboxItemId] = useState<string | null>(null);
+  const [reviewHandoffMessage, setReviewHandoffMessage] = useState("");
+  const [handoffBusyId, setHandoffBusyId] = useState<string | null>(null);
+  const handoffAbort = useRef<AbortController | null>(null);
+  const { result: proactive, refresh: refreshInbox } = useProactiveInboxReview(tab === "proactive" && proactiveEnabled);
+  const inboxFreshness = proactive.state === "ready"
+    ? assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now()) : "unavailable";
+  useEffect(() => () => {
+    handoffAbort.current?.abort();
+    handoffAbort.current = null;
+    setHandoffBusyId(null);
+  }, [tab, proactiveEnabled]);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -54,6 +73,7 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
 
   const pulse = useMemo(() => buildIntelligencePulse(100), [revision]);
   const matrix = useMemo(() => buildScenarioMatrix(), [revision]);
+  const recordedChanges = useMemo(() => getRecentAnalyticalContextChanges(80), [revision]);
 
   const openItem = (item: IntelligencePulseItem) => {
     if (item.kind === "decision-risk" || item.kind === "reversal") {
@@ -72,24 +92,31 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[94] bg-black/82 p-3 backdrop-blur-[5px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay mx-auto flex h-[min(860px,calc(100vh-24px))] w-full max-w-7xl flex-col overflow-hidden border" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS Intelligence Pulse">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="LiOS Intelligence Pulse"
+        className="lios-v4-overlay !z-[94] !flex !h-[min(860px,calc(100dvh-24px))] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-xl !p-0 !pr-0"
+        overlayProps={{ className: "!z-[93] bg-black/82 backdrop-blur-[3px]" }}
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}
+      >
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <div className="grid h-9 w-9 place-items-center border border-[hsl(38,100%,50%)/32%] bg-[hsl(38,100%,50%)/7%]"><Radar className="h-4 w-4 text-[hsl(38,100%,60%)]" /></div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold tracking-[.14em] text-foreground">INTELLIGENCE PULSE</div>
-            <div className="mt-1 text-[8px] tracking-wide text-muted-foreground">WHAT CHANGED · WHAT IS AT RISK · WHAT NEEDS ATTENTION</div>
+            <DialogTitle className="font-ui text-base font-semibold text-foreground">Intelligence Pulse</DialogTitle>
+            <DialogDescription className="mt-1 font-ui text-xs text-muted-foreground">What needs attention · What Changed · Scenario comparison · Proactive review</DialogDescription>
           </div>
           <div className="hidden items-center gap-1.5 lg:flex">
             {(["critical", "high", "medium", "low"] as PulsePriority[]).map((priority) => <span key={priority} className={`border px-2 py-1 text-[7px] font-bold tracking-wider ${PRIORITY_STYLE[priority]}`}>{priority.toUpperCase()} {pulse.counts[priority]}</span>)}
           </div>
           <button onClick={() => openTerminalUxSurface("decision-center")} className="lios-v5-hero-action"><Target className="h-3 w-3" /> DECISIONS</button>
-          <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+
         </header>
 
-        <div className="flex items-center border-b border-border/60 bg-black/20 px-2">
-          <button onClick={() => setTab("pulse")} className={`border-b-2 px-3 py-2 text-[8px] font-bold tracking-widest ${tab === "pulse" ? "border-[hsl(38,100%,50%)] text-[hsl(38,100%,60%)]" : "border-transparent text-muted-foreground"}`}>ATTENTION QUEUE</button>
-          <button onClick={() => setTab("matrix")} className={`border-b-2 px-3 py-2 text-[8px] font-bold tracking-widest ${tab === "matrix" ? "border-cyan-400 text-cyan-300" : "border-transparent text-muted-foreground"}`}>SCENARIO MATRIX</button>
+        <div className="flex flex-wrap items-center border-b border-border/60 bg-black/20 px-2">
+          <button type="button" aria-pressed={tab === "pulse"} onClick={() => setTab("pulse")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "pulse" ? "border-amber-300 text-amber-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Attention queue</button>
+          <button type="button" aria-pressed={tab === "changes"} onClick={() => setTab("changes")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "changes" ? "border-amber-300 text-amber-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>What Changed</button>
+          <button type="button" aria-pressed={tab === "matrix"} onClick={() => setTab("matrix")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "matrix" ? "border-cyan-300 text-cyan-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Scenario matrix</button>
+          <button type="button" aria-pressed={tab === "proactive"} onClick={() => setTab("proactive")} className={`min-h-11 border-b-2 px-3 py-2 font-ui text-xs font-semibold ${tab === "proactive" ? "border-cyan-300 text-cyan-200" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Proactive review</button>
           <div className="ml-auto px-2 text-[7px] text-muted-foreground">{pulse.activeScenario ? `SCENARIO ${pulse.activeScenario.name}` : "NO ACTIVE SCENARIO"}</div>
         </div>
 
@@ -122,7 +149,9 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
               </div>
             </aside>
           </div>
-        ) : (
+        ) : tab === "changes" ? (
+          <AnalyticalChangeStories entries={recordedChanges} onOpen={(view, symbol) => onOpen(view, "tab", symbol)} />
+        ) : tab === "matrix" ? (
           <div className="min-h-0 flex-1 overflow-auto p-4 scrollbar-thin">
             <div className="mb-3 flex items-center justify-between"><div><div className="text-[9px] font-bold">SCENARIO ASSUMPTION MATRIX</div><div className="mt-1 text-[7px] text-muted-foreground">Compare assumptions across Base / Bull / Bear / Stress / custom branches. Largest numeric spreads rise to the top.</div></div><button onClick={() => openTerminalUxSurface("scenario-workbench")} className="lios-v5-hero-action"><GitCompareArrows className="h-3 w-3" /> EDIT SCENARIOS</button></div>
             {matrix.scenarios.length ? <table className="lios-signature-table min-w-full border-collapse text-[8px]">
@@ -130,8 +159,137 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
               <tbody>{matrix.rows.map((row) => <tr key={row.key}><td className="sticky left-0 bg-[#070707] p-2"><span className="font-bold text-foreground">{row.label}</span>{row.unit && <span className="ml-1 text-muted-foreground">{row.unit}</span>}</td><td className="p-2 text-right tabular-nums text-cyan-300">{typeof row.spread === "number" ? row.spread.toLocaleString(undefined, { maximumFractionDigits: 3 }) : "—"}</td>{matrix.scenarios.map((scenario) => <td key={scenario.id} className="p-2 text-right tabular-nums">{row.values[scenario.id] === undefined || row.values[scenario.id] === null ? "—" : String(row.values[scenario.id])}</td>)}</tr>)}</tbody>
             </table> : <div className="grid min-h-64 place-items-center border border-dashed border-border/70 text-[8px] text-muted-foreground">CREATE SCENARIOS TO BUILD THE MATRIX</div>}
           </div>
+
+        ) : (
+          <main className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin" aria-label="Proactive action inbox review">
+            <div className="mx-auto max-w-4xl space-y-4">
+              <header className="space-y-2">
+                <h2 className="font-ui text-lg font-semibold text-foreground">Your Action Inbox</h2>
+                <p className="font-ui text-sm leading-relaxed text-muted-foreground">
+                  Review existing user-entitled Wave D alerts and their source evidence. This does not start an AI agent,
+                  place trades, write to sources, or authorize suggested actions.
+                </p>
+              </header>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 p-3">
+                <label className="flex items-center gap-3 font-ui text-sm text-foreground">
+                  <input type="checkbox" checked={proactiveEnabled}
+                    onChange={event => { setProactiveEnabled(event.target.checked); setExpandedInboxItemId(null); }}
+                    className="h-4 w-4 accent-cyan-500" />
+                  Enable this foreground review
+                </label>
+                <button type="button" onClick={refreshInbox} disabled={!proactiveEnabled || proactive.state === "loading"}
+                  className="min-h-10 rounded-lg border border-border px-3 text-sm font-medium text-foreground disabled:opacity-45">
+                  Check for updates
+                </button>
+              </div>
+              <div aria-live="polite" role="status" className="font-ui text-sm text-muted-foreground">
+                {!proactiveEnabled || proactive.state === "idle"
+                  ? "Off. The Action Inbox is not being requested."
+                  : proactive.state === "loading" ? "Checking your permitted Action Inbox…"
+                  : proactive.state === "not_authorized" ? "Action Inbox access is not authorized for this account or entitlement."
+                  : proactive.state === "unavailable" ? "Action Inbox unavailable. No all-clear is implied; try again when the service is accessible."
+                  : proactive.state !== "ready" ? "Action Inbox status is not confirmed."
+                  : proactive.review.openCount > 0
+                    ? `${proactive.review.openCount} open items require review · ${proactive.review.totalCount} in the current inbox`
+                    : `No open items in the returned inbox · ${proactive.review.totalCount} total records`}
+              </div>
+              {proactive.state === "ready" && inboxFreshness !== "current" && <p role="alert" className="rounded-lg border border-amber-500/30 p-3 font-ui text-sm text-amber-200">
+                {inboxFreshness === "future"
+                  ? "The Action Inbox snapshot is dated in the future. Check this device clock and refresh; no review can be staged."
+                  : "The Action Inbox snapshot is stale or its date is unavailable. Refresh the original service before drafting a Chat review."}
+              </p>}
+              {reviewHandoffMessage && <p role="alert" className="rounded-lg border border-amber-500/25 p-3 font-ui text-sm text-amber-200">{reviewHandoffMessage}</p>}
+              {proactive.state === "ready" && (
+                <div className="space-y-3">
+                  <p className="font-ui text-xs text-muted-foreground">
+                    Server snapshot: {new Date(proactive.review.asOf!).toLocaleString()}.
+                    {proactive.review.hiddenCount > 0 ? ` Showing the first ${proactive.review.items.length} of ${proactive.review.totalCount} items.` : ""}
+                    {" "}Materiality is determined by existing Wave D source rules, not generated here.
+                  </p>
+                  {proactive.review.items.length === 0 && <p className="rounded-xl border border-dashed border-border p-5 font-ui text-sm text-muted-foreground">
+                    The returned Action Inbox is empty. Existing Project automations and future monitoring still require their own permissions and setup.
+                  </p>}
+                  {proactive.review.items.map(item => (
+                    <article key={item.id} className="rounded-xl border border-border/70 bg-white/[.015] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="min-w-0 flex-1 break-words font-ui text-sm text-foreground">{item.title}</strong>
+                        <span className="font-ui text-xs text-muted-foreground">{item.priority} · {item.status}</span>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap break-words font-ui text-sm leading-relaxed text-muted-foreground">{item.reason}</p>
+                      <p className="mt-2 font-ui text-xs text-muted-foreground">Observed card: {item.sourceCardId} · {new Date(item.createdAt).toLocaleString()}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <button type="button" disabled={handoffBusyId !== null}
+                          onClick={async () => {
+                            if (proactive.state !== "ready" || handoffAbort.current) return;
+                            if (assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now()) !== "current") {
+                              setReviewHandoffMessage("This Action Inbox snapshot needs a fresh server recheck. No Chat review was staged.");
+                              return;
+                            }
+                            const controller = new AbortController();
+                            handoffAbort.current = controller;
+                            setHandoffBusyId(item.id);
+                            setReviewHandoffMessage("");
+                            try {
+                              // Re-read this exact user-owned alert under the CURRENT server entitlement.
+                              const rechecked = await readEntitledActionInbox(controller.signal);
+                              if (controller.signal.aborted) return;
+                              if (rechecked.state !== "ready") {
+                                setReviewHandoffMessage(rechecked.state === "not_authorized"
+                                  ? "The server denied this Action Inbox recheck. No Chat review was staged."
+                                  : "The server could not verify this alert. No Chat review was staged.");
+                                return;
+                              }
+                              const verified = confirmActionInboxHandoff(proactive.review, rechecked.review, item.id, Date.now());
+                              if (!verified) {
+                                setReviewHandoffMessage("This alert, source evidence, or server snapshot changed. Refresh and review the latest inbox; no Chat draft was staged.");
+                                refreshInbox();
+                                return;
+                              }
+                              const drafted = buildActionInboxChatDraft(verified, rechecked.review.asOf!);
+                              if (onStageAiReview(drafted)) onClose();
+                              else setReviewHandoffMessage("Keep or review your unsaved Workbench edits before switching to Chat. No AI request was sent.");
+                            } catch {
+                              if (!controller.signal.aborted) setReviewHandoffMessage("Alert verification failed. No Chat review was staged.");
+                            } finally {
+                              if (handoffAbort.current === controller) {
+                                handoffAbort.current = null;
+                                setHandoffBusyId(null);
+                              }
+                            }
+                          }}
+                          className="min-h-10 rounded-lg border border-cyan-500/35 px-3 font-ui text-sm font-semibold text-cyan-200 disabled:opacity-50">
+                          {handoffBusyId === item.id ? "Verifying source…" : "Draft review in Chat"}
+                        </button>
+                        <button type="button" className="min-h-10 rounded-lg border border-border px-3 font-ui text-sm text-foreground"
+                          aria-expanded={expandedInboxItemId === item.id}
+                          onClick={() => setExpandedInboxItemId(previous => previous === item.id ? null : item.id)}>
+                          {expandedInboxItemId === item.id ? "Hide source evidence" : `Inspect evidence (${item.evidence.length})`}
+                        </button>
+                        <span className="font-ui text-xs text-muted-foreground">
+                          Suggested only: {item.suggestedActions.join(", ") || "none"}
+                        </span>
+                      </div>
+                      {expandedInboxItemId === item.id && <div className="mt-3 rounded-lg border border-border/70 p-3">
+                        <h3 className="font-ui text-sm font-semibold text-foreground">Attributed source evidence</h3>
+                        {item.evidence.length === 0
+                          ? <p className="mt-2 font-ui text-sm text-muted-foreground">No source references were included. Do not treat the alert as verified evidence.</p>
+                          : <ul className="mt-2 space-y-2">{item.evidence.map(evidence => (
+                            <li key={evidence.id} className="break-words font-ui text-sm text-muted-foreground">
+                              <strong className="text-foreground">{evidence.source}</strong>
+                              {evidence.provider ? ` · ${evidence.provider}` : ""}
+                              {evidence.availableAt ? ` · ${new Date(evidence.availableAt).toLocaleString()}` : ""}
+                              {evidence.url && <a className="ml-2 underline underline-offset-2" href={evidence.url} target="_blank" rel="noopener noreferrer">View source</a>}
+                            </li>
+                          ))}</ul>}
+                      </div>}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
         )}
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

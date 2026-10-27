@@ -4,6 +4,7 @@
 // Re-exported for backward compat -- canonical definitions moved to
 // shared/dataStatus.ts.
 import type { DataStatus } from "@shared/dataStatus";
+import type { EditorialMedia } from "@shared/editorialMedia";
 export type { DataFreshness, DataStatus } from "@shared/dataStatus";
 
 export interface Quote {
@@ -48,6 +49,10 @@ export interface OHLCVSeries {
 }
 
 export interface NewsItem {
+  /** Only approved, linked local media may render. */
+  media?: EditorialMedia;
+  /** RSS-discovered thumbnail reference is unverified metadata, never a UI image source. */
+  imageCandidate?: { url: string; source: "rss"; rights: "unverified"; attribution?: string };
   title: string;
   summary: string;
   url: string;
@@ -142,6 +147,8 @@ export interface PortfolioAnalytics {
 // ── Screeners beyond equities (Country/Directory, Bond, Macro) ─────────────
 export interface DirectoryEntry {
   symbol: string; name: string; exchange: string; sector: string; assetClass?: string; region?: string; isPrimaryListing?: boolean;
+  mic?: string; currency?: string; isin?: string; figi?: string; source?: string; active?: boolean;
+  industry?: string; category?: string; family?: string; market?: string; marketCapTier?: string;
 }
 export interface DirectoryScreenResult { items: DirectoryEntry[]; total: number; page: number; totalPages: number }
 

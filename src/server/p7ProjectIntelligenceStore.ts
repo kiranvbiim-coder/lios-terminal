@@ -37,6 +37,7 @@ import {
   buildResearchGraph,
   buildUnifiedTimeline,
   compileDeterministicInsights,
+  retainPermittedProjectInsights,
   createProjectSnapshot,
   diffProjectSnapshots,
   p7DocumentId,
@@ -901,8 +902,9 @@ export async function currentProjectIntelligence(ctx: TenantContext, projectId: 
   researchGraph: P7ContextGraph;
   timeline: ReturnType<typeof buildUnifiedTimeline>;
 }> {
-  let documents = await listProjectIntelligenceDocuments(ctx, projectId);
-  if (!documents.length) documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
+  // The current graph and timeline share the same active-scope filter as Search.
+  // Indexed snapshots alone may still include archived/excluded/revoked sources.
+  const documents = await currentPermittedProjectSearchDocuments(ctx, projectId);
   const graph = buildReactiveContextGraph({ projectId, documents });
   return { documents, graph, researchGraph: buildResearchGraph(graph), timeline: buildUnifiedTimeline(documents) };
 }
@@ -959,11 +961,14 @@ export async function projectIntelligenceDelta(ctx: TenantContext, projectId: nu
 }
 
 export async function currentInsightLens(ctx: TenantContext, projectId: number) {
-  let documents = await listProjectIntelligenceDocuments(ctx, projectId);
-  if (!documents.length) documents = (await rebuildProjectIntelligence(ctx, projectId)).documents;
+  const documents = await currentPermittedProjectSearchDocuments(ctx, projectId);
   const snapshots = await listProjectIntelligenceSnapshots(ctx, projectId, 2);
   const delta = snapshots.length >= 2 ? diffProjectSnapshots(snapshots[1], snapshots[0]) : null;
-  return compileDeterministicInsights({ projectId, documents, delta });
+  // A persisted snapshot delta can describe a now-revoked source. Filter the
+  // compiled lens too, not just input documents, before returning to the client.
+  const lens = compileDeterministicInsights({ projectId, documents, delta });
+  const eligibleRefs = new Set(documents.flatMap(document => [document.sourceRef, ...document.sourceRefs]));
+  return retainPermittedProjectInsights(lens, eligibleRefs);
 }
 
 export function projectIntelligenceFingerprint(documents: P7ProjectDocument[]): string {

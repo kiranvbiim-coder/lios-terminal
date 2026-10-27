@@ -1,4 +1,9 @@
 import { useMemo } from "react";
+import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
+import { normalizePulseSubjectKey, type PulseSubjectAction, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
+import LiosPulseStoryCard from "./LiosPulseStoryCard";
+import { PulseDiscoveryTabs } from "./PulseDiscoveryTabs";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -11,21 +16,12 @@ import { FusionActionButton, FusionDataBar, FusionEmptyState, FusionFreshnessBad
 import FusionMarketCanvas from "./FusionMarketCanvas";
 import { toneForChange } from "@/lib/fusionExperience";
 
-interface PulseCard {
-  id: string;
-  title: string;
-  whatHappened: string;
-  whyItMattersToUser?: string;
-  priority: "critical" | "important" | "fyi";
-  score: number;
-  symbol?: string;
-}
 
 interface Props {
   activeSymbol?: string;
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
-  onAskLios?: () => void;
-  pulseCards: PulseCard[];
+  onAskLios?: (initialQuestion?: string) => void;
+  pulseCards: PulseStoryView[];
   monitoringCount: number;
   inboxCount: number;
   recents: RecentAnalyticalContext[];
@@ -33,6 +29,12 @@ interface Props {
   pulseChannel: "for_you" | "following" | "markets" | "research";
   pulseStatus: "loading" | "ready" | "unavailable";
   briefHeadline?: string | null;
+  pulsePreferences: PulseSubjectPreferences;
+  preferencePending: boolean;
+  preferenceError: string | null;
+  onPulsePreferenceChange: (cardId: string, action: PulseSubjectAction) => void;
+  onPulsePreferenceClear: (subjectKey: string) => void;
+  onPulseRetry: () => void;
   onPulseChannelChange: (channel: "for_you" | "following" | "markets" | "research") => void;
 }
 
@@ -141,6 +143,12 @@ export default function FusionPulseBoard({
   pulseChannel,
   pulseStatus,
   briefHeadline,
+  pulsePreferences,
+  preferencePending,
+  preferenceError,
+  onPulsePreferenceChange,
+  onPulsePreferenceClear,
+  onPulseRetry,
   onPulseChannelChange,
 }: Props) {
   const { data: gainers = [], isLoading: gainersLoading } = useMarketGainers();
@@ -152,24 +160,11 @@ export default function FusionPulseBoard({
   const breadthTotal = latestBreadth ? latestBreadth.advances + latestBreadth.declines + latestBreadth.unchanged : 0;
   const advancePct = latestBreadth && breadthTotal > 0 ? (latestBreadth.advances / breadthTotal) * 100 : null;
   const maxMacroMove = Math.max(1, ...indicators.map((item) => Math.abs(item.changePercent ?? 0)));
-  const derivedPulseCards = useMemo<PulseCard[]>(() => [...gainers.slice(0, 3), ...losers.slice(0, 3)]
-    .filter((quote) => Number.isFinite(quote.changePercent))
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-    .map((quote) => {
-      const positive = quote.changePercent >= 0;
-      const magnitude = Math.abs(quote.changePercent);
-      return {
-        id: `market-move-${quote.symbol}`,
-        title: `${quote.symbol} ${positive ? "leads higher" : "under pressure"}`,
-        whatHappened: `${quote.name} moved ${positive ? "+" : "−"}${magnitude.toFixed(2)}% in the visible market basket.`,
-        whyItMattersToUser: positive ? "Momentum leader worth a closer look." : "Laggard worth checking for catalyst or risk.",
-        priority: magnitude >= 7 ? "critical" : magnitude >= 4 ? "important" : "fyi",
-        score: Math.min(99, Math.round(50 + magnitude * 5)),
-        symbol: quote.symbol,
-      };
-    }), [gainers, losers]);
-  const visiblePulseCards = pulseCards.length ? pulseCards : derivedPulseCards;
-  const visiblePulseStatus = visiblePulseCards.length ? "ready" : pulseStatus;
+  // Source-filtered cards are canonical. Never repopulate a muted/empty Pulse
+  // from quote-derived synthetic cards; Market State remains independently live.
+  const groupedPulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
+  const visiblePulseCards = groupedPulseCards;
+  const visiblePulseStatus = pulseStatus;
 
   return (
     <section className="fusion-pulse-board" aria-label="LiOS market intelligence board">
@@ -181,25 +176,15 @@ export default function FusionPulseBoard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <FusionFreshnessBadge state={pulseStatus === "loading" ? "loading" : pulseStatus === "unavailable" ? "stale" : "live"} />
-          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" && visiblePulseCards.length ? "MARKET DATA LIVE" : `${visiblePulseCards.length} CARDS`}</span>
+          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" ? "PULSE UNAVAILABLE" : `${visiblePulseCards.length} STORIES`}</span>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
         </div>
       </div>
 
       <div className="border-b border-border/60 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(["for_you", "following", "markets", "research"] as const).map((channel) => (
-            <button
-              key={channel}
-              type="button"
-              onClick={() => onPulseChannelChange(channel)}
-              aria-pressed={pulseChannel === channel}
-              className={`border px-2 py-1 font-terminal text-[6px] tracking-wider ${pulseChannel === channel ? "border-amber-300/45 bg-amber-300/[0.035] text-amber-200" : "border-border/60 text-muted-foreground hover:text-foreground"}`}
-            >
-              {channel.replace("_", " ").toUpperCase()}
-            </button>
-          ))}
-          {briefHeadline && <div className="ml-auto min-w-0 truncate font-ui text-[7px] text-amber-100/90">{briefHeadline}</div>}
+        <div className="flex flex-wrap items-center gap-3">
+          <PulseDiscoveryTabs channel={pulseChannel} onChange={onPulseChannelChange} />
+          {briefHeadline && <div className="min-w-0 flex-1 truncate font-ui text-xs leading-5 text-amber-100/90" title={briefHeadline}>{briefHeadline}</div>}
         </div>
       </div>
 
@@ -279,18 +264,46 @@ export default function FusionPulseBoard({
           </FusionSection>
         </div>
 
-        <FusionSection title="What deserves attention" eyebrow="DECISION-RELEVANT CHANGES" className="mt-3" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">MONITOR</FusionActionButton>}>
-              {visiblePulseStatus === "loading" ? <FusionEmptyState>Refreshing decision-relevant changes…</FusionEmptyState> : visiblePulseStatus === "unavailable" ? <FusionEmptyState>PULSE UNAVAILABLE · Market and macro panels remain independently usable.</FusionEmptyState> : visiblePulseCards.length ? (
+        <FusionSection title="What deserves attention" eyebrow="DECISION-RELEVANT CHANGES · WHY IT MATTERS" className="mt-3" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">MONITOR</FusionActionButton>}>
+          {preferenceError && <p role="alert" className="mb-3 rounded-lg border border-rose-300/35 px-3 py-2 font-ui text-sm text-rose-200">{preferenceError}</p>}
+          {pulseStatus === "ready" && pulsePreferences.followed.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Followed subjects ({pulsePreferences.followed.length})</summary>
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Manage followed subjects">
+              {pulsePreferences.followed.map(subject => <button key={subject} type="button"
+                disabled={preferencePending} onClick={() => onPulsePreferenceClear(subject)}
+                aria-label={`Unfollow ${subject}`}
+                className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                {subject} · Unfollow
+              </button>)}
+            </div>
+          </details>}
+          {pulseStatus === "ready" && pulsePreferences.muted.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Muted subjects ({pulsePreferences.muted.length})</summary>
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Restore muted subjects">
+              {pulsePreferences.muted.map(subject => <button key={subject} type="button"
+                disabled={preferencePending} onClick={() => onPulsePreferenceClear(subject)}
+                aria-label={`Unmute ${subject}`}
+                className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                {subject} · Unmute
+              </button>)}
+            </div>
+          </details>}
+              {visiblePulseStatus === "loading" ? <FusionEmptyState>Refreshing decision-relevant changes…</FusionEmptyState> : visiblePulseStatus === "unavailable" ? <div role="alert" className="flex flex-wrap items-center gap-3 px-3 py-4 font-ui text-sm text-muted-foreground">Pulse unavailable. Market and macro panels remain independent. <button type="button" onClick={onPulseRetry} className="min-h-10 rounded-lg border border-border/60 px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Retry</button></div> : visiblePulseCards.length ? (
             <div className="fusion-pulse-card-grid">
-              {visiblePulseCards.slice(0, 6).map((card) => (
-                <button key={card.id} onClick={() => card.symbol ? onOpen("quote", "current", card.symbol) : undefined} className="fusion-pulse-card">
-                  <span className={`fusion-priority-dot ${card.priority === "critical" ? "bg-red-300" : card.priority === "important" ? "bg-amber-300" : "bg-cyan-300"}`} />
-                  <span className="min-w-0 flex-1"><strong>{card.title}</strong><small>{card.whatHappened}</small>{card.whyItMattersToUser && <small className="text-foreground/65">WHY IT MATTERS · {card.whyItMattersToUser}</small>}</span>
-                  <span className="tabular-nums text-muted-foreground">{card.score.toFixed(0)}</span>
-                </button>
+              {visiblePulseCards.slice(0, 6).map((card, index) => (
+                <LiosPulseStoryCard
+                  key={card.id}
+                  card={card}
+                  featured={index === 0}
+                  onAsk={(question) => onAskLios ? onAskLios(question) : onOpen("agent", "current", card.symbol ?? activeSymbol)}
+                  onOpenSymbol={(symbol) => onOpen("quote", "current", symbol)}
+                  followed={Boolean(normalizePulseSubjectKey(card.subjectKey ?? card.symbol) && pulsePreferences.followed.includes(normalizePulseSubjectKey(card.subjectKey ?? card.symbol)!))}
+                  preferencePending={preferencePending}
+                  onPreferenceChange={onPulsePreferenceChange}
+                />
               ))}
             </div>
-          ) : <FusionEmptyState>You are caught up. Material monitored changes will appear here.</FusionEmptyState>}
+          ) : <FusionEmptyState>{pulseChannel === "following" ? "No followed-source updates are available. Follow a subject from For You or your existing watchlist." : "No unmuted source-backed stories are currently available."}</FusionEmptyState>}
         </FusionSection>
       </div>
     </section>

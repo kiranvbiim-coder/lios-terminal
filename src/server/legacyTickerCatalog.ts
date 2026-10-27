@@ -15,6 +15,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { isUsableCatalogIdentityRow } from "@shared/catalogIdentityRows";
 import {
   adaptLegacySymbolCatalog,
   type InstrumentMasterCandidate,
@@ -71,7 +72,14 @@ export function loadLegacyTickerCatalog(): InstrumentMasterCandidate[] {
   }
 
   try {
-    const rows = JSON.parse(fs.readFileSync(tickersPath, "utf8")) as LegacyTickerRow[];
+    const parsed: unknown = JSON.parse(fs.readFileSync(tickersPath, "utf8"));
+    if (!Array.isArray(parsed)) throw new Error("Expected legacy ticker array");
+    // The historical private snapshot contains a provider FILE CREATION TIME
+    // footer; reject it and malformed listings at the single loader boundary.
+    const rows = parsed.filter((row): row is LegacyTickerRow =>
+      isUsableCatalogIdentityRow(row) &&
+      typeof row.exchange === "string" && row.exchange.trim().length > 0,
+    );
     cachedCandidates = adaptLegacySymbolCatalog(rows.map(toLegacyCatalogRow));
   } catch (error) {
     console.error(

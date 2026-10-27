@@ -12,8 +12,10 @@ import {
   useProjectIntelligenceSnapshots,
 } from "@/lib/useProjectIntelligence";
 import type { P7HistoricalState, P7SearchHit, P7LocalSearchResult } from "@shared/p7ResearchContracts";
+import { ProjectIntelligenceTimeline } from "./ProjectIntelligenceTimeline";
+import { ProjectInvestigationDesk } from "./ProjectInvestigationDesk";
 
-export function ProjectIntelligencePanel({ projectId }: { projectId: number }) {
+export function ProjectIntelligencePanel({ projectId, onInvestigate }: { projectId: number; onInvestigate?: (prompt: string) => void }) {
   const intelligence = useProjectIntelligence(projectId);
   const insights = useProjectInsightLens(projectId);
   const snapshots = useProjectIntelligenceSnapshots(projectId);
@@ -83,8 +85,8 @@ export function ProjectIntelligencePanel({ projectId }: { projectId: number }) {
   return <section className="mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-4" data-p7-project-intelligence>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex items-center gap-2"><Network className="h-3.5 w-3.5 text-amber-300"/><div className="font-ui text-[10px] font-semibold">Project Intelligence</div></div>
-        <div className="mt-1 font-ui text-[8px] text-muted-foreground">Reactive Context Graph · Insight Lens · Time Machine · Research Graph</div>
+        <div className="flex items-center gap-2"><Network className="h-5 w-5 text-amber-300"/><div className="font-ui text-lg font-semibold">Project Intelligence</div></div>
+        <div className="mt-1 font-ui text-sm text-muted-foreground">Connected knowledge, recorded history and meaningful changes across your Project.</div>
       </div>
       <button onClick={() => void rebuild()} disabled={busy} className="flex items-center gap-1 rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground hover:text-foreground disabled:opacity-40"><RefreshCw className="h-3 w-3"/>{busy ? "Working…" : "Refresh index"}</button>
     </div>
@@ -95,6 +97,11 @@ export function ProjectIntelligencePanel({ projectId }: { projectId: number }) {
       <Metric label="Insights" value={lens?.insights.length ?? 0}/>
       <Metric label="Snapshots" value={snapshotRows.length}/>
     </div>
+
+    {(intelligence.isError || insights.isError) && <p role="alert" className="mt-3 rounded-lg border border-amber-300/25 p-3 font-ui text-sm text-amber-100">Current Project Intelligence is unavailable. Previously retained evidence must not be treated as fresh.</p>}
+    {!intelligence.isError && !insights.isError && summary?.graph && lens && (
+      <ProjectInvestigationDesk projectId={projectId} graph={summary.graph} lens={lens} onInvestigate={onInvestigate} />
+    )}
 
     <div className="mt-3 flex gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 rounded border border-border/60 bg-black/20 px-2"><Search className="h-3 w-3 text-muted-foreground"/><input value={query} onChange={(e)=>setQuery(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter")void search()}} placeholder="Search across permitted Project chats, resources, Artifacts, evidence and ledger…" className="min-w-0 flex-1 bg-transparent py-2 font-ui text-[8px] outline-none"/></div>
@@ -110,19 +117,23 @@ export function ProjectIntelligencePanel({ projectId }: { projectId: number }) {
     {error&&<div className="mt-2 rounded border border-red-300/20 px-2 py-1.5 font-ui text-[7px] text-red-200">{error}</div>}
     {!!hits.length&&<div className="mt-3 space-y-1.5">{hits.slice(0,8).map((hit)=><div key={hit.documentId} className="rounded border border-border/45 p-2.5"><div className="flex gap-2"><span className="font-terminal text-[6px] text-cyan-300">{hit.sourceType.toUpperCase()}</span><span className="truncate font-ui text-[8px] font-medium">{hit.title}</span><span className="ml-auto font-terminal text-[6px] text-muted-foreground">{hit.combinedScore.toFixed(2)}</span></div><div className="mt-1 line-clamp-2 font-ui text-[7px] leading-4 text-muted-foreground">{hit.excerpt}</div></div>)}</div>}
 
-    <details className="mt-4 rounded-lg border border-border/50 p-3" open>
-      <summary className="cursor-pointer font-ui text-[8px] font-semibold">Intelligence Timeline · evidence-linked Project history</summary>
-      <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr]">
-        <select value={timelineType} onChange={(e)=>setTimelineType(e.target.value)} className="rounded border border-border/50 bg-[#090909] px-2 py-1.5 font-terminal text-[6px]">
-          <option value="all">All event types</option>
-          {["chat","resource","artifact","ledger","filing","research","decision","thesis","document"].map((type)=><option key={type} value={type}>{type}</option>)}
-        </select>
-        <input value={timelineRef} onChange={(e)=>setTimelineRef(e.target.value)} placeholder="Filter source / entity / model / Artifact / decision ref" className="rounded border border-border/50 bg-black/20 px-2 py-1.5 font-terminal text-[7px] outline-none"/>
+    <details className="mt-5 rounded-2xl border border-amber-300/15 bg-amber-300/[0.015] p-4" open>
+      <summary className="cursor-pointer font-ui text-base font-semibold text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">Intelligence Timeline · Your Project history</summary>
+      <p className="mt-2 font-ui text-sm leading-6 text-muted-foreground">Trace recorded research, work products, decisions and evidence. Expand any event to inspect the references already retained in this Project.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-[200px_1fr]">
+        <label className="flex flex-col gap-1.5 font-ui text-xs text-muted-foreground">
+          Event type
+          <select aria-label="Filter Project history by event type" value={timelineType} onChange={e=>setTimelineType(e.target.value)} className="min-h-10 rounded-lg border border-border/60 bg-background px-3 font-ui text-sm text-foreground">
+            <option value="all">All events</option>
+            {["chat","resource","artifact","ledger","filing","research","decision","thesis","document"].map(type=><option key={type} value={type}>{type[0].toUpperCase()+type.slice(1)}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 font-ui text-xs text-muted-foreground">
+          Find related references
+          <input aria-label="Filter Project history by source, entity, model, Artifact or decision reference" value={timelineRef} onChange={e=>setTimelineRef(e.target.value)} placeholder="Find source, entity, model, Artifact or decision reference" className="min-h-10 min-w-0 rounded-lg border border-border/60 bg-background px-3 font-ui text-sm text-foreground placeholder:text-muted-foreground"/>
+        </label>
       </div>
-      <div className="mt-2 space-y-1.5">{timelineRows.slice(0,8).map((event)=><div key={event.id} className="rounded border border-border/40 px-2 py-1.5">
-        <div className="flex gap-2"><span className="font-terminal text-[6px] text-cyan-300">{event.type.toUpperCase()}</span><span className="truncate font-ui text-[7px]">{event.title}</span><span className="ml-auto font-terminal text-[6px] text-muted-foreground">{new Date(event.at).toLocaleString()}</span></div>
-        <div className="mt-1 font-terminal text-[5px] text-muted-foreground">{event.artifactRefs.length} ARTIFACT · {event.modelRefs.length} MODEL · {event.sourceRefs.length} SOURCE REF{event.sourceRefs.length===1?"":"S"}{event.decisionRef?" · DECISION LINKED":""}</div>
-      </div>)}{!timelineRows.length&&<div className="font-ui text-[7px] text-muted-foreground">No timeline event matches these explicit filters.</div>}</div>
+      <ProjectIntelligenceTimeline events={timelineRows} loading={intelligence.isLoading} error={intelligence.isError} />
     </details>
 
     <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -141,5 +152,5 @@ export function ProjectIntelligencePanel({ projectId }: { projectId: number }) {
 }
 
 function Metric({label,value}:{label:string;value:number}) {
-  return <div className="rounded border border-border/45 p-2"><div className="font-terminal text-[6px] uppercase tracking-wider text-muted-foreground">{label}</div><div className="mt-1 font-ui text-[13px] font-semibold">{value.toLocaleString()}</div></div>;
+  return <div className="rounded-lg border border-border/45 bg-background/45 p-3"><div className="font-ui text-[11px] font-medium text-muted-foreground">{label}</div><div className="mt-1 font-ui text-xl font-semibold tabular-nums text-foreground">{value.toLocaleString()}</div></div>;
 }

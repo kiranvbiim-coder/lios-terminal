@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { countLiveVerifiedConnectors } from "@/lib/connectionCenterPresentation";
 import { Plug, CheckCircle2, AlertTriangle, Ban, CircleDashed, KeyRound, ShieldCheck, Clock } from "lucide-react";
 
 interface ConnectorDef {
@@ -53,7 +54,7 @@ export default function ConnectorRegistryPanel() {
   }
 
   const healthMap = new Map(data.health.map((h) => [h.connectorId, h]));
-  const verified = data.health.filter((h) => h.state === "live_verified" || h.state === "credential_configured").length;
+  const verified = countLiveVerifiedConnectors(data.connectors, data.health);
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-[#050505]">
@@ -61,7 +62,7 @@ export default function ConnectorRegistryPanel() {
         <Plug className="w-4 h-4 text-[hsl(38,95%,55%)]" />
         <span className="panel-label">CONNECTOR REGISTRY</span>
         <span className="font-terminal text-[9px] text-muted-foreground ml-auto">
-          {verified}/{data.connectors.length} verified
+          {verified}/{data.connectors.length} live verified
         </span>
       </div>
 
@@ -92,7 +93,7 @@ export default function ConnectorRegistryPanel() {
                 )}
                 {health?.lastVerifiedAt && (
                   <div className="font-terminal text-[7px] text-muted-foreground mt-1">
-                    verified {health.lastVerifiedAt}
+                    last verified {health.lastVerifiedAt}
                   </div>
                 )}
                 <div className="flex gap-1 mt-2 flex-wrap">

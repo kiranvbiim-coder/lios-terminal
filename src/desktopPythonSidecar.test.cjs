@@ -12,6 +12,12 @@ const {
   buildBundledPythonSidecarEnvironment,
   SIDECAR_TOKEN_HEADER,
   verifySidecarAuthentication,
+  PACKAGED_VALUATION_ROUTE,
+  PACKAGED_VALUATION_INPUT,
+  validateRepresentativeValuation,
+  runRepresentativeValuation,
+  runRepresentativeCalculation,
+  publicSidecarProbeFailure,
 } = require("./desktopPythonSidecar.cjs");
 
 test("bundled sidecar path is platform-specific and fail-closed when absent", () => {
@@ -108,5 +114,95 @@ test("sidecar self-test requires 401 for missing/wrong tokens and a minimal /hea
   } finally {
     enforcing.server.close();
     open.server.close();
+  }
+});
+
+test("packaged numerical probe agrees exactly with original independently checked SP-01 valuation contract", async () => {
+  const expected = await import("./script/sp01_strict_python_valuation_contract.mjs");
+  assert.equal(PACKAGED_VALUATION_ROUTE, expected.REVERSE_ROUTE);
+  assert.deepEqual(PACKAGED_VALUATION_INPUT, expected.REVERSE_BODY);
+  assert.deepEqual(validateRepresentativeValuation({
+    impliedRevenueGrowthPct: 0, repricedEquityValue: 100, absoluteError: 0,
+  }), {
+    verified: true, route: PACKAGED_VALUATION_ROUTE, impliedRevenueGrowthPct: 0, repricedEquityValue: 100,
+  });
+  for (const invalid of [
+    null, {}, { impliedRevenueGrowthPct: "0", repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 0, repricedEquityValue: "100" },
+    { impliedRevenueGrowthPct: NaN, repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 1.1, repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 0, repricedEquityValue: 90 },
+  ]) assert.throws(() => validateRepresentativeValuation(invalid));
+});
+
+test("packaged probe performs real loopback authenticated POST to exact valuation route", async () => {
+  const token = "known-value-only-token";
+  let requestCount = 0;
+  const service = await listen(async (req, res) => {
+    requestCount++;
+    const raw = [];
+    for await (const chunk of req) raw.push(chunk);
+    assert.equal(req.method, "POST");
+    assert.equal(req.url, PACKAGED_VALUATION_ROUTE);
+    assert.equal(req.headers[SIDECAR_TOKEN_HEADER.toLowerCase()], token);
+    assert.deepEqual(JSON.parse(Buffer.concat(raw).toString("utf8")), PACKAGED_VALUATION_INPUT);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ impliedRevenueGrowthPct: 0, repricedEquityValue: 100, absoluteError: 0 }));
+  });
+  try {
+    const result = await runRepresentativeValuation(service.port, token);
+    assert.equal(result.verified, true);
+    assert.equal(requestCount, 1);
+  } finally {
+    service.server.close();
+  }
+});
+
+test("missing packaged valuation route fails closed without exposing server response body", async () => {
+  const service = await listen(async (req, res) => {
+    for await (const _chunk of req) { /* consume */ }
+    res.writeHead(503, { "content-type": "text/plain" });
+    res.end("PRIVATE_PATH_OR_TRACEBACK_NEVER_RETURNED");
+  });
+  try {
+    await assert.rejects(() => runRepresentativeValuation(service.port, "token"), error => {
+      assert.match(error.message, /HTTP 503/);
+      assert.doesNotMatch(error.message, /PRIVATE_PATH_OR_TRACEBACK/);
+      return true;
+    });
+  } finally {
+    service.server.close();
+  }
+});
+
+test("packaged sidecar public qualification failures preserve HTTP status but never private diagnostics", () => {
+  const secret = "PRIVATE_CUSTOMER_PATH__DO_NOT_LOG";
+  const traced = publicSidecarProbeFailure(
+    new Error(`Packaged valuation route failed with HTTP 502. ${secret}`), true);
+  assert.match(traced.message, /valuation route failed with HTTP 502/);
+  assert.match(traced.message, /diagnostics withheld/);
+  assert.doesNotMatch(traced.message, /PRIVATE_CUSTOMER_PATH|Sidecar stderr:/);
+  assert.equal(publicSidecarProbeFailure(new Error(`Traceback: ${secret}`), true).message,
+    "Bundled Python sidecar qualification failed. Worker diagnostics withheld from public logs.");
+  assert.equal(publicSidecarProbeFailure(new Error(`Bundled Python sidecar failed health probe: ${secret}`)).message,
+    "Bundled Python sidecar health probe failed.");
+  assert.equal(publicSidecarProbeFailure(new Error("Bundled Python sidecar is missing required package QuantLib.")).message,
+    "Bundled Python sidecar is missing a required package.");
+});
+
+test("packaged representative calculation errors never reveal HTTP response body", async () => {
+  const service = await listen(async (req, res) => {
+    for await (const _chunk of req) { /* consume request */ }
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end("PRIVATE_TRACEBACK_DO_NOT_LOG");
+  });
+  try {
+    await assert.rejects(() => runRepresentativeCalculation(service.port, "test-token"), err => {
+      assert.match(err.message, /HTTP 502/);
+      assert.doesNotMatch(err.message, /PRIVATE_TRACEBACK_DO_NOT_LOG/);
+      return true;
+    });
+  } finally {
+    service.server.close();
   }
 });

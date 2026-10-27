@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { EMPTY_PULSE_SUBJECT_PREFERENCES, normalizePulseSubjectPreferences, type PulseSubjectAction, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -18,7 +19,7 @@ import {
 } from "@shared/waveCContracts";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { useAudience } from "@/lib/audience";
-import type { ActionInboxItem } from "@shared/waveDContracts";
+import type { ActionInboxItem, IntelligenceCard } from "@shared/waveDContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import {
   EXPERIENCE_SELECTED_FIELDS_STORAGE_KEY,
@@ -43,7 +44,7 @@ interface Props {
   embedded?: boolean;
   surface?: ExperienceShellSurface;
   onSurfaceChange?: (surface: ExperienceShellSurface) => void;
-  onAskLios?: () => void;
+  onAskLios?: (initialQuestion?: string) => void;
 }
 
 const masterAiResponseSchema = z.object({
@@ -54,15 +55,6 @@ const masterAiResponseSchema = z.object({
 const MARKET_PACK_KEY = "lios.waveC.marketPack";
 const SURFACE_ICONS = { projects: FolderKanban, pulse: Activity, explore: Compass, workbench: LayoutDashboard, signals: Radio, library: Library } as const;
 
-interface WaveDPulseCard {
-  id: string;
-  title: string;
-  whatHappened: string;
-  whyItMattersToUser: string;
-  priority: "critical" | "important" | "fyi";
-  score: number;
-  symbol?: string;
-}
 
 type PulseChannel = "for_you" | "following" | "markets" | "research";
 
@@ -102,12 +94,17 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       return Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string").slice(0, 6) : ["metric.pe", "metric.roic"];
     } catch { return ["metric.pe", "metric.roic"]; }
   });
-  const [waveDPulseCards, setWaveDPulseCards] = useState<WaveDPulseCard[]>([]);
+  const [waveDPulseCards, setWaveDPulseCards] = useState<IntelligenceCard[]>([]);
   const [waveDInboxCount, setWaveDInboxCount] = useState(0);
   const [waveDInboxItems, setWaveDInboxItems] = useState<ActionInboxItem[]>([]);
   const [waveDMonitoringCount, setWaveDMonitoringCount] = useState(0);
   const [waveDStatus, setWaveDStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [pulseChannel, setPulseChannel] = useState<PulseChannel>("for_you");
+  const [pulsePreferences, setPulsePreferences] = useState<PulseSubjectPreferences>(EMPTY_PULSE_SUBJECT_PREFERENCES);
+  const [pulseRevision, setPulseRevision] = useState(0);
+  const [preferencePending, setPreferencePending] = useState(false);
+  const preferenceRequestPending = useRef(false);
+  const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [briefHeadline, setBriefHeadline] = useState<string | null>(null);
   const [libraryRecents, setLibraryRecents] = useState<RecentAnalyticalContext[]>(() => loadRecentAnalyticalContexts().slice(0, 6));
   const [libraryFavorites, setLibraryFavorites] = useState<ViewMode[]>(() => loadTerminalFavorites().slice(0, 6));
@@ -134,11 +131,13 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
       if (!pulseResponse.ok) { setWaveDStatus("unavailable"); return; }
-      const pulse = await pulseResponse.json() as { cards?: WaveDPulseCard[]; monitoring?: { activeRules?: number } };
+      const pulse = await pulseResponse.json() as { cards?: IntelligenceCard[]; monitoring?: { activeRules?: number }; preferences?: PulseSubjectPreferences };
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
-      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
+      // Bound the already-authorized source read before evidence-safe clustering and six-card display.
+      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 24) : []);
+      setPulsePreferences(normalizePulseSubjectPreferences(pulse.preferences));
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
@@ -147,7 +146,31 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setWaveDStatus("ready");
     }).catch(() => { if (!cancelled) setWaveDStatus("unavailable"); });
     return () => { cancelled = true; };
-  }, [pulseChannel]);
+  }, [pulseChannel, pulseRevision]);
+
+  const changePulseSubject = async (change: { action: PulseSubjectAction; cardId?: string; subjectKey?: string }) => {
+    if (preferenceRequestPending.current || waveDStatus !== "ready") return;
+    preferenceRequestPending.current = true;
+    setPreferencePending(true);
+    setPreferenceError(null);
+    try {
+      const response = await fetch("/api/wave-d/pulse/preferences", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(change),
+      });
+      if (!response.ok) throw new Error("Could not save Follow/Mute. The previous preference is unchanged.");
+      const saved = await response.json() as { status?: string; persisted?: boolean; preferences?: PulseSubjectPreferences };
+      if (saved.status !== "saved" || saved.persisted !== true || !saved.preferences)
+        throw new Error("Server did not confirm a persisted discovery preference.");
+      setPulsePreferences(normalizePulseSubjectPreferences(saved.preferences));
+      setPulseRevision(value => value + 1);
+    } catch (error) {
+      setPreferenceError(error instanceof Error ? error.message : "Discovery preference could not be saved.");
+    } finally {
+      preferenceRequestPending.current = false;
+      setPreferencePending(false);
+    }
+  };
 
   const toggleMetric = (id: string) => setSelectedFieldIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id].slice(-6));
   const selectedLabels = selectedFieldIds.map((id) => catalog.find((field) => field.id === id)?.label ?? id);
@@ -200,6 +223,12 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               pulseStatus={waveDStatus}
               briefHeadline={!isClient && briefHeadline ? briefHeadline : null}
               onPulseChannelChange={setPulseChannel}
+              pulsePreferences={pulsePreferences}
+              preferencePending={preferencePending || waveDStatus !== "ready"}
+              preferenceError={preferenceError}
+              onPulsePreferenceChange={(cardId, action) => void changePulseSubject({ cardId, action })}
+              onPulsePreferenceClear={(subjectKey) => void changePulseSubject({ subjectKey, action: "clear" })}
+              onPulseRetry={() => setPulseRevision(value => value + 1)}
             />
           </div>
         )}

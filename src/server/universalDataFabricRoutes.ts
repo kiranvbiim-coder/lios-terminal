@@ -33,7 +33,6 @@ import { dataMappingStore } from "./dataMappingStore";
 import { discoverOpenApiJson } from "./openApiConnector";
 import { resolveCredential } from "./credentialVault";
 import { chooseHighVolumeInterop } from "./highVolumeInterop";
-import { getProject } from "./projectStore";
 import {
   externalRightsAssessmentInputSchema,
   externalRightsSubjectKindSchema,
@@ -45,7 +44,8 @@ import { liosMcpServerExposureContract } from "./externalMcpClient";
 import { buildStreamingLifecycle } from "./streamingCoordinator";
 import { executeBrowserConnector } from "./browserConnectorRuntime";
 import { createPlaywrightBrowserAdapter } from "./playwrightBrowserAdapter";
-import { assertWorkflowPointInTimePolicy } from "./workflowDataPolicy";
+import { authorizeCanonicalDataRequests } from "./canonicalDataRequestGate";
+import { getProject } from "./projectStore";
 
 function ctx(req: Request){ return tenantContext(req.user!); }
 function fail(res: Response,error:unknown){
@@ -89,12 +89,9 @@ export function registerUniversalDataFabricRoutes(app: Express):void{
   app.post("/api/data-fabric/execute",async(req,res)=>{
     try{
       const request=canonicalDataRequestSchema.parse(req.body);
-      if(request.projectId!==null&&request.projectId<=0) throw new Error("Invalid Project scope.");
       const tenant=ctx(req);
-      if(request.projectId!==null) await getProject(tenant,request.projectId);
+      await authorizeCanonicalDataRequests([request],tenant);
       const registry=await createProviderRegistryForUser(tenant,req.user!);
-      const workflowKind=request.parameters.workflowKind;
-      if(workflowKind==="research"||workflowKind==="backtest") assertWorkflowPointInTimePolicy(workflowKind,request.pointInTime);
       const result=await executeCanonicalDataRequestCached(request,tenant,registry);
       const response=result.response;
       let lineageId:null|string=null;
@@ -134,8 +131,10 @@ export function registerUniversalDataFabricRoutes(app: Express):void{
   app.post("/api/data-fabric/prefetch",async(req,res)=>{
     try{
       const requests=z.array(canonicalDataRequestSchema).min(1).max(100).parse(req.body);
-      const registry=await createProviderRegistryForUser(ctx(req),req.user!);
-      res.json(await prefetchCanonicalDataRequests(requests,ctx(req),registry,4));
+      const tenant=ctx(req);
+      await authorizeCanonicalDataRequests(requests,tenant);
+      const registry=await createProviderRegistryForUser(tenant,req.user!);
+      res.json(await prefetchCanonicalDataRequests(requests,tenant,registry,4));
     }catch(error){fail(res,error);}
   });
 

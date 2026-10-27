@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Activity, ArrowRight, BrainCircuit, BriefcaseBusiness, Check, GitCompareArrows, History, Layers3,
-  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2, X,
+  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2,
 } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode, WorkspaceState } from "@/lib/terminalTypes";
@@ -23,6 +24,8 @@ import {
   type ThesisCaseId, type ThesisMap,
 } from "@/lib/terminalThesisMap";
 import SpatialResearchCanvas from "./SpatialResearchCanvas";
+import type { SpatialCanvasReturnState, SpatialStudioTab } from "@/lib/spatialStudioContinuity";
+import { RecordedAnalyticalDifference } from "./AnalyticalChangeStories";
 import { loadResearchTray } from "@/lib/terminalResearchTray";
 import {
   createResearchPackage, loadResearchPackages, removeResearchPackage, subscribeResearchPackages, type ResearchPackage,
@@ -39,9 +42,12 @@ import {
   type UiActionProposal,
 } from "@/lib/terminalUiActionPreview";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
+import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
+import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
+
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
-type StudioTab = typeof TABS[number];
+type StudioTab = SpatialStudioTab;
 
 interface Props {
   activeView: ViewMode;
@@ -53,6 +59,10 @@ interface Props {
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
   onApplyWorkspace: (workspace: WorkspaceState, label?: string) => void;
   onClose: () => void;
+  selectedTab: StudioTab;
+  onSelectTab: (tab: StudioTab) => void;
+  spatialCanvasReturn: SpatialCanvasReturnState;
+  onSpatialCanvasReturn: (state: SpatialCanvasReturnState) => void;
 }
 
 function fmt(value: unknown): string {
@@ -63,33 +73,40 @@ function fmt(value: unknown): string {
 }
 
 function StudioNav({ tab, onTab }: { tab: StudioTab; onTab: (tab: StudioTab) => void }) {
-  return <nav className="flex gap-1 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} onClick={() => onTab(item)} className={`font-ui shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-semibold uppercase tracking-[0.1em] ${tab === item ? "border-amber-400/25 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item.replace("-", " ")}</button>)}</nav>;
+  return <nav aria-label="Analytical studio views" className="flex gap-1.5 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => onTab(item)} className={`font-ui min-h-10 shrink-0 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tab === item ? "border-amber-400/35 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item === "canvas" ? "Spatial research" : item.replace("-", " ")}</button>)}</nav>;
 }
 
-export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose }: Props) {
-  const [tab, setTab] = useState<StudioTab>("flow");
+export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose, selectedTab: tab, onSelectTab, spatialCanvasReturn, onSpatialCanvasReturn }: Props) {
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const quietMotion = preferences.reducedMotion || preferences.lowResourceMode ? { animation: "none" } : undefined;
   return (
-    <div className="fixed inset-0 z-[82] flex items-center justify-center bg-black/72 p-3 backdrop-blur-[3px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="LiOS Analytical Studio"
+        data-sprint-c-visual="studio"
+        className="lios-v4-overlay !z-[82] !flex h-[min(820px,94dvh)] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-2xl !p-0 !pr-0"
+        style={quietMotion}
+        overlayProps={{ className: "!z-[81] bg-black/72 backdrop-blur-[3px]", style: quietMotion }}
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}
+      >
         <header className="flex items-start gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><BrainCircuit className="h-4 w-4 text-amber-300" /></div>
-          <div className="min-w-0 flex-1"><div className="font-ui text-[13px] font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-[8px] text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
-          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1 pr-10"><DialogTitle className="font-ui text-base font-semibold text-foreground">LiOS Analytical Studio</DialogTitle><DialogDescription className="mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>Flow, compare, thesis, spatial research, packages, replay and safe UI orchestration</span></DialogDescription></div>
         </header>
-        <StudioNav tab={tab} onTab={setTab} />
+        <StudioNav tab={tab} onTab={onSelectTab} />
         <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin">
           {tab === "flow" && <FlowTab activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} onOpen={onOpen} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "compare" && <CompareTab activeView={activeView} activeSymbol={activeSymbol} />}
           {tab === "thesis" && <ThesisTab activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} />}
-          {tab === "canvas" && <SpatialResearchCanvas onOpen={onOpen} />}
+          {tab === "canvas" && <SpatialResearchCanvas preferences={preferences} initialReturnState={spatialCanvasReturn} onReturnStateChange={onSpatialCanvasReturn} onOpen={(view, mode, symbol) => { onOpen(view, mode, symbol); onClose(); }} />}
           {tab === "packages" && <PackagesTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "composer" && <ComposerTab activeSymbol={activeSymbol} onOpen={onOpen} />}
           {tab === "replay" && <ReplayTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "ai-preview" && <AiPreviewTab activeSymbol={activeSymbol} isInternal={isInternal} onOpen={onOpen} />}
           {tab === "meeting" && <MeetingTab preferences={preferences} onPreferencesChange={onPreferencesChange} />}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -110,7 +127,14 @@ function FlowTab({ activeView, activeSymbol, workspace, onOpen, onApplyWorkspace
     </div>
     <div className="space-y-4">
       <section className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between gap-2"><div className="font-ui text-[10px] font-semibold text-foreground">Data-State Atmosphere</div><span className="lios-pane-code text-[7px] text-cyan-300">{atmosphere.state.toUpperCase()}</span></div><div className="font-ui mt-2 text-[9px] text-foreground">{atmosphere.label}</div><p className="font-ui mt-1 text-[8px] leading-relaxed text-muted-foreground">{atmosphere.explanation}</p></section>
-      <section className="rounded-2xl border border-border/55 p-4"><div className="font-ui text-[10px] font-semibold text-foreground">Change Intelligence</div><div className="mt-3 space-y-1.5">{changes.length ? changes.slice(0, 12).map((change) => <ChangeRow key={change.key} change={change} />) : <div className="rounded-xl border border-dashed border-border/55 p-4 font-ui text-[8px] text-muted-foreground">No prior comparable snapshot yet. Hero panels publish snapshots automatically; you can also capture the current state in Compare.</div>}</div></section>
+      <section className="rounded-2xl border border-border/55 p-4">
+        <div className="font-ui text-sm font-semibold text-foreground">Recorded insight changes</div>
+        <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Exact differences between local analytical captures. Not live alerts, independent evidence or explanations of cause.</p>
+        <div className="mt-3 space-y-2">{changes.length
+          ? changes.slice(0, 6).map(change => <RecordedAnalyticalDifference key={change.key} change={change} />)
+          : <p role="status" className="rounded-xl border border-dashed border-border/55 p-4 font-ui text-xs text-muted-foreground">No prior comparable capture yet. Open Compare to inspect recorded fields; missing history is not inferred.</p>}</div>
+        {changes.length > 6 && <p className="mt-2 font-ui text-xs text-muted-foreground">Showing 6 of {changes.length} recorded changes. Open What Changed for additional saved contexts.</p>}
+      </section>
     </div>
   </div>;
 }
@@ -122,13 +146,24 @@ function ChangeRow({ change }: { change: AnalyticalChange }) {
 function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; activeSymbol?: string }) {
   const [slots, setSlots] = useState<ComparisonSlot[]>(() => loadComparisonSlots());
   const [evidence, setEvidence] = useState<EvidenceSnapshot>(() => getEvidenceSnapshot());
-  const [receiptA, setReceiptA] = useState(0);
-  const [receiptB, setReceiptB] = useState(1);
+  // Compare specific published records, not their shifting array positions.
+  const [receiptA, setReceiptA] = useState<string | null>(() => getEvidenceSnapshot().receipts[0]?.id ?? null);
+  const [receiptB, setReceiptB] = useState<string | null>(() => getEvidenceSnapshot().receipts[1]?.id ?? null);
+  const [reviewedPairKey, setReviewedPairKey] = useState<string | null>(null);
+  const [expandedPairKey, setExpandedPairKey] = useState<string | null>(null);
   useEffect(() => subscribeComparison(setSlots), []);
   useEffect(() => subscribeEvidence(setEvidence), []);
   const snapshots = getAnalyticalSnapshots(activeView, activeSymbol);
-  const slotChanges = compareSlots();
-  const receiptDiff = evidence.receipts.length >= 2 ? diffCalculationReceipts(evidence.receipts[Math.min(receiptA, evidence.receipts.length - 1)], evidence.receipts[Math.min(receiptB, evidence.receipts.length - 1)]) : null;
+  const leftSnapshot = slots.find(slot => slot.id === "A")?.snapshot ?? null;
+  const rightSnapshot = slots.find(slot => slot.id === "B")?.snapshot ?? null;
+  const context = describeSnapshotPair(leftSnapshot, rightSnapshot);
+  const pairKey = comparisonReviewKey(leftSnapshot, rightSnapshot);
+  const allowCrossContext = context.kind === "cross-context" && pairKey !== null && reviewedPairKey === pairKey;
+  const slotChanges = context.kind === "same-context" || allowCrossContext ? compareSlots() : [];
+  const showAllChanges = pairKey !== null && expandedPairKey === pairKey;
+  const visibleChanges = showAllChanges ? slotChanges : slotChanges.slice(0, 12);
+  const actualReceipts = resolveRecordedReceiptPair(evidence.receipts, receiptA, receiptB);
+  const receiptDiff = actualReceipts ? diffCalculationReceipts(actualReceipts[0], actualReceipts[1]) : null;
 
   const captureNow = () => {
     const latestReceipt = evidence.receipts[0];
@@ -140,15 +175,54 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-ui text-[11px] font-semibold text-foreground">Comparison Mode & Model Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Compare contexts, scenarios or two calculation receipts without losing the active workspace.</p></div><div className="flex gap-2"><button onClick={captureNow} className="font-ui rounded-lg border border-amber-400/25 bg-amber-400/[0.045] px-3 py-2 text-[8px] font-semibold text-amber-200">Capture current</button><button onClick={clearComparisonSlots} className="font-ui rounded-lg border border-border/60 px-3 py-2 text-[8px] text-muted-foreground hover:text-foreground">Clear A/B</button></div></div>
-    <div className="grid gap-3 md:grid-cols-2">{slots.map((slot) => <div key={slot.id} className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between"><span className="lios-pane-code text-[9px] text-fuchsia-300">SLOT {slot.id}</span>{slot.snapshot && <button onClick={() => setComparisonSlot(slot.id, null)} className="font-ui text-[7px] text-muted-foreground hover:text-foreground">Clear</button>}</div>{slot.snapshot ? <><div className="font-ui mt-2 text-[10px] font-semibold text-foreground">{slot.snapshot.label}</div><div className="font-ui mt-1 text-[7px] text-muted-foreground">{new Date(slot.snapshot.capturedAt).toLocaleString()} · {Object.keys(slot.snapshot.values).length} fields</div><div className="mt-3 grid grid-cols-2 gap-1">{Object.entries(slot.snapshot.values).slice(0, 8).map(([key, value]) => <div key={key} className="rounded-lg bg-white/[0.02] p-2"><div className="font-ui text-[6px] text-muted-foreground">{key}</div><div className="lios-number mt-1 text-[7px] text-foreground">{fmt(value)}</div></div>)}</div></> : <div className="font-ui mt-4 rounded-xl border border-dashed border-border/50 p-4 text-[8px] text-muted-foreground">Empty. Use Capture current or a pane Compare button.</div>}</div>)}</div>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="font-ui text-[10px] font-semibold text-foreground">A → B deterministic diff</div><div className="mt-3 grid gap-1.5 md:grid-cols-2">{slotChanges.length ? slotChanges.map((change) => <ChangeRow key={change.key} change={change} />) : <div className="font-ui text-[8px] text-muted-foreground">Fill both slots to calculate a field-by-field diff.</div>}</div></section>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{evidence.receipts.length >= 2 && <div className="flex gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <div className="mt-4 grid gap-3 lg:grid-cols-3"><DiffSection title="Inputs" items={receiptDiff.inputs} /><DiffSection title="Parameters" items={receiptDiff.parameters} /><DiffSection title="Outputs" items={receiptDiff.outputs} /></div> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-[8px] text-muted-foreground">At least two calculation receipts are required.</div>}</section>
+    <div className="grid gap-3 md:grid-cols-2">{slots.map((slot) => <div key={slot.id} className="rounded-2xl border border-border/55 p-4"><div className="flex items-center justify-between"><span className="lios-pane-code text-[9px] text-fuchsia-300">SLOT {slot.id}</span>{slot.snapshot && <button onClick={() => setComparisonSlot(slot.id, null)} className="font-ui text-[7px] text-muted-foreground hover:text-foreground">Clear</button>}</div>{slot.snapshot ? <><div className="font-ui mt-2 text-[10px] font-semibold text-foreground">{slot.snapshot.label}</div><div className="font-ui mt-1 text-[11px] text-muted-foreground">{new Date(slot.snapshot.capturedAt).toLocaleString()} · {Object.keys(slot.snapshot.values).length} fields · {slot.snapshot.metadata.source === "context-only" ? "Context only — no calculation receipt" : slot.snapshot.metadata.source?.startsWith("receipt:") ? "Recorded calculation receipt" : "Source context unspecified"}</div><div className="mt-3 grid grid-cols-2 gap-1">{Object.entries(slot.snapshot.values).slice(0, 8).map(([key, value]) => <div key={key} className="rounded-lg bg-white/[0.02] p-2"><div className="font-ui text-[6px] text-muted-foreground">{key}</div><div className="lios-number mt-1 text-[7px] text-foreground">{fmt(value)}</div></div>)}</div></> : <div className="font-ui mt-4 rounded-xl border border-dashed border-border/50 p-4 text-[8px] text-muted-foreground">Empty. Use Capture current or a pane Compare button.</div>}</div>)}</div>
+    <section className="rounded-2xl border border-border/55 p-4">
+      <div className="font-ui text-sm font-semibold text-foreground">A → B recorded field diff</div>
+      <p role="status" className="mt-2 font-ui text-xs leading-5 text-muted-foreground">{context.message}</p>
+      {context.kind === "cross-context" && <button type="button" aria-pressed={allowCrossContext}
+        onClick={() => setReviewedPairKey(current => current === pairKey ? null : pairKey)}
+        className="mt-2 min-h-11 rounded-lg border border-amber-300/30 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        {allowCrossContext ? "Hide cross-context field differences" : "Show cross-context fields with caution"}
+      </button>}
+      <div className="mt-3 grid gap-1.5 md:grid-cols-2">{visibleChanges.length
+        ? visibleChanges.map(change => <ChangeRow key={change.key} change={change} />)
+        : <p className="font-ui text-xs text-muted-foreground">{context.kind === "cross-context" && !allowCrossContext
+          ? "Field differences are hidden until explicitly requested."
+          : context.kind === "incomplete" ? "Fill both slots to inspect a comparison." : "No differing recorded fields."}</p>}</div>
+      {slotChanges.length > 12 && <button type="button" aria-expanded={showAllChanges}
+        onClick={() => setExpandedPairKey(current => current === pairKey ? null : pairKey)}
+        className="mt-3 min-h-11 w-full rounded-lg border border-border/70 font-ui text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+        {showAllChanges ? "Show fewer fields" : `Show all ${slotChanges.length} changed fields`}
+      </button>}
+    </section>
+    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{(evidence.receipts.length > 0 || receiptA !== null || receiptB !== null) && <div className="flex flex-wrap gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
+      <div className="mt-3 flex flex-wrap gap-3 font-ui text-xs text-muted-foreground">
+        <span>{[...receiptDiff.inputs, ...receiptDiff.parameters, ...receiptDiff.outputs].filter(item => item.changed).length} changed fields</span>
+        <span>{receiptDiff.warningsAdded.length} warnings added</span>
+        <span>{receiptDiff.warningsRemoved.length} warnings removed</span>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-3"><DiffSection title="Inputs" items={receiptDiff.inputs} /><DiffSection title="Parameters" items={receiptDiff.parameters} /><DiffSection title="Outputs" items={receiptDiff.outputs} /></div>
+      {(receiptDiff.warningsAdded.length > 0 || receiptDiff.warningsRemoved.length > 0) && <div className="mt-3 rounded-lg border border-amber-300/20 p-3 font-ui text-xs text-amber-200">
+        {receiptDiff.warningsAdded.map(warning => <p key={`added:${warning}`}>New warning: {warning}</p>)}
+        {receiptDiff.warningsRemoved.map(warning => <p key={`removed:${warning}`}>No longer recorded: {warning}</p>)}
+      </div>}
+      </> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-xs text-muted-foreground">{evidence.receipts.length < 2
+        ? "At least two published calculation receipts are required." : "Select two distinct, currently published receipts to compare."}</div>}</section>
     {snapshots.length > 0 && <div className="font-ui text-[7px] text-muted-foreground">{snapshots.length} stored snapshots available for {activeSymbol || "global"} {getTerminalCapability(activeView).label}.</div>}
   </div>;
 }
 
-function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: number; onChange: (value: number) => void; label: string }) {
-  return <label className="font-ui flex items-center gap-1 text-[7px] text-muted-foreground">{label}<select value={value} onChange={(event) => onChange(Number(event.target.value))} className="rounded-lg border border-border/60 bg-black/20 px-2 py-1.5 text-[7px] text-foreground">{receipts.map((item, index) => <option key={item.id} value={index}>{item.label} · {item.reproducibilityId}</option>)}</select></label>;
+export function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: string | null; onChange: (value: string | null) => void; label: string }) {
+  const missing = value !== null && !receipts.some(item => item.id === value);
+  return <label className="font-ui flex items-center gap-2 text-xs text-muted-foreground">
+    Receipt {label}
+    <select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}
+      className="min-h-11 max-w-52 rounded-lg border border-border/60 bg-background px-2 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+      <option value="">Choose receipt</option>
+      {missing && <option value={value} disabled>Previously selected receipt unavailable — choose again</option>}
+      {receipts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.reproducibilityId}</option>)}
+    </select>
+  </label>;
 }
 
 function DiffSection({ title, items }: { title: string; items: ReturnType<typeof diffCalculationReceipts>["inputs"] }) {

@@ -5,11 +5,95 @@
 
 LiOS uses open-source software aggressively, but code licenses, external API/data rights, model-weight licenses, assets, trademarks and service terms are tracked as separate concerns.
 
+
+## beUI — MIT (Workspace Composer motion action)
+
+LiOS selectively adapts `starc007/ui-components` (source snapshot pinned to repository commit `fa3393a3891723d4d2daec1f1d82ead175442f44`), with source paths `components/motion/button/base.tsx`, `lib/ease.ts` and `lib/hooks/use-hover-capable.ts`. The complete MIT license is retained at `src/client/src/components/vendor/beui/LICENSE`. This adaptation uses existing Framer Motion and applies to the existing accessible Workspace Composer's Apply Workspace action; it does not replace the workspace handler, dialog or Artifact safety guard, bundle paid Pro assets, or add an npm dependency. Exact Electron/keyboard/reduced-motion visual qualification is pending.
+
+## Kibo UI — MIT (Workspace tag filtering and governed runtime status)
+
+LiOS selectively adapts `shadcnblocks/kibo` pinned to commit `3d63cdb15b79d972e3dc38a10997987672f9b263` from `packages/status/index.tsx` and `packages/tags/index.tsx`. The complete MIT license is retained at `src/client/src/components/vendor/kibo/LICENSE`. The adaptations drive searchable existing-object tag selection inside Workspace Composer and status indicators reflecting existing Project P9 automation enablement and governed execution-session states. No Kibo app, React 19 upgrade, alternate Project/workflow store, external service, or additional production dependency is included. Source integration is not native/release acceptance.
+
+## beUI — MIT (accessible Pulse discovery channels)
+
+LiOS also adapts the pinned beUI segmented-tabs motion and keyboard pattern from `starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a`, `components/motion/tabs.tsx` (source blob `ed65ffad1ea648850ce29a874ea6eee28d032896`), to `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` and its source test. Full MIT grant at `third_party/licenses/beui-MIT.txt`. The control uses existing four Wave D channel state and the established `onPulseChannelChange` callback, not a second Pulse or data feed. Keyboard Home/End/arrow and reduced-motion behavior follow the pinned adaptation. Installed app validation remains separate.
+
+## Watermelon UI — MIT (Project Continuity activities)
+
+LiOS adapts `WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17`, `src/components/watermelon-ui/activities-card-base.tsx` (source blob `fac632b2675dff9d1199b038285ef4e58a520601`) into `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`. Complete MIT grant at `third_party/licenses/watermellon-registry-MIT.txt`. The component replaces the former P6 Project continuation mini-list and uses the canonical recorded queue. Clicking a decision uses the existing Artifact handler; reviewing a workflow only focuses the matching exact P9 workflow if currently visible, without approving, running or modifying it. It does not add synthetic events, state authority or an alternate task queue.
+
+## Opensource UI — MIT (reviewed Project spreadsheet import)
+
+LiOS adapts `bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`, `components/inputs/file-upload-field-input.tsx` (source blob `e0a22b94cfd01ffbf99541739991b4678a93d179`) into `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`. Full MIT grant at `third_party/licenses/opensourceui-MIT.txt`. The Project Library now requires explicit file selection, validation, review and confirmation before invoking the existing `importSpreadsheetArtifact` Project-owned endpoint. It removes the old immediate file-input uploader. No second importer, external storage, provider, or Next.js/React19/Tailwind4 dependency is added.
+
 This file is the human-readable notice entry point. The machine-readable source of truth for major donor/runtime intake is:
 
 - `third_party/components.json`
 - `third_party/upstream-lock.json`
 - `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
+
+
+## OpensourceUI Project spreadsheet — MIT (explicit import review)
+
+LIOS `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`
+adapts file-selection review, accessible dropzone and remove controls from
+`bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`,
+`components/inputs/file-upload-field-input.tsx` (Git blob
+`e0a22b94cfd01ffbf99541739991b4678a93d179`).
+Copyright (c) 2026 Bidyut Kundu; complete permission/notice retained in
+`third_party/licenses/opensourceui-MIT.txt`.
+
+This component replaces the tiny native spreadsheet-import picker in the
+existing LIOS Project Intelligence Library. It does not import a second
+uploader, run a workbook parser or send data on drop. The user confirms
+the exact selected file before the existing Project-scoped governed import
+endpoint checks format/signature, server size limit and authorization. No
+sample media, remote vendor assets or new runtime packages are imported.
+
+## Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`
+adapts Watermelon's open/close spring-card and icon/activity-row composition
+from `WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17`,
+source `src/components/watermelon-ui/activities-card-base.tsx` (Git blob
+`fac632b2675dff9d1199b038285ef4e58a520601`).
+Copyright (c) 2025-present Watermelon Contributors; full MIT grant:
+`third_party/licenses/watermellon-registry-MIT.txt`.
+
+LIOS replaces demo activities, speculative timestamps, mobile window-size
+observers and donor-only styling with the real P6 Project continuation queue,
+bounded and permission-aware existing decision/workflow actions, reduced-motion
+support and honest unavailable/empty states. No parallel Project event store or
+third-party images are imported.
+
+## beUI — Pulse discovery navigation adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` adapts
+the controlled tabs, directional keyboard movement and selected spring-indicator
+patterns from `starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a`,
+source `components/motion/tabs.tsx` (Git blob
+`ed65ffad1ea648850ce29a874ea6eee28d032896`).
+Copyright (c) 2026 Saurabh Chauhan; full MIT grant retained at
+`third_party/licenses/beui-MIT.txt`.
+
+LIOS uses its existing React 18, Framer Motion and Tailwind 3 components,
+with Wave D's exact four channel controls and callbacks, keyboard/RTL and
+reduced-motion support. The donor's Motion 12 runtime, unrelated tabs panels,
+demo content and alternative feed or routing authority are not imported.
+
+### Watermelon UI — adapted News editorial card (MIT)
+
+The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the
+expandable event card interaction from
+[`WatermelonCorp/watermellon-registry`](https://github.com/WatermelonCorp/watermellon-registry),
+source file `src/components/watermelon-ui/expandable-event-card-base.tsx` pinned
+to commit `86052b8fd12bc19bf3bac07625a7f93736c42b17`.
+Copyright (c) 2025-present Watermelon Contributors. The complete MIT notice
+is retained at `third_party/licenses/watermellon-registry-MIT.txt`.
+The adapted component uses LIOS's existing Framer Motion, React 18, story
+selection, source status and reader. It excludes upstream demo media, remote
+assets, modal, standalone store, paid packages and new runtime dependencies.
+This grants code reuse only; it does not grant publisher photograph or article rights.
 
 The npm lockfile and managed runtime manifest remain the authoritative intended dependency/version inventories for ordinary package-managed dependencies. The desktop packaging hook selects the locked production/optional/peer dependency closure plus the explicitly retained TypeScript operator-tool root, preserving original installation paths. This is not a `dev`-flag filter: any development-marked package reached by that closure remains included, and the auditor inventories **every package actually copied**, including unexpected extras. Build-only exclusion is a reachability decision, never a license ignore list.
 
@@ -512,11 +596,11 @@ LiOS adapts the bounded mathematical mechanism `effective_number_assets` from `s
 
 The pure TypeScript `src/server/skfolioEffectiveDiversification.ts` implements inverse Herfindahl concentration using already-recorded same-date long exposures; `src/server/portfolioAnalytics.ts` exposes the optional effective asset count and observation date through the existing portfolio analytics route. It refuses missing/stale/non-finite quotes, negative or invalid position sizes. This metric uses unverified recorded source closes, does not imply verified current pricing, and imports no Python skfolio runtime, optimizer, covariance model, new market provider, trading authority or data store. LiOS P6/P11 risk and portfolio authorities remain canonical; no full donor exhaustion or SP-05 packaged shipping claim.
 
-## Opensource UI — MIT (source catalogue search)
+## OpensourceUI — MIT (source catalogue search)
 
 LiOS adapts `bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`, `components/inputs/search-input.tsx` (blob `af74baf91c45b8cf89e33677b00607f6aafd0572`), into `src/client/src/components/terminal/SourceCatalogueSearch.tsx`. Copyright (c) 2026 Bidyut Kundu. The complete MIT grant is retained in `third_party/licenses/opensourceui-MIT.txt`; exact adaptations and exclusions are recorded in `docs/technical/LIOS_OPENSOURCEUI_ADOPTION_2026-10-23.md`. No upstream application, branding, Next.js runtime, backend or source authorization is imported.
 
-## MCP TypeScript SDK v2.3.1 (client)
+## MCP TypeScript SDK v2 — Apache-2.0 (client v2.3.1)
 
 - Upstream: https://github.com/modelcontextprotocol/typescript-sdk
 - Selected source: `v2.3.1` at commit `fcef852f6cdafea07f36cf6fae69b37c8adf85be`.

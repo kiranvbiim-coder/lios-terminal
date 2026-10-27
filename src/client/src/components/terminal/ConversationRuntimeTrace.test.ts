@@ -342,6 +342,7 @@ test("WS-50: actual run receipts are disclosed under Show work but not mistaken 
   assert.match(open, /data-testid="trace-receipt-count"/);
   assert.match(open, /1 recorded execution receipt/);
   assert.match(open, /quant.risk · risk run/);
+  assert.match(open, /data-receipt-status="completed"/, "real matching receipt drives visual status");
   assert.match(open, /1 completed · 0 failed · 0 cancelled/);
   assert.match(open, /Receipts do not grant approval or prove an external action occurred/);
   assert.match(open, /88888888-8888-4888-8888-888888888888/);
@@ -442,4 +443,41 @@ test("WS-51: legacy action review shows exact target, offered scope and hides ap
   assert.doesNotMatch(open, /Allow for Project/);
   const completed = render([action, doneOk]);
   assert.doesNotMatch(completed, /data-testid="trace-approval"/);
+});
+
+
+test("Phase 1 approval presentation labels only pending server-governed review, without changing allowed decisions", () => {
+  const base = event({
+    type: "governed_tool_approval_required",
+    reviewId: "99999999-9999-4999-8999-999999999999",
+    label: "Refresh research", message: "Read an additional source?",
+    permissionClass: "user_confirm", sideEffect: "none",
+    externalSideEffect: false, replaySafe: true,
+    expiresAt: "2099-10-25T12:00:00.000Z",
+    choices: ["allow_once", "deny"],
+    reviewBinding: {
+      toolId: "source.read", stepId: "s1", toolCallId: "call1",
+      inputSha256: "a".repeat(64), planSha256: "b".repeat(64),
+      projectId: null, chatId: 5,
+    },
+  });
+  const markup = render([base], { busy: true, onGovernedToolReview: async () => true });
+  assert.match(markup, /role="group" aria-label="Governed tool approval" aria-busy="false"/);
+  assert.match(markup, /Your decision needed|Allow unavailable/);
+  assert.match(markup, /data-testid="governed-review-risk"/);
+  assert.match(markup, /data-testid="governed-tool-allow-once"/);
+  assert.match(markup, /Allow once/);
+  assert.match(markup, /Deny/);
+  assert.doesNotMatch(markup, /Allow for Project/);
+  assert.doesNotMatch(markup, /Submitting review|Accepted by server|Action completed/);
+});
+
+test("Sprint A live AI activity reports only observed work, not an inferred execution success", () => {
+  const markup = render([planEvent, event({ type: "tool_start", stepId: "step-1" })], { busy: true });
+  assert.match(markup, /data-testid="trace-observed-progress"/);
+  assert.match(markup, /1 observed step of 1 planned/);
+  assert.match(markup, /0 tool results recorded/);
+  assert.doesNotMatch(markup, /1 successful|1 completed|100% complete/);
+  assert.match(markup, /data-testid="agent-run-cancel"/);
+  assert.match(markup, /data-testid="trace-show-work"/);
 });

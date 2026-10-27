@@ -1,6 +1,7 @@
 export type TerminalExperienceMode = "guided" | "professional";
 export type TerminalDensity = "terminal" | "compact" | "standard" | "comfortable";
 export type TerminalTextScale = "small" | "normal" | "large";
+export type TerminalVisualIntensity = "auto" | "immersive" | "contextual" | "focus";
 
 export interface TerminalUxPreferences {
   experienceMode: TerminalExperienceMode;
@@ -11,6 +12,7 @@ export interface TerminalUxPreferences {
   adaptiveCalm: boolean;
   ambientContext: boolean;
   visualEnvironmentsEnabled: boolean;
+  visualIntensity: TerminalVisualIntensity;
   visualEnvironmentMotion: boolean;
   lowResourceMode: boolean;
   showImmersiveDock: boolean;
@@ -43,6 +45,7 @@ export const DEFAULT_TERMINAL_UX_PREFERENCES: TerminalUxPreferences = {
   adaptiveCalm: true,
   ambientContext: true,
   visualEnvironmentsEnabled: false,
+  visualIntensity: "auto",
   visualEnvironmentMotion: true,
   lowResourceMode: false,
   showImmersiveDock: false,
@@ -101,6 +104,8 @@ export function normalizeTerminalUxPreferences(
     adaptiveCalm: booleanOrDefault(candidate.adaptiveCalm, defaults.adaptiveCalm),
     ambientContext: booleanOrDefault(candidate.ambientContext, defaults.ambientContext),
     visualEnvironmentsEnabled: booleanOrDefault(candidate.visualEnvironmentsEnabled, defaults.visualEnvironmentsEnabled),
+    visualIntensity: ["auto", "immersive", "contextual", "focus"].includes(String(candidate.visualIntensity))
+      ? candidate.visualIntensity as TerminalVisualIntensity : defaults.visualIntensity,
     visualEnvironmentMotion: booleanOrDefault(candidate.visualEnvironmentMotion, defaults.visualEnvironmentMotion),
     lowResourceMode: booleanOrDefault(candidate.lowResourceMode, defaults.lowResourceMode),
     showImmersiveDock: booleanOrDefault(candidate.showImmersiveDock, defaults.showImmersiveDock),

@@ -11,7 +11,7 @@ async function extensionRequest<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /** The existing P13/P11 authorities are the catalog; selecting a file never installs or executes it. */
-export default function GovernedExtensionsPanel() {
+export default function GovernedExtensionsPanel({ onCatalogChanged }: { onCatalogChanged?: () => void } = {}) {
   const [catalog, setCatalog] = useState<ExtensionCatalog | null>(null);
   const [preview, setPreview] = useState<ExtensionPreview | null>(null);
   const [inspection, setInspection] = useState<unknown>(null);
@@ -64,8 +64,15 @@ export default function GovernedExtensionsPanel() {
   }
 
   return <section aria-label="Governed extensions" className="space-y-4 rounded-lg border border-border p-4">
-    <div><h2 className="font-semibold">Governed Finance extensions</h2><p className="text-sm text-muted-foreground">Inspect existing runtime contributions or import an approved local package. No public vendor catalog, downloads or automatic installation. Package signatures do not establish independent publisher identity, license or data/model/API rights.</p></div>
-    <p className="text-sm">Registered P13 declarative contributions last only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="font-semibold">Installed plugins and extensions</h2>
+      <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">Local · governed</span>
+    </div>
+    <details className="rounded border border-border/60 px-3 py-2 text-sm text-muted-foreground">
+      <summary className="cursor-pointer text-foreground">Installation, rights and runtime limitations</summary>
+      <p className="mt-2">Inspect existing runtime contributions or import an approved local package. No public vendor catalog, downloads or automatic installation. Package signatures do not establish independent publisher identity, license or data/model/API rights.</p>
+      <p className="mt-2">Registered P13 declarative contributions last only for this Home process session. Restart removes imported adapters and publisher trust; reimport and review to activate again. P11 archives are stored inactive and never executed by this screen.</p>
+    </details>
     <button type="button" onClick={() => void refreshCatalog()} disabled={busy} className="min-h-10 rounded border px-3 py-1.5 text-sm disabled:opacity-50" data-testid="extensions-refresh-catalog">Refresh current runtime inventory</button>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {!catalog ? <p role="status" className="text-sm">{error ? "Canonical extension catalog unavailable. Confirm the Home owner administrator session or try refreshing; installed capability status is unknown." : "Loading canonical runtime catalog…"}</p> : <>
@@ -127,10 +134,10 @@ export default function GovernedExtensionsPanel() {
       </fieldset>}
       <label className="flex gap-2"><input type="checkbox" disabled={!preview.installable || busy} checked={rights} onChange={event => setRights(event.target.checked)} />I have reviewed the package licenses/notices and hold the separate code, data, model and API rights required for my use.</label>
       <label className="flex gap-2"><input type="checkbox" disabled={!preview.installable || busy} checked={consent} onChange={event => setConsent(event.target.checked)} />I consent to this exact digest, signed manifest, permissions and contributions {preview.activation === "inactive_only" ? "being stored inactive without execution" : "being registered in this Home runtime session"}. No Decision or external-action approval is granted.</label>
-      <button type="button" disabled={busy || !preview.installable || !rights || !consent} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/install", { previewId: preview.previewId, reviewHash: preview.reviewHash, packageDigest: preview.packageDigest, consent: true, rightsConfirmed: true }); setPreview(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>{preview.activation === "inactive_only" ? "Install verified inactive pack" : "Activate reviewed declarative contributions"}</button>
+      <button type="button" disabled={busy || !preview.installable || !rights || !consent} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/install", { previewId: preview.previewId, reviewHash: preview.reviewHash, packageDigest: preview.packageDigest, consent: true, rightsConfirmed: true }); onCatalogChanged?.(); setPreview(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>{preview.activation === "inactive_only" ? "Install verified inactive pack" : "Activate reviewed declarative contributions"}</button>
       <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/cancel", { previewId: preview.previewId }); setPreview(null); })}>Cancel and discard bytes</button>
     </section>}
     {inspection !== null && <details open><summary>Canonical installed contribution inspection</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border p-3 text-xs">{JSON.stringify(inspection, null, 2)}</pre></details>}
-    {revokeTarget && <section aria-label="Confirm extension revocation" className="space-y-2 rounded border p-3 text-sm"><h3 className="font-semibold">Revoke {revokeTarget.id}{revokeTarget.version ? `@${revokeTarget.version}` : ""}?</h3><p className="break-all">Exact digest: {revokeTarget.digest}</p><p>{revokeTarget.kind === "p13" ? "This removes current adapters and dependent plugin adapters, disposes brokers through P13, and revokes this package digest for the session. Saved Artifacts are not deleted." : "This removes this exact inactive package through P11. Active executable packages cannot be removed here."}</p><button type="button" disabled={busy} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/revoke", { ...revokeTarget, revoke: true }); setRevokeTarget(null); setInspection(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>Confirm exact revocation</button><button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => setRevokeTarget(null)}>Keep installed</button></section>}
+    {revokeTarget && <section aria-label="Confirm extension revocation" className="space-y-2 rounded border p-3 text-sm"><h3 className="font-semibold">Revoke {revokeTarget.id}{revokeTarget.version ? `@${revokeTarget.version}` : ""}?</h3><p className="break-all">Exact digest: {revokeTarget.digest}</p><p>{revokeTarget.kind === "p13" ? "This removes current adapters and dependent plugin adapters, disposes brokers through P13, and revokes this package digest for the session. Saved Artifacts are not deleted." : "This removes this exact inactive package through P11. Active executable packages cannot be removed here."}</p><button type="button" disabled={busy} className="rounded border px-3 py-1" onClick={() => void action(async () => { await extensionRequest("/revoke", { ...revokeTarget, revoke: true }); onCatalogChanged?.(); setRevokeTarget(null); setInspection(null); setCatalog(await extensionRequest<ExtensionCatalog>("")); })}>Confirm exact revocation</button><button type="button" disabled={busy} className="ml-2 rounded border px-3 py-1" onClick={() => setRevokeTarget(null)}>Keep installed</button></section>}
   </section>;
 }

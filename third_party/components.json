@@ -2786,11 +2786,11 @@
       "repository": "bidyut10/opensourceui",
       "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
       "license": "MIT",
-      "posture": "component_donor",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "Opensource UI — MIT (source catalogue search)",
+      "noticeHeading": "OpensourceUI",
       "externalRights": "separate_review_required",
       "roles": [
         "source-catalogue-search",
@@ -2814,7 +2814,7 @@
       "releaseTag": "v2.3.1",
       "commitSha": "fcef852f6cdafea07f36cf6fae69b37c8adf85be",
       "license": "Apache-2.0",
-      "posture": "pinned_package_integration_source_gate_pending",
+      "posture": "bundled",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
@@ -2849,11 +2849,11 @@
       "releaseTag": "v2026.9.7",
       "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
       "license": "MIT",
-      "posture": "pinned_source_adaptation",
+      "posture": "supplemental_bounded_source_adaptation",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "OpenClaw (MIT)",
+      "noticeHeading": "OpenClaw",
       "externalRights": "separate_review_required",
       "baselineDonorId": "openclaw",
       "roles": [
@@ -2880,7 +2880,141 @@
         "No OpenClaw auth profile store, quota rotation, CLI executor, OAuth, secondary model registry or agent runtime is imported.",
         "Adapted OpenClaw's secret-free credential-mode discriminator to describe LiOS currently executable API-key, local-endpoint and operator-managed compatible-endpoint methods; OAuth/consumer CLI/subscription remain unsupported until separately authorized and integrated."
       ],
-      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable."
+      "notes": "Source/test PR for failover boundary only, not full officially permitted OAuth/CLI/subscription entitlement, cross-model billing consent or live-provider SP acceptance. Existing OpenClaw license/NOTICE applies. The Connection Center setup contract now includes non-secret access-method and cost-exposure metadata; configured does not mean live verified. OAuth/subscription modes deliberately unavailable.",
+      "pathMappingNote": "One verified upstream input path is adapted into LiOS source, presentation tests and existing consumer bindings. Destination files are not a one-to-one copy of donor files, and do not install a parallel runtime."
+    },
+    {
+      "id": "opensourceui-project-spreadsheet-dropzone",
+      "name": "Opensource UI single-file Project spreadsheet dropzone and explicit import review",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "OpensourceUI Project spreadsheet",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "Project-Artifacts-import-spreadsheet",
+        "accessible-file-browse-and-drag-drop",
+        "user-confirmed-source-review"
+      ],
+      "importedPaths": [
+        "components/inputs/file-upload-field-input.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectSpreadsheetImportField.tsx",
+        "client/src/components/terminal/ProjectSpreadsheetImportField.test.tsx",
+        "client/src/components/terminal/ProjectArtifactsPanel.tsx"
+      ],
+      "modifications": [
+        "Adapted drag/drop, native labelled input, explicit selected-file display and remove action to the existing ProjectArtifactsPanel, using current React 18, Tailwind 3 and Lucide dependencies.",
+        "Restricts selection to one XLSX/XLSM/CSV, nonempty and <=20 MiB matching existing server uploadPolicy/SpreadsheetImportMaxFileBytes. Import only after explicit second confirmation, through existing Project-scoped importSpreadsheetArtifact endpoint; server independently verifies file and Project access.",
+        "No parallel storage, browser workbook parsing, upstream blob URL preview, demo images, new dependencies, automatic file transmission or weakened source policy."
+      ],
+      "notes": "Original file at pinned blob e0a22b94cfd01ffbf99541739991b4678a93d179. MIT copyright 2026 Bidyut Kundu, full grant third_party/licenses/opensourceui-MIT.txt. Source CI and installed drag/drop, keyboard, 390px/200%-zoom acceptance pending stacked PR; existing source search record is a different earlier actual component import."
+    },
+    {
+      "id": "watermelon-ui-p6-activities",
+      "name": "Watermelon UI activities-card Project Continuity adaptation",
+      "repository": "WatermelonCorp/watermellon-registry",
+      "commitSha": "86052b8fd12bc19bf3bac07625a7f93736c42b17",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Watermelon UI",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P6-project-continuity-followups",
+        "activity-disclosure",
+        "keyboard-source-actions"
+      ],
+      "importedPaths": [
+        "src/components/watermelon-ui/activities-card-base.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/ProjectContinuationActivitiesCard.tsx",
+        "client/src/components/terminal/ProjectContinuationActivitiesCard.test.tsx",
+        "client/src/components/terminal/ProjectContinuityPanel.tsx"
+      ],
+      "modifications": [
+        "Adapted expand/collapse motion header and icon activity rows to retained canonical P6 continuationQueue, with exact existing decision/workflow actions and P6 Project identity verification.",
+        "Replaced donor mock activities/time strings/window.resize/mobile-sniffing and new styling with real priority, saved source counts and truthful unavailable/loading/empty states.",
+        "Preserved current P7 Project Intelligence Timeline; no duplicate event model, runtime packages, persistence, data rights or autonomous actions."
+      ],
+      "notes": "Donor file blob fac632b2675dff9d1199b038285ef4e58a520601 at exact MIT pin. Full copyright/permission under third_party/licenses/watermellon-registry-MIT.txt. Hosted source and installed desktop UX acceptance are tracked on stacked draft PR #259, not implicitly complete."
+    },
+    {
+      "id": "beui-pulse-discovery-tabs",
+      "name": "beUI controlled motion tabs for Pulse discovery",
+      "repository": "starc007/ui-components",
+      "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P1-Pulse-discovery-navigation",
+        "accessible-controlled-tabs",
+        "reduced-motion"
+      ],
+      "importedPaths": [
+        "components/motion/tabs.tsx"
+      ],
+      "destinationPaths": [
+        "client/src/components/terminal/PulseDiscoveryTabs.tsx",
+        "client/src/components/terminal/PulseDiscoveryTabs.test.tsx",
+        "client/src/components/terminal/FusionPulseBoard.tsx",
+        "client/src/lib/fusionIntegration.test.ts"
+      ],
+      "modifications": [
+        "Adapted controlled selection, accessible keyboard navigation and shared-layout spring indicator to canonical Wave D For You/Following/Markets/Research channel callback.",
+        "Reimplemented using existing React 18, Framer Motion 11, Tailwind 3 and Lucide; no Motion 12 upgrade, separate panel/data/store, new network route or extra permission owner.",
+        "44px controls, RTL-aware arrows/Home/End and reduced-motion support; source integration tests updated to inspect the actual extracted channel component."
+      ],
+      "notes": "Donor file blob ed65ffad1ea648850ce29a874ea6eee28d032896 at exact MIT pin; Copyright 2026 Saurabh Chauhan. Full grant under third_party/licenses/beui-MIT.txt. Stacked draft PR #259 installed app QA remains required."
+    }
+    ,{
+      "id": "beui-motion",
+      "name": "beUI animated button (bounded UI source)",
+      "repository": "starc007/ui-components",
+      "commitSha": "fa3393a3891723d4d2daec1f1d82ead175442f44",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "verified_not_applicable",
+      "roles": ["TC-Workspace-Composer", "accessible-motion-actions"],
+      "importedPaths": ["components/motion/button/base.tsx", "lib/ease.ts", "lib/hooks/use-hover-capable.ts"],
+      "destinationPaths": ["client/src/components/vendor/beui/BeuiButton.tsx", "client/src/components/vendor/beui/motionTokens.ts", "client/src/components/vendor/beui/useHoverCapable.ts"],
+      "modifications": ["Preserves beUI action motion in the original accessible Workspace Composer, retaining unsaved Artifact protection and original apply handler.", "Adapts React Motion to preinstalled Framer Motion; hover capability and reduced-motion guards; no new production dependencies."],
+      "notes": "Public-repository port from PR305. Full MIT grant in client/src/components/vendor/beui/LICENSE. Source integration is not installed acceptance."
+    },
+    {
+      "id": "kibo-ui",
+      "name": "Kibo UI Status and searchable Tags (bounded UI sources)",
+      "repository": "shadcnblocks/kibo",
+      "commitSha": "3d63cdb15b79d972e3dc38a10997987672f9b263",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "Kibo UI",
+      "externalRights": "verified_not_applicable",
+      "roles": ["TC-Workspace-Composer-Tag-Filter", "P9-Workflow-Status", "GM-Execution-Session-Status"],
+      "importedPaths": ["packages/status/index.tsx", "packages/tags/index.tsx"],
+      "destinationPaths": ["client/src/components/vendor/kibo/Status.tsx", "client/src/components/vendor/kibo/Tags.tsx"],
+      "modifications": ["Adapted compound status primitive to existing P9/GM status truth and reduced-motion indicators.", "Reused searchable tag picker for existing published intelligence-object tags without adding data authority or dependencies.", "Adapted to existing React 18/Tailwind 3/Radix primitives."],
+      "notes": "Full MIT grant at client/src/components/vendor/kibo/LICENSE. Source integration is not native acceptance."
     }
   ]
 }

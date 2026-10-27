@@ -5,7 +5,18 @@ import {
   type InstrumentResolutionQuery,
   type InstrumentResolutionResult,
 } from "@shared/globalInstrumentMaster";
-import { instrumentSearchGroupKey } from "@shared/instrumentSearchIndex";
+/**
+ * Structured identity resolution has a different grouping contract from
+ * free-text search. Here we temporarily collect same-name, same-symbol
+ * provider observations so the conflict gate below can *inspect* all known
+ * venues/currencies and combine only nonconflicting evidence. Free-text
+ * search itself must keep provisional venues as separate suggestions.
+ */
+function observationKey(candidate: InstrumentMasterCandidate): string {
+  return [candidate.name, candidate.symbol ?? ""]
+    .map(value => value.trim().toUpperCase().replace(/\s+/g, " "))
+    .join("\u0000");
+}
 
 /** Extend the existing master fallback, never a competing identity registry. */
 export function createConversationInstrumentFallback(input: {
@@ -29,7 +40,7 @@ export function createConversationInstrumentFallback(input: {
       const groups = new Map<string, InstrumentMasterCandidate[]>();
       for (const candidate of candidates) {
         if (candidate.canonical !== false) continue;
-        const key = instrumentSearchGroupKey(candidate);
+        const key = observationKey(candidate);
         const members = groups.get(key);
         if (members) members.push(candidate);
         else groups.set(key, [candidate]);

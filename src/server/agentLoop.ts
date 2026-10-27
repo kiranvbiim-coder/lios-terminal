@@ -378,7 +378,11 @@ function inspectSystem(): string {
 
 function renderResults(outcomes: readonly AgentStepOutcome[]): string {
   return outcomes
-    .map((outcome) => `- ${outcome.id} (${outcome.toolId}) ${outcome.status}: ${outcome.summary.slice(0, outcome.toolId === "lios.artifact.inspect" ? 16_384 : 500)}`)
+    .map((outcome) => {
+      const limit = outcome.toolId === "lios.artifact.inspect" ? 16_384
+        : ["lios.provider.connected_sources", "lios.provider.connected_preview", "lios.external-mcp.allowed_tools"].includes(outcome.toolId) ? 2_000 : 500;
+      return `- ${outcome.id} (${outcome.toolId}) ${outcome.status}: ${outcome.summary.slice(0, limit)}`;
+    })
     .join("\n");
 }
 

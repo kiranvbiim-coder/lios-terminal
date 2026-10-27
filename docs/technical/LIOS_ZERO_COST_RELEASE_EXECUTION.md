@@ -75,3 +75,13 @@ Do not change signed-production validators or bypass security policy to obtain a
 - **Do not open another master issue or duplicate subsystem.** Make small reviewed branches/PRs against current protected `main`, coordinate with existing work and preserve current user-facing architecture.
 - **Cost gate is absolute:** if a signed/notarized commercial install is unavailable for $0, preserve it as an unmet P14 requirement rather than paying, bypassing OS protections, or inventing qualification.
 - **Release goal:** ship an actual reliable customer-usable zero-cash **beta**, then iterate only with zero-cash methods; never promise a universally frictionless/warning-free commercial installation without required platform trust.
+
+## Verified split-download transport — owner selected 2026-10-27
+
+The complete Mac beta exceeds the per-asset hosting limit. Preserve its full capabilities and installer bytes; distribute numbered parts plus an Ed25519-signed transport index. This is not automatic installation, OS signing, native acceptance or owner publication approval.
+
+Owner-only offline splitting: `node script/beta_release_parts.cjs split INSTALLER PARTS_DIRECTORY INDEX_JSON`, supplying the Ed25519 private PEM through standard input from owner-controlled off-repository storage. Never place private key bytes in argv, environment, repository, public CI or release assets. Default parts are at most 1,000,000,000 bytes. Output directories must already exist. Existing output files are never overwritten.
+
+Recipient reassembly: `node script/beta_release_parts.cjs join INDEX_JSON PARTS_DIRECTORY OUTPUT_DIRECTORY INDEPENDENT_PUBLIC_KEY_PEM`. Obtain that public key through a separately verified owner channel—not merely beside the download. Signature, ordered part names, each size/hash and the complete installer hash are checked. The final filename appears only after successful verification; partial staging is removed on failure. Nothing launches the assembled installer. Follow normal OS protections and explicit installation review.
+
+Source proof: two focused behavior tests cover exact byte reconstruction, tampering, foreign keys, symlink refusal and non-overwrite. The real 2,752,494,208-byte DMG round-tripped through three parts (1,000,000,000; 1,000,000,000; 752,494,208 bytes) to SHA-256 `a9f0babda94f32803c6984c75090fbad97605d87fc55701f1028b8f4419b3ec3`. Temporary smoke parts and ephemeral test key were removed. No durable release trust root or actual publication is established by this test; source commit/version review, native journeys, independent Windows acceptance, key custody/recovery and owner approval remain required.

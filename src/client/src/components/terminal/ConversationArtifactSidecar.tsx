@@ -6,6 +6,7 @@ import {
   canExpandArtifactRevision,
   clampArtifactSidecarWidth,
   keyboardArtifactSidecarWidth,
+  isCurrentArtifactLoad,
 } from "@/lib/artifactSidecarSizing";
 
 interface Props extends ComponentProps<typeof ArtifactPane> {
@@ -104,7 +105,7 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
     style={style}
     data-artifact-sidecar-focus={focus ? "true" : "false"}
     className={focus
-      ? "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#060606]/95 p-3"
+      ? "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-background p-3"
       : "lios-artifact-sidecar block min-h-0 shrink-0 overflow-y-auto border-l border-border/70 bg-[#060606]/95 p-3"}
   >
     <div
@@ -154,14 +155,14 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
       <span className="text-xs text-muted-foreground">{focus ? "Artifact Focus" : "Saved Artifact"}</span>
       <div className="flex flex-wrap gap-2">
         {focus
-          ? <button ref={exitFocusRef} type="button" onClick={onExitFocus} className="min-h-9 rounded border border-border/60 px-2 py-1 text-xs focus-visible:ring-2 focus-visible:ring-cyan-300">Exit Focus — back to Chat</button>
-          : onEnterFocus && <button type="button" onClick={onEnterFocus} className="min-h-9 rounded border border-border/60 px-2 py-1 text-xs focus-visible:ring-2 focus-visible:ring-cyan-300">Focus Artifact</button>}
+          ? <button ref={exitFocusRef} type="button" onClick={onExitFocus} className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Exit Focus — back to Chat</button>
+          : onEnterFocus && <button type="button" onClick={onEnterFocus} className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Focus Artifact</button>}
         <button
           type="button"
           data-testid="artifact-expand-workspace"
           disabled={!canExpand}
           title={dirty ? "Save or reset unsaved Artifact edits before expanding" : !canExpand ? "Wait for the exact saved Artifact version to load" : "Open this exact saved Artifact version in Workbench"}
-          className="min-h-9 rounded border border-border/60 px-2 py-1 text-xs focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-40"
+          className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-40"
           onClick={() => { if (canExpand && displayed) onExpand(displayed.version); }}
         >Expand workspace</button>
       </div>
@@ -170,10 +171,11 @@ export default function ConversationArtifactSidecar({ focus, onEnterFocus, onExi
     <ArtifactPane {...props}
       onDirtyChange={value => { setDirty(value); props.onDirtyChange?.(value); }}
       onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
-        if (artifactId === props.artifactId) {
-          setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === loadedRequest && current.version === version
-            ? current : { artifactId, requestedVersion: loadedRequest, version });
-        }
+        // Neither update local UI nor relay an outdated fetch after a
+        // same-object revision switch or a different Artifact selection.
+        if (!isCurrentArtifactLoad(artifactId, loadedRequest, version, props.artifactId, requestedVersion)) return;
+        setDisplayed(current => current?.artifactId === artifactId && current.requestedVersion === loadedRequest && current.version === version
+          ? current : { artifactId, requestedVersion: loadedRequest, version });
         props.onDisplayedVersionChange?.(version, artifactId, loadedRequest);
       }}
     />

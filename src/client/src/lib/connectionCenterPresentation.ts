@@ -53,3 +53,18 @@ export function connectionRecoveryPresentation(status: string): ConnectionRecove
 export function isConnectorConnectable(connector: { adapterImplemented?: boolean }): boolean {
   return connector.adapterImplemented !== false;
 }
+
+/**
+ * Registry headers must distinguish configured credentials from a successful
+ * live provider invocation. Count only current, known connector identities;
+ * duplicate/stale health rows must never inflate the verified figure.
+ */
+export function countLiveVerifiedConnectors(
+  connectors: readonly { id: string }[],
+  health: readonly { connectorId: string; state: string }[],
+): number {
+  const knownConnectorIds = new Set(connectors.map((connector) => connector.id));
+  return new Set(health
+    .filter((report) => report.state === "live_verified" && knownConnectorIds.has(report.connectorId))
+    .map((report) => report.connectorId)).size;
+}

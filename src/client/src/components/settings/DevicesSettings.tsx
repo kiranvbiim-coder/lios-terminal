@@ -14,6 +14,7 @@ import {
   rememberedHomeChangeReview, pairedDeviceRevocationReview,
 } from "@/lib/deviceContinuityTruth";
 import { RemoteNodeCapabilities } from "./RemoteNodeCapabilities";
+import { SystemDoctorDesk } from "./SystemDoctorDesk";
 import {
   chooseActiveDeviceHome,
   forgetDeviceHome,
@@ -54,6 +55,7 @@ export default function DevicesSettings() {
   const [continuityNotice, setContinuityNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<PairingCode | null>(null);
+  const [doctorOpen, setDoctorOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useState<"code" | "invitation" | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -200,6 +202,13 @@ export default function DevicesSettings() {
 
   return (
     <section className="border border-border/60 bg-black/20 p-3 space-y-3" data-testid="connection-devices-settings">
+      <section className="rounded-lg border border-border/55 p-3" aria-label="System diagnostics">
+        <button type="button" aria-expanded={doctorOpen} onClick={() => setDoctorOpen(current => !current)}
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+          <span>System Doctor</span><span className="font-normal text-muted-foreground">{doctorOpen ? "Hide" : "Inspect"}</span>
+        </button>
+        {doctorOpen && <SystemDoctorDesk />}
+      </section>
       <div className="flex items-center gap-2">
         <Smartphone className="h-3.5 w-3.5 text-[hsl(38,95%,55%)]" />
         <h3 className="font-terminal text-[8px] uppercase tracking-widest text-foreground">Devices</h3>

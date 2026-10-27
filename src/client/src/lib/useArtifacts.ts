@@ -162,6 +162,7 @@ export function useInvalidateArtifacts() {
 export async function createArtifact(projectId: number, input: {
   title: string;
   content: ArtifactContent;
+  sourceRefs?: string[];
   origin?: ProjectArtifactRecord["origin"];
   trustManifest?: TrustManifest | null;
   dependencyRefs?: string[];
