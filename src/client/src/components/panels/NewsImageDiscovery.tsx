@@ -2,6 +2,7 @@ import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Image as ImageIcon, Search } from "lucide-react";
 import type { CommonsCandidate } from "@shared/commonsMedia";
+import type { SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 import { safeCommonsFilePage, safeCommonsPreview } from "@shared/commonsMedia";
 
 function vettedCandidates(value: unknown): CommonsCandidate[] {
@@ -42,17 +43,27 @@ export function CommonsContextIllustration({ candidate, compact = false, showSou
 }
 
 /** Opt-in read-only image search. It never writes to the user's installation. */
-export function NewsImageDiscovery({ articleTitle, onSelect, selected, onClear }: {
+export function NewsImageDiscovery({
+  articleTitle, onSelect, selected, onClear, canRemember = false, saved = null,
+  onRemember, onForget, onReopenSaved,
+}: {
   articleTitle: string;
   onSelect: (candidate: CommonsCandidate) => void;
   selected: CommonsCandidate | null;
   onClear: () => void;
+  canRemember?: boolean;
+  saved?: SavedNewsIllustration | null;
+  onRemember?: () => void;
+  onForget?: () => void;
+  onReopenSaved?: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState(articleTitle.trim().split(/\s+/).slice(0, 5).join(" ").slice(0, 100));
   const [candidates, setCandidates] = useState<CommonsCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const [recheckError, setRecheckError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => { controller.current?.abort(); }, []);
 
@@ -81,12 +92,36 @@ export function NewsImageDiscovery({ articleTitle, onSelect, selected, onClear }
     }
   };
 
+  const showRemembered = async () => {
+    if (!saved || !onReopenSaved || rechecking) return;
+    setRechecking(true);
+    setRecheckError(null);
+    try {
+      const verified = await onReopenSaved();
+      if (!verified) setRecheckError("Saved image is unavailable or no longer verified CC0. Choose another image.");
+    } catch {
+      setRecheckError("Could not verify the saved Commons license. The image was not reopened.");
+    } finally { setRechecking(false); }
+  };
+
   return <section data-testid="news-image-discovery" className="my-4 rounded-xl border border-border/60 bg-background/40">
     <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3">
       <span className="inline-flex items-center gap-2 font-ui text-sm font-medium text-foreground">
         <ImageIcon className="h-4 w-4 text-amber-200" aria-hidden="true" />Context imagery
       </span>
       <div className="flex flex-wrap gap-2">
+        {canRemember && saved && !selected && <button type="button" disabled={rechecking} onClick={() => void showRemembered()}
+          className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+          {rechecking ? "Rechecking CC0…" : "Recheck & show saved"}
+        </button>}
+        {canRemember && selected && !saved && onRemember && <button type="button" onClick={onRemember}
+          className="min-h-10 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+          Remember illustration
+        </button>}
+        {canRemember && saved && onForget && <button type="button" onClick={onForget}
+          className="min-h-10 rounded-lg border border-border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
+          Forget saved
+        </button>}
         {selected && <button type="button" onClick={onClear}
           className="min-h-10 rounded-lg border border-border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70">
           Clear illustration
@@ -98,6 +133,11 @@ export function NewsImageDiscovery({ articleTitle, onSelect, selected, onClear }
         </button>
       </div>
     </div>
+    {canRemember && saved && <p className="px-3 pb-2 font-ui text-xs leading-5 text-muted-foreground" data-testid="saved-context-reference">
+      Saved in this Workbench artifact: {saved.candidate.fileTitle.replace(/^File:/, "")}.
+      Images are not reloaded automatically; recheck the CC0 file before showing it again.
+    </p>}
+    {recheckError && <p role="alert" className="px-3 pb-2 font-ui text-sm text-amber-100">{recheckError}</p>}
     {open && <div id="news-image-discovery-options" className="space-y-3 border-t border-border/60 p-3">
       <p className="font-ui text-xs leading-5 text-muted-foreground">
         Illustrations are not evidence of the event. Search sends the terms to Wikimedia Commons only when pressed. CC0 metadata is not an independent rights review.
