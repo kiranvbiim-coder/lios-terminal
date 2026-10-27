@@ -316,19 +316,15 @@ export function ProjectHome({
             <span>Investigation</span><span className="text-sm font-normal text-muted-foreground">{investigationOpen ? "Hide" : "Open"}</span>
           </button>
           {investigationOpen && <div id={`project-investigation-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
-            <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />
-          </div>}
-        </section>
-
-        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-briefing-entry">
-          <button type="button" aria-expanded={briefingOpen}
-            aria-controls={`project-briefing-${project.id}`}
-            onClick={() => setBriefingOpen(value => !value)}
-            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
-            <span>Briefing Studio</span><span className="text-sm font-normal text-muted-foreground">{briefingOpen ? "Hide" : "Open"}</span>
-          </button>
-          {briefingOpen && <div id={`project-briefing-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
-            <ProjectBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
+            <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Investigation workspace">
+              <button type="button" aria-pressed={!briefingOpen} onClick={() => setBriefingOpen(false)}
+                className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${!briefingOpen ? "border-amber-300/35 text-foreground" : "border-border/55 text-muted-foreground"}`}>Research</button>
+              <button type="button" aria-pressed={briefingOpen} onClick={() => setBriefingOpen(true)}
+                className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${briefingOpen ? "border-amber-300/35 text-foreground" : "border-border/55 text-muted-foreground"}`}>Briefing Studio</button>
+            </div>
+            {briefingOpen
+              ? <ProjectBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
+              : <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
           </div>}
         </section>
 
