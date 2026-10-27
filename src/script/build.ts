@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { verifyBuiltEditorialMedia } from "./verify_built_editorial_media";
 
 const BUILD_HEAP_MB = 4096;
 const BUILD_HEAP_ENV = "LIOS_BUILD_HEAP_CONFIGURED";
@@ -78,6 +79,10 @@ async function buildAll() {
 
   console.log("building client...");
   await viteBuild();
+  // Vite must copy every permitted local photo intact, with no stray
+  // unreviewed images in the packaged public directory.
+  const mediaAccepted = verifyBuiltEditorialMedia();
+  console.log(`editorial image release gate: ${mediaAccepted.grants} grants, ${mediaAccepted.files} unique files`);
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
