@@ -319,6 +319,14 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 }
 .lios-spatial-companion-grip { display: inline-flex; min-height: 34px; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
 .lios-spatial-companion-body { padding: 14px; overflow-wrap: anywhere; }
+.lios-spatial-companion:focus-visible {
+  outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: -4px;
+}
+/* After container reflow or 200% zoom, the companion is a read-only region.
+ * No invisible draggable target or hidden SVG survives in the DOM. */
+@container (max-width: 760px) {
+  .lios-spatial-companion-grip { cursor: default; touch-action: auto; user-select: text; }
+}
 .lios-spatial-research button:focus-visible {
   outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: 3px;
 }
