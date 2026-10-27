@@ -19,7 +19,7 @@ function containsRoot(root: string, candidate: string): boolean {
   return relative !== "" && relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative);
 }
 
-function imageSignatureValid(bytes: Buffer, extension: string): boolean {
+export function imageSignatureValid(bytes: Buffer, extension: string): boolean {
   if (extension === "png") return bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   if (extension === "jpg" || extension === "jpeg") return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   if (extension === "webp") return bytes.length > 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
