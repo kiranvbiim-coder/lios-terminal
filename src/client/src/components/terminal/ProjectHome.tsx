@@ -273,6 +273,7 @@ export function ProjectHome({
         </section>
 
 
+        {collectionsFailed && <p role="alert" className="mt-5 rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">Some saved Project items could not be loaded. Results may be incomplete. <button type="button" className="underline" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry</button></p>}
         <details className="mt-6 rounded-xl border border-border/55" data-testid="project-saved-work">
           <summary className="cursor-pointer select-none px-4 py-3 font-ui text-[14px] font-semibold text-foreground">Saved work</summary>
           <div className="px-4 pb-4">
@@ -281,7 +282,6 @@ export function ProjectHome({
           <input id={`project-work-search-${project.id}`} type="search" value={workQuery} onChange={event => setWorkQuery(event.target.value)}
             placeholder="Search chats, resources and sessions" className="min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm" />
           <p role="status" className="font-ui text-xs text-muted-foreground">{found.chats.length} chats · {found.resources.length} resources · {found.sessions.length} sessions{collectionsPending ? " · Loading" : ""}</p>
-          {collectionsFailed && <p role="alert" className="text-sm text-amber-200">The complete Project collections could not be refreshed. Showing available records; a missing match is not proof no saved item exists. <button type="button" onClick={() => { void chatsQuery.refetch(); void resourcesQuery.refetch(); void sessionsQuery.refetch(); }}>Retry Project collections</button></p>}
         </section>
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="border-t border-border/45 pt-4">
