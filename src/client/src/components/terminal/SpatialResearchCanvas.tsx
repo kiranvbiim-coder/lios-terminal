@@ -4,7 +4,7 @@ import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { loadResearchTray, subscribeResearchTray, type ResearchTrayItem } from "@/lib/terminalResearchTray";
 import { loadResearchCanvasPositions, removeResearchCanvasPosition, setResearchCanvasPosition, subscribeResearchCanvas } from "@/lib/terminalResearchCanvas";
-import { buildSpatialResearchModel, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 
 interface Props { onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void; }
@@ -20,6 +20,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const [version, setVersion] = useState(0);
   const [mode, setMode] = useState<SpatialLayoutMode>("map");
   const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>("all");
+  const [trailGroup, setTrailGroup] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
@@ -32,6 +33,9 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const positions = useMemo(() => loadResearchCanvasPositions(), [version]);
   const visibleItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
   const model = useMemo(() => buildSpatialResearchModel(visibleItems, positions, mode), [visibleItems, positions, mode]);
+  const trails = useMemo(() => buildExplicitResearchTrails(model.nodes), [model]);
+  const selectedTrail = trails.find(trail => trail.group === trailGroup) ?? null;
+  const trailIndex = selectedTrail?.itemIds.indexOf(inspectedId ?? "") ?? -1;
   const points = useMemo(() => new Map(model.nodes.map(node => [
     node.item.id, dragPreview?.id === node.item.id ? dragPreview.point : node.point,
   ] as const)), [model, dragPreview]);
@@ -40,6 +44,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   useEffect(() => subscribeResearchTray(setItems), []);
   useEffect(() => subscribeResearchCanvas(() => setVersion(value => value + 1)), []);
   useEffect(() => { if (inspectedId && !selected) setInspectedId(null); }, [inspectedId, selected]);
+  useEffect(() => { if (trailGroup && !selectedTrail) setTrailGroup(""); }, [trailGroup, selectedTrail]);
 
   const fromPointer = (clientX: number, clientY: number): SpatialPoint | null => {
     const rect = boardRef.current?.getBoundingClientRect();
@@ -97,6 +102,11 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
     setInspectedId(id);
     requestAnimationFrame(() => companionHeading.current?.focus());
   };
+  const navigateTrail = (direction: "previous" | "next") => {
+    if (!selectedTrail) return;
+    const id = stepExplicitResearchTrail(selectedTrail.itemIds, inspectedId, direction);
+    if (id) openInspection(id);
+  };
   return (
     <section className="lios-spatial-research space-y-3" aria-label="Spatial Research Canvas">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -124,6 +134,27 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
             <span aria-hidden="true">({kind === "all" ? items.length : items.filter(item => item.kind === kind).length})</span>
           </button>
         ))}
+      </div>
+      <div className="lios-spatial-trail" role="group" aria-label="Guided evidence trail">
+        <label htmlFor="lios-spatial-trail-choice" className="font-ui text-sm font-medium">Guided evidence trail</label>
+        <select id="lios-spatial-trail-choice" value={trailGroup} onChange={event => setTrailGroup(event.target.value)}
+          className="lios-spatial-trail-select" aria-label="Choose your saved research group">
+          <option value="">Choose a grouped set</option>
+          {trails.map(trail => <option key={trail.group} value={trail.group}>
+            {trail.group} ({trail.itemIds.length} pins)
+          </option>)}
+        </select>
+        <button type="button" className="lios-spatial-control" disabled={!selectedTrail}
+          onClick={() => { if (selectedTrail) openInspection(selectedTrail.itemIds[0]); }}>Start</button>
+        <button type="button" className="lios-spatial-control" disabled={!selectedTrail}
+          onClick={() => navigateTrail("previous")} aria-label="Previous pinned research item">Previous</button>
+        <button type="button" className="lios-spatial-control" disabled={!selectedTrail}
+          onClick={() => navigateTrail("next")} aria-label="Next pinned research item">Next</button>
+        <span className="font-ui text-xs text-muted-foreground" role="status" aria-live="polite">
+          {selectedTrail ? trailIndex >= 0 ? `${trailIndex + 1} of ${selectedTrail.itemIds.length} pinned items`
+            : `${selectedTrail.itemIds.length} saved pins ready`
+            : "Choose a named group with at least two visible pins."}
+        </span>
       </div>
       <div
         ref={boardRef}
