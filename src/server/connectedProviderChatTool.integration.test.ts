@@ -117,6 +117,23 @@ test("Phase 2: connected local file verifies, appears in Chat and supplies an ap
   assert.equal(JSON.stringify(refreshed).includes("new-secret-must-not-leak"), false);
   assert.notDeepEqual(refreshed.sourceRefs, result.sourceRefs, "file-content provenance changes when the file content changes");
 
+  // An owned source is usable directly in Quick Chat; Projects are optional.
+  // The canonical L4 grant permits only once-only approval with a null Project.
+  const quickCall = { ...call, projectId: null, requestId: crypto.randomUUID() };
+  const quickSources = await connectedProviderListChatTool.invoke({}, new AbortController().signal, quickCall);
+  assert.equal(
+    (quickSources.output as { sources: Array<{ id: number }> }).sources.some(row => row.id === source.id),
+    true,
+  );
+  const quickResult = await connectedProviderPreviewChatTool.invoke({
+    connectionId: source.id, entityRef: "region-sample", capability: "provider_extension", maxRows: 1,
+  }, new AbortController().signal, quickCall);
+  assert.deepEqual(
+    (quickResult.output as { previewRows: Array<Record<string, unknown>> }).previewRows,
+    [{ region: "west", metric: 38, api_key: "[REDACTED]" }],
+  );
+  assert.equal(quickResult.sourceRefs.includes(`source-connection:${source.id}`), true);
+
   await assert.rejects(
     () => connectedProviderPreviewChatTool.invoke({
       connectionId: source.id, entityRef: "region-sample",
