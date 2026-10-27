@@ -79,9 +79,9 @@ test("missing source and market fallback do not acquire fabricated citations or 
 
 test("bounded projection retains leading priority, carries omissions, does not mutate input", () => {
   const originals = Object.freeze([story("a"), story("b", {
-    evidence: Array.from({ length: 68 }, (_, index) => ({
+    evidence: [story("a").evidence![0], ...Array.from({ length: 68 }, (_, index) => ({
       id: "edge:" + index, source: "Source " + index, url: "https://example.org/" + index,
-    })),
+    }))],
   })]);
   const grouped = clusterRecordedPulseStories(originals, 48);
   assert.equal(grouped.length, 1);
