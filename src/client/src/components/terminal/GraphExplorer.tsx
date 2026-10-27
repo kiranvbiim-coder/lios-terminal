@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
-import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
+import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
@@ -37,6 +37,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [symbolOnly, setSymbolOnly] = useState(Boolean(activeSymbol));
   const [bridgesOnly, setBridgesOnly] = useState(false);
+  const [relation, setRelation] = useState<CrossDomainEdge["relation"] | "">("");
   const [neighborsOnly, setNeighborsOnly] = useState(false);
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
@@ -97,12 +98,13 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const graphObjects = useMemo(() => contextualObjects.slice(0, 120), [contextualObjects]);
   const graph = useMemo(() => buildCrossDomainGraph(graphObjects), [graphObjects]);
   const bridges = useMemo(() => crossDomainBridges(graph), [graph]);
+  const relations = useMemo(() => Array.from(new Set(graph.edges.map(edge => edge.relation))).sort(), [graph]);
   const presentation = useMemo(() => presentCrossDomainGraph(graph, {
-    query, selectedId, neighborsOnly, bridgesOnly, maxNodes: 48,
-  }), [graph, query, selectedId, neighborsOnly, bridgesOnly]);
+    query, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
+  }), [graph, query, selectedId, neighborsOnly, bridgesOnly, relation]);
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
-  const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id) : [], [graph, selected]);
+  const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link => !relation || link.relation === relation) : [], [graph, selected, relation]);
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
     for (const domain of DOMAIN_ORDER) {
@@ -151,6 +153,15 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
               className={`min-h-10 rounded-lg border px-3 font-ui text-xs ${symbolOnly ? "border-amber-300/45 bg-amber-300/[0.07] text-amber-200" : "border-border/70 text-muted-foreground hover:text-foreground"}`}>
               {activeSymbol} + global
             </button>}
+            <label className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground">
+              <span>Link type</span>
+              <select aria-label="Filter recorded relationship type" value={relation}
+                onChange={event => { setRelation(event.target.value as CrossDomainEdge["relation"] | ""); setSelectedId(null); setNeighborsOnly(false); }}
+                className="max-w-36 bg-background text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+                <option value="">All recorded</option>
+                {relations.map(item => <option key={item} value={item}>{item.replaceAll("-", " ")}</option>)}
+              </select>
+            </label>
             <button type="button" aria-pressed={bridgesOnly} onClick={() => setBridgesOnly(value => !value)}
               className={`min-h-10 rounded-lg border px-3 font-ui text-xs ${bridgesOnly ? "border-cyan-300/45 bg-cyan-300/[0.06] text-cyan-200" : "border-border/70 text-muted-foreground hover:text-foreground"}`}>
               Domain bridges ({bridges.length})
@@ -159,7 +170,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
               className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 font-ui text-xs disabled:cursor-not-allowed disabled:opacity-35 ${neighborsOnly ? "border-amber-300/45 bg-amber-300/[0.07] text-amber-200" : "border-border/70 text-muted-foreground hover:text-foreground"}`}>
               <Focus className="h-3.5 w-3.5" aria-hidden="true"/> Direct links
             </button>
-            {(query || selectedId || neighborsOnly || bridgesOnly) && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); setNeighborsOnly(false); setBridgesOnly(false); }}
+            {(query || selectedId || neighborsOnly || bridgesOnly || relation) && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); setNeighborsOnly(false); setBridgesOnly(false); setRelation(""); }}
               className="min-h-10 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground hover:text-foreground">Reset view</button>}
           </div>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Cross-domain graph viewport controls">
@@ -173,7 +184,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-ui text-xs text-muted-foreground" role="status">
             <span>{presentation.nodes.length} shown · {graph.nodes.length} objects loaded</span>
-            <span>{presentation.edges.length} recorded links shown</span>
+            <span>{presentation.edges.length} recorded links shown{relation ? ` · ${relation.replaceAll("-", " ")} only` : ""}</span>
             {query && <span>{presentation.matchingCount} direct search matches</span>}
             {presentation.omittedCount > 0 && <span>{presentation.omittedCount} not drawn — refine search</span>}
             {contextualObjects.length > graphObjects.length && <span>Only the 120 most recent objects loaded — additional records not shown</span>}
@@ -272,6 +283,8 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                     <h4 className="font-ui text-xs font-semibold text-muted-foreground">Recorded source</h4>
                     <p className="mt-1 break-words font-ui text-xs text-foreground">{selected.source.label}</p>
                     {selected.source.provider && <p className="mt-1 font-ui text-xs text-muted-foreground">{selected.source.provider}</p>}
+                    <p className="mt-2 font-ui text-[11px] text-muted-foreground">{selected.source.freshness ? `Recorded freshness: ${selected.source.freshness}` : "Freshness not recorded"} · {selected.source.effectiveAt ? `As of ${selected.source.effectiveAt}` : "As-of time unavailable"}</p>
+                    {selected.source.sourceId && <p className="mt-1 break-all font-ui text-[11px] text-muted-foreground">Source ID: {selected.source.sourceId}</p>}
                   </div>}
                 </section>
                 <section className="space-y-2">
