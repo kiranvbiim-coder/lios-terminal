@@ -5,11 +5,26 @@
  * middleware in routes.ts like the rest of this registration group.
  */
 import type { Express } from "express";
-import { searchCommonsCC0 } from "./commonsCc0Media";
+import { lookupCommonsCC0, searchCommonsCC0 } from "./commonsCc0Media";
 import { requireAuth } from "./auth";
 import { getMediaQuotes, getMediaHistory, getMediaVolume, getMediaCatalog, getMediaTopicProfile } from "./gdeltData";
 
 export function registerMediaRoutes(app: Express): void {
+  // Saved Commons references must be checked against the CURRENT file metadata
+  // on explicit user action; restoring panel state cannot itself load pixels.
+  app.get("/api/media/commons/cc0/file", requireAuth, async (req, res) => {
+    const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
+    if (!title.startsWith("File:") || title.length < 7 || title.length > 260) {
+      return res.status(400).json({ error: "A valid Commons File: title is required." });
+    }
+    try {
+      const candidate = await lookupCommonsCC0(title);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ candidate, status: "unreviewed" });
+    } catch {
+      return res.status(502).json({ error: "The saved Commons file is unavailable or no longer verified CC0." });
+    }
+  });
   // Explicit, read-only discovery, with the same authenticated media domain.
   // Does not download, persist, approve, proxy, or attach an image to a story.
   app.get("/api/media/commons/cc0", requireAuth, async (req, res) => {
