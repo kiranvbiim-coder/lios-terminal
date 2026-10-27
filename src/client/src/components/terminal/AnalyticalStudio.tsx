@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Activity, ArrowRight, BrainCircuit, BriefcaseBusiness, Check, GitCompareArrows, History, Layers3,
-  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2, X,
+  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2,
 } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode, WorkspaceState } from "@/lib/terminalTypes";
@@ -23,6 +24,7 @@ import {
   type ThesisCaseId, type ThesisMap,
 } from "@/lib/terminalThesisMap";
 import SpatialResearchCanvas from "./SpatialResearchCanvas";
+import type { SpatialCanvasReturnState, SpatialStudioTab } from "@/lib/spatialStudioContinuity";
 import { loadResearchTray } from "@/lib/terminalResearchTray";
 import {
   createResearchPackage, loadResearchPackages, removeResearchPackage, subscribeResearchPackages, type ResearchPackage,
@@ -41,7 +43,7 @@ import {
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
-type StudioTab = typeof TABS[number];
+type StudioTab = SpatialStudioTab;
 
 interface Props {
   activeView: ViewMode;
@@ -53,6 +55,10 @@ interface Props {
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
   onApplyWorkspace: (workspace: WorkspaceState, label?: string) => void;
   onClose: () => void;
+  selectedTab: StudioTab;
+  onSelectTab: (tab: StudioTab) => void;
+  spatialCanvasReturn: SpatialCanvasReturnState;
+  onSpatialCanvasReturn: (state: SpatialCanvasReturnState) => void;
 }
 
 function fmt(value: unknown): string {
@@ -63,33 +69,39 @@ function fmt(value: unknown): string {
 }
 
 function StudioNav({ tab, onTab }: { tab: StudioTab; onTab: (tab: StudioTab) => void }) {
-  return <nav className="flex gap-1 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} onClick={() => onTab(item)} className={`font-ui shrink-0 rounded-lg border px-2.5 py-1.5 text-[7px] font-semibold uppercase tracking-[0.1em] ${tab === item ? "border-amber-400/25 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item.replace("-", " ")}</button>)}</nav>;
+  return <nav aria-label="Analytical studio views" className="flex gap-1.5 overflow-x-auto border-b border-border/55 px-3 py-2 scrollbar-thin">{TABS.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => onTab(item)} className={`font-ui min-h-10 shrink-0 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tab === item ? "border-amber-400/35 bg-amber-400/[0.055] text-amber-200" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/[0.025] hover:text-foreground"}`}>{item === "canvas" ? "Spatial research" : item.replace("-", " ")}</button>)}</nav>;
 }
 
-export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose }: Props) {
-  const [tab, setTab] = useState<StudioTab>("flow");
+export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose, selectedTab: tab, onSelectTab, spatialCanvasReturn, onSpatialCanvasReturn }: Props) {
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const quietMotion = preferences.reducedMotion || preferences.lowResourceMode ? { animation: "none" } : undefined;
   return (
-    <div className="fixed inset-0 z-[82] flex items-center justify-center bg-black/72 p-3 backdrop-blur-[3px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="LiOS Analytical Studio"
+        className="lios-v4-overlay !z-[82] !flex h-[min(820px,94dvh)] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-2xl !p-0 !pr-0"
+        style={quietMotion}
+        overlayProps={{ className: "!z-[81] bg-black/72 backdrop-blur-[3px]", style: quietMotion }}
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}
+      >
         <header className="flex items-start gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><BrainCircuit className="h-4 w-4 text-amber-300" /></div>
-          <div className="min-w-0 flex-1"><div className="font-ui text-[13px] font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-[8px] text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
-          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1 pr-10"><DialogTitle className="font-ui text-base font-semibold text-foreground">LiOS Analytical Studio</DialogTitle><DialogDescription className="mt-1 flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>Flow, compare, thesis, spatial research, packages, replay and safe UI orchestration</span></DialogDescription></div>
         </header>
-        <StudioNav tab={tab} onTab={setTab} />
+        <StudioNav tab={tab} onTab={onSelectTab} />
         <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin">
           {tab === "flow" && <FlowTab activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} onOpen={onOpen} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "compare" && <CompareTab activeView={activeView} activeSymbol={activeSymbol} />}
           {tab === "thesis" && <ThesisTab activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} />}
-          {tab === "canvas" && <SpatialResearchCanvas onOpen={onOpen} />}
+          {tab === "canvas" && <SpatialResearchCanvas preferences={preferences} initialReturnState={spatialCanvasReturn} onReturnStateChange={onSpatialCanvasReturn} onOpen={(view, mode, symbol) => { onOpen(view, mode, symbol); onClose(); }} />}
           {tab === "packages" && <PackagesTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "composer" && <ComposerTab activeSymbol={activeSymbol} onOpen={onOpen} />}
           {tab === "replay" && <ReplayTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "ai-preview" && <AiPreviewTab activeSymbol={activeSymbol} isInternal={isInternal} onOpen={onOpen} />}
           {tab === "meeting" && <MeetingTab preferences={preferences} onPreferencesChange={onPreferencesChange} />}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

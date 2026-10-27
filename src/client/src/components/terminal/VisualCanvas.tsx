@@ -11,7 +11,7 @@ import {
 } from "@/lib/visualEnvironment";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { ambientMotionAllowed, isSoftwareRendered } from "@/lib/desktopRendering";
-import { resolveVisualCanvasPolicy } from "@/lib/visualCanvasPolicy";
+import { resolveVisualCanvasPolicy, resolveVisualIntensity } from "@/lib/visualCanvasPolicy";
 
 interface Props {
   surface: string;
@@ -77,10 +77,12 @@ export default function VisualCanvas({
   const environment = getVisualEnvironment(environmentId);
 
   const intensity: VisualIntensity = useMemo(() => {
-    if (focusMode || presentationMode || surface === "workbench") return "focus";
-    if (surface === "projects") return context.intensity;
-    return "contextual";
-  }, [context.intensity, focusMode, presentationMode, surface]);
+    const baseline = surface === "projects" ? context.intensity : "contextual";
+    return resolveVisualIntensity(
+      baseline, preferences.visualIntensity,
+      focusMode || presentationMode || surface === "workbench",
+    );
+  }, [context.intensity, focusMode, presentationMode, preferences.visualIntensity, surface]);
 
   const softwareRendered = isSoftwareRendered();
   const policy = resolveVisualCanvasPolicy({

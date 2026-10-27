@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveVisualCanvasPolicy } from "./visualCanvasPolicy";
+import { resolveVisualCanvasPolicy, resolveVisualIntensity } from "./visualCanvasPolicy";
 
 test("WS-12 visual environments are opt-in, default off means solid and no preloads", () => {
   assert.deepEqual(resolveVisualCanvasPolicy({
@@ -45,4 +45,17 @@ test("WS-12 asset policy does not require a new scene or alter permissions or so
     enabled: true, intensity: "contextual", lowResourceMode: false, softwareRendered: true,
   });
   assert.deepEqual(Object.keys(result).sort(), ["preloadScene", "renderScene", "useLowResourceAsset"]);
+});
+
+test("Phase 2 atmosphere intensity never promotes Workbench or focus into a decorative scene", () => {
+  for (const base of ["focus", "contextual", "immersive"] as const) {
+    for (const requested of ["auto", "immersive", "contextual", "focus"] as const) {
+      assert.equal(resolveVisualIntensity(base, requested, true), "focus");
+    }
+  }
+  assert.equal(resolveVisualIntensity("contextual", "immersive", false), "contextual");
+  assert.equal(resolveVisualIntensity("immersive", "immersive", false), "immersive");
+  assert.equal(resolveVisualIntensity("immersive", "contextual", false), "contextual");
+  assert.equal(resolveVisualIntensity("immersive", "focus", false), "focus");
+  assert.equal(resolveVisualIntensity("immersive", "auto", false), "immersive");
 });
