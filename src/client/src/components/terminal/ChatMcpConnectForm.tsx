@@ -26,6 +26,7 @@ export default function ChatMcpConnectForm({
     setError(""); setStatus(""); setBusy(true);
     let savedId: number | null = null;
     let createdCredentialRef: string | null = null;
+    let credentialWritten = false;
     try {
       const label = name.trim();
       const url = endpoint.trim();
@@ -43,6 +44,7 @@ export default function ChatMcpConnectForm({
         await apiRequest("PUT", `/api/setup/credentials/${createdCredentialRef}`, {
           value: bearerToken.trim(), label: `MCP: ${label}`,
         });
+        credentialWritten = true;
         setBearerToken("");
       }
       // Server independently checks current owner, endpoint/network policy,
@@ -73,7 +75,7 @@ export default function ChatMcpConnectForm({
       // If the source wasn't confirmed saved, an orphaned vault entry should
       // not linger. A lost source-save response is also possible: verify the
       // connection and reenter credentials if the cleanup invalidated them.
-      if (createdCredentialRef !== null && savedId === null) {
+      if (createdCredentialRef !== null && credentialWritten && savedId === null) {
         try {
           await apiRequest("DELETE", `/api/setup/credentials/${createdCredentialRef}`);
         } catch {
