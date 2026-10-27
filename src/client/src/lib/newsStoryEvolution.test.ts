@@ -87,3 +87,14 @@ test("unchanged newer observations advance the watermark without inventing revis
   assert.equal(cached[0].observedAt, first[0].observedAt);
   assert.equal(cached[0].lastObservedAt, new Date(at + 3000).toISOString());
 });
+
+test("B03 only timezone-qualified real publication dates become observed versions",()=>{
+  const bad=["1","2026-02-30T08:00:00Z","2026-10-27","2026-10-27T08:00:00","2026-10-27T24:00:00Z"];
+  for(const date of bad) {
+    assert.deepEqual(observeNewsFeed([], [{...article,publishedAt:date}], at), [], date);
+  }
+  const good=observeNewsFeed([], [{...article,publishedAt:"2026-10-27T13:30:00+05:30"}],at);
+  assert.equal(good.length,1);
+  assert.equal(good[0].publishedAt,"2026-10-27T08:00:00.000Z");
+  assert.equal(good[0].observedAt,"2026-10-27T09:00:00.000Z");
+});
