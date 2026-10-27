@@ -74,8 +74,10 @@ function SourceCard({
   onEditConnection,
   onDeleteConnection,
   onDiscoverDatabase,
+  readOnly = false,
 }: {
   item: SourceRegistryItem;
+  readOnly?: boolean;
   onConnectProvider: (connectorId?: string) => void;
   onTestConnection?: (connectionId: number) => void;
   onEditConnection?: (connectionId: number) => void;
@@ -107,9 +109,17 @@ function SourceCard({
           <span key={capability.contractFamily} className="rounded border border-border px-1.5 py-0.5 font-ui text-xs text-muted-foreground">{capability.contractFamily}</span>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-1">
-        {item.kind === "catalog" && (
+      {readOnly && <p className="mt-3 rounded-md border border-amber-300/30 px-3 py-2 font-ui text-xs leading-5 text-amber-100">
+        Last loaded record only; current availability is unverified. Refresh before changing a connection.
+      </p>}
+      {!readOnly && <div className="mt-3 flex flex-wrap gap-2">
+        {item.kind === "catalog" && item.adapterImplemented && (
           <button type="button" className="min-h-10 rounded-md border border-primary/40 px-3 py-2 font-ui text-sm font-medium text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onConnectProvider(item.connectorId)}>Configure</button>
+        )}
+        {item.kind === "catalog" && !item.adapterImplemented && (
+          <p className="font-ui text-xs leading-5 text-muted-foreground" role="note">
+            Catalogue reference only — no working connector adapter is available in this build.
+          </p>
         )}
         {item.kind === "connection" && item.connectionId !== null && (
           <>
@@ -119,7 +129,7 @@ function SourceCard({
             {onDeleteConnection && <button type="button" aria-label={`Remove saved connection ${item.name}`} className="min-h-10 rounded-md border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={() => onDeleteConnection(item.connectionId!)}>Remove</button>}
           </>
         )}
-      </div>
+      </div>}
     </article>
   );
 }
@@ -163,22 +173,33 @@ export default function DataSourcesPanel({
     staleTime: 30_000,
   });
 
-  if (query.isLoading) return <div className="border border-border bg-[#070707] p-4 font-terminal text-[10px] text-muted-foreground" role="status">Loading Connection Center...</div>;
+  if (query.isLoading && !query.data) return <div className="border border-border bg-[#070707] p-4 font-ui text-sm text-muted-foreground" role="status">Loading Connection Center…</div>;
 
-  if (query.isError || !query.data) {
+  if (!query.data) {
     return <div className="border border-red-500/30 bg-red-500/5 p-4" role="alert"><p className="font-terminal text-[10px] text-red-400">Unable to load Connection Center sources.</p><button type="button" className="mt-2 border border-border px-2 py-1 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground" onClick={() => query.refetch()}>Retry</button></div>;
   }
 
   const registry = query.data;
+  const readOnly = query.isError; // Cache is not a current provider-health receipt.
   const categoryItems = connectionCategoryItems(registry, activeCategory);
   const refresh = (): void => { onRefresh?.(); void query.refetch(); };
 
   return (
     <section className="border border-border bg-[#050505]" aria-labelledby="connection-center-heading">
+      {readOnly && <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-amber-300/30 bg-amber-300/[0.045] px-4 py-3">
+        <p className="min-w-0 flex-1 font-ui text-sm leading-6 text-amber-100">
+          Unable to refresh connections. These are previously loaded records, not proof that any provider is operational. Configuration and destructive actions are paused until a verified refresh.
+        </p>
+        <button type="button" disabled={query.isFetching} aria-busy={query.isFetching}
+          onClick={() => void query.refetch()}
+          className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+          {query.isFetching ? "Retrying…" : "Retry connection status"}
+        </button>
+      </div>}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-[#070707] px-4 py-3">
         <Plug className="h-4 w-4 text-[hsl(38,95%,55%)]" aria-hidden="true" />
         <div><h2 id="connection-center-heading" className="panel-label">CONNECTION CENTER</h2><p className="font-terminal text-[8px] uppercase tracking-widest text-muted-foreground">Connect your workspace · one setup surface for external and user-owned systems</p></div>
-        <div className="ml-auto flex items-center gap-2 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground"><span>{registry.summary.connectionCount} saved</span><span>{registry.summary.operationalCount} operational</span>{registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" className="border border-border p-1 text-muted-foreground" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
+        <div className="ml-auto flex items-center gap-2 font-terminal text-[8px] uppercase tracking-widest text-muted-foreground"><span>{registry.summary.connectionCount} saved</span><span>{readOnly ? "Operational status unverified" : `${registry.summary.operationalCount} reported operational`}</span>{registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" disabled={query.isFetching} aria-busy={query.isFetching} className="min-h-10 min-w-10 rounded-md border border-border p-2 text-muted-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
       </div>
 
       <nav className="grid grid-cols-1 border-b border-border sm:grid-cols-5" aria-label="Connection categories">
@@ -202,10 +223,10 @@ export default function DataSourcesPanel({
       </div>
 
       <div className="grid gap-2 p-3 xl:grid-cols-2">
-        {categoryItems.length > 0 ? categoryItems.map((item) => <SourceCard key={item.id} item={item} onConnectProvider={onConnectProvider} onTestConnection={onTestConnection} onEditConnection={onEditConnection} onDeleteConnection={onDeleteConnection} onDiscoverDatabase={(connectionId, name) => setDatabaseDiscovery({ connectionId, name })} />) : <div className="xl:col-span-2"><EmptyCategory category={activeCategory} /></div>}
+        {categoryItems.length > 0 ? categoryItems.map((item) => <SourceCard key={item.id} item={item} readOnly={readOnly} onConnectProvider={onConnectProvider} onTestConnection={onTestConnection} onEditConnection={onEditConnection} onDeleteConnection={onDeleteConnection} onDiscoverDatabase={(connectionId, name) => setDatabaseDiscovery({ connectionId, name })} />) : <div className="xl:col-span-2"><EmptyCategory category={activeCategory} /></div>}
       </div>
 
-      <div className="border-t border-border px-4 py-2 font-terminal text-[7px] leading-relaxed text-muted-foreground/80">Connection status reflects the evidence available for each source: catalog availability, saved credentials, or a specific live verification. A saved credential alone does not prove that data is flowing or that an AI conversation succeeds.</div>
+      <div className="border-t border-border px-4 py-2 font-terminal text-[7px] leading-relaxed text-muted-foreground/80">{readOnly ? "Previously loaded connection records only — status unverified until successful refresh. " : ""}Connection status reflects the evidence available for each source: catalog availability, saved credentials, or a specific live verification. A saved credential alone does not prove that data is flowing or that an AI conversation succeeds.</div>
 
       {providerWizardOpen && <AddAnyDataProviderWizard onClose={() => setProviderWizardOpen(false)} onSaved={() => { setProviderWizardOpen(false); refresh(); }} />}
       {databaseDiscovery && <DatabaseDiscoveryBrowser connectionId={databaseDiscovery.connectionId} connectionName={databaseDiscovery.name} onClose={() => setDatabaseDiscovery(null)} />}
