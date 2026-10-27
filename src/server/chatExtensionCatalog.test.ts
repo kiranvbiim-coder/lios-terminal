@@ -28,7 +28,7 @@ function connection(id: number, userId: number, org: number | null, sourceType: 
     sourceType,
     status,
     name: `MCP ${id}`,
-    config: { endpoint: "https://secret.example.test/mcp", token: "DO_NOT_SEND" },
+    config: { endpoint: "https://secret.example.test/mcp", token: "DO_NOT_SEND", projectId: 77 },
     credentialRef: "vault:sensitive",
   } as unknown as SourceConnection;
 }
@@ -53,6 +53,7 @@ test("P3 Chat extension catalog exposes only non-executable plugin metadata and 
   assert.equal(catalog.plugins[0].skillCount, 1);
   assert.equal(catalog.mcpConnections[0].explicitApprovalRequired, true);
   assert.equal(catalog.mcpConnections[0].projectRequired, true);
+  assert.equal(catalog.mcpConnections[0].projectId, 77);
   assert.equal(catalog.mcpConnections[1].status, "configured");
   assert.equal(catalog.installationManagedByHomeOwner, true);
   assert.equal(catalog.managementAvailable, true);
