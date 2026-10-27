@@ -295,7 +295,7 @@ export function VisualIntelligenceResultCard({ card, disabled, onAsk }: {
       <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)}
         variant="compact" className="w-full"
         fallback={<RecordedContextPicture title={card.title}
-          hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />} />}
+          hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />} />
       <h3 className="font-ui text-base font-semibold leading-snug text-foreground">{card.title}</h3>
       <p className="line-clamp-3 font-ui text-sm leading-6 text-muted-foreground">{card.whatHappened}</p>
       {card.whyItMattersToUser && <p className="line-clamp-2 font-ui text-sm leading-5 text-foreground/85">{card.whyItMattersToUser}</p>}
