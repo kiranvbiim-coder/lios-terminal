@@ -18,10 +18,13 @@ import { LicensedEditorialImage } from "./LicensedEditorialImage";
 import { RecordedContextPicture } from "./RecordedContextPicture";
 import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulseSubjectPreferences";
 import { eligibleEditorialMedia } from "@shared/editorialMedia";
+import { explainPulsePlacement } from "@/lib/pulsePlacementExplanation";
+import type { PulseChannel } from "./PulseDiscoveryTabs";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
+  channel?: PulseChannel;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
   followed?: boolean;
@@ -35,7 +38,7 @@ const priorityTone = {
   fyi: "border-cyan-300/25 text-cyan-200",
 } as const;
 
-export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
+export default function LiosPulseStoryCard({ card, featured = false, channel = "for_you", onAsk, onOpenSymbol, followed = false, preferencePending = false, onPreferenceChange }: Props) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const reduceMotion = useReducedMotion();
@@ -106,6 +109,13 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                   <p className="mt-1.5 font-ui text-sm leading-6 text-foreground/85">{card.whyItMattersToUser || card.whyItMatters}</p>
                 </div>
               )}
+              <section aria-label="Why this story appears" data-testid="pulse-explain-relevance"
+                className="rounded-lg border border-border/60 bg-white/[0.025] p-3">
+                <h4 className="font-ui text-sm font-semibold text-foreground">Why shown</h4>
+                <ul className="mt-2 space-y-1 font-ui text-sm leading-5 text-muted-foreground">
+                  {explainPulsePlacement(card, channel, followed).map((reason, index) => <li key={index}>{reason}</li>)}
+                </ul>
+              </section>
               {(card.clusteredCount ?? 1) > 1 && <p className="font-ui text-xs leading-5 text-muted-foreground">{card.clusteredCount} retained cards share an exact headline, subject, event date and evidence identity. This grouping is not independent corroboration.</p>}
               {!approvedMedia && <RecordedContextPicture title={card.title}
                 hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />}
