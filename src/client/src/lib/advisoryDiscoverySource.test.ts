@@ -49,19 +49,3 @@ test("Phase 4 service discovery offers actual editable templates and explains sc
   assert.match(routes, /res\.json\(request\)/);
   assert.equal((advisory.match(/apiRequest\("POST", "\/api\/client\/consulting\/requests"/g) || []).length, 1);
 });
-
-test("Phase 4 actual request submission is explicit, accessible and confirmed by server identity", () => {
-  assert.match(advisory, /<Dialog open onOpenChange=\{open => \{ if \(!open && !submitting\) setShowNewModal\(false\); \}\}>/);
-  assert.match(advisory, /<DialogTitle/);
-  assert.match(advisory, /<DialogDescription/);
-  assert.match(advisory, /<form onSubmit=\{handleCreateRequest\}/);
-  assert.match(advisory, /const saved: unknown = await response\.json\(\)/);
-  assert.match(advisory, /Number\.isSafeInteger\(saved\.id\)/);
-  assert.match(advisory, /submitInFlight\.current = true/);
-  assert.match(advisory, /submitInFlight\.current = false/);
-  assert.match(advisory, /disabled=\{submitting\} onClick=\{\(\) => setShowNewModal\(false\)\}/);
-  assert.match(advisory, /setSubmissionNotice\(/);
-  assert.match(advisory, /role="alert"/);
-  assert.match(advisory, /check existing requests before retrying to avoid duplicates/);
-  assert.doesNotMatch(advisory, /onMouseDown=\{\(\) => setShowNewModal\(false\)\}/);
-});

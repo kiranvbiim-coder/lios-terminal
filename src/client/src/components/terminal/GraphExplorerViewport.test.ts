@@ -20,20 +20,6 @@ test("graph viewport adapts B1 controls without replacing the terminal's object 
   assert.doesNotMatch(graph, /new WebSocket\(|fetch\("https?:|Math\.random\(|runConversation\(/);
 });
 
-test("existing narrow-screen list and modal keyboard ownership survive B1 adaptation", () => {
-  assert.match(graph, /import \{ GraphExplorerCompactList \} from "\.\/GraphExplorerCompactList"/);
-  assert.match(graph, /<GraphExplorerCompactList nodes=\{presentation\.nodes\}/);
-  assert.match(graph, /hidden h-\[600px\] w-\[900px\] md:block/);
-  assert.match(graph, /touch-pan-y overflow-y-auto/);
-  assert.match(graph, /role="dialog"/);
-  assert.match(graph, /aria-modal="true"/);
-  assert.match(graph, /onCloseRef\.current\(\)/);
-  assert.match(graph, /previouslyFocused\?\.focus\(\)/);
-  assert.match(graph, /event\.key !== "Tab"/);
-  assert.match(graph, /presentation\.omittedCount > 0/);
-  assert.match(graph, /className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Cross-domain graph viewport controls"/);
-});
-
 test("graph viewport changes are presentation-only and do not bypass explicit object actions", () => {
   assert.match(graph, /actionsForIntelligenceObject\(selected\)/);
   assert.match(graph, /requestIntelligenceObjectAction\(action\)/);

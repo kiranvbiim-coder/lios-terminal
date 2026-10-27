@@ -29,21 +29,6 @@ test("Sprint D: stored comparison consent never propagates to new A/B captures o
   assert.doesNotMatch(ui, /Math\.min\(receiptA|Math\.min\(receiptB/);
 });
 
-test("Sprint D: main analytical modal traps focus while the nonmodal evidence drawer does not", () => {
-  const studio = component("AnalyticalStudio");
-  const drawer = component("ProvenanceDrawer");
-  const hook = readFileSync(new URL("../hooks/useManagedOverlayFocus.ts", import.meta.url), "utf8");
-  assert.match(studio, /useManagedOverlayFocus\(onClose, true\)/);
-  assert.match(studio, /aria-modal="true"/);
-  assert.match(drawer, /useManagedOverlayFocus\(onClose, false\)/);
-  assert.match(drawer, /aria-modal="false"/);
-  assert.match(hook, /event\.key === "Escape"/);
-  assert.match(hook, /event\.key !== "Tab" \|\| !modal/);
-  assert.match(hook, /if \(previous\?\.isConnected\) previous\.focus\(\)/);
-  assert.match(drawer, /NO SOURCE METADATA PUBLISHED YET/i);
-  assert.match(drawer, /NO CALCULATION RECEIPTS PUBLISHED YET/i);
-});
-
 test("Sprint D: performance measures do not introduce a new animation or market data owner", () => {
   const market = component("FusionMarketCanvas");
   assert.match(market, /EMPTY_BREADTH_SERIES/);

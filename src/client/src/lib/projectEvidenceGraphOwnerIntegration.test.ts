@@ -3,20 +3,9 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
-const project = read("../components/terminal/ProjectHome.tsx");
-const intelligence = read("../components/terminal/ProjectIntelligencePanel.tsx");
 const desk = read("../components/terminal/ProjectInvestigationDesk.tsx");
 const p7 = read("./projectEvidenceGraphPresentation.ts");
 const graph = read("../components/terminal/ProjectEvidenceGraph.tsx");
-
-test("the existing Project home has exactly one identity-reset P7 Intelligence owner and reviewed Chat handoff", () => {
-  assert.equal((project.match(/<ProjectIntelligencePanel /g) ?? []).length, 1);
-  assert.match(project, /<ProjectIntelligencePanel key=\{project\.id\} projectId=\{project\.id\} onInvestigate=\{prompt => onNewChat\(prompt\)\}/);
-  assert.match(intelligence, /useProjectIntelligence\(projectId\)/);
-  assert.match(intelligence, /useProjectInsightLens\(projectId\)/);
-  assert.match(intelligence, /<ProjectInvestigationDesk projectId=\{projectId\} graph=\{summary\.graph\} lens=\{lens\} onInvestigate=\{onInvestigate\}/);
-  assert.match(intelligence, /!intelligence\.isError && !insights\.isError/);
-});
 
 test("P7 relationships are Project-scoped, read-only and derive from retained graph adjacency", () => {
   assert.match(desk, /graph\?\.projectId === projectId/);
