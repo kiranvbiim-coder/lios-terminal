@@ -113,3 +113,21 @@ test("Pulse renders a rights-verified RSS image when the article URL is present 
   }));
   assert.doesNotMatch(unrelated, /<img\b/);
 });
+
+
+test("CC0 context image is explicitly illustrative with an attributable Commons file link", () => {
+  const labeled: EditorialMedia = {
+    ...media,
+    mediaSourcePage: "https://commons.wikimedia.org/wiki/File:Generic_context_photo.jpg",
+    usageContext: "illustrative",
+    caption: "Context photograph, not a record of the reported news event.",
+  };
+  const html = render(React.createElement(LicensedEditorialImage, {
+    media: labeled, sourceIds: ["evidence:solar:1"], variant: "compact",
+  }));
+  assert.match(html, /Context illustration/);
+  assert.match(html, /not a photograph of this news event/);
+  assert.match(html, /Image source and license/);
+  assert.match(html, /href="https:\/\/commons\.wikimedia\.org\/wiki\/File:Generic_context_photo\.jpg"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+});
