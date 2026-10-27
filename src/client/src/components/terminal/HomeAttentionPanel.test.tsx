@@ -70,3 +70,37 @@ test("read-only statuses are differentiated and actions respect the server state
   assert.doesNotMatch(html, /Mark reviewed/);
   assert.match(html, /disabled/);
 });
+
+
+test("Home presents only article-linked, rights-approved image and preserves existing review actions", () => {
+  const image = {
+    kind: "image" as const,
+    assetPath: "/editorial-media/" + "a".repeat(64) + ".webp",
+    sha256: "a".repeat(64),
+    alt: "Publisher-provided image cleared for this recorded policy story",
+    attribution: "Publisher, with explicit permission",
+    owner: "Original publisher",
+    licenseName: "Owner-approved commercial reuse",
+    licenseEvidenceRef: "license:reviewed:original-image",
+    sourceEvidenceId: "safe",
+    verifiedBy: "authorized-editor",
+    verifiedAt: "2026-10-26T00:00:00Z",
+    permission: "commercial_redistribution_and_display" as const,
+    offlineBundlingPermitted: true as const,
+    state: "approved" as const,
+  };
+  const [approved] = homeAttentionEntries([{ ...card, media: image }], [inbox]);
+  const html = renderToStaticMarkup(createElement(HomeIntelligenceCard, {
+    entry: approved, disabled: false, saving: false, onUpdate: () => undefined,
+  }));
+  assert.match(html, /licensed-editorial-image/);
+  assert.match(html, /Mark reviewed/);
+  assert.match(html, /src="\/editorial-media\/a{64}\.webp"/);
+  assert.doesNotMatch(html, /https:\/\/publisher\.example\/tracking/);
+
+  const [unlinked] = homeAttentionEntries([{ ...card, media: { ...image, sourceEvidenceId: "other-story" } }], [inbox]);
+  const denied = renderToStaticMarkup(createElement(HomeIntelligenceCard, {
+    entry: unlinked, disabled: false, saving: false, onUpdate: () => undefined,
+  }));
+  assert.doesNotMatch(denied, /<img\b/);
+});

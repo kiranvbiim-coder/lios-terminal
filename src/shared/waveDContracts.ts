@@ -8,6 +8,8 @@
  * enable side effects.
  */
 
+import type { EditorialMedia } from "./editorialMedia";
+
 export const WAVE_D_CONTRACT_VERSION = "1.0.0" as const;
 
 export const WAVE_D_WORKSTREAMS = [
@@ -47,6 +49,8 @@ export interface PulseEvidence {
 }
 
 export interface PulseCardDraft {
+  /** Only independently rights-approved media linked to a recorded source may be displayed. */
+  media?: EditorialMedia;
   id: string;
   kind: PulseCardKind;
   title: string;

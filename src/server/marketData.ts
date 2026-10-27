@@ -1,4 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
+import type { EditorialMedia } from "@shared/editorialMedia";
+import { extractRssImageCandidate } from "./newsFeedImageCandidates";
+import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
 import { buildDataStatus, type DataStatus } from "./dataStatus";
 import { fetchText, fetchWithRetry, getCached, setCached } from "./providerUtils";
@@ -104,6 +107,9 @@ export interface OHLCVWithProvenance {
 }
 
 export interface NewsItem {
+  /** Independently approved publisher media only, never RSS URL metadata. */
+  media?: EditorialMedia;
+  imageCandidate?: ReturnType<typeof extractRssImageCandidate>;
   title: string;
   summary: string;
   url: string;
@@ -1038,6 +1044,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
       const url = stripHtml(String(item?.link?.href ?? item?.link ?? ""));
       const publishedAt = new Date(String(item?.pubDate ?? item?.published ?? item?.updated ?? Date.now())).toISOString();
       if (!title || !url) return null;
+      const imageCandidate = extractRssImageCandidate(item);
 
       return {
         title,
@@ -1046,6 +1053,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         source,
         feedProvider: "Limuria Intelligence",
         publishedAt,
+        ...(imageCandidate ? { imageCandidate } : {}),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,
@@ -2235,7 +2243,13 @@ async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options:
   }));
 
   const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
-  const normalized = dedupeNewsItems(items);
+  // Attach only exact article-linked images whose bundled bytes and license
+  // metadata passed verification. Raw RSS imageCandidate links never render.
+  const licensed = approvedNewsMediaForFeed();
+  const normalized = dedupeNewsItems(items).map(item => {
+    const media = licensed.get(item.url);
+    return media ? { ...item, media } : item;
+  });
 
   // Don't cache empty results — let the next request retry live feeds.
   if (!normalized.length) return [];

@@ -6,7 +6,7 @@ import type { IntelligenceCard } from "@shared/waveDContracts";
  */
 export type PulseStoryView =
   Pick<IntelligenceCard, "id" | "title" | "whatHappened" | "priority" | "score"> &
-  Partial<Pick<IntelligenceCard, "kind" | "symbol" | "createdAt" | "whyItMatters" | "whyItMattersToUser" | "evidence">>;
+  Partial<Pick<IntelligenceCard, "kind" | "symbol" | "createdAt" | "whyItMatters" | "whyItMattersToUser" | "evidence" | "media">>;
 
 export function safePulseSourceUrl(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -21,6 +21,18 @@ export function safePulseSourceUrl(raw: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** Preserve existing evidence IDs and also match a rights grant against the exact
+ * recorded article URL. A publisher link alone never grants image permissions. */
+export function pulseStoryMediaSourceIds(evidence: readonly { id: string; url?: string }[]): string[] {
+  const identities: string[] = [];
+  for (const source of evidence) {
+    identities.push(source.id);
+    const url = safePulseSourceUrl(source.url);
+    if (url && url.length <= 2048) identities.push(url);
+  }
+  return identities;
 }
 
 export function pulseStoryTimestamp(value: string | undefined): string | null {
