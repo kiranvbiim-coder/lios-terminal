@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSpatialResearchModel, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
 import type { ResearchTrayItem } from "./terminalResearchTray";
 
 function pin(id: string, options: Partial<ResearchTrayItem> = {}): ResearchTrayItem {
@@ -61,4 +61,38 @@ test("Phase 2 graph caps expensive nodes/edges without mutating source tray", ()
   assert.equal(model.edges.length, MAX_SPATIAL_NODES - 1);
   assert.equal(model.hiddenCount, 10);
   assert.deepEqual(list, before);
+});
+
+test("Phase 2 explicit evidence trail follows saved-pin chronology, never fabricated relationships", () => {
+  const items = [
+    pin("late", { group: "Deal diligence", createdAt: 50, kind: "output" }),
+    pin("outside", { group: "Other group", createdAt: 2 }),
+    pin("early", { group: "Deal diligence", createdAt: 10, kind: "evidence" }),
+    pin("middle", { group: "Deal diligence", createdAt: 20, kind: "note" }),
+    pin("ungrouped", { group: "", createdAt: 0 }),
+  ];
+  const model = buildSpatialResearchModel(items, {});
+  const trails = buildExplicitResearchTrails(model.nodes);
+  assert.deepEqual(trails, [{ group: "Deal diligence", itemIds: ["early", "middle", "late"] }]);
+  assert.deepEqual(items.map(item => item.id), ["late", "outside", "early", "middle", "ungrouped"]);
+});
+
+test("Phase 2 guided trail wraps safely through real pins, including empty and stale selection", () => {
+  const sequence = ["evidence", "context", "output"];
+  assert.equal(stepExplicitResearchTrail(sequence, null, "next"), "evidence");
+  assert.equal(stepExplicitResearchTrail(sequence, null, "previous"), "output");
+  assert.equal(stepExplicitResearchTrail(sequence, "evidence", "previous"), "output");
+  assert.equal(stepExplicitResearchTrail(sequence, "output", "next"), "evidence");
+  assert.equal(stepExplicitResearchTrail(sequence, "missing", "next"), "evidence");
+  assert.equal(stepExplicitResearchTrail([], "missing", "next"), null);
+});
+
+test("Phase 2 group trails derive only from current bounded visible research nodes", () => {
+  const items = Array.from({ length: MAX_SPATIAL_NODES + 4 }, (_, i) =>
+    pin(String(i), { group: i < MAX_SPATIAL_NODES ? "Visible evidence" : "Off-screen private" }));
+  const model = buildSpatialResearchModel(items, {});
+  const trails = buildExplicitResearchTrails(model.nodes);
+  assert.deepEqual(trails.map(t => t.group), ["Visible evidence"]);
+  assert.equal(trails[0].itemIds.length, MAX_SPATIAL_NODES);
+  assert.equal(trails[0].itemIds.includes(String(MAX_SPATIAL_NODES)), false);
 });
