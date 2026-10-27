@@ -12,10 +12,11 @@ import * as React from "react";
 import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
-import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, type PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
 import { normalizePulseSubjectKey, type PulseSubjectAction } from "@shared/pulseSubjectPreferences";
+import { eligibleEditorialMedia } from "@shared/editorialMedia";
 
 interface Props {
   card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
@@ -40,6 +41,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
   const evidence = card.evidence ?? [];
   const subjectKey = normalizePulseSubjectKey(card.subjectKey ?? card.symbol);
   const timestamp = pulseStoryTimestamp(card.createdAt);
+  const approvedMedia = eligibleEditorialMedia(card.media, pulseStoryMediaSourceIds(evidence), new Date().toISOString());
   const focusLabel = card.kind === "news" ? "News" : card.kind === "research" ? "Research" : card.kind === "alert" ? "Signal" : card.kind === "market_move" ? "Market" : "Intelligence";
 
   return (
@@ -57,7 +59,8 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
         className="w-full min-w-0 p-4 text-left outline-none transition-colors hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300/70 sm:p-5"
       >
         {featured && <LicensedEditorialImage media={card.media}
-          sourceIds={evidence.map(source => source.id)}
+          sourceIds={pulseStoryMediaSourceIds(evidence)}
+          showSourceLink={false}
           className="mb-4"
           fallback={<div aria-hidden="true" className="relative mb-4 flex h-28 items-center justify-between overflow-hidden rounded-lg border border-amber-200/10 bg-gradient-to-br from-amber-200/[0.09] via-zinc-500/[0.035] to-cyan-300/[0.045] px-6">
             <div className="absolute -right-10 top-[-90px] h-52 w-52 rounded-full border border-amber-200/15" />
@@ -65,6 +68,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
             <Radar className="relative h-10 w-10 text-amber-200/65" strokeWidth={1} />
             <span className="relative font-ui text-xs font-medium tracking-[0.19em] text-foreground/50">LIOS INTELLIGENCE</span>
           </div>} />}
+        {!featured && <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)} showSourceLink={false} variant="compact" className="mb-3 w-28" />}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-md border border-border/65 px-2 py-1 font-medium text-muted-foreground">{focusLabel}</span>
           <span className={`rounded-md border px-2 py-1 text-xs font-medium capitalize ${priorityTone[card.priority]}`}>{card.priority === "fyi" ? "For review" : card.priority}</span>
@@ -102,6 +106,12 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
                 </div>
               )}
               {(card.clusteredCount ?? 1) > 1 && <p className="font-ui text-xs leading-5 text-muted-foreground">{card.clusteredCount} retained cards share an exact headline, subject, event date and evidence identity. This grouping is not independent corroboration.</p>}
+              {approvedMedia?.mediaSourcePage && (
+                <a href={approvedMedia.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+                  className="inline-block font-ui text-sm text-amber-200 underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  Image source and license
+                </a>
+              )}
               <section aria-label="Recorded evidence">
                 <div className="mb-2 flex items-center gap-2 font-ui text-xs font-semibold text-foreground">
                   <BookOpenText className="h-4 w-4 text-cyan-200" /> Sources

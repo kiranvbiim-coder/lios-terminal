@@ -49,6 +49,10 @@ export interface OHLCVSeries {
 }
 
 export interface NewsItem {
+  /** Only approved, linked local media may render. */
+  media?: EditorialMedia;
+  /** RSS-discovered thumbnail reference is unverified metadata, never a UI image source. */
+  imageCandidate?: { url: string; source: "rss"; rights: "unverified"; attribution?: string };
   title: string;
   summary: string;
   /** Only eligible, locally bundled, rights-verified assets may render. */

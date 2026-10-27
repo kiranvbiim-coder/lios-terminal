@@ -23,7 +23,9 @@ export interface CodingRuntimeCapabilities {
 export async function inspectCodingRuntimeCapabilities(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  moduleResolver: (specifier: string) => string = createRequire(import.meta.url).resolve,
+  // Built server output is CommonJS; import.meta.url becomes undefined there.
+  // Resolve from the active application root without importing or executing a donor.
+  moduleResolver: (specifier: string) => string = createRequire(path.resolve(process.cwd(), "package.json")).resolve,
 ): Promise<CodingRuntimeCapabilities> {
   const directories = (env.PATH ?? "").split(platform === "win32" ? ";" : ":").filter((entry) => path.isAbsolute(entry));
   const suffixes = platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];

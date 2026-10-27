@@ -23,6 +23,18 @@ export function safePulseSourceUrl(raw: string | undefined): string | null {
   }
 }
 
+/** Preserve existing evidence IDs and also match a rights grant against the exact
+ * recorded article URL. A publisher link alone never grants image permissions. */
+export function pulseStoryMediaSourceIds(evidence: readonly { id: string; url?: string }[]): string[] {
+  const identities: string[] = [];
+  for (const source of evidence) {
+    identities.push(source.id);
+    const url = safePulseSourceUrl(source.url);
+    if (url && url.length <= 2048) identities.push(url);
+  }
+  return identities;
+}
+
 export function pulseStoryTimestamp(value: string | undefined): string | null {
   if (!value) return null;
   const parsed = Date.parse(value);

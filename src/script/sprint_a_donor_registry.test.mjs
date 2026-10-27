@@ -15,7 +15,7 @@ test("Sprint A retains immutable source pins and full legal notices for reused U
     "openclaw-gm22-byoai-failover",
     "mcp-typescript-sdk-v2-client",
   ];
-  const allowed = new Set(["adapted_source_component", "bundled"]);
+  const allowed = new Set(["adapted_source_component", "bundled", "supplemental_bounded_source_adaptation"]);
   for (const id of ids) {
     const record = registry.components.find(entry => entry.id === id);
     const pinned = lock.locks.find(entry => entry.id === id);

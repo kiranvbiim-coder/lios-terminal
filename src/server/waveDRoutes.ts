@@ -1,5 +1,6 @@
 /** Wave D continuous-intelligence contracts backed by existing terminal data. */
 import crypto from "node:crypto";
+import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
@@ -187,6 +188,7 @@ const pulseSubjectWriteSchema = z.object({
 });
 
 const pulseCardSchema = z.object({
+  media: editorialMediaSchema.optional(),
   id: z.string().trim().min(1).max(240).optional(),
   kind: z.enum(["news", "market_move", "earnings", "portfolio", "valuation", "research", "email", "alert", "macro", "ai_insight", "workflow", "report", "community_idea"]),
   title: z.string().trim().min(1).max(240),
@@ -332,6 +334,7 @@ async function buildPulseForUser(req: Request, sources: PulseSources) {
       cards.push({
         id: `news:${symbol}:${item.url}`,
         kind: "news",
+        ...(item.media ? { media: item.media } : {}),
         title: item.title,
         whatHappened: item.summary || item.title,
         whyItMatters: "A provider-attributed news item was published for a followed instrument.",

@@ -35,3 +35,15 @@ test("finished/inactive trace has no invented live progress", () => {
   assert.equal(state.label, null);
   assert.equal(state.observedSteps, 0);
 });
+
+test("nullable status step IDs from the real conversation contract do not fabricate a step", () => {
+  const activity = observedRunActivity([
+    { type: "status", stepId: null },
+    { type: "tool_start", stepId: "observed-1" },
+    { type: "status", stepId: undefined },
+    { type: "tool_result", stepId: null },
+  ], 2, true, false);
+  assert.equal(activity.observedSteps, 1);
+  assert.equal(activity.resultEvents, 1);
+  assert.match(activity.label ?? "", /1 observed step of 2 planned/);
+});

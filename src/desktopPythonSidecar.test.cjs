@@ -16,6 +16,8 @@ const {
   PACKAGED_VALUATION_INPUT,
   validateRepresentativeValuation,
   runRepresentativeValuation,
+  runRepresentativeCalculation,
+  publicSidecarProbeFailure,
 } = require("./desktopPythonSidecar.cjs");
 
 test("bundled sidecar path is platform-specific and fail-closed when absent", () => {
@@ -166,6 +168,38 @@ test("missing packaged valuation route fails closed without exposing server resp
     await assert.rejects(() => runRepresentativeValuation(service.port, "token"), error => {
       assert.match(error.message, /HTTP 503/);
       assert.doesNotMatch(error.message, /PRIVATE_PATH_OR_TRACEBACK/);
+      return true;
+    });
+  } finally {
+    service.server.close();
+  }
+});
+
+test("packaged sidecar public qualification failures preserve HTTP status but never private diagnostics", () => {
+  const secret = "PRIVATE_CUSTOMER_PATH__DO_NOT_LOG";
+  const traced = publicSidecarProbeFailure(
+    new Error(`Packaged valuation route failed with HTTP 502. ${secret}`), true);
+  assert.match(traced.message, /valuation route failed with HTTP 502/);
+  assert.match(traced.message, /diagnostics withheld/);
+  assert.doesNotMatch(traced.message, /PRIVATE_CUSTOMER_PATH|Sidecar stderr:/);
+  assert.equal(publicSidecarProbeFailure(new Error(`Traceback: ${secret}`), true).message,
+    "Bundled Python sidecar qualification failed. Worker diagnostics withheld from public logs.");
+  assert.equal(publicSidecarProbeFailure(new Error(`Bundled Python sidecar failed health probe: ${secret}`)).message,
+    "Bundled Python sidecar health probe failed.");
+  assert.equal(publicSidecarProbeFailure(new Error("Bundled Python sidecar is missing required package QuantLib.")).message,
+    "Bundled Python sidecar is missing a required package.");
+});
+
+test("packaged representative calculation errors never reveal HTTP response body", async () => {
+  const service = await listen(async (req, res) => {
+    for await (const _chunk of req) { /* consume request */ }
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end("PRIVATE_TRACEBACK_DO_NOT_LOG");
+  });
+  try {
+    await assert.rejects(() => runRepresentativeCalculation(service.port, "test-token"), err => {
+      assert.match(err.message, /HTTP 502/);
+      assert.doesNotMatch(err.message, /PRIVATE_TRACEBACK_DO_NOT_LOG/);
       return true;
     });
   } finally {

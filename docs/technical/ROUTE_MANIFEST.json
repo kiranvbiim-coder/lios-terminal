@@ -4386,6 +4386,30 @@
   },
   {
    "method": "GET",
+   "path": "/api/media/commons/cc0",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/media/commons/cc0/file",
+   "reachableBy": [
+    "client_user",
+    "client_admin",
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
    "path": "/api/media/topic/:topicId",
    "reachableBy": [
     "client_user",

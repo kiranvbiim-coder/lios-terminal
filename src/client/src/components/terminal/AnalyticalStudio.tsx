@@ -43,6 +43,7 @@ import {
 } from "@/lib/terminalUiActionPreview";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
+import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
 type StudioTab = SpatialStudioTab;
@@ -143,17 +144,24 @@ function ChangeRow({ change }: { change: AnalyticalChange }) {
 function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; activeSymbol?: string }) {
   const [slots, setSlots] = useState<ComparisonSlot[]>(() => loadComparisonSlots());
   const [evidence, setEvidence] = useState<EvidenceSnapshot>(() => getEvidenceSnapshot());
-  const [receiptA, setReceiptA] = useState(0);
-  const [receiptB, setReceiptB] = useState(1);
-  const [allowCrossContext, setAllowCrossContext] = useState(false);
-  const [showAllChanges, setShowAllChanges] = useState(false);
+  // Compare specific published records, not their shifting array positions.
+  const [receiptA, setReceiptA] = useState<string | null>(() => getEvidenceSnapshot().receipts[0]?.id ?? null);
+  const [receiptB, setReceiptB] = useState<string | null>(() => getEvidenceSnapshot().receipts[1]?.id ?? null);
+  const [reviewedPairKey, setReviewedPairKey] = useState<string | null>(null);
+  const [expandedPairKey, setExpandedPairKey] = useState<string | null>(null);
   useEffect(() => subscribeComparison(setSlots), []);
   useEffect(() => subscribeEvidence(setEvidence), []);
   const snapshots = getAnalyticalSnapshots(activeView, activeSymbol);
-  const context = describeSnapshotPair(slots.find(slot => slot.id === "A")?.snapshot ?? null, slots.find(slot => slot.id === "B")?.snapshot ?? null);
-  const slotChanges = context.kind === "same-context" || (context.kind === "cross-context" && allowCrossContext) ? compareSlots() : [];
+  const leftSnapshot = slots.find(slot => slot.id === "A")?.snapshot ?? null;
+  const rightSnapshot = slots.find(slot => slot.id === "B")?.snapshot ?? null;
+  const context = describeSnapshotPair(leftSnapshot, rightSnapshot);
+  const pairKey = comparisonReviewKey(leftSnapshot, rightSnapshot);
+  const allowCrossContext = context.kind === "cross-context" && pairKey !== null && reviewedPairKey === pairKey;
+  const slotChanges = context.kind === "same-context" || allowCrossContext ? compareSlots() : [];
+  const showAllChanges = pairKey !== null && expandedPairKey === pairKey;
   const visibleChanges = showAllChanges ? slotChanges : slotChanges.slice(0, 12);
-  const receiptDiff = evidence.receipts.length >= 2 && receiptA !== receiptB ? diffCalculationReceipts(evidence.receipts[Math.min(receiptA, evidence.receipts.length - 1)], evidence.receipts[Math.min(receiptB, evidence.receipts.length - 1)]) : null;
+  const actualReceipts = resolveRecordedReceiptPair(evidence.receipts, receiptA, receiptB);
+  const receiptDiff = actualReceipts ? diffCalculationReceipts(actualReceipts[0], actualReceipts[1]) : null;
 
   const captureNow = () => {
     const latestReceipt = evidence.receipts[0];
@@ -170,7 +178,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
       <div className="font-ui text-sm font-semibold text-foreground">A → B recorded field diff</div>
       <p role="status" className="mt-2 font-ui text-xs leading-5 text-muted-foreground">{context.message}</p>
       {context.kind === "cross-context" && <button type="button" aria-pressed={allowCrossContext}
-        onClick={() => setAllowCrossContext(value => !value)}
+        onClick={() => setReviewedPairKey(current => current === pairKey ? null : pairKey)}
         className="mt-2 min-h-11 rounded-lg border border-amber-300/30 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
         {allowCrossContext ? "Hide cross-context field differences" : "Show cross-context fields with caution"}
       </button>}
@@ -180,12 +188,12 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
           ? "Field differences are hidden until explicitly requested."
           : context.kind === "incomplete" ? "Fill both slots to inspect a comparison." : "No differing recorded fields."}</p>}</div>
       {slotChanges.length > 12 && <button type="button" aria-expanded={showAllChanges}
-        onClick={() => setShowAllChanges(value => !value)}
+        onClick={() => setExpandedPairKey(current => current === pairKey ? null : pairKey)}
         className="mt-3 min-h-11 w-full rounded-lg border border-border/70 font-ui text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
         {showAllChanges ? "Show fewer fields" : `Show all ${slotChanges.length} changed fields`}
       </button>}
     </section>
-    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{evidence.receipts.length >= 2 && <div className="flex gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
+    <section className="rounded-2xl border border-border/55 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-ui text-[10px] font-semibold text-foreground">Calculation Receipt Diff</div><p className="font-ui mt-1 text-[8px] text-muted-foreground">Git-style model comparison using published inputs, parameters, outputs and warnings.</p></div>{(evidence.receipts.length > 0 || receiptA !== null || receiptB !== null) && <div className="flex flex-wrap gap-2"><ReceiptSelect receipts={evidence.receipts} value={receiptA} onChange={setReceiptA} label="A" /><ReceiptSelect receipts={evidence.receipts} value={receiptB} onChange={setReceiptB} label="B" /></div>}</div>{receiptDiff ? <>
       <div className="mt-3 flex flex-wrap gap-3 font-ui text-xs text-muted-foreground">
         <span>{[...receiptDiff.inputs, ...receiptDiff.parameters, ...receiptDiff.outputs].filter(item => item.changed).length} changed fields</span>
         <span>{receiptDiff.warningsAdded.length} warnings added</span>
@@ -197,13 +205,22 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
         {receiptDiff.warningsRemoved.map(warning => <p key={`removed:${warning}`}>No longer recorded: {warning}</p>)}
       </div>}
       </> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-xs text-muted-foreground">{evidence.receipts.length < 2
-        ? "At least two published calculation receipts are required." : "Select two different published receipts to compare."}</div>}</section>
+        ? "At least two published calculation receipts are required." : "Select two distinct, currently published receipts to compare."}</div>}</section>
     {snapshots.length > 0 && <div className="font-ui text-[7px] text-muted-foreground">{snapshots.length} stored snapshots available for {activeSymbol || "global"} {getTerminalCapability(activeView).label}.</div>}
   </div>;
 }
 
-function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: number; onChange: (value: number) => void; label: string }) {
-  return <label className="font-ui flex items-center gap-1 text-[7px] text-muted-foreground">{label}<select value={value} onChange={(event) => onChange(Number(event.target.value))} className="rounded-lg border border-border/60 bg-black/20 px-2 py-1.5 text-[7px] text-foreground">{receipts.map((item, index) => <option key={item.id} value={index}>{item.label} · {item.reproducibilityId}</option>)}</select></label>;
+export function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: string | null; onChange: (value: string | null) => void; label: string }) {
+  const missing = value !== null && !receipts.some(item => item.id === value);
+  return <label className="font-ui flex items-center gap-2 text-xs text-muted-foreground">
+    Receipt {label}
+    <select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}
+      className="min-h-11 max-w-52 rounded-lg border border-border/60 bg-background px-2 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+      <option value="">Choose receipt</option>
+      {missing && <option value={value} disabled>Previously selected receipt unavailable — choose again</option>}
+      {receipts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.reproducibilityId}</option>)}
+    </select>
+  </label>;
 }
 
 function DiffSection({ title, items }: { title: string; items: ReturnType<typeof diffCalculationReceipts>["inputs"] }) {
