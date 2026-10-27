@@ -9,6 +9,7 @@ export type NavigationSection = "conversation" | "projects" | "chats" | "library
 
 interface Props {
   section: NavigationSection;
+  activeSection?: NavigationSection;
   account: { name: string; email?: string };
   busy: boolean;
   children: ReactNode;
@@ -47,7 +48,7 @@ export function AuthenticatedNavigation(props: Props) {
       <button type="button" onClick={() => act(props.onSearch)}><Search size={16} aria-hidden="true" />Search</button>
       <div className="lios-navigation-section-links">
         {sections.map(([id, label, Icon]) => (
-          <button key={id} type="button" aria-current={props.section === id ? "page" : undefined} onClick={() => act(() => props.onSection(id))}>
+          <button key={id} type="button" aria-current={(props.activeSection ?? props.section) === id ? "page" : undefined} onClick={() => act(() => props.onSection(id))}>
             <Icon size={16} aria-hidden="true" />{label}
           </button>
         ))}
@@ -89,7 +90,7 @@ export function AuthenticatedNavigation(props: Props) {
         <button type="button" title="Expand navigation" aria-label="Expand navigation" onClick={() => setCollapsed(false)}><PanelLeftOpen size={17} aria-hidden="true" /></button>
         <button type="button" title="New chat" aria-label="New chat" disabled={props.busy} onClick={props.onNewChat}><Plus size={17} aria-hidden="true" /></button>
         <button type="button" title="Search" aria-label="Search" onClick={props.onSearch}><Search size={17} aria-hidden="true" /></button>
-        {sections.map(([id, label, Icon]) => <button key={id} type="button" title={label} aria-label={label} aria-current={props.section === id ? "page" : undefined} onClick={() => props.onSection(id)}><Icon size={17} aria-hidden="true" /></button>)}
+        {sections.map(([id, label, Icon]) => <button key={id} type="button" title={label} aria-label={label} aria-current={(props.activeSection ?? props.section) === id ? "page" : undefined} onClick={() => props.onSection(id)}><Icon size={17} aria-hidden="true" /></button>)}
         <button type="button" title="Connections" aria-label="Connections" onClick={props.onConnectors}><Plug size={17} aria-hidden="true" /></button>
         <button type="button" className="lios-reference-rail-settings" title="Settings" aria-label="Settings" onClick={props.onSettings}><Settings2 size={17} aria-hidden="true" /></button>
       </nav>
