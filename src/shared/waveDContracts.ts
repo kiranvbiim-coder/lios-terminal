@@ -21,7 +21,6 @@ export const WAVE_D_WORKSTREAMS = [
   "V4-19 Living Outputs",
 ] as const;
 
-import type { EditorialMedia } from "./editorialMedia";
 
 export type PulseCardKind =
   | "news"
@@ -69,8 +68,6 @@ export interface PulseCardDraft {
   thesisRelevance?: number | null;
   upcomingEvent?: number | null;
   evidence: PulseEvidence[];
-  /** Optional rights-verified LiOS-owned local media; evidence URLs do not grant image rights. */
-  media?: EditorialMedia;
 }
 
 export interface IntelligenceCard extends PulseCardDraft {

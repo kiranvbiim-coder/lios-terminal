@@ -83,6 +83,7 @@ export default function AnalyticalStudio({ activeView, activeSymbol, workspace, 
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
         aria-label="LiOS Analytical Studio"
+        data-sprint-c-visual="studio"
         className="lios-v4-overlay !z-[82] !flex h-[min(820px,94dvh)] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-2xl !p-0 !pr-0"
         style={quietMotion}
         overlayProps={{ className: "!z-[81] bg-black/72 backdrop-blur-[3px]", style: quietMotion }}
