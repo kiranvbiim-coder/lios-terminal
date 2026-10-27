@@ -82,7 +82,7 @@ export const WORKSTATION_DEFINITIONS = {
   research: {
     id: "research",
     title: "RESEARCH INTELLIGENCE WORKSTATION",
-    subtitle: "Investigation → evidence → filings → consensus → financial context → methodology",
+    subtitle: "Investigation → perspectives → filings → consensus → financial context → methodology",
     sections: [
       { id: "investigation", label: "INVESTIGATION", code: "CASE", description: "Build a persistent thesis with source-scored evidence, relationships, timelines, changes, and briefs.", stage: "ANALYZE" },
       { id: "perspectives", label: "PERSPECTIVES", code: "VIEW", description: "Explore the two sides of explicit evidence relationships, trace recorded sources, and see where investigation links are missing.", stage: "ANALYZE" },
