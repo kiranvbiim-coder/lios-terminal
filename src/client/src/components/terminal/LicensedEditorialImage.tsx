@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { eligibleEditorialMedia, type EditorialMedia } from "@shared/editorialMedia";
 
 /**
@@ -8,19 +8,20 @@ import { eligibleEditorialMedia, type EditorialMedia } from "@shared/editorialMe
  * Failed/missing media collapses to the original text-first editorial layout.
  */
 export function LicensedEditorialImage({
-  media, sourceIds, className = "", sizes, asOf,
+  media, sourceIds, className = "", sizes, asOf, fallback,
 }: {
   media: EditorialMedia | unknown;
   sourceIds: readonly string[];
   className?: string;
   sizes?: string;
   asOf?: string;
+  fallback?: ReactNode;
 }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const eligible = eligibleEditorialMedia(media, sourceIds, asOf ?? new Date().toISOString());
   const asset = eligible?.assetPath ?? null;
   useEffect(() => { setFailedPath(null); }, [asset]);
-  if (!eligible || !asset || failedPath === asset) return null;
+  if (!eligible || !asset || failedPath === asset) return <>{fallback ?? null}</>;
 
   return <figure data-testid="licensed-editorial-image"
     className={`min-w-0 overflow-hidden rounded-lg border border-border/40 bg-background/40 ${className}`}>
