@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Mic, XCircle } from "lucide-react";
 import { getDesktopWorkspaceBridge, type VoiceRuntimeFileKind } from "@/lib/desktopWorkspace";
@@ -28,6 +28,8 @@ export default function LocalVoiceRuntimeSettings() {
   const queryClient = useQueryClient();
   const desktopBridge = useMemo(() => getDesktopWorkspaceBridge(), []);
   const [configuring, setConfiguring] = useState<VoiceRuntimeFileKind | null>(null);
+  // Native file dialogs are side effects: block repeated clicks synchronously.
+  const configurationInFlight = useRef<VoiceRuntimeFileKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const setupQuery = useQuery<VoiceRuntimeSetup>({
@@ -37,11 +39,13 @@ export default function LocalVoiceRuntimeSettings() {
   });
 
   async function configureRuntimeFile(kind: VoiceRuntimeFileKind): Promise<void> {
+    if (configurationInFlight.current) return;
     if (!desktopBridge?.configureVoiceRuntimeFile) {
       setError("Native file selection is available in the installed LiOS desktop app. Development/server environments can use the documented LIOS_WHISPER_CPP_BIN, LIOS_WHISPER_MODEL and LIOS_FFMPEG_BIN settings.");
       return;
     }
 
+    configurationInFlight.current = kind;
     setConfiguring(kind);
     setError(null);
     setNotice(null);
@@ -50,19 +54,26 @@ export default function LocalVoiceRuntimeSettings() {
       if (result.cancelled) return;
 
       await apiRequest("POST", "/api/voice/setup/refresh");
-      await Promise.all([
+      const [readiness] = await Promise.all([
         setupQuery.refetch(),
         queryClient.invalidateQueries({ queryKey: ["/api/voice/providers"] }),
       ]);
-      setNotice("Local voice runtime selection saved. Readiness has been refreshed.");
-    } catch (configureError) {
-      setError(configureError instanceof Error ? configureError.message : "Could not configure the local voice runtime.");
+      if (readiness.isError || !readiness.data) {
+        setError("Voice file selection may have been saved, but readiness could not be verified. Retry the read-only check before recording.");
+        return;
+      }
+      setNotice("Voice file selection saved. Readiness was checked; see each component's status below.");
+    } catch {
+      // Native and server errors can include private local file paths or host diagnostics.
+      setError("Could not confirm voice setup. The file selection may have been saved; use Retry readiness or choose the file again.");
     } finally {
+      configurationInFlight.current = null;
       setConfiguring(null);
     }
   }
 
-  const setup = setupQuery.data;
+  // Cached data after a failed read is not evidence of current runtime health.
+  const setup = setupQuery.isError ? undefined : setupQuery.data;
   const overallStatus = setupQuery.isLoading
     ? "CHECKING"
     : setupQuery.isError
