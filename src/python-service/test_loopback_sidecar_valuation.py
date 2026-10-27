@@ -16,10 +16,12 @@ import sys
 import time
 import unittest
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 
 SERVICE_DIR = Path(__file__).resolve().parent
+# Explicitly bypass host HTTP proxies: the test must exercise only the local process.
+LOOPBACK_HTTP = build_opener(ProxyHandler({}))
 ROUTE = "/advanced/valuation/reverse-dcf"
 KNOWN_INPUT = {
     "currentRevenue": 100,
@@ -49,7 +51,7 @@ def request_json(port, path, *, token=None, body=None):
         headers=headers, method=method,
     )
     try:
-        with urlopen(request, timeout=5) as response:
+        with LOOPBACK_HTTP.open(request, timeout=5) as response:
             return response.status, json.load(response)
     except HTTPError as error:
         with error:
