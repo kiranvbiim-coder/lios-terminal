@@ -2082,7 +2082,7 @@ export default function ProjectExperienceShell({
         onSearch={requestWorkSearch}
         onWorkbench={onOpenWorkbench}
         onConnectors={() => openSafeDestination("Connections", onOpenEnvironment)}
-        onSettings={() => openSafeDestination("Settings", onOpenSettings)} onLogout={() => void signOutSafely()}
+        onSettings={() => openSafeDestination("Settings", onOpenSettings)} onLogout={() => requestAnimationFrame(() => void signOutSafely())}
         onTrash={() => {
           if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
             setLifecycleNotice("Finish the current response or save/reset Artifact edits before opening Trash & archive.");
