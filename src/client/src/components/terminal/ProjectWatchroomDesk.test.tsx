@@ -70,3 +70,23 @@ test("Watchroom status strip excludes foreign and missing runs without creating 
   assert.match(html, /No recorded run/);
   assert.doesNotMatch(html, /watchroom-recorded-run-strip|recent recorded run|<time/);
 });
+
+test("Watchrooms offer the real event timeline only when at least two source-bound runs exist", () => {
+  const client = new QueryClient();
+  const earlier: P9RunRecord = {
+    ...run, id: "run:earlier", startedAt: "2026-10-26T09:00:00Z",
+    completedAt: "2026-10-26T09:01:00Z", status: "skipped",
+    changed: false, conditionMet: false, summary: "Skipped by recorded policy",
+  };
+  client.setQueryData(["/api/projects", 7, "automation", "workflows"], [workflow]);
+  client.setQueryData(["/api/projects", 7, "automation", "runs"], [earlier, run]);
+  client.setQueryData(["/api/projects", 7, "automation", "notifications"], []);
+  const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
+    createElement(ProjectWatchroomDesk, { projectId: 7 })));
+  assert.match(html, /Explore run timeline/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /2 recent recorded runs/);
+  assert.match(html, /skipped at/);
+  assert.match(html, /succeeded at/);
+  assert.doesNotMatch(html, /watchroom-beui-run-timeline/);
+});
