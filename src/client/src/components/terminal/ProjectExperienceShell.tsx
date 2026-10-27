@@ -291,6 +291,7 @@ function NavItem({
         type="button"
         data-navigation-action="true"
         onClick={onClick}
+        aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none hover:bg-white/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-cyan-300/70"
       >
         <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${muted ? "opacity-45" : ""}`} />
@@ -1959,7 +1960,7 @@ export default function ProjectExperienceShell({
         onClose={() => setWorkSearchOpen(false)}
         onSelect={openWorkSearchResult}
       />
-      <AuthenticatedNavigation section={section} account={account} busy={busy}
+      <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
         onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
@@ -1991,6 +1992,7 @@ export default function ProjectExperienceShell({
                     data-navigation-action="true"
                     type="button"
                     onClick={() => openProject(project, false, true)}
+                    aria-current={selection.projectId === project.id && chatMode === "project" ? "page" : undefined}
                     className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-left ${selection.projectId === project.id && chatMode === "project" ? "bg-white/[0.05] text-foreground" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"}`}
                   >
                     <FolderKanban className="h-3.5 w-3.5 shrink-0" />
@@ -2066,7 +2068,7 @@ export default function ProjectExperienceShell({
         )}
         {section !== "conversation" ? (
           <section className="lios-section-surface" aria-label={section}>
-            <header><h1>{({ projects: "Projects", chats: "Chats", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
+            <header><h1>{({ projects: "Projects", chats: "History", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
               <button className="lios-section-action" onClick={() => setSection("conversation")}>Back to chat</button></header>
             {section === "projects" && <>
               <button className="lios-section-action" onClick={() => { setSection("conversation"); setNewProjectOpen(true); }}>New Project</button>
