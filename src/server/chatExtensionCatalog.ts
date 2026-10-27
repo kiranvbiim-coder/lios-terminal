@@ -50,6 +50,10 @@ export function chatExtensionCatalog(input: {
         id: connection.id,
         name: safeLabel(connection.name, `MCP connection ${connection.id}`),
         status: connection.status,
+        projectId: typeof connection.config.projectId === "number"
+          && Number.isSafeInteger(connection.config.projectId)
+          && connection.config.projectId > 0
+          ? connection.config.projectId : null,
         projectRequired: true as const,
         explicitApprovalRequired: true as const,
       })),
