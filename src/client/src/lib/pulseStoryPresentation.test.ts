@@ -32,3 +32,21 @@ test("very long untrusted headlines cannot create unbounded generated prompts", 
   };
   assert.ok(pulseStoryQuestion(card).length < 500);
 });
+
+
+test("Pulse presentation keeps Wave D evidence, source inspection and Chat handoff connected", async () => {
+  const { readFileSync } = await import("node:fs");
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
+  const story = readFileSync(new URL("../components/terminal/LiosPulseStoryCard.tsx", import.meta.url), "utf8");
+
+  assert.match(shell, /useState<IntelligenceCard\[\]>/);
+  assert.match(shell, /cards\?: IntelligenceCard\[\]/);
+  assert.match(board, /LiosPulseStoryCard/);
+  assert.match(board, /onAskLios\(question\)/);
+  assert.match(story, /aria-expanded=\{expanded\}/);
+  assert.match(story, /safePulseSourceUrl\(source.url\)/);
+  assert.match(story, /role="region"/);
+  assert.match(story, /reducedMotion|reduceMotion/);
+  assert.doesNotMatch(story, /assets\.watermelon\.sh|Neon Nights Festival/);
+});
