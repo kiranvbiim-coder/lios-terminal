@@ -275,6 +275,17 @@ export default function FusionPulseBoard({
 
         <FusionSection title="What deserves attention" eyebrow="DECISION-RELEVANT CHANGES · WHY IT MATTERS" className="mt-3" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">MONITOR</FusionActionButton>}>
           {preferenceError && <p role="alert" className="mb-3 rounded-lg border border-rose-300/35 px-3 py-2 font-ui text-sm text-rose-200">{preferenceError}</p>}
+          {pulsePreferences.followed.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Followed subjects ({pulsePreferences.followed.length})</summary>
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Manage followed subjects">
+              {pulsePreferences.followed.map(subject => <button key={subject} type="button"
+                disabled={preferencePending} onClick={() => onPulsePreferenceClear(subject)}
+                aria-label={`Unfollow ${subject}`}
+                className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm text-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                {subject} · Unfollow
+              </button>)}
+            </div>
+          </details>}
           {pulsePreferences.muted.length > 0 && <details className="mb-3 rounded-lg border border-border/50 p-3 font-ui text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Muted subjects ({pulsePreferences.muted.length})</summary>
             <div className="mt-3 flex flex-wrap gap-2" aria-label="Restore muted subjects">
