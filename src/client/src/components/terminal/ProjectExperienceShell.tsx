@@ -15,7 +15,7 @@ import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import GovernedExtensionsPanel from "@/components/GovernedExtensionsPanel";
+import { openPluginCenter } from "@/lib/appShellEvents";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -66,6 +66,7 @@ import {
   Paperclip,
   Plus,
   Plug,
+  Blocks,
   Search,
   Send,
   Sparkles,
@@ -128,7 +129,8 @@ import { fillStarterPrompt, findStarterPlaceholder, starterPromptsForChatMode, r
 import { savedChatAttachmentRefs, stageSavedAttachmentForFollowUp } from "@/lib/chatSavedAttachmentReuse";
 import { activeObjectPromptForChatMode, selectionActionsForChatMode } from "@/lib/chatSelectionActions";
 import { loadRecentAnalyticalContexts } from "@/lib/terminalPersonalization";
-import { LIOS_FIRST_USE_CONTRACT, firstUseRecoveryDestination } from "@/lib/firstUseJourney";
+import { LIOS_FIRST_USE_CONTRACT, connectorIdFromRecoveryAction, firstUseRecoveryDestination } from "@/lib/firstUseJourney";
+import { openGuidedConnectorSetup } from "@/lib/appShellEvents";
 import { voiceAvailability } from "@/lib/composerAvailability";
 import { asyncSurfaceStatus } from "@/lib/asyncSurfaceState";
 import { planAttachmentStage, stagedFileKey } from "@/lib/fileAttachmentStaging";
@@ -2251,7 +2253,6 @@ export default function ProjectExperienceShell({
                   onFocusArtifact={(id) => { void newProjectChat(undefined, { artifactId: id }); }} /> : <ProjectAutomationPanel key={home.project.id} projectId={home.project.id} />}
               </div>}
             </>}
-            {section === "plugins" && <GovernedExtensionsPanel />}
           </section>
         ) : showLifecycleCenter ? (
           <LifecycleCenter
@@ -2541,7 +2542,9 @@ export default function ProjectExperienceShell({
                       setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
                     }
-                    openSafeConnections();
+                    const guidedConnectorId = connectorIdFromRecoveryAction(action);
+                    if (guidedConnectorId) openSafeDestination("Connections", () => openGuidedConnectorSetup(guidedConnectorId));
+                    else openSafeConnections();
                     return;
                   }
                   setInput(current => stageSafeRunRetry(current, action));
@@ -2797,6 +2800,13 @@ export default function ProjectExperienceShell({
                           <FileText className="h-4 w-4" /> Add Project resource
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={onOpenEnvironment}>
+                        <Plug className="h-4 w-4" /> Connect sources
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={openPluginCenter}>
+                        <Blocks className="h-4 w-4" /> Plugins & tools
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={askActiveObject}>Ask this</DropdownMenuItem>
                       <DropdownMenuSub>

@@ -1,4 +1,5 @@
 import { hashLedgerValue } from "./ledgerStore";
+import { providerCredentialRevision } from "./providerCredentialRevision";
 import type { TenantContext } from "./tenantContext";
 import type { CanonicalDataRequest, CanonicalDataResponse } from "@shared/universalDataFabric";
 import { executeCanonicalDataRequest, type ProviderSdkRegistry } from "./providerSdk";
@@ -37,6 +38,9 @@ function key(request: CanonicalDataRequest, ctx: TenantContext, registry: Provid
     pointInTimeModes: [...adapter.pointInTimeModes],
   }));
   return hashLedgerValue({
+    // No secret values enter this key. Revocation/rotation changes only the
+    // process-local epoch so previous observations cannot be reused.
+    credentialRevision: providerCredentialRevision(),
     userId: ctx.userId,
     organizationId: ctx.organizationId,
     role: ctx.role,

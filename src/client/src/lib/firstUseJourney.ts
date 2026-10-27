@@ -22,3 +22,10 @@ export function firstUseRecoveryDestination(action: string): "connections" | "co
   return /^(?:connect\b.*|configure ai\b.*|set up ai\b.*|open connection center|open connections|open connect)$/.test(normalized)
     ? "connections" : "compose";
 }
+
+/** Only an exact built-in connector id is accepted for guided recovery.
+ * Generic requests such as "Connect a data source" open the standard catalog. */
+export function connectorIdFromRecoveryAction(action: string): string | null {
+  const match = /^connect\s+([a-z][a-z0-9_-]{0,119})\s*$/i.exec(action.trim());
+  return match ? match[1].toLowerCase() : null;
+}

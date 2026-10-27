@@ -124,6 +124,7 @@ interface Props {
   onComplete: () => void;
   onLogout: () => void;
   embedded?: boolean;
+  initialConnectorId?: string | null;
 }
 
 const READINESS_CONNECTOR_IDS = ["fred", "simfin", "finnhub", "world_bank"] as const;
@@ -765,10 +766,12 @@ function AddStorageModal({ onClose, onSaved, seed, editing }: { onClose: () => v
 }
 
 function ConnectionCard({
-  conn, onTest, onEdit, onRemove,
+  conn, onTest, onEdit, onRemove, testBusy = false, testResult,
 }: {
   conn: SavedConnection;
   onTest: () => void;
+  testBusy?: boolean;
+  testResult?: { status: string; detail: string };
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -778,18 +781,22 @@ function ConnectionCard({
   const recovery = connectionRecoveryPresentation(conn.status);
 
   return (
-    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={recovery.needsAttention ? "attention" : "ready"}>
+    <div className={`border ${borderColor} bg-[#070707] p-3`} data-connection-state={["healthy", "live_verified"].includes(conn.status) ? "verified" : ["configured", "credential_configured"].includes(conn.status) ? "configured" : "attention"}>
       <div className="flex items-center gap-2">
         <Icon className={`w-3.5 h-3.5 ${color} shrink-0`} />
         <span className="truncate font-ui text-sm font-semibold text-foreground">{conn.name}</span>
         <span className={`ml-auto shrink-0 font-ui text-xs ${color}`}>{conn.status}</span>
       </div>
       <div className="mt-1 font-ui text-xs text-muted-foreground">
-        {conn.sourceType}{conn.lastTestedAt ? ` · tested ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
+        {conn.sourceType}{conn.lastTestedAt ? ` · last checked ${new Date(conn.lastTestedAt).toLocaleDateString()}` : ""}
       </div>
       {conn.statusDetail && <div className="mt-1 break-words font-ui text-sm text-muted-foreground">{conn.statusDetail}</div>}
+      {testResult && <p role="status" aria-live="polite" data-testid={`connection-verification-result-${conn.id}`}
+        className={`mt-2 break-words rounded border px-2 py-1.5 font-ui text-xs ${testResult.status === "healthy" ? "border-emerald-500/40 text-emerald-300" : "border-amber-500/40 text-amber-200"}`}>
+        {testResult.status === "healthy" ? "Live verified: " : "Not live verified: "}{testResult.detail}
+      </p>}
       <div className="mt-2 flex flex-wrap gap-2">
-        <button onClick={onTest} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.testLabel}</button>
+        <button type="button" onClick={onTest} disabled={testBusy} aria-busy={testBusy} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{testBusy ? "Checking…" : recovery.testLabel}</button>
         <button onClick={onEdit} className={`min-h-10 rounded border border-border px-3 py-2 font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${recovery.needsAttention ? "text-amber-300 hover:text-amber-200" : "text-muted-foreground hover:text-foreground"}`}>{recovery.editLabel}</button>
         <button onClick={onRemove} aria-label={`Remove saved connection ${conn.name}`} className="min-h-10 rounded border border-rose-500/30 px-3 py-2 font-ui text-sm text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Remove</button>
       </div>
@@ -799,14 +806,19 @@ function ConnectionCard({
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false }: Props) {
+export default function DataConnectionCenter({ session, onComplete, onLogout, embedded = false, initialConnectorId = null }: Props) {
   const qc = useQueryClient();
   const [modal, setModal] = useState<ModalType>(null);
   const [removalTarget, setRemovalTarget] = useState<number | null>(null);
   const [removingConnection, setRemovingConnection] = useState(false);
   const [removalError, setRemovalError] = useState<string | null>(null);
+  const [testingConnectionId, setTestingConnectionId] = useState<number | null>(null);
+  const verificationInFlightRef = useRef(false);
+  const [connectionTestNotice, setConnectionTestNotice] = useState<string | null>(null);
+  const [lastConnectionTest, setLastConnectionTest] = useState<{ connectionId: number; status: string; detail: string } | null>(null);
   const removalInFlight = useRef(false);
   const [selectedProvider, setSelectedProvider] = useState<ConnectorDef | null>(null);
+  const handledGuidedConnector = useRef<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiProviderId, setAiProviderId] = useState("");
@@ -981,6 +993,32 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
 
   const pickerProviders = useMemo(() => chooseConnectionProviders(catalogConnectors, providerPickerQuery), [catalogConnectors, providerPickerQuery]);
 
+  // Reuse the exact existing setup forms when Chat names a missing provider.
+  // Wait for the authenticated catalog and saved connections before opening
+  // the form; an unimplemented or unknown id never installs or executes.
+  useEffect(() => {
+    if (!initialConnectorId || !setupQuery.data || !connectionsQuery.data
+      || handledGuidedConnector.current === initialConnectorId) return;
+    handledGuidedConnector.current = initialConnectorId;
+    const connector = connectors.find(item => item.id === initialConnectorId);
+    if (!connector || !isConnectorConnectable(connector)) {
+      setSaveNotice("That provider is not available to connect in this LiOS build. Choose another listed source.");
+      return;
+    }
+    setSaveNotice(null);
+    setEditingConnection(connectionsQuery.data.find(connection => connection.connectorId === connector.id) ?? null);
+    setSelectedProvider(null);
+    setCatalogSeed(null);
+    if (connector.sourceType === "file") setModal("import");
+    else if (connector.sourceType === "database") setModal("database");
+    else if (connector.sourceType === "private_api") setModal("api");
+    else if (connector.sourceType === "cloud_storage") setModal("storage");
+    else {
+      setSelectedProvider(connector);
+      setModal("provider");
+    }
+  }, [initialConnectorId, setupQuery.data, connectionsQuery.data, connectors]);
+
   const filteredCatalog = useMemo(() => {
     let items = catalogConnectors;
     if (activeTab !== "all") {
@@ -1076,23 +1114,38 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
     if (selectedProvider?.category === "ai") setChatVerification(null);
     setModal(null); setSelectedProvider(null); setProviderPickerQuery(""); setCatalogSeed(null); setEditingConnection(null); refresh();
   }, [refresh, selectedProvider]);
-  const handleImported = useCallback(async () => {
-    await apiRequest("PUT", "/api/setup/source-connections", {
-      connectorId: "file_upload",
-      name: "Imported data",
-      sourceType: "file",
-      config: { source: "User BYOD upload" },
-      credentialRef: null,
-    });
+  const handleImported = useCallback(() => {
+    // DataImportWizard has already persisted the approved observations through
+    // /api/finance/normalize. Browser uploads have no reusable local file path:
+    // inventing a file_upload source connection here fails validation *after*
+    // the data is saved and misleadingly invites duplicate imports.
     setModal(null);
+    setConnectionTestNotice("File observations imported successfully. A one-time upload is not a reusable local-file connection.");
     refresh();
   }, [refresh]);
 
   async function handleTestConnection(connectionId: number) {
+    // React may batch state updates; guard synchronously against double clicks.
+    if (verificationInFlightRef.current) return;
+    verificationInFlightRef.current = true;
+    setTestingConnectionId(connectionId);
+    setConnectionTestNotice(null);
+    setLastConnectionTest(null);
     try {
-      await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
+      const response = await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
+      const result = await response.json() as { status: string; detail: string };
+      setLastConnectionTest({ connectionId, status: result.status, detail: result.detail || "No verification details were reported." });
+      setConnectionTestNotice(result.status === "healthy"
+        ? "Connection verified by a live check. Check the source card for the recorded result."
+        : "Live verification was not confirmed. Review the source card for the recorded status and recovery details.");
+    } catch {
+      setLastConnectionTest({ connectionId, status: "unreachable", detail: "This verification did not complete. No live access is confirmed." });
+      setConnectionTestNotice("Connection verification could not complete. No successful live check was confirmed; review the saved source and retry.");
+    } finally {
+      verificationInFlightRef.current = false;
       refresh();
-    } catch { refresh(); }
+      setTestingConnectionId(null);
+    }
   }
 
   function handleDeleteConnection(connectionId: number) {
@@ -1365,6 +1418,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
               {connectionSummary.state === "unavailable" && <button type="button" disabled={connectionsQuery.isFetching} onClick={() => void connectionsQuery.refetch()} className="mt-2 min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{connectionsQuery.isFetching ? "Retrying status…" : "Retry status"}</button>}
               <p className="mt-1 font-ui text-xs text-muted-foreground">Return to previous work closes Connections without changing your AI setup or sending a request. Use Continue to save setup explicitly. A paused or failed task never resumes on its own.</p>
               {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
+              {connectionTestNotice && <p role="status" aria-live="polite" data-testid="connection-test-feedback" className="mt-2 max-w-xl text-sm text-muted-foreground">{connectionTestNotice}</p>}
               <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
                 {connectionsQuery.data && !connectionsQuery.isError && <span>{connectionSummary.savedCount} saved · {connectionSummary.verifiedCount} verified · {connectionSummary.attentionCount} need attention</span>}
                 <span>{availableCount} catalog options · availability and rights checked when used</span>
@@ -1395,7 +1449,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {connectionSummary.state === "unavailable" ? <p role="alert" className="text-sm text-amber-200">Saved AI connections could not be loaded. Their status is unknown; use Retry status above.</p> : connectionSummary.state === "loading" ? <p role="status" className="text-sm text-muted-foreground">Loading saved AI connections…</p> : aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
               {aiConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} testResult={lastConnectionTest?.connectionId === conn.id ? lastConnectionTest : undefined} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (
@@ -1581,7 +1635,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout, em
           {connectionSummary.state === "unavailable" ? <p role="alert" className="text-sm text-amber-200">Saved data connections could not be loaded. Their status is unknown; use Retry status above.</p> : connectionSummary.state === "loading" ? <p role="status" className="text-sm text-muted-foreground">Loading saved data connections…</p> : dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
               {dataConnections.map((conn) => (
-                <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
+                <ConnectionCard key={conn.id} conn={conn} testBusy={testingConnectionId === conn.id} testResult={lastConnectionTest?.connectionId === conn.id ? lastConnectionTest : undefined} onTest={() => void handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
               ))}
             </div>
           ) : (

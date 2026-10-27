@@ -299,3 +299,45 @@ test("SI-06 integration revocation blocks cached observation and stops an active
   assert.equal(await active.recheckEntitlement(), false, "a stopped stream cannot silently rearm on renewed rights");
   clearProviderExecutionCache();
 });
+
+
+test("P5 credential mutation revision blocks old provider-cache hits under an unchanged adapter id", async () => {
+  const { noteProviderCredentialMutation, providerCredentialRevision } = await import("./providerCredentialRevision");
+  clearProviderExecutionCache();
+  let fetched = 0;
+  const registry = new ProviderSdkRegistry();
+  registry.register({
+    id: "same-source-after-rotation",
+    label: "Same source",
+    priority: 1,
+    capabilities: ["prices"],
+    pointInTimeModes: ["latest"],
+    async fetch() {
+      fetched += 1;
+      return {
+        data: { observedVersion: fetched },
+        entitlement: { decision: "allowed", policyId: null, permittedUses: ["internal_research"], reasons: [] },
+      };
+    },
+  });
+  assert.equal((await executeCanonicalDataRequestCached(req(), ctx, registry)).cache, "miss");
+  assert.equal((await executeCanonicalDataRequestCached(req(), ctx, registry)).cache, "hit");
+  const before = providerCredentialRevision();
+  noteProviderCredentialMutation();
+  assert.equal(providerCredentialRevision(), before + 1);
+  const rotated = await executeCanonicalDataRequestCached(req(), ctx, registry);
+  assert.equal(rotated.cache, "miss");
+  assert.equal((rotated.response.observation?.data as { observedVersion: number }).observedVersion, 2);
+  assert.equal((await executeCanonicalDataRequestCached(req(), ctx, registry)).cache, "hit");
+  assert.equal(fetched, 2);
+  clearProviderExecutionCache();
+});
+
+test("P5 vault writes and external invalidations signal cache credential revisions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const vault = readFileSync(new URL("./credentialVault.ts", import.meta.url), "utf8");
+  const cache = readFileSync(new URL("./providerExecutionCache.ts", import.meta.url), "utf8");
+  assert.match(vault, /function writeVaultStore[\s\S]*?noteProviderCredentialMutation\(\)/);
+  assert.match(vault, /export function invalidateVaultCache[\s\S]*?noteProviderCredentialMutation\(\)/);
+  assert.match(cache, /credentialRevision:\s*providerCredentialRevision\(\)/);
+});

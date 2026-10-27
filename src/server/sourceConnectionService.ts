@@ -2,7 +2,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { auditActor, recordAuditEvent } from "./auditEvents";
 import { getConnectorById, getConnectorRegistrySnapshot, getUserScopedConnectorRegistrySnapshot, testConnectorCredential } from "./connectorService";
+import type { ConnectorRuntimeState } from "@shared/connectorRegistry";
 import { hasConnectorProbe, probeConnector } from "./connectorVerification";
+import { getCredentialProbeFactory } from "./connectorCredentialProbes";
 import "./connectorProbes";
 import { fetchWithEndpointPolicy, normalizeSourceConfig, validateMcpSourceEndpoint, validateSourceEndpoint } from "./sourceConnectionPolicy";
 import { resolveCredential } from "./credentialVault";
@@ -12,6 +14,7 @@ import { sourceConnections, type SourceConnection, type SourceConnectionConfig, 
 import { persistSourceSnapshot } from "./sourceSnapshotStore";
 import { normalizeUniversalFinanceRecords } from "@shared/universalIngestion";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
+import { clearProviderExecutionCache } from "./providerExecutionCache";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -264,6 +267,9 @@ export async function upsertSourceConnection(
       updatedAt: now,
     }).where(and(eq(sourceConnections.id, input.id), eq(sourceConnections.userId, userId))).returning();
     if (!updated) throw new Error("Source connection was not found.");
+    // An identical adapter id/metadata can resolve a changed endpoint, file,
+    // credential or rights policy. Never reuse an earlier cached observation.
+    clearProviderExecutionCache();
 
     await recordAuditEvent(actor.id, "source_connection_saved", {
       connectionId: updated.id,
@@ -298,6 +304,7 @@ export async function upsertSourceConnection(
       updatedAt: now,
     },
   }).returning();
+  clearProviderExecutionCache();
 
   await recordAuditEvent(actor.id, "source_connection_saved", {
     connectionId: connection.id,
@@ -314,8 +321,26 @@ export async function deleteSourceConnection(userId: number, connectionId: numbe
   const [connection] = await db.select().from(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId))).limit(1);
   if (!connection) return false;
   await db.delete(sourceConnections).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId)));
+  clearProviderExecutionCache();
   await recordAuditEvent(actor.id, "source_connection_deleted", { connectionId, connectorId: connection.connectorId, organizationId: connection.organizationId, ...auditActor(actor) });
   return true;
+}
+
+/** A passive observation cannot satisfy a user-initiated "Verify" click.
+ * Only this invocation's successful live probe may write healthy status. */
+export function unprobedConnectionResult(state: ConnectorRuntimeState | null | undefined): {
+  status: "configured" | "degraded" | "unreachable" | "invalid";
+  detail: string;
+} {
+  if (!state) return { status: "unreachable", detail: "No live probe is registered and no runtime observation is available. Verification was not performed." };
+  const status = state === "catalog_only" ? "invalid"
+    : state === "disabled" || state === "degraded" || state === "rate_limited" ? "degraded"
+    : state === "adapter_available" || state === "credential_configured" || state === "live_verified" ? "configured"
+    : "unreachable";
+  return {
+    status,
+    detail: `Live verification is not supported for this connector in this build. Last observed runtime state: ${state}. This check did not contact the provider or verify access.`,
+  };
 }
 
 export async function testSourceConnection(userId: number, connectionId: number, actor: Pick<User, "id" | "email">): Promise<SourceConnectionTestResult | null> {
@@ -387,11 +412,11 @@ export async function testSourceConnection(userId: number, connectionId: number,
     if (!credential) {
       status = "degraded";
       detail = "Connector is registered but no credential is available to this runtime.";
-    } else if (connection.connectorId === "gemini") {
-      // Gemini's low-cost Models.list probe verifies the saved API key. The
-      // prior fallback only surfaced process-local AI traffic, so a visible
-      // "Verify" action could report a stale chat error without testing the
-      // credential that the user had just connected.
+    } else if (getCredentialProbeFactory(connection.connectorId)) {
+      // Reuse the same explicit credential probe required when saving a keyed
+      // connector. A user-clicked Verify must test this saved key now, not
+      // recycle passive process-local health from another request or owner.
+      // Only providers with a registered probe take this path.
       const verification = await testConnectorCredential(connection.connectorId, credential);
       status = verification.state;
       detail = verification.detail;
@@ -402,11 +427,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } else {
       const snapshot = await getConnectorRegistrySnapshot();
       const health = snapshot.health.find((item) => item.connectorId === connection.connectorId);
-      status = health?.state === "live_verified" ? "healthy"
-        : health?.state === "disabled" ? "degraded"
-        : health?.state === "credential_configured" ? "configured"
-        : "unreachable";
-      detail = health?.detail ?? "Connector health is unavailable. No live probe is wired for this connector yet; this reflects its last passively-observed state, not a fresh test.";
+      const noLiveProbe = unprobedConnectionResult(health?.state);
+      status = noLiveProbe.status;
+      detail = noLiveProbe.detail;
     }
   } else if (connection.sourceType === "public_api" || connection.sourceType === "sidecar") {
     if (hasConnectorProbe(connection.connectorId)) {
@@ -416,11 +439,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } else {
       const snapshot = await getConnectorRegistrySnapshot();
       const health = snapshot.health.find((item) => item.connectorId === connection.connectorId);
-      status = health?.state === "live_verified" ? "healthy"
-        : health?.state === "disabled" ? "degraded"
-        : health?.state === "credential_configured" ? "configured"
-        : "unreachable";
-      detail = health?.detail ?? "Connector health is unavailable. No live probe is wired for this connector yet; this reflects its last passively-observed state, not a fresh test.";
+      const noLiveProbe = unprobedConnectionResult(health?.state);
+      status = noLiveProbe.status;
+      detail = noLiveProbe.detail;
     }
   } else {
     status = "configured";
@@ -429,6 +450,9 @@ export async function testSourceConnection(userId: number, connectionId: number,
 
   const testedAt = new Date().toISOString();
   await db.update(sourceConnections).set({ status, statusDetail: detail, lastTestedAt: new Date(testedAt), lastHealthyAt: status === "healthy" ? new Date(testedAt) : connection.lastHealthyAt, updatedAt: new Date(testedAt) }).where(and(eq(sourceConnections.id, connectionId), eq(sourceConnections.userId, userId)));
+  // Verification may revoke a once-healthy source, or prove a freshly
+  // rotated credential. Both change the authority of retained observations.
+  clearProviderExecutionCache();
   await recordAuditEvent(actor.id, "source_connection_tested", { connectionId, connectorId: connection.connectorId, status, organizationId: connection.organizationId, ...auditActor(actor) });
   return { connectionId, status, detail, testedAt };
 }

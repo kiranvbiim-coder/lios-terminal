@@ -35,3 +35,4 @@ test("catalog-only is never connectable; saved configuration does not imply a ve
   });
 });
 
+
