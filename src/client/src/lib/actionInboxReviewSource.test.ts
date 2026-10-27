@@ -69,7 +69,7 @@ test("Phase 3 proactive review reuses existing accessible modal instead of an in
 
 test("Phase 3 fresh-source guard blocks stale or future alerts at exact user action time", () => {
   assert.match(pulse, /assessActionInboxSnapshotFreshness\(proactive\.review\.asOf, Date\.now\(\)\)/);
-  assert.match(pulse, /if \(freshness !== "current"\) \{/);
+  assert.match(pulse, /if \(assessActionInboxSnapshotFreshness\(proactive\.review\.asOf, Date\.now\(\)\) !== "current"\) \{/);
   assert.match(pulse, /This Action Inbox snapshot needs a fresh server recheck/);
   assert.match(pulse, /The Action Inbox snapshot is dated in the future/);
   assert.match(pulse, /The Action Inbox snapshot is stale or its date is unavailable/);
