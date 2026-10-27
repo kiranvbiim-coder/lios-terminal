@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Clock, Plus, MessageSquare, Send, CheckCircle2, ChevronRight, ReceiptText,
   Circle, CircleDot, CircleSlash, Calendar, FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Briefcase,
@@ -453,6 +453,7 @@ function ProjectsTab() {
 export default function AdvisoryPanel() {
   const [requests, setRequests] = useState<ConsultingRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestsLoadError, setRequestsLoadError] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ConsultingRequestDetail | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -464,13 +465,17 @@ export default function AdvisoryPanel() {
   const [description, setDescription] = useState("");
   const [packType, setPackType] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [respondingQuoteId, setRespondingQuoteId] = useState<number | null>(null);
 
   const loadRequests = () => {
     setLoading(true);
     getJson<ConsultingRequestItem[]>("/api/client/consulting/requests")
-      .then(setRequests).catch(() => setRequests([])).finally(() => setLoading(false));
+      .then(rows => { setRequests(rows); setRequestsLoadError(false); })
+      .catch(() => { setRequestsLoadError(true); /* Preserve last loaded records, never invent an empty Inbox. */ })
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadRequests(); }, []);
@@ -492,15 +497,18 @@ export default function AdvisoryPanel() {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || !formDomainId) return;
+    if (!title.trim() || !description.trim() || !formDomainId || submitInFlight.current) return;
+    submitInFlight.current = true;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await apiRequest("POST", "/api/client/consulting/requests", { domainId: formDomainId, title, description, packType: packType ?? undefined });
       setTitle(""); setDescription(""); setPackType(null); setShowNewModal(false);
       loadRequests();
     } catch {
-      alert("Failed to submit request.");
+      setSubmitError("The advisory request was not confirmed. Your entered details remain here; review them before retrying.");
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -539,8 +547,8 @@ export default function AdvisoryPanel() {
           <Briefcase className="w-4 h-4 text-[hsl(38,95%,55%)]" />
           <span className="panel-label">ADVISORY</span>
         </div>
-        <button onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1 bg-[hsl(38,95%,50%)/15%] border border-[hsl(38,95%,50%)/40%] font-terminal text-[10px] text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)/25%] transition-colors">
+        <button type="button" onClick={() => { setSubmitError(null); setShowNewModal(true); }}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <Plus className="w-3 h-3" /> SUBMIT QUERY
         </button>
       </div>
@@ -573,9 +581,16 @@ export default function AdvisoryPanel() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div className={selectedRequestId ? "lg:col-span-5 space-y-2.5" : "lg:col-span-12 space-y-2.5"}>
               <div className="font-terminal text-[9px] uppercase tracking-wider text-muted-foreground px-1">Active &amp; Past Enquiries ({requests.length})</div>
-              {loading ? (
-                <div className="p-8 text-center text-sm text-muted-foreground animate-pulse">Loading queries...</div>
-              ) : requests.length === 0 ? (
+              {requestsLoadError && <div role="alert" className="rounded-lg border border-destructive/30 p-3 font-ui text-sm text-destructive">
+                Advisory requests could not be verified. Any listed records are previously loaded, not a confirmed current Inbox.
+                <button type="button" disabled={loading} onClick={loadRequests}
+                  className="mt-2 block min-h-11 rounded-lg border border-border px-3 py-2 text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
+                  {loading ? "Retrying request list…" : "Retry request list (read-only)"}
+                </button>
+              </div>
+              {loading && !requestsLoadError ? (
+                <div role="status" className="p-8 text-center text-sm text-muted-foreground">Loading saved advisory requests…</div>
+              ) : requests.length === 0 && !requestsLoadError ? (
                 <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border">No queries submitted yet. Click "Submit Query" to open your first advisory request.</div>
               ) : (
                 requests.map((req) => {
@@ -743,7 +758,8 @@ export default function AdvisoryPanel() {
                   placeholder="Provide context, metrics, or specific questions for our advisory team..."
                   className="w-full px-3 py-2 border border-input bg-background focus:outline-none focus:ring-1 focus:ring-[hsl(38,95%,50%)] text-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground">A consultant will review this request and send you a scoped quote with pricing and turnaround time before any work begins.</p>
+              <p className="text-sm leading-5 text-muted-foreground">Submitting this form explicitly sends the details above to the Limuria advisory team for review. No engagement is started or automatically billed: a consultant will propose scope, pricing and timeline before work begins.</p>
+              {submitError && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{submitError}</p>}
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowNewModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
