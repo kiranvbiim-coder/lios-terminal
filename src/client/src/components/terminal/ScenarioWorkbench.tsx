@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, GitBranch, Play, Plus, Route, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitBranch, Play, Plus, Route, Trash2, X } from "lucide-react";
 import {
   applyScenarioToBindings,
   listAssumptionBindings,
@@ -42,6 +42,7 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState("");
   const [applyMessage, setApplyMessage] = useState("");
+  const [applyIsWarning, setApplyIsWarning] = useState(false);
   const [comparisonId, setComparisonId] = useState<string>("");
   const [reviewedApplicationKey, setReviewedApplicationKey] = useState<string | null>(null);
 
@@ -91,11 +92,13 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
     const freshKey = scenarioBindingReviewKey(active, activeView, activeSymbol, freshPlan);
     if (!freshKey || !inputApplyReviewed || freshKey !== currentApplicationKey) {
       setReviewedApplicationKey(null);
+      setApplyIsWarning(true);
       setApplyMessage("Model inputs changed after review. Inspect and confirm the updated preview.");
       return;
     }
     const result = applyScenarioToBindings(active, { view: activeView, symbol: activeSymbol });
     setReviewedApplicationKey(null);
+    setApplyIsWarning(result.applied.length === 0 || result.skipped.length > 0);
     setApplyMessage(`${result.applied.length} actual model input(s) applied · ${result.unmatched.length} unmatched · ${result.skipped.length} skipped. No P11 model was run and no P4 Artifact was saved.`);
   };
 
@@ -117,7 +120,7 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
           <button onClick={branch} disabled={!active} className="flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 font-ui text-xs text-foreground hover:border-amber-300/40 disabled:opacity-40"><GitBranch className="h-4 w-4" /> Branch case</button>
           <button type="button" onClick={() => {
             if (inputApplyReviewed) apply();
-            else { setReviewedApplicationKey(currentApplicationKey); setApplyMessage(""); }
+            else { setReviewedApplicationKey(currentApplicationKey); setApplyMessage(""); setApplyIsWarning(false); }
           }} disabled={!active || !applicable || !currentApplicationKey}
             aria-pressed={inputApplyReviewed} data-testid="scenario-apply-review-control"
             className="flex min-h-11 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-3 font-ui text-sm font-semibold text-amber-200 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
@@ -126,24 +129,29 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
           <button type="button" onClick={onClose} aria-label="Close Scenario Playground" className="grid min-h-10 min-w-10 place-items-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><X className="h-4 w-4" /></button>
         </header>
 
-        {applyMessage && <div role="status" className="flex items-center gap-2 border-b border-emerald-500/20 bg-emerald-500/5 px-4 py-3 font-ui text-sm leading-6 text-emerald-200">
-          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />{applyMessage}
+        {applyMessage && <div role={applyIsWarning ? "alert" : "status"}
+          className={`flex items-center gap-2 border-b px-4 py-3 font-ui text-sm leading-6 ${applyIsWarning ? "border-amber-300/30 bg-amber-300/[0.04] text-amber-100" : "border-emerald-500/20 bg-emerald-500/5 text-emerald-200"}`}>
+          {applyIsWarning ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            : <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />}{applyMessage}
         </div>}
         {inputApplyReviewed && <section data-testid="scenario-apply-reviewed-preview" aria-label="Model inputs pending explicit confirmation"
           className="space-y-2 border-b border-amber-300/30 bg-amber-300/[0.035] p-3 font-ui text-sm">
-          <p className="font-semibold text-foreground">Review {preview.matched.length} exact input changes before applying</p>
+          <p className="font-semibold text-foreground">Review {preview.matched.length} exact input assignments before applying</p>
           <p className="text-xs leading-5 text-muted-foreground">
             This modifies registered inputs in the active pane only. It does not run a deterministic P11 engine, verify predicted model output, save a P4 Artifact, trade, or launch an automation.
           </p>
           <ul className="max-h-44 space-y-1 overflow-y-auto">
-            {preview.matched.slice(0, 16).map((item, i) => <li key={item.bindingId + ":" + item.assumptionKey + ":" + i} className="break-words rounded border border-border/50 p-2">
+            {preview.matched.map((item, i) => <li key={item.bindingId + ":" + item.assumptionKey + ":" + i} className="break-words rounded border border-border/50 p-2">
               {item.bindingLabel}: {item.currentValue} {item.unit ?? ""} → {item.value} {item.unit ?? ""} · source input: {item.assumptionKey}
             </li>)}
           </ul>
-          {preview.matched.length > 16 && <p className="text-xs text-muted-foreground">Showing 16 of {preview.matched.length} actual input changes. Other exact changes are included in this review token.</p>}
-          {(preview.unmatched.length > 0 || preview.skipped.length > 0) && <p className="text-xs text-amber-200">
-            {preview.unmatched.length} unmatched and {preview.skipped.length} skipped; they will not be applied.
-          </p>}
+          {(preview.unmatched.length > 0 || preview.skipped.length > 0) && <details className="rounded border border-amber-300/30 p-3 text-xs text-amber-100">
+            <summary className="cursor-pointer font-medium">{preview.unmatched.length} unmatched and {preview.skipped.length} skipped (nothing in this list will be applied)</summary>
+            <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+              {preview.unmatched.map((key, i) => <li key={key + ":" + i}>Unmatched source key: {key}</li>)}
+              {preview.skipped.map((item, i) => <li key={item.assumptionKey + ":" + i}>Skipped {item.assumptionKey}: {item.reason}</li>)}
+            </ul>
+          </details>}
           <button type="button" onClick={() => setReviewedApplicationKey(null)}
             className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">Cancel review</button>
         </section>
