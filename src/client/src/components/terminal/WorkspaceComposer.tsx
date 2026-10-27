@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { Boxes, LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { Boxes, LayoutGrid, Plus, Trash2, X } from "lucide-react";
+import { Button as BeuiButton } from "@/components/vendor/beui/BeuiButton";
+import { Tags, TagsContent, TagsEmpty, TagsGroup, TagsInput, TagsItem, TagsList, TagsTrigger } from "@/components/vendor/kibo/Tags";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { readIntelligenceObjectDrag } from "@/lib/terminalObjectDnD";
 import type { PaneId, PaneState, WorkspaceState } from "@/lib/terminalTypes";
@@ -24,11 +26,17 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
     return panes.map((pane, index) => ({ objectId: `workspace:${index}`, pane }));
   });
   const [query, setQuery] = useState("");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [notice, setNotice] = useState("");
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
 
-  const candidates = useMemo(() => objects.filter((object) => object.view && `${object.label} ${object.symbol ?? ""} ${object.kind} ${object.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())).slice(0, 100), [objects, query]);
+  const availableTags = useMemo(() => [...new Set(objects.flatMap((object) => object.tags))].sort(), [objects]);
+  const candidates = useMemo(() => objects.filter((object) =>
+    object.view && (!activeTag || object.tags.includes(activeTag)) &&
+    `${object.label} ${object.symbol ?? ""} ${object.kind} ${object.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 100), [objects, query, activeTag]);
 
   const addObject = (object: IntelligenceObject) => {
     if (!object.view) return;
@@ -76,13 +84,38 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
           </main>
           <aside className="min-h-44 overflow-y-auto border-t border-border bg-black/20 p-3 scrollbar-thin lg:border-l lg:border-t-0">
             <label className="flex min-h-11 items-center gap-2 rounded border border-border px-3"><Boxes className="h-4 w-4 text-primary"/><span className="sr-only">Search intelligence objects</span><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search objects…" className="min-w-0 flex-1 bg-transparent font-ui text-sm outline-none"/></label>
-            <div className="mt-3 space-y-2">{candidates.length ? candidates.map(object => {
+            {availableTags.length > 0 && (
+              <div className="mt-3 flex items-center gap-2">
+                <Tags open={tagsOpen} onOpenChange={setTagsOpen} className="min-w-0 flex-1">
+                  <TagsTrigger aria-label="Filter intelligence objects by tag" className="min-h-11 border-border bg-background px-3 font-ui text-sm">
+                    <span className="truncate">{activeTag ? `Tag: ${activeTag}` : "Filter by tag"}</span>
+                  </TagsTrigger>
+                  <TagsContent align="start">
+                    <TagsInput placeholder="Search tags…" />
+                    <TagsList>
+                      <TagsEmpty>No matching tags.</TagsEmpty>
+                      <TagsGroup>
+                        {availableTags.map((tag) => (
+                          <TagsItem key={tag} value={tag} onSelect={() => { setActiveTag(tag); setTagsOpen(false); }}>{tag}</TagsItem>
+                        ))}
+                      </TagsGroup>
+                    </TagsList>
+                  </TagsContent>
+                </Tags>
+                {activeTag && (
+                  <button type="button" aria-label="Clear tag filter" onClick={() => setActiveTag(null)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="mt-3 space-y-2" data-testid="workspace-object-results">{candidates.length ? candidates.map(object => {
               const selected = slots.some(slot => slot.objectId === object.id);
               return <button key={object.id} type="button" disabled={selected || slots.length >= PANE_IDS.length} onClick={() => addObject(object)} aria-label={`${selected ? "Already added" : "Add"} ${object.label}`} className="min-h-12 w-full rounded border border-border p-3 text-left font-ui text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"><span className="block text-xs text-primary">{object.kind}</span><span className="block break-words">{object.label}</span><span className="block text-xs text-muted-foreground">{object.symbol ?? "Global"} · {getTerminalCapability(object.view!).shortLabel}</span></button>;
             }) : <p role="status" className="p-3 font-ui text-sm text-muted-foreground">No matching objects.</p>}</div>
           </aside>
         </div>
-        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border p-3"><button type="button" onClick={onClose} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button><button type="button" onClick={apply} disabled={!slots.length} className="min-h-11 rounded border border-primary px-4 py-2 font-ui text-sm text-primary disabled:opacity-40">Apply workspace</button></footer>
+        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border p-3"><button type="button" onClick={onClose} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button><BeuiButton type="button" onClick={apply} disabled={!slots.length} variant="outline" size="md" className="min-h-11 rounded border-primary px-4 py-2 font-ui text-sm text-primary focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40">Apply workspace</BeuiButton></footer>
       </DialogContent>
     </Dialog>
   );
