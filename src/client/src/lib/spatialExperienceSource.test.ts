@@ -25,6 +25,8 @@ test("Phase 2 Map, Timeline and List require explicit user selection", () => {
   assert.match(canvas, /role="group"/);
   assert.match(canvas, /aria-live="polite"/);
   assert.match(canvas, /hiddenCount/);
+  assert.match(canvas, /aria-label="Filter research pins by kind"/);
+  assert.match(canvas, /kindFilter === "all" \? items : items\.filter\(item => item\.kind === kindFilter\)/);
 });
 
 test("Phase 2 pointer movement previews locally and commits once, while keyboard movement stays available", () => {
