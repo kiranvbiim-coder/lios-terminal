@@ -57,3 +57,12 @@ test("Phase 3 AI alert review only stages canonical unsent Chat draft after a us
   assert.match(handoff, /stageUniversalChatQuestion\(existing: string, incoming: string \| null\)/);
   assert.doesNotMatch(pulse, /runConversation\(|sendMessage\(|submitPrompt\(/);
 });
+
+test("Phase 3 proactive review reuses existing accessible modal instead of an inaccessible fixed overlay", () => {
+  assert.match(pulse, /<Dialog open onOpenChange=\{open => \{ if \(!open\) onClose\(\); \}\}>/);
+  assert.match(pulse, /<DialogContent/);
+  assert.match(pulse, /<DialogTitle/);
+  assert.match(pulse, /<DialogDescription/);
+  assert.match(pulse, /onCloseAutoFocus=\{event => \{ event\.preventDefault\(\); if \(opener\?\.isConnected\) opener\.focus\(\); \}\}/);
+  assert.doesNotMatch(pulse, /onMouseDown=\{onClose\}/);
+});
