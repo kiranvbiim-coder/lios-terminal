@@ -113,3 +113,25 @@ test("deterministic screenshot harness supports palettes without altering real a
   assert.match(smoke, /\?\? "lios-classic"/);
   assert.doesNotMatch(smoke, /localStorage\.setItem\("lios-product-palette-v1"/);
 });
+
+
+test("light palette status colors meet normal-text contrast on Chat and Project panels", () => {
+  const statuses = [
+    "--lios-theme-error-text",
+    "--lios-theme-success-text",
+    "--lios-theme-info-text",
+    "--lios-theme-violet-text",
+    "--lios-theme-fuchsia-text",
+  ];
+  for (const key of statuses) {
+    const match = polishCss.match(new RegExp(key + ":\\s*(#[0-9a-fA-F]{6})"));
+    assert.ok(match, "Missing accessible status token " + key);
+    for (const theme of ["chatgpt-light", "claude-light"]) {
+      for (const bg of ["--lios-bg-app", "--lios-bg-panel"]) {
+        assert.ok(contrastRatio(match[1], color(paletteCss, theme, bg)) >= 4.5,
+          key + " fails AA on " + theme + " " + bg);
+      }
+    }
+  }
+  assert.match(polishCss, /lios-project-experience-shell :is\(\.text-red-200,\.text-red-300\)/);
+});
