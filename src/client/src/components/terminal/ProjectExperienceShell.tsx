@@ -338,7 +338,7 @@ export default function ProjectExperienceShell({
       requestWorkSearch();
       return;
     }
-    if (navigationRequest.section !== "conversation" && (busyRef.current || sendInFlightRef.current)) {
+    if (navigationRequest.section !== "conversation" && (busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current)) {
       setLifecycleNotice("Stop the current response before opening another section.");
       return;
     }
@@ -558,7 +558,11 @@ export default function ProjectExperienceShell({
     }
     action();
   };
+  const signingOutRef = useRef(false);
   const signOutSafely = async () => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    try {
     if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
       setLifecycleNotice("Stop the current response or finish the pending request before signing out.");
       return;
@@ -570,6 +574,9 @@ export default function ProjectExperienceShell({
     const before = currentDraftRef.current;
     if (!(await confirmConversationSwitch(true)) || !discardConversationDraft(before)) return;
     onLogout();
+    } finally {
+      signingOutRef.current = false;
+    }
   };
   const onOpenWorkbench = () => {
     if (busy || busyRef.current || sendInFlightRef.current) {
