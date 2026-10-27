@@ -426,3 +426,83 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
     transition: none !important; animation: none !important;
   }
 }
+
+
+/* Phase 2 — inspectable, explicit-group connection ledger.
+ * SVG strokes remain decorative; the accompanying list is the accessible source.
+ * No additional canvas, overlay engine or source authority is introduced. */
+.lios-spatial-connections {
+  min-width: 0; border: 1px solid var(--lios-border-default, rgb(255 255 255 / .17));
+  border-radius: 14px; background: var(--lios-bg-panel, rgb(18 20 24 / .98));
+  color: var(--lios-text-primary, #eee);
+}
+.lios-spatial-connections-summary {
+  display: list-item; cursor: pointer; min-height: 44px; padding: 11px 15px;
+  font-size: 13px; font-weight: 600;
+}
+.lios-spatial-connections-summary:focus-visible,
+.lios-spatial-connection-choice:focus-visible,
+.lios-spatial-connection-endpoints button:focus-visible {
+  outline: 2px solid var(--lios-theme-link, #91bdd0); outline-offset: 2px;
+}
+.lios-spatial-connections-explanation {
+  padding: 8px 15px 12px; font-size: 13px; line-height: 1.6;
+  color: var(--lios-text-secondary, #b7bcc5);
+}
+.lios-spatial-connections-list {
+  display: grid; gap: 7px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  max-height: 260px; overflow: auto; padding: 0 15px 12px; margin: 0;
+  list-style: none;
+}
+.lios-spatial-connection-choice {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; width: 100%;
+  min-height: 48px; padding: 9px 11px; text-align: left;
+  border: 1px solid var(--lios-border-default, rgb(255 255 255 / .17));
+  border-radius: 9px; background: var(--lios-bg-panel-2, #181b20);
+  font-size: 13px; color: var(--lios-text-primary, #eee);
+}
+.lios-spatial-connection-choice:hover,
+.lios-spatial-connection-choice[aria-pressed="true"] {
+  border-color: var(--lios-border-strong, #8893a7);
+  background: var(--lios-bg-elevated, #252932);
+}
+.lios-spatial-connection-choice span { max-width: 44%; }
+.lios-spatial-connection-details {
+  margin: 0 15px 15px; padding: 13px;
+  border: 1px solid var(--lios-border-strong, #68778c);
+  border-radius: 12px; background: var(--lios-bg-panel-2, #1b1e25);
+}
+.lios-spatial-connection-endpoints {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px; margin-top: 12px;
+}
+.lios-spatial-connection-endpoints > div {
+  min-width: 0; padding: 11px; border: 1px solid var(--lios-border-default, #454b55);
+  border-radius: 10px;
+}
+.lios-spatial-connection-endpoints strong,
+.lios-spatial-connection-endpoints span { display: block; overflow-wrap: anywhere; }
+.lios-spatial-connection-endpoints strong { font-size: 13px; }
+.lios-spatial-connection-endpoints span { margin-top: 5px; font-size: 12px; color: var(--lios-text-secondary, #b7bcc5); }
+.lios-spatial-connection-endpoints button {
+  margin-top: 10px; min-height: 40px; font-size: 13px; font-weight: 600;
+  color: var(--lios-theme-link, #9ac1cf);
+}
+.lios-spatial-links line[data-connection-current="true"] {
+  stroke-opacity: .95; stroke-width: .65; stroke-dasharray: none;
+}
+.lios-spatial-node[data-connection-member="true"] {
+  border-color: var(--lios-theme-link, #86b8ce);
+  box-shadow: 0 0 0 1px rgb(87 154 189 / .2), 0 15px 36px rgb(0 0 0 / .27);
+}
+@container (max-width: 540px) {
+  .lios-spatial-connection-endpoints { grid-template-columns: minmax(0, 1fr); }
+  .lios-spatial-connections-list { max-height: 240px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lios-spatial-connections *,
+  .lios-spatial-node[data-connection-member="true"] { transition: none !important; animation: none !important; }
+}
+[data-low-resource-mode="true"] .lios-spatial-node[data-connection-member="true"] {
+  box-shadow: none !important;
+}
