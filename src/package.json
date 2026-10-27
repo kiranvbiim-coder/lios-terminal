@@ -34,6 +34,8 @@
     "test:desktop": "node --check desktopSecretCustody.cjs && node --check desktopIpcSecurity.cjs && node --check desktopLogRedaction.cjs && node --check desktopBackupRestore.cjs && node --check desktopPythonSidecar.cjs && node --check desktopSelfTest.cjs && node --check desktopMacPackSigning.cjs && node --check p14PerformanceBudget.cjs && node --check script/validate_p14_packaged_performance_probe.cjs && node --check script/build_python_sidecar.cjs && node --check script/verify_packaged_python_sidecar.cjs && node --check script/afterPackCopyNodeModules.cjs && node script/run_project_tests.mjs desktop && node --test script/afterPackCopyNodeModules.test.cjs script/runtimeDependencyClosure.test.cjs script/verify_packaged_python_sidecar.test.cjs",
     "test:sandbox-image": "node --check desktopSandboxImage.cjs && node --check script/sandbox_image_release.cjs && node --test desktopSandboxImage.test.cjs",
     "smoke:local": "tsx script/smoke_local.ts",
+    "visual:palette:capture": "electron script/visual_smoke_palette_capture.cjs",
+    "test:palette:source": "node --test script/palette_smoke_contract.test.cjs client/src/lib/liosProductPalette.test.ts client/src/lib/liosProductExperience.test.ts",
     "coding:runtime": "tsx script/acp_runtime_capabilities.ts",
     "acceptance:si01-isolation-v2": "tsx script/si01_isolation_v2.ts",
     "acceptance:sp01-packaged": "tsx script/sp01_packaged_journey.ts",
