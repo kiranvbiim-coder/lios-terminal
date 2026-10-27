@@ -1,0 +1,81 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import LiosPulseStoryCard from "./LiosPulseStoryCard";
+import NewsEditorialStoryCard from "../panels/NewsEditorialStoryCard";
+import type { EditorialMedia } from "@shared/editorialMedia";
+import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+
+const checksum="a".repeat(64);
+const media: EditorialMedia = {
+  kind:"image",
+  assetPath:"/editorial-media/"+checksum+".webp",
+  sha256:checksum,
+  alt:"Sunlight over permitted original solar installation photograph",
+  caption:"Licensed original editorial image",
+  owner:"Limuria Intelligence LLP",
+  attribution:"Original image supplied by source owner",
+  licenseName:"Owner-approved commercial reuse",
+  licenseEvidenceRef:"internal:documented-license:77",
+  sourceEvidenceId:"evidence:solar:1",
+  verifiedBy:"authorized-editor",
+  verifiedAt:"2026-09-01T00:00:00Z",
+  permission:"commercial_redistribution_and_display",
+  offlineBundlingPermitted:true,
+  state:"approved",
+};
+const fallback = React.createElement("div",{"data-testid":"text-hero"},"Original text-first hero");
+const render = (value:React.ReactElement) => renderToStaticMarkup(value);
+
+test("approved editorial image is a same-origin, locally bundled URL with attribution and alt", () => {
+  const html=render(React.createElement(LicensedEditorialImage,{media,sourceIds:["evidence:solar:1"]}));
+  assert.match(html, /src="\/editorial-media\/a{64}\.webp"/);
+  assert.match(html, /Sunlight over permitted original solar installation photograph/);
+  assert.match(html, /Owner-approved commercial reuse/);
+  assert.match(html, /no-referrer/);
+  assert.doesNotMatch(html,/src="https?:\/\//);
+});
+test("unapproved, revoked, unattached and off-origin images never enter an img tag", () => {
+  for (const input of [
+    { ...media, state:"revoked" },
+    { ...media, assetPath:"https://publisher.test/photo.webp" },
+    { ...media, permission:"publisher_preview_only" },
+    undefined,
+  ]) {
+    const html=render(React.createElement(LicensedEditorialImage,{media:input,sourceIds:["evidence:solar:1"],fallback}));
+    assert.match(html,/Original text-first hero/);
+    assert.doesNotMatch(html,/<img\b/);
+  }
+  const html=render(React.createElement(LicensedEditorialImage,{media,sourceIds:["unrelated"],fallback}));
+  assert.match(html,/Original text-first hero/);
+  assert.doesNotMatch(html,/<img\b/);
+});
+test("Pulse keeps source-grounded Watermelon disclosure while optionally rendering permitted media", () => {
+  const card:PulseStoryView={ id:"solar:news", kind:"news", title:"Source-reported installation", whatHappened:"Pending verification",
+    priority:"important",score:58,createdAt:"2026-10-27T03:00:00Z",media,
+    evidence:[{id:"evidence:solar:1",source:"Original source",url:"https://example.org/news"}],
+  };
+  const html=render(React.createElement(LiosPulseStoryCard,{card,featured:true,onAsk:()=>undefined}));
+  assert.match(html,/licensed-editorial-image/);
+  assert.match(html, /Original image supplied by source owner/);
+  assert.match(html,/evidence/i);
+  assert.match(html,/Source-reported installation/);
+  const unsafe=render(React.createElement(LiosPulseStoryCard,{card:{...card,evidence:[]},featured:true,onAsk:()=>undefined}));
+  assert.doesNotMatch(unsafe,/<img\b/);
+  assert.match(unsafe,/LIOS INTELLIGENCE/);
+});
+test("News readthrough preserves keyboard selection, and never reuses a different article's image grant", () => {
+  const base={
+    title:"Recorded solar coverage",summary:"Source-backed report",source:"Original publisher",
+    publishedAt:"2026-10-27T03:00:00Z",ageLabel:"Today",statusBadge:React.createElement("span",null,"Recorded"),
+    active:false,lead:true,onSelect:()=>undefined,media,
+  };
+  const allowed=render(React.createElement(NewsEditorialStoryCard,{...base,sourceEvidenceId:"evidence:solar:1"}));
+  assert.match(allowed,/<img\b/);
+  assert.match(allowed,/aria-pressed="false"/);
+  const denied=render(React.createElement(NewsEditorialStoryCard,{...base,sourceEvidenceId:"other-story"}));
+  assert.match(denied,/Story overview/);
+  assert.doesNotMatch(denied,/<img\b/);
+});
