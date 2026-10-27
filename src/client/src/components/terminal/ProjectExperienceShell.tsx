@@ -580,7 +580,7 @@ export default function ProjectExperienceShell({
     }
   };
   const onOpenWorkbench = () => {
-    if (busy || busyRef.current || sendInFlightRef.current) {
+    if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current) {
       setLifecycleNotice("Stop the current response before opening Work.");
       return;
     }
@@ -2084,14 +2084,14 @@ export default function ProjectExperienceShell({
         onConnectors={() => openSafeDestination("Connections", onOpenEnvironment)}
         onSettings={() => openSafeDestination("Settings", onOpenSettings)} onLogout={() => requestAnimationFrame(() => void signOutSafely())}
         onTrash={() => {
-          if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
+          if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
             setLifecycleNotice("Finish the current response or save/reset Artifact edits before opening Trash & archive.");
             return;
           }
           setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(true); setContextOpen(false);
         }}
         onMigrate={() => {
-          if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
+          if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
             setLifecycleNotice("Finish the current response or save/reset Artifact edits before importing workspaces.");
             return;
           }
