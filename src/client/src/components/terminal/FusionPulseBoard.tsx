@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { PulseDiscoveryTabs } from "./PulseDiscoveryTabs";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
@@ -146,24 +147,10 @@ export default function FusionPulseBoard({
   const breadthTotal = latestBreadth ? latestBreadth.advances + latestBreadth.declines + latestBreadth.unchanged : 0;
   const advancePct = latestBreadth && breadthTotal > 0 ? (latestBreadth.advances / breadthTotal) * 100 : null;
   const maxMacroMove = Math.max(1, ...indicators.map((item) => Math.abs(item.changePercent ?? 0)));
-  const derivedPulseCards = useMemo<PulseStoryView[]>(() => [...gainers.slice(0, 3), ...losers.slice(0, 3)]
-    .filter((quote) => Number.isFinite(quote.changePercent))
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-    .map((quote) => {
-      const positive = quote.changePercent >= 0;
-      const magnitude = Math.abs(quote.changePercent);
-      return {
-        id: `market-move-${quote.symbol}`,
-        title: `${quote.symbol} ${positive ? "leads higher" : "under pressure"}`,
-        whatHappened: `${quote.name} moved ${positive ? "+" : "−"}${magnitude.toFixed(2)}% in the visible market basket.`,
-        whyItMattersToUser: positive ? "Momentum leader worth a closer look." : "Laggard worth checking for catalyst or risk.",
-        priority: magnitude >= 7 ? "critical" : magnitude >= 4 ? "important" : "fyi",
-        score: Math.min(99, Math.round(50 + magnitude * 5)),
-        symbol: quote.symbol,
-      };
-    }), [gainers, losers]);
-  const visiblePulseCards = pulseCards.length ? pulseCards : derivedPulseCards;
-  const visiblePulseStatus = visiblePulseCards.length ? "ready" : pulseStatus;
+  // Only canonical Wave D evidence cards can become an intelligence story.
+  // Live quote movers belong to the independent market tables, not this feed.
+  const visiblePulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
+  const visiblePulseStatus = pulseStatus;
 
   return (
     <section className="fusion-pulse-board" aria-label="LiOS market intelligence board">

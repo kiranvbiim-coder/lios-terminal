@@ -13,10 +13,11 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import type { RecordedPulseCluster } from "@/lib/pulseStoryClusters";
 import { eligibleEditorialMedia } from "@shared/editorialMedia";
 
 interface Props {
-  card: PulseStoryView;
+  card: PulseStoryView & Partial<Pick<RecordedPulseCluster, "clusteredCount" | "omittedEvidenceCount">>;
   featured?: boolean;
   onAsk: (question: string) => void;
   onOpenSymbol?: (symbol: string) => void;
@@ -66,6 +67,7 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
           <span className="rounded-md border border-border/65 px-2 py-1 font-medium text-muted-foreground">{focusLabel}</span>
           <span className={`rounded-md border px-2 py-1 text-xs font-medium capitalize ${priorityTone[card.priority]}`}>{card.priority === "fyi" ? "For review" : card.priority}</span>
           {card.symbol && <span className="font-medium text-foreground/75">{card.symbol}</span>}
+          {(card.clusteredCount ?? 1) > 1 && <span className="rounded-md border border-cyan-300/20 px-2 py-1 font-medium text-cyan-200">{card.clusteredCount} recorded cards grouped</span>}
           <span className="ml-auto font-medium tabular-nums text-muted-foreground">{card.score.toFixed(0)} relevance</span>
         </div>
         <h3 className={`mt-3 font-ui font-semibold tracking-tight text-foreground ${featured ? "text-xl leading-snug sm:text-2xl" : "text-base leading-snug"}`}>{card.title}</h3>
@@ -91,6 +93,12 @@ export default function LiosPulseStoryCard({ card, featured = false, onAsk, onOp
             className="overflow-hidden border-t border-border/60"
           >
             <div className="space-y-4 px-4 py-4 sm:px-5">
+              {(card.clusteredCount ?? 1) > 1 && (
+                <p className="font-ui text-xs leading-5 text-muted-foreground">
+                  {card.clusteredCount} retained cards share an exact recorded event and source identity. This grouping is not independent corroboration.
+                  {(card.omittedEvidenceCount ?? 0) > 0 ? ` ${card.omittedEvidenceCount} additional source references are omitted from this bounded view.` : ""}
+                </p>
+              )}
               {(card.whyItMattersToUser || card.whyItMatters) && (
                 <div>
                   <h4 className="font-ui text-xs font-semibold uppercase tracking-wider text-amber-200">Why it matters</h4>
