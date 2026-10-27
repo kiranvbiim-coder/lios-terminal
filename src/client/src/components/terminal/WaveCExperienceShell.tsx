@@ -228,6 +228,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               preferenceError={preferenceError}
               onPulsePreferenceChange={(cardId, action) => void changePulseSubject({ cardId, action })}
               onPulsePreferenceClear={(subjectKey) => void changePulseSubject({ subjectKey, action: "clear" })}
+              onPulseRetry={() => setPulseRevision(value => value + 1)}
             />
           </div>
         )}
