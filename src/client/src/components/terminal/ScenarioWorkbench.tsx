@@ -195,11 +195,10 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
               </section>
 
               <section className="border border-border/70 bg-black/12 p-3">
-                <div className="flex items-center justify-between"><div><div className="text-[9px] font-bold">LIVE MODEL BINDINGS</div><div className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Current editable inputs registered by the active analytical pane.</div></div><span className="text-[7px] text-muted-foreground">{activeBindings.length} BOUND INPUTS</span></div>
+                <div className="flex items-center justify-between"><div><div className="text-[9px] font-bold">LIVE MODEL BINDINGS</div><div className="mt-1 font-ui text-xs leading-5 text-muted-foreground">Current editable inputs registered by the active analytical pane. Only same-key, same-unit finite scenario inputs are eligible to apply; use the two-step review above.</div></div><span className="text-[7px] text-muted-foreground">{activeBindings.length} BOUND INPUTS</span></div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">{activeBindings.map((binding) => {
-                  const normalized = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "");
-                  const match = active.assumptions.some((assumption) => normalized(assumption.key) === normalized(binding.key) || normalized(assumption.label) === normalized(binding.label));
-                  return <div key={binding.id} className={`border p-2.5 ${match ? "border-emerald-500/25 bg-emerald-500/4" : "border-border/60 bg-white/[.01]"}`}><div className="flex items-center justify-between"><span className="text-[8px] font-bold">{binding.label}</span><span className={`text-[6.5px] font-bold ${match ? "text-emerald-300" : "text-muted-foreground"}`}>{match ? "MATCHED" : "UNMATCHED"}</span></div><div className="mt-1 text-[7px] text-muted-foreground">{binding.key} · CURRENT {binding.value}{binding.unit ?? ""}</div></div>;
+                  const match = preview.matched.some(item => item.bindingId === binding.id);
+                  return <div key={binding.id} className={`border p-2.5 ${match ? "border-emerald-500/25 bg-emerald-500/4" : "border-border/60 bg-white/[.01]"}`}><div className="flex items-center justify-between"><span className="text-[8px] font-bold">{binding.label}</span><span className={`text-[6.5px] font-bold ${match ? "text-emerald-300" : "text-muted-foreground"}`}>{match ? "ELIGIBLE" : "NOT ELIGIBLE"}</span></div><div className="mt-1 text-[7px] text-muted-foreground">{binding.key} · CURRENT {binding.value}{binding.unit ?? ""}</div></div>;
                 })}{!activeBindings.length && <div className="md:col-span-2 border border-dashed border-border/60 p-5 text-center text-[7px] text-muted-foreground">Open a model surface containing editable assumptions (DCF/WACC/etc.) to expose live bindings.</div>}</div>
               </section>
             </div>}
