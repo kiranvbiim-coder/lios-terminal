@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, inspectExplicitResearchConnection, listExplicitResearchConnections, explicitResearchConnectionKey, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
 import type { ResearchTrayItem } from "./terminalResearchTray";
 
 function pin(id: string, options: Partial<ResearchTrayItem> = {}): ResearchTrayItem {
@@ -95,4 +95,54 @@ test("Phase 2 group trails derive only from current bounded visible research nod
   assert.deepEqual(trails.map(t => t.group), ["Visible evidence"]);
   assert.equal(trails[0].itemIds.length, MAX_SPATIAL_NODES);
   assert.equal(trails[0].itemIds.includes(String(MAX_SPATIAL_NODES)), false);
+});
+
+test("Phase 2 inspectable links explain only exact, currently visible, user-assigned group membership", () => {
+  const pins = [
+    pin("first", { group: "Management diligence", title: "Filings", kind: "evidence" }),
+    pin("second", { group: "Management diligence", title: "Board notes", kind: "note" }),
+    pin("third", { group: "Other group" }),
+  ];
+  const model = buildSpatialResearchModel(pins, {});
+  const entries = listExplicitResearchConnections(model);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].basis, "shared_user_assigned_group");
+  assert.deepEqual([entries[0].from.id, entries[0].to.id], ["first", "second"]);
+  assert.equal(entries[0].group, "Management diligence");
+  assert.deepEqual(inspectExplicitResearchConnection(model, entries[0].key), entries[0]);
+  assert.equal(inspectExplicitResearchConnection(model, "unknown"), null);
+  assert.equal(inspectExplicitResearchConnection(model, null), null);
+  assert.deepEqual(pins.map(item => item.group), ["Management diligence", "Management diligence", "Other group"], "inspector is read only");
+});
+
+test("Phase 2 refuses forged/stale/mismatched graph edges or ambiguous saved pin IDs", () => {
+  const model = buildSpatialResearchModel([
+    pin("a", { group: "Explicit" }), pin("b", { group: "Explicit" }),
+  ], {});
+  const validEdge = model.edges[0];
+  const key = explicitResearchConnectionKey(validEdge);
+  assert.ok(inspectExplicitResearchConnection(model, key));
+  assert.equal(inspectExplicitResearchConnection({ ...model, edges: [] }, key), null);
+  assert.equal(inspectExplicitResearchConnection({ ...model, nodes: model.nodes.slice(1) }, key), null);
+  assert.equal(inspectExplicitResearchConnection({ ...model, nodes: [...model.nodes, model.nodes[0]] }, key), null);
+  assert.equal(inspectExplicitResearchConnection({
+    ...model,
+    nodes: model.nodes.map(node => node.item.id === "b" ? { ...node, item: { ...node.item, group: "Changed" } } : node),
+  }, key), null);
+  assert.equal(inspectExplicitResearchConnection({
+    ...model,
+    edges: [{ group: "Explicit", fromId: "a", toId: "a" }],
+  }, explicitResearchConnectionKey({ group: "Explicit", fromId: "a", toId: "a" })), null);
+});
+
+test("Phase 2 no connection is fabricated from ungrouped pins, filtering or truncated nodes", () => {
+  const list = Array.from({ length: MAX_SPATIAL_NODES + 2 }, (_, i) =>
+    pin(String(i), { group: i >= MAX_SPATIAL_NODES ? "Invisible user group" : "" }));
+  const model = buildSpatialResearchModel(list, {});
+  assert.deepEqual(listExplicitResearchConnections(model), []);
+  assert.deepEqual(listExplicitResearchConnections(buildSpatialResearchModel([], {})), []);
+  const filteredModel = buildSpatialResearchModel([
+    pin("source", { group: "Same" }), pin("target", { group: "Elsewhere" }),
+  ], {});
+  assert.deepEqual(listExplicitResearchConnections(filteredModel), []);
 });
