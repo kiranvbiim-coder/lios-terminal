@@ -65,7 +65,7 @@ export default function NewsEditorialStoryCard({
     >
       {lead && !media && contextIllustration && <CommonsContextIllustration candidate={contextIllustration} />}
       {lead && !contextIllustration && <LicensedEditorialImage media={media}
-        sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []}
+        sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []} showSourceLink={false}
         className="mb-3"
         fallback={<div
           className="pointer-events-none relative mb-3 flex h-16 items-center justify-between overflow-hidden rounded-lg border border-border/35 bg-[radial-gradient(circle_at_85%_25%,rgba(251,191,36,0.13),transparent_64%)] px-4"
@@ -85,7 +85,7 @@ export default function NewsEditorialStoryCard({
       <div className="mt-2.5 flex min-w-0 items-start gap-3">
         {!lead && !media && contextIllustration && <div className="w-28 shrink-0"><CommonsContextIllustration candidate={contextIllustration} compact /></div>}
         {!lead && !contextIllustration && <LicensedEditorialImage media={media}
-          sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []}
+          sourceIds={sourceEvidenceId ? [sourceEvidenceId] : []} showSourceLink={false}
           variant="compact" className="w-24 shrink-0 sm:w-28" />}
         <div className="min-w-0 flex-1">
           <h3 className={`font-ui font-semibold leading-snug text-foreground ${lead ? "line-clamp-3 text-[17px]" : "line-clamp-2 text-[14px]"}`}>
