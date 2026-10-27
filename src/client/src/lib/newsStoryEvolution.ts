@@ -65,7 +65,13 @@ export function observeNewsFeed(
     if (!item || seenThisFeed.has(item.url)) continue;
     seenThisFeed.add(item.url);
     const latest = next.find(record => record.url === item.url);
-    if (latest && changedNewsFields(latest, item).length === 0) continue;
+    // Switching between cached React Query keys can surface an older response
+    // after a newer one. Never reclassify old feed data as a fresh revision.
+    if (latest) {
+      const lastSeen = Date.parse(latest.observedAt);
+      if (!Number.isFinite(lastSeen) || observationTime <= lastSeen) continue;
+      if (changedNewsFields(latest, item).length === 0) continue;
+    }
     next = [{ ...item, observedAt }, ...next];
   }
   // Retain the last 6 actual observed versions of the last 80 unique stories.

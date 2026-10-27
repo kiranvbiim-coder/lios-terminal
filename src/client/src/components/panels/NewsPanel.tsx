@@ -96,9 +96,16 @@ export default function NewsPanel({ symbol }: Props) {
   }, [filtered, selectedUrl, newsQuery.isSuccess, newsQuery.isFetching, newsQuery.isError]);
 
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
-  // Ref tracks the currently committed read-through target across asynchronous
-  // license rechecks. A late response can never overwrite another article.
-  activeNewsStoryRef.current = selectedItem?.url ?? null;
+  // Invalidate image rechecks whenever a committed reader target changes,
+  // including A → B → A and restored artifact selections. Never mutate refs
+  // during render: discarded concurrent renders must not change permissions.
+  const selectedStoryUrl = selectedItem?.url ?? null;
+  useEffect(() => {
+    if (activeNewsStoryRef.current !== selectedStoryUrl) {
+      recheckGenerationRef.current++;
+      activeNewsStoryRef.current = selectedStoryUrl;
+    }
+  }, [selectedStoryUrl]);
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedSourceHref = selectedItem ? safePulseSourceUrl(selectedItem.url) : null;
@@ -208,6 +215,14 @@ export default function NewsPanel({ symbol }: Props) {
               <div className="p-4 space-y-3">
                 {Array(6).fill(0).map((_, index) => <Skeleton key={index} className="h-24 bg-border" />)}
               </div>
+            ) : newsQuery.isError ? (
+              <div role="alert" className="space-y-3 p-4 font-ui text-sm text-muted-foreground">
+                <p>News could not be fetched. Check the date filters or source connection.</p>
+                <button type="button" onClick={() => void newsQuery.refetch()}
+                  className="min-h-10 rounded border border-border px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">
+                  Retry news
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">{photoOnly ? "NO RIGHTS-VERIFIED PHOTOS MATCH THIS FEED" : "NO STORIES MATCH CURRENT FILTERS"}</div>
             ) : (
@@ -226,7 +241,10 @@ export default function NewsPanel({ symbol }: Props) {
                   contextIllustration={!item.media && contextImage?.storyUrl === item.url ? contextImage.candidate : undefined}
                   active={item.url === selectedUrl}
                   lead={index === 0}
-                  onSelect={() => setSelectedUrl(item.url)}
+                  onSelect={() => {
+                    recheckGenerationRef.current++;
+                    setSelectedUrl(item.url);
+                  }}
                 />
               ))
             )}

@@ -51,6 +51,20 @@ test("invalid and credential-bearing URLs or timestamps do not enter history", (
   assert.deepEqual(observeNewsFeed([], [article], Number.NaN), []);
 });
 
+test("older cached feeds never fabricate a newer story revision on query-key switches", () => {
+  const first = observeNewsFeed([], [article], at);
+  const newer = observeNewsFeed(first, [{ ...article, title: "Verified later headline" }], at + 60_000);
+  const stale = observeNewsFeed(newer, [article], at + 10_000);
+  assert.deepEqual(stale, newer);
+  assert.equal(newsStoryRevisions(stale, article.url).length, 2);
+  // A changed payload at the same query observation timestamp is not a new fetch.
+  assert.deepEqual(observeNewsFeed(stale, [{ ...article, title: "Another headline" }], at + 60_000), stale);
+  // Real successive observations remain visible.
+  const fresh = observeNewsFeed(stale, [{ ...article, title: "Another headline" }], at + 120_000);
+  assert.equal(newsStoryRevisions(fresh, article.url).length, 3);
+  assert.equal(newsStoryRevisions(fresh, article.url)[0].title, "Another headline");
+});
+
 test("bounded memory never grows beyond last 80 stories and 6 revisions per URL", () => {
   let history = observeNewsFeed([], Array.from({ length: MAX_NEWS_STORIES + 20 }, (_, i) => ({
     ...article, url: "https://publisher.example/story/" + i,

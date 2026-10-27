@@ -10,6 +10,15 @@ test("Story Evolution renders in the real News read-through, not a disconnected 
   assert.match(panel, /<NewsStoryEvolution exactUrl=\{selectedItem\.url\} history=\{observedRevisions\}/);
   assert.match(panel, /observeNewsFeed\(current, news, newsQuery\.dataUpdatedAt\)/);
   assert.match(panel, /newsQuery\.isSuccess/);
+  // The read-through must reject delayed image rechecks after A→B→A selection
+  // changes, including when artifact state changes selection outside a card click.
+  assert.match(panel, /activeNewsStoryRef\.current !== selectedStoryUrl/);
+  assert.match(panel, /\[selectedStoryUrl\]/);
+  assert.match(panel, /onSelect=\{\(\) => \{/);
+  assert.match(panel, /newsQuery\.isError \? \(/);
+  assert.match(panel, /Retry news/);
+  assert.match(panel, /recheckGenerationRef\.current\+\+/);
+  assert.match(panel, /generation !== recheckGenerationRef\.current/);
   assert.match(panel, /safePulseSourceUrl\(selectedItem\.url\)/);
   assert.match(panel, /Read original publisher/);
   assert.match(panel, /rel="noopener noreferrer"/);
