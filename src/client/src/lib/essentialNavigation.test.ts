@@ -115,5 +115,5 @@ test("Sign out reviews staged unsent work and never silently discards an in-flig
   assert.match(handler, /confirmConversationSwitch\(true\)/);
   assert.match(handler, /discardConversationDraft\(before\)/);
   assert.match(handler, /onLogout\(\)/);
-  assert.match(shell, /onLogout=\{\(\) => void signOutSafely\(\)\}/);
+  assert.match(shell, /onLogout=\{\(\) => requestAnimationFrame\(\(\) => void signOutSafely\(\)\)\}/);
 });
