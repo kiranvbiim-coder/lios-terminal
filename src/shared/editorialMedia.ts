@@ -15,7 +15,7 @@ export const editorialMediaSchema = z.object({
   owner: z.string().trim().min(2).max(240),
   licenseName: z.string().trim().min(2).max(180),
   licenseEvidenceRef: z.string().trim().min(4).max(300),
-  sourceEvidenceId: z.string().trim().min(1).max(240),
+  sourceEvidenceId: z.string().trim().min(1).max(2048),
   verifiedBy: z.string().trim().min(2).max(160),
   verifiedAt: z.string().datetime(),
   permission: z.literal("commercial_redistribution_and_display"),
