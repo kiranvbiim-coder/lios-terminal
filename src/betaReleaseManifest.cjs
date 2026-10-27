@@ -34,6 +34,9 @@ function validateBody(body) {
   keysExactly(body, ["schema", "channel", "version", "commit", "assets"], "signed body");
   assert(body.schema === 1 && body.channel === "beta", "only schema 1 beta releases may be checked.");
   assert(typeof body.version === "string" && VERSION.test(body.version), "invalid explicit beta version.");
+  const numericVersion = body.version.match(/^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/).slice(1);
+  assert(numericVersion.every(part => (part === "0" || !part.startsWith("0")) && Number.isSafeInteger(Number(part))),
+    "beta version has noncanonical or unsafe numeric components.");
   assert(typeof body.commit === "string" && COMMIT.test(body.commit), "exact source commit SHA is required.");
   assert(Array.isArray(body.assets) && body.assets.length === TARGETS.length,
     "macOS DMG/ZIP and Windows NSIS x64 assets are all mandatory.");
@@ -127,7 +130,10 @@ async function signBetaManifest({ version, commit, assetDir, privateKeyPem }) {
 }
 function betaVersionParts(version) {
   assert(typeof version === "string" && VERSION.test(version), "invalid installed beta version.");
-  return version.match(/^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/).slice(1).map(Number);
+  const parts = version.match(/^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/).slice(1);
+  assert(parts.every(part => (part === "0" || !part.startsWith("0")) && Number.isSafeInteger(Number(part))),
+    "beta version components must be bounded, canonical integers.");
+  return parts.map(Number);
 }
 async function verifyBetaManifest({ manifest, assetDir, trustedPublicKeyPem, expectedCommit, currentVersion = null }) {
   const { body, signature } = parseManifest(manifest);
