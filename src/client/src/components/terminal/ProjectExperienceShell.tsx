@@ -520,7 +520,7 @@ export default function ProjectExperienceShell({
     const { origin, request } = chatWorkbenchReturn;
     // The return target, including Temporary's null scope, is authoritative.
     // Returning to a different Chat must never silently clear an unsent draft.
-    if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+    if (chatMode !== origin.mode || selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
       if (reviewingChatReturn.current === request) return;
       reviewingChatReturn.current = request;
       void (async () => {
@@ -529,6 +529,7 @@ export default function ProjectExperienceShell({
           setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to try switching again.");
           return;
         }
+        setChatMode(origin.mode);
         selection.setProjectId(origin.projectId);
         selection.setChatId(origin.chatId);
       })().finally(() => {
@@ -538,7 +539,7 @@ export default function ProjectExperienceShell({
     }
     handledChatReturn.current = request;
     setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
-  }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
+  }, [chatWorkbenchReturn, chatMode, selection.projectId, selection.chatId]);
   const onOpenWorkbench = () => {
     if (busy || busyRef.current || sendInFlightRef.current) {
       setLifecycleNotice("Stop the current response before opening Work.");
@@ -563,7 +564,7 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
     const { context, prompt, request } = workbenchReturn;
-    if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
+    if (chatMode !== (context.projectId === null ? "quick" : "project") || selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
       if (reviewingArtifactReturn.current === request) return;
       reviewingArtifactReturn.current = request;
       void (async () => {
@@ -572,6 +573,7 @@ export default function ProjectExperienceShell({
           setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to open that Artifact later.");
           return;
         }
+        setChatMode(context.projectId === null ? "quick" : "project");
         selection.setProjectId(context.projectId);
         selection.setChatId(context.chatId);
       })().finally(() => {
@@ -583,7 +585,7 @@ export default function ProjectExperienceShell({
     setChatMode(context.projectId === null ? "quick" : "project"); setSection("conversation"); setProjectHomeRequested(false);
     setConversationArtifactRef(context.artifactId); setArtifactViewVersion(context.version);
     if (prompt) setInput(current => stageUniversalChatQuestion(current, prompt));
-  }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
+  }, [workbenchReturn, chatMode, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
   useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
     const width = shellRef.current?.querySelector(".lios-project-chat-surface")?.clientWidth ?? 0;
