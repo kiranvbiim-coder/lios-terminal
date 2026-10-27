@@ -4,6 +4,8 @@ import { Compass, GitBranch, MapPinned, MessageSquareText, Network } from "lucid
 import type { P7ContextGraph, P7InsightLens } from "@shared/p7ResearchContracts";
 import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
 import { OfflineProjectWorldMap } from "./OfflineProjectWorldMap";
+import { ProjectConsequenceReview } from "./ProjectConsequenceReview";
+import { reviewRecordedConsequences } from "@/lib/recordedConsequenceReview";
 import {
   consequenceTrailChatPrompt,
   investigationViewIntentSchema,
@@ -31,6 +33,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
     ?? validLens?.insights[0] ?? null;
 
   const trail = useMemo(() => recordedConsequenceTrail(projectId, validGraph, selected), [projectId, validGraph, selected]);
+  const consequenceReview = useMemo(() => reviewRecordedConsequences(projectId, validGraph, selected), [projectId, validGraph, selected]);
   const geographic = useMemo(() => recordedGeographicPoints(projectId, validGraph), [projectId, validGraph]);
   const localGeographic = useMemo(() => {
     const implicated = new Set([
@@ -91,6 +94,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><Network aria-hidden="true" className="h-4 w-4"/>Linked Project objects</h4>
           <p className="font-ui text-xs text-muted-foreground">{trail.matchedNodes.length} directly identified graph object{trail.matchedNodes.length === 1 ? "" : "s"} · {trail.totalLinks} stored adjacency link{trail.totalLinks === 1 ? "" : "s"}. Adjacency does not prove consequence or exposure.</p>
           <ProjectEvidenceGraph key={projectId + ":" + selected.id} projectId={projectId} graph={validGraph} insight={selected} />
+          <ProjectConsequenceReview projectId={projectId} insight={selected} review={consequenceReview} onInvestigate={onInvestigate} />
         </section>}
         {view === "geography" && <section aria-label="Recorded geographic coordinates" className="space-y-2 rounded-lg border border-border/50 p-3">
           <h4 className="inline-flex items-center gap-2 font-ui text-sm font-semibold text-foreground"><MapPinned aria-hidden="true" className="h-4 w-4"/>Geographic evidence</h4>

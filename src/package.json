@@ -150,7 +150,8 @@
     "test:website-b2": "node --import tsx --test client/src/lib/offlineWorldMapPresentation.test.ts client/src/components/terminal/OfflineProjectWorldMap.test.tsx client/src/lib/websiteB2OfflineMapIntegration.test.ts client/src/lib/phase3InvestigationPresentation.test.ts client/src/components/terminal/ProjectInvestigationDesk.test.tsx",
     "test:website-b3": "node --import tsx --test client/src/lib/recordedEvidenceFlow.test.ts client/src/components/panels/RecordedEvidenceFlowPanel.test.tsx client/src/lib/websiteB3VisualComparisonsIntegration.test.ts client/src/lib/researchPerspectives.test.ts client/src/components/panels/ResearchEvidencePresentation.test.ts",
     "test:website-c1": "node --import tsx --test shared/governedVisualAnswer.test.ts client/src/components/terminal/GovernedVisualAnswer.test.tsx client/src/lib/websiteC1GovernedVisualIntegration.test.ts client/src/lib/artifactChartProjection.test.ts client/src/lib/visualizationIntentContract.test.ts",
-    "test:website-c2": "node --import tsx --test client/src/lib/reviewedModelRunArtifact.test.ts client/src/lib/websiteC2ReviewedModelIntegration.test.ts client/src/lib/integratedModelArtifactSave.test.ts server/integratedModelArtifact.test.ts"
+    "test:website-c2": "node --import tsx --test client/src/lib/reviewedModelRunArtifact.test.ts client/src/lib/websiteC2ReviewedModelIntegration.test.ts client/src/lib/integratedModelArtifactSave.test.ts server/integratedModelArtifact.test.ts",
+    "test:website-c3": "node --import tsx --test client/src/lib/recordedConsequenceReview.test.ts client/src/components/terminal/ProjectConsequenceReview.test.tsx client/src/components/terminal/ProjectInvestigationDesk.test.tsx"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
