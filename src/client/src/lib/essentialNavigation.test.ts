@@ -45,7 +45,7 @@ test("Work is accessible directly from both sidebar modes and preserves the orig
   assert.match(shell, /onWorkbench=\{onOpenWorkbench\}/);
   assert.match(shell, /navigateWorkbench\(\{ projectId: selection\.projectId, chatId: selection\.chatId, artifactId: conversationArtifactRef, version: displayed\.version \}\)/);
   assert.match(shell, /captureChatWorkbenchOrigin\(chatMode, selection\.projectId, selection\.chatId, symbol\)/);
-  assert.match(shell, /const onOpenWorkbench = \(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /const onOpenWorkbench = \(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current\)/);
   assert.match(shell, /Save or reset unsaved Artifact edits before opening Workbench/);
 });
 
