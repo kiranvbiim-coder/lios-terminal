@@ -97,3 +97,10 @@ test("the same recorded article URL can anchor licensed media without changing h
   assert.equal(result.some(item => item.startsWith("javascript:")), false);
   assert.equal(result.some(item => item.includes("PRIVATE")), false);
 });
+
+test("a 300+ character Google News source URL remains eligible as an exact media identity", () => {
+  const longUrl = "https://news.google.com/rss/articles/" + "a".repeat(340);
+  const sourceIds = pulseStoryMediaSourceIds([{ id: "historic-source", url: longUrl }]);
+  assert.ok(sourceIds.includes(longUrl));
+  assert.ok(sourceIds.includes("historic-source"));
+});
