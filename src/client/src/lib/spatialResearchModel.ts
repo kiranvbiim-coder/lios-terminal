@@ -77,3 +77,42 @@ export function moveSpatialPoint(point: SpatialPoint, direction: "left" | "right
     y: point.y + (direction === "up" ? -SPATIAL_MOVE_STEP : direction === "down" ? SPATIAL_MOVE_STEP : 0),
   });
 }
+
+/** A user-directed trail through existing pins sharing an explicit group name.
+ * It is local navigation, not a relationship inference or AI-generated narrative. */
+export interface ExplicitResearchTrail { group: string; itemIds: string[] }
+
+export function buildExplicitResearchTrails(nodes: readonly SpatialNode[]): ExplicitResearchTrail[] {
+  const groups = new Map<string, SpatialNode[]>();
+  for (const node of nodes) {
+    const group = node.item.group.trim();
+    if (!group) continue;
+    const entries = groups.get(group) ?? [];
+    entries.push(node);
+    groups.set(group, entries);
+  }
+  return [...groups.entries()]
+    .filter(([, matches]) => matches.length >= 2)
+    .map(([group, matches]) => ({
+      group,
+      itemIds: [...matches].sort((a, b) => {
+        const aTime = Number.isFinite(a.item.createdAt) ? a.item.createdAt : 0;
+        const bTime = Number.isFinite(b.item.createdAt) ? b.item.createdAt : 0;
+        return aTime - bTime || a.item.id.localeCompare(b.item.id);
+      }).map(node => node.item.id),
+    }))
+    .sort((a, b) => a.group.localeCompare(b.group));
+}
+
+export function stepExplicitResearchTrail(
+  itemIds: readonly string[],
+  currentId: string | null,
+  direction: "previous" | "next",
+): string | null {
+  if (!itemIds.length) return null;
+  const currentIndex = currentId === null ? -1 : itemIds.indexOf(currentId);
+  if (currentIndex < 0) return direction === "previous" ? itemIds[itemIds.length - 1] : itemIds[0];
+  const nextIndex = direction === "next" ? (currentIndex + 1) % itemIds.length
+    : (currentIndex - 1 + itemIds.length) % itemIds.length;
+  return itemIds[nextIndex];
+}
