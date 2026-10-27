@@ -526,7 +526,7 @@ export default function ProjectExperienceShell({
       void (async () => {
         if (!(await confirmConversationSwitch())) {
           handledChatReturn.current = request;
-          setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to try switching again.");
+          setLifecycleNotice("Your unsent work remains in this Chat. You can reopen the originating conversation from History.");
           return;
         }
         // Change the owning selection first; the existing selected-Chat sync
@@ -575,7 +575,7 @@ export default function ProjectExperienceShell({
       void (async () => {
         if (!(await confirmConversationSwitch())) {
           handledWorkbenchReturn.current = request;
-          setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to open that Artifact later.");
+          setLifecycleNotice("Your unsent work remains in this Chat. You can reopen that Artifact through saved-work Search.");
           return;
         }
         if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
