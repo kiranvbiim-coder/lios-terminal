@@ -9,7 +9,9 @@ import { lookupCommonsCC0, searchCommonsCC0 } from "./commonsCc0Media";
 import { requireAuth } from "./auth";
 import { getMediaQuotes, getMediaHistory, getMediaVolume, getMediaCatalog, getMediaTopicProfile } from "./gdeltData";
 
-export function registerMediaRoutes(app: Express): void {
+type CommonsDiscoverySources = Readonly<{ search: typeof searchCommonsCC0; lookup: typeof lookupCommonsCC0 }>;
+
+export function registerMediaRoutes(app: Express, sources: CommonsDiscoverySources = { search: searchCommonsCC0, lookup: lookupCommonsCC0 }): void {
   // Saved Commons references must be checked against the CURRENT file metadata
   // on explicit user action; restoring panel state cannot itself load pixels.
   app.get("/api/media/commons/cc0/file", requireAuth, async (req, res) => {
@@ -18,7 +20,7 @@ export function registerMediaRoutes(app: Express): void {
       return res.status(400).json({ error: "A valid Commons File: title is required." });
     }
     try {
-      const candidate = await lookupCommonsCC0(title);
+      const candidate = await sources.lookup(title);
       res.setHeader("Cache-Control", "no-store");
       return res.json({ candidate, status: "unreviewed" });
     } catch {
@@ -31,7 +33,7 @@ export function registerMediaRoutes(app: Express): void {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (q.length < 3 || q.length > 100) return res.status(400).json({ error: "Search must be 3 to 100 characters." });
     try {
-      const results = await searchCommonsCC0(q);
+      const results = await sources.search(q);
       res.setHeader("Cache-Control", "private, max-age=60");
       res.json({ results, status: "unreviewed", source: "Wikimedia Commons CC0 metadata" });
     } catch (reason) {
