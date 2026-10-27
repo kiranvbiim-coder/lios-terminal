@@ -23,7 +23,7 @@ test("Quick Artifact search validates the authoritative owning Chat and Artifact
 });
 
 test("search selection preserves destination version without writing through source Chat", () => {
-  const section = shell.match(/if \(selection\.chatId === chat\.id && chatMode === "quick"\) \{([\s\S]*?)\n      \} else \{([\s\S]*?)\n      \}\n      return await openChat\(chat, true\);/);
+  const section = shell.match(/if \(selection\.chatId === chat\.id && chatMode === "quick"\) \{([\s\S]*?)\r?\n\s*\} else \{([\s\S]*?)\r?\n\s*\}\r?\n\s*return await openChat\(chat, true\);/);
   assert.ok(section, "destination-scoped Quick Chat search branch exists");
   assert.match(section[1], /setConversationArtifactRef\(result\.artifactId\)/);
   assert.match(section[1], /setArtifactViewVersion\(detail\.version\.version\)/);
