@@ -3,6 +3,7 @@ import { CheckCircle2, GitBranch, Play, Plus, Route, Trash2, X } from "lucide-re
 import {
   applyScenarioToBindings,
   listAssumptionBindings,
+  previewScenarioBindingApplication,
   subscribeAssumptionBindings,
   type AssumptionBinding,
 } from "@/lib/terminalAssumptionRegistry";
@@ -22,6 +23,7 @@ import {
 import { publishScenarioContext, scenarioAppliesTo } from "@/lib/terminalScenarioPropagation";
 import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
 import type { ViewMode } from "@/lib/terminalTypes";
+import { scenarioBindingReviewKey } from "@/lib/scenarioBindingReview";
 import ScenarioComparisonBoard from "./ScenarioComparisonBoard";
 
 interface Props {
@@ -40,12 +42,20 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
   const [unit, setUnit] = useState("");
   const [applyMessage, setApplyMessage] = useState("");
   const [comparisonId, setComparisonId] = useState<string>("");
+  const [reviewedApplicationKey, setReviewedApplicationKey] = useState<string | null>(null);
 
   useEffect(() => subscribeScenarioUniverse((next, current) => { setScenarios(next); setActive(current); }), []);
   useEffect(() => subscribeAssumptionBindings(setBindings), []);
 
   const activeBindings = useMemo(() => listAssumptionBindings({ view: activeView, symbol: activeSymbol }), [activeSymbol, activeView, bindings]);
   const applicable = scenarioAppliesTo(active, activeView, activeSymbol);
+  const preview = useMemo(
+    () => active ? previewScenarioBindingApplication(active, { view: activeView, symbol: activeSymbol })
+      : { matched: [], unmatched: [], skipped: [] },
+    [active, activeView, activeSymbol, bindings],
+  );
+  const currentApplicationKey = scenarioBindingReviewKey(active, activeView, activeSymbol, preview);
+  const inputApplyReviewed = currentApplicationKey !== null && reviewedApplicationKey === currentApplicationKey;
   const comparisonReference = scenarios.find(scenario => scenario.id === comparisonId && scenario.id !== active?.id)
     ?? scenarios.find(scenario => scenario.kind === "base" && scenario.id !== active?.id)
     ?? scenarios.find(scenario => scenario.id !== active?.id)
@@ -75,10 +85,17 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
   };
 
   const apply = () => {
-    if (!active) return;
+    if (!active || !applicable) return;
+    const freshPlan = previewScenarioBindingApplication(active, { view: activeView, symbol: activeSymbol });
+    const freshKey = scenarioBindingReviewKey(active, activeView, activeSymbol, freshPlan);
+    if (!freshKey || !inputApplyReviewed || freshKey !== currentApplicationKey) {
+      setReviewedApplicationKey(null);
+      setApplyMessage("Model inputs changed after review. Inspect and confirm the updated preview.");
+      return;
+    }
     const result = applyScenarioToBindings(active, { view: activeView, symbol: activeSymbol });
-    setApplyMessage(`${result.applied.length} APPLIED · ${result.unmatched.length} UNMATCHED · ${result.skipped.length} SKIPPED`);
-    window.setTimeout(() => setApplyMessage(""), 2800);
+    setReviewedApplicationKey(null);
+    setApplyMessage(`${result.applied.length} actual model input(s) applied · ${result.unmatched.length} unmatched · ${result.skipped.length} skipped. No P11 model was run and no P4 Artifact was saved.`);
   };
 
   const branch = () => {
@@ -97,11 +114,38 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
           {active && <span className={`border px-2 py-1 text-[8px] font-bold ${applicable ? "border-emerald-500/30 text-emerald-300" : "border-red-500/30 text-red-300"}`}>{applicable ? "APPLIES TO ACTIVE PANE" : "OUT OF SCOPE"}</span>}
           <button onClick={() => openTerminalUxSurface("impact-map")} disabled={!active} className="flex min-h-10 items-center gap-1.5 rounded-lg border border-cyan-400/20 px-3 font-ui text-xs text-cyan-200 hover:bg-cyan-400/[.04] disabled:opacity-40"><Route className="h-4 w-4" /> Impact map</button>
           <button onClick={branch} disabled={!active} className="flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 font-ui text-xs text-foreground hover:border-amber-300/40 disabled:opacity-40"><GitBranch className="h-4 w-4" /> Branch case</button>
-          <button onClick={apply} disabled={!active || !applicable} className="flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-3 font-ui text-xs font-semibold text-amber-200 disabled:opacity-40"><Play className="h-4 w-4" /> Apply to model</button>
+          <button type="button" onClick={() => {
+            if (inputApplyReviewed) apply();
+            else { setReviewedApplicationKey(currentApplicationKey); setApplyMessage(""); }
+          }} disabled={!active || !applicable || !currentApplicationKey}
+            aria-pressed={inputApplyReviewed} data-testid="scenario-apply-review-control"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-3 font-ui text-sm font-semibold text-amber-200 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <Play className="h-4 w-4" aria-hidden="true" /> {inputApplyReviewed ? "Confirm apply to model" : "Review model input changes"}
+          </button>
           <button type="button" onClick={onClose} aria-label="Close Scenario Playground" className="grid min-h-10 min-w-10 place-items-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><X className="h-4 w-4" /></button>
         </header>
 
-        {applyMessage && <div className="flex items-center gap-2 border-b border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-[8px] font-bold text-emerald-300"><CheckCircle2 className="h-3 w-3" />{applyMessage}</div>}
+        {applyMessage && <div role="status" className="flex items-center gap-2 border-b border-emerald-500/20 bg-emerald-500/5 px-4 py-3 font-ui text-sm leading-6 text-emerald-200">
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />{applyMessage}
+        </div>}
+        {inputApplyReviewed && <section data-testid="scenario-apply-reviewed-preview" aria-label="Model inputs pending explicit confirmation"
+          className="space-y-2 border-b border-amber-300/30 bg-amber-300/[0.035] p-3 font-ui text-sm">
+          <p className="font-semibold text-foreground">Review ${preview.matched.length} exact input changes before applying</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            This modifies registered inputs in the active pane only. It does not run a deterministic P11 engine, verify predicted model output, save a P4 Artifact, trade, or launch an automation.
+          </p>
+          <ul className="max-h-44 space-y-1 overflow-y-auto">
+            {preview.matched.slice(0, 16).map((item, i) => <li key={item.bindingId + ":" + item.assumptionKey + ":" + i} className="break-words rounded border border-border/50 p-2">
+              {item.bindingLabel}: {item.currentValue} {item.unit ?? ""} → {item.value} {item.unit ?? ""} · `{item.assumptionKey}`
+            </li>)}
+          </ul>
+          {preview.matched.length > 16 && <p className="text-xs text-muted-foreground">Showing 16 of {preview.matched.length} actual input changes. Other exact changes are included in this review token.</p>}
+          {(preview.unmatched.length > 0 || preview.skipped.length > 0) && <p className="text-xs text-amber-200">
+            {preview.unmatched.length} unmatched and {preview.skipped.length} skipped; they will not be applied.
+          </p>}
+          <button type="button" onClick={() => setReviewedApplicationKey(null)}
+            className="min-h-11 rounded-lg border border-border/60 px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-amber-300">Cancel review</button>
+        </section>
 
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(110px,180px)_minmax(0,1fr)] md:grid-cols-[238px_minmax(0,1fr)] md:grid-rows-1">
           <aside className="overflow-y-auto border-b border-border/60 bg-black/20 p-3 scrollbar-thin md:border-b-0 md:border-r">
