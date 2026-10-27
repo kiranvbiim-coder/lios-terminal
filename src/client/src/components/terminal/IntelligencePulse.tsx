@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target, X } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import { subscribeChangeIntelligence } from "@/lib/terminalChangeIntelligence";
 import { subscribeDecisionObjects } from "@/lib/terminalDecisionObjects";
@@ -46,6 +47,7 @@ function PulseIcon({ item }: { item: IntelligencePulseItem }) {
 
 export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("pulse");
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [proactiveEnabled, setProactiveEnabled] = useState(false);
   const [expandedInboxItemId, setExpandedInboxItemId] = useState<string | null>(null);
   const [reviewHandoffMessage, setReviewHandoffMessage] = useState("");
@@ -79,19 +81,24 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
   };
 
   return (
-    <div className="fixed inset-0 z-[94] bg-black/82 p-3 backdrop-blur-[5px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay mx-auto flex h-[min(860px,calc(100vh-24px))] w-full max-w-7xl flex-col overflow-hidden border" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS Intelligence Pulse">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-label="LiOS Intelligence Pulse"
+        className="lios-v4-overlay !z-[94] !flex !h-[min(860px,calc(100dvh-24px))] !w-[calc(100vw-24px)] !max-w-7xl !flex-col !gap-0 !overflow-hidden !rounded-xl !p-0 !pr-0"
+        overlayProps={{ className: "!z-[93] bg-black/82 backdrop-blur-[3px]" }}
+        onCloseAutoFocus={event => { event.preventDefault(); if (opener?.isConnected) opener.focus(); }}
+      >
         <header className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
           <div className="grid h-9 w-9 place-items-center border border-[hsl(38,100%,50%)/32%] bg-[hsl(38,100%,50%)/7%]"><Radar className="h-4 w-4 text-[hsl(38,100%,60%)]" /></div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold tracking-[.14em] text-foreground">INTELLIGENCE PULSE</div>
-            <div className="mt-1 text-[8px] tracking-wide text-muted-foreground">WHAT CHANGED · WHAT IS AT RISK · WHAT NEEDS ATTENTION</div>
+            <DialogTitle className="text-[13px] font-bold tracking-[.11em] text-foreground">INTELLIGENCE PULSE</DialogTitle>
+            <DialogDescription className="mt-1 text-xs text-muted-foreground">What changed · What is at risk · What needs attention</DialogDescription>
           </div>
           <div className="hidden items-center gap-1.5 lg:flex">
             {(["critical", "high", "medium", "low"] as PulsePriority[]).map((priority) => <span key={priority} className={`border px-2 py-1 text-[7px] font-bold tracking-wider ${PRIORITY_STYLE[priority]}`}>{priority.toUpperCase()} {pulse.counts[priority]}</span>)}
           </div>
           <button onClick={() => openTerminalUxSurface("decision-center")} className="lios-v5-hero-action"><Target className="h-3 w-3" /> DECISIONS</button>
-          <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+
         </header>
 
         <div className="flex items-center border-b border-border/60 bg-black/20 px-2">
@@ -228,7 +235,7 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
             </div>
           </main>
         )}
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
