@@ -44,8 +44,44 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
   const [actionError, setActionError] = useState<string | null>(null);
   const [stagingId, setStagingId] = useState<string | null>(null);
   const [facet, setFacet] = useState<IntelligenceSearchFacet>("all");
+  const [foregroundRevision, setForegroundRevision] = useState(0);
   const activeQuery = query.trim().slice(0, 120);
   const searchReady = activeQuery.length >= 2;
+
+  useEffect(() => {
+    if (!searchReady) return;
+    // An authenticated snapshot is not valid indefinitely across sign-out,
+    // account switching, permission revocation or saved Follow/Mute changes.
+    // Only recheck when the panel regains foreground; never per keystroke.
+    let lastForegroundCheck = Date.now();
+    const onForegroundChange = () => {
+      if (document.visibilityState === "hidden") {
+        // Hide the last authorized records immediately and abort an in-flight
+        // fetch via the revision-driven effect cleanup.
+        setSnapshot(null);
+        setFailure(null);
+        setPending(false);
+        setForegroundRevision(value => value + 1);
+        lastForegroundCheck = 0;
+        return;
+      }
+      const now = Date.now();
+      // Focus and visibilitychange often arrive together: one network read.
+      if (now - lastForegroundCheck < 500) return;
+      lastForegroundCheck = now;
+      setSnapshot(null);
+      setFailure(null);
+      setActionError(null);
+      setPending(true);
+      setForegroundRevision(value => value + 1);
+    };
+    window.addEventListener("focus", onForegroundChange);
+    document.addEventListener("visibilitychange", onForegroundChange);
+    return () => {
+      window.removeEventListener("focus", onForegroundChange);
+      document.removeEventListener("visibilitychange", onForegroundChange);
+    };
+  }, [searchReady]);
 
   useEffect(() => {
     // Fetch one authorized snapshot when this panel becomes searchable.
@@ -54,12 +90,14 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
     setSnapshot(null);
     setFailure(null);
     setActionError(null);
-    if (!searchReady) { setPending(false); return; }
+    if (!searchReady || document.visibilityState === "hidden") { setPending(false); return; }
     const controller = new AbortController();
     setPending(true);
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch("/api/wave-d/pulse", { signal: controller.signal });
+        const response = await fetch("/api/wave-d/pulse", {
+          signal: controller.signal, credentials: "same-origin", cache: "no-store",
+        });
         if (!response.ok) throw new Error("Current intelligence is unavailable or access was denied.");
         const payload: unknown = await response.json();
         if (!hasRecordedPulseCards(payload)) throw new Error("Current intelligence returned an unsupported response.");
@@ -72,7 +110,7 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
       }
     }, 160);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [searchReady]);
+  }, [searchReady, foregroundRevision]);
 
   const cards = snapshot?.cards ?? [];
   const counts = useMemo(() => intelligenceSearchCounts(cards), [cards]);

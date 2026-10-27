@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { IntelligenceCard } from "@shared/waveDContracts";
 import VisualIntelligenceSearch, { VisualIntelligenceResultCard } from "./VisualIntelligenceSearch";
@@ -73,4 +74,23 @@ test("Search uses existing approved local images without fetching publisher pixe
   }));
   assert.doesNotMatch(unlinked, /<img\b/);
   assert.match(unlinked, /Water source publication/);
+});
+
+
+test("Visual Search refreshes exact authorized Pulse on foreground return without keystroke fetches", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  for (const exact of [
+    'window.addEventListener("focus", onForegroundChange)',
+    'document.addEventListener("visibilitychange", onForegroundChange)',
+    'window.removeEventListener("focus", onForegroundChange)',
+    'document.removeEventListener("visibilitychange", onForegroundChange)',
+    'document.visibilityState === "hidden"',
+    'setSnapshot(null)',
+    'setForegroundRevision(value => value + 1)',
+    '}, [searchReady, foregroundRevision]);',
+    'credentials: "same-origin", cache: "no-store"',
+    'controller.abort()',
+  ]) assert.ok(source.includes(exact), "Missing scoped foreground freshness safeguard: " + exact);
+  assert.ok(!source.includes('[searchReady, activeQuery]'), "Do not refetch provider for each keystroke");
+  assert.ok(!source.includes('localStorage.setItem('), "No duplicate browser-side intelligence cache");
 });
