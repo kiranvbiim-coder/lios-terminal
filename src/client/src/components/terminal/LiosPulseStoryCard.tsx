@@ -8,6 +8,7 @@
  * Both MIT; see third_party/licenses/*. No donor demo media, invented market
  * observations or remote favicon requests are included.
  */
+import * as React from "react";
 import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
