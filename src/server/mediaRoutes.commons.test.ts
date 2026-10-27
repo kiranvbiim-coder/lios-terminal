@@ -26,3 +26,23 @@ test("Commons discovery is authenticated and rejects invalid search terms before
   const huge = await fetch(origin + "/api/media/commons/cc0?q=" + "x".repeat(101));
   assert.equal(huge.status, 400);
 });
+
+
+test("saved Commons lookup endpoint requires auth and a bounded File: title before network access", async t => {
+  const app = express();
+  let allowed = false;
+  app.use((req, _res, next) => {
+    req.isAuthenticated = (() => allowed) as Request["isAuthenticated"];
+    next();
+  });
+  registerMediaRoutes(app);
+  const server = createServer(app);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); });
+  const origin = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
+  const denied = await fetch(origin + "/api/media/commons/cc0/file?title=File:Example.jpg");
+  assert.equal(denied.status, 401);
+  allowed = true;
+  assert.equal((await fetch(origin + "/api/media/commons/cc0/file?title=bad")).status, 400);
+  assert.equal((await fetch(origin + "/api/media/commons/cc0/file?title=" + "a".repeat(300))).status, 400);
+});
