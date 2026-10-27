@@ -54,3 +54,27 @@ test("real free MIT beUI source is wired to existing Framer Motion without a sec
   assert.match(timeline, /Timeline as BeuiTimeline/);
   assert.match(news, /React\.lazy\(\(\) => import\("\.\/NewsObservedRevisionTimeline"\)\)/);
 });
+
+test("multiple related source headlines can offer a distinct chronology without merging publishers", () => {
+  const history = observeNewsFeed([], [item], at);
+  const coverage = [
+    { ...item, title: "Solar battery innovation expands factories" },
+    { ...item, url: "https://other.example/story/solar", title: "Solar battery innovation attracts investment",
+      source: "Independent source", publishedAt: "2026-10-27T10:00:00Z" },
+    { ...item, url: "https://third.example/story/solar", title: "Solar battery innovation gains new capacity",
+      source: "Third publisher", publishedAt: "2026-10-27T11:00:00Z" },
+  ];
+  const html = renderToStaticMarkup(React.createElement(NewsStoryEvolution, {
+    exactUrl: url, history, coverage,
+  }));
+  assert.match(html, /Explore publication timeline/);
+  assert.match(html, /not proof that they report the same event/);
+  assert.match(html, /Independent source/);
+  assert.match(html, /Third publisher/);
+  assert.doesNotMatch(html, /data-testid="news-beui-related-timeline"/);
+  const adapter = source("./NewsObservedRevisionTimeline.tsx");
+  assert.match(adapter, /export function RelatedPublisherTimeline/);
+  assert.match(adapter, /date: item.publishedAt/);
+  assert.match(adapter, /Separate publisher feed item/);
+  assert.match(adapter, /may describe different events/);
+});
