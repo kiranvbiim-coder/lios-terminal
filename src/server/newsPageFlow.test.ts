@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildNewsWindowQuery, filterNewsPageWindow, newsPageWindowBounds } from "./marketData";
-import type { NewsItem } from "@shared/finance";
+import type { NewsItem } from "./marketData";
 import { parseNewsPageRequest } from "./newsPageRequest";
 
 
@@ -17,6 +17,7 @@ test("explicit from/to stay fixed through pagination and apply local item offset
   const bounds = { from: "2026-10-01", to: "2026-10-27", windowDays: 7 };
   assert.equal(buildNewsWindowQuery("AAPL", 1, bounds), "AAPL after:2026-09-30 before:2026-10-28");
   assert.equal(buildNewsWindowQuery("AAPL", 2, bounds), "AAPL after:2026-09-30 before:2026-10-28");
+
 });
 
 test("paged page 1 rewrites provider when windows, while legacy getNews keeps original queries", () => {
@@ -47,3 +48,7 @@ test("inclusive fixed dates and rolling windows filter providers returning the w
     { from: "2026-10-01", to: "2026-10-27" })), [1, 2, 3, 4]);
 });
 
+test("paged UTC date validation preserves one explicit request anchor", () => {
+  assert.deepEqual(newsPageWindowBounds(2, { windowDays: 7 },
+    new Date("2026-10-27T23:59:59.000Z")), { from: "2026-10-14", to: "2026-10-20" });
+});

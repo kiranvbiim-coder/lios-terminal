@@ -26,7 +26,7 @@ function fixture(t: { after: (callback: () => void) => void }) {
     verifiedAt: "2026-10-26T08:00:00Z", permission: "commercial_redistribution_and_display",
     offlineBundlingPermitted: true, state: "approved",
   };
-  const save = (assets: unknown[]) => writeFileSync(ledgerPath, JSON.stringify({ schemaVersion:1, assets }));
+  const save = (assets: unknown[]) => writeFileSync(ledgerPath, JSON.stringify(assets));
   return { folder, ledgerPath, png, fileName, media, save };
 }
 

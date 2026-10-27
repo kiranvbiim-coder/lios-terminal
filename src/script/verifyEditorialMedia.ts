@@ -5,12 +5,9 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { editorialMediaSchema, eligibleEditorialMedia } from "@shared/editorialMedia";
 
-const ledgerSchema = z.object({
-  schemaVersion: z.literal(1),
-  assets: z.array(editorialMediaSchema).max(200),
-}).strict();
+const ledgerSchema = z.array(editorialMediaSchema).max(128);
 
-export const EDITORIAL_LEDGER_PATH = fileURLToPath(new URL("../media/editorial-license-ledger.json", import.meta.url));
+export const EDITORIAL_LEDGER_PATH = fileURLToPath(new URL("../client/public/editorial-media/manifest.json", import.meta.url));
 export const EDITORIAL_PUBLIC_DIRECTORY = fileURLToPath(new URL("../client/public/editorial-media/", import.meta.url));
 
 function allowedSignature(buffer: Buffer, extension: string): boolean {
@@ -28,7 +25,7 @@ export function verifyBundledEditorialAssets(
   asOf = new Date().toISOString(),
 ) {
   const input: unknown = JSON.parse(readFileSync(ledgerPath, "utf8"));
-  const ledger = ledgerSchema.parse(input);
+  const ledger = { assets: ledgerSchema.parse(input) };
   const listed = new Set<string>();
   if (!existsSync(publicDirectory)) {
     if (ledger.assets.length) throw new Error("Licensed editorial asset folder missing.");
@@ -36,7 +33,7 @@ export function verifyBundledEditorialAssets(
   }
   const folder = lstatSync(publicDirectory);
   if (!folder.isDirectory() || folder.isSymbolicLink()) throw new Error("Asset directory must be a regular directory.");
-  const actual = readdirSync(publicDirectory);
+  const actual = readdirSync(publicDirectory).filter(name => name !== "manifest.json");
   for (const asset of ledger.assets) {
     if (!eligibleEditorialMedia(asset, [asset.sourceEvidenceId], asOf))
       throw new Error("Unapproved, expired or unlinked editorial rights record: " + asset.assetPath);
