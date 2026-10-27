@@ -17,7 +17,7 @@ test("general Workbench return reviews an identity change instead of silently di
   assert.match(shell, /returnChangesChatIdentity\(\{ mode: chatMode, projectId: selection\.projectId, chatId: selection\.chatId \}, origin\)/);
   assert.match(shell, /reviewingChatReturn\.current === request/);
   assert.match(shell, /if \(!\(await confirmConversationSwitch\(\)\)\) \{\s*handledChatReturn\.current = request/);
-  assert.match(shell, /setChatMode\(origin\.mode\);\s*selection\.setProjectId\(origin\.projectId\);\s*selection\.setChatId\(origin\.chatId\)/);
+  assert.match(shell, /if \(selection\.projectId !== origin\.projectId \|\| selection\.chatId !== origin\.chatId\) \{\s*selection\.setProjectId\(origin\.projectId\);\s*selection\.setChatId\(origin\.chatId\);\s*\} else \{\s*setChatMode\(origin\.mode\);/);
   assert.match(shell, /Your unsent work remains in this Chat\. Return to Work to try switching again/);
 });
 
