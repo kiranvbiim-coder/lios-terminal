@@ -88,7 +88,7 @@ test("Phase 2 guided trails are explicitly named, user-started and source-only",
 test("Phase 2 provenance inspector opens only a chosen visible graph connection, never a fabricated claim", () => {
   assert.match(canvas, /listExplicitResearchConnections\(model\)/);
   assert.match(canvas, /inspectExplicitResearchConnection\(model, selectedConnectionKey\)/);
-  assert.match(canvas, /useState<string \| null>\(null\)/);
+  assert.match(canvas, /useState<string \| null>\(initialReturnState\?\.selectedConnectionKey \?\? null\)/);
   assert.match(canvas, /aria-label="Visible user-grouped connections"/);
   assert.match(canvas, /aria-label="Selected connection provenance"/);
   assert.match(canvas, /aria-pressed=\{inspectedConnection\?\.key === connection\.key\}/);
@@ -113,6 +113,8 @@ test("Phase 2 Studio to Workbench to Studio restores only on-mount presentation"
   assert.match(shell, /<StudioNav tab=\{tab\} onTab=\{onSelectTab\}/);
   assert.match(shell, /onOpen=\{\(view, mode, symbol\) => \{ onOpen\(view, mode, symbol\); onClose\(\); \}\}/);
   assert.match(canvas, /reconcileSpatialCanvasReturnState\(/);
+  assert.match(canvas, /connections\.map\(connection => connection\.key\)/);
+  assert.match(canvas, /selectedConnectionKey, expanded/);
   assert.match(canvas, /onReturnStateChange\(/);
   assert.doesNotMatch(overlays, /localStorage\.setItem\(["']lios\.spatial/i);
 });
