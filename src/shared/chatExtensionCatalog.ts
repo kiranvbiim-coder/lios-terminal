@@ -18,6 +18,7 @@ export const chatExtensionCatalogSchema = z.object({
     id: z.number().int().positive(),
     name: z.string().min(1).max(240),
     status: z.enum(["healthy", "configured", "degraded", "unreachable", "invalid"]),
+    projectId: z.number().int().positive().nullable(),
     projectRequired: z.literal(true),
     explicitApprovalRequired: z.literal(true),
   }).strict()).max(100),
