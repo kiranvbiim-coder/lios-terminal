@@ -216,11 +216,33 @@ export function buildPythonSidecarEnvironment(
 // class of bug as resolveNodeBinary() in main.cjs; same fix -- resolve an
 // absolute path instead of trusting PATH order. This list is macOS-specific
 // on purpose: none of these paths exist on a Linux container, so a
-function packagedSidecarExecutable(): string | null {
-  if (!resourcesBase) return null;
-  const executable = process.platform === "win32" ? "lios-python-sidecar.exe" : "lios-python-sidecar";
-  const candidate = path.join(resourcesBase, "python-sidecar-dist", "lios-python-sidecar", executable);
-  return fs.existsSync(candidate) ? candidate : null;
+/**
+ * The packaged Electron backend must use only the exact bundled executable.
+ * Falling back to an arbitrary host Python after packaging fails would conceal
+ * a broken installer, violate source-to-binary equivalence and introduce
+ * dependencies that were never tested or owned by LiOS.
+ *
+ * Returning null is permitted only in an unpackaged/server checkout.
+ */
+export function resolvePackagedPythonSidecar(
+  root: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  if (!root) return null;
+  const unavailable = () => new Error("Packaged Python sidecar is missing or invalid; host-interpreter fallback refused.");
+  if (!path.isAbsolute(root)) throw unavailable();
+  const filename = platform === "win32" ? "lios-python-sidecar.exe" : "lios-python-sidecar";
+  const candidate = path.join(root, "python-sidecar-dist", "lios-python-sidecar", filename);
+  try {
+    const stat = fs.lstatSync(candidate);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 ||
+        (platform !== "win32" && (stat.mode & 0o111) === 0)) {
+      throw unavailable();
+    }
+  } catch {
+    throw unavailable();
+  }
+  return candidate;
 }
 
 function resolvePythonExecutable(): string {
@@ -296,16 +318,17 @@ export function startPythonService(): Promise<boolean> {
     // and is never trusted or reused: always launch our own on a fresh port.
     localPort = await reserveLoopbackPort();
 
-    const packagedSidecar = packagedSidecarExecutable();
+    const packagedSidecar = resolvePackagedPythonSidecar(resourcesBase);
     const python = resolvePythonExecutable();
     const executable = packagedSidecar ?? python;
     const args = packagedSidecar
       ? []
       : ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", String(localPort)];
+    // Paths can contain personal directory names and must not be surfaced in logs.
     log(
       packagedSidecar
-        ? `Starting bundled Python sidecar (${packagedSidecar}) on port ${localPort}...`
-        : `Starting Python sidecar (${python}) on port ${localPort}...`,
+        ? "Starting bundled Python sidecar over authenticated loopback."
+        : "Starting development Python sidecar over authenticated loopback.",
       "python-service",
     );
 
