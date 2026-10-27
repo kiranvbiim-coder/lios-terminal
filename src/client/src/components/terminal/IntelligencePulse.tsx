@@ -10,7 +10,7 @@ import { setActiveScenario, subscribeScenarioUniverse } from "@/lib/terminalScen
 import { subscribeTerminalTimeContext } from "@/lib/terminalTimeTravel";
 import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
 import { useProactiveInboxReview } from "@/lib/useProactivePulse";
-import { buildActionInboxChatDraft } from "@/lib/actionInboxReview";
+import { assessActionInboxSnapshotFreshness, buildActionInboxChatDraft } from "@/lib/actionInboxReview";
 import type { ViewMode } from "@/lib/terminalTypes";
 
 interface Props {
@@ -52,6 +52,8 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
   const [expandedInboxItemId, setExpandedInboxItemId] = useState<string | null>(null);
   const [reviewHandoffMessage, setReviewHandoffMessage] = useState("");
   const { result: proactive, refresh: refreshInbox } = useProactiveInboxReview(tab === "proactive" && proactiveEnabled);
+  const inboxFreshness = proactive.state === "ready"
+    ? assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now()) : "unavailable";
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -179,6 +181,11 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
                     ? `${proactive.review.openCount} open items require review · ${proactive.review.totalCount} in the current inbox`
                     : `No open items in the returned inbox · ${proactive.review.totalCount} total records`}
               </div>
+              {proactive.state === "ready" && inboxFreshness !== "current" && <p role="alert" className="rounded-lg border border-amber-500/30 p-3 font-ui text-sm text-amber-200">
+                {inboxFreshness === "future"
+                  ? "The Action Inbox snapshot is dated in the future. Check this device clock and refresh; no review can be staged."
+                  : "The Action Inbox snapshot is stale or its date is unavailable. Refresh the original service before drafting a Chat review."}
+              </p>}
               {reviewHandoffMessage && <p role="alert" className="rounded-lg border border-amber-500/25 p-3 font-ui text-sm text-amber-200">{reviewHandoffMessage}</p>}
               {proactive.state === "ready" && (
                 <div className="space-y-3">
@@ -201,6 +208,11 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
                       <div className="mt-3 flex flex-wrap items-center gap-3">
                         <button type="button" onClick={() => {
                           if (proactive.state !== "ready") return;
+                          const freshness = assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now());
+                          if (freshness !== "current") {
+                            setReviewHandoffMessage("This Action Inbox snapshot needs a fresh server recheck. No Chat review was staged.");
+                            return;
+                          }
                           const drafted = buildActionInboxChatDraft(item, proactive.review.asOf!);
                           if (onStageAiReview(drafted)) onClose();
                           else setReviewHandoffMessage("Keep or review your unsaved Workbench edits before switching to Chat. No AI request was sent.");
