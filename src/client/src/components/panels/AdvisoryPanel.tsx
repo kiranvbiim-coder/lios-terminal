@@ -4,6 +4,7 @@ import {
   Circle, CircleDot, CircleSlash, Calendar, FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import type { DomainInfo } from "@/lib/domains";
@@ -699,15 +700,18 @@ export default function AdvisoryPanel() {
         )}
       </div>
 
-      {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4" onClick={() => { if (!submitting) setShowNewModal(false); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="lios-advisory-request-heading" className="my-8 w-full max-w-lg space-y-4 rounded-xl border border-border bg-background p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 id="lios-advisory-request-heading" className="text-lg font-semibold text-foreground">Request advisory review</h3>
+      <Dialog open={showNewModal} onOpenChange={next => { if (!next && !submitting) setShowNewModal(false); }}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-2xl"
+          onEscapeKeyDown={event => { if (submitting) event.preventDefault(); }}
+          onInteractOutside={event => { if (submitting) event.preventDefault(); }}>
+          <DialogTitle className="text-lg font-semibold text-foreground">Request advisory review</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Optional professional advice. Review and edit details before deliberately submitting; no engagement or payment is initiated by opening this form.</DialogDescription>
             <form onSubmit={handleCreateRequest} className="space-y-4 text-sm">
               <div>
-                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Domain Specialty</label>
+                <label htmlFor="lios-advisory-domain" className="mb-1 block text-sm font-semibold text-muted-foreground">Domain Specialty</label>
                 {domains.length > 1 ? (
                   <select
+                    id="lios-advisory-domain"
                     value={formDomainId ?? ""}
                     onChange={(e) => setFormDomainId(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-muted border border-border font-medium text-foreground focus:outline-none"
@@ -749,12 +753,12 @@ export default function AdvisoryPanel() {
                 {packType && <p className="mt-2 text-sm text-muted-foreground">Template loaded below — edit freely before submitting.</p>}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Query Title</label>
-                <Input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Q3 Hedging strategy for Forex exposure" />
+                <label htmlFor="lios-advisory-title" className="mb-1 block text-sm font-semibold text-muted-foreground">Query Title</label>
+                <Input id="lios-advisory-title" type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Q3 Hedging strategy for Forex exposure" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Query Description &amp; Details</label>
-                <textarea required rows={packType ? 8 : 4} value={description} onChange={(e) => setDescription(e.target.value)}
+                <label htmlFor="lios-advisory-description" className="mb-1 block text-sm font-semibold text-muted-foreground">Query Description &amp; Details</label>
+                <textarea id="lios-advisory-description" required rows={packType ? 8 : 4} value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Provide context, metrics, or specific questions for our advisory team..."
                   className="w-full px-3 py-2 border border-input bg-background focus:outline-none focus:ring-1 focus:ring-[hsl(38,95%,50%)] text-foreground" />
               </div>
@@ -765,9 +769,8 @@ export default function AdvisoryPanel() {
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
