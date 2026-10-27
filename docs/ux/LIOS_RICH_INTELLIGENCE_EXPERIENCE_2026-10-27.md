@@ -268,3 +268,150 @@ These registry names and several full TSX bodies were verified in upstream sourc
 - **Phase 4:** refine transitions and briefing carousels; mature accessibility, source rights, performance, memory, native installed Mac/Windows regression and the existing $0 beta release contract.
 
 **Recommendation:** Watermelon is a **priority permissive source-code donor** for small, polished interactive UI parts, but **not** a blanket replacement for LiOS's visual design system, desktop application shell, analytics, evidence model or backend. Its own marketing claim "production ready" is not LiOS native acceptance.
+
+
+## 13. Expanded code-first donor assimilation — owner direction 2026-10-27
+
+**This is the latest controlling donor-selection interpretation within this UX annex and supersedes narrower earlier shortlists/rejection language in this file wherever they conflict.** **No arbitrary cap on volume, whole screen/subsystem reuse or framework upgrades** if the improvement is material and verified. Reuse the maximum safe, licensed, maintainable donor code. The distinction is **not** 'small component allowed / big component forbidden'; it is 'improved LiOS experience with functioning original owners / competing or fragile stack'. Research/UX references can inspire design, but only inspected permissibly licensed source code can be directly imported without additional permissions.
+
+**Truth limitations:** this was GitHub source inspection and targeted code review, not full source line-by-line audit of every candidate, browser screenshots, source integration, native Electron acceptance, full dependency closure, or a successfully executed upstream app. Planned != source-present != source-tested != rendered-tested != native-tested != shipped.
+
+### 13.1 Code-derived baseline, not previous summaries
+
+Selected actual LiOS files directly read (public main as inspected):
+- \`src/shared/waveDContracts.ts\` — 386-line Wave D card/evidence/scoring/action/What Changed contract; \`src/server/waveDRoutes.ts\`, \`waveDIntegrations.ts\` — real Pulse routes with sources and optional evidence-bounded BYOAI. **Reuse and extend.**
+- \`src/client/src/components/terminal/FusionPulseBoard.tsx\` (~299 lines) — functional four channels/market metrics/card rows but information-dense/small type; \`IntelligencePulse.tsx\` — risk/matrix overlay; \`HomeAttentionPanel.tsx\` — Action Inbox/evidence. **Converge visual presentation only.**
+- \`src/client/src/components/panels/NewsPanel.tsx\` (~232 lines) + \`src/client/src/lib/finance.ts\` — text-first article lists, filtering, source and timestamps but no media presentation contract. **Media rights/actual source story identity is the main P1 gap.**
+- \`GraphExplorer.tsx\` (~96 lines) — existing cross-domain graph is rendered from fixed trigonometric \`nodePosition\` coordinates, bounded to 120 intelligence objects, object actions and filters. **Enhance canvas/zoom/layout/edge interactions using React Flow or alternative, retain cross-domain graph function and permissioned actions.**
+- \`ImpactMap.tsx\` — existing *scenario assumption impact* presentation, not geolocation; \`CoverageMapPanel.tsx\` is a provider-region coverage matrix, not event map; \`VisualCanvas.tsx\` provides visual environment/backdrop, not geospatial investigation. **F02 needs real geographic renderer/locations, not an invented claim of existing map coverage.**
+- \`WorkSearchDialog.tsx\` (~201 lines), \`CommandBar.tsx\` (~513 lines) — real search/keyboard command ownership exists. **Enhance UX, do not fork another search route.**
+- \`geminiNewsService.ts\` — existing Google News RSS XML reading via fast-xml-parser, BYOAI summarization, first 5 items with link/title/published/source; \`gdeltData.ts\` — GDELT API throttled/cached media data. **No new standalone RSS/cloud backend required for first version.** Source eligibility, provider terms, broader cross-domain queries, dedup/media fetching/caching rights need targeted work.
+- \`src/remotion/DemoVideo.tsx\` and \`Root.tsx\` — real 1,800-frame Remotion demo scaffold but hard-coded sample quotes and headlines; **not a production grounding path**. Do not reuse fabricated ticker values or pretend demo clips are observed research.
+- Existing source imports \`src/client/src/components/terminal/SourceCatalogueSearch.tsx\` already adapt permissive OpenSourceUI donor code with provenance. Reuse this path-level pattern.
+
+### 13.2 Watermelon deeper actual source read — two MIT repos, large reuse allowed
+
+**Pin for repeatable source inspection (2026-10-27):**
+- Platform \`WatermelonCorp/watermelon-platform@7b93bcfe8d8b44a462dc676d842bb54056faab0f\` root MIT; current components in \`src/data/contents/animated-components/<slug>/{base,original}.tsx\`; new \`skills/make-interfaces-feel-better\` and \`skills/watermelon-ui\`.
+- Registry \`WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17\` root MIT; composable TSX bundled within \`public/r/<slug>.json\`. Platform's \`scripts/generate-shadcn-registry.ts\` fetches older registry for blocks/dashboards, builds animated component registry from maintained platform source; **check newest platform canonical TSX before importing old registry versions**.
+- Published stack uses React 19, Tailwind 4, Motion 12; LiOS current \`src/package.json\` uses React18, Tailwind3, \`framer-motion\`11, Embla8, ECharts6, Recharts2. Watermelon publicly states React18/19 compatible *but* Tailwind4 required for as-is installation; assess both port and controlled UI modernize path.
+- Audited actual source of \`contextual-ai-bar\`, \`inline-table-control\`, \`layered-progressive-disclosure\`, \`macos-sidebar\`, \`journal-navigation\`, \`quick-switcher\`, \`extended-toolbar\`, \`onboarding-setup\`, \`feature-tour\`, \`inline-action\`, \`quick-feedback\`, \`list-stack\`, \`expandable-event-card\`, \`command-search\`, \`morphing-discovery-bar\`, \`inline-toast\`, \`carousel-navigator\`, \`continuous-tabs\`, \`minimal-carousel\`, \`filter-disclosure\`, and registry variants of cards/carousels/preview link/slider/dashboard. **Sample code presence does not imply quality or user-tested completion**.
+- Several real examples have fixed demo amounts/titles/external media, redundant icon packages, local-only state, or pointer-only clickable containers. Examples do not automatically meet WCAG, data rights or professional density. Plan to improve entire interaction, not merely reskin small cards.
+
+**Expanded direct-source import catalog** (no arbitrary count limit; order is priority, not blanket approval):
+
+| Priority | Upstream component or complete subsystem | LiOS live integration target | Selection notes from inspected source |
+| --- | --- | --- | --- |
+| P0 | \`expandable-event-card/base.tsx\` + image-led card sections and full story treatment | \`FusionPulseBoard\`, \`NewsPanel\`, Wave D card registry | Import TSX composition and motion where advantageous; replace unlicensed hardcoded \`assets.watermelon.sh\` event image + festival placeholder, use keyboard-safe trigger, grounded story & evidence |
+| P0 | \`activities-card/base.tsx\` + \`list-stack\` | What Changed/Action Inbox/Watchrooms/Project continuity | Feed of real event/monitor records, semantic list/action rows, no fake counters |
+| P0 | \`morphing-discovery-bar/base.tsx\` + \`command-search\` | Topic discovery/Visual Search UI within existing command and work search | Reuse interactions, not sample Calendar/User commands or second routing/state store |
+| P0 | \`contextual-ai-bar/base.tsx\` + \`quick-switcher\` | Contextual Ask/Analyze/Compare actions attached to story/visual/Artifact | Compose with existing P2 Chat and no duplicated AI executor |
+| P0 | \`layered-progressive-disclosure\`, \`filter-disclosure\`, \`collection-grid-disclosure\` | Progressive article filters, investigation depth, source comparison panels | Audit nested scrolling and pointer-only interactions; remove extraneous dependencies and dark-mode contrast failures |
+| P1 | \`continuous-tabs\`, \`fluid-tabs\`, \`discrete-tabs\`, \`carousel-navigator\`, \`motion-carousel\` | Existing For You/Following/Markets/Research channel selection, hero stories, briefing galleries | Select coherent set; keep semantic tab keyboard, Embla architecture where useful; measure smoothness |
+| P1 | \`preview-link-card\`, \`hover-card\`, \`expand-details\` | Source/evidence preview; claims, citations and supporting research documents | No involuntary remote fetch; safe user-authorized preview and P3 trust scope |
+| P1 | \`journal-navigation\`, \`event-reminders\`, \`feature-tour\` | Story Evolution, event chronology and optional explainable onboarding | Source timeline plus timestamps, reduced motion, optional tour not unavoidable overlays |
+| P1 | \`inline-action\`, \`quick-feedback\`, \`inline-toast\` | Save/follow/review/monitor status with rollback/receipt and undo where applicable | Async success must reflect actual server outcome; no optimistic false confirmation |
+| P1 | \`inline-table-control\`, \`extended-toolbar\` | Evidence comparison tables, selected data and Artifact inline tools | Preserve canonical P4 versions, editable permission rules, unit/snapshot semantics |
+| P2 | \`adaptive-slider\`, \`range-selection-slider\`, \`knob-slider\` | P11 scenario assumptions and constrained policy sensitivity exploration | Separate UI draft from deterministic engine; proper units/range/input review |
+| P2 | \`onboarding-setup\`, \`integration-card\`, \`feature-tour\` | Contextual inline connectors/plugins and first-time LiOS guidance | Avoid alternate setup flows, silent provider activation and shallow marketing copy |
+| P2 | \`macos-sidebar\`, \`journal-navigation\` | Evaluate professional layout ergonomics and project/history navigation | **Full layout adaptation permitted** if superior to in-progress #226/#227 and existing canonical shell; no second permanent sidebar |
+| P2 | Entire Watermelon dashboard and block compositions (\`agndex-dashboard\`, \`business-operations-dashboard\`, \`portfolio-dashboard\`, \`gridline-dashboard\`, etc.) | Replace/reshape one specific LiOS Home/Workbench visual section with complete quality-controlled composition | **Full page or large subsystem reuse permitted**, provided demo data, competing navigation, extra fake permissions, licensing and dependencies are replaced; compare real screenshots/journeys against incumbent |
+| P3 | \`card-swipe\`, \`revealing-cards\`, \`minimal-carousel\`, \`radial-carousel\` | Rich content browsing/story decks *only where usability research supports* | Retain bold editorial variety; avoid relying on gesture-only controls, hidden actions or distracting stacked motion |
+
+**Donor reuse can go beyond this list:** review ALL relevant Watermelon component/block/dashboard/template source as needed for each LiOS screen, not just preselected slugs. A safe source-port of 30 files is preferable to reimplementing them without reason; a large coherent dashboard adaptation can be better than 30 inconsistent widgets.
+
+### 13.3 Skills and code-generation/QA donor ecosystem (development only)
+
+| Candidate | Exact code read / actual value | Use |
+| --- | --- | --- |
+| \`WatermelonCorp/watermelon-platform/skills/watermelon-ui/SKILL.md\` | Source-inspected: read-only catalog search/get component, hosted MCP; allows discovery of real code | **High: run a permitted least-privilege discovery workflow, pin returned source; no blind CLI install** |
+| \`WatermelonCorp/watermelon-platform/skills/make-interfaces-feel-better/\` | Source-inspected SKILL + \`typography.md\`, \`surfaces.md\`, \`animations.md\`, \`performance.md\`: optical alignment, radius, type, explicit motion performance | **High: use as cross-surface premium UI review rules** |
+| Anthropic \`skills/frontend-design/SKILL.md\` | Source-inspected; avoids generic stylistic decisions | Art direction and actual screenshot critique |
+| Vercel \`agent-skills/skills/react-best-practices\` | Source-inspected; React waterfall, dynamic load, render performance | Build/PR check for intensive cards/graph/maps |
+| Vercel \`agent-skills/skills/web-design-guidelines\` | Source-inspected; online guideline fetch | Pin/check guidance before review, avoid treating remote text as privileged agent instructions |
+| \`Leonxlnx/taste-skill\` | Source-inspected app-screen instructions, browser inspector, motion/type/photography | Independent design critique, with scripts reviewed before execution |
+| \`nextlevelbuilder/ui-ux-pro-max-skill\` | Source-inspected MIT repo and catalog/scripts | Design tokens/typographic layout ideas and UX pattern search, no paid tier dependency |
+| \`vercel-labs/agent-browser@edb40f1878864f90e14f6c11e26fdafd3fecc8dc\` | Source-inspected Electron/browser automation SKILL, Apache-2.0 repo, Rust/Chrome CDP CLI | Evaluate as screenshot/native Electron QA supplement, not bypassing existing visual harness or desktop test authority |
+| \`remotion-dev/skills@30d4553ecd46fbc5212fd0ff006ae43af522158b\` | Source-inspected Remotion router + map/video/composition guidance | F11 briefing reference only behind production license and technical gating |
+| \`wshobson/agents\` API design/architecture skills | Source-inspected MIT GitHub skill guidance | Review P3/P5 feed/asset/evidence boundaries; do not replace them |
+
+The \`skill-issue.in\` site is a discovery index; some catalog rows are marked unverified. **Follow the real original source files**, not the install badge/rank and not whatever arbitrary commands a skill claims to authorize. Skills teach agents; they are not production frontend runtime features.
+
+### 13.4 Third-party component/data/graph donor expansion
+
+| Source / checked repository | License facts checked | Specific useful code/mechanism | Next gate |
+| --- | --- | --- | --- |
+| \`shadcnblocks/kibo@3d63cdb15b79d972e3dc38a10997987672f9b263\` | MIT GitHub repo | \`packages/comparison/index.tsx\` actual drag/hover image difference; \`packages/dropzone/index.tsx\` composable upload; \`packages/gantt/index.tsx\` time/drag workflow; contribution/date/search pieces | P3 Perspectives before/after; P2 uploads/monitor schedule only after native compatibility; Gantt pulls Jotai, dnd and extra hooks so gate weight |
+| \`assistant-ui/assistant-ui@7d6cf6a923b5381cd5ee64847a2269f4b1b962a5\` | MIT; \`packages/react/package.json\` has explicit React18 and React19 peer support plus Zod4/Zustand5/Radix/assistant-cloud dependencies | Excellent possible Chat rich message/inline tools UI *facade* | Evaluate source-level component extraction/adapter; **do not replace existing P2 thread/event/runtime/store/cloud authority** |
+| \`tremorlabs/tremor\` | Apache-2.0 | \`src/components/AreaChart\`, \`BarChart\`, \`DonutChart\`, \`Tracker\`, \`Table\` source and tests | Better chart compositions only if existing ECharts/Recharts inadequate; no second chart stack |
+| \`xyflow/xyflow\` | MIT | React Flow node/edge/mini-map/toolbar/zoom/pan primitives | P3 GraphExplorer *renderer* upgrade while preserving LiOS object/edge/evidence contracts |
+| \`vasturiano/react-force-graph\` | MIT | 2D/3D force graph alternative | Benchmark FPS, layout, accessibility and bundle against React Flow; never install both by default |
+| \`maplibre/maplibre-gl-js\` + \`visgl/deck.gl\` | MapLibre BSD-3-Clause source per upstream, deck.gl MIT; GitHub metadata of MapLibre incomplete, verify exact license file | World intelligence maps, event layers/aggregation/heatmaps | Separate tile/map geographic dataset rights, offline behavior, chunk-loading and GPU budget |
+| \`protomaps/PMTiles\` | check exact package/file license before adoption | local/offline vector tile archive mechanism | validate distributable data assets/tile rights and size |
+| \`TanStack/virtual\` | MIT | virtualized cross-domain feeds, research search results and large image/story grids | P1/P2 benchmark against current list behavior |
+| \`mozilla/readability\` | Apache-2.0 | article text extraction under actual publisher access conditions | P1/P3 only if terms allow retrieving and caching text; prompt-injection and SSRF boundaries |
+| \`microlinkhq/metascraper\` | MIT | OpenGraph/JSON-LD metadata extraction | P1 server-side link/image description adapter; **metadata image URL is not reuse rights** |
+| \`rbren/rss-parser\` | MIT | lightweight Node RSS/Atom parsing | Compare directly against existing \`fast-xml-parser\` in \`geminiNewsService.ts\`; import only if actual correctness/format breadth improves |
+| \`Miniflux/v2\` | Apache-2.0 | feed polling, dedupe, retention and caching implementation lessons | Can adapt Go service algorithm/architecture or source as separate local service only if justified by packaging tests; no mandatory cloud feed server |
+| \`KagiSearch/kite-public\` | MIT frontend, dataset rights independent/noncommercial | topical news/cluster and source perspective UI inspiration | No licensed Kagi feed dataset import without permission |
+| \`RSSHub/RSSHub\`, \`RSSNext/Folo\` | AGPL-3.0 repository source | feed/trend/reading patterns useful for conceptual benchmarking | Copyleft gate: no code wholesale into proprietary core absent counsel/licensing decision |
+| \`magicuidesign/magicui\`, \`ibelick/motion-primitives\` | MIT repo metadata, inspect exact component license/path prior to copying | Animations, bento and content hero compositions beyond Watermelon | Evaluate direct source donor when a tested LiOS screen needs the effect, not broad extra packages |
+
+**Avoid assuming MIT root covers arbitrary image/video/font/icon/sample data or every transitive package.** A larger donor import needs better license due diligence, not a categorical size ban.
+
+### 13.5 PromptMotion deep audit — inspiration yes, source code only when attached & licensed
+
+- \`promptmotion.org\` provides creator-attributed motion briefs and videos; its prompts are not a published MIT React registry. Source-based visual references inspected: https://promptmotion.org/prompts/p-a1aab88a (evidence + data.json + code + timing, renders/stills/review), https://promptmotion.org/prompts/p-b0c58a8a (reusable parametrized compositions for social/video aspect ratios), https://promptmotion.org/prompts/p-30d95445 (separate controllable transition parameters), https://promptmotion.org/wani-shola-16ca7a (real UI capture/large type/brand-limited product demo).
+- **Import patterns aggressively**: story beat logic, frame/timing parameters, reusable shot renderer interfaces, transitions, code-to-video composition strategies and screenshot render/review loops; write original LiOS content and implementation when no permissively licensed source code is provided.
+- **Critical hidden license gate found 2026-10-27:** current Remotion repository license is **source-available custom**, not OSI-approved MIT/Apache; official licensing generally grants Free License to individuals and companies/teams up to three people, with Company License normally required for 4+ people and use-case-dependent redistribution/automation conditions. See https://www.remotion.dev/docs/license/pricing and https://www.remotion.dev/docs/license/faq and https://github.com/remotion-dev/remotion/blob/main/packages/core/LICENSE.md . **LiOS already contains \`src/remotion/DemoVideo.tsx\` example/demo-only Remotion code, not permission to include a user-facing bundled video rendering engine indefinitely.** Audit organization size, use scenario, end-user redistribution/usage and specific version *before* making F11 production-critical. No paid subscription or license is allowed under $0 release owner lock: if ineligible, render F11 first as source-grounded editable visual Artifact/storyboard and evaluate MIT/Apache local composition/FFmpeg paths instead. Do not misrepresent Prompts Motion creations as LiOS-owned video rights.
+
+### 13.6 Honest framework decision — import broadly, modernize only with tested proof
+
+**We are not ideologically restricting LiOS to React18/Tailwind3.** Two admissible approaches:
+- **A. Maximal tested source-port first:** import substantial coherent React components/block compositions into current React18/Tailwind3 using code transforms, existing theme variables and Framer Motion/Embla; no global dependency upgrade required. Good for rapid first visible improvements and minimal merge conflicts.
+- **B. Isolated modern stack spike:** on an independent experimental branch/worktree (never blindly on release main), upgrade React18->19, Tailwind3->4, Motion11->12 and Zod3->4 only if needed for a compelling >component-scale donor integration. Compare whole-application typecheck, offline/native test suite, CSS rendering, dark theme, accessibility, Electron CSP, P4 spreadsheet/document editing, existing Radix/shadcn, project/chat persistence, binary size/startup/memory, current active PRs and rollback. Migration approval is determined by measured UX and platform benefit, not fashion or fear. **Rollback on failures, avoid partial parallel framework runtimes.**
+
+Whole-dashboard imports, cloned interactions, multiple upstream component collections and substantial backend source are explicitly allowed whenever licenses, compatibility, one-owner integration and real native quality pass.
+
+### 13.7 Phase-by-phase executable import ledger
+
+**Phase 1 — Import-ready premium foundation (F01–F12 shared dependency):**
+1. Freeze exact public main/UX PR heads; open real Home/Chat/News/Graph/Briefing at 390px, 768px, desktop/200%; capture source/rendered/native baselines and identify where existing code is superior.
+2. Track source SHA/paths and notice for imported donor files. Trial Watermelon cohesive \`ExpandableStoryCard\` **and** \`contextual-ai-bar\` + \`activity-card\`, with right sourced story/permission/review actions. First visual experience must not require 4 new package managers.
+3. Plug into Wave D/News existing item/envelope with allowed image metadata, alt/attribution/cache rights, source-provenance click path and published/observed timestamps. Use existing Google News RSS/GDELT provider through existing routes where legal/available; compare \`metascraper\` and \`readability\` with actual provider rules. Add safe imagery fallback and story dedup.
+4. Build shared editorial hierarchy of hero image + trusted synopsis + source, rich/compact cards + expanded investigation; buttons route to existing Chat, sources, artifacts and monitor.
+5. Check types/tests/CSP/SSRF/cross-project/no-source/404/stale/offline/keyboard/reduced-motion and real Electron screenshot; **ship first vertical slice before adding more dependencies**.
+
+**Phase 2 — Import the best complete discovery experience (F01/F06/F07/F10/F12 + N03/N06):**
+1. Adapt substantial Watermelon discovery/animation sets, selected dashboard compositions and optional Kibo UI/virtual lists; compose one coherent responsive Home+Pulse; retain user controls to switch editorial/compact/focus.
+2. Features: cross-domain topical story collections, ranked & deduped For You/Following/Markets/Research, topic explorer, hover source previews, Explain This Feed, What Changed receipt feed, visual search gallery, Project/recents continuation and Smart Watchrooms/notifications under P9.
+3. Native journey: first launch/connect or skip -> discover -> inspect evidence -> ask -> follow -> set monitor -> reopen after restart; finance + healthcare + policy or energy use cases; no fabricated evidence.
+4. Benchmark adaptation of full Watermelon \`portfolio-dashboard\`, \`business-operations-dashboard\`, \`gridline-dashboard\` against existing quiet UI and actual user work. If a cohesive full layout wins, import it after replacing dummy data/navigation/permissions.
+5. Ensure large feeds are virtualized/lazy and high-quality media doesn't block typing/streaming or local artifact actions.
+
+**Phase 3 — Import mature interactive investigation (F02/F03/F04/F05/F08/F09 + N01/N02/N03/N04):**
+1. Wire \`GraphExplorer\` object's existing cross-domain graph function to React Flow or higher-performing qualified alternative; preserve evidence and object action ownership; not a second graph database.
+2. Add true geospatial event map with MapLibre/offline permitted tiles and optional deck.gl visual aggregation; geolocate only sourced places/events, leave unknowns unknown.
+3. Story timeline/journal, source/claim comparison via Kibo comparison mechanisms, open linked evidence, scenario sliders using existing deterministic P11 engine and P4 review.
+4. Typed AI visual cards in current chat: model proposes approved renderer type and current data/Artifact/source refs; LiOS validates and retrieves data independently, denies arbitrary JS/HTML and unreviewed operations; context preserved across Workbench.
+5. Complete story -> evidence/graph/map -> scenario -> existing P4 same-ID Artifact -> back-to-chat. Exercise contradiction, stale source, zero records, revoked permissions, pathological nodes and low memory.
+
+**Phase 4 — Adaptive premium finishing + briefings + release (F11/N05/N07/N08 plus regression for all):**
+1. Approved Remotion only under documented valid free licensing; otherwise source-backed local editable visual storyboards/P4 slides and reviewed permissive video alternatives. Permit interesting animated diagrams, transcripts and high-quality captured product demos without unsourced financial headlines.
+2. Watermelon details skill + Anthropic/Vercel/Taste design critique: typography, optical alignment, layer depth, accessible keyboard/touch, responsive densification, reduced motion, physics/duration, screenshot comparison.
+3. Optimize file/binary/resource budget, CSP, current security controls, no outbound ad private data, source rights and cached asset expiry; optional clearly labeled sponsorship isolated from ranking.
+4. Native Mac and Windows **installed zero-cost beta** full route journey and error/restart/backup tests; CI green != native release. Preserve existing P14 signed production truth and $0 beta policy.
+
+### 13.8 Stop/go and measurable quality acceptance for donor code
+
+- **No import count restriction:** smallest useful component, coherent 40-file subsystem or full working screen can be correct. Donor acceptance depends on measured improvement + legal/security/owner fit.
+- **Experience:** prominent real media when legally allowed, readable editorial text, restrained chrome, meaningful animation, fast consistent shared transitions, no fake financial data, no under-10px functional labels in premium reading mode. Provide cross-domain visual variety, not an endless stack of tiny template cards.
+- **Architecture:** existing TC visible shell; P2 Chat; P3/P5 evidence/entity; P4 Artifacts; P9 watchrooms; P11 deterministic scenarios; GM/P13 trust/security; all data stays on user-authorized topology.
+- **Reliability:** role/tenant permission tested, safe link/image downloads, image metadata vs. media rights separated, stale/offline fallback, deterministic source timings, no no-op buttons; data remains across restart and permission boundaries.
+- **Performance:** measured startup/CPU/RAM/GPU and heavy view lazy-loading on actual reference Mac M2 and Windows, responsive typing while rich content loads, no regression to streaming or Artifact round-trip. Set numeric budgets after baseline.
+- **Proof:** \`source-present\`, \`source-tested\`, \`rendered-tested\`, \`native-installed-tested\`, \`accepted\` are separate columns in donor ledger; exact SHA source imports, file modifications, license and notices, screenshot pre/post and negative test proof.
+- **Sequence discipline:** PR #229 remains planning annex until owner review; reconcile overlapping #223, #226, #227 and other live PR heads. In Phase 1 ship a real card-to-Chat-and-evidence slice, not a giant untested cherry-pick.
+
+### 13.9 Architectural recommendation
+
+The central source insight: LiOS's weakness is not the absence of many analytical engines, but how evidence and data **appear, connect, flow and feel**. Reuse Watermelon's rich interaction families at scale, specialize with Kibo + React Flow + MapLibre + source-safe article ingestion, enforce skills/screenshot critique across development, and promote verified insights to the existing P4/P9 execution layer. **One premium intelligence product**; immersive when discovering, fast and exact when working, transparent when citing, and never childish.
