@@ -107,3 +107,12 @@ test("B07 saved cross-domain radar finds recorded matches beyond the first 120 w
   assert.deepEqual(selectRecordedCrossDomainGraphObjects(list,"", "node:215",3).map(x=>x.id),["node:215","node:9"]);
   assert.equal(list[215].relations.length,1);
 });
+
+test("B07 search resolves canonical recorded domain labels even when object title omits the domain", () => {
+  const saved=[object("macro:1","Inflation reading"),object("other:1","Publication")];
+  const subset=selectRecordedCrossDomainGraphObjects(saved,"macro",null);
+  assert.deepEqual(subset.map(item=>item.id),["macro:1"]);
+  const graph=buildCrossDomainGraph(subset);
+  assert.equal(graph.nodes[0].domain,"macro");
+  assert.equal(presentCrossDomainGraph(graph,{query:"macro"}).nodes[0].objectId,"macro:1");
+});
