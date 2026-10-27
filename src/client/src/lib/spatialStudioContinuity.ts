@@ -16,6 +16,7 @@ export interface SpatialCanvasReturnState {
   kindFilter: "all" | ResearchTrayItemKind;
   trailGroup: string;
   inspectedId: string | null;
+  selectedConnectionKey: string | null;
   expanded: boolean;
 }
 
@@ -24,6 +25,7 @@ export const INITIAL_SPATIAL_CANVAS_RETURN_STATE: SpatialCanvasReturnState = Obj
   kindFilter: "all",
   trailGroup: "",
   inspectedId: null,
+  selectedConnectionKey: null,
   expanded: false,
 });
 
@@ -34,10 +36,12 @@ export function reconcileSpatialCanvasReturnState(
   snapshot: SpatialCanvasReturnState,
   visibleItemIds: readonly string[],
   availableGroups: readonly string[],
+  availableConnectionKeys: readonly string[],
 ): SpatialCanvasReturnState {
   return {
     ...snapshot,
     inspectedId: snapshot.inspectedId && visibleItemIds.includes(snapshot.inspectedId) ? snapshot.inspectedId : null,
+    selectedConnectionKey: snapshot.selectedConnectionKey && availableConnectionKeys.includes(snapshot.selectedConnectionKey) ? snapshot.selectedConnectionKey : null,
     trailGroup: snapshot.trailGroup && availableGroups.includes(snapshot.trailGroup) ? snapshot.trailGroup : "",
   };
 }
