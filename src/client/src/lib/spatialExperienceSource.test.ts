@@ -35,7 +35,9 @@ test("Phase 2 pointer movement previews locally and commits once, while keyboard
   assert.match(canvas, /move\(dragRef\.current\.kind, dragRef\.current\.id, point, false\)/);
   assert.match(canvas, /drag\?\.kind === "node" && preview\?\.id === drag\.id\) move/);
   assert.match(canvas, /event\.currentTarget\.setPointerCapture\(event\.pointerId\)/);
-  assert.match(canvas, /onPointerCancel=\{stopDrag\}/);
+  assert.match(canvas, /onPointerCancel=\{cancelDrag\}/);
+  assert.match(canvas, /const cancelDrag = \(event:/);
+  assert.match(canvas, /Move canceled\. The prior saved pin position is unchanged/);
   assert.match(canvas, /onKeyDown=\{event => keyboardMove\(event, "node", item\.id\)\}/);
   assert.match(canvas, /removeResearchCanvasPosition\(item\.id\)/);
 });
