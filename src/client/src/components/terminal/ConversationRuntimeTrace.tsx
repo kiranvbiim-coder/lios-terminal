@@ -266,7 +266,6 @@ export default function ConversationRuntimeTrace({
             <span role="status" className="inline-flex items-center gap-1.5 px-1">
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" aria-hidden="true" />
               {waitingForApproval ? "Waiting for your approval" : "Working"}
-              {!waitingForApproval && <ResearchRunProgress events={events} requestId={requestId} view="inline" />}
             </span>
           )}
           {working && (
