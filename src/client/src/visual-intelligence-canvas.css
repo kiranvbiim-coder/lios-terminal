@@ -387,3 +387,42 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
     transform-style: flat !important;
   }
 }
+
+
+/* Phase 2 guided evidence trail: purely user-directed exploration of pinned items. */
+.lios-spatial-trail {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  border: 1px solid var(--lios-border-default, rgb(255 255 255 / .16));
+  border-radius: 13px; padding: 10px 12px;
+  background: var(--lios-bg-panel, rgb(20 22 28 / .97));
+}
+.lios-spatial-trail-select {
+  flex: 1 1 160px; max-width: 320px; min-width: 0; min-height: 40px;
+  border: 1px solid var(--lios-border-strong, rgb(255 255 255 / .36));
+  border-radius: 9px; background: var(--lios-bg-elevated, #22252a);
+  color: var(--lios-text-primary, #fff);
+  padding: 7px 10px; font-family: inherit; font-size: 13px;
+}
+.lios-spatial-trail-select:focus-visible {
+  outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: 2px;
+}
+.lios-spatial-trail .lios-spatial-control:disabled {
+  opacity: .45; cursor: not-allowed;
+}
+.lios-spatial-trail > [role="status"] { flex-basis: 100%; }
+.lios-spatial-board[data-trail-active="true"] .lios-spatial-node[data-trail-member="true"] {
+  border-color: var(--lios-theme-link, #91bacc);
+}
+.lios-spatial-board[data-trail-active="true"] .lios-spatial-node[data-trail-current="true"] {
+  z-index: 8; border-width: 2px;
+  box-shadow: 0 0 0 2px rgb(95 171 203 / .22), 0 18px 40px rgb(0 0 0 / .3);
+}
+@container (max-width: 540px) {
+  .lios-spatial-trail-select { max-width: 100%; flex-basis: 100%; }
+  .lios-spatial-trail > .lios-spatial-control { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lios-spatial-trail *, .lios-spatial-board[data-trail-active="true"] .lios-spatial-node {
+    transition: none !important; animation: none !important;
+  }
+}
