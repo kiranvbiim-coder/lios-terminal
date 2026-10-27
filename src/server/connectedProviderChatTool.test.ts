@@ -75,6 +75,7 @@ test("P5 Chat: single governed provider SDK and Project/rights boundaries are us
   assert.match(source, /await authorizeCanonicalDataRequests\(\[request\], tenant\)/);
   assert.match(source, /await getProject\(tenant, projectId\)/);
   assert.match(source, /resourceTransmissionAllowed !== true/);
+  assert.match(source, /previewAvailable: s\.sourceType === "file" \|\| s\.sourceType === "private_api"/);
   assert.match(source, /getLatestExternalRightsAssessment\(tenant, "data"/);
   assert.match(source, /source\.sourceType !== "file" && source\.sourceType !== "private_api"/);
   assert.match(runtime, /registerConversationTool\(connectedProviderListChatTool\)/);
