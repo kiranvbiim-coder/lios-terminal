@@ -360,3 +360,30 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 [data-low-resource-mode="true"] .lios-spatial-companion {
   box-shadow: none; backdrop-filter: none;
 }
+
+
+/* Accessible stacked reading mode, regardless of viewport or GPU capability. */
+.lios-spatial-board[data-layout="list"] {
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; padding: 18px; perspective: none;
+}
+.lios-spatial-board[data-layout="list"] .lios-spatial-axis,
+.lios-spatial-board[data-layout="list"] .lios-spatial-links { display: none; }
+.lios-spatial-board[data-layout="list"] .lios-spatial-node,
+.lios-spatial-board[data-layout="list"] .lios-spatial-companion {
+  position: relative !important; left: auto !important; top: auto !important;
+  width: 100%; max-width: 100%; flex: none; transform: none !important;
+}
+.lios-spatial-board[data-layout="list"] .lios-spatial-node { order: 1; }
+.lios-spatial-board[data-layout="list"] .lios-spatial-companion { order: 0; }
+.lios-spatial-board[data-layout="list"] .lios-spatial-empty { position: relative; min-height: 220px; }
+.lios-spatial-board[data-layout="list"] .lios-spatial-companion { max-height: none; }
+@media (max-width: 760px) {
+  /* On phones layout changes to a scrollable list instead of decorative overlapping nodes. */
+  .lios-spatial-drag { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lios-spatial-research :is(.lios-spatial-node, .lios-spatial-companion) {
+    transform-style: flat !important;
+  }
+}
