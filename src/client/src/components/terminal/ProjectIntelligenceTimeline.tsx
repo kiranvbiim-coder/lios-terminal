@@ -40,7 +40,7 @@ export interface ProjectTimelineGroup {
 
 /** Sort latest-first without modifying the server-owned response; group by the displayed local day. */
 export function groupProjectTimeline(events: readonly P7TimelineEvent[]): ProjectTimelineGroup[] {
-  const sorted = [...events].sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+  const sorted = [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id));
   const groups: ProjectTimelineGroup[] = [];
   for (const event of sorted) {
     const date = new Date(event.at);
@@ -77,7 +77,7 @@ export function ProjectIntelligenceTimeline({ events, loading = false, error = f
   const [visibleCount, setVisibleCount] = useState(8);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const reducedMotion = useReducedMotion();
-  const visible = [...events].sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id)).slice(0, visibleCount);
+  const visible = [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id)).slice(0, visibleCount);
   const groups = groupProjectTimeline(visible);
 
   if (error) return <p role="alert" className="mt-3 rounded-lg border border-red-400/25 p-3 font-ui text-sm text-red-200">Project history could not be loaded. Refresh the index or retry the Project.</p>;
