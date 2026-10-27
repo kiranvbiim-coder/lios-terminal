@@ -1,4 +1,5 @@
 import type { SourceConnection } from "@shared/schema";
+import { isCredentialSafeReference } from "@shared/dataFabric";
 import type { InstalledPluginSnapshot } from "./p13PluginManager";
 import { chatExtensionCatalogSchema, type ChatExtensionCatalog } from "@shared/chatExtensionCatalog";
 
@@ -8,16 +9,23 @@ import { chatExtensionCatalogSchema, type ChatExtensionCatalog } from "@shared/c
  * authority: the existing P13 owner, MCP Project policy and GM/L4 grants
  * still decide installation and execution.
  */
+function safeLabel(value: string, fallback: string): string {
+  const text = value.trim();
+  return text && text.length <= 240 && isCredentialSafeReference(text) && !/\\/\\/|:\\/\\/|[\\r\\n]|(?:secret|password|token|credential|api[_-]?key)\\s*[=:]/i.test(text)
+    ? text : fallback;
+}
+
 export function chatExtensionCatalog(input: {
   plugins: readonly InstalledPluginSnapshot[];
   connections: readonly SourceConnection[];
   userId: number;
   organizationId: number | null;
+  managementAvailable?: boolean;
 }): ChatExtensionCatalog {
   return chatExtensionCatalogSchema.parse({
     plugins: input.plugins.slice(0, 100).map((plugin) => ({
       id: plugin.id,
-      name: plugin.manifest.name,
+      name: safeLabel(plugin.manifest.name, "Installed plugin"),
       version: plugin.version,
       skillCount: plugin.manifest.skills.length,
       artifactCount: plugin.manifest.artifacts.length,
@@ -33,11 +41,12 @@ export function chatExtensionCatalog(input: {
       .slice(0, 100)
       .map((connection) => ({
         id: connection.id,
-        name: connection.name,
+        name: safeLabel(connection.name, `MCP connection ${connection.id}`),
         status: connection.status,
         projectRequired: true as const,
         explicitApprovalRequired: true as const,
       })),
     installationManagedByHomeOwner: true as const,
+    managementAvailable: input.managementAvailable === true,
   });
 }
