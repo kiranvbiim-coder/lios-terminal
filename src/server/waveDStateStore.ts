@@ -9,6 +9,7 @@
  */
 import { eq } from "drizzle-orm";
 import { userPersonaPreferences } from "@shared/schema";
+import { normalizePulseSubjectPreferences, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import type {
   CommunicationConnectionRecord,
   LivingReportRecord,
@@ -31,6 +32,8 @@ const MAX_STATE_BYTES = 48_000;
 
 export interface WaveDStoredState {
   pulseCards: PulseCardDraft[];
+  /** Authenticated owner-scoped discovery choices; no automation side effects. */
+  pulsePreferences: PulseSubjectPreferences;
   signalRules: StoredSignalRule[];
   theses: LivingThesisRecord[];
   eventRooms: StoredEventRoom[];
@@ -47,6 +50,7 @@ export interface WaveDStoredState {
 
 const EMPTY_STATE: WaveDStoredState = {
   pulseCards: [],
+  pulsePreferences: { followed: [], muted: [] },
   signalRules: [],
   theses: [],
   eventRooms: [],
@@ -70,6 +74,7 @@ function normalizeState(value: unknown): WaveDStoredState {
   const statuses = isRecord(value.inboxStatuses) ? Object.fromEntries(Object.entries(value.inboxStatuses).filter(([, status]) => status === "open" || status === "snoozed" || status === "resolved")) as WaveDStoredState["inboxStatuses"] : {};
   const state: WaveDStoredState = {
     pulseCards: Array.isArray(value.pulseCards) ? value.pulseCards.filter(isRecord) as unknown as PulseCardDraft[] : [],
+    pulsePreferences: normalizePulseSubjectPreferences(value.pulsePreferences),
     signalRules: Array.isArray(value.signalRules) ? value.signalRules.filter(isRecord) as unknown as StoredSignalRule[] : [],
     theses: Array.isArray(value.theses) ? value.theses.filter(isRecord) as unknown as LivingThesisRecord[] : [],
     eventRooms: Array.isArray(value.eventRooms) ? value.eventRooms.filter(isRecord) as unknown as StoredEventRoom[] : [],
@@ -90,6 +95,7 @@ function boundedState(state: WaveDStoredState): WaveDStoredState {
   const next = {
     ...state,
     pulseCards: state.pulseCards.slice(-200),
+    pulsePreferences: normalizePulseSubjectPreferences(state.pulsePreferences),
     signalRules: state.signalRules.slice(-100),
     theses: state.theses.slice(-50),
     eventRooms: state.eventRooms.slice(-100),
