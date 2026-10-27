@@ -82,3 +82,24 @@ test("Phase 2 guided trails are explicitly named, user-started and source-only",
   assert.match(canvas, /data-trail-member=/);
   assert.match(styles, /\.lios-spatial-board\[data-trail-active="true"\] \.lios-spatial-node\[data-trail-current="true"\]/);
 });
+
+
+test("Phase 2 provenance inspector opens only a chosen visible graph connection, never a fabricated claim", () => {
+  assert.match(canvas, /listExplicitResearchConnections\(model\)/);
+  assert.match(canvas, /inspectExplicitResearchConnection\(model, selectedConnectionKey\)/);
+  assert.match(canvas, /useState<string \| null>\(null\)/);
+  assert.match(canvas, /aria-label="Visible user-grouped connections"/);
+  assert.match(canvas, /aria-label="Selected connection provenance"/);
+  assert.match(canvas, /aria-pressed=\{inspectedConnection\?\.key === connection\.key\}/);
+  assert.match(canvas, /onClick=\{\(\) => setSelectedConnectionKey\(connection\.key\)\}/);
+  assert.match(canvas, /if \(selectedConnectionKey && !inspectedConnection\) setSelectedConnectionKey\(null\)/);
+  assert.match(canvas, /This line represents group membership only/);
+  assert.match(canvas, /has not verified any link/);
+  assert.match(canvas, /onClick=\{\(\) => openInspection\(inspectedConnection\.from\.id\)\}/);
+  assert.match(canvas, /onClick=\{\(\) => openInspection\(inspectedConnection\.to\.id\)\}/);
+  assert.match(canvas, /data-connection-current=/);
+  assert.match(canvas, /data-connection-member=/);
+  assert.match(styles, /\.lios-spatial-connections-summary/);
+  assert.match(styles, /\.lios-spatial-node\[data-connection-member="true"\]/);
+  assert.match(styles, /@container \(max-width: 540px\)/);
+});
