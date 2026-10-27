@@ -20,6 +20,7 @@ import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { ProjectResumeDesk } from "./ProjectResumeDesk";
 import { ProjectWatchroomDesk } from "./ProjectWatchroomDesk";
+import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
 
 export function relativeTime(value: string): string {
@@ -127,6 +128,7 @@ export function ProjectHome({
   const [watchroomsOpen, setWatchroomsOpen] = useState(false);
   const [continuityOpen, setContinuityOpen] = useState(false);
   const [investigationOpen, setInvestigationOpen] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const renameInFlight = useRef(false);
   const [renameBusy, setRenameBusy] = useState(false);
@@ -162,6 +164,7 @@ export function ProjectHome({
     setWatchroomsOpen(false);
     setContinuityOpen(false);
     setInvestigationOpen(false);
+    setBriefingOpen(false);
     setEnvironmentId(getProjectVisualEnvironmentPin(project.id) ?? "");
     setRenameBusy(false);
     setRenameError(null);
@@ -314,6 +317,18 @@ export function ProjectHome({
           </button>
           {investigationOpen && <div id={`project-investigation-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
             <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />
+          </div>}
+        </section>
+
+        <section className="mt-3 rounded-xl border border-border/60 bg-white/[0.015] p-3" data-testid="project-briefing-entry">
+          <button type="button" aria-expanded={briefingOpen}
+            aria-controls={`project-briefing-${project.id}`}
+            onClick={() => setBriefingOpen(value => !value)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left font-ui text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            <span>Briefing Studio</span><span className="text-sm font-normal text-muted-foreground">{briefingOpen ? "Hide" : "Open"}</span>
+          </button>
+          {briefingOpen && <div id={`project-briefing-${project.id}`} className="border-t border-border/55 px-1 pb-1 pt-3">
+            <ProjectBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
           </div>}
         </section>
 
