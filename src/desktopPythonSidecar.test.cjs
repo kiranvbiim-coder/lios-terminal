@@ -27,9 +27,45 @@ test("bundled sidecar path is platform-specific and fail-closed when absent", ()
     const dir = path.join(root, "python-sidecar-dist", "lios-python-sidecar");
     fs.mkdirSync(dir, { recursive: true });
     const executable = path.join(dir, "lios-python-sidecar");
-    fs.writeFileSync(executable, "stub");
+    fs.writeFileSync(executable, "stub", { mode: 0o700 });
+    if (process.platform !== "win32") fs.chmodSync(executable, 0o700);
     assert.equal(bundledPythonSidecarPath(root, "darwin"), executable);
     assert.equal(bundledPythonSidecarPath(root, "win32"), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("packaged desktop probe rejects symlinked parent directories and untrusted images", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-sidecar-parent-"));
+  try {
+    const distribution = path.join(root, "python-sidecar-dist");
+    const bundle = path.join(distribution, "lios-python-sidecar");
+    const external = path.join(root, "unrelated-runtime");
+    fs.mkdirSync(external);
+    const fake = path.join(external, "lios-python-sidecar");
+    fs.writeFileSync(fake, "synthetic external binary", { mode: 0o700 });
+    if (process.platform !== "win32") {
+      fs.symlinkSync(external, distribution, "dir");
+      assert.equal(bundledPythonSidecarPath(root, "darwin"), null,
+        "a symlinked distribution cannot redirect the packaged self-test to host Python");
+      fs.unlinkSync(distribution);
+    }
+    fs.mkdirSync(distribution);
+    if (process.platform !== "win32") {
+      fs.symlinkSync(external, bundle, "dir");
+      assert.equal(bundledPythonSidecarPath(root, "darwin"), null,
+        "the nested bundle folder cannot redirect an executable outside Resources");
+      fs.unlinkSync(bundle);
+    }
+    fs.mkdirSync(bundle);
+    const owned = path.join(bundle, "lios-python-sidecar");
+    fs.writeFileSync(owned, "synthetic packaged image", { mode: 0o700 });
+    if (process.platform !== "win32") fs.chmodSync(owned, 0o700);
+    assert.equal(bundledPythonSidecarPath(root, "darwin"), owned);
+    fs.writeFileSync(owned, "");
+    assert.equal(bundledPythonSidecarPath(root, "darwin"), null);
+    assert.equal(bundledPythonSidecarPath("relative-Resources", "darwin"), null);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

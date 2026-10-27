@@ -174,7 +174,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             {(query || selectedId || neighborsOnly || bridgesOnly || relation) && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); setNeighborsOnly(false); setBridgesOnly(false); setRelation(""); }}
               className="min-h-10 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground hover:text-foreground">Reset view</button>}
           </div>
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Cross-domain graph viewport controls">
+          <div className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Cross-domain graph viewport controls">
             <button type="button" aria-label="Zoom cross-domain graph out" onClick={() => setZoom(current => zoomClamp(current - 0.15))}
               className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Minus className="h-4 w-4" aria-hidden="true"/></button>
             <button type="button" aria-label="Zoom cross-domain graph in" onClick={() => setZoom(current => zoomClamp(current + 0.15))}

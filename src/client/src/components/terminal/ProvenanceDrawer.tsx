@@ -6,7 +6,6 @@ import {
 } from "@/lib/terminalEvidence";
 import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 import { filterPublishedSources, safePublishedSourceUrl, summarizePublishedSources, type SourceReviewFilter } from "@/lib/sprintBSourceReview";
-import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 
 function ProvenanceCard({ item }: { item: ProvenanceRecord }) {
   const safeUrl = safePublishedSourceUrl(item.sourceUrl);
