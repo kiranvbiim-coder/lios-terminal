@@ -4,10 +4,10 @@ import {
   ArrowRight, ArrowUpRight, BookOpenCheck, GitBranch, GitCompareArrows,
   Link2, Search, ShieldAlert, ShieldCheck, SplitSquareHorizontal,
 } from "lucide-react";
-import { safeHref } from "@/lib/chatMarkdown";
+import { safePublicSourceUrl } from "@shared/publicSourceUrl";
 import { RecordedEvidenceFlowPanel } from "./RecordedEvidenceFlowPanel";
 import {
-  buildPerspectiveModel, filterPerspectiveLinks, filterUnlinkedEvidence,
+  buildPerspectiveModel, filterPerspectiveLinks, filterUnlinkedEvidence, inspectRecordedEvidenceClaim,
   perspectivePublishedDate, type PerspectiveEvidence, type PerspectiveGroup,
   type PerspectiveLink, type PerspectiveRelation,
 } from "@/lib/researchPerspectives";
@@ -29,8 +29,7 @@ const LANE: Record<PerspectiveGroup, { label: string; meaning: string; tone: str
 
 function recordedLink(url: string | null): string | null {
   if (!url) return null;
-  const href = safeHref(url);
-  return href && /^https?:\/\//i.test(href) ? href : null;
+  return safePublicSourceUrl(url);
 }
 
 export function PerspectiveSource({ item }: { item: PerspectiveEvidence }) {
@@ -91,8 +90,11 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState<PerspectiveGroup | "all">("all");
   const [focusedId, setFocusedId] = useState<number | null>(null);
+  const [lensTargetId, setLensTargetId] = useState<number | null>(null);
   const [visiblePerLane, setVisiblePerLane] = useState(4);
   const model = buildPerspectiveModel(evidence, relationships);
+  const lensTargets = evidence.slice(0, 100);
+  const lens = lensTargetId === null ? null : inspectRecordedEvidenceClaim(evidence, relationships, lensTargetId);
   const filtered = filterPerspectiveLinks(model.links, search, group);
   const unlinked = group === "all" ? filterUnlinkedEvidence(model.unlinked, search) : [];
   const selected = filtered.find(link => link.id === focusedId) ?? filtered[0] ?? null;
@@ -161,6 +163,57 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
       </label>
     </div>
 
+    {model.evidenceCount > 0 && <section className="rounded-2xl border border-border/60 bg-card/45 p-3 sm:p-4"
+      aria-label="Recorded evidence Claim Lens" data-testid="recorded-claim-lens">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-ui text-sm font-semibold text-foreground">Claim Lens</h3>
+          <p className="mt-1 font-ui text-xs leading-5 text-muted-foreground">
+            Inspect only explicit evidence relationships directed to one recorded item.
+            This is not an AI verdict on whether the item's claims are true.
+          </p>
+        </div>
+        <label className="min-w-0 flex-1 font-ui text-xs text-muted-foreground sm:max-w-sm">
+          Inspect recorded evidence
+          <select value={lens?.target.id ?? ""} onChange={event => setLensTargetId(event.target.value ? Number(event.target.value) : null)}
+            className="mt-1 min-h-11 w-full rounded-lg border border-border/70 bg-background px-2 font-ui text-sm text-foreground">
+            <option value="">Select an evidence record</option>
+            {lensTargets.map(item => <option value={item.id} key={item.id}>E{item.id} · {item.title}</option>)}
+          </select>
+        </label>
+      </div>
+      {evidence.length > lensTargets.length && <p className="mt-2 font-ui text-xs text-muted-foreground">
+        Showing {lensTargets.length} of {evidence.length} records in the selector. Open the Investigation to inspect the full ledger.
+      </p>}
+      {lens && <div className="mt-4 space-y-3" role="region" aria-label={`Claim Lens for ${lens.target.title}`}>
+        <PerspectiveSource item={lens.target}/>
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+          {([
+            { title:"Explicit supporting links", links:lens.supporting, type:"support" },
+            { title:"Explicit contradicting links", links:lens.challenging, type:"challenge" },
+          ] as const).map(section => <div key={section.type} className="min-w-0 rounded-lg border border-border/60 p-3">
+            <h4 className="font-ui text-sm font-semibold text-foreground">{section.title} · {section.links.length}</h4>
+            <p className="mt-1 font-ui text-xs text-muted-foreground">Incoming recorded relationship only, not independent verification.</p>
+            {section.links.length ? <ul className="mt-3 space-y-3">
+              {section.links.slice(0, 6).map(link => <li key={link.id}>
+                <PerspectiveSource item={link.from}/>
+                {link.note && <p className="mt-1 break-words font-ui text-xs text-muted-foreground">Recorded reason · {link.note}</p>}
+              </li>)}
+            </ul> : <p className="mt-3 font-ui text-xs text-muted-foreground">
+              No {section.type === "support" ? "supporting" : "contradicting"} links recorded to this evidence.
+            </p>}
+            {section.links.length > 6 && <p className="mt-2 font-ui text-xs text-muted-foreground">
+              {section.links.length - 6} further links. Open the Investigation for the complete ledger.
+            </p>}
+          </div>)}
+        </div>
+        <p className="font-ui text-xs leading-5 text-muted-foreground">
+          {lens.context.length} other incoming relationship(s) · {lens.outgoing.length} outgoing relationship(s).
+          Outgoing, citing or superseding links cannot be reassigned as support for this target.
+          {lens.unlinked ? " No relationships have been retained for this record." : ""}
+        </p>
+      </div>}
+    </section>}
     {model.evidenceCount > 0 && <RecordedEvidenceFlowPanel links={filtered} selectedId={selected?.id ?? null} onSelect={setFocusedId} />}
 
     {!model.evidenceCount ? <div role="status" className="rounded-xl border border-dashed border-border/65 p-8 text-center">

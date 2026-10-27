@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildPerspectiveModel, filterPerspectiveLinks, filterUnlinkedEvidence,
-  relationshipGroup, perspectivePublishedDate,
+  relationshipGroup, perspectivePublishedDate, inspectRecordedEvidenceClaim,
   type PerspectiveEvidence, type PerspectiveRelation,
 } from "./researchPerspectives";
 
@@ -78,4 +78,23 @@ test("date fallback is honest about unknown or invalid publisher dates", () => {
   assert.equal(perspectivePublishedDate(null), "Publication date not recorded");
   assert.equal(perspectivePublishedDate("not-a-date"), "Publication date not recorded");
   assert.notEqual(perspectivePublishedDate("2026-10-20T09:00:00Z"), "Publication date not recorded");
+});
+
+test("B05 Claim Lens distinguishes incoming recorded supports and contradiction from outgoing records",()=>{
+  const lens=inspectRecordedEvidenceClaim(records,relations,1)!;
+  assert.equal(lens.target.id,1);
+  assert.deepEqual(lens.supporting.map(x=>x.id),[]);
+  assert.deepEqual(lens.challenging.map(x=>x.id),[11]);
+  assert.deepEqual(lens.context.map(x=>x.id),[12]);
+  assert.deepEqual(lens.outgoing.map(x=>x.id),[10]);
+  assert.equal(lens.unlinked,false);
+  assert.equal(inspectRecordedEvidenceClaim(records,relations,999),null);
+  const missing=inspectRecordedEvidenceClaim(records,[],4)!;
+  assert.equal(missing.unlinked,true);
+  assert.deepEqual(missing.supporting,[]);
+});
+test("B05 missing or unauthorized relation endpoints cannot fabricate a claim lens side",()=>{
+  const lens=inspectRecordedEvidenceClaim(records.slice(0,1),relations,1)!;
+  assert.equal(lens.supporting.length+lens.challenging.length+lens.context.length+lens.outgoing.length,0);
+  assert.equal(lens.unlinked,true);
 });
