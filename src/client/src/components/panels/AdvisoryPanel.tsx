@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { DomainInfo } from "@/lib/domains";
 import { ADVISORY_SERVICE_EXPLANATIONS, ADVISORY_SERVICE_STEPS } from "@/lib/advisoryDiscoveryPolicy";
 
@@ -465,6 +466,8 @@ export default function AdvisoryPanel() {
   const [description, setDescription] = useState("");
   const [packType, setPackType] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [respondingQuoteId, setRespondingQuoteId] = useState<number | null>(null);
 
@@ -492,6 +495,7 @@ export default function AdvisoryPanel() {
   }, [selectedRequestId]);
 
   const startAdvisoryBrief = (packKey?: string) => {
+    setSubmitError(null);
     const pack = packKey ? PACK_TEMPLATES[packKey] : null;
     if (pack) {
       setTitle(pack.title);
@@ -505,13 +509,21 @@ export default function AdvisoryPanel() {
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !formDomainId) return;
+    if (submitting) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      await apiRequest("POST", "/api/client/consulting/requests", { domainId: formDomainId, title, description, packType: packType ?? undefined });
+      const response = await apiRequest("POST", "/api/client/consulting/requests", { domainId: formDomainId, title, description, packType: packType ?? undefined });
+      const saved: unknown = await response.json();
+      if (!saved || typeof saved !== "object" || !("id" in saved) || typeof saved.id !== "number" || !Number.isSafeInteger(saved.id) || saved.id < 1) {
+        throw new Error("The server did not confirm the exact new request.");
+      }
+      setSubmissionNotice(`Advisory request #${saved.id} was received. Review the request and any subsequent quote in this workspace.`);
       setTitle(""); setDescription(""); setPackType(null); setShowNewModal(false);
+      setActiveTab("requests");
       loadRequests();
     } catch {
-      alert("Failed to submit request.");
+      setSubmitError("The advisory request was not confirmed. Your draft remains here; check existing requests before retrying to avoid duplicates.");
     } finally {
       setSubmitting(false);
     }
@@ -567,6 +579,7 @@ export default function AdvisoryPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
+        {submissionNotice && <p role="status" className="mb-4 rounded-lg border border-border/65 p-3 font-ui text-sm text-foreground">{submissionNotice}</p>}
         {activeTab === "invoices" && (
           <div className="space-y-4">
             <div className="bg-[#0d0d0d] border border-border p-4">
@@ -738,9 +751,13 @@ export default function AdvisoryPanel() {
       </div>
 
       {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 overflow-y-auto" onClick={() => setShowNewModal(false)}>
-          <div className="w-full max-w-lg my-8 p-6 bg-[#0d0d0d] border border-border shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-foreground">Submit New Advisory Query</h3>
+        <Dialog open onOpenChange={open => { if (!open && !submitting) setShowNewModal(false); }}>
+          <DialogContent className="!max-w-lg !max-h-[92dvh] !overflow-y-auto !rounded-xl !border-border !bg-[#0d0d0d] !p-6">
+            <DialogTitle className="font-ui text-lg font-semibold text-foreground">Start an advisory brief</DialogTitle>
+            <DialogDescription className="font-ui text-sm leading-5 text-muted-foreground">
+              This is an optional consulting request. Your draft stays here until you submit it.
+              A consultant reviews the scope and proposes a quote before an engagement is accepted.
+            </DialogDescription>
             <form onSubmit={handleCreateRequest} className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Domain Specialty</label>
@@ -797,13 +814,14 @@ export default function AdvisoryPanel() {
                   className="w-full px-3 py-2 border border-input bg-background focus:outline-none focus:ring-1 focus:ring-[hsl(38,95%,50%)] text-foreground" />
               </div>
               <p className="text-xs text-muted-foreground">A consultant will review this request and send you a scoped quote with pricing and turnaround time before any work begins.</p>
+              {submitError && <p role="alert" className="rounded-lg border border-amber-500/35 p-3 font-ui text-sm text-amber-200">{submitError}</p>}
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowNewModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
               </div>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
