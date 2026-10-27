@@ -50,7 +50,8 @@ test("Phase 2 Insight companion is single, removable, movable and reads exact pi
 
 test("Phase 2 CSS never replaces global shell geometry and respects mobile and low-resource constraints", () => {
   assert.match(styles, /\.lios-spatial-board\[data-layout="list"\]/);
-  assert.match(styles, /@media \(max-width: 760px\)/);
+  assert.match(styles, /\.lios-spatial-research \{[^}]*container-type: inline-size/);
+  assert.match(styles, /@container \(max-width: 760px\)/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles, /\[data-low-resource-mode="true"\] \.lios-spatial-field/);
   assert.match(styles, /\.lios-spatial-research button:focus-visible/);
