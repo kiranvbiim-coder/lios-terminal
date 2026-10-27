@@ -43,3 +43,34 @@ test("Ask LiOS is a user-triggered action and respects parent denial", () => {
   }));
   assert.match(html, /disabled/);
 });
+
+
+test("Search uses existing approved local images without fetching publisher pixels", () => {
+  const image = {
+    kind: "image" as const,
+    assetPath: "/editorial-media/" + "b".repeat(64) + ".webp",
+    sha256: "b".repeat(64),
+    alt: "Original evidence image cleared for the recorded source",
+    attribution: "Original publisher",
+    owner: "Rights-granting publisher",
+    licenseName: "Licensed reuse",
+    licenseEvidenceRef: "license:source:reviewed",
+    sourceEvidenceId: "public",
+    verifiedBy: "authorized-editor",
+    verifiedAt: "2026-10-26T00:00:00Z",
+    permission: "commercial_redistribution_and_display" as const,
+    offlineBundlingPermitted: true as const,
+    state: "approved" as const,
+  };
+  const permitted = renderToStaticMarkup(createElement(VisualIntelligenceResultCard, {
+    card: { ...card, media: image }, disabled: false, onAsk: () => undefined,
+  }));
+  assert.match(permitted, /licensed-editorial-image/);
+  assert.match(permitted, /src="\/editorial-media\/b{64}\.webp"/);
+  assert.match(permitted, /Ask LiOS/);
+  const unlinked = renderToStaticMarkup(createElement(VisualIntelligenceResultCard, {
+    card: { ...card, media: { ...image, sourceEvidenceId: "unrelated" } }, disabled: false, onAsk: () => undefined,
+  }));
+  assert.doesNotMatch(unlinked, /<img\b/);
+  assert.match(unlinked, /Water source publication/);
+});
