@@ -125,6 +125,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="LiOS Cross-Domain Intelligence Graph Explorer"
+        data-sprint-c-visual="graph"
         className="lios-v4-overlay mx-auto flex h-[min(900px,calc(100vh-16px))] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-border/65 sm:h-[min(900px,calc(100vh-24px))]"
         onMouseDown={event => event.stopPropagation()}
       >

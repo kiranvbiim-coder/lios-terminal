@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, X } from "lucide-react";
 import {
   FRESHNESS_LABELS, getEvidenceSnapshot, subscribeEvidence,
   type CalculationReceipt, type EvidenceSnapshot, type ProvenanceRecord,
 } from "@/lib/terminalEvidence";
+import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 import { filterPublishedSources, safePublishedSourceUrl, summarizePublishedSources, type SourceReviewFilter } from "@/lib/sprintBSourceReview";
 
 function ProvenanceCard({ item }: { item: ProvenanceRecord }) {
@@ -56,10 +57,11 @@ export default function ProvenanceDrawer({ onClose }: { onClose: () => void }) {
   const review = useMemo(() => summarizePublishedSources(snapshot.provenance), [snapshot.provenance]);
   const visibleSources = useMemo(() => filterPublishedSources(snapshot.provenance, query, filter), [snapshot.provenance, query, filter]);
   useEffect(() => subscribeEvidence(setSnapshot), []);
+  const drawerRef = useManagedOverlayFocus(onClose, false);
 
   return (
-    <aside className="fixed bottom-0 right-0 top-0 z-[75] flex w-full max-w-xl flex-col border-l border-border bg-[#080808] shadow-2xl" aria-label="Evidence and provenance drawer">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3"><Database className="h-4 w-4 text-cyan-300" /><div className="min-w-0 flex-1"><div className="font-terminal text-[10px] font-bold tracking-widest text-foreground">EVIDENCE & PROVENANCE</div><div className="mt-1 font-terminal text-[8px] text-muted-foreground">Inspect real source metadata published by the active analytical surface.</div></div><button onClick={onClose} className="border border-border p-1.5 text-muted-foreground hover:text-foreground" aria-label="Close evidence drawer"><X className="h-3.5 w-3.5" /></button></header>
+    <aside ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="false" data-sprint-c-visual="evidence" className="fixed bottom-0 right-0 top-0 z-[75] flex w-full max-w-xl flex-col border-l border-border bg-[#080808] shadow-2xl" aria-label="Evidence and provenance drawer">
+      <header className="flex items-center gap-2 border-b border-border px-4 py-3"><Database className="h-4 w-4 text-cyan-300" /><div className="min-w-0 flex-1"><div className="font-terminal text-[10px] font-bold tracking-widest text-foreground">EVIDENCE & PROVENANCE</div><div className="mt-1 font-terminal text-[8px] text-muted-foreground">Inspect real source metadata published by the active analytical surface.</div></div><button type="button" data-overlay-initial-focus onClick={onClose} className="border border-border p-1.5 text-muted-foreground hover:text-foreground" aria-label="Close evidence drawer"><X className="h-3.5 w-3.5" /></button></header>
       <nav className="flex border-b border-border" aria-label="Evidence sections">{(["sources", "receipts"] as const).map((item) => <button key={item} type="button" aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)} className={`min-h-11 flex-1 px-3 py-2 font-ui text-xs ${tab === item ? "bg-cyan-500/[0.06] text-cyan-300" : "text-muted-foreground hover:text-foreground"}`}>{item === "sources" ? `Sources (${snapshot.provenance.length})` : `Calculation receipts (${snapshot.receipts.length})`}</button>)}</nav>
       {tab === "sources" && <div className="space-y-3 border-b border-border/70 p-3">
         <p className="font-ui text-xs leading-5 text-muted-foreground">These counts describe published metadata, not independent verification, a source-quality score or a live feed.</p>

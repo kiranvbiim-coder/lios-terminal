@@ -42,6 +42,7 @@ import {
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
 import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
+import { useManagedOverlayFocus } from "@/hooks/useManagedOverlayFocus";
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
 type StudioTab = typeof TABS[number];
@@ -71,13 +72,14 @@ function StudioNav({ tab, onTab }: { tab: StudioTab; onTab: (tab: StudioTab) => 
 
 export default function AnalyticalStudio({ activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace, onClose }: Props) {
   const [tab, setTab] = useState<StudioTab>("flow");
+  const dialogRef = useManagedOverlayFocus(onClose, true);
   return (
     <div className="fixed inset-0 z-[82] flex items-center justify-center bg-black/72 p-3 backdrop-blur-[3px]" onMouseDown={onClose}>
-      <section className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" data-sprint-c-visual="studio" className="lios-v4-overlay flex h-[min(820px,94vh)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl" onMouseDown={(event) => event.stopPropagation()} aria-label="LiOS V4 Analytical Studio">
         <header className="flex items-start gap-3 border-b border-border/60 px-4 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/[0.055]"><BrainCircuit className="h-4 w-4 text-amber-300" /></div>
           <div className="min-w-0 flex-1"><div className="font-ui text-[13px] font-semibold text-foreground">LiOS Analytical Studio</div><div className="mt-1 flex flex-wrap items-center gap-2 font-ui text-[8px] text-muted-foreground"><span>{getTerminalCapability(activeView).label}</span>{activeSymbol && <span className="lios-symbol text-amber-300">{activeSymbol}</span>}<span>· Flow, compare, thesis, canvas, packages, replay and safe UI orchestration</span></div></div>
-          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
+          <button type="button" data-overlay-initial-focus onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground" aria-label="Close studio"><X className="h-4 w-4" /></button>
         </header>
         <StudioNav tab={tab} onTab={setTab} />
         <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin">
