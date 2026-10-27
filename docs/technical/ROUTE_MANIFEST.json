@@ -2794,6 +2794,16 @@
    "unprobed": false
   },
   {
+   "method": "GET",
+   "path": "/api/data-snapshots/economics/:seriesId/compare",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
    "method": "POST",
    "path": "/api/data-snapshots/financials/:symbol",
    "reachableBy": [
@@ -2873,6 +2883,16 @@
   {
    "method": "GET",
    "path": "/api/data-snapshots/markets/:symbol/as-of",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/data-snapshots/markets/:symbol/compare",
    "reachableBy": [
     "internal_analyst",
     "internal_compliance",
@@ -8334,6 +8354,36 @@
   {
    "method": "POST",
    "path": "/api/wave-d/pulse/review",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/wave-d/pulse/views",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/wave-d/pulse/views",
+   "reachableBy": [
+    "internal_analyst",
+    "internal_compliance",
+    "internal_admin"
+   ],
+   "unprobed": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/wave-d/pulse/views/:id",
    "reachableBy": [
     "internal_analyst",
     "internal_compliance",

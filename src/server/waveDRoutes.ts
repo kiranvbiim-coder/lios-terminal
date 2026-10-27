@@ -551,10 +551,11 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     }
   });
   app.delete("/api/wave-d/pulse/views/:id", requireWaveDRetailRead, async (req, res) => {
-    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: "Invalid saved view ID." });
+    const viewId = typeof req.params.id === "string" ? req.params.id : "";
+    if (!/^[0-9a-f-]{36}$/i.test(viewId)) return res.status(400).json({ error: "Invalid saved view ID." });
     try {
       const saved = await updateWaveDState(waveUser(req), state => ({
-        ...state, pulseSavedViews: removePulseDiscoveryView(state.pulseSavedViews, req.params.id),
+        ...state, pulseSavedViews: removePulseDiscoveryView(state.pulseSavedViews, viewId),
       }));
       res.json({ status: "deleted", persisted: true, savedViews: saved.pulseSavedViews });
     } catch (error) {
