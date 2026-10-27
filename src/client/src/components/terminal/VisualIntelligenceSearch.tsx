@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { BookOpenText, ExternalLink, Radar, Sparkles } from "lucide-react";
 import type { IntelligenceCard } from "@shared/waveDContracts";
