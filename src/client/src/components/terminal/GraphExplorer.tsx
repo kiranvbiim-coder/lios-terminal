@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Network, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
+import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
 
@@ -149,7 +150,9 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
         </header>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(180px,0.6fr)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
           <main className="relative min-h-0 overflow-auto bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505]" aria-label="Intelligence graph canvas">
-            <div className="relative h-full min-h-[440px] w-full min-w-[660px]">
+            <GraphExplorerCompactList nodes={presentation.nodes} selectedId={selectedId} onSelect={setSelectedId}
+              emptyMessage={graph.nodes.length ? "No matching recorded objects. Reset search or filters." : "Capture or publish intelligence objects to build the graph."} />
+            <div className="relative hidden h-full min-h-[440px] w-full min-w-[660px] md:block">
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Recorded object relationships">
                 {presentation.edges.map((edge, index) => {
                   const a = positions.get(edge.sourceId); const b = positions.get(edge.targetId);
