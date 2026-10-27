@@ -20,6 +20,26 @@ Light's warm panel accent and verifies that its decorative terracotta is
 **not** reused as low-contrast small text. These **source-level** checks are
 not screenshots, browser-computed style checks or formal WCAG certification.
 
+## Deterministic screenshot entry points
+
+The existing visual-smoke browser harness now accepts a **test-only**
+`palette` query string without reading or persisting an actual user's
+Appearance preference. An absent/invalid parameter uses LiOS Classic so
+previous fixtures and smoke screenshot baselines remain stable.
+
+When the local client test server serves `/visual-smoke.html`, open
+`/visual-smoke.html?case=conversation&palette=chatgpt-dark`,
+`/visual-smoke.html?case=conversation&palette=chatgpt-light`,
+`/visual-smoke.html?case=conversation-artifact&palette=claude-light`,
+`/visual-smoke.html?case=project-home&palette=claude-dark`, and
+`/visual-smoke.html?case=workbench-real&palette=lios-classic`.
+Also compare the **same case** under all five palettes, at 390×844,
+768×1024, and 1440×900. Wait until `data-visual-smoke-ready="true"`
+before capturing a screenshot. Capture the DOM's `data-lios-palette`
+and `data-theme` together with the screenshot. These are
+**deterministic source fixtures**, not authenticated real-user journeys;
+native acceptance below remains mandatory.
+
 ## Rendered journey / native acceptance checklist (evidence pending)
 
 Test **ChatGPT Dark, ChatGPT Light, Claude Light, Claude Dark and LiOS Classic**
