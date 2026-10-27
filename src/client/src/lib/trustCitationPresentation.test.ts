@@ -33,6 +33,9 @@ test("presentation retains source identity, provenance, status and original obse
   first.isFallback = true;
   const second = observed("https://publisher.example/a");
   second.evidenceId = "00000000-0000-4000-8000-000000000002";
+  second.access = { state: "available", servedTier: "free", bestAvailableTier: "premium",
+    entitlementRequired: true, upgradeConnectorId: "upgrade-id",
+    upgradeConnectorLabel: "Premium feed", reason: "Provider tier excludes deep history" };
   const projected = presentTrustCitations([first, second]);
   assert.deepEqual(projected.map(item => item.id), [first.evidenceId, second.evidenceId]);
   assert.equal(projected[0].href, null);
@@ -40,6 +43,8 @@ test("presentation retains source identity, provenance, status and original obse
   assert.ok(projected[0].details.includes("Fallback observation"));
   assert.ok(projected[0].details.includes("Human verified"));
   assert.equal(projected[1].href, "https://publisher.example/a");
+  assert.ok(projected[1].details.includes("Upgrade source: Premium feed"));
+  assert.ok(projected[1].details.includes("Provider tier excludes deep history"));
 });
 
 test("beUI source is reused in canonical P3 Trust panel, not an alternate evidence store", async () => {
