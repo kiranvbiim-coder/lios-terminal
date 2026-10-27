@@ -27,12 +27,14 @@ export function CommonsContextIllustration({ candidate, compact = false, showSou
 }) {
   const preview = safeCommonsPreview(candidate);
   const page = safeCommonsFilePage(candidate);
+  const [failedPreview, setFailedPreview] = useState<string | null>(null);
   if (!preview) return null;
   return <figure data-testid="commons-context-illustration"
     className="min-w-0 overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.025]">
-    <img src={preview} alt={"Context illustration: " + candidate.fileTitle.replace(/^File:/, "").trim()}
-      loading="lazy" decoding="async" referrerPolicy="no-referrer"
-      className={compact ? "h-20 w-full object-cover" : "max-h-64 w-full object-cover"} />
+    {failedPreview === preview ? <div role="status" className="px-3 py-4 font-ui text-xs text-muted-foreground">Remote preview unavailable. Open the Commons source for this illustration.</div> :
+      <img src={preview} alt={"Context illustration: " + candidate.fileTitle.replace(/^File:/, "").trim()}
+        loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedPreview(preview)}
+        className={compact ? "h-20 w-full object-cover" : "max-h-64 w-full object-cover"} />}
     <figcaption className="px-2 py-2 font-ui text-xs leading-5 text-muted-foreground">
       <span className="block font-semibold text-amber-200">Illustration only · not a photograph of the news event</span>
       {!compact && <span className="block">{candidate.creator} · Wikimedia Commons · CC0 metadata (review source before reuse)</span>}
