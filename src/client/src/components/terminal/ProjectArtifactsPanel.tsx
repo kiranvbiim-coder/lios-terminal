@@ -22,6 +22,8 @@ import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
 import { ProjectSpreadsheetImportField } from "./ProjectSpreadsheetImportField";
 import { buildProjectBriefingReport, isReviewedBriefingSourceCurrent, type BriefingSource } from "@/lib/projectBriefingStoryboard";
+import { verifyCurrentPinnedVisual, assertSavedBriefingArtifact, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
+import type { ArtifactDetail } from "@/lib/useArtifacts";
 
 function starter(kind: ArtifactContent["kind"]): ArtifactContent {
   if (kind === "spreadsheet") return { kind, sheets: [{ id: "sheet-1", name: "Model", cells: {}, names: {}, rowCount: 60, columnCount: 15 }], activeSheetId: "sheet-1", rendererPreference: "builtin", calculationMode: "automatic" };
@@ -122,7 +124,7 @@ export function ProjectArtifactsPanel({
     }
   };
 
-  const handleSaveBriefing = async (sources: readonly BriefingSource[], title: string, introduction: string) => {
+  const handleSaveBriefing = async (sources: readonly BriefingSource[], title: string, introduction: string, visuals: readonly PinnedBriefingVisual[]) => {
     // Recheck exact saved versions after user review; never silently substitute a
     // changed, archived, inaccessible, or cross-Project source.
     const refreshed = await artifacts.refetch();
@@ -133,8 +135,24 @@ export function ProjectArtifactsPanel({
         throw new Error("A selected source changed since review. Reopen the briefing and review its exact saved version.");
       }
     }
-    const draft = buildProjectBriefingReport({ projectId, sources, title, introduction });
+    if (visuals.length > 3 || new Set(visuals.map(visual => visual.artifactId)).size !== visuals.length)
+      throw new Error("Review up to three different saved visuals.");
+    const verifiedVisuals: PinnedBriefingVisual[] = [];
+    for (const visual of visuals) {
+      const source = sources.find(item => item.id === visual.artifactId);
+      if (!source || source.headVersion !== visual.version || source.kind !== visual.content.kind)
+        throw new Error("The saved visual is not an exact reviewed storyboard source.");
+      // Current session/source authority comes from a fresh P4 GET, never browser pin state.
+      const response = await fetch("/api/artifacts/" + encodeURIComponent(visual.artifactId), {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("A selected visual is no longer permitted. Nothing was saved.");
+      const detail = await response.json() as ArtifactDetail;
+      verifiedVisuals.push(verifyCurrentPinnedVisual(visual, detail));
+    }
+    const draft = buildProjectBriefingReport({ projectId, sources, title, introduction, visuals: verifiedVisuals });
     const created = await createArtifact(projectId, draft);
+    assertSavedBriefingArtifact(created, projectId, draft.content, draft.dependencyRefs, draft.sourceRefs);
     invalidate(projectId, created.artifact.id);
     setBriefingOpen(false);
     setVersionView(null);
@@ -247,7 +265,7 @@ export function ProjectArtifactsPanel({
         <ProjectSpreadsheetImportField key={projectId} busy={importingSpreadsheet} onImport={handleSpreadsheetImport} />
       </div>}
       {briefingOpen && <div id="project-briefing-studio">
-        <ProjectBriefingStudio projectId={projectId} artifacts={rows}
+        <ProjectBriefingStudio key={projectId} projectId={projectId} artifacts={rows}
           onSave={handleSaveBriefing} onClose={() => setBriefingOpen(false)}
           onOpenSource={id => { setBriefingOpen(false); setVersionView(null); setSelected(id); }} />
       </div>}

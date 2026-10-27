@@ -1,5 +1,7 @@
 import type { ArtifactContent } from "@shared/artifactContracts";
 import type { ProjectArtifactRecord } from "./useArtifacts";
+import type { PinnedBriefingVisual } from "./phase4BriefingVisuals";
+import { reportArtifactContentSchema } from "@shared/artifactContracts";
 
 export type BriefingSource = Pick<
   ProjectArtifactRecord, "id" | "projectId" | "title" | "headVersion" | "kind" | "status"
@@ -10,6 +12,7 @@ export interface BriefingDraftInput {
   title: string;
   introduction: string;
   sources: readonly BriefingSource[];
+  visuals?: readonly PinnedBriefingVisual[];
 }
 
 export const MAX_BRIEFING_SOURCES = 8;
@@ -31,6 +34,7 @@ export function buildProjectBriefingReport(input: BriefingDraftInput): {
   title: string;
   content: Extract<ArtifactContent, { kind: "report" }>;
   dependencyRefs: string[];
+  sourceRefs: string[];
 } {
   const title = input.title.trim();
   if (title.length < 3 || title.length > 200) throw new Error("Enter a briefing title between 3 and 200 characters.");
@@ -48,6 +52,20 @@ export function buildProjectBriefingReport(input: BriefingDraftInput): {
     ids.add(source.id);
   }
 
+  const visuals = input.visuals ?? [];
+  if (visuals.length > 3 || new Set(visuals.map(visual => visual.artifactId)).size !== visuals.length)
+    throw new Error("Choose up to three distinct saved chart/table versions.");
+  for (const visual of visuals) {
+    const owner = input.sources.find(source => source.id === visual.artifactId);
+    if (!owner || owner.projectId !== input.projectId || visual.projectId !== input.projectId ||
+        owner.headVersion !== visual.version || owner.kind !== visual.content.kind ||
+        !/^[a-f0-9]{64}$/.test(visual.contentHash) || !visual.sourceRefs.length) {
+      throw new Error("A saved visual must match an explicitly selected exact Project source version.");
+    }
+  }
+  const visualById = new Map(visuals.map(visual => [visual.artifactId, visual]));
+  const recordedSourceRefs = new Set<string>();
+  const dependencies = new Set(input.sources.map(source => source.id));
   const cover = ["briefing-title", "briefing-introduction"];
   const intro = input.introduction.trim()
     || "Review this authored storyboard and open each saved Artifact to verify its content. References are not citations, slide images or permission to redistribute source material.";
@@ -80,12 +98,35 @@ export function buildProjectBriefingReport(input: BriefingDraftInput): {
         attrs: {},
       },
     );
+    const visual = visualById.get(source.id);
+    if (visual) {
+      const refs = [...new Set(visual.sourceRefs)].slice(0, 100);
+      refs.forEach(ref => recordedSourceRefs.add(ref));
+      dependencies.add("artifact-version:" + visual.artifactId + ":v" + visual.version + ":" + visual.contentHash);
+      const visualId = prefix + "-native-visual";
+      const attrs = { p4ArtifactId: visual.artifactId, p4Version: visual.version,
+        p4ContentHash: visual.contentHash, sourceRefs: refs };
+      blocks.push(visual.content.kind === "chart"
+        ? { id: visualId, type: "chart_ref", text: "Reviewed saved chart v" + visual.version,
+            attrs: { ...attrs, chart: visual.content } }
+        : { id: visualId, type: "table", text: "Reviewed saved table v" + visual.version,
+            attrs: { ...attrs, table: visual.content } });
+      const provenanceId = prefix + "-native-source";
+      blocks.push({ id: provenanceId, type: "paragraph",
+        text: "Exact saved P4 " + visual.content.kind + " version " + visual.version +
+          " · SHA-256 " + visual.contentHash + ". Source IDs are not media redistribution rights.",
+        attrs: { sourceRefs: refs } });
+      frame.push(visualId, provenanceId);
+    }
     sections.push({ id: prefix, title: `Frame ${number}: ${source.title}`, blockIds: frame });
   });
 
   return {
     title,
-    content: { kind: "report", templateId: null, editorPreference: "builtin", blocks, sections },
-    dependencyRefs: input.sources.map(source => source.id),
+    content: reportArtifactContentSchema.parse({
+      kind: "report", templateId: null, editorPreference: "builtin", blocks, sections,
+    }),
+    dependencyRefs: [...dependencies],
+    sourceRefs: [...recordedSourceRefs],
   };
 }

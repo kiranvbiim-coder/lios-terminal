@@ -146,6 +146,11 @@ jobs:
         timeout-minutes: 5
         run: npm run test:website-c3
 
+      - name: D1 native source-backed briefing and canonical P4 save contract
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run test:website-d1
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
