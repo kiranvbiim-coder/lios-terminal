@@ -2,6 +2,7 @@ import type { ProjectChat, ProjectSession } from "@/lib/useProjects";
 import type { P6ProjectContinuitySnapshot } from "@shared/p6ContinuityContracts";
 import type { P9NotificationRecord, P9RunRecord, P9WorkflowRecord } from "@/lib/useP9Automation";
 import { workflowExecutionTruth, workflowScheduleSummary } from "@/lib/workflowReviewTruth";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 /** Read-only Project continuity projection. Never infer ownership from a title or a global ID. */
 export function projectResumeSelection(projectId: number, chats: readonly ProjectChat[], sessions: readonly ProjectSession[]) {
@@ -28,25 +29,6 @@ export interface ProjectWatchroomView {
   schedule: string;
 }
 
-/**
- * P9 run timestamps must be complete, zone-qualified calendar instants.
- * Date.parse alone accepts local-time guesses, year-only fragments ("1"),
- * and impossible days ("2026-02-30"), which must never be shown as evidence.
- */
-function validRecordedRunTimestamp(value: string): boolean {
-  if (typeof value !== "string" ||
-    !/^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(value)) return false;
-  const year = Number(value.slice(0, 4));
-  const month = Number(value.slice(5, 7));
-  const day = Number(value.slice(8, 10));
-  const calendar = new Date(0);
-  calendar.setUTCFullYear(year, month - 1, day);
-  calendar.setUTCHours(0, 0, 0, 0);
-  return calendar.getUTCFullYear() === year &&
-    calendar.getUTCMonth() + 1 === month && calendar.getUTCDate() === day &&
-    Number.isFinite(Date.parse(value));
-}
-
 /** All summaries are strictly from currently returned, Project-matching P9 records. */
 export function projectWatchroomSummary(
   projectId: number,
@@ -56,7 +38,7 @@ export function projectWatchroomSummary(
 ) {
   const owned = workflows.filter(workflow => workflow.projectId === projectId);
   const ownedIds = new Set(owned.map(workflow => workflow.id));
-  const ownedRuns = runs.filter(run => run.projectId === projectId && ownedIds.has(run.workflowId) && validRecordedRunTimestamp(run.startedAt));
+  const ownedRuns = runs.filter(run => run.projectId === projectId && ownedIds.has(run.workflowId) && recordedIsoTimestamp(run.startedAt) !== null);
   const recentRuns = [...ownedRuns].sort((a, b) => (Date.parse(b.startedAt) || 0) - (Date.parse(a.startedAt) || 0));
   const latest = new Map<string, P9RunRecord>();
   for (const run of recentRuns) if (!latest.has(run.workflowId)) latest.set(run.workflowId, run);
@@ -92,7 +74,7 @@ export function watchroomRecordedHistory(
   const max = Number.isFinite(limit) ? Math.max(1, Math.min(24, Math.floor(limit))) : 12;
   return runs.filter(run =>
     run.projectId === projectId && run.workflowId === workflowId &&
-    validRecordedRunTimestamp(run.startedAt)
+    recordedIsoTimestamp(run.startedAt) !== null
   ).sort((left, right) =>
     Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)
   ).slice(0, max).reverse();

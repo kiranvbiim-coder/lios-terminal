@@ -6,6 +6,7 @@
  */
 import type { AuthorizedVisualAnswer } from "../../../shared/governedVisualAnswer";
 import type { RecordedGeographicPoint } from "./offlineWorldMapPresentation";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 type SavedTable = Extract<AuthorizedVisualAnswer, { kind: "table" }>;
 const MAX_ROWS_SCANNED = 1_000;
@@ -19,26 +20,6 @@ function exactColumn(table: SavedTable["content"], names: readonly string[]): st
   const matched = table.columns.find(column => names.includes(normalizedKey(column.key)) ||
     names.includes(normalizedKey(column.label)));
   return matched?.key ?? null;
-}
-
-/**
- * Only unambiguous ISO calendar dates/times may be labeled as recorded events.
- * Date.parse alone guesses years for inputs such as "1" and rolls invalid
- * days forward; those would silently invent a misleading evidence timestamp.
- */
-function recordedIsoTimestamp(value: unknown): string | null {
-  if (typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value)) return null;
-  const year = Number(value.slice(0, 4));
-  const month = Number(value.slice(5, 7));
-  const day = Number(value.slice(8, 10));
-  const calendar = new Date(0);
-  calendar.setUTCFullYear(year, month - 1, day);
-  calendar.setUTCHours(0, 0, 0, 0);
-  if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() + 1 !== month ||
-    calendar.getUTCDate() !== day) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
 export interface SavedTableMapProjection {
@@ -81,7 +62,7 @@ export function projectSavedTableGeography(
     const label = typeof rawLabel === "string" && rawLabel.trim()
       ? rawLabel.trim().slice(0, 160) : "Saved table row " + (index + 1);
     const date = whenColumn ? row[whenColumn] : null;
-    const occurredAt = recordedIsoTimestamp(date);
+    const occurredAt = recordedIsoTimestamp(date, true);
     all.push({
       id: "p4-table-row-" + index, label, latitude: lat, longitude: lon,
       sourceRef: source, occurredAt,
