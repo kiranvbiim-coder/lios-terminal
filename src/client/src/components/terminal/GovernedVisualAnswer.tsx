@@ -74,7 +74,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         </p>
         {decision.kind === "chart" ? <GovernedChartBoundary>
           <Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Rendering the saved chart…</p>}>
-            <ArtifactChart content={decision.content} readOnly/>
+            <ArtifactChart content={decision.content} artifactSourceRefs={decision.sourceRefs} readOnly/>
           </Suspense>
         </GovernedChartBoundary> : <div className="max-h-80 overflow-auto rounded-lg border border-border/55" role="region"
           tabIndex={0} aria-label="Exact saved table values">
