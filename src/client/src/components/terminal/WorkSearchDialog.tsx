@@ -197,7 +197,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
         {error && query.trim().length >= 2 && !loading && !opening && <button type="button" onClick={() => setRetrySequence(value => value + 1)}
           className="mx-4 mb-3 min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           Retry saved-work search (read-only)
-        </button>
+        </button>}
         {error && visibleResults.length > 0 && <p role="alert" className="mx-3 mb-2 rounded-md border border-red-400/30 p-2 font-ui text-[12px] text-red-200">{error}</p>}
         <div id={listId} role="listbox" aria-label="Matching LiOS work" aria-busy={loading || opening} className="max-h-[52vh] overflow-y-auto p-2">
           {!loading && visibleResults.map((result, index) => (
@@ -223,7 +223,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
               </span>
             </button>
           ))}
-          {!loading && !visibleResults.length && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">{workSearchEmptyMessage(query, filter, results.length)}</div>}
+          {!loading && !error && !visibleResults.length && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">{workSearchEmptyMessage(query, filter, results.length)}</div>}
           {loading && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">Searching…</div>}
         </div>
         </> : <VisualIntelligenceSearch query={query} onAsk={async card => {
