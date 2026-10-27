@@ -79,7 +79,7 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
     throw new Error("Editorial images would exceed the 32 MiB release-size budget.");
   }
   // New grant text is fully validated before copying any binary.
-  const next = JSON.stringify([...existing, media], null, 2) + "\\n";
+  const next = JSON.stringify([...existing, media], null, 2) + "\n";
   if (Buffer.byteLength(next) > MAX_MANIFEST) {
     throw new Error("New manifest would exceed maximum size.");
   }
