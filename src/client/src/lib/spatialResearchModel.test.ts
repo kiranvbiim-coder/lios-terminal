@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, inspectExplicitResearchConnection, listExplicitResearchConnections, explicitResearchConnectionKey, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, inspectExplicitResearchConnection, listExplicitResearchConnections, explicitResearchConnectionKey, findSpatialResearchPins, clampSpatialPoint, moveSpatialPoint, MAX_SPATIAL_NODES } from "./spatialResearchModel";
 import type { ResearchTrayItem } from "./terminalResearchTray";
 
 function pin(id: string, options: Partial<ResearchTrayItem> = {}): ResearchTrayItem {
@@ -145,4 +145,36 @@ test("Phase 2 no connection is fabricated from ungrouped pins, filtering or trun
     pin("source", { group: "Same" }), pin("target", { group: "Elsewhere" }),
   ], {});
   assert.deepEqual(listExplicitResearchConnections(filteredModel), []);
+});
+
+test("Phase 2 spotlight finds saved research by exact local metadata and all terms", () => {
+  const items = [
+    pin("a", { title: "Aster Holdings", symbol: "ASTER", group: "Review", tags: ["due-diligence"], note: "Board resolution" }),
+    pin("b", { title: "Boreal", symbol: "BOR", group: "Review", description: "Debt obligations" }),
+    pin("c", { title: "Aster Research", symbol: "AST", group: "Other", note: "Market story" }),
+  ];
+  assert.deepEqual(findSpatialResearchPins(items, "ASTER").map(p => p.id), ["a", "c"]);
+  assert.deepEqual(findSpatialResearchPins(items, "  BOARD  RESOLUTION  ").map(p => p.id), ["a"]);
+  assert.deepEqual(findSpatialResearchPins(items, "review debt").map(p => p.id), ["b"]);
+  assert.deepEqual(findSpatialResearchPins(items, "due-diligence").map(p => p.id), ["a"]);
+  assert.deepEqual(findSpatialResearchPins(items, "not-a-pin"), []);
+  assert.deepEqual(findSpatialResearchPins(items, "   "), items);
+});
+
+test("Phase 2 spotlight searches before the canvas 36-node cap without mutating tray", () => {
+  const items = Array.from({ length: MAX_SPATIAL_NODES + 4 }, (_, i) =>
+    pin(String(i), { title: i >= MAX_SPATIAL_NODES ? "Important late research" : "General context" }));
+  const previous = structuredClone(items);
+  const matches = findSpatialResearchPins(items, "important late");
+  const model = buildSpatialResearchModel(matches, {});
+  assert.equal(model.nodes.length, 4);
+  assert.equal(model.hiddenCount, 0);
+  assert.deepEqual(items, previous);
+});
+
+test("Phase 2 spotlight cannot interpret a text query as an action or access absent pins", () => {
+  const items = [pin("safe", { note: "A descriptive sentence" })];
+  assert.deepEqual(findSpatialResearchPins(items, "open file:///credentials"), []);
+  assert.deepEqual(findSpatialResearchPins(items, "safe").map(p => p.id), ["safe"]);
+  assert.equal(findSpatialResearchPins(items, "a".repeat(81)).length, 0);
 });
