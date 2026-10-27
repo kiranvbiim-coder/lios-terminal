@@ -8,6 +8,7 @@
  * credentials out of the document and preserving the existing RLS boundary.
  */
 import { eq } from "drizzle-orm";
+import { normalizePulseSubjectPreferences, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { userPersonaPreferences } from "@shared/schema";
 import type {
   CommunicationConnectionRecord,
@@ -31,6 +32,7 @@ const MAX_STATE_BYTES = 48_000;
 
 export interface WaveDStoredState {
   pulseCards: PulseCardDraft[];
+  pulseSubjects: PulseSubjectPreferences;
   signalRules: StoredSignalRule[];
   theses: LivingThesisRecord[];
   eventRooms: StoredEventRoom[];
@@ -47,6 +49,7 @@ export interface WaveDStoredState {
 
 const EMPTY_STATE: WaveDStoredState = {
   pulseCards: [],
+  pulseSubjects: { followed: [], muted: [] },
   signalRules: [],
   theses: [],
   eventRooms: [],
@@ -70,6 +73,7 @@ function normalizeState(value: unknown): WaveDStoredState {
   const statuses = isRecord(value.inboxStatuses) ? Object.fromEntries(Object.entries(value.inboxStatuses).filter(([, status]) => status === "open" || status === "snoozed" || status === "resolved")) as WaveDStoredState["inboxStatuses"] : {};
   const state: WaveDStoredState = {
     pulseCards: Array.isArray(value.pulseCards) ? value.pulseCards.filter(isRecord) as unknown as PulseCardDraft[] : [],
+    pulseSubjects: normalizePulseSubjectPreferences(value.pulseSubjects),
     signalRules: Array.isArray(value.signalRules) ? value.signalRules.filter(isRecord) as unknown as StoredSignalRule[] : [],
     theses: Array.isArray(value.theses) ? value.theses.filter(isRecord) as unknown as LivingThesisRecord[] : [],
     eventRooms: Array.isArray(value.eventRooms) ? value.eventRooms.filter(isRecord) as unknown as StoredEventRoom[] : [],
