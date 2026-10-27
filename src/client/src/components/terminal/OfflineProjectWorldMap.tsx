@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Focus, MapPin, Minus, Plus, Search, X } from "lucide-react";
-import { projectOfflineWorldPoints, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
+import { projectOfflineWorldPoints, worldMapCenterPreservingPan, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
 
 const WIDTH = 1152;
 const HEIGHT = 576;
@@ -43,6 +43,14 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
     return () => window.removeEventListener("resize", update);
   }, []);
 
+  function zoomAroundCentre(step: number) {
+    const next = clampZoom(zoom + step);
+    if (next === zoom) return;
+    const viewport = { width: viewportRef.current?.clientWidth ?? 560, height: viewportRef.current?.clientHeight ?? 360 };
+    setPan(previous => worldMapCenterPreservingPan(previous, viewport, zoom, next));
+    setZoom(next);
+  }
+
   function focusPoint(id: string) {
     const point = projection.points.find(item => item.id === id);
     if (!point) return;
@@ -69,9 +77,9 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
         {projection.omittedCount > 0 && <span>{projection.omittedCount} omitted from bounded map view; narrow the search to find them</span>}
       </div>
       <div role="group" aria-label="World map controls" className="flex flex-wrap gap-1.5">
-        <button type="button" aria-label="Zoom world map out" onClick={() => setZoom(value => clampZoom(value - 0.16))}
+        <button type="button" aria-label="Zoom world map out" onClick={() => zoomAroundCentre(-0.16)}
           className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Minus className="h-4 w-4" aria-hidden="true"/></button>
-        <button type="button" aria-label="Zoom world map in" onClick={() => setZoom(value => clampZoom(value + 0.16))}
+        <button type="button" aria-label="Zoom world map in" onClick={() => zoomAroundCentre(0.16)}
           className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Plus className="h-4 w-4" aria-hidden="true"/></button>
         <button type="button" aria-label="Fit whole world map" onClick={fit}
           className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70"><Focus className="h-4 w-4" aria-hidden="true"/>Fit world</button>
@@ -87,6 +95,11 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
           aria-describedby="lios-map-search-help"
           onChange={event => { setQuery(event.target.value); setSelectedId(null); }}
           className="min-h-11 min-w-[160px] flex-1 rounded-lg border border-border/60 bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" />
+        {query.trim() && projection.points.length > 0 && <button type="button"
+          onClick={() => focusPoint(projection.points[0].id)}
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-amber-300/45 bg-amber-300/[0.05] px-3 py-2 font-ui text-sm text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+          <Focus className="h-4 w-4" aria-hidden="true" /> Focus first match
+        </button>}
         {query && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); }}
           className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-border/60 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
           <X className="h-4 w-4" aria-hidden="true" /> Clear search
@@ -107,14 +120,14 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
       </label>
     </div>
     <div ref={viewportRef} role="region" tabIndex={0}
-      aria-label="Offline world map. Drag blank space to pan, use zoom controls, Tab to location markers or select locations in the list."
+      aria-label="Offline world map. Drag blank space or use arrow keys to pan, plus or minus to zoom, Home to fit, Tab to markers, or choose a saved location from the list."
       data-testid="offline-world-map-viewport"
       className="relative h-[310px] min-w-0 touch-none overflow-hidden rounded-lg border border-border/60 bg-[#09131e] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 sm:h-[420px]"
       onWheel={event => {
         if (document.activeElement !== event.currentTarget &&
           !event.currentTarget.contains(document.activeElement)) return;
         if (event.cancelable) event.preventDefault();
-        setZoom(value => clampZoom(value + (event.deltaY < 0 ? 0.1 : -0.1)));
+        zoomAroundCentre(event.deltaY < 0 ? 0.1 : -0.1);
       }}
       onPointerDown={event => {
         if (event.button !== 0 || event.target !== event.currentTarget) return;
@@ -134,6 +147,9 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
         const dy = event.key === "ArrowUp" ? -40 : event.key === "ArrowDown" ? 40 : 0;
         if (dx || dy) { event.preventDefault(); setPan(previous => ({x:previous.x+dx,y:previous.y+dy})); }
         if (event.key === "Home") { event.preventDefault(); fit(); }
+        if (event.key === "+" || event.key === "=" || event.key === "-") {
+          event.preventDefault(); zoomAroundCentre(event.key === "-" ? -0.16 : 0.16);
+        }
       }}>
       <div className="pointer-events-none absolute left-0 top-0" style={{
         width: WIDTH, height: HEIGHT,
