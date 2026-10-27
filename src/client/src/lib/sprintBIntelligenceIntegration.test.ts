@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 const screen = (name: string) =>
   readFileSync(new URL("../components/terminal/" + name + ".tsx", import.meta.url), "utf8");
@@ -27,6 +28,21 @@ test("Sprint B source review reads only published evidence and never computes a 
   assert.match(ui, /noopener noreferrer/);
   assert.match(ui, /not independent verification/);
   assert.doesNotMatch(ui, /fetch\(|apiRequest\(/);
+});
+
+test("Sprint B provenance panel is parseable TSX before checking only source-text invariants", () => {
+  // Source-grep tests passed while a missing JSX expression brace broke both tsc
+  // and the production build. The TypeScript parser catches that regression here.
+  const ui = screen("ProvenanceDrawer");
+  const compiled = ts.transpileModule(ui, {
+    fileName: "ProvenanceDrawer.tsx",
+    reportDiagnostics: true,
+    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  });
+  const errors = (compiled.diagnostics ?? []).filter(item => item.category === ts.DiagnosticCategory.Error);
+  assert.deepEqual(errors.map(item => ts.flattenDiagnosticMessageText(item.messageText, "\n")), []);
+  assert.match(ui, /\{tab === "sources" && <div/);
+  assert.match(ui, /\{visibleSources\.length\} of \{review\.recorded\} recorded sources shown/);
 });
 
 test("Sprint B comparisons and rich insights stay on the canonical capture and receipt surfaces", () => {
