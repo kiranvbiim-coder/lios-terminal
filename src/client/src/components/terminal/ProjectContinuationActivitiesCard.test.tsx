@@ -61,7 +61,7 @@ test("Project Continuity workflow review targets an exact P9 workflow in the sam
   const { readFileSync } = await import("node:fs");
   const continuity = readFileSync(new URL("./ProjectContinuityPanel.tsx", import.meta.url), "utf8");
   const automations = readFileSync(new URL("./ProjectAutomationPanel.tsx", import.meta.url), "utf8");
-  const focus = readFileSync(new URL("../lib/projectWorkflowFocus.ts", import.meta.url), "utf8");
+  const focus = readFileSync(new URL("../../lib/projectWorkflowFocus.ts", import.meta.url), "utf8");
   assert.ok(automations.includes("data-p9-workflow-id={workflow.id}"));
   assert.ok(automations.includes("data-p9-project-id={projectId}"));
   assert.ok(automations.includes("tabIndex={-1}"));
