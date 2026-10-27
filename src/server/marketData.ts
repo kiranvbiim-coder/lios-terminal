@@ -2276,6 +2276,12 @@ async function fetchNewsFeeds(cacheKey: string, feeds: RssFeedConfig[], options:
     return parseNewsFeed(xml, feed.fallbackSource);
   }));
 
+  // An outage of every configured provider is not a genuinely empty News feed.
+  // The existing Finance handler reports the failure and the News reader offers
+  // retry. Leave the legacy unpaged behavior unchanged.
+  if (options.page !== undefined && settled.length > 0 && settled.every(result => result.status === "rejected")) {
+    throw new Error("All configured news feeds are temporarily unavailable.");
+  }
   const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
   // Attach only exact article-linked images whose bundled bytes and license
   // metadata passed verification. Raw RSS imageCandidate links never render.
@@ -2294,10 +2300,13 @@ export async function getNewsPage(symbol?: string, query?: string, options: News
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 20), 1), 100);
   const feeds = symbol ? buildSymbolNewsFeeds(symbol.toUpperCase()) : GENERAL_NEWS_FEEDS;
-  const feedItems = await fetchNewsFeeds(symbol ? `news:${symbol.toUpperCase()}` : "news:market", feeds, { ...options, page });
+  // Capture one UTC anchor per request so a midnight rollover cannot make
+  // the RSS query window disagree with the post-fetch date validation.
+  const effectiveOptions = { ...options, page, to: options.to ?? new Date().toISOString().slice(0, 10) };
+  const feedItems = await fetchNewsFeeds(symbol ? `news:${symbol.toUpperCase()}` : "news:market", feeds, effectiveOptions);
   // Provider date operators are advisory. Enforce the requested period on
   // actual publishedAt values before symbol/search filters and local offsets.
-  let items = filterNewsPageWindow(feedItems, page, options);
+  let items = filterNewsPageWindow(feedItems, page, effectiveOptions);
   if (symbol) {
     const upper = symbol.toUpperCase();
     const profile = getProfileWithCryptoFallback(upper);
