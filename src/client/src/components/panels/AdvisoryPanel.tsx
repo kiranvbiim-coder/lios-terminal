@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import type { DomainInfo } from "@/lib/domains";
+import { ADVISORY_SERVICE_EXPLANATIONS, ADVISORY_SERVICE_STEPS } from "@/lib/advisoryDiscoveryPolicy";
 
 /**
  * Client consulting and engagement workflows on the existing
@@ -490,6 +491,17 @@ export default function AdvisoryPanel() {
     }
   }, [selectedRequestId]);
 
+  const startAdvisoryBrief = (packKey?: string) => {
+    const pack = packKey ? PACK_TEMPLATES[packKey] : null;
+    if (pack) {
+      setTitle(pack.title);
+      setDescription(pack.description);
+      setPackType(packKey!);
+    }
+    setActiveTab("requests");
+    setShowNewModal(true);
+  };
+
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !formDomainId) return;
@@ -539,8 +551,8 @@ export default function AdvisoryPanel() {
           <Briefcase className="w-4 h-4 text-[hsl(38,95%,55%)]" />
           <span className="panel-label">ADVISORY</span>
         </div>
-        <button onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1 bg-[hsl(38,95%,50%)/15%] border border-[hsl(38,95%,50%)/40%] font-terminal text-[10px] text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)/25%] transition-colors">
+        <button type="button" onClick={() => startAdvisoryBrief()}
+          className="flex min-h-10 items-center gap-1.5 rounded-lg border border-border/70 px-3 py-1.5 font-ui text-sm font-semibold text-foreground hover:bg-white/[.04]">
           <Plus className="w-3 h-3" /> SUBMIT QUERY
         </button>
       </div>
@@ -567,7 +579,48 @@ export default function AdvisoryPanel() {
           </div>
         )}
 
-        {activeTab === "projects" && <ProjectsTab />}
+        {activeTab === "projects" && (
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-border/70 bg-card/30 p-4 sm:p-6"
+              aria-label="Limuria professional advisory services">
+              <div className="max-w-3xl">
+                <p className="font-ui text-xs text-muted-foreground">Limuria consulting · Optional professional engagement</p>
+                <h2 className="mt-2 font-ui text-xl font-semibold tracking-[-0.02em] text-foreground">When a decision deserves a second perspective</h2>
+                <p className="mt-2 font-ui text-sm leading-6 text-muted-foreground">
+                  Self-service LiOS analysis remains yours. You can separately request human support to
+                  evaluate assumptions, frame diligence and work toward a decision-ready deliverable.
+                  Scope, pricing and turnaround are proposed for your review before any engagement.
+                </p>
+              </div>
+              <details className="mt-5 rounded-xl border border-border/65 p-3">
+                <summary className="min-h-10 cursor-pointer px-2 py-2 font-ui text-sm font-semibold text-foreground">
+                  Explore common advisory briefs
+                </summary>
+                <div className="mt-2 grid gap-3 md:grid-cols-3">
+                  {Object.entries(PACK_TEMPLATES).map(([key, pack]) => (
+                    <article key={key} className="flex min-w-0 flex-col rounded-xl border border-border/60 bg-background/40 p-4">
+                      <h3 className="font-ui text-sm font-semibold text-foreground">{pack.label}</h3>
+                      <p className="mt-2 flex-1 font-ui text-[13px] leading-5 text-muted-foreground">
+                        {ADVISORY_SERVICE_EXPLANATIONS[key as keyof typeof ADVISORY_SERVICE_EXPLANATIONS]}
+                      </p>
+                      <button type="button" className="mt-4 min-h-11 rounded-lg border border-border px-3 font-ui text-sm text-foreground hover:border-foreground/40"
+                        onClick={() => startAdvisoryBrief(key)}>
+                        Start an editable brief
+                      </button>
+                    </article>
+                  ))}
+                </div>
+                <ol className="mt-4 list-inside list-decimal space-y-1 rounded-lg bg-background/30 px-3 py-3 font-ui text-xs leading-5 text-muted-foreground">
+                  {ADVISORY_SERVICE_STEPS.map(step => <li key={step}>{step}</li>)}
+                </ol>
+                <p className="mt-2 font-ui text-xs text-muted-foreground">
+                  No Project, file, source, conversation or analysis is attached automatically. Briefs remain editable until you submit.
+                </p>
+              </details>
+            </section>
+            <ProjectsTab />
+          </div>
+        )}
 
         {activeTab === "requests" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
