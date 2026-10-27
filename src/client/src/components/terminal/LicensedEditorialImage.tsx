@@ -8,7 +8,7 @@ import { eligibleEditorialMedia, type EditorialMedia } from "@shared/editorialMe
  * Failed/missing media collapses to the original text-first editorial layout.
  */
 export function LicensedEditorialImage({
-  media, sourceIds, className = "", sizes, asOf, fallback, variant = "featured",
+  media, sourceIds, className = "", sizes, asOf, fallback, variant = "featured", showSourceLink = true,
 }: {
   media: EditorialMedia | unknown;
   sourceIds: readonly string[];
@@ -17,6 +17,8 @@ export function LicensedEditorialImage({
   asOf?: string;
   fallback?: ReactNode;
   variant?: "featured" | "compact";
+  /** Disable nested image-source links when hosted inside an outer story button. */
+  showSourceLink?: boolean;
 }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const eligible = eligibleEditorialMedia(media, sourceIds, asOf ?? new Date().toISOString());
@@ -34,7 +36,7 @@ export function LicensedEditorialImage({
       {eligible.usageContext === "illustrative" && <span className="block font-semibold text-amber-200" data-testid="media-illustrative-label">Context illustration · not a photograph of this news event</span>}
       {eligible.caption && <span className="block text-foreground/80">{eligible.caption}</span>}
       <span className="block">Image: {eligible.attribution} · {eligible.licenseName}</span>
-      {eligible.mediaSourcePage && <a href={eligible.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="inline-block underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">Image source and license</a>}
+      {eligible.mediaSourcePage && showSourceLink && <a href={eligible.mediaSourcePage} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="inline-block underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-amber-300">Image source and license</a>}
     </figcaption>
   </figure>;
 }
