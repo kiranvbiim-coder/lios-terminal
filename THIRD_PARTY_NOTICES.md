@@ -607,3 +607,7 @@ LiOS adapts `bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`, `c
 - Dependency: `@modelcontextprotocol/client@2.3.1` and its locked `@modelcontextprotocol/core@2.3.1` runtime dependency.
 - License: Apache License, Version 2.0 (upstream client and core). Preserve the distributed npm package license and applicable notices when packaging or redistributing.
 - LiOS use: official MCP client protocol/Streamable HTTP transport, wrapped by existing P5/P13 network admission, credential custody, tool permissions, cancellation and source limits. The upstream client is **not** a new LiOS store, agent, execution authority or data-license grant. Real MCP server/installed desktop qualification remains separately required.
+
+## beUI — MIT (News Story Evolution exact-URL timeline)
+
+LiOS imports and adapts free/public MIT beUI Timeline from `starc007/ui-components@601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1`, upstream `components/motion/timeline.tsx` (blob `49eac72ab9237b48c4eaa7fc106f7e162137657a`) and `lib/touch.ts` (blob `44a72af240f694d4b64cbabf101dae8a6fb9be52`). Copyright (c) 2026 Saurabh Chauhan; complete MIT license retained at `third_party/licenses/beui-MIT.txt`. Adapted to existing React 18, Framer Motion 11 and Tailwind; lazily displayed inside the existing News Story Evolution owner for exact-URL observed feed changes. No new event claims, source feed, database, paid components, runtime authority or npm dependency. Hosted CI and installed app validation remain required.

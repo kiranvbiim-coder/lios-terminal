@@ -1,9 +1,10 @@
 import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
 import NewsEditorialStoryCard from "./NewsEditorialStoryCard";
+import { NewsMediaPreview } from "./NewsMediaPreview";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { NewsItem } from "@/lib/finance";
 import { useNewsArticle } from "@/lib/useFinance";
@@ -15,6 +16,7 @@ import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import { observeNewsFeed, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
 import { approvedPhotoCount, newsWithApprovedPhotos } from "@/lib/newsVisualCoverage";
 import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
+import { automaticContextSearchTerm, chooseAutomaticContextImage } from "@/lib/newsAutomaticContext";
 
 interface Props {
   symbol?: string;
@@ -44,6 +46,9 @@ export default function NewsPanel({ symbol }: Props) {
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
   const [photoOnly, setPhotoOnly] = useState(false);
+  // Public RSS headlines only: no private research, project or query text is
+  // automatically submitted to Commons. Context illustrations are NEVER news photos.
+  const [automaticContextOn, setAutomaticContextOn] = useState(true);
   // Only real successive feed observations while this view is mounted.
   const [observedRevisions, setObservedRevisions] = useState<NewsStoryRevision[]>([]);
   const activeNewsStoryRef = useRef<string | null>(null);
@@ -90,6 +95,36 @@ export default function NewsPanel({ symbol }: Props) {
     return photoOnly ? newsWithApprovedPhotos(sourceAndSentiment, new Date().toISOString()) : sourceAndSentiment;
   }, [news, sentimentFilter, sourceFilter, photoOnly]);
 
+  // Strict 4-story budget per visible public RSS page. Disabled when the
+  // viewer opts out, provider data is stale, or licensed photography exists.
+  // React Query caches only unapproved Commons metadata in memory; no pixels
+  // are downloaded or written into the Workbench or a package by LiOS.
+  const contextualStories = filtered.filter(item => !item.media).slice(0, 4)
+    .map(item => ({ url: item.url, title: item.title, term: automaticContextSearchTerm(item.title) }))
+    .filter((item): item is { url: string; title: string; term: string } => Boolean(item.term));
+  const contextQueries = useQueries({
+    queries: contextualStories.map(story => ({
+      queryKey: ["news-public-cc0-context", story.url, story.title],
+      queryFn: async () => {
+        const response = await fetch("/api/media/commons/cc0?q=" + encodeURIComponent(story.term), {
+          credentials: "same-origin",
+        });
+        if (!response.ok) return null;
+        const payload: unknown = await response.json();
+        return chooseAutomaticContextImage(payload, story.term);
+      },
+      enabled: automaticContextOn && newsQuery.isSuccess && !newsQuery.isFetching,
+      staleTime: 10 * 60_000,
+      retry: false,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const automaticContexts = new Map<string, CommonsCandidate>();
+  if (automaticContextOn) contextualStories.forEach((story, index) => {
+    const candidate = contextQueries[index]?.data;
+    if (candidate) automaticContexts.set(story.url, candidate);
+  });
+
   useEffect(() => {
     if (!newsQuery.isSuccess || newsQuery.isFetching || newsQuery.isError || selectedUrl || !filtered.length) return;
     setSelectedUrl(filtered[0].url);
@@ -110,6 +145,7 @@ export default function NewsPanel({ symbol }: Props) {
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedSourceHref = selectedItem ? safePulseSourceUrl(selectedItem.url) : null;
   const selectedContextImage = selectedItem && contextImage?.storyUrl === selectedItem.url && !selectedItem.media ? contextImage.candidate : null;
+  const displayContextImage = selectedContextImage ?? (selectedItem && !selectedItem.media ? automaticContexts.get(selectedItem.url) ?? null : null);
   const savedSelection = selectedItem && !selectedItem.media
     ? savedIllustrations.find(saved => saved.storyUrl === selectedItem.url) ?? null : null;
   const rememberSelected = () => {
@@ -167,6 +203,12 @@ export default function NewsPanel({ symbol }: Props) {
         </div>
 
         <div className="flex items-center gap-px overflow-x-auto scrollbar-thin px-2 py-1.5">
+          <button type="button" aria-pressed={automaticContextOn}
+            onClick={() => setAutomaticContextOn(value => !value)}
+            className="mr-2 shrink-0 border border-border px-2.5 py-1 font-terminal text-[9px] tracking-wider text-foreground focus-visible:outline-2 focus-visible:outline-amber-300"
+            title="Search Wikimedia Commons CC0 for context illustrations for up to four public news stories per page; not photos of reported events">
+            CONTEXT IMAGES {automaticContextOn ? "ON" : "OFF"}
+          </button>
           <button type="button" aria-pressed={photoOnly} onClick={() => setPhotoOnly(value => !value)}
             disabled={licensedPhotoCount === 0 && !photoOnly}
             className="mr-2 shrink-0 border border-border px-2.5 py-1 font-terminal text-[9px] tracking-wider text-amber-200 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-amber-300">
@@ -237,8 +279,11 @@ export default function NewsPanel({ symbol }: Props) {
                   sentiment={item.sentiment}
                   statusBadge={<DataStatusBadge status={item.status} compact />}
                   media={item.media}
+                   mediaPreview={item.mediaPreview}
                   sourceEvidenceId={item.url}
-                  contextIllustration={!item.media && contextImage?.storyUrl === item.url ? contextImage.candidate : undefined}
+                  contextIllustration={!item.media
+                     ? contextImage?.storyUrl === item.url ? contextImage.candidate : automaticContexts.get(item.url)
+                     : undefined}
                   active={item.url === selectedUrl}
                   lead={index === 0}
                   onSelect={() => {
@@ -293,7 +338,10 @@ export default function NewsPanel({ symbol }: Props) {
 
                 {selectedItem.media
                   ? <LicensedEditorialImage media={selectedItem.media} sourceIds={[selectedItem.url]} className="my-4" />
-                  : selectedContextImage ? <CommonsContextIllustration candidate={selectedContextImage} showSource /> : null}
+                  : displayContextImage ? <CommonsContextIllustration candidate={displayContextImage} showSource /> : null}
+                {displayContextImage && !selectedContextImage && <p className="mt-2 font-ui text-xs text-muted-foreground">
+                  Automatic Commons context preview · not a photograph of this event. Image rights are based on Commons CC0 metadata, not independently licensed for redistribution.
+                </p>}
                 <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
                   selected={selectedContextImage}
                   onSelect={candidate => { recheckGenerationRef.current++; setContextImage({ storyUrl: selectedItem.url, candidate }); }}
@@ -304,11 +352,19 @@ export default function NewsPanel({ symbol }: Props) {
                   onForget={forgetSelected}
                   onReopenSaved={reopenSaved} />
 
+                {article?.readThrough !== "publisher_text" && <p role="status" className="mt-4 rounded-lg border border-amber-300/30 p-3 font-ui text-sm leading-5 text-amber-100">
+                  Publisher text could not be retrieved. Showing the RSS feed summary only; open the original publisher for the full report.
+                </p>}
                 <p className="mt-4 border-b border-border/60 pb-4 font-ui text-sm leading-6 text-muted-foreground">
                   {article?.excerpt || selectedItem.summary}
                 </p>
 
-                <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions} />
+                <NewsMediaPreview key={selectedItem.url} preview={selectedItem.mediaPreview} />
+                <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions}
+                  coverage={filtered} onSelectRelated={url => {
+                    recheckGenerationRef.current++;
+                    setSelectedUrl(url);
+                  }} />
 
                 <div className="mt-5 space-y-3">
                   {(article?.content.length ? article.content : [selectedItem.summary]).map((paragraph, index) => (

@@ -43,6 +43,10 @@ test("Project Watchrooms render current P9 evidence, not invented live execution
   assert.match(html, /1 execution receipt IDs/);
   assert.match(html, /Recorded change detected/);
   assert.match(html, /Manage watchrooms/);
+  assert.match(html, /data-testid="watchroom-recorded-run-strip"/);
+  assert.match(html, /1 recent recorded run/);
+  assert.match(html, /succeeded at/);
+  assert.match(html, /A paused monitor, skipped run or missing observation is not a successful execution/);
 });
 
 test("Watchrooms show a read-only initial loading state without making up results", () => {
@@ -50,5 +54,40 @@ test("Watchrooms show a read-only initial loading state without making up result
   const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
     createElement(ProjectWatchroomDesk, { projectId: 7 })));
   assert.match(html, /Loading saved Project monitoring records/);
-  assert.doesNotMatch(html, /No saved Watchrooms in this Project|Recorded change detected/);
+  assert.doesNotMatch(html, /No saved Watchrooms in this Project|Recorded change detected|watchroom-recorded-run-strip/);
+});
+
+test("Watchroom status strip excludes foreign and missing runs without creating success markers", () => {
+  const client = new QueryClient();
+  client.setQueryData(["/api/projects", 7, "automation", "workflows"], [workflow]);
+  client.setQueryData(["/api/projects", 7, "automation", "runs"], [
+    { ...run, projectId: 8, id: "foreign" },
+    { ...run, workflowId: "other-workflow", id: "other" },
+  ]);
+  client.setQueryData(["/api/projects", 7, "automation", "notifications"], []);
+  const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
+    createElement(ProjectWatchroomDesk, { projectId: 7 })));
+  assert.match(html, /No recorded run/);
+  assert.doesNotMatch(html, /watchroom-recorded-run-strip|recent recorded run|<time/);
+});
+
+test("Watchrooms offer the real event timeline only when at least two source-bound runs exist", () => {
+  const client = new QueryClient();
+  const earlier: P9RunRecord = {
+    ...run, id: "run:earlier", startedAt: "2026-10-26T09:00:00Z",
+    completedAt: "2026-10-26T09:01:00Z", status: "skipped",
+    changed: false, conditionMet: false, summary: "Skipped by recorded policy",
+  };
+  client.setQueryData(["/api/projects", 7, "automation", "workflows"], [workflow]);
+  client.setQueryData(["/api/projects", 7, "automation", "runs"], [earlier, run]);
+  client.setQueryData(["/api/projects", 7, "automation", "notifications"], []);
+  const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
+    createElement(ProjectWatchroomDesk, { projectId: 7 })));
+  assert.match(html, /Explore run timeline/);
+  assert.doesNotMatch(html, /Interactive timeline unavailable/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /2 recent recorded runs/);
+  assert.match(html, /skipped at/);
+  assert.match(html, /succeeded at/);
+  assert.doesNotMatch(html, /watchroom-beui-run-timeline/);
 });

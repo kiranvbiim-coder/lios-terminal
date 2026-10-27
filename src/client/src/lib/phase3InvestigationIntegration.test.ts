@@ -14,7 +14,9 @@ const perspectives = source("../components/panels/RecordedPerspectivesBoard.tsx"
 const research = source("../components/panels/ResearchInvestigationPanel.tsx");
 
 test("Phase 3 uses one existing Project Intelligence owner and explicitly opened investigation", () => {
-  assert.match(project, /<ProjectIntelligencePanel projectId=\{project\.id\} onInvestigate=\{prompt => onNewChat\(prompt\)\}/);
+  // A keyed Project-scoped owner must remount on Project identity changes;
+  // do not regress to the older unkeyed panel or duplicate intelligence state.
+  assert.match(project, /<ProjectIntelligencePanel key=\{project\.id\} projectId=\{project\.id\} onInvestigate=\{prompt => onNewChat\(prompt\)\}/);
   assert.equal((project.match(/<ProjectIntelligencePanel /g) ?? []).length, 1);
   assert.match(project, /aria-expanded=\{investigationOpen\}/);
   assert.match(project, /setInvestigationOpen\(false\)/);

@@ -2,6 +2,7 @@ import type { ProjectChat, ProjectSession } from "@/lib/useProjects";
 import type { P6ProjectContinuitySnapshot } from "@shared/p6ContinuityContracts";
 import type { P9NotificationRecord, P9RunRecord, P9WorkflowRecord } from "@/lib/useP9Automation";
 import { workflowExecutionTruth, workflowScheduleSummary } from "@/lib/workflowReviewTruth";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 /** Read-only Project continuity projection. Never infer ownership from a title or a global ID. */
 export function projectResumeSelection(projectId: number, chats: readonly ProjectChat[], sessions: readonly ProjectSession[]) {
@@ -37,7 +38,7 @@ export function projectWatchroomSummary(
 ) {
   const owned = workflows.filter(workflow => workflow.projectId === projectId);
   const ownedIds = new Set(owned.map(workflow => workflow.id));
-  const ownedRuns = runs.filter(run => run.projectId === projectId && ownedIds.has(run.workflowId));
+  const ownedRuns = runs.filter(run => run.projectId === projectId && ownedIds.has(run.workflowId) && recordedIsoTimestamp(run.startedAt) !== null);
   const recentRuns = [...ownedRuns].sort((a, b) => (Date.parse(b.startedAt) || 0) - (Date.parse(a.startedAt) || 0));
   const latest = new Map<string, P9RunRecord>();
   for (const run of recentRuns) if (!latest.has(run.workflowId)) latest.set(run.workflowId, run);
@@ -56,4 +57,25 @@ export function projectWatchroomSummary(
     unread: alerts,
     failed: views.filter(room => room.latestRun?.status === "failed").length,
   };
+}
+
+/**
+ * Source-recorded Watchroom activity strip. Unlike a synthetic sparkline, each
+ * categorical status represents an actual P9 run with an exact Project and
+ * workflow owner and a valid recorded timestamp. Never infer a skipped run.
+ */
+export function watchroomRecordedHistory(
+  projectId: number,
+  workflowId: string,
+  runs: readonly P9RunRecord[],
+  limit = 12,
+): P9RunRecord[] {
+  if (!Number.isInteger(projectId) || projectId < 1 || !workflowId.trim()) return [];
+  const max = Number.isFinite(limit) ? Math.max(1, Math.min(24, Math.floor(limit))) : 12;
+  return runs.filter(run =>
+    run.projectId === projectId && run.workflowId === workflowId &&
+    recordedIsoTimestamp(run.startedAt) !== null
+  ).sort((left, right) =>
+    Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)
+  ).slice(0, max).reverse();
 }

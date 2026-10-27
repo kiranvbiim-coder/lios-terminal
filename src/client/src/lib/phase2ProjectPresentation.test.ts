@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { ProjectChat, ProjectSession } from "@/lib/useProjects";
 import type { P6ProjectContinuitySnapshot } from "@shared/p6ContinuityContracts";
 import type { P9NotificationRecord, P9RunRecord, P9WorkflowRecord } from "@/lib/useP9Automation";
-import { projectResumeItems, projectResumeSelection, projectWatchroomSummary } from "./phase2ProjectPresentation";
+import { projectResumeItems, projectResumeSelection, projectWatchroomSummary, watchroomRecordedHistory } from "./phase2ProjectPresentation";
 
 const chat = (id: number, projectId: number, lastActivityAt: string): ProjectChat => ({
   id, projectId, ownerUserId: 11, organizationId: null, scope: "project", title: "Saved chat " + id, pinned: false,
@@ -84,4 +84,48 @@ test("workflow enabled state never reports successful execution without a server
   assert.equal(rooms[0].state.state, "enabled");
   assert.equal(rooms[0].latestRun, null);
   assert.match(rooms[0].state.warning, /not a guarantee of future execution/i);
+});
+
+test("Smart Watchroom history contains only actual same-project workflow runs ordered by recorded start", () => {
+  const history = watchroomRecordedHistory(5, "local", [
+    run("newest", "local", 5, "failed", "2026-10-27T11:00:00Z"),
+    run("foreign-project", "local", 8, "succeeded", "2026-10-27T13:00:00Z"),
+    run("foreign-workflow", "different", 5, "succeeded", "2026-10-27T14:00:00Z"),
+    run("invalid-time", "local", 5, "succeeded", "not-a-timestamp"),
+    run("oldest", "local", 5, "succeeded", "2026-10-27T09:00:00Z"),
+    run("ongoing", "local", 5, "running", "2026-10-27T10:00:00Z"),
+  ]);
+  assert.deepEqual(history.map(entry => entry.id), ["oldest", "ongoing", "newest"]);
+  assert.deepEqual(history.map(entry => entry.status), ["succeeded", "running", "failed"]);
+  assert.deepEqual(watchroomRecordedHistory(8, "missing", [], 12), []);
+  assert.deepEqual(watchroomRecordedHistory(5, "local", [run("foreign", "local", 8, "succeeded", "2026-10-27T10:00:00Z")]), []);
+});
+
+test("P9 monitoring chronology ignores ambiguous, impossible or unzoned dates rather than inventing run times", () => {
+  const candidates = [
+    run("short", "owned", 5, "succeeded", "1"),
+    run("rollover", "owned", 5, "succeeded", "2026-02-30T09:00:00Z"),
+    run("local-guess", "owned", 5, "succeeded", "2026-10-27T09:00:00"),
+    run("date-only", "owned", 5, "succeeded", "2026-10-27"),
+    run("hour-24", "owned", 5, "succeeded", "2026-10-27T24:00:00Z"),
+    run("leap-day", "owned", 5, "succeeded", "2024-02-29T09:00:00Z"),
+    run("offset", "owned", 5, "failed", "2026-10-27T15:30:00+05:30"),
+    run("foreign", "owned", 6, "succeeded", "2026-10-28T09:00:00Z"),
+  ];
+  assert.deepEqual(watchroomRecordedHistory(5, "owned", candidates).map(item => item.id),
+    ["leap-day", "offset"]);
+  const summary = projectWatchroomSummary(5, [workflow("owned", 5)], candidates, []);
+  assert.equal(summary.rooms[0].latestRun?.id, "offset");
+  assert.equal(summary.failed, 1);
+});
+
+test("Smart Watchroom visual history enforces a bounded source-recorded window, never fabricates gaps", () => {
+  const source = Array.from({ length: 40 }, (_, i) =>
+    run("run-" + i, "owned", 5, i % 2 ? "failed" : "skipped", new Date(Date.UTC(2026, 9, 27, 0, i)).toISOString()));
+  assert.deepEqual(watchroomRecordedHistory(5, "owned", source).map(entry => entry.id),
+    source.slice(28).map(entry => entry.id));
+  assert.equal(watchroomRecordedHistory(5, "owned", source, 1000).length, 24);
+  assert.equal(watchroomRecordedHistory(5, "owned", source, Number.NaN).length, 12);
+  assert.equal(watchroomRecordedHistory(5, "owned", [], 12).length, 0);
+  assert.deepEqual(source.map(entry => entry.id)[0], "run-0");
 });

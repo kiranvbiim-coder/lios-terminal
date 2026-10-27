@@ -340,7 +340,7 @@ export function ProjectHome({
             </div>
             {briefingOpen
               ? <ProjectEvidenceBriefingStudio key={project.id} projectId={project.id} onOpenArtifact={onFocusArtifact} />
-              : <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
+              : <ProjectIntelligencePanel key={project.id} projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
           </div>}
         </section>
         {collectionsFailed && <div role="alert" className="mt-5 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
