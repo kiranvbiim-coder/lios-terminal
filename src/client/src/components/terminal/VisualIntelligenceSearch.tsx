@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenText, ExternalLink, Radar, Search, Sparkles } from "lucide-react";
+import { BookOpenText, ExternalLink, Radar, Sparkles } from "lucide-react";
 import type { IntelligenceCard } from "@shared/waveDContracts";
-import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
+import { pulseStoryTimestamp, safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import {
   INTELLIGENCE_SEARCH_FACETS,
   intelligenceSearchCounts,
