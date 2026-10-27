@@ -9,10 +9,12 @@ import { setActiveScenario, subscribeScenarioUniverse } from "@/lib/terminalScen
 import { subscribeTerminalTimeContext } from "@/lib/terminalTimeTravel";
 import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
 import { useProactiveInboxReview } from "@/lib/useProactivePulse";
+import { buildActionInboxChatDraft } from "@/lib/actionInboxReview";
 import type { ViewMode } from "@/lib/terminalTypes";
 
 interface Props {
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+  onStageAiReview: (draft: string) => boolean;
   onClose: () => void;
 }
 
@@ -42,10 +44,11 @@ function PulseIcon({ item }: { item: IntelligencePulseItem }) {
   return <Activity className="h-3.5 w-3.5" />;
 }
 
-export default function IntelligencePulse({ onOpen, onClose }: Props) {
+export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("pulse");
   const [proactiveEnabled, setProactiveEnabled] = useState(false);
   const [expandedInboxItemId, setExpandedInboxItemId] = useState<string | null>(null);
+  const [reviewHandoffMessage, setReviewHandoffMessage] = useState("");
   const { result: proactive, refresh: refreshInbox } = useProactiveInboxReview(tab === "proactive" && proactiveEnabled);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
@@ -168,6 +171,7 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
                     ? `${proactive.review.openCount} open items require review · ${proactive.review.totalCount} in the current inbox`
                     : `No open items in the returned inbox · ${proactive.review.totalCount} total records`}
               </div>
+              {reviewHandoffMessage && <p role="alert" className="rounded-lg border border-amber-500/25 p-3 font-ui text-sm text-amber-200">{reviewHandoffMessage}</p>}
               {proactive.state === "ready" && (
                 <div className="space-y-3">
                   <p className="font-ui text-xs text-muted-foreground">
@@ -187,6 +191,14 @@ export default function IntelligencePulse({ onOpen, onClose }: Props) {
                       <p className="mt-2 whitespace-pre-wrap break-words font-ui text-sm leading-relaxed text-muted-foreground">{item.reason}</p>
                       <p className="mt-2 font-ui text-xs text-muted-foreground">Observed card: {item.sourceCardId} · {new Date(item.createdAt).toLocaleString()}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <button type="button" onClick={() => {
+                          if (proactive.state !== "ready") return;
+                          const drafted = buildActionInboxChatDraft(item, proactive.review.asOf!);
+                          if (onStageAiReview(drafted)) onClose();
+                          else setReviewHandoffMessage("Keep or review your unsaved Workbench edits before switching to Chat. No AI request was sent.");
+                        }} className="min-h-10 rounded-lg border border-cyan-500/35 px-3 font-ui text-sm font-semibold text-cyan-200">
+                          Draft review in Chat
+                        </button>
                         <button type="button" className="min-h-10 rounded-lg border border-border px-3 font-ui text-sm text-foreground"
                           aria-expanded={expandedInboxItemId === item.id}
                           onClick={() => setExpandedInboxItemId(previous => previous === item.id ? null : item.id)}>
