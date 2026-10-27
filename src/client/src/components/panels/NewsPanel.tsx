@@ -13,6 +13,7 @@ import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 import { NewsStoryEvolution } from "./NewsStoryEvolution";
 import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import { observeNewsFeed, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
+import { approvedPhotoCount, newsWithApprovedPhotos } from "@/lib/newsVisualCoverage";
 import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 
 interface Props {
@@ -42,6 +43,7 @@ export default function NewsPanel({ symbol }: Props) {
   const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
+  const [photoOnly, setPhotoOnly] = useState(false);
   // Only real successive feed observations while this view is mounted.
   const [observedRevisions, setObservedRevisions] = useState<NewsStoryRevision[]>([]);
   const activeNewsStoryRef = useRef<string | null>(null);
@@ -78,13 +80,15 @@ export default function NewsPanel({ symbol }: Props) {
     ];
   }, [news]);
 
+  const licensedPhotoCount = useMemo(() => approvedPhotoCount(news, new Date().toISOString()), [news]);
   const filtered = useMemo(() => {
-    return news.filter((item: NewsItem) => {
+    const sourceAndSentiment = news.filter((item: NewsItem) => {
       const sourceOk = sourceFilter === "ALL" || item.source.toUpperCase() === sourceFilter;
       const sentimentOk = sentimentFilter === "ALL" || item.sentiment === sentimentFilter.toLowerCase();
       return sourceOk && sentimentOk;
     });
-  }, [news, sentimentFilter, sourceFilter]);
+    return photoOnly ? newsWithApprovedPhotos(sourceAndSentiment, new Date().toISOString()) : sourceAndSentiment;
+  }, [news, sentimentFilter, sourceFilter, photoOnly]);
 
   useEffect(() => {
     if (!newsQuery.isSuccess || newsQuery.isFetching || newsQuery.isError || selectedUrl || !filtered.length) return;
@@ -156,6 +160,11 @@ export default function NewsPanel({ symbol }: Props) {
         </div>
 
         <div className="flex items-center gap-px overflow-x-auto scrollbar-thin px-2 py-1.5">
+          <button type="button" aria-pressed={photoOnly} onClick={() => setPhotoOnly(value => !value)}
+            disabled={licensedPhotoCount === 0 && !photoOnly}
+            className="mr-2 shrink-0 border border-border px-2.5 py-1 font-terminal text-[9px] tracking-wider text-amber-200 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-amber-300">
+            VERIFIED PHOTOS {licensedPhotoCount}
+          </button>
           {sources.map((source) => (
             <button
               key={source}
@@ -200,7 +209,7 @@ export default function NewsPanel({ symbol }: Props) {
                 {Array(6).fill(0).map((_, index) => <Skeleton key={index} className="h-24 bg-border" />)}
               </div>
             ) : filtered.length === 0 ? (
-              <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">NO STORIES MATCH CURRENT FILTERS</div>
+              <div className="flex items-center justify-center h-40 font-terminal text-muted-foreground text-xs">{photoOnly ? "NO RIGHTS-VERIFIED PHOTOS MATCH THIS FEED" : "NO STORIES MATCH CURRENT FILTERS"}</div>
             ) : (
               filtered.map((item, index) => (
                 <NewsEditorialStoryCard
