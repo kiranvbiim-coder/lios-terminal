@@ -71,9 +71,12 @@ export const chatMcpDiscoveryTool: ConversationToolDefinition = {
     if (!connection) throw new Error("MCP connection is not available for this owner.");
     const providerId = `source:${connection.id}`;
     const policy = call.researchSourcePolicy;
-    if (policy?.providerDeny.includes(providerId)
-      || (policy?.providerAllow.length && !policy.providerAllow.includes(providerId))
-      || (policy?.mode === "only_refs" && !policy.allowedSourceRefs.includes(`source-connection:${connection.id}`))
+    const denied = policy?.providerDeny ?? [];
+    const allowed = policy?.providerAllow ?? [];
+    const sourceRefs = policy?.allowedSourceRefs ?? [];
+    if (denied.includes(providerId)
+      || (allowed.length > 0 && !allowed.includes(providerId))
+      || (policy?.mode === "only_refs" && !sourceRefs.includes(`source-connection:${connection.id}`))
       || (call.allowedSourceRefs?.length && !call.allowedSourceRefs.includes(`source-connection:${connection.id}`))) {
       throw new Error("MCP connection is excluded by the current research source policy.");
     }
