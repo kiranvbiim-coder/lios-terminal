@@ -90,13 +90,13 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState<PerspectiveGroup | "all">("all");
   const [focusedId, setFocusedId] = useState<number | null>(null);
-  const [more, setMore] = useState(false);
+  const [visiblePerLane, setVisiblePerLane] = useState(4);
   const model = buildPerspectiveModel(evidence, relationships);
   const filtered = filterPerspectiveLinks(model.links, search, group);
   const unlinked = group === "all" ? filterUnlinkedEvidence(model.unlinked, search) : [];
   const selected = filtered.find(link => link.id === focusedId) ?? filtered[0] ?? null;
   const groups: PerspectiveGroup[] = group === "all" ? ["support", "challenge", "context"] : [group];
-  const maxPerLane = more ? 24 : 4;
+  const maxPerLane = visiblePerLane;
 
   return <section data-testid="research-perspectives-explorer" aria-label="Research Perspectives Explorer" className="min-h-full space-y-5 p-3 sm:p-5">
     <header className="space-y-3">
@@ -143,14 +143,14 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
       <label className="flex min-h-11 min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3">
         <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true"/>
         <span className="sr-only">Search evidence relationships</span>
-        <input type="search" value={search} onChange={event => { setSearch(event.target.value); setMore(false); setFocusedId(null); }}
+        <input type="search" value={search} onChange={event => { setSearch(event.target.value); setVisiblePerLane(4); setFocusedId(null); }}
           placeholder="Search exact source titles, excerpts and notes"
           className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground" />
       </label>
       <label className="flex items-center gap-2 font-ui text-xs text-muted-foreground">
         <span>Show</span>
         <select aria-label="Filter explicit relationship types" value={group}
-          onChange={event => { setGroup(event.target.value as PerspectiveGroup | "all"); setMore(false); setFocusedId(null); }}
+          onChange={event => { setGroup(event.target.value as PerspectiveGroup | "all"); setVisiblePerLane(4); setFocusedId(null); }}
           className="min-h-11 rounded-lg border border-border/70 bg-background px-3 font-ui text-sm text-foreground">
           <option value="all">All links</option>
           <option value="support">Supports links</option>
@@ -184,9 +184,9 @@ export function RecordedPerspectivesBoard({ title, question, thesis, evidence, r
           })}
         </div>
         {filtered.some(link => groups.some(kind => link.group === kind) && filtered.filter(item => item.group === link.group).length > maxPerLane) && <button type="button"
-          onClick={() => setMore(value => !value)} aria-expanded={more}
+          onClick={() => setVisiblePerLane(n => n + 12)}
           className="min-h-10 w-full rounded-lg border border-border/70 font-ui text-sm text-foreground hover:bg-white/[0.05]">
-          {more ? "Show fewer relationship cards" : "Show more recorded relationships"}
+          Show more recorded relationships
         </button>}
         {selected && <section aria-label="Inspect both ends of an explicit relationship" className="rounded-2xl border border-amber-300/25 bg-card/65 p-4" data-testid="perspectives-source-comparison">
           <div className="mb-3 flex flex-wrap items-center gap-2">
