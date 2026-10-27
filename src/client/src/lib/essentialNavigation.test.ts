@@ -39,6 +39,25 @@ test("full navigation is default; compact icons are intentional and accessible",
   assert.match(navigation, /aria-label=\{label\} aria-current=\{\(props\.activeSection \?\? props\.section\) === id/);
 });
 
+test("Work is accessible directly from both sidebar modes and preserves the original Workbench handoff", () => {
+  assert.match(navigation, /className="lios-open-work" onClick=\{\(\) => act\(props\.onWorkbench\)\}/);
+  assert.match(navigation, /title="Work" aria-label="Work" onClick=\{props\.onWorkbench\}/);
+  assert.match(shell, /onWorkbench=\{onOpenWorkbench\}/);
+  assert.match(shell, /navigateWorkbench\(\{ projectId: selection\.projectId, chatId: selection\.chatId, artifactId: conversationArtifactRef, version: displayed\.version \}\)/);
+  assert.match(shell, /captureChatWorkbenchOrigin\(chatMode, selection\.projectId, selection\.chatId, symbol\)/);
+  assert.match(shell, /const onOpenWorkbench = \(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /Save or reset unsaved Artifact edits before opening Workbench/);
+});
+
+test("compact navigation never loses account access", () => {
+  assert.match(navigation, /const accountMenu = \(compact = false\) =>/);
+  assert.match(navigation, /\{accountMenu\(\)\}/);
+  assert.match(navigation, /\{accountMenu\(true\)\}/);
+  assert.match(navigation, /className=\{compact \? "lios-compact-account-trigger" : "lios-account-trigger"\}/);
+  assert.match(navigation, /onSelect=\{props\.onLogout\}/);
+  assert.match(navigation, /onSelect=\{\(\) => act\(props\.onTemporary\)\}/);
+});
+
 test("mobile drawer reuses named navigation, closes on selection, and provides account controls", () => {
   assert.match(navigation, /<Sheet open=\{open\} onOpenChange=\{setOpen\}>/);
   assert.match(navigation, /<SheetTitle className="sr-only">LiOS navigation<\/SheetTitle>/);
