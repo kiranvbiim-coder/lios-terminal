@@ -130,13 +130,13 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
         </div>}
         {inputApplyReviewed && <section data-testid="scenario-apply-reviewed-preview" aria-label="Model inputs pending explicit confirmation"
           className="space-y-2 border-b border-amber-300/30 bg-amber-300/[0.035] p-3 font-ui text-sm">
-          <p className="font-semibold text-foreground">Review ${preview.matched.length} exact input changes before applying</p>
+          <p className="font-semibold text-foreground">Review {preview.matched.length} exact input changes before applying</p>
           <p className="text-xs leading-5 text-muted-foreground">
             This modifies registered inputs in the active pane only. It does not run a deterministic P11 engine, verify predicted model output, save a P4 Artifact, trade, or launch an automation.
           </p>
           <ul className="max-h-44 space-y-1 overflow-y-auto">
             {preview.matched.slice(0, 16).map((item, i) => <li key={item.bindingId + ":" + item.assumptionKey + ":" + i} className="break-words rounded border border-border/50 p-2">
-              {item.bindingLabel}: {item.currentValue} {item.unit ?? ""} → {item.value} {item.unit ?? ""} · `{item.assumptionKey}`
+              {item.bindingLabel}: {item.currentValue} {item.unit ?? ""} → {item.value} {item.unit ?? ""} · source input: {item.assumptionKey}
             </li>)}
           </ul>
           {preview.matched.length > 16 && <p className="text-xs text-muted-foreground">Showing 16 of {preview.matched.length} actual input changes. Other exact changes are included in this review token.</p>}
