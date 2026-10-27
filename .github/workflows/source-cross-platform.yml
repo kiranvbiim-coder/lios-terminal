@@ -136,6 +136,7 @@ jobs:
         run: |
           npm run test:phase-closure
           npm run beta:manifest:test
+          npm run beta:acceptance:test
           npm run release:preflight:ci
 
       - name: Installed UX evidence negative controls (source only)
