@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useMemo, useState } from "react";
 import { Compass, GitBranch, MapPinned, MessageSquareText, Network } from "lucide-react";
 import type { P7ContextGraph, P7InsightLens } from "@shared/p7ResearchContracts";
