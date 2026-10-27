@@ -144,3 +144,20 @@ test("C04 replacing a model binding invalidates old review even if ID and values
     replacement?.();
   }
 });
+
+test("C04 punctuation-only scenario keys must not match an empty-normalized model key", () => {
+  let calls = 0;
+  const dispose = registerAssumptionBinding({
+    id: "c04-blank-normalization", view: "valuation", key: "!!", label: "??",
+    value: 12, apply: () => { calls++; },
+  });
+  try {
+    const item = scenario([{ key: "---", label: "???", value: 999 }]);
+    const plan = previewScenarioBindingApplication(item, { view: "valuation" });
+    assert.deepEqual(plan.matched, []);
+    assert.equal(plan.skipped.length, 1);
+    assert.equal(scenarioBindingReviewKey(item, "valuation", undefined, plan), null);
+    assert.equal(applyScenarioToBindings(item, { view: "valuation" }).applied.length, 0);
+    assert.equal(calls, 0);
+  } finally { dispose(); }
+});
