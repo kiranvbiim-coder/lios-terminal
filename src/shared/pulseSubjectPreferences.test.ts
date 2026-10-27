@@ -43,7 +43,7 @@ test("Following uses existing watchlist plus explicit subjects, but cannot resur
     { subjectKey: "AAPL", symbol: "AAPL", title: "Muted" },
     { subjectKey: "COPPER", symbol: "COPPER", title: "Followed" },
     { subjectKey: undefined, symbol: "AAPL", title: "Fallback identity still muted" },
-    { subjectKey: null, symbol: null, title: "Unclassified" },
+    { subjectKey: undefined, symbol: undefined, title: "Unclassified" },
   ] as Array<{subjectKey?: string | null; symbol?: string | null; title: string}>;
   assert.deepEqual(suppressMutedPulseCards(source, prefs).map(item => item.title), ["Followed", "Unclassified"]);
   assert.equal(source.length, 4, "the source list and canonical inbox remain unaffected");
