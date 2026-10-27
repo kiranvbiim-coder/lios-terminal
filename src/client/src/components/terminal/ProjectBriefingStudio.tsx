@@ -16,25 +16,30 @@ export function ProjectBriefingStudio({
   const [title, setTitle] = useState("My intelligence briefing");
   const [introduction, setIntroduction] = useState("");
   const [search, setSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Preserve the version/title captured at explicit selection, not just its ID.
+  const [selectedSources, setSelectedSources] = useState<BriefingSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   // Only exact, currently active Project Artifacts appear; source contents are not fetched.
   const available = artifacts.filter(artifact => artifact.projectId === projectId && artifact.status === "active");
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
-  const chosen = selectedIds.map(id => byId.get(id)).filter((item): item is BriefingSource => Boolean(item));
-  const staleSelection = chosen.length !== selectedIds.length;
+  const chosen = selectedSources;
+  const staleSelection = chosen.some(source => {
+    const live = byId.get(source.id);
+    return !live || live.headVersion !== source.headVersion || live.title !== source.title
+      || live.kind !== source.kind || live.status !== "active" || live.projectId !== source.projectId;
+  });
   const offered = available.filter(item =>
     item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
     || item.kind.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const toggle = (id: string) => {
     setError(null);
-    setSelectedIds(current => current.includes(id) ? current.filter(x => x !== id)
-      : current.length < MAX_BRIEFING_SOURCES ? [...current, id] : current);
+    setSelectedSources(current => current.some(item => item.id === id) ? current.filter(item => item.id !== id)
+      : current.length < MAX_BRIEFING_SOURCES && byId.has(id) ? [...current, { ...byId.get(id)! }] : current);
   };
   const move = (index: number, direction: -1 | 1) => {
-    setSelectedIds(current => {
+    setSelectedSources(current => {
       const destination = index + direction;
       if (destination < 0 || destination >= current.length) return current;
       const next = [...current];
@@ -108,7 +113,7 @@ export function ProjectBriefingStudio({
           </label>
           {offered.length ? <ul className="max-h-80 space-y-2 overflow-y-auto">
             {offered.slice(0, 40).map(artifact => {
-              const isSelected = selectedIds.includes(artifact.id);
+              const isSelected = chosen.some(source => source.id === artifact.id);
               return <li key={artifact.id}>
                 <button type="button" aria-pressed={isSelected}
                   disabled={busy || (!isSelected && chosen.length >= MAX_BRIEFING_SOURCES)}
@@ -136,7 +141,7 @@ export function ProjectBriefingStudio({
             <h3 className="text-sm font-semibold">Storyboard · review order</h3>
             <span className="text-xs text-muted-foreground">{chosen.length} frames</span>
           </div>
-          {staleSelection && <p role="alert" className="rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">A previously selected Artifact is unavailable. Remove the missing source before saving.</p>}
+          {staleSelection && <p role="alert" className="rounded-lg border border-amber-300/30 p-3 text-sm text-amber-200">A selected Artifact has changed or become unavailable. Its previously reviewed version remains visible but cannot be saved. Remove and reselect it from the current library.</p>}
           {chosen.length ? <ol className="space-y-2">
             {chosen.map((source, index) => <li key={source.id} className="rounded-lg border border-border/60 bg-white/[0.02] p-3">
               <div className="flex gap-3">
