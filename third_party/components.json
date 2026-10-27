@@ -2850,7 +2850,7 @@
       "releaseTag": "v2026.9.7",
       "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
       "license": "MIT",
-      "posture": "adapted_source_component",
+      "posture": "supplemental_bounded_source_adaptation",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
