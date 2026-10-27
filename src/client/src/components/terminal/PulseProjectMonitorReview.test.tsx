@@ -17,6 +17,8 @@ test("A08 uses current Project and P9 owner only; no alternate monitor API or im
   assert.match(source, /const saved = await createP9Workflow\(originalProjectId, preview\)/);
   assert.match(source, /saved\.enabled !== false \|\| saved\.action\.kind !== "project_what_changed"/);
   assert.match(source, /formatLiosAddress\(\{ kind: "project", projectId: savedProjectId \}\)/);
+  assert.match(source, /requestInFlight\.current = true/);
+  assert.match(source, /requestInFlight\.current = false/);
   assert.doesNotMatch(source, /runP9WorkflowNow|setP9WorkflowEnabled|localStorage|navigator\.geolocation|new WebSocket/);
 });
 
