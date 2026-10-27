@@ -26,7 +26,7 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   const [mode, setMode] = useState<SpatialLayoutMode>(initialReturnState?.mode ?? "map");
   const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>(initialReturnState?.kindFilter ?? "all");
   const [trailGroup, setTrailGroup] = useState(initialReturnState?.trailGroup ?? "");
-  const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(null);
+  const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(initialReturnState?.selectedConnectionKey ?? null);
   const [expanded, setExpanded] = useState(initialReturnState?.expanded ?? false);
   const [inspectedId, setInspectedId] = useState<string | null>(initialReturnState?.inspectedId ?? null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
@@ -58,11 +58,12 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   useEffect(() => {
     if (!onReturnStateChange) return;
     onReturnStateChange(reconcileSpatialCanvasReturnState(
-      { mode, kindFilter, trailGroup, inspectedId, expanded },
+      { mode, kindFilter, trailGroup, inspectedId, selectedConnectionKey, expanded },
       model.nodes.map(node => node.item.id),
       trails.map(trail => trail.group),
+      connections.map(connection => connection.key),
     ));
-  }, [mode, kindFilter, trailGroup, inspectedId, expanded, model, trails, onReturnStateChange]);
+  }, [mode, kindFilter, trailGroup, inspectedId, selectedConnectionKey, expanded, model, trails, connections, onReturnStateChange]);
   useEffect(() => { if (selectedConnectionKey && !inspectedConnection) setSelectedConnectionKey(null); }, [selectedConnectionKey, inspectedConnection]);
 
   const fromPointer = (clientX: number, clientY: number): SpatialPoint | null => {
