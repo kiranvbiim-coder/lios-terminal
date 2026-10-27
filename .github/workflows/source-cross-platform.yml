@@ -141,6 +141,11 @@ jobs:
         timeout-minutes: 5
         run: npm run test:website-c2
 
+      - name: C3 recorded Project evidence consequence-review contracts
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run test:website-c3
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
