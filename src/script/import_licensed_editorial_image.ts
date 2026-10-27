@@ -15,19 +15,11 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { editorialMediaSchema, eligibleEditorialMedia, type EditorialMedia } from "../shared/editorialMedia";
-import { approvedNewsMediaByUrl } from "../server/newsEditorialMedia";
+import { approvedNewsMediaByUrl, imageSignatureValid } from "../server/newsEditorialMedia";
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 const MAX_MANIFEST = 128 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
-
-function checkImage(bytes: Buffer, ext: string): boolean {
-  if (ext === ".png") return bytes.length >= 16 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
-  if (ext === ".jpg" || ext === ".jpeg") return bytes.length >= 16 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-  if (ext === ".webp") return bytes.length >= 16 && bytes.toString("ascii",0,4) === "RIFF" && bytes.toString("ascii",8,12) === "WEBP";
-  if (ext === ".avif") return bytes.length >= 16 && bytes.toString("ascii",4,8) === "ftyp" && ["avif","avis"].includes(bytes.toString("ascii",8,12));
-  return false;
-}
 
 export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publicRoot: string): EditorialMedia {
   const ext = path.extname(imagePath).toLowerCase();
@@ -35,7 +27,7 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
   const original = fs.statSync(imagePath);
   if (!original.isFile() || original.size < 16 || original.size > MAX_IMAGE) throw new Error("Image must be a non-empty file of 4 MB or less.");
   const bytes = fs.readFileSync(imagePath);
-  if (!checkImage(bytes, ext)) throw new Error("Image content does not match the declared extension.");
+  if (!imageSignatureValid(bytes, ext.slice(1))) throw new Error("Image content does not match the declared extension.");
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const assetPath = "/editorial-media/" + sha256 + ext;
   const record = grant && typeof grant === "object" && !Array.isArray(grant) ? grant : {};
