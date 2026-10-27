@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitBranch, RefreshCw } from "lucide-react";
 import { refreshP6ProjectContinuity, useInvalidateP6ProjectContinuity, useP6ProjectContinuity } from "@/lib/useP6Continuity";
 import { ProjectChangeActivity } from "./ProjectChangeActivity";
+import { ProjectContinuationActivitiesCard } from "./ProjectContinuationActivitiesCard";
 
 function time(value: string | null): string {
   if (!value) return "—";
@@ -73,46 +74,13 @@ export function ProjectContinuityPanel({
       </div>
 
       <div className="mt-4 grid gap-3 xl:grid-cols-2">
-        <div className="rounded-lg border border-border/50 bg-black/15 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-ui text-[8px] font-semibold text-foreground">Continue work</div>
-            <span className="font-terminal text-[6px] text-muted-foreground">DETERMINISTIC QUEUE</span>
-          </div>
-          <div className="mt-2 space-y-1.5">
-            {(snapshot?.continuationQueue ?? []).slice(0, 8).map((item) => (
-              <article key={item.id} className="rounded border border-border/40 px-2.5 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-ui text-[8px] text-foreground">{item.title}</span>
-                  <span className={`font-terminal text-[6px] uppercase ${item.priority === "high" ? "text-red-300" : item.priority === "medium" ? "text-amber-200" : "text-muted-foreground"}`}>{item.priority}</span>
-                </div>
-                <div className="mt-1 line-clamp-2 font-ui text-[7px] leading-4 text-muted-foreground">{item.summary}</div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="font-terminal text-[6px] uppercase text-muted-foreground/70">{item.kind.replaceAll("_", " ")}</span>
-                  {item.decisionArtifactId && onFocusArtifact && (
-                    <button
-                      type="button"
-                      onClick={() => onFocusArtifact(item.decisionArtifactId!, item.title)}
-                      className="font-ui text-[7px] text-cyan-300 hover:text-cyan-200"
-                    >
-                      Open decision
-                    </button>
-                  )}
-                  {!item.decisionArtifactId && item.workflowId && (
-                    <button
-                      type="button"
-                      onClick={() => document.querySelector("[data-p9-continuous-intelligence]")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                      className="font-ui text-[7px] text-cyan-300 hover:text-cyan-200"
-                    >
-                      Review workflow
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-            {snapshot && !snapshot.continuationQueue.length && <div className="font-ui text-[7px] text-muted-foreground">No deterministic follow-up is currently outstanding.</div>}
-            {!snapshot && !continuity.isError && <div className="font-ui text-[7px] text-muted-foreground">Loading Project continuation state…</div>}
-          </div>
-        </div>
+        <ProjectContinuationActivitiesCard
+          items={snapshot?.continuationQueue ?? []}
+          loading={!snapshot && !continuity.isError}
+          unavailable={continuity.isError}
+          onOpenDecision={onFocusArtifact}
+          onReviewWorkflow={() => document.querySelector("[data-p9-continuous-intelligence]")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        />
 
         <div className="rounded-lg border border-border/50 bg-black/15 p-3">
           <div className="flex items-center justify-between gap-3">
