@@ -23,40 +23,16 @@ const POLL_INTERVAL_MS = 60_000;
 
 /** Pure so it can be tested without mocking fetch/timers -- see useProactivePulse.test.ts. */
 export function parseActionInboxResponse(data: unknown): ProactivePulseState {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return { count: 0, status: "unavailable" };
-  const items = (data as { items?: unknown }).items;
-  return { count: Array.isArray(items) ? items.length : 0, status: "ready" };
+  const review = parseActionInboxReview(data);
+  return review.status === "ready" ? { count: review.openCount, status: "ready" }
+    : { count: 0, status: "unavailable" };
 }
 
+/** Both ambient and detailed review now share one source-validated polling policy. */
 export function useProactivePulse(enabled: boolean): ProactivePulseState {
-  const [state, setState] = useState<ProactivePulseState>({ count: 0, status: "loading" });
-
-  useEffect(() => {
-    if (!enabled) {
-      setState({ count: 0, status: "loading" });
-      return;
-    }
-    let cancelled = false;
-    const load = () => {
-      fetch("/api/wave-d/action-inbox")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: unknown) => {
-          if (cancelled) return;
-          setState(parseActionInboxResponse(data));
-        })
-        .catch(() => {
-          if (!cancelled) setState({ count: 0, status: "unavailable" });
-        });
-    };
-    load();
-    const interval = window.setInterval(load, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [enabled]);
-
-  return state;
+  const { result } = useProactiveInboxReview(enabled);
+  return result.state === "ready" ? { count: result.review.openCount, status: "ready" }
+    : { count: 0, status: result.state === "unavailable" || result.state === "not_authorized" ? "unavailable" : "loading" };
 }
 
 /**
