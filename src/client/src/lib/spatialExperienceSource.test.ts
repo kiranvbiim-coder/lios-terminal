@@ -67,3 +67,16 @@ test("Phase 2 visual-intensity preference is a safe presentation change on the s
   assert.match(uxSettings, /"auto", "immersive", "contextual", "focus"/);
   assert.match(uxSettings, /update\(\{ visualIntensity \}\)/);
 });
+
+
+test("Phase 2 guided trails are explicitly named, user-started and source-only", () => {
+  assert.match(canvas, /buildExplicitResearchTrails\(model\.nodes\)/);
+  assert.match(canvas, /aria-label="Guided evidence trail"/);
+  assert.match(canvas, /aria-label="Choose your saved research group"/);
+  assert.match(canvas, /stepExplicitResearchTrail\(selectedTrail\.itemIds, inspectedId, direction\)/);
+  assert.match(canvas, /onClick=\{\(\) => \{ if \(selectedTrail\) openInspection\(selectedTrail\.itemIds\[0\]\)/);
+  assert.match(canvas, /aria-label="Previous pinned research item"/);
+  assert.match(canvas, /aria-label="Next pinned research item"/);
+  assert.match(canvas, /data-trail-member=/);
+  assert.match(styles, /\.lios-spatial-board\[data-trail-active="true"\] \.lios-spatial-node\[data-trail-current="true"\]/);
+});
