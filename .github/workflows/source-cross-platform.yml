@@ -126,6 +126,11 @@ jobs:
         timeout-minutes: ${{ matrix.platform == 'macOS' && 45 || 30 }}
         run: npm run test:offline
 
+      - name: B3 source-backed research flow and evidence comparison
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run test:website-b3
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
