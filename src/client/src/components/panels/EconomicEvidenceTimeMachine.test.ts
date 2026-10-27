@@ -6,7 +6,7 @@ test("B06 economics reuses the real frozen FRED data fabric and shows true befor
   for(const item of [
     'b06-economic-evidence-time-machine','economicCaptureKnownOn(series,seriesId,knownOnDay)',
     'eligibleEconomicCaptures(series,seriesId)','b06-economic-snapshot-comparison',
-    'Compare saved economic vintages','recorded source revision pairs',
+    'Compare saved economic vintages','Retained source revision pairs',
     'result.baseline.contentHash !== savedThen.contentHash',
     'result.current.contentHash !== latestSeriesCapture.contentHash',
     'comparisonAbort.current?.abort()','type="date"',
