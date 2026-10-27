@@ -23,12 +23,16 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
   const [announcement, setAnnouncement] = useState("");
+  const [dragPreview, setDragPreview] = useState<{ id: string; point: SpatialPoint } | null>(null);
+  const dragPreviewRef = useRef<{ id: string; point: SpatialPoint } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const companionHeading = useRef<HTMLButtonElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const positions = useMemo(() => loadResearchCanvasPositions(), [version]);
   const model = useMemo(() => buildSpatialResearchModel(items, positions, mode), [items, positions, mode]);
-  const points = useMemo(() => new Map(model.nodes.map(node => [node.item.id, node.point])), [model]);
+  const points = useMemo(() => new Map(model.nodes.map(node => [
+    node.item.id, dragPreview?.id === node.item.id ? dragPreview.point : node.point,
+  ] as const)), [model, dragPreview]);
   const selected = model.nodes.find(node => node.item.id === inspectedId)?.item ?? null;
 
   useEffect(() => subscribeResearchTray(setItems), []);
@@ -43,28 +47,39 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
       y: (clientY - rect.top) / rect.height * 100,
     });
   };
-  const move = (kind: DragState["kind"], id: string, point: SpatialPoint) => {
-    if (kind === "companion") setCompanionPoint(point);
-    else {
-      try { setResearchCanvasPosition(id, point.x, point.y); }
-      catch { setAnnouncement("Could not save the new position to this device."); }
+  const move = (kind: DragState["kind"], id: string, point: SpatialPoint, commit = true) => {
+    if (kind === "companion") { setCompanionPoint(point); return; }
+    if (!commit) {
+      const preview = { id, point };
+      dragPreviewRef.current = preview;
+      setDragPreview(preview);
+      return;
     }
+    try { setResearchCanvasPosition(id, point.x, point.y); }
+    catch { setAnnouncement("Could not save the new position to this device."); }
   };
   const startDrag = (event: ReactPointerEvent<HTMLButtonElement>, kind: DragState["kind"], id: string) => {
     if (mode === "timeline" && kind === "node") return;
     if (event.button !== 0) return;
     event.preventDefault();
+    dragPreviewRef.current = null;
+    setDragPreview(null);
     dragRef.current = { kind, id, pointerId: event.pointerId };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const continueDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
     const point = fromPointer(event.clientX, event.clientY);
-    if (point) move(dragRef.current.kind, dragRef.current.id, point);
+    if (point) move(dragRef.current.kind, dragRef.current.id, point, false);
   };
   const stopDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    const drag = dragRef.current;
     dragRef.current = null;
+    const preview = dragPreviewRef.current;
+    dragPreviewRef.current = null;
+    if (drag?.kind === "node" && preview?.id === drag.id) move("node", drag.id, preview.point);
+    setDragPreview(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const keyboardMove = (event: ReactKeyboardEvent<HTMLButtonElement>, kind: DragState["kind"], id: string) => {
@@ -104,7 +119,8 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
         className="lios-spatial-board"
         data-layout={mode}
         data-expanded={expanded ? "true" : "false"}
-        aria-label={mode === "map" ? "Pinned research map" : "Pinned research timeline"}
+        role="group"
+        aria-label={mode === "map" ? "Pinned research map" : mode === "timeline" ? "Pinned research timeline" : "Pinned research list"}
       >
         <div className="lios-spatial-field" aria-hidden="true" />
         <div className="lios-spatial-axis" aria-hidden="true">
@@ -127,13 +143,14 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
         </div>}
         {model.nodes.map(({ item, point }) => {
           const capability = getTerminalCapability(item.view);
+          const effectivePoint = points.get(item.id) ?? point;
           return (
             <article
               key={item.id}
               className="lios-spatial-node"
               data-kind={item.kind}
               data-inspected={inspectedId === item.id ? "true" : "false"}
-              style={{ left: `${point.x}%`, top: `${point.y}%` }}
+              style={{ left: `${effectivePoint.x}%`, top: `${effectivePoint.y}%` }}
               aria-label={`${item.title}; ${item.kind}; ${item.group ? `group ${item.group}` : "ungrouped"}`}
             >
               <div className="lios-spatial-node-header">
