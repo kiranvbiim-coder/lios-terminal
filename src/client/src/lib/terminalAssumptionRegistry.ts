@@ -83,8 +83,13 @@ export function previewScenarioBindingApplication(
       plan.skipped.push({ assumptionKey: assumption.key, reason: "Only finite numeric assumptions can be applied to model inputs" });
       continue;
     }
-    const assumptionTokens = new Set([normalize(assumption.key), normalize(assumption.label)]);
-    const matches = available.filter(binding => assumptionTokens.has(normalize(binding.key)) || assumptionTokens.has(normalize(binding.label)));
+    const assumptionTokens = new Set([normalize(assumption.key), normalize(assumption.label)].filter(Boolean));
+    if (!assumptionTokens.size) {
+      plan.skipped.push({ assumptionKey: assumption.key, reason: "No valid model input key or label is recorded" });
+      continue;
+    }
+    const matches = available.filter(binding =>
+      [normalize(binding.key), normalize(binding.label)].some(token => !!token && assumptionTokens.has(token)));
     if (!matches.length) { plan.unmatched.push(assumption.key); continue; }
     for (const binding of matches) {
       const aUnit = assumption.unit?.trim().toLocaleLowerCase() ?? "";
