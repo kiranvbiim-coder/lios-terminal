@@ -93,6 +93,9 @@ test("beta evidence checker reads and hashes actual screenshot and test log, nev
   assert.equal(found[0].bytes, fs.statSync(image).size);
   assert.throws(() => inspectNativeEvidence(report, ["missing.png", "test.log"]), /ENOENT/);
   assert.throws(() => inspectNativeEvidence(report, ["screen.png", "missing.log"]), /ENOENT/);
+  fs.writeFileSync(path.join(dir, "spoof.png"), "not a screenshot");
+  assert.throws(() => inspectNativeEvidence(report, ["spoof.png", "test.log"]), /BLOCKED.*PNG/);
+
   assert.throws(() => inspectNativeEvidence(report, ["screen.png"]), /BLOCKED/);
   assert.throws(() => inspectNativeEvidence(report, ["screen.png", "../outside.log"]), /BLOCKED/);
   assert.throws(() => inspectNativeEvidence(report, ["/tmp/screen.png", "test.log"]), /BLOCKED/);
