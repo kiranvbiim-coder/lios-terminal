@@ -19,6 +19,8 @@ export interface ScenarioApplyResult {
 }
 
 const bindings = new Map<string, AssumptionBinding>();
+const registrationVersions = new Map<string, number>();
+let nextRegistrationVersion = 0;
 const EVENT_NAME = "lios:assumption-bindings";
 
 function normalize(value: string): string {
@@ -31,10 +33,15 @@ function emit(): void {
 }
 
 export function registerAssumptionBinding(binding: AssumptionBinding): () => void {
+  const registrationVersion = ++nextRegistrationVersion;
   bindings.set(binding.id, { ...binding, symbol: binding.symbol?.trim().toUpperCase() || undefined });
+  registrationVersions.set(binding.id, registrationVersion);
   emit();
   return () => {
+    // A stale pane unmount must not unregister a newer owner for this ID.
+    if (registrationVersions.get(binding.id) !== registrationVersion) return;
     bindings.delete(binding.id);
+    registrationVersions.delete(binding.id);
     emit();
   };
 }
@@ -55,7 +62,7 @@ export function updateAssumptionBindingValue(id: string, value: number): void {
 }
 
 export interface ScenarioBindingApplicationPlan {
-  matched: Array<{ bindingId: string; bindingLabel: string; assumptionKey: string; value: number; currentValue: number; unit?: string }>;
+  matched: Array<{ bindingId: string; registrationVersion: number; bindingLabel: string; assumptionKey: string; value: number; currentValue: number; unit?: string }>;
   unmatched: string[];
   skipped: Array<{ assumptionKey: string; reason: string }>;
 }
@@ -88,7 +95,8 @@ export function previewScenarioBindingApplication(
         continue;
       }
       plan.matched.push({
-        bindingId: binding.id, bindingLabel: binding.label,
+        bindingId: binding.id, registrationVersion: registrationVersions.get(binding.id) ?? 0,
+        bindingLabel: binding.label,
         assumptionKey: assumption.key, value: assumption.value,
         currentValue: binding.value, unit: binding.unit,
       });
@@ -104,7 +112,7 @@ export function applyScenarioToBindings(scenario: TerminalScenario, filter?: { v
   const skipped = [...plan.skipped];
   for (const match of plan.matched) {
     const binding = bindings.get(match.bindingId);
-    if (!binding || binding.value !== match.currentValue) {
+    if (!binding || registrationVersions.get(match.bindingId) !== match.registrationVersion || binding.value !== match.currentValue) {
       skipped.push({ assumptionKey: match.assumptionKey, reason: "Registered input changed after review; no value applied" });
       continue;
     }
