@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
+import { mayShowQuietAdvisoryInvite } from "@/lib/advisoryDiscoveryPolicy";
 import { resolveEntrySurface, resolveInitialChatMode } from "@/lib/projectEntry";
 import { ProjectHome, relativeTime } from "./ProjectHome";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
@@ -213,6 +214,9 @@ interface Props {
   renderTerminalPanel?: ChatTerminalRenderer;
   chatWorkbenchReturn?: { origin: ChatWorkbenchOrigin; request: number } | null;
   onOpenEnvironment: () => void;
+  onExploreAdvisory: () => boolean;
+  focusMode: boolean;
+  presentationMode: boolean;
   account: { name: string; email?: string };
   onLogout: () => void;
   onOpenSettings: () => void;
@@ -317,7 +321,7 @@ export default function ProjectExperienceShell({
   activeSymbol: workbenchSymbol,
   workspaceAdapter,
   onOpenWorkbench: navigateWorkbench, workbenchReturn, universalChatHandoff,
-  onOpenEnvironment,
+  onOpenEnvironment, onExploreAdvisory, focusMode, presentationMode,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
   renderTerminalPanel, chatWorkbenchReturn,
@@ -336,6 +340,8 @@ export default function ProjectExperienceShell({
     lifecycleTrigger.current = null;
   });
   const [section, setSection] = useState<NavigationSection>("conversation");
+  const [advisoryDismissed, setAdvisoryDismissed] = useState(false);
+  useEffect(() => { setAdvisoryDismissed(false); }, [account.email]);
   const handledNavigation = useRef<number | null>(null);
   useEffect(() => {
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
@@ -2298,6 +2304,19 @@ export default function ProjectExperienceShell({
             onOpenSession={(session) => void restoreSession(session)}
             onOpenContext={toggleContext}
             onOpenWorkbench={onOpenWorkbench}
+            showQuietAdvisoryInvite={mayShowQuietAdvisoryInvite({
+              audience, surface: "project-home", dismissedInSession: advisoryDismissed,
+              focusMode, presentationMode,
+              projectBusy: busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current,
+            })}
+            onDismissAdvisory={() => setAdvisoryDismissed(true)}
+            onExploreAdvisory={() => {
+              if (busy || busyRef.current || sendInFlightRef.current || chatCreationInFlightRef.current || projectCreationInFlightRef.current || artifactDraftDirtyRef.current) {
+                setLifecycleNotice("Finish the current response and save pending changes before opening Advisory.");
+                return;
+              }
+              if (!onExploreAdvisory()) setLifecycleNotice("Advisory is unavailable for this account or while another workspace has unsaved changes.");
+            }}
             onRenameProject={async name => {
               const saved = await updateProject(home.project.id, { name });
               if (saved.id !== home.project.id || saved.name !== name) throw new Error("The server did not confirm this Project name. Your draft is retained.");
