@@ -8,6 +8,9 @@ test("Phase 3 plugin browser lives in Chat and never replaces P13 installer or M
   assert.match(ui, /\/api\/extensions\/chat-catalog/);
   assert.match(ui, /GovernedExtensionsPanel/);
   assert.match(ui, /ChatMcpConnectForm/);
+  assert.match(ui, /verifyMcp\(mcp.id\)/);
+  assert.match(ui, /\/api\/setup\/source-connections\/test/);
+  assert.match(ui, /No remote tools were executed/);
   assert.ok(shell.includes('projectId={chatMode === "project" ? selection.projectId : null}'));
   assert.match(ui, /queryClient\.invalidateQueries/);
   assert.match(ui, /onCatalogChanged=/);
