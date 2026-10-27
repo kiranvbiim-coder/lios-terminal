@@ -46,7 +46,7 @@ test("Phase 3 unavailable is not misrepresented as zero alerts or generated cert
 });
 
 test("Phase 3 AI alert review only stages canonical unsent Chat draft after a user click", () => {
-  assert.match(pulse, /buildActionInboxChatDraft\(item, proactive\.review\.asOf!\)/);
+  assert.match(pulse, /buildActionInboxChatDraft\(verified, rechecked\.review\.asOf!\)/);
   assert.match(pulse, /if \(onStageAiReview\(drafted\)\) onClose\(\)/);
   assert.match(pulse, /Draft review in Chat/);
   assert.match(pulse, /Keep or review your unsaved Workbench edits/);
@@ -75,4 +75,18 @@ test("Phase 3 fresh-source guard blocks stale or future alerts at exact user act
   assert.match(pulse, /The Action Inbox snapshot is stale or its date is unavailable/);
   assert.match(pulse, /No Chat review was staged/);
   assert.match(pulse, /Check for updates/);
+});
+
+test("Phase 3 user-click revalidates server permissions and same evidence before drafting", () => {
+  assert.match(pulse, /readEntitledActionInbox\(controller\.signal\)/);
+  assert.match(pulse, /confirmActionInboxHandoff\(proactive\.review, rechecked\.review, item\.id, Date\.now\(\)\)/);
+  assert.match(pulse, /if \(!verified\) \{/);
+  assert.match(pulse, /server denied this Action Inbox recheck/);
+  assert.match(pulse, /Refresh and review the latest inbox/);
+  assert.match(pulse, /handoffAbort\.current\?\.abort\(\)/);
+  assert.match(pulse, /handoffBusyId !== null/);
+  assert.match(hook, /export async function readEntitledActionInbox\(signal: AbortSignal\)/);
+  assert.match(hook, /return \{ state: response\.status === 401 \|\| response\.status === 403/);
+  assert.match(hook, /const next = await readEntitledActionInbox\(controller\.signal\)/);
+  assert.doesNotMatch(pulse, /POST|runP9WorkflowNow|executeAgent|createArtifact|startConversation/);
 });
