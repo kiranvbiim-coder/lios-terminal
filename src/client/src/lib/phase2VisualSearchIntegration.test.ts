@@ -20,7 +20,7 @@ test("intelligence is read only on user-selected tab and unavailable in Temporar
   assert.match(search, /mode !== "work"\) return/);
   assert.match(search, /\{intelligenceEnabled && <button/);
   assert.match(shell, /intelligenceEnabled=\{chatMode !== "temporary"\}/);
-  assert.match(visual, /if \(activeQuery\.length < 2\)/);
+  assert.match(visual, /if \(!searchReady\)/);
   assert.match(visual, /controller\.abort\(\)/);
   assert.doesNotMatch(visual, /POST|api\/visual-search|window\.open|new Image/);
 });
