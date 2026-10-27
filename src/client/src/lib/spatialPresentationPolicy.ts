@@ -35,7 +35,7 @@ export function resolveSpatialPresentation(
     stacked,
     canMoveNodes: mode === "map" && !stacked,
     canMoveCompanion: !stacked,
-    showDecorativeEdges: !stacked && mode !== "list",
+    showDecorativeEdges: !stacked,
     layoutHint: stacked
       ? "Reading layout: inspect or open pins in their saved order. Spatial dragging is disabled in this pane."
       : mode === "timeline"
