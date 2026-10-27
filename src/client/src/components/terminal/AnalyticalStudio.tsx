@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Activity, ArrowRight, BrainCircuit, BriefcaseBusiness, Check, GitCompareArrows, History, Layers3,
-  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2, X,
+  Network, Package, Play, Plus, RefreshCw, Save, ShieldCheck, Sparkles, Target, Trash2,
 } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode, WorkspaceState } from "@/lib/terminalTypes";
