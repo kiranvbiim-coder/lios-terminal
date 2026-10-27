@@ -23,6 +23,24 @@ export function ProjectContinuityPanel({
   const [message, setMessage] = useState<string | null>(null);
   const snapshot = !continuity.isError ? continuity.data : undefined;
 
+  const openExactWorkflow = (workflowId: string) => {
+    // Automation remains the authority. Navigation does not approve, run,
+    // enable, or modify the selected workflow.
+    const panel = document.querySelector<HTMLElement>("[data-p9-continuous-intelligence]");
+    const target = Array.from(panel?.querySelectorAll<HTMLElement>("[data-p9-workflow-id]") ?? [])
+      .find(element => element.dataset.p9WorkflowId === workflowId);
+    if (!target) {
+      setMessage("This exact workflow is not visible in this Project's current Automations. Refresh the Project and review the workflow list before acting.");
+      return;
+    }
+    setMessage(null);
+    target.focus();
+    target.scrollIntoView({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "center",
+    });
+  };
+
   const refresh = async () => {
     setRefreshing(true);
     setMessage(null);
@@ -79,7 +97,7 @@ export function ProjectContinuityPanel({
           loading={!snapshot && !continuity.isError}
           unavailable={continuity.isError}
           onOpenDecision={onFocusArtifact}
-          onReviewWorkflow={() => document.querySelector("[data-p9-continuous-intelligence]")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onReviewWorkflow={openExactWorkflow}
         />
 
         <div className="rounded-lg border border-border/50 bg-black/15 p-3">
