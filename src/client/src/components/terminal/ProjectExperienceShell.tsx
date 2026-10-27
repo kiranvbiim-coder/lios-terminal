@@ -1961,10 +1961,10 @@ export default function ProjectExperienceShell({
         onSelect={openWorkSearchResult}
       />
       <AuthenticatedNavigation section={section} activeSection={section === "conversation" && entrySurface === "project-home" ? "projects" : section} account={account} busy={busy}
-        onSection={(next) => { setSection(next); setShowLifecycleCenter(false); setContextOpen(false); }}
+        onSection={(next) => { setSection(next); if (next === "conversation") setProjectHomeRequested(false); setShowLifecycleCenter(false); setContextOpen(false); }}
         onNewChat={() => void newQuickChat()}
         onTemporary={() => void startTemporary()}
-        onSearch={onOpenCommand ?? requestWorkSearch}
+        onSearch={requestWorkSearch}
         onWorkbench={onOpenWorkbench}
         onConnectors={onOpenEnvironment}
         onSettings={onOpenSettings} onLogout={onLogout}
