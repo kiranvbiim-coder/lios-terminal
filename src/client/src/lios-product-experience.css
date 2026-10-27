@@ -626,3 +626,29 @@ html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-s
 @media (max-width: 767px) {
   .terminal-root .lios-authenticated-navigation { display: none !important; }
 }
+
+
+/* Phase 1: short application windows still reach every named destination and
+ * the compact-account menu without clipping or changing layout ownership. */
+.terminal-root .lios-authenticated-navigation .lios-primary-navigation {
+  max-height: min(58vh, 490px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.terminal-root .lios-authenticated-navigation[data-sidebar-collapsed="true"] .lios-reference-navigation-rail {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.terminal-root .lios-authenticated-navigation .lios-compact-account-trigger {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  color: var(--lios-text-primary);
+}
+.terminal-root .lios-authenticated-navigation .lios-compact-account-trigger:focus-visible {
+  outline: 2px solid var(--lios-brand);
+  outline-offset: -2px;
+}
