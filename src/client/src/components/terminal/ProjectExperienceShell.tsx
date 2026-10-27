@@ -2049,8 +2049,20 @@ export default function ProjectExperienceShell({
         onWorkbench={onOpenWorkbench}
         onConnectors={onOpenEnvironment}
         onSettings={onOpenSettings} onLogout={onLogout}
-        onTrash={() => { setSection("conversation"); setShowLifecycleCenter(true); setContextOpen(false); }}
-        onMigrate={() => void migrateLegacyWorkspaces().then(() => invalidate()).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to import workspaces."))}>
+        onTrash={() => {
+          if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Finish the current response or save/reset Artifact edits before opening Trash & archive.");
+            return;
+          }
+          setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(true); setContextOpen(false);
+        }}
+        onMigrate={() => {
+          if (busy || busyRef.current || sendInFlightRef.current || artifactDraftDirtyRef.current) {
+            setLifecycleNotice("Finish the current response or save/reset Artifact edits before importing workspaces.");
+            return;
+          }
+          void migrateLegacyWorkspaces().then(() => invalidate()).catch((error) => setLifecycleNotice(error instanceof Error ? error.message : "Unable to import workspaces."));
+        }}>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <section className="mb-5" aria-label="Projects">
             <div className="mb-1 flex items-center px-2">
@@ -2150,14 +2162,14 @@ export default function ProjectExperienceShell({
         {section !== "conversation" ? (
           <section className="lios-section-surface" aria-label={section}>
             <header><h1>{({ projects: "Projects", chats: "History", library: "Artifacts", automations: "Automations", plugins: "Plugins" } as const)[section]}</h1>
-              <button className="lios-section-action" onClick={() => setSection("conversation")}>Back to chat</button></header>
+              <button className="lios-section-action" onClick={() => { setSection("conversation"); setProjectHomeRequested(false); setShowLifecycleCenter(false); }}>Back to chat</button></header>
             {section === "projects" && <>
               <button className="lios-section-action" onClick={() => { setSection("conversation"); setNewProjectOpen(true); }}>New Project</button>
               {projectsQuery.isLoading ? <p role="status">Loading Projects…</p> : projectsQuery.isError ? <p role="alert">Unable to load Projects. <button onClick={() => void projectsQuery.refetch()}>Retry</button></p> : <div className="lios-directory-list">{projects.map((project) => <button key={project.id} onClick={() => openProject(project, false, true)}><strong>{project.name}</strong><small>{project.instructions || "Open Project"}</small></button>)}{!projects.length && <p>Create a Project to organize your research.</p>}</div>}
             </>}
             {section === "chats" && <>
               {allChatsQuery.isLoading || quickChatsQuery.isLoading ? <p role="status">Loading chats…</p> : allChatsQuery.isError || quickChatsQuery.isError ? <p role="alert">Unable to load chats. <button onClick={() => { void allChatsQuery.refetch(); void quickChatsQuery.refetch(); }}>Retry</button></p> : (() => {
-                const chats = [...(allChatsQuery.data ?? []), ...quickChats].sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime());
+                const chats = canonicalRecentChats(allChatsQuery.data ?? [], quickChats, Number.MAX_SAFE_INTEGER);
                 return <div className="lios-directory-list">{chats.slice(0, chatLimit).map((chat) => <button key={chat.id} onClick={() => openChat(chat)}><strong>{chat.title}</strong><small>{chat.projectId ? projects.find((project) => project.id === chat.projectId)?.name || "Project chat" : "Quick chat"} · {relativeTime(chat.updatedAt)}</small></button>)}{chats.length > chatLimit && <button className="lios-section-action" onClick={() => setChatLimit((limit) => limit + 50)}>Load more chats</button>}{!chats.length && <p>Your saved conversations will appear here.</p>}</div>;
               })()}
             </>}
