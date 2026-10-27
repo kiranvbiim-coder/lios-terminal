@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Timeline as BeuiTimeline, type TimelineEvent } from "../vendor/beui/BeuiTimeline";
 import { changedNewsFields, type NewsStoryRevision, type NewsStoryObservation } from "@/lib/newsStoryEvolution";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 
 /**
  * One display projection over exact-URL changes already observed by the News
@@ -42,8 +43,8 @@ export default function NewsObservedRevisionTimeline({ versions }: { versions: r
 export function RelatedPublisherTimeline({ headlines }: { headlines: readonly NewsStoryObservation[] }) {
   if (headlines.length < 2) return null;
   const ordered = [...headlines]
-    .filter(item => Number.isFinite(Date.parse(item.publishedAt)))
-    .sort((left, right) => Date.parse(left.publishedAt) - Date.parse(right.publishedAt));
+    .filter(item => !!recordedIsoTimestamp(item.publishedAt))
+    .sort((left, right) => Date.parse(recordedIsoTimestamp(left.publishedAt)!) - Date.parse(recordedIsoTimestamp(right.publishedAt)!));
   if (ordered.length < 2) return null;
   const events: TimelineEvent[] = ordered.slice(0, 5).map((item, index) => ({
     id: item.url + ":published:" + index,
