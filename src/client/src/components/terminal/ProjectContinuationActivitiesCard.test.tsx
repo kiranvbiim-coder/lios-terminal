@@ -42,3 +42,17 @@ test("unavailable, loading, and no records are distinct and never inferred", () 
   assert.match(render({items: []}), /No deterministic follow-up/);
   assert.equal(MAX_VISIBLE_CONTINUATION_ITEMS, 8);
 });
+
+
+// The P6 continuity owner, not this visual component, controls read/write
+// policy and all actions. The integration is a replacement, not a second list.
+test("Project Continuity mounts one Watermelon-derived P6 view using canonical queue and decision actions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const owner = readFileSync(new URL("./ProjectContinuityPanel.tsx", import.meta.url), "utf8");
+  assert.match(owner, /<ProjectContinuationActivitiesCard/);
+  assert.match(owner, /items=\\{snapshot\\?\\.continuationQueue \\?\\? \\[\\]\\}/);
+  assert.match(owner, /onOpenDecision=\\{onFocusArtifact\\}/);
+  assert.match(owner, /onReviewWorkflow=/);
+  assert.doesNotMatch(owner, /continuationQueue \\?\\? \\[\\]\\)\\.slice\\(0, 8\\)\\.map/);
+  assert.match(owner, /<ProjectChangeActivity/);
+});
