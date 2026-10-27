@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { canonicalDataCapabilitySchema } from "@shared/universalDataFabric";
+import { canonicalDataCapabilitySchema, externalRightsSchema } from "@shared/universalDataFabric";
 import { users } from "@shared/schema";
 import type { SourceConnection } from "@shared/schema";
 import type { ConversationToolDefinition, ConversationToolResult } from "./conversationRuntime";
@@ -219,7 +219,8 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
       throw new Error("Connected Chat preview currently supports verified local files and private API sources only.");
     }
     const rights = await getLatestExternalRightsAssessment(tenant, "data", `source-connection:${source.id}`);
-    if (!reviewedChatReleaseRights(rights?.rights ?? null, source.sourceType)) {
+    const assessedRights = externalRightsSchema.safeParse(rights?.rights);
+    if (!assessedRights.success || !reviewedChatReleaseRights(assessedRights.data, source.sourceType)) {
       throw new Error("Source data is not approved for external AI use; record an explicit owner-scoped data-rights review first.");
     }
     const actorRows = await getDb().select({ id: users.id, email: users.email })
