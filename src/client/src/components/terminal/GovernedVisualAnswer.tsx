@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Component, lazy, Suspense, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { GovernedVisualAnswerRequest, GovernedVisualAnswerDecision } from "@shared/governedVisualAnswer";
 import { resolveGovernedVisualAnswer } from "@shared/governedVisualAnswer";
 import { projectSavedTableGeography } from "@/lib/governedTableGeography";
@@ -29,6 +29,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
   const [expanded, setExpanded] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [readRevision, setReadRevision] = useState(0);
+  const activeReadRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "blocked"; signature?: string; decision?: GovernedVisualAnswerDecision }>({ phase: "idle" });
   const signature = JSON.stringify([request.artifactId, request.version, request.projectId, request.kind, request.sourceRefs]);
   useEffect(() => { setMapOpen(false); }, [signature]);
@@ -36,6 +37,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
   useEffect(() => {
     if (!expanded) return;
     const controller = new AbortController();
+    activeReadRef.current = controller;
     setState({ phase: "loading", signature });
     void (async () => {
       try {
@@ -51,7 +53,10 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         if (!controller.signal.aborted) setState({ phase: "blocked", signature });
       }
     })();
-    return () => { controller.abort(); };
+    return () => {
+      controller.abort();
+      if (activeReadRef.current === controller) activeReadRef.current = null;
+    };
   }, [expanded, signature, readRevision]);
 
   const current: typeof state = state.signature === signature ? state : { phase: "loading" };
@@ -69,7 +74,7 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         {expanded ? "Hide visual" : "View visual"}
       </button>
       {expanded && current.phase !== "loading" && <button type="button"
-        onClick={() => { setState({ phase: "loading", signature }); setMapOpen(false); setReadRevision(value => value + 1); }}
+        onClick={() => { activeReadRef.current?.abort(); setState({ phase: "loading", signature }); setMapOpen(false); setReadRevision(value => value + 1); }}
         className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
         Recheck current source permissions
       </button>}
