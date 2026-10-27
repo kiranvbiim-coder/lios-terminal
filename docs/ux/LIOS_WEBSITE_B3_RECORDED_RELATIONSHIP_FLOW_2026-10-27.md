@@ -17,6 +17,10 @@ The gap closed here is **an interactive/visual overview of exact stored evidence
 - `client/src/components/panels/RecordedEvidenceSankey.tsx` is a small **lazy** ECharts SVG chart runtime. Its `SankeyChart` extension and SVGRenderer are from **the existing installed ECharts 6.1.0**, with no new chart library/lockfile or data source. Drag/tooltip/animation are disabled, chart legend is outside, and a ResizeObserver cleans up on disposal. No network, AI call, write, or source navigation.
 - `RecordedEvidenceFlowPanel.tsx` offers an opt-in visual summary plus a keyboard-accessible, exact-source relation table with source E#, relationship type and a concrete **Inspect** action reusing the board's selected relationship. If visual ECharts fails, the same table remains available. No inferred excerpts, numeric weights, or publisher stance are produced.
 
+### Aligned comparison added to the existing evidence cards
+
+The previously implemented side-by-side `ResearchEvidenceComparison` now includes a keyboard-scrollable, aligned **recorded metadata table** inspired by Kibo's comparison usability: actual evidence type/kind, source, provider and published/effective/retrieved dates for E# left and E# right. The pure `compareRecordedEvidenceMetadata` returns literal **Same / Differs / Missing**, never semantic contradiction, truth or normalized financial-unit inference. Missing dates are named as missing, the source URL remains subject to the existing safe-link behavior, and the original excerpt/annotation cards remain intact. New tests guard identical dates, different publisher metadata and unavailable dates. No Kibo source code or dependency was copied; the LiOS data owner and styling are retained.
+
 ### Donor assessment and implementation decision
 
 - **beUI Sankey** is a sophisticated motion/styling pattern for weighted stage flows, but its animated copy would add another chart engine on top of existing ECharts, while LiOS's data describes **unit-count qualitative relationships**, not real weighted financial flows. We adapt the useful **flow composition**, not the unverified weights or extra dependency. [beUI site](https://beui.dev/).
