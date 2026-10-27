@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BeuiTimeline, type TimelineEvent } from "../vendor/beui/BeuiTimeline";
+import { Timeline as BeuiTimeline, type TimelineEvent } from "../vendor/beui/BeuiTimeline";
 import { changedNewsFields, type NewsStoryRevision } from "@/lib/newsStoryEvolution";
 
 /**
