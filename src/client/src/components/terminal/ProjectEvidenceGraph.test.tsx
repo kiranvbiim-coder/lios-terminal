@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { P7ContextGraph, P7Insight } from "@shared/p7ResearchContracts";
 import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
@@ -47,4 +48,19 @@ test("missing graph does not synthesize nodes, edges or geography",()=>{
   const html=render(15,null);
   assert.match(html,/No recorded graph nodes connect/);
   assert.doesNotMatch(html,/data-testid="p7-recorded-graph-node"|<svg/);
+});
+
+test("B02 Project graph search and source filters remain bound to same P7 source projection",()=>{
+  const html=render(15);
+  assert.match(html,/Find recorded graph node or source ID/);
+  assert.match(html,/Find a visible node, kind or source ID/);
+  assert.match(html,/Source IDs only/);
+  assert.match(html,/2 of 2 Project nodes/);
+  assert.match(html,/not guessed here/);
+  const source=readFileSync(new URL("./ProjectEvidenceGraph.tsx",import.meta.url),"utf8");
+  assert.match(source,/const visibleNodes = useMemo/);
+  assert.match(source,/const visibleEdges = useMemo/);
+  assert.match(source,/visibleNodeIds\.has\(item\.from\) && visibleNodeIds\.has\(item\.to\)/);
+  assert.match(source,/setChosenNode\(null\);setChosenEdge\(null\)/);
+  assert.doesNotMatch(source,/fetch\(|navigator\.geolocation|new WebSocket|setP7Graph/);
 });
