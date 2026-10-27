@@ -558,6 +558,7 @@ export default function ProjectExperienceShell({
     }
     action();
   };
+  const openSafeConnections = () => openSafeDestination("Connections", onOpenEnvironment);
   const signingOutRef = useRef(false);
   const signOutSafely = async () => {
     if (signingOutRef.current) return;
@@ -2360,7 +2361,7 @@ export default function ProjectExperienceShell({
                       <button
                         type="button"
                         data-first-use-connect="optional"
-                        onClick={onOpenEnvironment}
+                        onClick={openSafeConnections}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-[12px] font-medium text-muted-foreground transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
                       >
                         <Plug className="h-3.5 w-3.5" /> {LIOS_FIRST_USE_CONTRACT.optionalConnectionAction}
@@ -2513,7 +2514,7 @@ export default function ProjectExperienceShell({
                       setInput(current => stageSafeRunRetry(current, lastSubmittedMessage));
                       setLifecycleNotice("Connection Center opened for the missing source. Your original request is preserved here so you return to the same task.");
                     }
-                    onOpenEnvironment();
+                    openSafeConnections();
                     return;
                   }
                   setInput(current => stageSafeRunRetry(current, action));
@@ -2736,9 +2737,9 @@ export default function ProjectExperienceShell({
                   }}
                 />
                 {executionMode === "ai_direct" && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">AI DIRECT · APPROVAL — AI estimates require approval and are labelled.</div>}
-                <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={onOpenEnvironment} />
+                <BoundedAgentComposerControl agent={agentComposer} busy={busy} onConfigureAI={openSafeConnections} />
                 <div className="lios-conversation-composer-actions flex items-center gap-1.5 px-2.5 pb-2 pt-1">
-                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={onOpenEnvironment} disabled={busy} projectAvailable={chatMode !== "temporary"} />
+                  <ChatSourcesControl scope={sourceScope} onScopeChange={updateSourceScope} onOpenConnections={openSafeConnections} disabled={busy} projectAvailable={chatMode !== "temporary"} />
                   {renderTerminalPanel && <ChatTerminalControl audience={audience} selected={terminalContext} onSelect={openTerminalPanel}/>}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2815,7 +2816,7 @@ export default function ProjectExperienceShell({
 
                   <button
                     type="button"
-                    onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : onOpenEnvironment()}
+                    onClick={() => voiceInputAvailable ? void voiceRecorder.toggle() : openSafeConnections()}
                     disabled={voiceProvidersQuery.isLoading || voiceRecorder.isTranscribing || busy}
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${voiceRecorder.isRecording ? "bg-red-400/10 text-red-200" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"}`}
                     title={voiceInputHint}
