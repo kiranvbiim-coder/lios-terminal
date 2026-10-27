@@ -2013,7 +2013,9 @@ export default function ProjectExperienceShell({
                   View all Projects
                 </button>
               )}
-              {!projects.length && !projectsQuery.isLoading && (
+              {projectsQuery.isLoading && <p role="status" className="px-2.5 py-2 text-xs text-muted-foreground">Loading Projects…</p>}
+              {projectsQuery.isError && <div role="alert" className="px-2.5 py-2 text-xs text-amber-200">Unable to load Projects. <button type="button" disabled={projectsQuery.isFetching} onClick={() => void projectsQuery.refetch()} className="min-h-10 underline disabled:opacity-50">Retry Projects</button></div>}
+              {!projects.length && !projectsQuery.isLoading && !projectsQuery.isError && (
                 <button data-navigation-action="true" type="button" onClick={() => setNewProjectOpen(true)} className="w-full rounded-md px-2.5 py-2 text-left font-ui text-[12px] text-muted-foreground hover:bg-white/[0.035] hover:text-foreground">
                   Create your first Project
                 </button>
@@ -2047,7 +2049,9 @@ export default function ProjectExperienceShell({
                   />
                 </div>
               ))}
-              {!recentChats.length && (
+              {(allChatsQuery.isLoading || quickChatsQuery.isLoading) && <p role="status" className="px-2.5 py-2 text-xs text-muted-foreground">Loading recent chats…</p>}
+              {(allChatsQuery.isError || quickChatsQuery.isError) && <div role="alert" className="px-2.5 py-2 text-xs text-amber-200">Unable to load recent chats. <button type="button" disabled={allChatsQuery.isFetching || quickChatsQuery.isFetching} onClick={() => void Promise.all([allChatsQuery.refetch(), quickChatsQuery.refetch()])} className="min-h-10 underline disabled:opacity-50">Retry recent chats</button></div>}
+              {!recentChats.length && !allChatsQuery.isLoading && !quickChatsQuery.isLoading && !allChatsQuery.isError && !quickChatsQuery.isError && (
                 <div className="px-2.5 py-3 font-ui text-[12px] text-muted-foreground">Your recent chats will appear here.</div>
               )}
             </div>

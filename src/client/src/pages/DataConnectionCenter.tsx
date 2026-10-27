@@ -1361,6 +1361,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
                 <h1 className="font-terminal text-[11px] uppercase tracking-widest text-foreground">{connectionSummary.statusLabel}</h1>
               </div>
               <p className="mt-2 max-w-xl font-terminal text-[9px] leading-relaxed text-muted-foreground">{connectionSummary.statusDetail}</p>
+              {connectionSummary.state === "unavailable" && <button type="button" disabled={connectionsQuery.isFetching} onClick={() => void connectionsQuery.refetch()} className="mt-2 min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{connectionsQuery.isFetching ? "Retrying status…" : "Retry status"}</button>}
               <p className="mt-1 font-ui text-xs text-muted-foreground">Return to previous work closes Connections without changing your AI setup or sending a request. Use Continue to save setup explicitly. A paused or failed task never resumes on its own.</p>
               {saveNotice && <p role="alert" className="mt-2 max-w-xl border border-rose-500/40 bg-rose-500/[0.05] px-2 py-1.5 font-terminal text-[8px] leading-relaxed text-rose-200">{saveNotice}</p>}
               <div role="status" className="mt-2 flex flex-wrap items-center gap-2 font-terminal text-[8px] uppercase tracking-wider text-foreground/70">
@@ -1390,7 +1391,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">AI</h2>
             <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Your provider · your key · your permission</span>
           </div>
-          {aiConnections.length > 0 ? (
+          {connectionSummary.state === "unavailable" ? <p role="alert" className="text-sm text-amber-200">Saved AI connections could not be loaded. Their status is unknown; use Retry status above.</p> : connectionSummary.state === "loading" ? <p role="status" className="text-sm text-muted-foreground">Loading saved AI connections…</p> : aiConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-ai-connected">
               {aiConnections.map((conn) => (
                 <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
@@ -1576,7 +1577,7 @@ export default function DataConnectionCenter({ session, onComplete, onLogout }: 
             <h2 className="font-terminal text-[10px] uppercase tracking-widest text-foreground">Data</h2>
             <span className="font-terminal text-[7px] uppercase tracking-wider text-muted-foreground">Connect what you bring · optional</span>
           </div>
-          {dataConnections.length > 0 ? (
+          {connectionSummary.state === "unavailable" ? <p role="alert" className="text-sm text-amber-200">Saved data connections could not be loaded. Their status is unknown; use Retry status above.</p> : connectionSummary.state === "loading" ? <p role="status" className="text-sm text-muted-foreground">Loading saved data connections…</p> : dataConnections.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="connect-data-connected">
               {dataConnections.map((conn) => (
                 <ConnectionCard key={conn.id} conn={conn} onTest={() => handleTestConnection(conn.id)} onEdit={() => handleEditConnection(conn)} onRemove={() => handleDeleteConnection(conn.id)} />
