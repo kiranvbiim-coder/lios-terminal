@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpenText, CheckCircle2, Clock3, ExternalLink, Radar, Search, ShieldAlert } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { pulseStoryTimestamp, safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
+import { pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds } from "@/lib/pulseStoryPresentation";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
 import {
   ATTENTION_FILTERS, filterHomeAttention, homeAttentionCounts,
@@ -197,7 +197,7 @@ export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
         <span className="rounded-md border border-amber-300/25 px-2 py-1 font-semibold capitalize text-amber-100">{card.priority}</span>
         <span className="ml-auto tabular-nums text-muted-foreground">{Number.isFinite(card.score) ? card.score.toFixed(0) : "—"} relevance</span>
       </div>
-      <LicensedEditorialImage media={card.media} sourceIds={evidence.map(source => source.id)} variant="compact" className="w-full" />
+      <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)} variant="compact" className="w-full" />
       <h4 className="font-ui text-base font-semibold leading-snug tracking-tight text-foreground">{card.title}</h4>
       <p className="font-ui text-sm leading-6 text-muted-foreground">{card.whatHappened}</p>
       {card.whyItMattersToUser && <p className="border-l-2 border-amber-300/35 pl-3 font-ui text-sm leading-6 text-foreground/85">{card.whyItMattersToUser}</p>}
