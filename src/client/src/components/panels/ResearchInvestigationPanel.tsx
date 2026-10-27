@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { buildDecisionCaseBridgePayload, buildDecisionEngineHandoffUrl } from "@/lib/researchDecisionBridge";
 import { AdvancedManualWorkflow } from "./advancedMacroForecastResearch";
 import EventOwnershipImpactView from "./EventOwnershipImpactView";
+import { filterResearchEvidence, ResearchEvidenceCard, ResearchEvidenceComparison } from "./ResearchEvidencePresentation";
 
 type InvestigationStatus = "draft" | "active" | "review" | "completed" | "archived";
 type EvidenceKind = "fact" | "claim" | "calculation" | "interpretation" | "counterargument" | "unknown";
@@ -148,6 +149,9 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
   const [relationshipType, setRelationshipType] = useTerminalArtifactState<Relationship["relationshipType"]>("ResearchIntelligencePanel.relationshipType", "supports");
   const [selectedBriefId, setSelectedBriefId] = useTerminalArtifactState<number | null>("ResearchInvestigationPanel.selectedBriefId", null);
   const [decisionHandoff, setDecisionHandoff] = useState<{ id: number; title: string } | null>(null);
+  const [evidenceQuery, setEvidenceQuery] = useState("");
+  const [evidenceClass, setEvidenceClass] = useState("all");
+  const [compareIds, setCompareIds] = useState<number[]>([]);
   const appliedStarterRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -192,6 +196,9 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
   useEffect(() => {
     setSelectedBriefId(null);
     setDecisionHandoff(null);
+    setCompareIds([]);
+    setEvidenceQuery("");
+    setEvidenceClass("all");
   }, [selectedId]);
 
   const filtered = useMemo(() => {
@@ -345,6 +352,10 @@ export default function ResearchIntelligencePanel({ symbol, role, starterQuestio
   });
 
   const attachedExternalIds = useMemo(() => new Set(detail?.evidence.map((item) => item.sourceExternalId).filter(Boolean)), [detail]);
+  const visibleEvidence = useMemo(() => filterResearchEvidence(detail?.evidence ?? [], evidenceQuery, evidenceClass), [detail, evidenceQuery, evidenceClass]);
+  const evidenceClasses = useMemo(() => [...new Set((detail?.evidence ?? []).map(item => item.evidenceType))].sort(), [detail]);
+  const selectedComparison = detail?.evidence.filter(item => compareIds.includes(item.id)) ?? [];
+  const toggleEvidenceCompare = (id: number) => setCompareIds(current => current.includes(id) ? current.filter(other => other !== id) : current.length >= 2 ? [current[1], id] : [...current, id]);
 
   return (
     <div className="h-full min-h-0 flex flex-col bg-[#050505] text-foreground">
