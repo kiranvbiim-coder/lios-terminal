@@ -72,7 +72,7 @@ test("mobile drawer reuses named navigation, closes on selection, and provides a
 
 test("host-initiated navigation observes the same Stop and unsaved-work protections", () => {
   assert.match(shell, /Host shortcuts\/deep links use the same safety rules as sidebar navigation/);
-  assert.match(shell, /navigationRequest\.section !== "conversation" && \(busyRef\.current \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /navigationRequest\.section !== "conversation" && \(busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current\)/);
   assert.match(shell, /navigationRequest\.section !== "conversation" && artifactDraftDirtyRef\.current/);
   assert.match(shell, /if \(navigationRequest\.section === "conversation"\) setProjectHomeRequested\(false\)/);
   assert.match(styles, /lios-authenticated-navigation \.lios-primary-navigation \{[\s\S]*max-height: min\(58vh, 490px\)/);
@@ -103,6 +103,9 @@ test("Connections and Settings cannot hide active work or local unsaved Artifact
 test("Sign out reviews staged unsent work and never silently discards an in-flight response", () => {
   const handler = shell.split('const signOutSafely = async () => {')[1]?.split('const onOpenWorkbench = ')[0] ?? "";
   assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current/);
+  assert.match(shell, /const signingOutRef = useRef\(false\)/);
+  assert.match(handler, /if \(signingOutRef\.current\) return/);
+  assert.match(handler, /finally \{\s*signingOutRef\.current = false/);
   assert.match(handler, /artifactDraftDirtyRef\.current/);
   assert.match(handler, /confirmConversationSwitch\(true\)/);
   assert.match(handler, /discardConversationDraft\(before\)/);
