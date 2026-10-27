@@ -15,7 +15,15 @@ test("Sprint A retains immutable source pins and full legal notices for reused U
     "openclaw-gm22-byoai-failover",
     "mcp-typescript-sdk-v2-client",
   ];
-  const allowed = new Set(["adapted_source_component", "bundled", "supplemental_bounded_source_adaptation"]);
+  // Posture is pinned for EACH donor. An allowed-set test could accidentally
+  // relabel a bounded OpenClaw adaptation as a full bundled runtime.
+  const expectedPosture = {
+    "beui-pulse-discovery-tabs": "adapted_source_component",
+    "watermelon-ui-p6-activities": "adapted_source_component",
+    "opensourceui-source-search": "adapted_source_component",
+    "openclaw-gm22-byoai-failover": "supplemental_bounded_source_adaptation",
+    "mcp-typescript-sdk-v2-client": "bundled",
+  };
   for (const id of ids) {
     const record = registry.components.find(entry => entry.id === id);
     const pinned = lock.locks.find(entry => entry.id === id);
@@ -25,7 +33,7 @@ test("Sprint A retains immutable source pins and full legal notices for reused U
     assert.equal(record.commitSha, pinned.commitSha);
     assert.equal(record.license, pinned.license);
     assert.match(record.commitSha, /^[a-f0-9]{40}$/);
-    assert.ok(allowed.has(record.posture));
+    assert.equal(record.posture, expectedPosture[id], id + " review posture must remain scoped");
     assert.equal(record.bundled, true);
     const heading = `## ${record.noticeHeading.toLowerCase()} — `;
     assert.ok(notices.some(line => line.startsWith(heading)), id + " exact MIT/Apache attribution heading");
