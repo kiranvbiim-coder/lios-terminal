@@ -4,7 +4,7 @@ import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
 import { loadResearchTray, subscribeResearchTray, type ResearchTrayItem } from "@/lib/terminalResearchTray";
 import { loadResearchCanvasPositions, removeResearchCanvasPosition, setResearchCanvasPosition, subscribeResearchCanvas } from "@/lib/terminalResearchCanvas";
-import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
+import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, listExplicitResearchConnections, inspectExplicitResearchConnection, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
 
 interface Props { onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void; }
@@ -21,6 +21,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const [mode, setMode] = useState<SpatialLayoutMode>("map");
   const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>("all");
   const [trailGroup, setTrailGroup] = useState("");
+  const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
@@ -34,6 +35,8 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const visibleItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
   const model = useMemo(() => buildSpatialResearchModel(visibleItems, positions, mode), [visibleItems, positions, mode]);
   const trails = useMemo(() => buildExplicitResearchTrails(model.nodes), [model]);
+  const connections = useMemo(() => listExplicitResearchConnections(model), [model]);
+  const inspectedConnection = useMemo(() => inspectExplicitResearchConnection(model, selectedConnectionKey), [model, selectedConnectionKey]);
   const selectedTrail = trails.find(trail => trail.group === trailGroup) ?? null;
   const trailIndex = selectedTrail?.itemIds.indexOf(inspectedId ?? "") ?? -1;
   const points = useMemo(() => new Map(model.nodes.map(node => [
@@ -45,6 +48,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   useEffect(() => subscribeResearchCanvas(() => setVersion(value => value + 1)), []);
   useEffect(() => { if (inspectedId && !selected) setInspectedId(null); }, [inspectedId, selected]);
   useEffect(() => { if (trailGroup && !selectedTrail) setTrailGroup(""); }, [trailGroup, selectedTrail]);
+  useEffect(() => { if (selectedConnectionKey && !inspectedConnection) setSelectedConnectionKey(null); }, [selectedConnectionKey, inspectedConnection]);
 
   const fromPointer = (clientX: number, clientY: number): SpatialPoint | null => {
     const rect = boardRef.current?.getBoundingClientRect();
@@ -165,6 +169,54 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
             : "Choose a named group with at least two visible pins."}
         </span>
       </div>
+      <details className="lios-spatial-connections">
+        <summary className="lios-spatial-connections-summary">
+          Inspect group connections <span aria-hidden="true">({connections.length})</span>
+        </summary>
+        <p className="lios-spatial-connections-explanation">
+          Each line joins two neighboring pins in the same group you named. This shows organization, not verified evidence, causation, correlation, or permission to use underlying data.
+        </p>
+        {connections.length === 0 ? <p className="lios-spatial-connections-explanation">No visible pins share a named group. Filter or group saved research in the existing Research Tray.</p> : (
+          <ul className="lios-spatial-connections-list" aria-label="Visible user-grouped connections">
+            {connections.map(connection => (
+              <li key={connection.key}>
+                <button type="button"
+                  className="lios-spatial-connection-choice"
+                  aria-pressed={inspectedConnection?.key === connection.key}
+                  onClick={() => setSelectedConnectionKey(connection.key)}>
+                  <span className="truncate">{connection.from.title}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="truncate">{connection.to.title}</span>
+                  <small className="block basis-full text-xs text-muted-foreground">Group: {connection.group} · User-assigned</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {inspectedConnection && (
+          <div className="lios-spatial-connection-details" role="region" aria-label="Selected connection provenance">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <strong className="text-sm">Shared user-assigned group: {inspectedConnection.group}</strong>
+              <button type="button" className="lios-spatial-control" onClick={() => setSelectedConnectionKey(null)}>Clear selection</button>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This line represents group membership only. LiOS has not verified any link between these items or the evidence behind them.
+            </p>
+            <div className="lios-spatial-connection-endpoints">
+              <div>
+                <strong>{inspectedConnection.from.title}</strong>
+                <span>{inspectedConnection.from.kind} · {getTerminalCapability(inspectedConnection.from.view).label}</span>
+                <button type="button" onClick={() => openInspection(inspectedConnection.from.id)}>Inspect first pin</button>
+              </div>
+              <div>
+                <strong>{inspectedConnection.to.title}</strong>
+                <span>{inspectedConnection.to.kind} · {getTerminalCapability(inspectedConnection.to.view).label}</span>
+                <button type="button" onClick={() => openInspection(inspectedConnection.to.id)}>Inspect second pin</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </details>
       <div
         ref={boardRef}
         className="lios-spatial-board"
@@ -184,7 +236,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
             {model.edges.map(edge => {
               const from = points.get(edge.fromId);
               const to = points.get(edge.toId);
-              return from && to ? <line key={`${edge.fromId}:${edge.toId}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null;
+              return from && to ? <line key={`${edge.fromId}:${edge.toId}`} data-connection-current={inspectedConnection?.group === edge.group && inspectedConnection.from.id === edge.fromId && inspectedConnection.to.id === edge.toId ? "true" : "false"} x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null;
             })}
           </svg>
         )}
@@ -203,6 +255,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
               data-kind={item.kind}
               data-inspected={inspectedId === item.id ? "true" : "false"}
               data-trail-member={selectedTrail?.itemIds.includes(item.id) ? "true" : "false"}
+              data-connection-member={inspectedConnection && (inspectedConnection.from.id === item.id || inspectedConnection.to.id === item.id) ? "true" : "false"}
               data-trail-current={selectedTrail && inspectedId === item.id ? "true" : "false"}
               style={{ left: `${effectivePoint.x}%`, top: `${effectivePoint.y}%` }}
               aria-label={`${item.title}; ${item.kind}; ${item.group ? `group ${item.group}` : "ungrouped"}`}
