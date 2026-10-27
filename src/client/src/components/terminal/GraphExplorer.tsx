@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Network, Search, X } from "lucide-react";
-import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
+import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
@@ -36,7 +36,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [symbolOnly, setSymbolOnly] = useState(Boolean(activeSymbol));
   const [bridgesOnly, setBridgesOnly] = useState(false);
-  const [relation, setRelation] = useState("");
+  const [relation, setRelation] = useState<CrossDomainEdge["relation"] | "">("");
   const [neighborsOnly, setNeighborsOnly] = useState(false);
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
@@ -137,7 +137,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <label className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground">
               <span>Link type</span>
               <select aria-label="Filter recorded relationship type" value={relation}
-                onChange={event => { setRelation(event.target.value); setSelectedId(null); setNeighborsOnly(false); }}
+                onChange={event => { setRelation(event.target.value as CrossDomainEdge["relation"] | ""); setSelectedId(null); setNeighborsOnly(false); }}
                 className="max-w-36 bg-background text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
                 <option value="">All recorded</option>
                 {relations.map(item => <option key={item} value={item}>{item.replaceAll("-", " ")}</option>)}
