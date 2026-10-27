@@ -67,3 +67,37 @@ test("chosen session illustration retains its authentic Commons source link afte
   }));
   assert.doesNotMatch(cardHtml, /href="https:\/\/commons\.wikimedia\.org/);
 });
+
+
+test("saved references show a recheck control without loading any image on reopening", () => {
+  const saved = {
+    storyUrl: "https://news.example.org/exact-article",
+    candidate, savedAt: "2026-10-27T09:00:00.000Z",
+  };
+  const html = render(React.createElement(NewsImageDiscovery, {
+    articleTitle: "News about solar", selected: null, saved, canRemember: true,
+    onSelect: () => undefined, onClear: () => undefined,
+    onRemember: () => undefined, onForget: () => undefined,
+    onReopenSaved: async () => true,
+  }));
+  assert.match(html, /Recheck &amp; show saved/);
+  assert.match(html, /Saved in this Workbench artifact/);
+  assert.match(html, /Forget saved/);
+  assert.doesNotMatch(html, /<img\b|src="https:\/\/upload\.wikimedia\.org/);
+});
+
+test("a current illustration can be explicitly remembered or updated, but not saved in read-only mode", () => {
+  const basic = { articleTitle: "Solar markets", selected: candidate, onSelect: () => undefined, onClear: () => undefined };
+  const writable = render(React.createElement(NewsImageDiscovery, {
+    ...basic, canRemember: true, onRemember: () => undefined,
+  }));
+  assert.match(writable, /Remember illustration/);
+  const saved = { storyUrl: "https://news.example.org/exact-article", savedAt: "2026-10-27T09:00:00.000Z",
+    candidate: { ...candidate, filePage: "https://commons.wikimedia.org/wiki/File:Previous.jpg" } };
+  const update = render(React.createElement(NewsImageDiscovery, {
+    ...basic, canRemember: true, saved, onRemember: () => undefined,
+  }));
+  assert.match(update, /Update saved illustration/);
+  const readonly = render(React.createElement(NewsImageDiscovery, { ...basic, canRemember: false }));
+  assert.doesNotMatch(readonly, /Remember illustration|Update saved illustration|Forget saved/);
+});
