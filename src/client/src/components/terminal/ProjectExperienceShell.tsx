@@ -2399,7 +2399,7 @@ export default function ProjectExperienceShell({
                     </div>
                   </section>
                 )}
-                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel onAsk={stageRecordedIntelligenceToChat} />}
+                {chatMode !== "temporary" && !displayMessages.length && !streaming && <HomeAttentionPanel key={account.email ?? "active-account"} ownerScope={account.email ?? "active-account"} onAsk={stageRecordedIntelligenceToChat} />}
                 {hiddenMessageCount > 0 && (
                   <div className="flex justify-center" role="group" aria-label="Earlier messages">
                     <button type="button" data-testid="chat-load-earlier" className="lios-section-action" onClick={() => {
