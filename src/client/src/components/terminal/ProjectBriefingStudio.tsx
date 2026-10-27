@@ -2,7 +2,7 @@ import * as React from "react";
 import { useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpenCheck, FileText, Layers3, Plus, Trash2, X } from "lucide-react";
 import {
-  buildProjectBriefingReport, MAX_BRIEFING_SOURCES, type BriefingSource,
+  buildProjectBriefingReport, isReviewedBriefingSourceCurrent, MAX_BRIEFING_SOURCES, type BriefingSource,
 } from "@/lib/projectBriefingStoryboard";
 
 export function ProjectBriefingStudio({
@@ -25,11 +25,8 @@ export function ProjectBriefingStudio({
   const available = artifacts.filter(artifact => artifact.projectId === projectId && artifact.status === "active");
   const byId = useMemo(() => new Map(available.map(item => [item.id, item])), [artifacts, projectId]);
   const chosen = selectedSources;
-  const staleSelection = chosen.some(source => {
-    const live = byId.get(source.id);
-    return !live || live.headVersion !== source.headVersion || live.title !== source.title
-      || live.kind !== source.kind || live.status !== "active" || live.projectId !== source.projectId;
-  });
+  const staleSelection = chosen.some(source =>
+    !isReviewedBriefingSourceCurrent(source, byId.get(source.id), projectId));
   const offered = available.filter(item =>
     item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
     || item.kind.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
