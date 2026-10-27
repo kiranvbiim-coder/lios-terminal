@@ -151,7 +151,7 @@ export default function NewsPanel({ symbol }: Props) {
           <label className="font-terminal text-[8px] text-muted-foreground">FROM <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="ml-1 bg-black/30 border border-border px-1 py-1 text-[8px]" /></label>
           <label className="font-terminal text-[8px] text-muted-foreground">TO <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="ml-1 bg-black/30 border border-border px-1 py-1 text-[8px]" /></label>
           <button type="button" disabled={page === 1 || isLoading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">PREV</button>
-          <button type="button" disabled={page === 1 || !pagedNews?.hasMore || isLoading} onClick={() => setPage((value) => value + 1)} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">NEXT</button>
+          <button type="button" disabled={!pagedNews?.hasMore || page >= 52 || isLoading || newsQuery.isFetching} onClick={() => setPage((value) => Math.min(52, value + 1))} className="px-2 py-1 font-terminal text-[8px] border border-border disabled:opacity-30">NEXT</button>
           <span className="ml-auto font-terminal text-[8px] text-muted-foreground">PAGE {page} · {pagedNews ? `${pagedNews.returnedCount}/${pagedNews.knownCount}` : `${news.length}`} RETURNED</span>
         </div>
 
