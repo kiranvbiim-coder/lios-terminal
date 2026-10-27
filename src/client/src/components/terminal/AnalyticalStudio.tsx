@@ -132,8 +132,9 @@ function ChangeRow({ change }: { change: AnalyticalChange }) {
 function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; activeSymbol?: string }) {
   const [slots, setSlots] = useState<ComparisonSlot[]>(() => loadComparisonSlots());
   const [evidence, setEvidence] = useState<EvidenceSnapshot>(() => getEvidenceSnapshot());
-  const [receiptA, setReceiptA] = useState(0);
-  const [receiptB, setReceiptB] = useState(1);
+  // Compare specific published records, not their shifting array positions.
+  const [receiptA, setReceiptA] = useState<string | null>(() => getEvidenceSnapshot().receipts[0]?.id ?? null);
+  const [receiptB, setReceiptB] = useState<string | null>(() => getEvidenceSnapshot().receipts[1]?.id ?? null);
   const [reviewedPairKey, setReviewedPairKey] = useState<string | null>(null);
   const [expandedPairKey, setExpandedPairKey] = useState<string | null>(null);
   useEffect(() => subscribeComparison(setSlots), []);
@@ -197,8 +198,17 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
   </div>;
 }
 
-function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: number; onChange: (value: number) => void; label: string }) {
-  return <label className="font-ui flex items-center gap-1 text-[7px] text-muted-foreground">{label}<select value={value} onChange={(event) => onChange(Number(event.target.value))} className="rounded-lg border border-border/60 bg-black/20 px-2 py-1.5 text-[7px] text-foreground">{receipts.map((item, index) => <option key={item.id} value={index}>{item.label} · {item.reproducibilityId}</option>)}</select></label>;
+function ReceiptSelect({ receipts, value, onChange, label }: { receipts: CalculationReceipt[]; value: string | null; onChange: (value: string | null) => void; label: string }) {
+  const missing = value !== null && !receipts.some(item => item.id === value);
+  return <label className="font-ui flex items-center gap-2 text-xs text-muted-foreground">
+    Receipt {label}
+    <select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}
+      className="min-h-11 max-w-52 rounded-lg border border-border/60 bg-background px-2 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+      <option value="">Choose receipt</option>
+      {missing && <option value={value} disabled>Previously selected receipt unavailable — choose again</option>}
+      {receipts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.reproducibilityId}</option>)}
+    </select>
+  </label>;
 }
 
 function DiffSection({ title, items }: { title: string; items: ReturnType<typeof diffCalculationReceipts>["inputs"] }) {
