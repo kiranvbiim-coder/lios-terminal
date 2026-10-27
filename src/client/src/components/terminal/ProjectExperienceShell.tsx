@@ -312,7 +312,6 @@ export default function ProjectExperienceShell({
   onOpenEnvironment,
   account, onLogout, onOpenSettings,
   navigationRequest, onNavigationContext,
-  onOpenCommand,
   renderTerminalPanel, chatWorkbenchReturn,
 }: Props) {
   const [lifecycleRequest, setLifecycleRequest] = useState<LifecycleRequest | null>(null);
