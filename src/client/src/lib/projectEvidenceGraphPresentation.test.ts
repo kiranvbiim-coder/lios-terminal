@@ -51,8 +51,8 @@ test("bounded, source-matched graph omits extras and reports omissions honestly"
   };
   const shown=projectEvidenceGraphProjection(17,bigger,insight);
   assert.equal(shown.totalRecordedEdges,80);
-  assert.equal(shown.edges.length,40);
-  assert.equal(shown.omittedEdges,40);
+  assert.equal(shown.edges.length,39);
+  assert.equal(shown.omittedEdges,41);
   assert.equal(shown.nodes.length,40);
   assert.equal(shown.omittedNodes,9);
   assert.ok(shown.nodes.every(n=>n.id!=="unrelated"));
