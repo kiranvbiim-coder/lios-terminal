@@ -6,10 +6,14 @@ import { loadResearchTray, subscribeResearchTray, type ResearchTrayItem } from "
 import { loadResearchCanvasPositions, removeResearchCanvasPosition, setResearchCanvasPosition, subscribeResearchCanvas } from "@/lib/terminalResearchCanvas";
 import { buildSpatialResearchModel, buildExplicitResearchTrails, stepExplicitResearchTrail, listExplicitResearchConnections, inspectExplicitResearchConnection, clampSpatialPoint, moveSpatialPoint, type SpatialLayoutMode, type SpatialPoint } from "@/lib/spatialResearchModel";
 import { getTerminalCapability } from "@/lib/terminalCatalog";
+import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
+import { isSoftwareRendered } from "@/lib/desktopRendering";
+import { resolveSpatialMotionBudget } from "@/lib/spatialMotionPolicy";
 import { reconcileSpatialCanvasReturnState, type SpatialCanvasReturnState } from "@/lib/spatialStudioContinuity";
 
 interface Props {
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
+  preferences: TerminalUxPreferences;
   initialReturnState?: SpatialCanvasReturnState;
   onReturnStateChange?: (state: SpatialCanvasReturnState) => void;
 }
@@ -20,7 +24,7 @@ const MOVE_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", Arrow
  * A local visualization of user-pinned research, not another Workbench or Artifact store.
  * Edges exist only for an explicit group name. All object opens use the existing callback.
  */
-export default function SpatialResearchCanvas({ onOpen, initialReturnState, onReturnStateChange }: Props) {
+export default function SpatialResearchCanvas({ onOpen, initialReturnState, onReturnStateChange, preferences }: Props) {
   const [items, setItems] = useState<ResearchTrayItem[]>(() => loadResearchTray());
   const [version, setVersion] = useState(0);
   const [mode, setMode] = useState<SpatialLayoutMode>(initialReturnState?.mode ?? "map");
@@ -137,7 +141,8 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
     if (id) openInspection(id);
   };
   return (
-    <section className="lios-spatial-research space-y-3" aria-label="Spatial Research Canvas">
+    <section className="lios-spatial-research space-y-3" aria-label="Spatial Research Canvas"
+      data-motion-budget={resolveSpatialMotionBudget({ ...preferences, softwareRendered: isSoftwareRendered() })}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-ui text-base font-semibold text-foreground">Spatial Research Canvas</h3>
