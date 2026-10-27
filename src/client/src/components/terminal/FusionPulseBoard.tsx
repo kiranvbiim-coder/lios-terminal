@@ -1,6 +1,7 @@
+import * as React from "react";
 import { useMemo, useState } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
-import { normalizePulseSubject, pulseSubjectChoice, type PulseSubjectChoice, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
+import { pulseSubjectChoice, type PulseSubjectChoice, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
