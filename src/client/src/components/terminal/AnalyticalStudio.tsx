@@ -93,7 +93,7 @@ export default function AnalyticalStudio({ activeView, activeSymbol, workspace, 
           {tab === "flow" && <FlowTab activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} onOpen={onOpen} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "compare" && <CompareTab activeView={activeView} activeSymbol={activeSymbol} />}
           {tab === "thesis" && <ThesisTab activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} />}
-          {tab === "canvas" && <SpatialResearchCanvas initialReturnState={spatialCanvasReturn} onReturnStateChange={onSpatialCanvasReturn} onOpen={(view, mode, symbol) => { onOpen(view, mode, symbol); onClose(); }} />}
+          {tab === "canvas" && <SpatialResearchCanvas preferences={preferences} initialReturnState={spatialCanvasReturn} onReturnStateChange={onSpatialCanvasReturn} onOpen={(view, mode, symbol) => { onOpen(view, mode, symbol); onClose(); }} />}
           {tab === "packages" && <PackagesTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
           {tab === "composer" && <ComposerTab activeSymbol={activeSymbol} onOpen={onOpen} />}
           {tab === "replay" && <ReplayTab activeSymbol={activeSymbol} workspace={workspace} onApplyWorkspace={onApplyWorkspace} />}
