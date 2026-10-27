@@ -20,13 +20,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-
-Source reference for this adaptation:
-starc007/ui-components @ 41a330ba66684696c445d58ca5d77c0133d4059a
-- components/agents/tool-approval.tsx (status and reviewed action presentation)
-- components/agents/agent-activity/index.tsx (compact progress and disclosure)
-- components/agents/agent-activity/activity-row.tsx (receipt list status pattern)
-
-LiOS original implementation in src/client/src/components/terminal/AgentExecutionReceipts.tsx
-and guarded UI improvements in ConversationRuntimeTrace.tsx. Existing LiOS execution,
-receipts, user review, and permission logic remain authoritative.
+Adapted upstream: starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a
+components/agents/citations.tsx
