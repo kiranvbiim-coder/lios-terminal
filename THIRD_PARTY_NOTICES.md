@@ -29,6 +29,37 @@ the exact selected file before the existing Project-scoped governed import
 endpoint checks format/signature, server size limit and authorization. No
 sample media, remote vendor assets or new runtime packages are imported.
 
+### Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`
+adapts Watermelon's open/close spring-card and icon/activity-row composition
+from `WatermelonCorp/watermellon-registry@86052b8fd12bc19bf3bac07625a7f93736c42b17`,
+source `src/components/watermelon-ui/activities-card-base.tsx` (Git blob
+`fac632b2675dff9d1199b038285ef4e58a520601`).
+Copyright (c) 2025-present Watermelon Contributors; full MIT grant:
+`third_party/licenses/watermellon-registry-MIT.txt`.
+
+LIOS replaces demo activities, speculative timestamps, mobile window-size
+observers and donor-only styling with the real P6 Project continuation queue,
+bounded and permission-aware existing decision/workflow actions, reduced-motion
+support and honest unavailable/empty states. No parallel Project event store or
+third-party images are imported.
+
+### beUI — Pulse discovery navigation adaptation (MIT)
+
+LIOS `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` adapts
+the controlled tabs, directional keyboard movement and selected spring-indicator
+patterns from `starc007/ui-components@41a330ba66684696c445d58ca5d77c0133d4059a`,
+source `components/motion/tabs.tsx` (Git blob
+`ed65ffad1ea648850ce29a874ea6eee28d032896`).
+Copyright (c) 2026 Saurabh Chauhan; full MIT grant retained at
+`third_party/licenses/beui-MIT.txt`.
+
+LIOS uses its existing React 18, Framer Motion and Tailwind 3 components,
+with Wave D's exact four channel controls and callbacks, keyboard/RTL and
+reduced-motion support. The donor's Motion 12 runtime, unrelated tabs panels,
+demo content and alternative feed or routing authority are not imported.
+
 ### Watermelon UI — adapted News editorial card (MIT)
 
 The LIOS `src/client/src/components/panels/NewsEditorialStoryCard.tsx` adapts the

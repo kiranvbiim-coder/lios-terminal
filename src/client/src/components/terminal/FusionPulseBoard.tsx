@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
+import { PulseDiscoveryTabs } from "./PulseDiscoveryTabs";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -180,19 +181,9 @@ export default function FusionPulseBoard({
       </div>
 
       <div className="border-b border-border/60 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(["for_you", "following", "markets", "research"] as const).map((channel) => (
-            <button
-              key={channel}
-              type="button"
-              onClick={() => onPulseChannelChange(channel)}
-              aria-pressed={pulseChannel === channel}
-              className={`border px-2 py-1 font-terminal text-[6px] tracking-wider ${pulseChannel === channel ? "border-amber-300/45 bg-amber-300/[0.035] text-amber-200" : "border-border/60 text-muted-foreground hover:text-foreground"}`}
-            >
-              {channel.replace("_", " ").toUpperCase()}
-            </button>
-          ))}
-          {briefHeadline && <div className="ml-auto min-w-0 truncate font-ui text-[7px] text-amber-100/90">{briefHeadline}</div>}
+        <div className="flex flex-wrap items-center gap-3">
+          <PulseDiscoveryTabs channel={pulseChannel} onChange={onPulseChannelChange} />
+          {briefHeadline && <div className="min-w-0 flex-1 truncate font-ui text-xs leading-5 text-amber-100/90" title={briefHeadline}>{briefHeadline}</div>}
         </div>
       </div>
 
