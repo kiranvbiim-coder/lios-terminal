@@ -14,6 +14,28 @@ export interface ActionInboxReview {
   hiddenCount: number;
 }
 
+/**
+ * Freshness applies to the SERVER inbox snapshot, not the age of an alert.
+ * An old alert can still matter, but a cached snapshot must never claim
+ * today's source permissions, statuses or available evidence.
+ */
+export const ACTION_INBOX_MAX_SNAPSHOT_AGE_MS = 5 * 60_000;
+export const ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS = 30_000;
+export type ActionInboxSnapshotFreshness = "current" | "stale" | "future" | "unavailable";
+
+export function assessActionInboxSnapshotFreshness(
+  asOf: string | null | undefined,
+  nowMs: number,
+): ActionInboxSnapshotFreshness {
+  if (!asOf || !Number.isFinite(nowMs)) return "unavailable";
+  const whenMs = Date.parse(asOf);
+  if (!Number.isFinite(whenMs)) return "unavailable";
+  const age = nowMs - whenMs;
+  if (age < -ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS) return "future";
+  if (age > ACTION_INBOX_MAX_SNAPSHOT_AGE_MS) return "stale";
+  return "current";
+}
+
 const MAX_RECEIVED = 250;
 const MAX_VISIBLE = 40;
 const ACTIONS = new Set(["investigate", "recalculate", "update", "dismiss", "snooze", "monitor"]);
