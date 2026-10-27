@@ -47,7 +47,7 @@ test("real free MIT beUI source is wired to existing Framer Motion without a sec
   assert.match(beui, /starc007\/ui-components/);
   assert.match(beui, /components\/motion\/timeline\.tsx/);
   assert.match(beui, /from "framer-motion"/);
-  assert.match(beui, /onKeyDown=\{onKeyDown\}/);
+  assert.match(beui, /onKeyDown=\{\(e\) => onKeyDown\(e, index\)\}/);
   assert.match(beui, /useReducedMotion/);
   assert.match(beui, /onPointerMove=\{onPointerMove\}/);
   assert.doesNotMatch(beui, /from "motion\/react"|from "@\/lib\/touch"/);
