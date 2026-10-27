@@ -4,6 +4,9 @@ const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const CC0_URL = "https://creativecommons.org/publicdomain/zero/1.0/";
 const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_CANDIDATES = 8;
+// Search a broader page because most Commons images are BY/SA rather than CC0.
+// One request, at most eight CC0 results returned to LiOS.
+const DISCOVERY_PAGE_LIMIT = 30;
 const AGENT = "LiOS-Terminal/1.0 (https://github.com/kiranvbiim-coder/lios-terminal; manual CC0 media review)";
 type FetchLike = typeof fetch;
 
@@ -122,7 +125,7 @@ export async function searchCommonsCC0(term: string, requester: FetchLike = fetc
   const q = term.trim();
   if (q.length < 3 || q.length > 100) throw new Error("Search must be between 3 and 100 characters.");
   const url = commonsQuery({ generator: "search", gsrsearch: q,
-    gsrnamespace: "6", gsrlimit: String(MAX_CANDIDATES) });
+    gsrnamespace: "6", gsrlimit: String(DISCOVERY_PAGE_LIMIT) });
   return candidates(await fetchCommons(url, requester));
 }
 
