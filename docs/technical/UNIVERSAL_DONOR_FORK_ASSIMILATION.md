@@ -1,5 +1,8 @@
 # Universal Donor & Fork Assimilation — All 92 + 10
 
+> **Active queue superseded 2026-10-27.** This is an **historical provenance and source-audit inventory**, not a directive to import every donor or exhaust every fork. The old Wave 1–4 allocation below is retained only as historical planning evidence. For the **actual finite active worklist**, see [LiOS Active Donor Dispositions](LIOS_ACTIVE_DONOR_DISPOSITIONS_2026-10-27.md) and the only live `executionPriorities` in `third_party/universal-donor-adoption.json` (10 selected identities, two workstreams, no catch-all). Archived and reference-only candidates need a new measured user journey, rights review, approved component consumer and release qualification before promotion.
+
+
 **Date:** 2026-10-11 · **Scope:** every established baseline donor, all controlled forks and registered package subcomponents. **State:** cross-donor work allocation and truth validation, **not** an import-all or SP acceptance claim.
 
 ## Why this exists
