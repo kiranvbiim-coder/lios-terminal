@@ -336,7 +336,6 @@ export function ProjectHome({
               : <ProjectIntelligencePanel projectId={project.id} onInvestigate={prompt => onNewChat(prompt)} />}
           </div>}
         </section>
-
         {collectionsFailed && <div role="alert" className="mt-5 space-y-2 rounded-lg border border-amber-300/30 p-3 font-ui text-sm text-amber-100">
           <p>{savedWorkRead.label} Resource changes are disabled until the exact saved Project records are verified.</p>
           <button type="button" disabled={!savedWorkRead.retryAvailable} aria-busy={collectionsFetching}

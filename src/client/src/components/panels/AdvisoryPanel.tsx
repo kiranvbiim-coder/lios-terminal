@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Clock, Plus, MessageSquare, Send, CheckCircle2, ChevronRight, ReceiptText,
   Circle, CircleDot, CircleSlash, Calendar, FileText, ShieldCheck, ShieldAlert, ShieldQuestion, Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import type { DomainInfo } from "@/lib/domains";
@@ -276,7 +277,7 @@ function ProjectsTab() {
         <div className="flex items-center gap-2 flex-wrap">
           {engagements.map((e) => (
             <button key={e.id} onClick={() => setSelectedEngagementId(e.id)}
-              className={`font-terminal px-3 py-1.5 border text-[10px] uppercase tracking-wider transition-colors ${e.id === selectedEngagementId ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
+              className={`inline-flex min-h-11 items-center rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${e.id === selectedEngagementId ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
               {e.title}
             </button>
           ))}
@@ -453,6 +454,7 @@ function ProjectsTab() {
 export default function AdvisoryPanel() {
   const [requests, setRequests] = useState<ConsultingRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestsLoadError, setRequestsLoadError] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ConsultingRequestDetail | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -464,13 +466,17 @@ export default function AdvisoryPanel() {
   const [description, setDescription] = useState("");
   const [packType, setPackType] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [respondingQuoteId, setRespondingQuoteId] = useState<number | null>(null);
 
   const loadRequests = () => {
     setLoading(true);
     getJson<ConsultingRequestItem[]>("/api/client/consulting/requests")
-      .then(setRequests).catch(() => setRequests([])).finally(() => setLoading(false));
+      .then(rows => { setRequests(rows); setRequestsLoadError(false); })
+      .catch(() => { setRequestsLoadError(true); /* Preserve last loaded records, never invent an empty Inbox. */ })
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadRequests(); }, []);
@@ -492,15 +498,18 @@ export default function AdvisoryPanel() {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || !formDomainId) return;
+    if (!title.trim() || !description.trim() || !formDomainId || submitInFlight.current) return;
+    submitInFlight.current = true;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await apiRequest("POST", "/api/client/consulting/requests", { domainId: formDomainId, title, description, packType: packType ?? undefined });
       setTitle(""); setDescription(""); setPackType(null); setShowNewModal(false);
       loadRequests();
     } catch {
-      alert("Failed to submit request.");
+      setSubmitError("The advisory request was not confirmed. Your entered details remain here; review them before retrying.");
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -539,16 +548,16 @@ export default function AdvisoryPanel() {
           <Briefcase className="w-4 h-4 text-[hsl(38,95%,55%)]" />
           <span className="panel-label">ADVISORY</span>
         </div>
-        <button onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1 bg-[hsl(38,95%,50%)/15%] border border-[hsl(38,95%,50%)/40%] font-terminal text-[10px] text-[hsl(38,95%,55%)] hover:bg-[hsl(38,95%,50%)/25%] transition-colors">
-          <Plus className="w-3 h-3" /> SUBMIT QUERY
+        <button type="button" onClick={() => { setSubmitError(null); setShowNewModal(true); }}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+          <Plus aria-hidden="true" className="h-4 w-4" /> Request advisory review
         </button>
       </div>
 
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-[#070707] shrink-0">
         {(["projects", "requests", "invoices"] as const).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`font-terminal px-3 py-1.5 border text-[10px] uppercase tracking-wider transition-colors ${activeTab === tab ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
+            className={`inline-flex min-h-11 items-center rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${activeTab === tab ? "bg-[hsl(38,95%,50%)/15%] text-[hsl(38,95%,55%)] border-[hsl(38,95%,50%)/40%]" : "text-muted-foreground border-border hover:text-foreground"}`}>
             {tab === "projects" ? "Projects" : tab === "requests" ? `Advisory Requests (${requests.length})` : "Invoices & Billing"}
           </button>
         ))}
@@ -573,9 +582,16 @@ export default function AdvisoryPanel() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div className={selectedRequestId ? "lg:col-span-5 space-y-2.5" : "lg:col-span-12 space-y-2.5"}>
               <div className="font-terminal text-[9px] uppercase tracking-wider text-muted-foreground px-1">Active &amp; Past Enquiries ({requests.length})</div>
-              {loading ? (
-                <div className="p-8 text-center text-sm text-muted-foreground animate-pulse">Loading queries...</div>
-              ) : requests.length === 0 ? (
+              {requestsLoadError && <div role="alert" className="rounded-lg border border-destructive/30 p-3 font-ui text-sm text-destructive">
+                Advisory requests could not be verified. Any listed records are previously loaded, not a confirmed current Inbox.
+                <button type="button" disabled={loading} onClick={loadRequests}
+                  className="mt-2 block min-h-11 rounded-lg border border-border px-3 py-2 text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
+                  {loading ? "Retrying request list…" : "Retry request list (read-only)"}
+                </button>
+              </div>}
+              {loading && !requestsLoadError ? (
+                <div role="status" className="p-8 text-center text-sm text-muted-foreground">Loading saved advisory requests…</div>
+              ) : requests.length === 0 && !requestsLoadError ? (
                 <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border">No queries submitted yet. Click "Submit Query" to open your first advisory request.</div>
               ) : (
                 requests.map((req) => {
@@ -684,15 +700,18 @@ export default function AdvisoryPanel() {
         )}
       </div>
 
-      {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 overflow-y-auto" onClick={() => setShowNewModal(false)}>
-          <div className="w-full max-w-lg my-8 p-6 bg-[#0d0d0d] border border-border shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-foreground">Submit New Advisory Query</h3>
+      <Dialog open={showNewModal} onOpenChange={next => { if (!next && !submitting) setShowNewModal(false); }}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-2xl"
+          onEscapeKeyDown={event => { if (submitting) event.preventDefault(); }}
+          onInteractOutside={event => { if (submitting) event.preventDefault(); }}>
+          <DialogTitle className="text-lg font-semibold text-foreground">Request advisory review</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Optional professional advice. Review and edit details before deliberately submitting; no engagement or payment is initiated by opening this form.</DialogDescription>
             <form onSubmit={handleCreateRequest} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Domain Specialty</label>
+                <label htmlFor="lios-advisory-domain" className="mb-1 block text-sm font-semibold text-muted-foreground">Domain Specialty</label>
                 {domains.length > 1 ? (
                   <select
+                    id="lios-advisory-domain"
                     value={formDomainId ?? ""}
                     onChange={(e) => setFormDomainId(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-muted border border-border font-medium text-foreground focus:outline-none"
@@ -704,7 +723,7 @@ export default function AdvisoryPanel() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Start From a Pack (optional)</label>
+                <label className="mb-1 block text-sm font-semibold text-muted-foreground">Start From a Pack (optional)</label>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(PACK_TEMPLATES).map(([key, pack]) => (
                     <button
@@ -715,7 +734,7 @@ export default function AdvisoryPanel() {
                         setTitle(pack.title);
                         setDescription(pack.description);
                       }}
-                      className={`px-2 py-1 border text-[10px] font-terminal uppercase tracking-wider transition-colors ${
+                      className={`min-h-11 rounded-lg border px-3 py-2 font-ui text-sm transition-colors ${
                         packType === key
                           ? "border-[hsl(38,95%,50%)/50%] bg-[hsl(38,95%,50%)/10%] text-[hsl(38,95%,55%)]"
                           : "border-border text-muted-foreground hover:text-foreground"
@@ -726,32 +745,32 @@ export default function AdvisoryPanel() {
                   ))}
                   {packType && (
                     <button type="button" onClick={() => { setPackType(null); setTitle(""); setDescription(""); }}
-                      className="px-2 py-1 border border-border text-[10px] font-terminal uppercase tracking-wider text-muted-foreground hover:text-foreground">
+                      className="min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                       Clear
                     </button>
                   )}
                 </div>
-                {packType && <p className="text-[10px] text-muted-foreground mt-1">Template loaded below — edit freely before submitting.</p>}
+                {packType && <p className="mt-2 text-sm text-muted-foreground">Template loaded below — edit freely before submitting.</p>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Query Title</label>
-                <Input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Q3 Hedging strategy for Forex exposure" />
+                <label htmlFor="lios-advisory-title" className="mb-1 block text-sm font-semibold text-muted-foreground">Query Title</label>
+                <Input id="lios-advisory-title" type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Q3 Hedging strategy for Forex exposure" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Query Description &amp; Details</label>
-                <textarea required rows={packType ? 8 : 4} value={description} onChange={(e) => setDescription(e.target.value)}
+                <label htmlFor="lios-advisory-description" className="mb-1 block text-sm font-semibold text-muted-foreground">Query Description &amp; Details</label>
+                <textarea id="lios-advisory-description" required rows={packType ? 8 : 4} value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Provide context, metrics, or specific questions for our advisory team..."
                   className="w-full px-3 py-2 border border-input bg-background focus:outline-none focus:ring-1 focus:ring-[hsl(38,95%,50%)] text-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground">A consultant will review this request and send you a scoped quote with pricing and turnaround time before any work begins.</p>
+              <p className="text-sm leading-5 text-muted-foreground">Submitting this form explicitly sends the details above to the Limuria advisory team for review. No engagement is started or automatically billed: a consultant will propose scope, pricing and timeline before work begins.</p>
+              {submitError && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{submitError}</p>}
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowNewModal(false)}>Cancel</Button>
+                <Button type="button" variant="outline" disabled={submitting} onClick={() => setShowNewModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting || !formDomainId}>{submitting ? "Submitting..." : "Confirm & Submit"}</Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

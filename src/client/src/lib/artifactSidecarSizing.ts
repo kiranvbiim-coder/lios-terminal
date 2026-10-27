@@ -47,3 +47,22 @@ export function canExpandArtifactRevision(
     && Number.isSafeInteger(actual.version) && actual.version > 0
     && (requestedVersion === null || requestedVersion === actual.version);
 }
+
+/**
+ * A load notification is presentation authority only for the exact object and
+ * requested revision currently selected in Chat. In "latest" mode (null) the
+ * revision must still be an actual positive saved version. No stale callback
+ * can replace the parent shell's recorded Workbench handoff target.
+ */
+export function isCurrentArtifactLoad(
+  loadedArtifactId: string,
+  loadedRequest: number | null,
+  loadedVersion: number,
+  activeArtifactId: string,
+  activeRequest: number | null,
+): boolean {
+  return loadedArtifactId === activeArtifactId
+    && loadedRequest === activeRequest
+    && Number.isSafeInteger(loadedVersion) && loadedVersion > 0
+    && (activeRequest === null || loadedVersion === activeRequest);
+}

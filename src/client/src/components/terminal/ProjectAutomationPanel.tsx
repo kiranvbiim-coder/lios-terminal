@@ -54,7 +54,16 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   const notificationsQuery = useP9Notifications(projectId);
   const invalidate = useInvalidateP9Automation();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  // Manual runs and receipt checks can finish after this mounted panel switches
+  // Projects. Keep every presentation receipt bound to its originating Project.
+  const selectedProject = useRef(projectId);
+  selectedProject.current = projectId;
+  const [messageReceipt, setMessageReceipt] = useState<{ projectId: number; text: string } | null>(null);
+  const message = messageReceipt?.projectId === projectId ? messageReceipt.text : null;
+  const setMessage = (text: string | null) => {
+    if (selectedProject.current !== projectId) return;
+    setMessageReceipt(text === null ? null : { projectId, text });
+  };
   const [drafts, setDrafts] = useState(() => listP9ManualRunDrafts(projectId));
   const [attempts, setAttempts] = useState(() => listP9ManualRunAttempts(projectId));
   const confirming = useRef(false);
@@ -67,8 +76,6 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
     try { return p9EventFiltersSchema.safeParse(JSON.parse(eventFiltersDraft)); }
     catch { return null; }
   }, [eventFiltersDraft]);
-  const selectedProject = useRef(projectId);
-  selectedProject.current = projectId;
   const managementInFlight = useRef(false);
   useEffect(() => {
     setCreateKind(null); setReview(null); setMessage(null);
@@ -296,7 +303,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   if ((workflowsQuery.isError && !workflowsQuery.data) || (runsQuery.isError && !runsQuery.data) || (notificationsQuery.isError && !notificationsQuery.data)) return <p role="alert" className="mt-6 text-sm">Unable to load automations. <button onClick={() => { void workflowsQuery.refetch(); void runsQuery.refetch(); void notificationsQuery.refetch(); }}>Retry</button></p>;
 
   return (
-    <section className="mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-4" data-p9-continuous-intelligence>
+    <section className="mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-4" data-p9-continuous-intelligence data-p9-project-id={projectId}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 font-ui text-[10px] font-semibold text-foreground">
@@ -411,15 +418,17 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           const last = latestRun.get(workflow.id);
           const truth = workflowExecutionTruth(workflow, last);
           return (
-            <article key={workflow.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
-              <div className="flex items-start gap-2">
+            <article key={workflow.id} data-p9-workflow-id={workflow.id} tabIndex={-1}
+              aria-label={`Saved workflow ${workflow.name}`}
+              className="scroll-mt-20 rounded-lg border border-border/50 bg-card/60 p-3 focus:outline-none focus:ring-2 focus:ring-amber-300/70">
+              <div className="flex flex-wrap items-start gap-3">
                 <button type="button" disabled={Boolean(busyId)}
                   onClick={() => requestWorkflowReview(workflow, workflow.enabled ? "pause" : "resume")}
-                  className={`mt-0.5 rounded border p-1 disabled:opacity-40 ${workflow.enabled ? "border-emerald-400/35 text-emerald-300" : "border-border/60 text-muted-foreground"}`}
+                  className={`mt-0.5 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40 ${workflow.enabled ? "border-emerald-400/35 text-emerald-300" : "border-border/60 text-foreground hover:bg-accent/40"}`}
                   title={workflow.enabled ? "Review pause" : "Review resume"}
                   aria-label={`Review ${workflow.enabled ? "pause" : "resume"} for ${workflow.name}`}
                 >
-                  {workflow.enabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                  {workflow.enabled ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -464,14 +473,29 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
                   </div>
                   {last?.summary && <div className="mt-2 line-clamp-2 font-ui text-[13px] leading-4 text-muted-foreground/90">{last.summary}</div>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button type="button" disabled={Boolean(busyId)} onClick={() => void run(workflow.id, workflow.updatedAt)} className="rounded border border-border/60 p-1.5 text-cyan-300 hover:bg-white/[0.03] disabled:opacity-40" title="Run now · explicit manual action">
-                    <RefreshCw className={`h-3 w-3 ${busyId === workflow.id ? "animate-spin" : ""}`} />
+                <div role="group" aria-label={`Actions for ${workflow.name}`}
+                  className="flex w-full flex-wrap items-center gap-2 border-t border-border/40 pt-3 sm:w-auto sm:border-0 sm:pt-0">
+                  <button type="button" disabled={Boolean(busyId)}
+                    onClick={() => void run(workflow.id, workflow.updatedAt)}
+                    aria-label={`Run ${workflow.name} now — explicit manual action`}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
+                    title="Run now · explicit manual action">
+                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${busyId === workflow.id ? "motion-safe:animate-spin" : ""}`} />
+                    Run now
                   </button>
-                  <button type="button" disabled={Boolean(busyId) || workflow.trigger.type === "manual"} onClick={() => requestWorkflowReview(workflow, "edit")}
-                    className="rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground disabled:opacity-40" title={workflow.trigger.type === "event" ? "Review event type and matching filters" : "Review interval or UTC daily schedule edit"}>{workflow.trigger.type === "event" ? "Edit event trigger" : "Edit schedule"}</button>
-                  <button type="button" disabled={Boolean(busyId)} onClick={() => requestWorkflowReview(workflow, "delete")} className="rounded p-1.5 text-muted-foreground hover:bg-white/[0.03] hover:text-red-300 disabled:opacity-40" title="Review workflow deletion">
-                    <Trash2 className="h-3 w-3" />
+                  <button type="button" disabled={Boolean(busyId) || workflow.trigger.type === "manual"}
+                    onClick={() => requestWorkflowReview(workflow, "edit")}
+                    className="inline-flex min-h-11 items-center rounded-lg border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
+                    title={workflow.trigger.type === "event" ? "Review event type and matching filters" : "Review interval or UTC daily schedule edit"}>
+                    {workflow.trigger.type === "event" ? "Review event trigger" : "Review schedule"}
+                  </button>
+                  <button type="button" disabled={Boolean(busyId)}
+                    onClick={() => requestWorkflowReview(workflow, "delete")}
+                    aria-label={`Review deletion of ${workflow.name}`}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
+                    title="Review workflow deletion">
+                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                    Review delete
                   </button>
                 </div>
               </div>

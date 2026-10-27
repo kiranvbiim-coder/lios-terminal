@@ -43,10 +43,45 @@ test("chart artwork plots only recorded numeric values", () => {
   assert.equal(recordedGalleryChartPath({ ...chart, series: [] }), null);
   const html = renderToStaticMarkup(React.createElement(GalleryRecordedPreviewContent, { content: chart }));
   assert.match(html, /3 recorded points/);
-  assert.match(html, /First 3 recorded points/);
+  assert.match(html, /First 3 saved positions/);
   assert.match(html, /M8\.00,82\.00 L150\.00,47\.00 L292\.00,12\.00/);
 });
 
+test("gallery line preview preserves missing positions and never connects across gaps", () => {
+  const interrupted: typeof chart = { ...chart, series: [{ ...chart.series[0], points: [
+    { x: "jan", y: 10 }, { x: "feb", y: Number.NaN }, { x: "mar", y: 20 }, { x: "apr", y: 30 },
+  ] }] };
+  const path = recordedGalleryChartPath(interrupted);
+  assert.equal(path, "M8.00,82.00 M197.33,47.00 L292.00,12.00");
+  assert.doesNotMatch(path!, /NaN|Infinity|L197\.33/);
+  const html = renderToStaticMarkup(React.createElement(GalleryRecordedPreviewContent, { content: interrupted }));
+  assert.match(html, /gaps are not joined/);
+  assert.match(html, /missing points remain disconnected/);
+});
+
+test("non-line charts never invent a linear trend preview", () => {
+  const bar: typeof chart = { ...chart, chartType: "bar" };
+  assert.equal(recordedGalleryChartPath(bar), null);
+  const html = renderToStaticMarkup(React.createElement(GalleryRecordedPreviewContent, { content: bar }));
+  assert.doesNotMatch(html, /<svg\b|<path\b/);
+  assert.match(html, /not a line chart/);
+  assert.match(html, /3 recorded points/);
+});
+
+test("finite extreme and flat line data produce only finite SVG coordinates", () => {
+  const extreme: typeof chart = { ...chart, series: [{ ...chart.series[0], points: [
+    { x: "a", y: -Number.MAX_VALUE }, { x: "b", y: Number.MAX_VALUE },
+  ] }] };
+  assert.equal(recordedGalleryChartPath(extreme), "M8.00,82.00 L292.00,12.00");
+  const flat: typeof chart = { ...chart, series: [{ ...chart.series[0], points: [
+    { x: "a", y: 10 }, { x: "b", y: 10 },
+  ] }] };
+  assert.equal(recordedGalleryChartPath(flat), "M8.00,47.00 L292.00,47.00");
+  const incomplete: typeof chart = { ...chart, series: [{ ...chart.series[0], points: [
+    { x: "a", y: 1 }, { x: "b", y: Number.NaN },
+  ] }] };
+  assert.equal(recordedGalleryChartPath(incomplete), null);
+});
 test("recorded table preview uses exact rows, has semantic headings, and escapes cells", () => {
   const table: Extract<ArtifactContent, { kind: "table" }> = {
     kind: "table",

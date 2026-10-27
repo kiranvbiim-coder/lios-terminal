@@ -56,8 +56,8 @@ export function verifiedReopenedModelRun(
     a.datasetContentHash === b.datasetContentHash &&
     (a.inputHash === undefined || a.inputHash === b.inputHash) &&
     a.deterministic === true && b.deterministic === true &&
-    b.result.datasetSnapshotId === b.datasetSnapshotId &&
-    b.result.checks.passed && b.result.checks.circularConverged;
+    reopened.result.datasetSnapshotId === b.datasetSnapshotId &&
+    reopened.result.checks.passed && reopened.result.checks.circularConverged;
 }
 
 /** Verify P4 returned the requested exact run/dataset receipt. A server POST
@@ -75,7 +75,7 @@ export function savedModelArtifactMatchesReceipt(
     (destination.projectId !== null || artifact.owningChatId === destination.owningChatId) &&
     artifact.kind === "spreadsheet" && artifact.origin === "conversation" &&
     version.refreshSpec?.kind === "engine" &&
-    version.refreshSpec.engineRef?.startsWith("integrated_financial_model:") &&
+    version.refreshSpec.engineRef?.startsWith("integrated_financial_model:") === true &&
     version.refreshSpec.engineRef.endsWith(`:run:${receipt.runId}`) &&
     artifact.status === "active" && version.version > 0 && version.content.kind === "spreadsheet" &&
     refSet.has(`financial-model-run:${receipt.runId}`) &&

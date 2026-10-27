@@ -11,6 +11,7 @@ import { parseChatTerminalRequest, chatTerminalCapabilities, type ChatTerminalCo
 import { useConversationArtifactView, rememberConversationArtifactView } from "@/lib/conversationArtifactView";
 import ChatSourcesControl from "./ChatSourcesControl";
 import ConversationArtifactSidecar from "./ConversationArtifactSidecar";
+import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -2374,25 +2375,25 @@ export default function ProjectExperienceShell({
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
-                      <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-sm font-semibold text-black focus-visible:outline focus-visible:outline-2">
+                      <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-2 font-ui text-sm font-semibold text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300">
                         Ask LiOS
                       </button>
                       <details className="lios-first-use-options text-left">
-                        <summary className="cursor-pointer rounded-md px-3 py-2 font-ui text-[13px] text-muted-foreground hover:text-foreground">More options</summary>
+                        <summary className="flex min-h-11 cursor-pointer items-center rounded-lg border border-border/60 px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">More options (optional)</summary>
                         <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-                          <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
+                          <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border/70 px-3.5 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                         <Plus className="h-3.5 w-3.5" /> Create a Project
                       </button>
                       <button
                         type="button"
                         data-first-use-connect="optional"
                         onClick={openSafeConnections}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-[12px] font-medium text-muted-foreground transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border/70 bg-black/20 px-3.5 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:border-cyan-300/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                       >
                         <Plug className="h-3.5 w-3.5" /> {LIOS_FIRST_USE_CONTRACT.optionalConnectionAction}
                       </button>
                         </div>
-                        <div data-first-use-entry="ask-first" className="mt-2 max-w-md font-ui text-[12px] leading-5 text-muted-foreground">
+                        <div data-first-use-entry="ask-first" className="mt-3 max-w-md font-ui text-sm leading-6 text-muted-foreground">
                           {LIOS_FIRST_USE_CONTRACT.shellHint}
                         </div>
                       </details>
@@ -2893,7 +2894,13 @@ export default function ProjectExperienceShell({
                     onEnterFocus={() => setArtifactFocusMode(true)}
                     onExitFocus={() => { setArtifactFocusMode(false); requestAnimationFrame(() => reopenArtifactFocusRef.current?.focus()); }}
                     onExpand={(version) => { displayedArtifactRef.current = { artifactId: conversationArtifactRef, requestedVersion: artifactViewVersion, version }; onOpenWorkbench(); }}
-                    onDisplayedVersionChange={(version, artifactId) => { if (artifactId === conversationArtifactRef) displayedArtifactRef.current = { artifactId, requestedVersion: artifactViewVersion, version }; }}
+                    onDisplayedVersionChange={(version, artifactId, loadedRequest) => {
+                      // Only the currently selected exact P4 load may update
+                      // the separate Chat → Workbench shortcut target.
+                      if (isCurrentArtifactLoad(artifactId, loadedRequest, version, conversationArtifactRef, artifactViewVersion)) {
+                        displayedArtifactRef.current = { artifactId, requestedVersion: loadedRequest, version };
+                      }
+                    }}
                     artifactId={conversationArtifactRef}
                     version={artifactViewVersion} onVersionChange={setArtifactViewVersion} onDirtyChange={(dirty) => { artifactDraftDirtyRef.current = dirty; }}
                     projectId={selection.projectId} owningChatId={selection.chatId}

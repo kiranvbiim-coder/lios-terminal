@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain } from "@/lib/terminalCrossDomainGraph";
 import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
+import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
 
@@ -58,12 +59,15 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
     window.addEventListener("resize", resized);
     return () => window.removeEventListener("resize", resized);
   }, []);
+  // Keep the Escape handler current without re-running the modal focus trap on parent renders.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     searchRef.current?.focus();
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key === "Escape") { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]),input:not([disabled]),a[href],select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
@@ -82,7 +86,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
       document.removeEventListener("keydown", keyboard);
       previouslyFocused?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   // The existing local Intelligence Object store is the sole graph authority.
   // 120 is a bounded source read, not a claim that all retained objects are shown.
