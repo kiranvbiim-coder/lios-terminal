@@ -110,14 +110,24 @@ test("packaged desktop never falls back to an unverified host Python interpreter
     assert.throws(() => resolvePackagedPythonSidecar(root, "win32"),
       /host-interpreter fallback refused/, "packaged Windows must not use the system python");
 
-    const macBinary = path.join(binDir, "lios-python-sidecar");
-    fs.writeFileSync(macBinary, "synthetic frozen executable", { mode: 0o700 });
-    fs.chmodSync(macBinary, 0o700);
-    assert.equal(resolvePackagedPythonSidecar(root, "darwin"), macBinary);
-    assert.equal(resolvePackagedPythonSidecar(root, "linux"), macBinary);
-    fs.chmodSync(macBinary, 0o600);
-    assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
-      /host-interpreter fallback refused/, "non-executable packaged binary must be refused");
+    // POSIX execute permission bits have no equivalent in Node's Win32 stat.
+    // Exercise those assertions on actual POSIX runners, not simulated chmod.
+    if (process.platform !== "win32") {
+      const macBinary = path.join(binDir, "lios-python-sidecar");
+      fs.writeFileSync(macBinary, "synthetic frozen executable", { mode: 0o700 });
+      fs.chmodSync(macBinary, 0o700);
+      assert.equal(resolvePackagedPythonSidecar(root, "darwin"), macBinary);
+      assert.equal(resolvePackagedPythonSidecar(root, "linux"), macBinary);
+      fs.chmodSync(macBinary, 0o600);
+      assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+        /host-interpreter fallback refused/, "non-executable packaged binary must be refused");
+
+      // A symlink cannot turn a mutable user-local python into an accepted package.
+      fs.unlinkSync(macBinary);
+      fs.symlinkSync(path.join(root, "outside-not-bundled"), macBinary);
+      assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
+        /host-interpreter fallback refused/);
+    }
 
     const winBinary = path.join(binDir, "lios-python-sidecar.exe");
     fs.writeFileSync(winBinary, "synthetic frozen Windows executable");
@@ -125,14 +135,6 @@ test("packaged desktop never falls back to an unverified host Python interpreter
     fs.writeFileSync(winBinary, "");
     assert.throws(() => resolvePackagedPythonSidecar(root, "win32"),
       /host-interpreter fallback refused/, "empty packaged executable must be refused");
-
-    // A symlink cannot turn a mutable user-local python into an accepted package.
-    if (process.platform !== "win32") {
-      fs.unlinkSync(macBinary);
-      fs.symlinkSync(path.join(root, "outside-not-bundled"), macBinary);
-      assert.throws(() => resolvePackagedPythonSidecar(root, "darwin"),
-        /host-interpreter fallback refused/);
-    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
