@@ -22,20 +22,32 @@ export function checkedGalleryArtifactContent(record: RecordIdentity, detail: Ar
   return detail.version.content;
 }
 
-/** A non-approximate visual of the first *recorded* chart series, not an invented trend. */
+/**
+ * Read-only path for the first 40 original *positions* of a saved line chart.
+ * Preserve gaps instead of joining unrelated observations or silently skipping points.
+ * Non-line types have no line preview: the full Artifact owns their true renderer.
+ */
 export function recordedGalleryChartPath(content: Extract<ArtifactContent, { kind: "chart" }>): string | null {
-  const series = content.series[0];
-  if (!series) return null;
-  const values = series.points.filter(point => Number.isFinite(point.y)).slice(0, 40).map(point => point.y);
+  if (content.chartType.trim().toLowerCase() !== "line") return null;
+  const points = content.series[0]?.points.slice(0, 40) ?? [];
+  const values = points.map(point => point.y).filter(Number.isFinite);
   if (values.length < 2) return null;
   const low = Math.min(...values);
   const high = Math.max(...values);
-  const span = Math.max(1e-9, high - low);
-  return values.map((y, i) => {
-    const x = 8 + (i / (values.length - 1)) * 284;
-    const ordinate = 82 - ((y - low) / span) * 70;
-    return `${i ? "L" : "M"}${x.toFixed(2)},${ordinate.toFixed(2)}`;
-  }).join(" ");
+  // Halving before subtracting avoids overflow for finite near-MAX_VALUE endpoints.
+  const lowHalf = low / 2;
+  const halfRange = high / 2 - lowHalf;
+  const pieces: string[] = [];
+  let connected = false;
+  for (const [index, point] of points.entries()) {
+    if (!Number.isFinite(point.y)) { connected = false; continue; }
+    const x = 8 + (index / (points.length - 1)) * 284;
+    const ratio = halfRange > 0 ? Math.min(1, Math.max(0, (point.y / 2 - lowHalf) / halfRange)) : 0.5;
+    const ordinate = 82 - ratio * 70;
+    pieces.push(`${connected ? "L" : "M"}${x.toFixed(2)},${ordinate.toFixed(2)}`);
+    connected = true;
+  }
+  return pieces.join(" ") || null;
 }
 
 export function GalleryRecordedPreviewContent({ content }: { content: ArtifactContent }) {
@@ -46,12 +58,13 @@ export function GalleryRecordedPreviewContent({ content }: { content: ArtifactCo
     return (
       <div className="space-y-2">
         {path ? (
-          <svg viewBox="0 0 300 94" role="img" aria-label={`First ${Math.min(40, first.points.length)} recorded points from ${first.label}`} className="h-28 w-full rounded-lg border border-border/40 bg-background/50 p-1">
+          <svg viewBox="0 0 300 94" role="img" aria-label={`First ${Math.min(40, first.points.length)} saved chart positions from ${first.label}; missing points remain disconnected`} className="h-28 w-full rounded-lg border border-border/40 bg-background/50 p-1">
             <path d={path} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-300" />
           </svg>
         ) : <p className="text-xs text-muted-foreground">No recorded line to preview.</p>}
         <p className="text-xs text-muted-foreground">{summary}.</p>
-        {path && <p className="text-[11px] text-muted-foreground">First {Math.min(40, first.points.length)} points in the first recorded series — open the Artifact for full values and evidence.</p>}
+        {path && <p className="text-[11px] text-muted-foreground">First {Math.min(40, first.points.length)} saved positions in the first recorded line series; gaps are not joined. Open the Artifact for exact axes, values and evidence.</p>}
+        {!path && content.chartType.trim().toLowerCase() !== "line" && <p className="text-[11px] text-muted-foreground">This saved {content.chartType} chart is not a line chart. Open the Artifact to view the correct chart type rather than an invented line preview.</p>}
       </div>
     );
   }
