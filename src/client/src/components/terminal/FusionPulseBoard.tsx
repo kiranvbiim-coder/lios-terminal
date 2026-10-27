@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+import { normalizePulseSubject, pulseSubjectChoice, type PulseSubjectChoice, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
@@ -26,6 +27,10 @@ interface Props {
   favorites: ViewMode[];
   pulseChannel: "for_you" | "following" | "markets" | "research";
   pulseStatus: "loading" | "ready" | "unavailable";
+  pulsePreferences: PulseSubjectPreferences;
+  pulsePreferenceBusy: boolean;
+  pulsePreferenceError: string | null;
+  onPulseSubjectChange: (subjectKey: string, choice: PulseSubjectChoice) => void;
   briefHeadline?: string | null;
   onPulseChannelChange: (channel: "for_you" | "following" | "markets" | "research") => void;
 }
@@ -134,6 +139,10 @@ export default function FusionPulseBoard({
   favorites,
   pulseChannel,
   pulseStatus,
+  pulsePreferences,
+  pulsePreferenceBusy,
+  pulsePreferenceError,
+  onPulseSubjectChange,
   briefHeadline,
   onPulseChannelChange,
 }: Props) {
@@ -146,25 +155,11 @@ export default function FusionPulseBoard({
   const breadthTotal = latestBreadth ? latestBreadth.advances + latestBreadth.declines + latestBreadth.unchanged : 0;
   const advancePct = latestBreadth && breadthTotal > 0 ? (latestBreadth.advances / breadthTotal) * 100 : null;
   const maxMacroMove = Math.max(1, ...indicators.map((item) => Math.abs(item.changePercent ?? 0)));
-  const derivedPulseCards = useMemo<PulseStoryView[]>(() => [...gainers.slice(0, 3), ...losers.slice(0, 3)]
-    .filter((quote) => Number.isFinite(quote.changePercent))
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-    .map((quote) => {
-      const positive = quote.changePercent >= 0;
-      const magnitude = Math.abs(quote.changePercent);
-      return {
-        id: `market-move-${quote.symbol}`,
-        title: `${quote.symbol} ${positive ? "leads higher" : "under pressure"}`,
-        whatHappened: `${quote.name} moved ${positive ? "+" : "−"}${magnitude.toFixed(2)}% in the visible market basket.`,
-        whyItMattersToUser: positive ? "Momentum leader worth a closer look." : "Laggard worth checking for catalyst or risk.",
-        priority: magnitude >= 7 ? "critical" : magnitude >= 4 ? "important" : "fyi",
-        score: Math.min(99, Math.round(50 + magnitude * 5)),
-        symbol: quote.symbol,
-      };
-    }), [gainers, losers]);
-  const groupedPulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
-  const visiblePulseCards = pulseCards.length ? groupedPulseCards : derivedPulseCards;
-  const visiblePulseStatus = visiblePulseCards.length ? "ready" : pulseStatus;
+  const [managingSubjects, setManagingSubjects] = useState(false);
+  // Only server-authorized Wave D cards enter discovery. A filtered/empty
+  // Following feed must NEVER be replaced by a market quote as a fake story.
+  const visiblePulseCards = useMemo(() => clusterRecordedPulseStories(pulseCards, 24), [pulseCards]);
+  const visiblePulseStatus = pulseStatus;
 
   return (
     <section className="fusion-pulse-board" aria-label="LiOS market intelligence board">
@@ -194,10 +189,32 @@ export default function FusionPulseBoard({
               {channel.replace("_", " ").toUpperCase()}
             </button>
           ))}
-          {briefHeadline && <div className="ml-auto min-w-0 truncate font-ui text-[7px] text-amber-100/90">{briefHeadline}</div>}
+          <button type="button" onClick={() => setManagingSubjects(value => !value)}
+            aria-expanded={managingSubjects} aria-controls="pulse-subject-preferences"
+            className="ml-auto min-h-9 rounded-lg border border-border/60 px-3 py-2 font-ui text-xs text-foreground hover:border-amber-300/35 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+            Manage subjects · {pulsePreferences.followed.length} followed · {pulsePreferences.muted.length} muted
+          </button>
+          {briefHeadline && <div className="min-w-0 max-w-xs truncate font-ui text-xs text-muted-foreground">{briefHeadline}</div>}
         </div>
       </div>
 
+      {managingSubjects && <section id="pulse-subject-preferences" aria-label="Saved discovery subjects"
+        className="border-b border-border/60 px-4 py-3 font-ui text-sm">
+        <p className="text-muted-foreground">Following includes your saved subjects and existing finance watchlist. Muted topics disappear from discovery only, not alerts or monitoring.</p>
+        {(["followed", "muted"] as const).map(kind => <div key={kind} className="mt-3">
+          <div className="font-medium text-foreground">{kind === "followed" ? "Following" : "Muted"}</div>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {pulsePreferences[kind].length ? pulsePreferences[kind].map(subject => <button
+              type="button" key={subject} disabled={pulsePreferenceBusy || pulseStatus !== "ready"}
+              onClick={() => onPulseSubjectChange(subject, "clear")}
+              aria-label={`Clear ${kind === "muted" ? "mute" : "follow"} for ${subject}`}
+              className="min-h-10 rounded-full border border-border/60 px-3 py-2 text-foreground hover:border-amber-300/35 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-300/70">
+              {subject} · Clear
+            </button>) : <span className="text-muted-foreground">None</span>}
+          </div>
+        </div>)}
+      </section>}
+      {pulsePreferenceError && <p role="alert" className="px-4 py-2 font-ui text-sm text-amber-100">{pulsePreferenceError}</p>}
       <div className="p-3">
         <MarketStateHero breadth={breadth} sentiment={sentiment} gainers={gainers} losers={losers} onOpen={onOpen} />
 
@@ -284,10 +301,15 @@ export default function FusionPulseBoard({
                   featured={index === 0}
                   onAsk={(question) => onAskLios ? onAskLios(question) : onOpen("agent", "current", card.symbol ?? activeSymbol)}
                   onOpenSymbol={(symbol) => onOpen("quote", "current", symbol)}
+                  subjectChoice={pulseSubjectChoice(pulsePreferences, card.subjectKey ?? card.symbol)}
+                  preferenceBusy={pulsePreferenceBusy || pulseStatus !== "ready"}
+                  onSubjectChoice={onPulseSubjectChange}
                 />
               ))}
             </div>
-          ) : <FusionEmptyState>You are caught up. Material monitored changes will appear here.</FusionEmptyState>}
+          ) : <FusionEmptyState>{pulseChannel === "following"
+              ? "No currently recorded stories match your followed subjects. Follow a subject from another Pulse channel."
+              : "No current recorded stories match this channel. Market and macro panels remain available above."}</FusionEmptyState>}
         </FusionSection>
       </div>
     </section>
