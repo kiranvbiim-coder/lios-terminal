@@ -15,6 +15,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { verifyBetaManifest } = require("../betaReleaseManifest.cjs");
 
 const FIELDS = Object.freeze([
@@ -75,6 +76,37 @@ function checkNativeUX(value, target, expectedHash) {
     target + " actual test evidence paths have not been recorded.");
   return { target, checks: UX_CHECKS.length, evidenceEntries: value.evidencePaths.length };
 }
+/** Verify real captured files, not mere user-typed path claims. Non-symlink files
+ * must be inside the report's own directory and under the 30 MB evidence cap.
+ * Hashes are returned for review, never treated as cryptographic attestations. */
+function inspectNativeEvidence(uxFile, evidencePaths) {
+  const ownerDir = path.dirname(path.resolve(uxFile));
+  const evidence = [];
+  for (const ref of evidencePaths) {
+    const name = String(ref || "");
+    assert(name.length > 0 && name.length < 1000 && !path.isAbsolute(name),
+      "native evidence paths must be relative to the local UX report directory.");
+    const full = path.resolve(ownerDir, name);
+    assert(full.startsWith(ownerDir + path.sep), "native evidence path escapes owner report directory.");
+    const relativeParts = path.relative(ownerDir, full).split(path.sep);
+    let folder = ownerDir;
+    for (const part of relativeParts.slice(0, -1)) {
+      folder = path.join(folder, part);
+      const dir = fs.lstatSync(folder);
+      assert(dir.isDirectory() && !dir.isSymbolicLink(), "native evidence parent must be an actual local directory.");
+    }
+    const stat = fs.lstatSync(full);
+    assert(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size <= 30_000_000,
+      "native evidence file missing, empty, symlinked or oversized.");
+    const bytes = fs.readFileSync(full);
+    assert(bytes.length === stat.size, "native evidence changed during inspection.");
+    evidence.push({ path: name, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") });
+  }
+  assert(evidence.some(row => /\.(png|jpg|jpeg|webp)$/i.test(row.path)) &&
+    evidence.some(row => /\.(txt|log|json)$/i.test(row.path)),
+    "native acceptance requires an actual screenshot and an actual test log/report.");
+  return evidence;
+}
 function parseFlags(argv) {
   assert(argv.length === FIELDS.length * 2, "all eight evidence paths and source commit are required.");
   const out = {};
@@ -118,6 +150,8 @@ async function auditBetaRelease(args) {
     checkNativeUX(readJson(fields["mac-ux"]), "mac-arm64-dmg", mac.sha256),
     checkNativeUX(readJson(fields["win-ux"]), "win-x64-nsis", win.sha256),
   ];
+  ux[0].actualEvidence = inspectNativeEvidence(fields["mac-ux"], readJson(fields["mac-ux"]).evidencePaths);
+  ux[1].actualEvidence = inspectNativeEvidence(fields["win-ux"], readJson(fields["win-ux"]).evidencePaths);
   return {
     evidenceChecksPassed: true,
     releasePublished: false,
@@ -138,4 +172,4 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-module.exports = { checkNativeSelfTest, checkNativeUX, parseFlags, auditBetaRelease };
+module.exports = { checkNativeSelfTest, checkNativeUX, inspectNativeEvidence, parseFlags, auditBetaRelease };
