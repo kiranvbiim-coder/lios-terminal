@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Plus, Search, FolderKanban, MessageSquare, Clock3, LayoutDashboard, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, PanelLeftOpen, Trash2, Upload } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
