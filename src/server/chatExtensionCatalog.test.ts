@@ -44,6 +44,7 @@ test("P3 Chat extension catalog exposes only non-executable plugin metadata and 
       connection(5, 7, null, "mcp", "configured"),
     ],
     userId: 7, organizationId: null, managementAvailable: true,
+    isPluginLiveTrusted: () => true,
   });
   assert.equal(chatExtensionCatalogSchema.safeParse(catalog).success, true);
   assert.deepEqual(catalog.mcpConnections.map(row => row.id), [1, 5]);
@@ -70,10 +71,22 @@ test("P3 Chat catalog masks unsupported/untrusted plugin execution and clamps re
     plugins: Array.from({ length: 120 }, () => revoked),
     connections: Array.from({ length: 120 }, (_, id) => connection(id + 1, 5, null, "mcp", "invalid")),
     userId: 5, organizationId: null,
+    isPluginLiveTrusted: () => true,
   });
   assert.equal(catalog.plugins.length, 100);
   assert.equal(catalog.mcpConnections.length, 100);
   assert.ok(catalog.plugins.every(row => !row.trusted && !row.registered && !row.executableFromChat));
+});
+
+test("P3 stale install snapshot cannot claim trust after live publisher revocation", () => {
+  const catalog = chatExtensionCatalog({
+    plugins: [plugin], connections: [],
+    userId: 7, organizationId: null,
+    isPluginLiveTrusted: () => false,
+  });
+  assert.equal(catalog.plugins[0].trusted, false);
+  assert.equal(catalog.plugins[0].registered, false);
+  assert.equal(catalog.plugins[0].executableFromChat, false);
 });
 
 test("P3 Chat hides credential-like labels and does not allow non-owner management", () => {
@@ -89,6 +102,7 @@ test("P3 Chat hides credential-like labels and does not allow non-owner manageme
     }],
     userId: 5,
     organizationId: null,
+    isPluginLiveTrusted: () => true,
   });
   assert.equal(catalog.managementAvailable, false);
   assert.equal(catalog.plugins[0].name, "Installed plugin");
