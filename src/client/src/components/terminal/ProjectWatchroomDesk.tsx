@@ -5,6 +5,8 @@ import { useP9Notifications, useP9Runs, useP9Workflows, type P9RunRecord } from 
 import { projectWatchroomSummary, watchroomRecordedHistory } from "@/lib/phase2ProjectPresentation";
 import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 
+const WatchroomRecordedRunTimeline = React.lazy(() => import("./WatchroomRecordedRunTimeline"));
+
 const RUN_STATUS_TONE: Record<P9RunRecord["status"], string> = {
   succeeded: "border-emerald-300/70 bg-emerald-300/30",
   failed: "border-rose-300/70 bg-rose-300/30",
@@ -18,6 +20,8 @@ const RUN_STATUS_TONE: Record<P9RunRecord["status"], string> = {
  */
 export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
   const [managing, setManaging] = useState(false);
+  const [timelineWorkflowId, setTimelineWorkflowId] = useState<string | null>(null);
+  React.useEffect(() => { setTimelineWorkflowId(null); }, [projectId]);
   const workflows = useP9Workflows(managing ? null : projectId);
   const runs = useP9Runs(managing ? null : projectId);
   const notifications = useP9Notifications(managing ? null : projectId);
@@ -87,6 +91,17 @@ export function ProjectWatchroomDesk({ projectId }: { projectId: number }) {
                 <p className="font-ui text-[11px] leading-5 text-muted-foreground">
                   Recorded P9 outcomes only. A paused monitor, skipped run or missing observation is not a successful execution.
                 </p>
+                {recordedRuns.length > 1 && <>
+                  <button type="button" aria-expanded={timelineWorkflowId === room.workflow.id}
+                    onClick={() => setTimelineWorkflowId(current => current === room.workflow.id ? null : room.workflow.id)}
+                    className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-xs text-amber-100 focus-visible:outline-2 focus-visible:outline-amber-300">
+                    {timelineWorkflowId === room.workflow.id ? "Hide run timeline" : "Explore run timeline"}
+                  </button>
+                  {timelineWorkflowId === room.workflow.id && <React.Suspense fallback={<p role="status" className="font-ui text-xs text-muted-foreground">Loading recorded run timeline…</p>}>
+                    <WatchroomRecordedRunTimeline projectId={projectId}
+                      workflowId={room.workflow.id} runs={recordedRuns} />
+                  </React.Suspense>}
+                </>}
               </section>}
               <button type="button" onClick={() => setManaging(true)}
                 className="min-h-10 rounded-lg border border-border/65 px-3 py-2 font-ui text-sm text-foreground hover:border-amber-300/40 focus-visible:ring-2 focus-visible:ring-amber-300/70">Review workflow and history</button>
