@@ -29,6 +29,13 @@ export function verifyEvidenceFiles(input, baseDir) {
       errors.push({ id: row.id ?? "invalid", reason: "Evidence must be a regular non-symlinked file." });
       continue;
     }
+    // Never read unbounded, untrusted evidence blobs into source-gate memory.
+    // Original native release reports may retain larger binary attachments
+    // separately; this inventory references concise machine-readable reports.
+    if (lstatSync(full).size > 64 * 1024 * 1024) {
+      errors.push({ id: row.id ?? "invalid", reason: "Evidence report exceeds the 64 MiB manifest verification ceiling." });
+      continue;
+    }
     const actual = createHash("sha256").update(readFileSync(full)).digest("hex");
     if (actual !== row.artifactSha256) errors.push({ id: row.id ?? "invalid", reason: "Evidence bytes do not match supplied SHA-256." });
   }
