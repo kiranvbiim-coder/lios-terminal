@@ -27,7 +27,7 @@ test("Watchroom visual chronology is based on observed P9 runs, not scheduled in
   assert.match(adapter, /date: run\.startedAt/);
   assert.match(adapter, /run\.sourceRefs\.length/);
   assert.match(adapter, /run\.executionReceiptIds\.length/);
-  assert.match(adapter, /run\.status === "skipped"/);
+  assert.match(adapter, /"Running" : "Skipped"/);
   assert.match(adapter, /if \(history\.length < 2\) return null/);
   assert.doesNotMatch(adapter, /fetch\(|useQuery\(|createP9Workflow\(|setInterval\(|Math\.random\(/);
 });
