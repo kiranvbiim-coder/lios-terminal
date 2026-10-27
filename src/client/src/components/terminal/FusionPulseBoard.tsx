@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useId, useMemo, useState } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
