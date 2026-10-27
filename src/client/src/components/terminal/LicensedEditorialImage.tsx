@@ -8,7 +8,7 @@ import { eligibleEditorialMedia, type EditorialMedia } from "@shared/editorialMe
  * Failed/missing media collapses to the original text-first editorial layout.
  */
 export function LicensedEditorialImage({
-  media, sourceIds, className = "", sizes, asOf, fallback,
+  media, sourceIds, className = "", sizes, asOf, fallback, variant = "featured",
 }: {
   media: EditorialMedia | unknown;
   sourceIds: readonly string[];
@@ -16,6 +16,7 @@ export function LicensedEditorialImage({
   sizes?: string;
   asOf?: string;
   fallback?: ReactNode;
+  variant?: "featured" | "compact";
 }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const eligible = eligibleEditorialMedia(media, sourceIds, asOf ?? new Date().toISOString());
@@ -28,8 +29,8 @@ export function LicensedEditorialImage({
     <img src={asset} alt={eligible.alt} decoding="async" loading="lazy"
       referrerPolicy="no-referrer" sizes={sizes}
       onError={() => setFailedPath(asset)}
-      className="block h-40 w-full object-cover sm:h-48" />
-    <figcaption className="space-y-0.5 px-3 py-2 font-ui text-xs leading-5 text-muted-foreground">
+      className={variant === "compact" ? "block h-20 w-full object-cover sm:h-24" : "block h-40 w-full object-cover sm:h-48"} />
+    <figcaption className={variant === "compact" ? "space-y-0.5 px-2 py-1 font-ui text-[10px] leading-4 text-muted-foreground" : "space-y-0.5 px-3 py-2 font-ui text-xs leading-5 text-muted-foreground"}>
       {eligible.caption && <span className="block text-foreground/80">{eligible.caption}</span>}
       <span className="block">Image: {eligible.attribution} · {eligible.licenseName}</span>
     </figcaption>
