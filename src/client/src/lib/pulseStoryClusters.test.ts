@@ -88,7 +88,7 @@ test("bounded projection retains leading priority, carries omissions, does not m
   assert.equal(grouped[0].evidence?.length, 60);
   assert.equal(grouped[0].omittedEvidenceCount, 9);
   assert.equal(originals[0].evidence?.length, 1);
-  assert.equal(originals[1].evidence?.length, 68);
+  assert.equal(originals[1].evidence?.length, 69);
   assert.equal(clusterRecordedPulseStories(Array.from({ length: 100 }, (_, i) => story("id-" + i, {
     evidence: [], subjectKey: undefined, symbol: undefined,
   })), 200).length, 48);
