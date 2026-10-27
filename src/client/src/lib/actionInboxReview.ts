@@ -143,3 +143,29 @@ export function buildActionInboxChatDraft(item: ActionInboxItem, asOf: string): 
     JSON.stringify(payload, null, 2),
   ].join("\n");
 }
+
+/** User-clicked review requires a fresh authorized re-read of the SAME exact alert.
+ * A new ID/status/priority/evidence/source is a changed proposal, never an
+ * invisible substitution. The old and new server responses are never cached.
+ */
+export function confirmActionInboxHandoff(
+  shown: ActionInboxReview,
+  updated: ActionInboxReview,
+  alertId: string,
+  nowMs: number,
+): ActionInboxItem | null {
+  if (shown.status !== "ready" || updated.status !== "ready"
+    || assessActionInboxSnapshotFreshness(shown.asOf, nowMs) !== "current"
+    || assessActionInboxSnapshotFreshness(updated.asOf, nowMs) !== "current") return null;
+  const original = shown.items.find(item => item.id === alertId);
+  const verified = updated.items.find(item => item.id === alertId);
+  if (!original || !verified) return null;
+  const same = (a: ActionInboxItem, b: ActionInboxItem) =>
+    a.sourceCardId === b.sourceCardId
+    && a.title === b.title && a.reason === b.reason
+    && a.priority === b.priority && a.status === b.status
+    && a.createdAt === b.createdAt
+    && JSON.stringify(a.suggestedActions) === JSON.stringify(b.suggestedActions)
+    && JSON.stringify(a.evidence) === JSON.stringify(b.evidence);
+  return same(original, verified) ? verified : null;
+}
