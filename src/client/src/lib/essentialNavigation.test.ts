@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
+const navigation = read("../components/terminal/AuthenticatedNavigation.tsx");
+const shell = read("../components/terminal/ProjectExperienceShell.tsx");
+const styles = read("../lios-product-experience.css");
+
+test("default navigation has readable names for primary destinations", () => {
+  for (const [id, label] of [
+    ["conversation", "Chat"],
+    ["projects", "Projects"],
+    ["chats", "History"],
+    ["library", "Artifacts"],
+    ["automations", "Automations"],
+    ["plugins", "Plugins"],
+  ]) {
+    assert.ok(navigation.includes('["' + id + '", "' + label + '"'), id + " must have a readable visible name");
+  }
+  for (const action of ["New chat", "Search", "Connections", "Settings"]) {
+    assert.ok(navigation.includes(action), action + " must remain discoverable");
+  }
+  assert.match(navigation, /aria-label="Main navigation"/);
+  assert.match(navigation, /aria-current=\{\(props\.activeSection \?\? props\.section\) === id \? "page"/);
+  assert.doesNotMatch(navigation, /lios-shortcut.*⌘ K/);
+});
+
+test("full navigation is default; compact icons are intentional and accessible", () => {
+  assert.match(navigation, /useState\(false\)/);
+  assert.match(navigation, /data-sidebar-collapsed=\{collapsed\}/);
+  assert.match(navigation, /className="lios-reference-navigation-rail" aria-label="Compact navigation" hidden=\{!collapsed\}/);
+  assert.match(navigation, /className="lios-reference-navigation-projects" hidden=\{collapsed\}/);
+  assert.match(navigation, /aria-label="Expand navigation"/);
+  assert.match(navigation, /aria-label="Collapse navigation"/);
+  assert.match(styles, /\.lios-reference-navigation-rail\[hidden\][\s\S]*display:\s*none\s*!important/);
+  assert.match(styles, /data-sidebar-collapsed="false"[\s\S]*width:\s*260px\s*!important/);
+  assert.match(styles, /data-sidebar-collapsed="true"[\s\S]*\.lios-reference-navigation-rail[\s\S]*width:\s*60px/);
+  assert.match(navigation, /aria-label=\{label\} aria-current=\{\(props\.activeSection \?\? props\.section\) === id/);
+});
+
+test("mobile drawer reuses named navigation, closes on selection, and provides account controls", () => {
+  assert.match(navigation, /<Sheet open=\{open\} onOpenChange=\{setOpen\}>/);
+  assert.match(navigation, /<SheetTitle className="sr-only">LiOS navigation<\/SheetTitle>/);
+  assert.match(navigation, /\{content\(true\)\}/);
+  assert.match(navigation, /const act = \(action: \(\) => void\) => \{ action\(\); setOpen\(false\); \}/);
+  assert.match(navigation, /onClick=\{\(\) => act\(\(\) => props\.onSection\(id\)\)\}/);
+  assert.match(navigation, /onClick=\{\(\) => act\(props\.onConnectors\)\}/);
+  assert.match(navigation, /onClick=\{\(\) => act\(props\.onSettings\)\}/);
+  assert.match(navigation, /onSelect=\{props\.onLogout\}/);
+  assert.match(styles, /@media \(max-width:\s*767px\)[\s\S]*\.lios-authenticated-navigation\s*\{\s*display:\s*none\s*!important/);
+});
+
+test("navigation actions preserve the right section and avoid losing current work", () => {
+  assert.match(shell, /activeSection=\{section === "conversation" && entrySurface === "project-home" \? "projects" : section\}/);
+  assert.match(shell, /onSearch=\{requestWorkSearch\}/);
+  assert.match(shell, /if \(next === "conversation"\) setProjectHomeRequested\(false\)/);
+  assert.match(shell, /next !== "conversation" && \(busy \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /next !== "conversation" && artifactDraftDirtyRef\.current/);
+  assert.match(shell, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(shell, /aria-current=\{selection\.projectId === project\.id && chatMode === "project" \? "page" : undefined\}/);
+  assert.match(shell, /projects: "Projects", chats: "History", library: "Artifacts"/);
+});
