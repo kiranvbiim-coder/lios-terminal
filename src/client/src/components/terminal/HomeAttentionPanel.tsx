@@ -24,7 +24,7 @@ interface HomeAttention {
 }
 
 /** One Home view over the existing Wave D Pulse and Action Inbox, not another feed or scheduler. */
-export function HomeAttentionPanel({ onAsk }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean> }) {
+export function HomeAttentionPanel({ onAsk, ownerScope = "active-account" }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean>; ownerScope?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <details
@@ -36,12 +36,12 @@ export function HomeAttentionPanel({ onAsk }: { onAsk?: (card: IntelligenceCard)
         <Radar aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" />
         Home intelligence
       </summary>
-      {open && <HomeAttentionContents onAsk={onAsk} />}
+      {open && <HomeAttentionContents onAsk={onAsk} ownerScope={ownerScope} />}
     </details>
   );
 }
 
-function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean> }) {
+function HomeAttentionContents({ onAsk, ownerScope }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean>; ownerScope: string }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<AttentionFilter>("all");
   const [search, setSearch] = useState("");
@@ -51,9 +51,11 @@ function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => 
   const [askError, setAskError] = useState<string | null>(null);
 
   const query = useQuery<HomeAttention>({
-    queryKey: ["/api/wave-d/pulse"],
+    queryKey: ["/api/wave-d/pulse", "Home", ownerScope],
     queryFn: async () => (await apiRequest("GET", "/api/wave-d/pulse")).json(),
-    staleTime: 30_000,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
   });
   const mutation = useMutation({
