@@ -162,6 +162,8 @@ test("Phase 2 Spotlight only searches local saved pins before graph truncation",
 test("Phase 2 narrow and zoomed panes are readable, undraggable and never allocate decorative SVG", () => {
   assert.match(canvas, /const \[contentWidth, setContentWidth\] = useState<number \| null>\(null\)/);
   assert.match(canvas, /new ResizeObserver\(measure\)/);
+  assert.match(canvas, /bucketSpatialPaneWidth\(container\.getBoundingClientRect\(\)\.width\)/);
+  assert.match(presentationPolicy, /export function bucketSpatialPaneWidth\(width: number\)/);
   assert.match(canvas, /return \(\) => observer\.disconnect\(\)/);
   assert.match(canvas, /resolveSpatialPresentation\(mode, contentWidth\)/);
   assert.match(canvas, /if \(presentation\.stacked\) return/);
