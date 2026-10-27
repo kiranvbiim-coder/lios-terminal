@@ -27,7 +27,14 @@ function ui(target) {
       artifactVersionReopened: true, offlineAndReconnect: true,
       keyboardOnly: true, screenReader: true, zoom200: true,
       reducedMotion: true, nativeSecretCustody: true,
-    }, evidencePaths: ["screenshots/desktop.png", "logs/acceptance.txt"],
+      pulseFollowMutePersistsAfterRestart: true, sourceSearchToChatContinuity: true,
+      projectGraphKeyboardPanZoom: true, offlineProjectGeography: true,
+      evidenceAndContradictionReview: true, governedChatVisualsNoFakeData: true,
+      reviewedModelResultSavedToP4: true, recordedConsequencePathsNoAction: true,
+      briefingP4ChartAndTableEditable: true, pptxChartAndTableRoundtrip: true,
+      sourceRevocationBlocksBriefingSave: true, projectSwitchKeepsSourcesIsolated: true,
+      narrow390NoClippedControls: true,
+    }, evidencePaths: ["screenshots/discovery.png", "screenshots/investigation.png", "screenshots/briefing.png", "screenshots/narrow.png", "logs/acceptance.txt"],
     reviewer: "Owner native QA",
   };
 }
@@ -55,7 +62,7 @@ test("beta gate rejects absence of OS protected secret custody, persisted work o
 });
 
 test("beta UX requires exact signed manifest installer and every native acceptance control", () => {
-  assert.equal(checkNativeUX(ui("mac-arm64-dmg"), "mac-arm64-dmg", checksum).checks, 10);
+  assert.equal(checkNativeUX(ui("mac-arm64-dmg"), "mac-arm64-dmg", checksum).checks, 23);
   for (const bad of [
     { assetSha256: "b".repeat(64) },
     { osWarningDisclosure: false },
@@ -87,16 +94,23 @@ test("beta evidence checker reads and hashes actual screenshot and test log, nev
   const log = path.join(dir, "test.log");
   fs.writeFileSync(image, Buffer.from("89504e470d0a1a0a" + "01".repeat(90), "hex"));
   fs.writeFileSync(log, "Keyboard-only Project reopening was exercised.");
-  const found = inspectNativeEvidence(report, ["screen.png", "test.log"]);
-  assert.equal(found.length, 2);
+  for (const name of ["investigation.png", "briefing.png", "narrow.png"])
+    fs.writeFileSync(path.join(dir, name), Buffer.concat([fs.readFileSync(image), Buffer.from(name)]));
+  const valid = ["screen.png", "investigation.png", "briefing.png", "narrow.png", "test.log"];
+  const found = inspectNativeEvidence(report, valid);
+  assert.equal(found.length, 5);
   assert.match(found[0].sha256, /^[a-f0-9]{64}$/);
   assert.equal(found[0].bytes, fs.statSync(image).size);
-  assert.throws(() => inspectNativeEvidence(report, ["missing.png", "test.log"]), /ENOENT/);
-  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "missing.log"]), /ENOENT/);
+  assert.throws(() => inspectNativeEvidence(report, [...valid, "missing.png"]), /ENOENT/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "investigation.png", "briefing.png", "narrow.png", "missing.log"]), /ENOENT/);
   fs.writeFileSync(path.join(dir, "spoof.png"), "not a screenshot");
-  assert.throws(() => inspectNativeEvidence(report, ["spoof.png", "test.log"]), /BLOCKED.*PNG/);
+  assert.throws(() => inspectNativeEvidence(report, ["spoof.png", ...valid.slice(1)]), /BLOCKED.*PNG/);
 
   assert.throws(() => inspectNativeEvidence(report, ["screen.png"]), /BLOCKED/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "test.log"]), /BLOCKED/);
+  assert.throws(() => inspectNativeEvidence(report, ["screen.png", "screen.png", "screen.png", "screen.png", "test.log"]), /BLOCKED/);
+  assert.throws(() => checkNativeUX({ ...ui("mac-arm64-dmg"), evidencePaths: ["same.png", "same.png", "x.png", "y.png", "run.log"] }, "mac-arm64-dmg", checksum), /BLOCKED/);
+  assert.throws(() => checkNativeUX({ ...ui("mac-arm64-dmg"), checks: { ...ui("mac-arm64-dmg").checks, pptxChartAndTableRoundtrip: false } }, "mac-arm64-dmg", checksum), /BLOCKED/);
   assert.throws(() => inspectNativeEvidence(report, ["screen.png", "../outside.log"]), /BLOCKED/);
   assert.throws(() => inspectNativeEvidence(report, ["/tmp/screen.png", "test.log"]), /BLOCKED/);
   if (process.platform !== "win32") {

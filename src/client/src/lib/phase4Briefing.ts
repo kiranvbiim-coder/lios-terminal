@@ -34,6 +34,8 @@ export function composeProjectBriefing(
   const ids = new Set(selection.insightIds.slice(0, 16));
   const items = lens.insights.filter(insight => ids.has(insight.id)).slice(0, 16);
   if ((!items.length && !visuals.length) || !restricted(selection.title, 160)) return null;
+  // Never silently drop source identifiers from the user-selected finding.
+  if (items.some(item => item.sourceRefs.length > 50)) return null;
   if (visuals.length > 3 || new Set(visuals.map(v => v.artifactId)).size !== visuals.length ||
       visuals.some(v => v.projectId !== selection.projectId || !v.sourceRefs.length ||
         !/^[a-f0-9]{64}$/.test(v.contentHash) || v.version < 1)) return null;
@@ -76,6 +78,7 @@ export function composeProjectBriefing(
         (event.sourceRefs.some(ref => selectedSources.has(ref)) ||
           event.entityRefs.some(ref => selectedEntities.has(ref))))
       .sort((a,b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 8);
+    if (sorted.some(event => event.sourceRefs.length > 20)) return null;
     if (sorted.length) {
       const ids = [add("heading", "Recorded Project timeline")];
       sorted.forEach(event => {
@@ -112,7 +115,7 @@ export function composeProjectBriefing(
   const closingIds = [
     add("heading", "Verification and next steps"),
     add("paragraph", "Review original permitted Project sources, conflicting interpretations and data freshness. Only subsequently verified findings should become conclusions or external claims."),
-    add("paragraph", unreferenced ? unreferenced + " selected insight(s) have no attached source IDs." : "All selected insights carry source identifiers. IDs alone do not establish content rights or truth."),
+    add("paragraph", unreferenced ? unreferenced + " selected insight(s) have no attached source IDs." : items.length ? "All selected insights carry source identifiers. IDs alone do not establish content rights or truth." : "Selected visuals carry recorded source identifiers. IDs alone do not establish content rights or truth."),
   ];
   sections.push({ id: "briefing-section-verification", title: "Verification", blockIds: closingIds });
 

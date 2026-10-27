@@ -4,6 +4,7 @@ import { BookOpen, FileText, Save } from "lucide-react";
 import { createArtifact, useInvalidateArtifacts, useProjectArtifacts, type ArtifactDetail } from "@/lib/useArtifacts";
 import { useProjectInsightLens, useProjectIntelligence } from "@/lib/useProjectIntelligence";
 import { composeProjectBriefing, type BriefingLayout } from "@/lib/phase4Briefing";
+import { stableSerialize } from "@/lib/analyticalCore";
 import { captureBriefingVisual, verifyCurrentPinnedVisual, eligibleBriefingVisuals, assertSavedBriefingArtifact, type PinnedBriefingVisual } from "@/lib/phase4BriefingVisuals";
 
 async function readP4Visual(projectId: number, artifactId: string): Promise<PinnedBriefingVisual> {
@@ -36,6 +37,8 @@ export function ProjectBriefingStudio({ projectId, onOpenArtifact }: {
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ id: string; title: string; version: number } | null>(null);
   const currentProject = useRef(projectId);
+  // Update synchronously during Project switches, before old async P4 reads resolve.
+  currentProject.current = projectId;
   const saveInFlight = useRef(false);
 
   useEffect(() => {
@@ -101,7 +104,7 @@ export function ProjectBriefingStudio({ projectId, onOpenArtifact }: {
       if (currentProject.current !== expectedProject) return;
       const reviewed = composeProjectBriefing({ projectId: expectedProject, title, layout, insightIds: selected, editorNote },
         actualLens, actualContext?.timeline ?? [], checked);
-      if (!reviewed || JSON.stringify(reviewed.content) !== JSON.stringify(draft.content))
+      if (!reviewed || stableSerialize(reviewed.content) !== stableSerialize(draft.content))
         throw new Error("The briefing changed since preview. Review the current evidence before saving.");
       const result = await createArtifact(expectedProject, {
         title: title.trim().slice(0, 160),

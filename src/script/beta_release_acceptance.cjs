@@ -26,6 +26,14 @@ const UX_CHECKS = Object.freeze([
   "signedIn", "sourceAccess", "briefingSavedAndReopened",
   "artifactVersionReopened", "offlineAndReconnect", "keyboardOnly",
   "screenReader", "zoom200", "reducedMotion", "nativeSecretCustody",
+  // Website assimilation A–D native journeys. Source CI can NEVER set these.
+  "pulseFollowMutePersistsAfterRestart", "sourceSearchToChatContinuity",
+  "projectGraphKeyboardPanZoom", "offlineProjectGeography",
+  "evidenceAndContradictionReview", "governedChatVisualsNoFakeData",
+  "reviewedModelResultSavedToP4", "recordedConsequencePathsNoAction",
+  "briefingP4ChartAndTableEditable", "pptxChartAndTableRoundtrip",
+  "sourceRevocationBlocksBriefingSave", "projectSwitchKeepsSourcesIsolated",
+  "narrow390NoClippedControls",
 ]);
 function assert(condition, message) {
   if (!condition) throw new Error("LiOS beta gate BLOCKED: " + message);
@@ -70,10 +78,12 @@ function checkNativeUX(value, target, expectedHash) {
     value.reviewer.length <= 200, target + " reviewer identity missing.");
   keysExactly(value.checks, UX_CHECKS, target + " UX checks");
   for (const check of UX_CHECKS) assert(value.checks[check] === true, target + " acceptance is unverified: " + check);
-  assert(Array.isArray(value.evidencePaths) && value.evidencePaths.length >= 2 &&
+  assert(Array.isArray(value.evidencePaths) && value.evidencePaths.length >= 5 &&
     value.evidencePaths.length <= 40 &&
     value.evidencePaths.every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 1000),
     target + " actual test evidence paths have not been recorded.");
+  assert(new Set(value.evidencePaths).size === value.evidencePaths.length,
+    target + " repeated evidence filenames cannot prove distinct native captures.");
   return { target, checks: UX_CHECKS.length, evidenceEntries: value.evidencePaths.length };
 }
 /** Verify real captured files, not mere user-typed path claims. Non-symlink files
@@ -112,6 +122,10 @@ function inspectNativeEvidence(uxFile, evidencePaths) {
   assert(evidence.some(row => /\.(png|jpg|jpeg|webp)$/i.test(row.path)) &&
     evidence.some(row => /\.(txt|log|json)$/i.test(row.path)),
     "native acceptance requires an actual screenshot and an actual test log/report.");
+  const images = evidence.filter(row => /\.(png|jpg|jpeg|webp)$/i.test(row.path));
+  assert(images.length >= 4 && new Set(images.map(row => row.sha256)).size >= 4,
+    "D2 native acceptance needs four different screenshot files for discovery, investigation, briefing/Office and narrow viewport.");
+  assert(evidence.some(row => /\.(txt|log|json)$/i.test(row.path)), "D2 native acceptance needs a real session log.");
   return evidence;
 }
 function parseFlags(argv) {

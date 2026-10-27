@@ -4,6 +4,7 @@ import {
 } from "@shared/artifactContracts";
 import { readRecordedDocumentTable } from "@shared/richArtifactDocument";
 import { prepareArtifactChart } from "./artifactChartProjection";
+import { stableSerialize } from "./analyticalCore";
 import type { ArtifactDetail, ProjectArtifactRecord } from "./useArtifacts";
 
 type P4VisualContent = Extract<ArtifactContent, { kind: "chart" | "table" }>;
@@ -68,7 +69,7 @@ export function verifyCurrentPinnedVisual(pinned: PinnedBriefingVisual, reread: 
   if (now.artifactId !== pinned.artifactId || now.version !== pinned.version || now.contentHash !== pinned.contentHash ||
       now.title !== pinned.title ||
       JSON.stringify(now.sourceRefs) !== JSON.stringify(pinned.sourceRefs) ||
-      JSON.stringify(now.content) !== JSON.stringify(pinned.content)) {
+      stableSerialize(now.content) !== stableSerialize(pinned.content)) {
     throw new Error("The selected visual or its sources changed; review and select its current version again.");
   }
   return now;
@@ -83,7 +84,7 @@ export function assertSavedBriefingArtifact(detail: ArtifactDetail, projectId: n
       !Number.isSafeInteger(version.version) || version.version < 1 ||
       version.version !== artifact.headVersion || !SHA256.test(version.contentHash) ||
       !reportArtifactContentSchema.safeParse(version.content).success ||
-      JSON.stringify(version.content) !== JSON.stringify(expected) ||
+      stableSerialize(version.content) !== stableSerialize(expected) ||
       requiredRefs.some(ref => !version.dependencyRefs.includes(ref)) ||
       sourceRefs.some(ref => !version.sourceRefs.includes(ref))) {
     throw new Error("The P4 response did not confirm the exact briefing and dependencies. Check Library before attempting another save.");
