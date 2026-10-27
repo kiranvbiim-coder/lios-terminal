@@ -1,4 +1,4 @@
-import type { SpatialLayoutMode, SpatialPoint } from "./spatialResearchModel";
+import type { SpatialLayoutMode } from "./spatialResearchModel";
 import type { ResearchTrayItemKind } from "./terminalResearchTray";
 
 /**
@@ -42,9 +42,3 @@ export function reconcileSpatialCanvasReturnState(
   };
 }
 
-/** User-initiated tab opens remain the same canonical Workbench operation. */
-export interface SpatialStudioOpenTarget { view: string; symbol?: string; }
-export function isExactSpatialOpenTarget(target: SpatialStudioOpenTarget): boolean {
-  return typeof target.view === "string" && target.view.length > 0
-    && (target.symbol === undefined || typeof target.symbol === "string");
-}
