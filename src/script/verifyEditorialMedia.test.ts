@@ -85,4 +85,6 @@ test("package rejects media past their rights expiry, even if bytes remain uncha
   writeFileSync(join(f.folder,f.fileName),f.png);
   f.save([{...f.media,expiresAt:"2026-10-27T07:59:59Z"}]);
   assert.throws(() => verifyBundledEditorialAssets(f.ledgerPath,f.folder,timestamp),/Unapproved/);
+  f.save([{...f.media,expiresAt:"2026-11-30T00:00:00Z"}]);
+  assert.throws(() => verifyBundledEditorialAssets(f.ledgerPath,f.folder,timestamp),/Time-limited/);
 });
