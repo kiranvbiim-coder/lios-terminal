@@ -43,25 +43,31 @@ export function presentCrossDomainGraph(
     selectedId?: string | null;
     neighborsOnly?: boolean;
     bridgesOnly?: boolean;
+    relation?: CrossDomainEdge["relation"];
     maxNodes?: number;
   } = {},
 ): GraphExplorerPresentation {
+  const relationEdges = settings.relation ? graph.edges.filter(edge => edge.relation === settings.relation) : graph.edges;
+  const participating = settings.relation
+    ? new Set(relationEdges.flatMap(edge => [edge.sourceId, edge.targetId]))
+    : null;
   const known = new Set(graph.nodes.map(node => node.objectId));
   const query = (settings.query ?? "").trim().toLocaleLowerCase();
   const matchIds = new Set(graph.nodes.filter(node =>
-    !query || [node.label, node.symbol ?? "", node.domain].some(value => value.toLocaleLowerCase().includes(query)),
+    (!participating || participating.has(node.objectId)) &&
+    (!query || [node.label, node.symbol ?? "", node.domain].some(value => value.toLocaleLowerCase().includes(query))),
   ).map(node => node.objectId));
   const eligible = new Set(matchIds);
   if (query) {
-    for (const edge of graph.edges) {
+    for (const edge of relationEdges) {
       if (matchIds.has(edge.sourceId) && known.has(edge.targetId)) eligible.add(edge.targetId);
       if (matchIds.has(edge.targetId) && known.has(edge.sourceId)) eligible.add(edge.sourceId);
     }
   }
-  const selectedId = settings.selectedId && known.has(settings.selectedId) ? settings.selectedId : null;
+  const selectedId = settings.selectedId && known.has(settings.selectedId) && (!participating || participating.has(settings.selectedId)) ? settings.selectedId : null;
   const selectedConnected = new Set<string>(selectedId ? [selectedId] : []);
   if (selectedId) {
-    for (const edge of graph.edges) {
+    for (const edge of relationEdges) {
       if (edge.sourceId === selectedId && known.has(edge.targetId)) selectedConnected.add(edge.targetId);
       if (edge.targetId === selectedId && known.has(edge.sourceId)) selectedConnected.add(edge.sourceId);
     }
@@ -77,7 +83,7 @@ export function presentCrossDomainGraph(
   const nodes = ordered.slice(0, limit);
   const shown = new Set(nodes.map(node => node.objectId));
   const domains = new Map(nodes.map(node => [node.objectId, node.domain]));
-  const edges = graph.edges.filter(edge => shown.has(edge.sourceId) && shown.has(edge.targetId)
+  const edges = relationEdges.filter(edge => shown.has(edge.sourceId) && shown.has(edge.targetId)
     && (!settings.bridgesOnly || domains.get(edge.sourceId) !== domains.get(edge.targetId)));
   const connectedIds = new Set<string>(selectedId ? [selectedId] : []);
   for (const edge of edges) {
