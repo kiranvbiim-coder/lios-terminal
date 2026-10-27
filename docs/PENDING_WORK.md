@@ -8,6 +8,10 @@
 
 ### Consolidated product completion queue — 2026-10-27
 
+**Native and release follow-through:** optimized image passed actual canonical broker navigation/extraction and post-abort refusal without safety changes. Package gate passed after exact archive staging; Mac beta DMG/ZIP built. Packaged native self-test verified OS-protected secret round-trip, workspace reopen, bundled Python statistics route and resource immutability; actual packaged synthetic-owner sign-in and Connections drawer draft/focus preservation passed. DMG2,752,494,208bytes and ZIP2,766,174,624bytes exceed per-asset limits. Owner selected authenticated split downloads; full DMG round-trip preserved SHA256 `a9f0babda94f32803c6984c75090fbad97605d87fc55701f1028b8f4419b3ec3`, with ephemeral smoke key only. Windows/native journey/upgrade/accessibility/publication acceptance remains open.
+
+**Hosted failure disposition:** run40466297229 failed on source-string assertions in phase1PremiumIntegration/quietProfessionalUi (forbidding restored inline progress), plus Windows source-format matching in phase1SavedWorkNavigation. Removed these implementation-only suites instead of repinning or reverting product fixes; command reference updated. Retained actual receipt/progress/return-identity tests passed21/21 and manifest references passed3/3. No broad local suite rerun and no hosted pass claimed.
+
 The former per-donor todo list is consolidated below; the full WS04–WS65 scope and exact acceptance requirements remain in the existing WS matrix. Source integration, exercised source UI and installed acceptance remain separate.
 
 1. **Done — repository reconciliation:** current protected main includes PR224 (`2944fd1`) and PR216 (`47cc7a8f`). Use cumulative PR253 as the integration candidate; PR254/255 are correction donors, not additional parallel product architectures.
