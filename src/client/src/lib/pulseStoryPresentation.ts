@@ -13,6 +13,9 @@ export function safePulseSourceUrl(raw: string | undefined): string | null {
   try {
     const url = new URL(raw);
     if ((url.protocol !== "https:" && url.protocol !== "http:") || !url.hostname || url.username || url.password) return null;
+    // Credential-bearing links must never be opened, nor forwarded to BYOAI.
+    const secretQueryFields = /^(?:api[_-]?key|access[_-]?token|token|password|passwd|secret|client[_-]?secret|auth|authorization|signature|sig|session[_-]?id)$/i;
+    if ([...url.searchParams.keys()].some(name => secretQueryFields.test(name))) return null;
     // We only navigate to source pages. A renderer may never turn a source URL into image rights.
     return url.href;
   } catch {
