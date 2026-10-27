@@ -26,7 +26,9 @@ test("Phase 1 Pulse preserves channel selection and truthful source states", () 
 
   assert.match(shell, /pulseChannel=\{pulseChannel\}/);
   assert.match(shell, /pulseStatus=\{waveDStatus\}/);
-  assert.match(shell, /onPulseChannelChange=\{setPulseChannel\}/);
+  // Switching the discovery channel must also invalidate the previous user-owned subject filter.
+  assert.match(shell, /onPulseChannelChange=\\{\\(next\\) => \\{ setPulseChannel\\(next\\); setActiveSavedSubject\\(null\\); \\}\\}/);
+  assert.match(shell, /onSelectSavedSubject=\\{setActiveSavedSubject\\}/);
   const tabs = read("../components/terminal/PulseDiscoveryTabs.tsx");
   assert.ok(pulse.includes("<PulseDiscoveryTabs channel={pulseChannel} onChange={onPulseChannelChange}"));
   for (const channel of ["for_you", "following", "markets", "research"]) {
