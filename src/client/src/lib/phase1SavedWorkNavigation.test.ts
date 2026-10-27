@@ -1,0 +1,54 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const shell = readFileSync(new URL("../components/terminal/ProjectExperienceShell.tsx", import.meta.url), "utf8");
+const search = readFileSync(new URL("../components/terminal/WorkSearchDialog.tsx", import.meta.url), "utf8");
+const bookmark = readFileSync(new URL("./conversationArtifactView.ts", import.meta.url), "utf8");
+
+test("saved-work search is accessible from both navigation and the Artifact directory", () => {
+  assert.match(shell, /onSearch=\{requestWorkSearch\}/);
+  assert.match(shell, /section === "library" && <button type="button" className="lios-section-action ml-3" onClick=\{requestWorkSearch\}>Search saved work<\/button>/);
+  assert.match(shell, /Saved Artifacts from regular Chats are available through Search/);
+  assert.match(shell, /section === "library" \? <ProjectArtifactsPanel/);
+  assert.match(search, /placeholder="Search chats, Projects, files and Artifacts"/);
+});
+
+test("Quick Artifact search validates the authoritative owning Chat and Artifact before navigation", () => {
+  assert.match(shell, /if \(result\.kind === "artifact" && result\.projectId === null && result\.chatId && result\.artifactId\)/);
+  assert.match(shell, /matchesSavedSearchChat\(result, chat\)/);
+  assert.match(shell, /detail\.artifact\.id !== result\.artifactId \|\| detail\.artifact\.projectId !== null \|\| detail\.artifact\.owningChatId !== chat\.id/);
+  assert.match(shell, /selection\.chatId !== chat\.id && \(!\(await confirmConversationSwitch\(true\)\) \|\| !discardConversationDraft\(before\)\)/);
+});
+
+test("search selection preserves destination version without writing through source Chat", () => {
+  const section = shell.match(/if \(selection\.chatId === chat\.id && chatMode === "quick"\) \{([\s\S]*?)\n      \} else \{([\s\S]*?)\n      \}\n      return await openChat\(chat, true\);/);
+  assert.ok(section, "destination-scoped Quick Chat search branch exists");
+  assert.match(section[1], /setConversationArtifactRef\(result\.artifactId\)/);
+  assert.match(section[1], /setArtifactViewVersion\(detail\.version\.version\)/);
+  assert.doesNotMatch(section[2], /setArtifactViewVersion/);
+  assert.match(section[2], /rememberConversationArtifactView\(chat\.ownerUserId, null, chat\.id, \{/);
+  assert.match(section[2], /revision: detail\.version\.version/);
+  assert.match(bookmark, /conversationArtifactViewKey\(ownerId, projectId, chatId\)/);
+});
+
+test("History includes both Project and Quick chats and opens through normal switch review", () => {
+  assert.match(shell, /const chats = \[\.\.\.\(allChatsQuery\.data \?\? \[\]\), \.\.\.quickChats\]/);
+  assert.match(shell, /onClick=\{\(\) => openChat\(chat\)\}/);
+  assert.match(shell, /const openChat = async \(chat: ProjectChat, confirmed = false\) => \{/);
+  assert.match(shell, /selection\.chatId !== chat\.id && !\(await confirmConversationSwitch\(\)\)/);
+  assert.match(shell, /setProjectHomeRequested\(false\)/);
+});
+
+test("clearing Project filter in Artifacts or Automations returns to a valid Quick Chat posture", () => {
+  assert.match(shell, /<option value="">Choose a Project<\/option>/);
+  assert.match(shell, /selection\.setChatId\(null\); selection\.setProjectId\(nextId\); setChatMode\(nextId === null \? "quick" : "project"\)/);
+  assert.match(shell, /Choose a Project to manage its automations/);
+});
+
+test("a canceled or rejected search navigation remains open and preserves the draft", () => {
+  assert.match(search, /const opened = await onSelect\(result\)/);
+  assert.match(search, /if \(shouldCloseSearchAfterNavigation\(opened\)\) onClose\(\)/);
+  assert.match(search, /else inputRef\.current\?\.focus\(\)/);
+  assert.match(shell, /if \(selection\.chatId !== chat\.id && \(!\(await confirmConversationSwitch\(true\)\) \|\| !discardConversationDraft\(before\)\)\) return false/);
+});
