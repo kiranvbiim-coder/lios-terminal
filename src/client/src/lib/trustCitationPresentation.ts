@@ -49,6 +49,7 @@ export function presentTrustCitations(evidence: readonly EvidenceObservation[]):
       ...(item.access ? ["Access: " + item.access.state.replaceAll("_", " ")] : []),
       ...(item.access?.servedTier ? ["Served tier: " + item.access.servedTier.replaceAll("_", " ")] : []),
       ...(item.access?.entitlementRequired ? ["Entitlement required"] : []),
+      ...(item.access?.upgradeConnectorLabel ? ["Upgrade source: " + item.access.upgradeConnectorLabel] : []),
       ...(item.access?.reason ? [item.access.reason] : []),
       ...item.notes,
     ],
