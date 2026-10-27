@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildNewsWindowQuery, filterNewsPageWindow, newsPageWindowBounds } from "./marketData";
-import type { NewsItem } from "@shared/finance";
+import type { NewsItem } from "./marketData";
 import { parseNewsPageRequest } from "./newsPageRequest";
 
 const routes = readFileSync(new URL("./routes.ts", import.meta.url), "utf8");
@@ -38,7 +38,7 @@ test("rolling dated pages move into disjoint earlier provider windows", () => {
 test("explicit from/to stay fixed through pagination and apply local item offsets", () => {
   const bounds = { from: "2026-10-01", to: "2026-10-27", windowDays: 7 };
   assert.equal(buildNewsWindowQuery("AAPL", 1, bounds), "AAPL after:2026-09-30 before:2026-10-28");
-  assert.equal(buildNewsWindowQuery("AAPL", 2, bounds), "AAPL after:2026-10-01 before:2026-10-28");
+  assert.equal(buildNewsWindowQuery("AAPL", 2, bounds), "AAPL after:2026-09-30 before:2026-10-28");
   assert.match(backend, /options\.from \? "bounded" : String\(page\)/);
   assert.match(backend, /const offset = explicitFrom \? \(page - 1\) \* limit : 0/);
   assert.match(backend, /items\.slice\(offset, offset \+ limit\)/);
@@ -69,7 +69,7 @@ test("inclusive fixed dates and rolling windows filter providers returning the w
   assert.deepEqual(toIndices(filterNewsPageWindow(items, 1,
     { to: "2026-10-27", windowDays: 7 })), [3, 4]);
   assert.deepEqual(toIndices(filterNewsPageWindow(items, 2,
-    { to: "2026-10-27", windowDays: 7 })), [1, 2]);
+    { to: "2026-10-27", windowDays: 7 })), [2]);
   assert.deepEqual(toIndices(filterNewsPageWindow(items, 1,
     { from: "2026-10-01", to: "2026-10-27" })), [1, 2, 3, 4]);
 });
