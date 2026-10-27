@@ -131,6 +131,11 @@ jobs:
         timeout-minutes: 5
         run: npm run test:website-b3
 
+      - name: C1 governed Chat saved-visual exact-revision and source regression
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run test:website-c1
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
