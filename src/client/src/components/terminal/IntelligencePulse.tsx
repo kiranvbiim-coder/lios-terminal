@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BellRing, Clock3, GitCompareArrows, Radar, ShieldAlert, Target } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
@@ -9,8 +9,8 @@ import { buildIntelligencePulse, buildScenarioMatrix, type IntelligencePulseItem
 import { setActiveScenario, subscribeScenarioUniverse } from "@/lib/terminalScenarioUniverse";
 import { subscribeTerminalTimeContext } from "@/lib/terminalTimeTravel";
 import { openTerminalUxSurface } from "@/lib/terminalUxEvents";
-import { useProactiveInboxReview } from "@/lib/useProactivePulse";
-import { assessActionInboxSnapshotFreshness, buildActionInboxChatDraft } from "@/lib/actionInboxReview";
+import { readEntitledActionInbox, useProactiveInboxReview } from "@/lib/useProactivePulse";
+import { assessActionInboxSnapshotFreshness, buildActionInboxChatDraft, confirmActionInboxHandoff } from "@/lib/actionInboxReview";
 import type { ViewMode } from "@/lib/terminalTypes";
 
 interface Props {
@@ -51,9 +51,15 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
   const [proactiveEnabled, setProactiveEnabled] = useState(false);
   const [expandedInboxItemId, setExpandedInboxItemId] = useState<string | null>(null);
   const [reviewHandoffMessage, setReviewHandoffMessage] = useState("");
+  const [handoffBusyId, setHandoffBusyId] = useState<string | null>(null);
+  const handoffAbort = useRef<AbortController | null>(null);
   const { result: proactive, refresh: refreshInbox } = useProactiveInboxReview(tab === "proactive" && proactiveEnabled);
   const inboxFreshness = proactive.state === "ready"
     ? assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now()) : "unavailable";
+  useEffect(() => () => {
+    handoffAbort.current?.abort();
+    handoffAbort.current = null;
+  }, [tab, proactiveEnabled]);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -206,18 +212,47 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
                       <p className="mt-2 whitespace-pre-wrap break-words font-ui text-sm leading-relaxed text-muted-foreground">{item.reason}</p>
                       <p className="mt-2 font-ui text-xs text-muted-foreground">Observed card: {item.sourceCardId} · {new Date(item.createdAt).toLocaleString()}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <button type="button" onClick={() => {
-                          if (proactive.state !== "ready") return;
-                          const freshness = assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now());
-                          if (freshness !== "current") {
-                            setReviewHandoffMessage("This Action Inbox snapshot needs a fresh server recheck. No Chat review was staged.");
-                            return;
-                          }
-                          const drafted = buildActionInboxChatDraft(item, proactive.review.asOf!);
-                          if (onStageAiReview(drafted)) onClose();
-                          else setReviewHandoffMessage("Keep or review your unsaved Workbench edits before switching to Chat. No AI request was sent.");
-                        }} className="min-h-10 rounded-lg border border-cyan-500/35 px-3 font-ui text-sm font-semibold text-cyan-200">
-                          Draft review in Chat
+                        <button type="button" disabled={handoffBusyId !== null}
+                          onClick={async () => {
+                            if (proactive.state !== "ready" || handoffAbort.current) return;
+                            if (assessActionInboxSnapshotFreshness(proactive.review.asOf, Date.now()) !== "current") {
+                              setReviewHandoffMessage("This Action Inbox snapshot needs a fresh server recheck. No Chat review was staged.");
+                              return;
+                            }
+                            const controller = new AbortController();
+                            handoffAbort.current = controller;
+                            setHandoffBusyId(item.id);
+                            setReviewHandoffMessage("");
+                            try {
+                              // Re-read this exact user-owned alert under the CURRENT server entitlement.
+                              const rechecked = await readEntitledActionInbox(controller.signal);
+                              if (controller.signal.aborted) return;
+                              if (rechecked.state !== "ready") {
+                                setReviewHandoffMessage(rechecked.state === "not_authorized"
+                                  ? "The server denied this Action Inbox recheck. No Chat review was staged."
+                                  : "The server could not verify this alert. No Chat review was staged.");
+                                return;
+                              }
+                              const verified = confirmActionInboxHandoff(proactive.review, rechecked.review, item.id, Date.now());
+                              if (!verified) {
+                                setReviewHandoffMessage("This alert, source evidence, or server snapshot changed. Refresh and review the latest inbox; no Chat draft was staged.");
+                                refreshInbox();
+                                return;
+                              }
+                              const drafted = buildActionInboxChatDraft(verified, rechecked.review.asOf!);
+                              if (onStageAiReview(drafted)) onClose();
+                              else setReviewHandoffMessage("Keep or review your unsaved Workbench edits before switching to Chat. No AI request was sent.");
+                            } catch {
+                              if (!controller.signal.aborted) setReviewHandoffMessage("Alert verification failed. No Chat review was staged.");
+                            } finally {
+                              if (handoffAbort.current === controller) {
+                                handoffAbort.current = null;
+                                setHandoffBusyId(null);
+                              }
+                            }
+                          }}
+                          className="min-h-10 rounded-lg border border-cyan-500/35 px-3 font-ui text-sm font-semibold text-cyan-200 disabled:opacity-50">
+                          {handoffBusyId === item.id ? "Verifying source…" : "Draft review in Chat"}
                         </button>
                         <button type="button" className="min-h-10 rounded-lg border border-border px-3 font-ui text-sm text-foreground"
                           aria-expanded={expandedInboxItemId === item.id}
