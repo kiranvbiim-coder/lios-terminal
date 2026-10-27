@@ -68,7 +68,10 @@ test("A05 failed saved-view writes retain draft names and confirmed writes avoid
   assert.ok(shell.includes('return false;'));
   assert.match(shell, /do not call market\/news providers again/);
   assert.ok(board.includes('if (saved) setViewName("")'));
-  assert.doesNotMatch(board, /onSavePulseView\(label.slice\(0, 60\)\);\s*setViewName\("")/);
+  // The name can clear only after the server-confirmed success branch.
+  assert.ok(board.includes('void onSavePulseView(label.slice(0, 60)).then(saved => {'));
+  assert.ok(board.includes('if (saved) setViewName("")'));
+  assert.ok(!board.includes('onSavePulseView(label.slice(0, 60)); setViewName("")'));
 });
 
 test("A05 saved view names remain available through user-scoped reads when upstream Pulse fails", () => {
