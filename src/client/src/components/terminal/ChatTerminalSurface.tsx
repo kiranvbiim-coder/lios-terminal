@@ -48,12 +48,12 @@ export function ChatTerminalControl({ audience, selected, onSelect }: ChatTermin
         <button
           type="button"
           data-testid="chat-contextual-tools-trigger"
-          aria-label="Browse research and analysis tools"
+          aria-label="Browse analysis views"
           aria-expanded={open}
           className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 bg-background/45 px-3 py-2 font-ui text-sm font-medium text-foreground transition-colors hover:border-amber-300/35 hover:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
         >
           <PanelsTopLeft aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-          <span>Tools</span>
+          <span>Views</span>
           <ChevronsUpDown aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
       </PopoverTrigger>
@@ -64,12 +64,12 @@ export function ChatTerminalControl({ audience, selected, onSelect }: ChatTermin
           event.preventDefault();
           searchRef.current?.focus();
         }}
-        aria-label="Research and analysis tools"
+        aria-label="Analysis views"
         data-testid="chat-contextual-tools-popover"
         className="z-[100] w-[min(92vw,27rem)] max-w-[92vw] overflow-hidden rounded-xl border border-border bg-background p-0 shadow-xl"
       >
         <div className="border-b border-border/65 p-3">
-          <label htmlFor="lios-chat-tool-filter" className="sr-only">Search registered tools</label>
+          <label htmlFor="lios-chat-tool-filter" className="sr-only">Search registered views</label>
           <div className="flex min-h-10 items-center gap-2 rounded-lg border border-border/70 bg-white/[0.025] px-3 focus-within:ring-2 focus-within:ring-amber-300/60">
             <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
@@ -77,7 +77,7 @@ export function ChatTerminalControl({ audience, selected, onSelect }: ChatTermin
               ref={searchRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Search tools"
+              placeholder="Search views"
               autoComplete="off"
               maxLength={120}
               className="min-w-0 flex-1 border-0 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -117,7 +117,7 @@ export function ChatTerminalControl({ audience, selected, onSelect }: ChatTermin
             </div>
           ) : (
             <div role="status" className="px-3 py-6 text-center font-ui text-sm text-muted-foreground">
-              No matching tools. Try another search.
+              No matching views. Try another search.
             </div>
           )}
         </div>
