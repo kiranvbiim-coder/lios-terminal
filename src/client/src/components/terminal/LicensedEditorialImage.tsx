@@ -26,7 +26,7 @@ export function LicensedEditorialImage({
   return <figure data-testid="licensed-editorial-image"
     className={`min-w-0 overflow-hidden rounded-lg border border-border/40 bg-background/40 ${className}`}>
     <img src={asset} alt={eligible.alt} decoding="async" loading="lazy"
-      referrerPolicy="no-referrer" crossOrigin="anonymous" sizes={sizes}
+      referrerPolicy="no-referrer" sizes={sizes}
       onError={() => setFailedPath(asset)}
       className="block h-40 w-full object-cover sm:h-48" />
     <figcaption className="space-y-0.5 px-3 py-2 font-ui text-xs leading-5 text-muted-foreground">
