@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseActionInboxReview, safeInboxEvidenceUrl, buildActionInboxChatDraft } from "./actionInboxReview";
+import { parseActionInboxReview, safeInboxEvidenceUrl, buildActionInboxChatDraft, assessActionInboxSnapshotFreshness, ACTION_INBOX_MAX_SNAPSHOT_AGE_MS, ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS } from "./actionInboxReview";
 import type { ActionInboxItem } from "@shared/waveDContracts";
 
 const asOf = "2026-10-27T10:00:00.000Z";
@@ -114,4 +114,25 @@ test("Phase 3 drafted alert limits copied text and evidence fanout before canoni
   assert.match(draft, /"omittedSourceCount": 24/);
   assert.equal(draft.includes("x".repeat(1000)), false);
   assert.equal(draft.includes("x".repeat(900)), true);
+});
+
+test("Phase 3 inbox freshness reflects exact server as-of and boundary clock tolerance", () => {
+  const now = Date.parse(asOf);
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, now), "current");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, now + ACTION_INBOX_MAX_SNAPSHOT_AGE_MS), "current");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, now + ACTION_INBOX_MAX_SNAPSHOT_AGE_MS + 1), "stale");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, now - ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS), "current");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, now - ACTION_INBOX_FUTURE_CLOCK_TOLERANCE_MS - 1), "future");
+  assert.equal(assessActionInboxSnapshotFreshness("invalid", now), "unavailable");
+  assert.equal(assessActionInboxSnapshotFreshness(null, now), "unavailable");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, NaN), "unavailable");
+  assert.equal(assessActionInboxSnapshotFreshness(asOf, Infinity), "unavailable");
+});
+
+test("Phase 3 alert age does not become snapshot freshness or permission proof", () => {
+  const oldItem = item("old", { createdAt: "2020-01-01T00:00:00.000Z" });
+  const review = parseActionInboxReview(envelope([oldItem]));
+  assert.equal(review.status, "ready");
+  assert.equal(assessActionInboxSnapshotFreshness(review.asOf, Date.parse(asOf)), "current");
+  assert.equal(review.items[0].createdAt, "2020-01-01T00:00:00.000Z");
 });
