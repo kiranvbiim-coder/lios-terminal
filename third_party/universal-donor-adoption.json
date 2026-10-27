@@ -9,8 +9,8 @@
   "controlledForkCount": 10,
   "sourceSnapshot": {
     "baselineSha": "ad77f2d53189a7d98583e9d9996d532b79e4686d",
-    "componentsSha": "dcc78482673598bb3b46af33b09c1ce015b24fa5",
-    "upstreamPinsSha": "3903ae7d811d72b6101fc9f5fbb419dcc2cb655e",
+    "componentsSha": "9f3343e0b427de5febdeda3dd1e2412aa532bd47",
+    "upstreamPinsSha": "3759d315ea0d40e48a7b417b8358544c160a2ae8",
     "controlledForkSha": "142ff14c5e6b5d6804b20a346d5e31435db2f33b"
   },
   "releaseClaims": {
