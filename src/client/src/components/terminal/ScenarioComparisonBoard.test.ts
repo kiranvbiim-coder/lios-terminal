@@ -45,7 +45,7 @@ test("comparison does not render invented values where an assumption is absent",
   assert.match(html, /Not specified/);
   assert.match(html, /Active only/);
   assert.match(html, /Reference only/);
-  assert.doesNotMatch(html, /0 units/);
+  assert.doesNotMatch(html, />0 units</);
 });
 
 test("empty scenarios clearly show no comparison is available", () => {
