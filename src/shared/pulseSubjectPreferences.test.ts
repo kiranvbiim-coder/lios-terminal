@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { filterPulseCards } from "./waveDAdvancedContracts";
+import { rankPulseCards } from "./waveDContracts";
 import test from "node:test";
 import {
   effectivePulseFollowingSubjects, normalizePulseSubjectKey, normalizePulseSubjectPreferences,
@@ -57,4 +59,18 @@ test("Maximum 60 subjects per preference list; no unbounded saved personalizatio
   assert.equal(updatePulseSubjectPreferences(prefs, "SUBJECT0", "follow").followed.length, 60);
   assert.equal(updatePulseSubjectPreferences(prefs, "SUBJECT0", "clear").followed.length, 59);
   assert.equal(normalizePulseSubjectPreferences({followed: Array.from({length:100},(_,i)=>"TOPIC"+i), muted:[]}).followed.length,60);
+});
+
+test("Following displays a backed symbol-only card that was explicitly selected, not only subjectKey cards", () => {
+  const cards = rankPulseCards([{
+    id: "source-only-solar", kind: "news", title: "Sourced solar filing",
+    whatHappened: "Original observation", whyItMatters: "Investigation pending",
+    whyItMattersToUser: "Review the recorded source", nextActions: ["analyse"],
+    createdAt: "2026-10-27T09:00:00Z", symbol: "SOLAR",
+    evidence: [{ id: "solar:source", source: "Original retained source" }],
+  }], new Date("2026-10-27T10:00:00Z"));
+  assert.deepEqual(filterPulseCards(cards, { channel: "following", subjectKeys: ["SOLAR"] }).map(card => card.id), ["source-only-solar"]);
+  assert.deepEqual(filterPulseCards(cards, { channel: "following", subjectKeys: ["WIND"] }), []);
+  const muted = suppressMutedPulseCards(cards, { followed: [], muted: ["SOLAR"] });
+  assert.deepEqual(filterPulseCards(muted, { channel: "following", subjectKeys: ["SOLAR"] }), []);
 });
