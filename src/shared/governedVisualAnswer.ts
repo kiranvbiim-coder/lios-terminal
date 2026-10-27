@@ -27,6 +27,15 @@ const remoteArtifactSchema = z.object({
     version: z.number().int().positive(),
     contentHash: z.string().regex(/^[a-f0-9]{64}$/),
     sourceRefs: z.array(z.string()).max(2000),
+    trustManifest: z.object({
+      evidence: z.array(z.object({
+        sourceRef: z.string(),
+        access: z.object({
+          state: z.string(),
+          entitlementRequired: z.boolean().nullable().optional(),
+        }).passthrough().nullable().optional(),
+      }).passthrough()).max(1_000),
+    }).passthrough().nullable().optional(),
     content: z.unknown(),
   }),
 });
@@ -57,6 +66,21 @@ export function resolveGovernedVisualAnswer(
 
   const canonicalRefs = new Set(version.sourceRefs);
   if (!canonicalRefs.size || request.data.sourceRefs.some(ref => !canonicalRefs.has(ref))) return BLOCKED;
+
+  // Saved P3 entitlement posture is not a fresh provider authorization; it
+  // can only further RESTRICT an otherwise authenticated P4 read.
+  // If a manifest includes observations, no selected ref may be absent or
+  // explicitly denied; re-auth the Artifact on every click via P4 first.
+  const manifest = version.trustManifest;
+  if (manifest?.evidence.length) {
+    const observed = new Map(manifest.evidence.map(item => [item.sourceRef, item]));
+    for (const ref of request.data.sourceRefs) {
+      const observation = observed.get(ref);
+      const access = observation?.access;
+      if (!observation || access?.entitlementRequired === true ||
+        (access && /^(blocked|restricted|denied|unauthorized|not_entitled|expired)$/i.test(access.state))) return BLOCKED;
+    }
+  }
 
   if (request.data.kind === "chart") {
     const parsed = chartArtifactContentSchema.safeParse(version.content);
