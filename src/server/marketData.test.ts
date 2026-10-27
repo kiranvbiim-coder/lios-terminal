@@ -353,7 +353,9 @@ test("mapRangeToYahoo uses only valid Yahoo range tokens", () => {
 test("news windows remove relative clauses and add bounded date clauses", () => {
   const query = buildNewsWindowQuery("AAPL stock when:7d", 2, { windowDays: 7 });
   assert.match(query, /^AAPL stock after:\d{4}-\d{2}-\d{2} before:\d{4}-\d{2}-\d{2}$/);
-  assert.equal(buildNewsWindowQuery("AAPL", 1, { from: "2026-01-01", to: "2026-01-31" }), "AAPL after:2026-01-01 before:2026-02-01");
+  // Google News `after:` excludes its calendar day; Dec 31 is required
+  // to INCLUDE every item published on Jan 1 in the requested date range.
+  assert.equal(buildNewsWindowQuery("AAPL", 1, { from: "2026-01-01", to: "2026-01-31" }), "AAPL after:2025-12-31 before:2026-02-01");
 });
 
 test("news dedupe is deterministic by URL and publication time", () => {
