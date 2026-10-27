@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  evidenceDateLabels, filterResearchEvidence, recordedEvidenceHttpUrl,
+  compareRecordedEvidenceMetadata, evidenceDateLabels, filterResearchEvidence, recordedEvidenceHttpUrl,
   ResearchEvidenceCard, ResearchEvidenceComparison,
   type ResearchEvidenceRecord,
 } from "./ResearchEvidencePresentation";
@@ -91,4 +91,30 @@ test("untrusted evidence strings remain escaped; invalid and missing dates stay 
   assert.match(html, /&lt;img src=x/);
   assert.doesNotMatch(html, /<script\b|<img\b/);
   assert.deepEqual(evidenceDateLabels({ publishedAt: null, effectiveAt: "invalid", retrievedAt: "2026-10-23T08:00:00.000Z" }).published, "Not recorded");
+});
+
+test("aligned comparison distinguishes same, literal difference and missing metadata, without judging claim truth", () => {
+  const later: ResearchEvidenceRecord = {
+    ...recorded,
+    id:73, title:"Second reported observation", sourceName:"Other filing",
+    publishedAt:"2026-10-24T10:00:00.000Z", effectiveAt:null, provider: recorded.provider,
+    sourceUrl:"https://different.example.org/report",
+  };
+  const original=JSON.stringify({recorded,later});
+  const rows=compareRecordedEvidenceMetadata(recorded,later);
+  assert.equal(rows.length,7);
+  assert.deepEqual(rows.find(item=>item.key==="sourceName"),{
+    key:"sourceName",label:"Recorded source",first:"Public filing",second:"Other filing",status:"different",
+  });
+  assert.equal(rows.find(item=>item.key==="provider")?.status,"same");
+  assert.equal(rows.find(item=>item.key==="effectiveAt")?.status,"missing");
+  assert.equal(rows.find(item=>item.key==="publishedAt")?.status,"different");
+  assert.equal(JSON.stringify({recorded,later}),original,"projection is read-only");
+  const html=renderToStaticMarkup(React.createElement(ResearchEvidenceComparison,{first:recorded,second:later,onClear:()=>undefined}));
+  assert.match(html,/Aligned recorded evidence metadata/);
+  assert.match(html,/data-metadata-comparison="missing"/);
+  assert.match(html,/data-metadata-comparison="same"/);
+  assert.match(html,/data-metadata-comparison="different"/);
+  assert.match(html,/Different dates, providers or evidence kinds do not imply contradiction/);
+  assert.doesNotMatch(html,/contradiction detected|verified independently/i);
 });
