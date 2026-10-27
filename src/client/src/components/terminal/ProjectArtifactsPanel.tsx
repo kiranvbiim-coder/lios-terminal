@@ -141,6 +141,7 @@ export function ProjectArtifactsPanel({
   if (selected) {
     if (selected === initialArtifactId && ![...rows, ...archivedRows].some((artifact) => artifact.id === selected && artifact.projectId === projectId)) {
       if (archivedArtifacts.isLoading) return <p role="status">Loading exact Artifact…</p>;
+      if (artifacts.isError || archivedArtifacts.isError) return <section className="mt-4"><p role="alert">This Artifact's availability could not be checked. No substitute was opened.</p><button type="button" disabled={artifacts.isFetching || archivedArtifacts.isFetching} onClick={() => void Promise.all([artifacts.refetch(), archivedArtifacts.refetch()])} className="lios-section-action mt-3">Retry Artifact lookup</button><button type="button" className="lios-section-action mt-3" onClick={() => setSelected(null)}>Back to Library</button></section>;
       return <section className="mt-4"><p role="alert">This exact Artifact is no longer available in this Project. No substitute was opened.</p><button type="button" className="lios-section-action mt-3" onClick={() => setSelected(null)}>Back to Library</button></section>;
     }
     return (
@@ -177,12 +178,13 @@ export function ProjectArtifactsPanel({
           <button onClick={() => void (async () => { try { setError(null); const created = await createArtifact(projectId, { title: `New ${newKind} Artifact`, content: starter(newKind) }); invalidate(projectId); setSelected(created.artifact.id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create Artifact."); } })()} className="flex items-center gap-1 rounded border border-amber-300/20 px-2.5 py-1.5 font-ui text-[7px] text-amber-200">
             <Plus className="h-3 w-3" /> New
           </button>
-          <label className={`flex cursor-pointer items-center gap-1 rounded border border-cyan-300/20 px-2.5 py-1.5 font-ui text-[7px] text-cyan-200 ${importingSpreadsheet ? "pointer-events-none opacity-50" : ""}`}>
+          <label className={`flex cursor-pointer items-center gap-1 rounded border border-cyan-300/20 px-2.5 py-1.5 font-ui text-[7px] text-cyan-200 focus-within:outline focus-within:outline-2 focus-within:outline-primary ${importingSpreadsheet ? "pointer-events-none opacity-50" : ""}`}>
             <FileUp className="h-3 w-3" /> {importingSpreadsheet ? "Importing…" : "Import spreadsheet"}
             <input
               type="file"
               accept=".xlsx,.csv,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              className="hidden"
+              className="sr-only"
+              aria-label="Import spreadsheet"
               disabled={importingSpreadsheet}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -194,9 +196,9 @@ export function ProjectArtifactsPanel({
           <button onClick={() => void exportProjectArtifactPackage(projectId).then((pkg) => downloadPackage(projectId, pkg)).catch((cause) => setError(cause instanceof Error ? cause.message : "Package export failed."))} className="flex items-center gap-1 rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground">
             <Package className="h-3 w-3" /> Export package
           </button>
-          <label className="cursor-pointer rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground">
+          <label className="cursor-pointer rounded border border-border/60 px-2.5 py-1.5 font-ui text-[7px] text-muted-foreground focus-within:outline focus-within:outline-2 focus-within:outline-primary">
             Import package
-            <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void file.text().then(JSON.parse).then((pkg) => importProjectArtifactPackage(projectId, pkg)).then((result) => { setImportSummary(`Imported ${result.importedArtifacts} Artifacts and ${result.importedSessions} Sessions`); invalidate(projectId); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Package import failed.")); event.currentTarget.value = ""; }} />
+            <input type="file" accept=".json,application/json" className="sr-only" aria-label="Import Artifact package" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void file.text().then(JSON.parse).then((pkg) => importProjectArtifactPackage(projectId, pkg)).then((result) => { setImportSummary(`Imported ${result.importedArtifacts} Artifacts and ${result.importedSessions} Sessions`); invalidate(projectId); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Package import failed.")); event.currentTarget.value = ""; }} />
           </label>
         </div>
       </div>

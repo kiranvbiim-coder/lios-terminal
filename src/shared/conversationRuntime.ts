@@ -368,7 +368,7 @@ export const conversationRuntimeEventSchema = z.discriminatedUnion("type", [
   baseEventSchema.extend({ type: z.literal("plan"), plan: workflowPlanSchema }).strict(),
   baseEventSchema.extend({ type: z.literal("status"), stepId: z.string().max(120).nullable().default(null), message: z.string().max(1_000), state: z.enum(["queued", "running", "completed", "cancelled"]) }).strict(),
   baseEventSchema.extend({ type: z.literal("tool_start"), stepId: z.string().max(120), label: z.string().max(300), componentId: z.string().max(300) }).strict(),
-  baseEventSchema.extend({ type: z.literal("tool_result"), stepId: z.string().max(120), label: z.string().max(300), summary: z.string().max(2_000), deterministic: z.boolean(), sourceRefs: z.array(z.string().max(1_000)).max(100).default([]) }).strict(),
+  baseEventSchema.extend({ type: z.literal("tool_result"), stepId: z.string().max(120), label: z.string().max(300), summary: z.string().max(2_000), deterministic: z.boolean(), sourceRefs: z.array(z.string().max(1_000)).max(100).default([]), outcome: z.enum(["completed", "failed", "skipped", "denied", "approval_required"]).optional() }).strict(),
   baseEventSchema.extend({ type: z.literal("approval_required"), action: conversationActionNameSchema, actionRequest: runtimeActionRequestSchema, choices: z.array(z.enum(["allow_once", "allow_project", "deny"])).min(1), message: z.string().max(1_000) }).strict(),
   /**
    * SI-02 L4: generic governed-tool review. Exact operation identity remains

@@ -48,13 +48,25 @@ for entry in artifacts + dependencies:
     if file.stat().st_size != entry['size']:
         raise RuntimeError('Browser input size mismatch: ' + relative)
 
-# APT orders Pre-Depends before unpack/configure; dpkg --install over the whole batch does not.
-# Every artifact is already locked above, and network acquisition is forbidden at this stage.
-subprocess.run([
-    'apt-get', '--yes', '--no-download', '--no-install-recommends',
-    '-o', 'Dpkg::Use-Pty=0', 'install',
-    *[str(inputs / 'browser-debs' / d['filename']) for d in dependencies],
-], check=True, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
+# --no-download cannot stage bind-mounted archives through APT's acquire step.
+# Seed its writable cache with the already hash-verified bytes, then remove them
+# in this same build layer. Network access and package pins remain unchanged.
+cache = Path('/var/cache/apt/archives')
+cache.mkdir(parents=True, exist_ok=True)
+cached = []
+try:
+    for dep in dependencies:
+        target = cache / dep['filename']
+        shutil.copyfile(inputs / 'browser-debs' / dep['filename'], target)
+        cached.append(target)
+    subprocess.run([
+        'apt-get', '--yes', '--no-download', '--no-install-recommends',
+        '-o', 'Dpkg::Use-Pty=0', 'install',
+        *[str(inputs / 'browser-debs' / d['filename']) for d in dependencies],
+    ], check=True, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
+finally:
+    for file in cached:
+        file.unlink(missing_ok=True)
 for dep in dependencies:
     actual = subprocess.check_output(['dpkg-query', '-W', '-f=${Version} ${Architecture}', dep['package']], text=True)
     if actual != dep['version'] + ' ' + dep['architecture']:

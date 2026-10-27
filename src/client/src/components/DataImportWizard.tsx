@@ -95,11 +95,11 @@ export default function DataImportWizard({ onClose, onImported }: Props) {
           <label><span className="font-terminal text-[8px] text-muted-foreground">DEFAULT CURRENCY</span><input value={currency} onChange={event => setCurrency(event.target.value.toUpperCase())} className={inputClass} /></label>
         </div>
 
-        <label className="mt-4 flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[hsl(38,95%,50%)]/40 bg-[hsl(38,95%,50%)]/[0.03] px-4 text-center hover:bg-[hsl(38,95%,50%)]/[0.07]">
+        <label className="mt-4 flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[hsl(38,95%,50%)]/40 bg-[hsl(38,95%,50%)]/[0.03] px-4 text-center hover:bg-[hsl(38,95%,50%)]/[0.07] focus-within:outline focus-within:outline-2 focus-within:outline-primary">
           <Upload className="h-5 w-5 text-[hsl(38,95%,55%)]" />
           <span className="mt-2 font-terminal text-[9px] text-foreground">{preview?.fileName || "CHOOSE CSV, TSV, XLSX, XLS, ODS, JSON, OR PARQUET"}</span>
           <span className="mt-1 font-terminal text-[7px] text-muted-foreground">Parquet is accepted for capability detection but is not falsely decoded in-browser before the secure local-file bridge exists.</span>
-          <input type="file" className="hidden" accept=".csv,.tsv,.xlsx,.xls,.ods,.json,.parquet" onChange={event => void handleFile(event.target.files?.[0])} />
+          <input type="file" className="sr-only" aria-label="Choose data file" accept=".csv,.tsv,.xlsx,.xls,.ods,.json,.parquet" onChange={event => void handleFile(event.target.files?.[0])} />
         </label>
 
         {preview && (

@@ -14,18 +14,27 @@ export default function TickerTape({ onSymbol }: Props) {
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const root = el.closest(".terminal-root");
     let pos = 0;
-    const speed = 0.6; // px per frame
-    let raf: number;
+    let raf = 0;
     const animate = () => {
-      pos += speed;
+      pos += 0.6;
       if (pos >= el.scrollWidth / 2) pos = 0;
       el.style.transform = `translateX(-${pos}px)`;
       raf = requestAnimationFrame(animate);
     };
-    raf = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(raf);
+    const syncMotion = () => {
+      cancelAnimationFrame(raf);
+      pos = 0;
+      el.style.transform = "";
+      if (!media.matches && root?.getAttribute("data-reduced-motion") !== "true") raf = requestAnimationFrame(animate);
+    };
+    const observer = new MutationObserver(syncMotion);
+    if (root) observer.observe(root, { attributes: true, attributeFilter: ["data-reduced-motion"] });
+    media.addEventListener("change", syncMotion);
+    syncMotion();
+    return () => { cancelAnimationFrame(raf); observer.disconnect(); media.removeEventListener("change", syncMotion); el.style.transform = ""; };
   }, [quotes]);
 
   const items = quotes ?? [];

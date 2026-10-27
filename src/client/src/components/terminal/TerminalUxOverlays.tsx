@@ -78,6 +78,7 @@ function snapshotValuesFromEvidence(evidence: EvidenceSnapshot): Record<string, 
 
 export default function TerminalUxOverlays({ experienceSurface, activeView, activeSymbol, workspace, isInternal, preferences, onPreferencesChange, onOpen, onApplyWorkspace }: Props) {
   const [surface, setSurface] = useState<TerminalUxSurface | null>(null);
+  const [researchOpened, setResearchOpened] = useState(false);
   const [contextMenu, setContextMenu] = useState<TerminalContextMenuRequest | null>(null);
   const [peek, setPeek] = useState<TerminalPeekRequest | null>(null);
   const [inspector, setInspector] = useState<TerminalInspectorRequest | null>(null);
@@ -86,6 +87,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
   const lastSessionFingerprint = useRef("");
 
   const openSurface = useCallback((next: TerminalUxSurface | null) => {
+    if (next === "research-tray") setResearchOpened(true);
     setSurface(next);
     setContextMenu(null);
     setPeek(null);
@@ -261,7 +263,9 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {surface === "graph-explorer" && <GraphExplorer activeSymbol={activeSymbol} onClose={() => setSurface(null)} />}
       {surface === "workspace-composer" && <WorkspaceComposer workspace={workspace} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
       {surface === "innovation-studio" && <AnalyticalStudio activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} isInternal={isInternal} preferences={preferences} onPreferencesChange={onPreferencesChange} onOpen={onOpen} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
-      {surface === "research-tray" && <ResearchTray activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />}
+      {researchOpened && <div hidden={surface !== "research-tray"} style={surface !== "research-tray" ? { display: "none" } : undefined}>
+        <ResearchTray activeView={activeView} activeSymbol={activeSymbol} onOpen={onOpen} onClose={() => setSurface(null)} />
+      </div>}
       {surface === "shortcuts" && <ShortcutOverlay onClose={() => setSurface(null)} />}
       {surface === "macros" && <TerminalMacroManager activeSymbol={activeSymbol} isInternal={isInternal} onRunStep={runMacroStep} onClose={() => setSurface(null)} />}
       {surface === "missions" && <TerminalMissionCenter isInternal={isInternal} onOpenView={(view) => onOpen(view, "current", activeSymbol)} onClose={() => setSurface(null)} />}

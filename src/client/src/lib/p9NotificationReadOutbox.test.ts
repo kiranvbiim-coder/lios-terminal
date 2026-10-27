@@ -9,8 +9,8 @@ import {
   clearNotificationReadOutbox,
 } from "./p9NotificationReadOutbox";
 
-const NOTIFICATION = "550e8400-e29b-41d4-a716-446655440099";
-const SECOND = "550e8400-e29b-41d4-a716-446655440098";
+const NOTIFICATION = "workflow-notification:550e8400-e29b-41d4-a716-446655440099";
+const SECOND = "workflow-notification:550e8400-e29b-41d4-a716-446655440098";
 const PREFIX = "lios.p9-notification-read-outbox.v1.";
 const key = (user: number) => `${PREFIX}${user}.17`;
 function session(userId = 11, state: AuthSessionState["state"] = "authenticated_online"): AuthSessionState {
@@ -80,8 +80,8 @@ test("SI-06.22 queued read receipts contain identifiers only, dedupe and replay 
     assert.deepEqual(result, { confirmed: 2, remaining: 0, blocked: false });
     assert.deepEqual(urls, [
       "/api/auth/me",
-      `/api/projects/7/automation/notifications/${NOTIFICATION}/read`,
-      `/api/projects/7/automation/notifications/${SECOND}/read`,
+      `/api/projects/7/automation/notifications/${encodeURIComponent(NOTIFICATION)}/read`,
+      `/api/projects/7/automation/notifications/${encodeURIComponent(SECOND)}/read`,
     ]);
     assert.equal(pendingNotificationReadCount(), 0);
     assert.equal(items.has(key(11)), false);

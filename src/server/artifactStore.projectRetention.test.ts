@@ -331,6 +331,56 @@ test("SI-04.02 Project draft retention uses canonical P4 state and durable repla
     assert.equal((await artifactRows(first.artifact.id)).receipts[0].detail.draftRetentionHash, undefined);
   });
 
+  await t.test("authored revisions cannot retain or reattach verification, while recorded access restrictions survive direct edits and proposals", async () => {
+    const { createArtifact, restoreArtifactRevision, createArtifactProposal, decideArtifactProposal } = await import("./artifactStore");
+    const { getArtifactExportPlan } = await import("./artifactExport");
+    for (const supplied of ["omitted", "recorded", "fabricated"] as const) {
+      const manifest = trustSnapshot(crypto.randomUUID());
+      const created = await createArtifact(ctx, { projectId: project.id, title: `Direct ${supplied}`, content: { kind:"report", templateId:null, blocks:[{id:"p",type:"paragraph",text:"Original supported text",attrs:{}}], sections:[] }, trustManifest:manifest, sourceRefs:["provider:filing-extract"] });
+      const changed = { ...created.version.content, blocks:[{id:"p",type:"paragraph",text:"Materially changed authored assertion",attrs:{}}] } as any;
+      const edited = await createArtifactVersion(ctx, {artifactId:created.artifact.id,baseVersion:1,content:changed,actorType:"system",...(supplied==="omitted"?{}:{trustManifest:supplied==="recorded"?manifest:{...manifest,trustId:crypto.randomUUID()}})});
+      assert.equal(edited.trustManifest,null);
+      assert.deepEqual((await getArtifactVersion(ctx,created.artifact.id,1)).trustManifest,created.version.trustManifest);
+      await assert.rejects(createArtifactVersion(ctx,{artifactId:created.artifact.id,baseVersion:2,content:changed,trustManifest:manifest}),/cannot mint or replace/);
+      const restored=await restoreArtifactRevision(ctx,created.artifact.id,2,1);
+      assert.deepEqual(restored.trustManifest,created.version.trustManifest);
+    }
+    for (const state of ["revoked","denied","expired","restricted"]) {
+      const manifest=trustSnapshot(crypto.randomUUID());
+      manifest.evidence[0].access={state,servedTier:null,bestAvailableTier:null,entitlementRequired:true,upgradeConnectorId:null,upgradeConnectorLabel:null,reason:"Historical source restriction"};
+      const created=await createArtifact(ctx,{projectId:project.id,title:`Restricted ${state}`,content:{kind:"report",templateId:null,blocks:[{id:"p",type:"paragraph",text:"Original",attrs:{}}],sections:[]},trustManifest:manifest,sourceRefs:["provider:filing-extract"],dependencyRefs:["provider:filing-extract"]});
+      const edited=await createArtifactVersion(ctx,{artifactId:created.artifact.id,baseVersion:1,content:{...created.version.content,blocks:[{id:"p",type:"paragraph",text:"Authored change",attrs:{}}]} as any,trustManifest:null,sourceRefs:[],dependencyRefs:[]});
+      const trust=edited.trustManifest as unknown as TrustManifest;
+      assert.equal(trust.summary.confidence,"unknown");assert.equal(trust.summary.evidenceCoveragePct,0);assert.equal(trust.claims.length,0);assert.equal(trust.methodology.length,0);
+      assert.deepEqual(trust.evidence[0].access,manifest.evidence[0].access);
+      assert.ok(edited.sourceRefs.includes("provider:filing-extract"));assert.ok(edited.dependencyRefs.includes("provider:filing-extract"));
+      if(state!=="restricted")await assert.rejects(getArtifactExportPlan(ctx,created.artifact.id,2),/denied|revoked|expired/);
+      const proposal=await createArtifactProposal(ctx,{artifactId:created.artifact.id,baseVersion:2,type:"artifact_patch",summary:"Explicit authored proposal",patch:{blocks:[{id:"p",type:"paragraph",text:"Proposal change",attrs:{}}]}});
+      await decideArtifactProposal(ctx,proposal.id,"accept");
+      const proposed=await getArtifactVersion(ctx,created.artifact.id);
+      assert.deepEqual((proposed.trustManifest as unknown as TrustManifest).evidence[0].access,manifest.evidence[0].access);
+      if(state!=="restricted")await assert.rejects(getArtifactExportPlan(ctx,created.artifact.id,3),/denied|revoked|expired/);
+    }
+    const {createArtifactPackage,importArtifactPackage}=await import("./artifactPackage");
+    const exportProject=await createProject(ctx,{name:"Restricted portable history"});
+    const destination=await createProject(ctx,{name:"Reimported restricted history"});
+    const manifest=trustSnapshot(crypto.randomUUID());
+    Object.assign(manifest.evidence[0],{sourceRef:"manual:restricted",providerId:null,kind:"manual",access:{state:"revoked",servedTier:null,bestAvailableTier:null,entitlementRequired:true,upgradeConnectorId:null,upgradeConnectorLabel:null,reason:"Historical restriction"}});
+    const original=await createArtifact(ctx,{projectId:exportProject.id,title:"Portable restricted history",content:{kind:"report",templateId:null,blocks:[{id:"p",type:"paragraph",text:"Original historical claim",attrs:{}}],sections:[]},sourceRefs:["manual:restricted"],trustManifest:manifest});
+    const changed={...original.version.content,blocks:[{id:"p",type:"paragraph",text:"Authored changed claim",attrs:{}}]} as any;
+    await createArtifactVersion(ctx,{artifactId:original.artifact.id,baseVersion:1,content:changed});
+    await createArtifactVersion(ctx,{artifactId:original.artifact.id,baseVersion:2,content:changed});
+    await restoreArtifactRevision(ctx,original.artifact.id,3,1);
+    const pkg=await createArtifactPackage(ctx,exportProject.id);
+    const imported=await importArtifactPackage(ctx,destination.id,pkg);
+    const importedId=imported.artifactIdMap[original.artifact.id];
+    for(let version=1;version<=4;version++) {
+      const source=await getArtifactVersion(ctx,original.artifact.id,version);
+      const restored=await getArtifactVersion(ctx,importedId,version);
+      assert.deepEqual(restored.content,source.content);assert.deepEqual(restored.trustManifest,source.trustManifest);
+    }
+  });
+
   await t.test("replay after database reopen returns the original version without replacing later edits", async () => {
     const editedContent = normalizeConversationDraft({ ...draft, data: { ...draft.data, question: "User-refined research question" } });
     const editedVersion = await createArtifactVersion(ctx, {

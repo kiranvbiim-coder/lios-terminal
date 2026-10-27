@@ -4852,6 +4852,7 @@ async function executeAgentLoop(
         type: "tool_result",
         stepId: step.id,
         label: step.label,
+        outcome: step.status,
         summary: step.status === "completed" ? step.summary : `${agentStatusLabel(step.status)}: ${step.summary}`,
         deterministic: step.deterministic,
         sourceRefs: step.sourceRefs,

@@ -425,7 +425,8 @@ export default function ConversationRuntimeTrace({
           <div className="grid gap-1.5 md:grid-cols-2">
             {steps.map((step) => {
               const observed = stepEvents.get(step.id);
-              const complete = observed?.type === "tool_result" || (observed?.type === "status" && observed.state === "completed");
+              const complete = (observed?.type === "tool_result" && (observed.outcome === "completed" || (observed.outcome === undefined && step.kind !== "agent")))
+                || (observed?.type === "status" && observed.state === "completed");
               const running = observed?.type === "tool_start" || (observed?.type === "status" && observed.state === "running");
               return (
                 <div key={step.id} className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/[0.012] px-2.5 py-2">

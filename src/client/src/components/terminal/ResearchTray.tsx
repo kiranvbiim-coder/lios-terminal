@@ -57,6 +57,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
   const [group, setGroup] = useState("ALL");
   const [addingNote, setAddingNote] = useState(false);
   const [newNote, setNewNote] = useState("");
+  const [newNoteContext, setNewNoteContext] = useState({ view: activeView, symbol: activeSymbol });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [tagsDraft, setTagsDraft] = useState("");
@@ -111,15 +112,15 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
     const note = newNote.trim();
     if (!note) return;
     const item = createResearchContextItem({
-      view: activeView,
-      symbol: activeSymbol,
+      view: newNoteContext.view,
+      symbol: newNoteContext.symbol,
       kind: "note",
-      title: activeSymbol ? activeSymbol + " · Research Note" : "Research Note",
+      title: newNoteContext.symbol ? newNoteContext.symbol + " · Research Note" : "Research Note",
       note,
     });
     if (!persist([item, ...items])) return;
     try {
-      appendResearchThreadEvent({ kind: "pin", view: activeView, symbol: activeSymbol, label: item.title, detail: note });
+      appendResearchThreadEvent({ kind: "pin", view: newNoteContext.view, symbol: newNoteContext.symbol, label: item.title, detail: note });
       setNotice("Research note saved locally.");
     } catch {
       setNotice("Note saved, but the research history could not be updated.");
@@ -189,7 +190,7 @@ export default function ResearchTray({ activeView, activeSymbol, onOpen, onClose
               <button type="button" onClick={pinCurrent} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-primary/45 bg-primary/[0.065] px-3 py-2 font-ui text-sm font-semibold text-primary hover:bg-primary/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                 <BookmarkPlus className="h-4 w-4" aria-hidden="true" /> Pin current
               </button>
-              <button type="button" onClick={() => { setAddingNote((current) => !current); setNewNote(""); }} aria-expanded={addingNote} aria-controls="research-new-note"
+              <button type="button" onClick={() => { setAddingNote((current) => !current); setNewNote(""); setNewNoteContext({ view: activeView, symbol: activeSymbol }); }} aria-expanded={addingNote} aria-controls="research-new-note"
                 className={smallButton}>
                 <Plus className="h-4 w-4" aria-hidden="true" /> New note
               </button>
