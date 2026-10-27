@@ -1,5 +1,5 @@
 import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
@@ -39,6 +39,9 @@ export default function NewsPanel({ symbol }: Props) {
   const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
   const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
+  const activeNewsStoryRef = useRef<string | null>(null);
+  const recheckGenerationRef = useRef(0);
+  useEffect(() => () => { recheckGenerationRef.current++; }, []);
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
     queryKey: ["/api/finance/news", symbol ?? "market", query, page, from, to],
@@ -80,6 +83,9 @@ export default function NewsPanel({ symbol }: Props) {
   }, [filtered, selectedUrl, newsQuery.isSuccess, newsQuery.isFetching, newsQuery.isError]);
 
   const selectedItem = filtered.find((item) => item.url === selectedUrl) ?? null;
+  // Ref tracks the currently committed read-through target across asynchronous
+  // license rechecks. A late response can never overwrite another article.
+  activeNewsStoryRef.current = selectedItem?.url ?? null;
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedContextImage = selectedItem && contextImage?.storyUrl === selectedItem.url && !selectedItem.media ? contextImage.candidate : null;
@@ -90,11 +96,14 @@ export default function NewsPanel({ symbol }: Props) {
     setSavedImageState(previous => rememberNewsIllustration(previous, selectedItem.url, selectedContextImage));
   };
   const forgetSelected = () => {
+    recheckGenerationRef.current++;
     if (!canRememberIllustrations || !selectedItem) return;
     setSavedImageState(previous => forgetNewsIllustration(previous, selectedItem.url));
   };
   const reopenSaved = async (): Promise<boolean> => {
     if (!savedSelection || !selectedItem || !canRememberIllustrations) return false;
+    const requestedStory = selectedItem.url;
+    const generation = ++recheckGenerationRef.current;
     const response = await fetch("/api/media/commons/cc0/file?title=" + encodeURIComponent(savedSelection.candidate.fileTitle), {
       credentials: "same-origin",
       cache: "no-store",
@@ -104,9 +113,10 @@ export default function NewsPanel({ symbol }: Props) {
     if (!payload || typeof payload !== "object") return false;
     const record = payload as { status?: unknown; candidate?: unknown };
     if (record.status !== "unreviewed") return false;
+    if (generation !== recheckGenerationRef.current || activeNewsStoryRef.current !== requestedStory) return false;
     const candidate = restoredNewsIllustration(savedSelection, record.candidate as CommonsCandidate);
     if (!candidate) return false;
-    setContextImage({ storyUrl: selectedItem.url, candidate });
+    setContextImage({ storyUrl: requestedStory, candidate });
     return true;
   };
 
@@ -242,8 +252,8 @@ export default function NewsPanel({ symbol }: Props) {
                   : selectedContextImage ? <CommonsContextIllustration candidate={selectedContextImage} showSource /> : null}
                 <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
                   selected={selectedContextImage}
-                  onSelect={candidate => setContextImage({ storyUrl: selectedItem.url, candidate })}
-                  onClear={() => setContextImage(null)}
+                  onSelect={candidate => { recheckGenerationRef.current++; setContextImage({ storyUrl: selectedItem.url, candidate }); }}
+                  onClear={() => { recheckGenerationRef.current++; setContextImage(null); }}
                   canRemember={canRememberIllustrations}
                   saved={savedSelection}
                   onRemember={rememberSelected}
