@@ -2785,6 +2785,7 @@ export default function ProjectExperienceShell({
         open={showChatExtensions}
         onOpenChange={setShowChatExtensions}
         projectAvailable={chatMode === "project" && Boolean(selection.projectId)}
+        projectId={chatMode === "project" ? selection.projectId : null}
         onStagePrompt={(prompt) => {
           // Never overwrite a pending user draft or send an MCP call implicitly.
           setInput(current => current.trim() ? `${current.trimEnd()}\n\n${prompt}` : prompt);
