@@ -70,6 +70,15 @@ test("mobile drawer reuses named navigation, closes on selection, and provides a
   assert.match(styles, /@media \(max-width:\s*767px\)[\s\S]*\.lios-authenticated-navigation\s*\{\s*display:\s*none\s*!important/);
 });
 
+test("host-initiated navigation observes the same Stop and unsaved-work protections", () => {
+  assert.match(shell, /Host shortcuts\/deep links use the same safety rules as sidebar navigation/);
+  assert.match(shell, /navigationRequest\.section !== "conversation" && \(busyRef\.current \|\| sendInFlightRef\.current\)/);
+  assert.match(shell, /navigationRequest\.section !== "conversation" && artifactDraftDirtyRef\.current/);
+  assert.match(shell, /if \(navigationRequest\.section === "conversation"\) setProjectHomeRequested\(false\)/);
+  assert.match(styles, /lios-authenticated-navigation \.lios-primary-navigation \{[\s\S]*max-height: min\(58vh, 490px\)/);
+  assert.match(styles, /lios-authenticated-navigation \.lios-compact-account-trigger \{[\s\S]*min-height: 40px/);
+});
+
 test("navigation actions preserve the right section and avoid losing current work", () => {
   assert.match(shell, /activeSection=\{section === "conversation" && entrySurface === "project-home" \? "projects" : section\}/);
   assert.match(shell, /onSearch=\{requestWorkSearch\}/);
