@@ -2,6 +2,7 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Focus, MapPin, Minus, Plus, Search, X } from "lucide-react";
 import { projectOfflineWorldPoints, worldMapCenterPreservingPan, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 
 const WIDTH = 1152;
 const HEIGHT = 576;
@@ -28,6 +29,7 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
     [points, sourceOnly, withEventDate, query],
   );
   const selected = projection.points.find(point => point.id === selectedId) ?? null;
+  const selectedRecordedEvent = selected ? recordedIsoTimestamp(selected.occurredAt) : null;
 
   const fit = () => {
     const width = viewportRef.current?.clientWidth ?? 560;
@@ -202,7 +204,9 @@ export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: 
             {selected.sourceRef
               ? <p className="break-all text-muted-foreground">Recorded source ID: <code>{selected.sourceRef}</code></p>
               : <p className="text-amber-200">No source ID attached. Coordinates are recorded, not independently verified.</p>}
-            {selected.occurredAt && <p className="text-muted-foreground">Recorded event: <time dateTime={selected.occurredAt}>{new Date(selected.occurredAt).toLocaleString()}</time></p>}
+            {selectedRecordedEvent
+              ? <p className="text-muted-foreground">Recorded event: <time dateTime={selectedRecordedEvent}>{new Date(selectedRecordedEvent).toLocaleString()}</time></p>
+              : <p className="text-muted-foreground">{selected.occurredAt ? "The supplied event date was not a valid timezone-aware timestamp." : "No event date was recorded."}</p>}
           </> : <p className="text-muted-foreground">Select a marker or a location from the keyboard-accessible list to inspect the source reference and recorded time.</p>}
         </section>
       </div>}
