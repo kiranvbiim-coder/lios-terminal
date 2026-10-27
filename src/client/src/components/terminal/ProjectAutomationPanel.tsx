@@ -413,7 +413,8 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           const last = latestRun.get(workflow.id);
           const truth = workflowExecutionTruth(workflow, last);
           return (
-            <article key={workflow.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+            <article key={workflow.id} data-p9-workflow-id={workflow.id} tabIndex={-1}
+              className="rounded-lg border border-border/50 bg-black/15 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
               <div className="flex items-start gap-2">
                 <button type="button" disabled={Boolean(busyId)}
                   onClick={() => requestWorkflowReview(workflow, workflow.enabled ? "pause" : "resume")}
