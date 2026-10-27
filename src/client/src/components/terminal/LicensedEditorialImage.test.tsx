@@ -79,3 +79,19 @@ test("News readthrough preserves keyboard selection, and never reuses a differen
   assert.match(denied,/Story overview/);
   assert.doesNotMatch(denied,/<img\b/);
 });
+
+test("a nonfeatured news card shows verified image thumbnail instead of an empty decorative placeholder", () => {
+  const html = render(React.createElement(NewsEditorialStoryCard, {
+    title:"Recorded solar coverage",summary:"Source-backed report",source:"Original publisher",
+    publishedAt:"2026-10-27T03:00:00Z",ageLabel:"Today",statusBadge:React.createElement("span",null,"Recorded"),
+    active:false,lead:false,onSelect:()=>undefined,media,sourceEvidenceId:"evidence:solar:1",
+  }));
+  assert.match(html, /licensed-editorial-image/);
+  assert.match(html, /h-20/);
+  const noGrant = render(React.createElement(NewsEditorialStoryCard, {
+    title:"Other story",summary:"No image permission",source:"Another publisher",
+    publishedAt:"2026-10-27T03:00:00Z",ageLabel:"Today",statusBadge:React.createElement("span",null,"Recorded"),
+    active:false,lead:false,onSelect:()=>undefined,media,sourceEvidenceId:"other",
+  }));
+  assert.doesNotMatch(noGrant, /<img\\b/);
+});
