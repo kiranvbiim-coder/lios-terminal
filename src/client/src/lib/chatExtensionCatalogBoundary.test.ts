@@ -28,3 +28,14 @@ test("Phase 3 plugin browser lives in Chat and never replaces P13 installer or M
   assert.match(shell, /pendingComposerDialog\.current = "plugins"/);
   assert.doesNotMatch(shell, /<DropdownMenuItem onSelect=\{openPluginCenter\}>/);
 });
+
+test("Phase 3 MCP credential setup remains inside Chat and uses the existing encrypted vault", () => {
+  const form = readFileSync(new URL("../components/terminal/ChatMcpConnectForm.tsx", import.meta.url), "utf8");
+  assert.match(form, /type="password"/);
+  assert.match(form, /\/api\/setup\/credentials\/\$\{createdCredentialRef\}/);
+  assert.match(form, /credentialRef: createdCredentialRef/);
+  assert.match(form, /credentialWritten && savedId === null/);
+  assert.match(form, /setBearerToken\(""/);
+  assert.doesNotMatch(form, /config:\s*\{[^}]*bearerToken/);
+  assert.doesNotMatch(form, /localStorage|sessionStorage/);
+});
