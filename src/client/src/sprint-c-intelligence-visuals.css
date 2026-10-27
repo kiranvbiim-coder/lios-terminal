@@ -1,0 +1,225 @@
+/*
+ * Sprint C: feature-scoped visual refinement only.
+ * Source-aware markets + saved intelligence overlays.
+ * Global pane/dock/window geometry remains exclusively in terminal-shell.css.
+ * No assets, network dependencies or chart-animation loops.
+ */
+
+.terminal-root [data-sprint-c-visual="market"] {
+  container: lios-market / inline-size;
+  --c-stroke: color-mix(in srgb, var(--lios-border-strong) 70%, var(--lios-market-up) 30%);
+  --c-focus: var(--lios-brand);
+  border-color: var(--c-stroke);
+  border-radius: 14px;
+  background: radial-gradient(ellipse at 22% 0%, rgb(45 156 219 / .07), transparent 48%),
+    linear-gradient(170deg, var(--lios-bg-panel-2), var(--lios-bg-app) 75%);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-header {
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: clamp(12px, 2vw, 18px);
+  gap: 12px;
+  background: linear-gradient(120deg, rgb(255 255 255 / .028), transparent 72%);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-title {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: clamp(1.04rem, 2vw, 1.55rem);
+  line-height: 1.25;
+  font-weight: 680;
+  letter-spacing: -.025em;
+  color: var(--lios-text-primary);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-subtitle {
+  max-width: 55ch;
+  font-size: .75rem;
+  line-height: 1.55;
+  color: var(--lios-text-secondary);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-actions {
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+.terminal-root [data-sprint-c-visual="market"] :is(.fusion-range-button, .fusion-canvas-action) {
+  min-height: 42px;
+  min-width: 44px;
+  padding-inline: 12px;
+  font-size: .72rem;
+  border-radius: 9px;
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-range-button[aria-pressed="true"] {
+  outline: 1px solid color-mix(in srgb, var(--c-focus) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-grid {
+  gap: 1px;
+  background: var(--lios-border-default);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-panel {
+  background: linear-gradient(145deg, rgb(255 255 255 / .018), transparent 48%), var(--lios-bg-panel-2);
+  transition: background-color .18s var(--lios-ease), box-shadow .18s var(--lios-ease);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-panel:is(:hover, :focus-within) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .06);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-canvas-panel-head {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: .72rem;
+  font-weight: 650;
+  line-height: 1.45;
+  letter-spacing: .04em;
+  color: var(--lios-text-secondary);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-source-note {
+  max-width: none;
+  margin: 2px 0 10px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--lios-text-secondary);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-chart-legend {
+  gap: 8px 14px;
+  margin-top: 10px;
+  padding: 0;
+  font-size: .68rem;
+  line-height: 1.6;
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data {
+  margin-top: 14px;
+  border-top: 1px solid var(--lios-border-strong);
+  padding-top: 10px;
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data > summary {
+  min-height: 42px;
+  display: list-item;
+  cursor: pointer;
+  padding: 11px 12px;
+  border: 1px solid var(--lios-border-strong);
+  border-radius: 9px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: .77rem;
+  font-weight: 650;
+  color: var(--lios-text-primary);
+  background: rgb(255 255 255 / .028);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data[open] > summary {
+  border-color: var(--c-stroke);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-table-scroll {
+  width: 100%;
+  max-height: min(360px, 55vh);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--lios-border-default);
+  background: var(--lios-bg-panel);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data table {
+  width: 100%;
+  min-width: 350px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data caption {
+  padding: 10px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: .71rem;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--lios-text-secondary);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data :is(th, td) {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--lios-border-subtle);
+  text-align: right;
+  font-size: .72rem;
+  white-space: nowrap;
+  color: var(--lios-text-primary);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data :is(th:first-child, td:first-child) { text-align: left; }
+.terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-data thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--lios-bg-elevated);
+  color: var(--lios-text-secondary);
+}
+
+.terminal-root [data-sprint-c-visual="market"] .fusion-market-tile {
+  min-height: 68px;
+  border-radius: 6px;
+  transition: border-color .16s var(--lios-ease), filter .16s var(--lios-ease);
+}
+.terminal-root [data-sprint-c-visual="market"] .fusion-market-tile:hover {
+  transform: none;
+  filter: brightness(1.13);
+}
+.terminal-root [data-sprint-c-visual="market"] :is(button, summary, a):focus-visible,
+.terminal-root [data-sprint-c-visual="graph"] :is(button, input, select):focus-visible,
+.terminal-root [data-sprint-c-visual="evidence"] :is(button, input, select, a):focus-visible,
+.terminal-root [data-sprint-c-visual="studio"] :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--lios-brand);
+  outline-offset: 3px;
+}
+
+.terminal-root [data-sprint-c-visual="graph"] [data-graph-object] {
+  transition: border-color .16s var(--lios-ease), box-shadow .16s var(--lios-ease);
+}
+.terminal-root [data-sprint-c-visual="graph"] [data-graph-object]:hover {
+  transform: translate(-50%, -50%);
+  box-shadow: 0 14px 38px rgb(0 0 0 / .26), inset 0 1px 0 rgb(255 255 255 / .06);
+}
+.terminal-root [data-sprint-c-visual="evidence"] :where(article),
+.terminal-root [data-sprint-c-visual="studio"] :where(section.rounded-2xl) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .018);
+}
+
+@container lios-market (max-width: 800px) {
+  .terminal-root [data-sprint-c-visual="market"] .fusion-canvas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-flow-panel,
+  .terminal-root [data-sprint-c-visual="market"] .fusion-map-panel {
+    grid-column: span 2;
+  }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-index-strip {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+}
+@container lios-market (max-width: 560px) {
+  .terminal-root [data-sprint-c-visual="market"] .fusion-canvas-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-flow-panel,
+  .terminal-root [data-sprint-c-visual="market"] .fusion-map-panel {
+    grid-column: auto;
+  }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-canvas-panel { min-width: 0; }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-canvas-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .terminal-root [data-sprint-c-visual="market"] .fusion-sprint-c-actions { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-root :is([data-sprint-c-visual="market"], [data-sprint-c-visual="graph"], [data-sprint-c-visual="evidence"], [data-sprint-c-visual="studio"]) :is(.fusion-market-tile, .fusion-canvas-panel, [data-graph-object], button, .fusion-canvas-orb) {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+.terminal-root:is([data-reduced-motion="true"], [data-low-resource-mode="true"]) :is([data-sprint-c-visual="market"], [data-sprint-c-visual="graph"], [data-sprint-c-visual="evidence"], [data-sprint-c-visual="studio"]) :is(.fusion-market-tile, .fusion-canvas-panel, [data-graph-object], button, .fusion-canvas-orb) {
+  transition: none !important;
+  animation: none !important;
+  filter: none !important;
+}

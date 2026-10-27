@@ -20,6 +20,7 @@ import { useIndexSparklines } from "@/lib/useFinance";
 import { formatPrice, getCurrencySymbol, INDICES, pctClass } from "@/lib/finance";
 import { cn } from "@/lib/utils";
 import { FusionSparkline } from "./FusionPrimitives";
+import { recordedBreadthRows, recordedLatestBreadth, shortRecordedMarketDate } from "@/lib/sprintCMarketCanvas";
 
 interface Props {
   breadth?: MarketBreadthResult;
@@ -29,12 +30,8 @@ interface Props {
 }
 
 type Range = "1W" | "1M" | "3M";
-
-function shortDate(value: string) {
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(date);
-}
+const EMPTY_BREADTH_SERIES: MarketBreadthResult["series"] = [];
+const SESSION_LABEL: Record<Range, string> = { "1W": "7S", "1M": "30S", "3M": "90S" };
 
 function moveColor(value: number) {
   const intensity = Math.min(1, Math.max(0.18, Math.abs(value) / 5));
@@ -52,6 +49,7 @@ function MoveTile({ quote, onOpen }: { quote: Quote; onOpen: Props["onOpen"] }) 
       className="fusion-market-tile group"
       style={{ background: moveColor(move) }}
       title={`${quote.name} · ${move >= 0 ? "+" : ""}${move.toFixed(2)}%`}
+      aria-label={`Open recorded quote for ${quote.name} (${quote.symbol}), ${move >= 0 ? "up" : "down"} ${Math.abs(move).toFixed(2)} percent`}
     >
       <span className="truncate font-terminal text-[8px] font-bold text-white/95">{quote.symbol.replace(/\.(NS|BO|T|HK)$/, "")}</span>
       <span className="mt-1 font-terminal text-[10px] font-bold tabular-nums text-white">{move >= 0 ? "+" : ""}{move.toFixed(2)}%</span>
@@ -78,24 +76,16 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }: Props) {
   const [range, setRange] = useState<Range>("1M");
   const { data: indexSparklines = {} } = useIndexSparklines();
-  const series = breadth?.series ?? [];
+  const series = breadth?.series ?? EMPTY_BREADTH_SERIES;
   const points = range === "1W" ? 7 : range === "3M" ? 90 : 30;
 
-  const flowData = useMemo(() => series.slice(-points).map((item) => {
-    const total = Math.max(1, item.advances + item.declines + item.unchanged);
-    return {
-      date: shortDate(item.date),
-      advances: (item.advances / total) * 100,
-      declines: -(item.declines / total) * 100,
-      net: (item.netAdvances / total) * 100,
-    };
-  }), [points, series]);
+  const flowData = useMemo(() => recordedBreadthRows(series, points), [points, series]);
 
   const latest = breadth?.latest ?? null;
-  const latestTotal = latest ? Math.max(1, latest.advances + latest.declines + (latest.unchanged ?? 0)) : 1;
-  const advancePct = latest ? latest.advances / latestTotal * 100 : 0;
-  const declinePct = latest ? latest.declines / latestTotal * 100 : 0;
-  const unchangedPct = Math.max(0, 100 - advancePct - declinePct);
+  const validLatest = recordedLatestBreadth(latest);
+  const advancePct = validLatest?.advances ?? 0;
+  const declinePct = validLatest?.declines ?? 0;
+  const unchangedPct = validLatest?.unchanged ?? 0;
 
   const moverData = useMemo(() => [...gainers.slice(0, 4), ...losers.slice(0, 4)]
     .filter((quote) => Number.isFinite(quote.changePercent))
@@ -110,24 +100,25 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
     const values = (indexSparklines[index.symbol] ?? []).filter((value) => Number.isFinite(value));
     const first = values[0];
     const last = values.at(-1);
-    const move = first && last ? ((last - first) / Math.abs(first)) * 100 : null;
+    const move = first !== undefined && last !== undefined && first !== 0
+      ? ((last - first) / Math.abs(first)) * 100 : null;
     return { ...index, values, move };
   }), [indexSparklines]);
 
   return (
-    <section className="fusion-market-canvas" aria-label="Visual market canvas">
+    <section className="fusion-market-canvas" data-sprint-c-visual="market" aria-label="Visual market canvas">
       <header className="fusion-canvas-header">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="fusion-canvas-orb" aria-hidden="true"><span /></div>
           <div className="min-w-0">
-            <div className="fusion-section-eyebrow text-cyan-200/75">VISUAL MARKET MAP · LIVE EVIDENCE</div>
+            <div className="fusion-section-eyebrow text-cyan-200/75">MARKET MAP · RECORDED OBSERVATIONS</div>
             <div className="fusion-canvas-title">Market canvas</div>
-            <div className="fusion-canvas-subtitle">Breadth flow, momentum and market movers in one glance.</div>
+            <div className="fusion-canvas-subtitle">Source-bound breadth, momentum and movers. Ranges count recorded trading sessions, not calendar weeks or months.</div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="fusion-sprint-c-actions flex shrink-0 items-center gap-1.5" aria-label="Market canvas view options">
           {(["1W", "1M", "3M"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => setRange(item)} aria-pressed={range === item} className={cn("fusion-range-button", range === item && "fusion-range-button-active")}>{item}</button>
+            <button key={item} type="button" onClick={() => setRange(item)} aria-label={`Show up to ${item === "1W" ? 7 : item === "1M" ? 30 : 90} recorded trading sessions`} aria-pressed={range === item} className={cn("fusion-range-button", range === item && "fusion-range-button-active")}>{SESSION_LABEL[item]}</button>
           ))}
           <button type="button" onClick={() => onOpen("heatmap", "current")} className="fusion-canvas-action">FULL MAP ↗</button>
         </div>
@@ -145,7 +136,10 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
 
       <div className="fusion-canvas-grid">
         <div className="fusion-canvas-panel fusion-flow-panel">
-          <div className="fusion-canvas-panel-head"><span>ADVANCE / DECLINE FLOW</span><span className="text-cyan-200/75">{latest?.date ?? "AWAITING DATA"}</span></div>
+          <div className="fusion-canvas-panel-head"><span>ADVANCE / DECLINE FLOW</span><span className="text-cyan-200/75">{flowData.at(-1)?.date ?? "AWAITING DATA"}</span></div>
+          <p className="fusion-sprint-c-source-note" role="status">{flowData.length
+            ? `${flowData.length} recorded sessions shown · latest ${points} sessions selected · percentages of reported breadth universe`
+            : "No usable recorded breadth sessions for this range. A missing source is not a zero market reading."}</p>
           {flowData.length ? (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={flowData} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}>
@@ -154,8 +148,8 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
                   <linearGradient id="fusionDeclineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(2 78% 56%)" stopOpacity={0.015} /><stop offset="100%" stopColor="hsl(2 78% 56%)" stopOpacity={0.3} /></linearGradient>
                 </defs>
                 <CartesianGrid stroke="hsl(0 0% 100% / .07)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: "hsl(0 0% 100% / .42)", fontSize: 8 }} tickLine={false} axisLine={false} minTickGap={24} />
-                <YAxis domain={[-100, 100]} tick={{ fill: "hsl(0 0% 100% / .34)", fontSize: 8 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                <XAxis dataKey="date" tickFormatter={shortRecordedMarketDate} tick={{ fill: "hsl(0 0% 100% / .62)", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={24} />
+                <YAxis domain={[-100, 100]} tick={{ fill: "hsl(0 0% 100% / .55)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
                 <ReferenceLine y={0} stroke="hsl(0 0% 100% / .18)" />
                 <Tooltip content={<ChartTooltip />} cursor={{ stroke: "hsl(186 80% 65% / .25)" }} />
                 <Area type="monotone" dataKey="advances" name="ADVANCERS" stroke="hsl(145 70% 47%)" fill="url(#fusionAdvanceFill)" strokeWidth={1.5} isAnimationActive={false} />
@@ -164,18 +158,33 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
               </AreaChart>
             </ResponsiveContainer>
           ) : <div className="fusion-visual-empty">Waiting for breadth history to draw the market.</div>}
-          <div className="fusion-chart-legend"><span><i className="bg-emerald-300" />ADVANCERS</span><span><i className="bg-rose-300" />DECLINERS</span><span><i className="bg-amber-300" />NET FLOW</span></div>
+          <div className="fusion-chart-legend"><span><i className="bg-emerald-300" />ADVANCERS</span><span><i className="bg-rose-300" />DECLINERS (negative axis for comparison)</span><span><i className="bg-amber-300" />NET FLOW</span></div>
+          <details className="fusion-sprint-c-data">
+            <summary>Read recorded breadth values ({flowData.length} sessions)</summary>
+            {flowData.length ? <div className="fusion-sprint-c-table-scroll">
+              <table aria-label={`Recorded advance decline percentages from up to the latest ${points} sessions`}>
+                <caption>Existing provider records only. Decliners appear negative on the chart; the table shows their positive share. No forecast or interpolation.</caption>
+                <thead><tr><th scope="col">Session</th><th scope="col">Advancing</th><th scope="col">Declining</th><th scope="col">Net</th></tr></thead>
+                <tbody>{flowData.map((row, index) => <tr key={`${row.date}:${index}`}>
+                  <th scope="row"><time dateTime={row.date}>{row.date}</time></th>
+                  <td>{row.advances.toFixed(1)}%</td>
+                  <td>{Math.abs(row.declines).toFixed(1)}%</td>
+                  <td>{row.net > 0 ? "+" : ""}{row.net.toFixed(1)}%</td>
+                </tr>)}</tbody>
+              </table>
+            </div> : <p role="status" className="p-3 text-sm text-muted-foreground">No valid recorded breadth rows are available to inspect.</p>}
+          </details>
         </div>
 
         <div className="fusion-canvas-panel fusion-breadth-panel">
           <div className="fusion-canvas-panel-head"><span>MARKET BREADTH</span><span>{breadth?.universeSize ? `${breadth.universeSize.toLocaleString()} NAMES` : "—"}</span></div>
-          <div className="fusion-breadth-ring" style={{ "--advance": `${advancePct}%`, "--decline": `${declinePct}%` } as CSSProperties}>
-            <div><strong>{latest ? `${Math.round(advancePct)}%` : "—"}</strong><span>ADVANCING</span></div>
+          <div className="fusion-breadth-ring" aria-label={validLatest ? `Recorded market breadth: ${advancePct.toFixed(1)}% advancing, ${declinePct.toFixed(1)}% declining, ${unchangedPct.toFixed(1)}% unchanged` : "Breadth proportions not recorded"} style={{ "--advance": `${advancePct}%`, "--decline": `${declinePct}%` } as CSSProperties}>
+            <div><strong>{validLatest ? `${Math.round(advancePct)}%` : "—"}</strong><span>ADVANCING</span></div>
           </div>
-          <div className="fusion-stack-bar" aria-label="Market breadth split"><span className="bg-emerald-300" style={{ width: `${advancePct}%` }} /><span className="bg-rose-300" style={{ width: `${declinePct}%` }} /><span className="bg-white/20" style={{ width: `${unchangedPct}%` }} /></div>
-          <div className="grid grid-cols-3 gap-2 pt-3 text-center"><div><strong className="text-emerald-300">{latest?.advances ?? "—"}</strong><span>ADV</span></div><div><strong className="text-rose-300">{latest?.declines ?? "—"}</strong><span>DEC</span></div><div><strong className="text-white/65">{latest?.unchanged ?? "—"}</strong><span>FLAT</span></div></div>
-          <div className="fusion-breadth-stat"><span>NEW HIGHS / LOWS</span><strong>{latest ? `${latest.newHighs} / ${latest.newLows}` : "—"}</strong></div>
-          <div className="fusion-breadth-stat"><span>McCLELLAN</span><strong className={latest?.mcClellanOscillator && latest.mcClellanOscillator >= 0 ? "text-emerald-300" : "text-rose-300"}>{latest?.mcClellanOscillator == null ? "—" : latest.mcClellanOscillator.toFixed(2)}</strong></div>
+          <div className="fusion-stack-bar" aria-label={validLatest ? "Recorded market breadth split" : "Market breadth split unavailable"}><span className="bg-emerald-300" style={{ width: `${advancePct}%` }} /><span className="bg-rose-300" style={{ width: `${declinePct}%` }} /><span className="bg-white/20" style={{ width: `${unchangedPct}%` }} /></div>
+          <div className="grid grid-cols-3 gap-2 pt-3 text-center"><div><strong className="text-emerald-300">{validLatest ? latest?.advances : "—"}</strong><span>ADV</span></div><div><strong className="text-rose-300">{validLatest ? latest?.declines : "—"}</strong><span>DEC</span></div><div><strong className="text-white/65">{validLatest ? latest?.unchanged : "—"}</strong><span>FLAT</span></div></div>
+          <div className="fusion-breadth-stat"><span>NEW HIGHS / LOWS</span><strong>{latest && Number.isSafeInteger(latest.newHighs) && latest.newHighs >= 0 && Number.isSafeInteger(latest.newLows) && latest.newLows >= 0 ? `${latest.newHighs} / ${latest.newLows}` : "—"}</strong></div>
+          <div className="fusion-breadth-stat"><span>McCLELLAN</span><strong className={latest?.mcClellanOscillator != null && Number.isFinite(latest.mcClellanOscillator) && latest.mcClellanOscillator >= 0 ? "text-emerald-300" : "text-rose-300"}>{latest?.mcClellanOscillator == null || !Number.isFinite(latest.mcClellanOscillator) ? "—" : latest.mcClellanOscillator.toFixed(2)}</strong></div>
         </div>
 
         <div className="fusion-canvas-panel fusion-momentum-panel">
@@ -193,12 +202,12 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          ) : <div className="fusion-visual-empty">No live mover data available.</div>}
+          ) : <div className="fusion-visual-empty">No recorded mover observations available.</div>}
         </div>
 
         <div className="fusion-canvas-panel fusion-map-panel">
-          <div className="fusion-canvas-panel-head"><span>LIVE MOVER MAP</span><span className="text-amber-200/75">CLICK TO DRILL IN</span></div>
-          {tiles.length ? <div className="fusion-market-map">{tiles.map((quote) => <MoveTile key={quote.symbol} quote={quote} onOpen={onOpen} />)}</div> : <div className="fusion-visual-empty">No live mover data available.</div>}
+          <div className="fusion-canvas-panel-head"><span>RECORDED MOVER MAP</span><span className="text-amber-200/75">CLICK TO DRILL IN</span></div>
+          {tiles.length ? <div className="fusion-market-map">{tiles.map((quote) => <MoveTile key={quote.symbol} quote={quote} onOpen={onOpen} />)}</div> : <div className="fusion-visual-empty">No recorded mover observations available.</div>}
           <div className="mt-auto border-t border-white/[0.07] pt-2 font-terminal text-[6.5px] leading-relaxed text-white/40">Tile color shows observed move intensity. Data stays tied to the visible provider universe and keeps its source state in the detail view.</div>
         </div>
       </div>
