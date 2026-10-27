@@ -74,6 +74,13 @@ export function importLicensedNewsPhoto(imagePath: string, grant: unknown, publi
     if (!entry.isFile()) throw new Error("Existing editorial assets must be regular files.");
     return bytes + fs.statSync(file).size;
   }, 0);
+  // A stale file from a failed import is not a licensed ship target. Reject
+  // the bundle until the operator explicitly reconciles it; never hide it in
+  // an otherwise valid manifest or create another unreferenced binary.
+  const referenced = new Set(existing.map(row => row.assetPath?.split("/").at(-1)));
+  if (currentFiles.some(entry => !referenced.has(entry.name))) {
+    throw new Error("Existing editorial assets include unreferenced or orphaned files.");
+  }
   const alreadyBundled = currentFiles.some(entry => entry.name === path.basename(destination));
   if (currentImageBytes + (alreadyBundled ? 0 : bytes.length) > MAX_RELEASE_IMAGE_BYTES) {
     throw new Error("Editorial images would exceed the 32 MiB release-size budget.");
