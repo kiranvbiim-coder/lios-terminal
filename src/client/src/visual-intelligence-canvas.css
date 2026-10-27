@@ -518,3 +518,49 @@ main[data-visual-host="true"]:has(.lios-visual-canvas[data-render-policy="low-re
 [data-low-resource-mode="true"] .lios-spatial-node[data-connection-member="true"] {
   box-shadow: none !important;
 }
+
+
+/* Phase 2 Spotlight: local, user-invoked saved-pin navigation; no second palette. */
+.lios-spatial-spotlight {
+  display: grid; gap: 9px; min-width: 0;
+  border: 1px solid var(--lios-border-default, rgb(255 255 255 / .17));
+  border-radius: 14px; padding: 12px;
+  background: var(--lios-bg-panel, rgb(20 22 28 / .96));
+}
+.lios-spatial-spotlight-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.lios-spatial-spotlight-controls { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.lios-spatial-find {
+  flex: 1 1 225px; min-width: 0; min-height: 44px; padding: 9px 12px;
+  border: 1px solid var(--lios-border-strong, rgb(255 255 255 / .33)); border-radius: 10px;
+  color: var(--lios-text-primary, #eee); background: var(--lios-bg-elevated, #22252a);
+  font-family: inherit; font-size: 14px; line-height: 1.5;
+}
+.lios-spatial-find:focus-visible {
+  outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: 2px;
+}
+.lios-spatial-spotlight-controls .lios-spatial-control:disabled { opacity: .45; cursor: not-allowed; }
+.lios-spatial-quick-hits {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 7px; list-style: none; margin: 0; padding: 0;
+}
+.lios-spatial-quick-hit {
+  display: flex; align-items: center; justify-content: space-between;
+  min-width: 0; width: 100%; min-height: 44px; gap: 10px;
+  padding: 8px 10px; text-align: left; border-radius: 9px;
+  background: var(--lios-bg-elevated, rgb(35 38 44 / .88));
+  border: 1px solid var(--lios-border-default, rgb(255 255 255 / .14));
+  color: var(--lios-text-primary, #eee); font-size: 13px;
+}
+.lios-spatial-quick-hit small {
+  flex: none; color: var(--lios-text-secondary, #bbb); font-size: 11px;
+}
+.lios-spatial-quick-hit:hover, .lios-spatial-quick-hit:focus-visible {
+  border-color: var(--lios-theme-link, #9ccbd3);
+}
+.lios-spatial-quick-hit:focus-visible {
+  outline: 2px solid var(--lios-theme-link, #9ccbd3); outline-offset: 2px;
+}
+@container (max-width: 540px) {
+  .lios-spatial-spotlight-controls .lios-spatial-find { flex-basis: 100%; }
+  .lios-spatial-spotlight-controls .lios-spatial-control { flex: 1 1 auto; }
+}
