@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useGatewayState } from "@/lib/gateway/GatewayProvider";
