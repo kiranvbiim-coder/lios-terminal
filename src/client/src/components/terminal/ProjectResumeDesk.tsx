@@ -1,3 +1,4 @@
+import * as React from "react";
 import { GitBranch, MessageSquareText, Workflow, Files } from "lucide-react";
 import type { ProjectChat, ProjectSession } from "@/lib/useProjects";
 import { useP6ProjectContinuity } from "@/lib/useP6Continuity";
