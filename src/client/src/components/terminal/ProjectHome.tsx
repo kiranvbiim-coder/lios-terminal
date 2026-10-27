@@ -205,9 +205,6 @@ export function ProjectHome({
             {project.instructions && <p className="mt-2 max-w-2xl font-ui text-[14px] leading-5 text-muted-foreground">{project.instructions}</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button onClick={() => onNewChat()} className="rounded-md border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2 font-ui text-[13px] font-medium text-amber-200 hover:bg-amber-400/[0.12]">
-              + New chat
-            </button>
             <details className="lios-project-options relative rounded-md border border-border/60" data-testid="project-options">
               <summary className="min-h-10 cursor-pointer select-none px-3 py-2 font-ui text-[13px] text-muted-foreground hover:text-foreground">Project options</summary>
               <div className="absolute right-0 z-20 mt-2 flex w-[min(280px,calc(100vw-40px))] flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-lg">
@@ -243,7 +240,7 @@ export function ProjectHome({
           </div>
         </div>
 
-        <section className="mt-6 rounded-2xl border border-border/55 bg-card p-4 backdrop-blur-sm">
+        <section className="mt-6">
           <button
             type="button"
             onClick={() => onNewChat()}
