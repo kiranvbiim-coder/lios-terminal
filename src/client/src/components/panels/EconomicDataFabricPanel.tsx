@@ -3,7 +3,8 @@ import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Activity, Database, RefreshCw, TriangleAlert } from "lucide-react";
 import type { PointInTimeScalarSeriesSnapshot, PointInTimeYieldCurveSnapshot } from "@shared/pointInTimeData";
-import { economicCaptureKnownOn, eligibleEconomicCaptures, type EconomicEvidenceComparison } from "@shared/economicEvidenceTimeMachine";
+import { eligibleEconomicCaptures, type EconomicEvidenceComparison } from "@shared/economicEvidenceTimeMachine";
+import { useRecordedAsOfSnapshot } from "@/lib/useRecordedAsOfSnapshot";
 import { AdvancedManualWorkflow, ReceiptSummary, useAdvancedWorkflow, type AdvancedReceipt } from "./advancedMacroForecastResearch";
 import { StructuredJsonEditor, type JsonFieldSchema } from "@/components/ui/StructuredJsonEditor";
 
@@ -130,7 +131,12 @@ export default function EconomicDataFabricPanel() {
   const currentCurve = selectedCurveId ? curves.find(item => item.id === selectedCurveId) ?? null : curves[0] ?? null;
   const recordedCaptures = eligibleEconomicCaptures(series,seriesId);
   const latestSeriesCapture = recordedCaptures[0] ?? null;
-  const savedThen = knownOnDay ? economicCaptureKnownOn(series,seriesId,knownOnDay) : null;
+  const historicalLookup = useRecordedAsOfSnapshot<PointInTimeScalarSeriesSnapshot>({
+    url:`/api/data-snapshots/economics/${encodeURIComponent(seriesId)}/as-of`,
+    entityKey:seriesId,datasetKey:`economic:${seriesId}`,dataClass:"economic_series",
+    day:knownOnDay,revision:latestSeriesCapture?.id,
+  });
+  const savedThen = historicalLookup.snapshot;
   const shownComparison = historicalComparison &&
     historicalComparison.baseline.id === savedThen?.id && historicalComparison.current.id === latestSeriesCapture?.id &&
     historicalComparison.baseline.entityKey === seriesId ? historicalComparison : null;
@@ -251,7 +257,11 @@ export default function EconomicDataFabricPanel() {
               className="mt-1 block min-h-11 rounded-md border border-border/60 bg-background px-3 font-ui text-sm text-foreground"/>
           </label>
         </div>
-        {knownOnDay && (!savedThen || !latestSeriesCapture
+        {knownOnDay && (historicalLookup.status === "loading"
+          ? <p role="status" className="font-ui text-xs text-muted-foreground">Inspecting retained economic vintages…</p>
+          : historicalLookup.status === "unavailable"
+            ? <p role="alert" className="font-ui text-xs text-rose-200">{historicalLookup.error || "Saved macro vintage lookup unavailable."}</p>
+          : !savedThen || !latestSeriesCapture
           ? <p role="status" className="font-ui text-xs text-amber-200">
               No immutable {seriesId} snapshot was retained as available on that day. This view cannot reconstruct missing evidence.
             </p>
