@@ -114,8 +114,9 @@ async function runRepresentativeCalculation(port, token) {
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Bundled Python sidecar representative calculation failed with HTTP ${response.status}${body ? `: ${body.slice(0, 500)}` : ""}.`);
+    // Never expose internal server error bodies (which can include local paths
+    // or tracebacks) in release and qualification logs.
+    throw new Error(`Bundled Python sidecar representative calculation failed with HTTP ${response.status}.`);
   }
   return validateRepresentativeCalculation(await response.json());
 }
@@ -192,6 +193,24 @@ function validateHealth(health) {
   };
 }
 
+/**
+ * A packaged worker may emit private paths/tracebacks on stderr. Keep public
+ * qualification diagnostics actionable without returning untrusted process text.
+ */
+function publicSidecarProbeFailure(error, observedStderr = false) {
+  const message = error instanceof Error ? error.message : "";
+  const http = /^(Packaged valuation route failed|Bundled Python sidecar representative calculation failed|Bundled Python sidecar authenticated runtime-info request failed) with HTTP ([1-5][0-9]{2})\./.exec(message);
+  const reason = http
+    ? `${http[1]} with HTTP ${http[2]}.`
+    : message.startsWith("Bundled Python sidecar failed health probe:")
+      ? "Bundled Python sidecar health probe failed."
+      : REQUIRED_SIDECAR_PACKAGES.some(name => message === `Bundled Python sidecar is missing required package ${name}.`)
+        ? "Bundled Python sidecar is missing a required package."
+        : "Bundled Python sidecar qualification failed.";
+  const detail = observedStderr ? " Worker diagnostics withheld from public logs." : "";
+  return new Error(reason + detail);
+}
+
 async function probeBundledPythonSidecar(options) {
   const executable = options.executable;
   if (!executable || !fs.existsSync(executable)) throw new Error("Bundled Python sidecar executable is missing.");
@@ -209,8 +228,9 @@ async function probeBundledPythonSidecar(options) {
     }),
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let stderr = "";
-  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  // Drain rather than retaining arbitrary traceback or sensitive output in memory.
+  let observedStderr = false;
+  child.stderr.on("data", () => { observedStderr = true; });
 
   try {
     const openHealth = await waitForSidecarHealth(port, options.timeoutMs || 45_000);
@@ -226,10 +246,7 @@ async function probeBundledPythonSidecar(options) {
     const valuationRoute = await runRepresentativeValuation(port, token);
     return { ...health, authentication, representativeRoute, valuationRoute, executable };
   } catch (error) {
-    if (stderr.trim()) {
-      throw new Error(`${error instanceof Error ? error.message : String(error)} Sidecar stderr: ${stderr.trim().slice(0, 2_000)}`);
-    }
-    throw error;
+    throw publicSidecarProbeFailure(error, observedStderr);
   } finally {
     child.kill();
     await new Promise((resolve) => {
@@ -261,3 +278,5 @@ module.exports.PACKAGED_VALUATION_ROUTE = PACKAGED_VALUATION_ROUTE;
 module.exports.PACKAGED_VALUATION_INPUT = PACKAGED_VALUATION_INPUT;
 module.exports.validateRepresentativeValuation = validateRepresentativeValuation;
 module.exports.runRepresentativeValuation = runRepresentativeValuation;
+module.exports.publicSidecarProbeFailure = publicSidecarProbeFailure;
+module.exports.runRepresentativeCalculation = runRepresentativeCalculation;
