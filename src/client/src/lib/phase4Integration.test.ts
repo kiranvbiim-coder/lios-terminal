@@ -8,7 +8,7 @@ const briefing = source("../components/terminal/ProjectBriefingStudio.tsx");
 const builder = source("./phase4Briefing.ts");
 const devices = source("../components/settings/DevicesSettings.tsx");
 const doctor = source("../components/settings/SystemDoctorDesk.tsx");
-const pkg = JSON.parse(source("../../../../package.json")) as {scripts: Record<string,string>};
+const pkg = JSON.parse(source("../../../package.json")) as {scripts: Record<string,string>};
 
 test("Briefing Studio owns no new Artifact datastore and uses P4 only after review", () => {
   assert.match(home, /<ProjectBriefingStudio key=\{project\.id\} projectId=\{project\.id\} onOpenArtifact=\{onFocusArtifact\}/);
@@ -35,8 +35,8 @@ test("System Doctor reuses internal P0 diagnostic GET and is no repair executor"
 test("offline zero-cost beta integrity tools are explicit and never production-signing claims", () => {
   assert.equal(pkg.scripts["beta:manifest:test"],"node --test betaReleaseManifest.test.cjs");
   assert.equal(pkg.scripts["beta:manifest"],"node script/beta_release_manifest.cjs");
-  const manifest=source("../../../../betaReleaseManifest.cjs");
-  const cli=source("../../../../script/beta_release_manifest.cjs");
+  const manifest=source("../../../betaReleaseManifest.cjs");
+  const cli=source("../../../script/beta_release_manifest.cjs");
   assert.match(manifest,/ed25519/);
   assert.match(manifest,/release_asset_integrity_only/);
   assert.match(manifest,/macNotarized: false/);
