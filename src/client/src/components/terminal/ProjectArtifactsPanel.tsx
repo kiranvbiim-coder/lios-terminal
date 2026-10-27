@@ -20,7 +20,7 @@ import { ObjectActionMenu } from "./ObjectActionMenu";
 import { ProjectArtifactGalleryCard } from "./ProjectArtifactGalleryCard";
 import { ProjectArtifactGalleryPreview } from "./ProjectArtifactGalleryPreview";
 import { ProjectBriefingStudio } from "./ProjectBriefingStudio";
-import { buildProjectBriefingReport, type BriefingSource } from "@/lib/projectBriefingStoryboard";
+import { buildProjectBriefingReport, isReviewedBriefingSourceCurrent, type BriefingSource } from "@/lib/projectBriefingStoryboard";
 
 function starter(kind: ArtifactContent["kind"]): ArtifactContent {
   if (kind === "spreadsheet") return { kind, sheets: [{ id: "sheet-1", name: "Model", cells: {}, names: {}, rowCount: 60, columnCount: 15 }], activeSheetId: "sheet-1", rendererPreference: "builtin", calculationMode: "automatic" };
@@ -127,8 +127,7 @@ export function ProjectArtifactsPanel({
     if (refreshed.isError || !refreshed.data) throw new Error("Saved Project sources could not be rechecked. Nothing was created.");
     for (const source of sources) {
       const current = refreshed.data.find(item => item.id === source.id && item.projectId === projectId);
-      if (!current || current.status !== "active" || current.headVersion !== source.headVersion
-        || current.kind !== source.kind || current.title !== source.title) {
+      if (!isReviewedBriefingSourceCurrent(source, current, projectId)) {
         throw new Error("A selected source changed since review. Reopen the briefing and review its exact saved version.");
       }
     }
