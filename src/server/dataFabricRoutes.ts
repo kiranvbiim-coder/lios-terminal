@@ -29,6 +29,7 @@ import {
   getMarketDatasetRevisionReport,
   getMarketDatasetSnapshot,
   listMarketDatasetSnapshots,
+  compareMarketDatasetPayloads,
 } from "./marketDatasetStore";
 import {
   captureFredSeriesSnapshot,
@@ -56,6 +57,7 @@ import { IntegratedModelArtifactError, integratedModelArtifactRequestSchema, loa
 import { getDb } from "./db";
 import { and, eq, isNull } from "drizzle-orm";
 import { datasetSnapshots, users } from "@shared/schema";
+import { marketCapturePairIssue, marketCaptureReference } from "@shared/marketEvidenceTimeMachine";
 
 const READ_ROLES = ["internal_admin", "internal_analyst", "internal_compliance"] as const;
 const AUTHOR_ROLES = ["internal_admin", "internal_analyst"] as const;
@@ -137,6 +139,54 @@ export function registerDataFabricRoutes(app: Express): void {
     if (!symbol.success) return res.status(400).json({ error: "A valid symbol is required." });
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
     res.json(await listMarketDatasetSnapshots(symbol.data, limit));
+  });
+
+  // B06: compare exactly two immutable market captures. This endpoint must
+  // never ask the live provider to reconstruct a past observation, nor treat
+  // historical bar dates as the capture's availability date.
+  app.get("/api/data-snapshots/markets/:symbol/compare", requireRole(...READ_ROLES), async (req, res) => {
+    const symbol = symbolSchema.safeParse(req.params.symbol);
+    const baselineId = z.string().uuid().safeParse(req.query.baselineId);
+    const currentId = z.string().uuid().safeParse(req.query.currentId);
+    if (!symbol.success || !baselineId.success || !currentId.success || baselineId.data === currentId.data)
+      return res.status(400).json({ error: "Two distinct saved capture IDs and an exact symbol are required." });
+    try {
+      const [baseline, current] = await Promise.all([
+        getMarketDatasetSnapshot(baselineId.data),
+        getMarketDatasetSnapshot(currentId.data),
+      ]);
+      if (!baseline || !current || baseline.entityKey !== symbol.data.toUpperCase() ||
+        current.entityKey !== symbol.data.toUpperCase()) {
+        return res.status(404).json({ error: "No authorized capture pair exists for this symbol." });
+      }
+      const issue = marketCapturePairIssue(baseline, current, symbol.data);
+      if (issue) return res.status(422).json({ status: "incomparable", error: issue });
+      // The canonical market store fingerprints payload + lineage. Validate
+      // both before comparing; a changed or damaged row is not evidence.
+      if ([baseline, current].some(snapshot =>
+        stableSnapshotHash({ payload: snapshot.payload, lineage: snapshot.lineage }) !== snapshot.contentHash)) {
+        return res.status(409).json({ status: "unverified", error: "Recorded capture content hash mismatch; no comparison is available." });
+      }
+      const report = compareMarketDatasetPayloads(baseline.payload, current.payload, current.id, baseline.id);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        status: "compared", baseline: marketCaptureReference(baseline), current: marketCaptureReference(current),
+        changes: {
+          status: report.status, changedObservations: report.changedObservations,
+          materialChanges: report.materialChanges, totalAddedDates: report.addedDates.length,
+          totalRemovedDates: report.removedDates.length, actionChanges: report.actionChanges,
+          revisions: report.revisions.slice(0, 48), addedDates: report.addedDates.slice(0, 16),
+          removedDates: report.removedDates.slice(0, 16),
+        },
+        omitted: {
+          revisions: Math.max(0, report.revisions.length - 48),
+          addedDates: Math.max(0, report.addedDates.length - 16),
+          removedDates: Math.max(0, report.removedDates.length - 16),
+        },
+      });
+    } catch {
+      return res.status(502).json({ status: "unavailable", error: "Saved market capture comparison unavailable." });
+    }
   });
 
   app.get("/api/data-snapshots/markets/:symbol/as-of", requireRole(...READ_ROLES), async (req, res) => {
