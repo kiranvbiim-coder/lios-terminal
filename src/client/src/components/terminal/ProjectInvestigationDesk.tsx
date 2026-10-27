@@ -6,6 +6,7 @@ import { ProjectEvidenceGraph } from "./ProjectEvidenceGraph";
 import { OfflineProjectWorldMap } from "./OfflineProjectWorldMap";
 import { ProjectConsequenceReview } from "./ProjectConsequenceReview";
 import { reviewRecordedConsequences } from "@/lib/recordedConsequenceReview";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 import {
   consequenceTrailChatPrompt,
   investigationViewIntentSchema,
@@ -31,6 +32,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
   const validLens = lens?.projectId === projectId ? lens : null;
   const selected = (validLens?.insights ?? []).find(item => item.id === selectedId)
     ?? validLens?.insights[0] ?? null;
+  const selectedEventInstant = selected ? recordedIsoTimestamp(selected.occurredAt) : null;
 
   const trail = useMemo(() => recordedConsequenceTrail(projectId, validGraph, selected), [projectId, validGraph, selected]);
   const consequenceReview = useMemo(() => reviewRecordedConsequences(projectId, validGraph, selected), [projectId, validGraph, selected]);
@@ -71,7 +73,7 @@ export function ProjectInvestigationDesk({ projectId, graph, lens, onInvestigate
         <div className="space-y-1">
           <p className="font-ui text-sm font-semibold text-foreground">{selected.title}</p>
           <p className="font-ui text-sm leading-6 text-muted-foreground">{selected.summary}</p>
-          <p className="font-ui text-xs text-muted-foreground">{selected.kind.replaceAll("_", " ")} · {selected.severity} · {selected.occurredAt ? new Date(selected.occurredAt).toLocaleDateString() : "No recorded event date"}</p>
+          <p className="font-ui text-xs text-muted-foreground">{selected.kind.replaceAll("_", " ")} · {selected.severity} · {selectedEventInstant ? new Date(selectedEventInstant).toLocaleDateString("en-GB", { timeZone: "UTC" }) : "No recorded event date"}</p>
         </div>
         <div role="group" aria-label="Investigation perspectives" className="flex flex-wrap gap-2">
           {(["evidence", "relationships", "geography"] as const).map(kind => {
