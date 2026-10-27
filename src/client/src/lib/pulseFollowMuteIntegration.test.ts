@@ -38,6 +38,8 @@ test("Existing card retains same Chat/evidence owner and accessible Follow/Mute 
   assert.match(card, /onAsk\(pulseStoryQuestion\(card\)\)/);
   assert.match(board, /aria-label=\{\x60Unmute \$\{subject\}\x60\}/);
   assert.match(board, /pulsePreferences\.muted\.map\(subject/);
+  assert.match(board, /pulsePreferences\.followed\.map\(subject/);
+  assert.match(board, /aria-label=\{\x60Unfollow \$\{subject\}\x60\}/);
   assert.match(shell, /fetch\("\/api\/wave-d\/pulse\/preferences"/);
   assert.match(shell, /saved\.persisted !== true/);
   assert.match(shell, /setPulseRevision\(value => value \+ 1\)/);
