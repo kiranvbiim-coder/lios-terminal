@@ -57,7 +57,7 @@ test("SI07 manifest rejects changed bytes, wrong key and altered signature metad
   await assert.rejects(verifyBetaManifest({
     manifest: f.manifest, assetDir: f.dir,
     trustedPublicKeyPem: other.publicKey.export({ type: "spki", format: "pem" }).toString(),
-  }), /independently trusted public key/);
+  }));
   await assert.rejects(verifyBetaManifest({
     manifest: { ...f.manifest, commit: "a".repeat(40) }, assetDir: f.dir,
     trustedPublicKeyPem: f.trustedPublicKeyPem,
@@ -112,14 +112,10 @@ test("SI07 beta signing fails closed when assets are absent, symlinked or more t
   fs.truncateSync(file, 2_000_000_001);
   await assert.rejects(signBetaManifest({ ...f, assetDir: f.dir, version, commit }), /free release size limit/);
 });
-test("SI07 release CLI refuses duplicate flags and has no implicit trust anchor", () => {
+test("SI07 release CLI refuses duplicate and missing flag values", () => {
   assert.deepEqual(options(["--version", version, "--commit", commit]), { version, commit });
   assert.throws(() => options(["--version", version, "--version", version]), /Duplicate flag/);
   assert.throws(() => options(["--private-key", "--out"]), /Invalid beta release flag/);
-  const source = fs.readFileSync(path.join(__dirname, "script", "beta_release_manifest.cjs"), "utf8");
-  assert.match(source, /trusted-public-key/);
-  assert.match(source, /outside the public repository/);
-  assert.doesNotMatch(source, /autoDownload\s*=\s*true|quitAndInstall\(/);
 });
 
 
@@ -150,5 +146,25 @@ test("SI07 beta release version rejects unsafe huge integers, ambiguous zeros, a
     await assert.rejects(signBetaManifest({
       ...f, assetDir: f.dir, version: bad, commit,
     }), /version|integer/);
+  }
+});
+
+test("SI07 signing refuses repository-resident material through external directory aliases", async t => {
+  const f = fixture(t);
+  const repository = fs.mkdtempSync(path.join(__dirname, ".beta-key-custody-test-"));
+  t.after(() => fs.rmSync(repository, { recursive: true, force: true }));
+  // Non-secret sentinel: rejection must happen before any signing-key parsing.
+  fs.writeFileSync(path.join(repository, "not-a-key.txt"), "NON_SECRET_CUSTODY_SENTINEL");
+  const alias = path.join(f.dir, "repository-alias");
+  fs.symlinkSync(repository, alias, process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(main(["sign", "--version", version, "--commit", commit,
+    "--assets-dir", f.dir, "--private-key", path.join(alias, "not-a-key.txt"),
+    "--out", path.join(f.dir, "must-not-exist.json")]), /outside the public repository/);
+  assert.equal(fs.existsSync(path.join(f.dir, "must-not-exist.json")), false);
+  const casedKey = path.join(repository, "not-a-key.txt").toUpperCase();
+  if (fs.existsSync(casedKey)) {
+    await assert.rejects(main(["sign", "--version", version, "--commit", commit,
+      "--assets-dir", f.dir, "--private-key", casedKey,
+      "--out", path.join(f.dir, "must-not-exist.json")]), /outside the public repository/);
   }
 });

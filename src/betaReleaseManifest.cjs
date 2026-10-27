@@ -57,7 +57,8 @@ function validateBody(body) {
   return body;
 }
 function publicKeyFingerprint(publicKey) {
-  const key = crypto.createPublicKey(publicKey);
+  const key = publicKey instanceof crypto.KeyObject && publicKey.type === "public"
+    ? publicKey : crypto.createPublicKey(publicKey);
   assert(key.asymmetricKeyType === "ed25519", "trusted key must be Ed25519.");
   return crypto.createHash("sha256").update(key.export({ type: "spki", format: "der" })).digest("hex");
 }
@@ -108,7 +109,7 @@ function parseManifest(manifest) {
   return { body, signature };
 }
 async function signBetaManifest({ version, commit, assetDir, privateKeyPem }) {
-  assert(VERSION.test(version), "beta version required.");
+  betaVersionParts(version);
   assert(COMMIT.test(commit), "exact source SHA required.");
   const key = crypto.createPrivateKey(privateKeyPem);
   assert(key.asymmetricKeyType === "ed25519", "signing key must be Ed25519.");

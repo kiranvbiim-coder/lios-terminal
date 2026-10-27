@@ -52,9 +52,24 @@ async function main(argv) {
     : ["manifest", "assets-dir", "trusted-public-key", "commit"];
   if (required.some(key => !flags[key])) throw new Error("Missing mandatory release manifest input.");
   if (operation === "sign") {
-    const keyFile = path.resolve(flags["private-key"]);
-    const repoRoot = path.resolve(__dirname, "..", "..");
-    if (keyFile === repoRoot || keyFile.startsWith(repoRoot + path.sep)) {
+    const keyPath = path.resolve(flags["private-key"]);
+    if (fs.lstatSync(keyPath).isSymbolicLink()) throw new Error("Private signing key must not be a symlink.");
+    const keyFile = fs.realpathSync(keyPath);
+    const repoRoot = fs.realpathSync(path.resolve(__dirname, "..", ".."));
+    const relativeKey = path.relative(repoRoot, keyFile);
+    const repositoryIdentity = fs.statSync(repoRoot, { bigint: true });
+    let insideRepository = false;
+    for (let ancestor = path.dirname(keyFile); ; ) {
+      const identity = fs.statSync(ancestor, { bigint: true });
+      if (identity.ino !== 0n && identity.ino === repositoryIdentity.ino && identity.dev === repositoryIdentity.dev) {
+        insideRepository = true;
+        break;
+      }
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
+    }
+    if (insideRepository || relativeKey === "" || (!path.isAbsolute(relativeKey) && relativeKey !== ".." && !relativeKey.startsWith(".." + path.sep))) {
       throw new Error("Private signing key MUST be stored outside the public repository.");
     }
     const output = path.resolve(flags.out);
