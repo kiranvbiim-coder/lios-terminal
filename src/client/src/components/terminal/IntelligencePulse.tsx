@@ -174,6 +174,7 @@ export default function IntelligencePulse({ onOpen, onStageAiReview, onClose }: 
                   : proactive.state === "loading" ? "Checking your permitted Action Inbox…"
                   : proactive.state === "not_authorized" ? "Action Inbox access is not authorized for this account or entitlement."
                   : proactive.state === "unavailable" ? "Action Inbox unavailable. No all-clear is implied; try again when the service is accessible."
+                  : proactive.state !== "ready" ? "Action Inbox status is not confirmed."
                   : proactive.review.openCount > 0
                     ? `${proactive.review.openCount} open items require review · ${proactive.review.totalCount} in the current inbox`
                     : `No open items in the returned inbox · ${proactive.review.totalCount} total records`}
