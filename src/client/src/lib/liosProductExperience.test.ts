@@ -65,31 +65,31 @@ test("chat skin is a final imported layer while canonical structural shell remai
   const fontImport = styles.indexOf('import "./lios-product-typography.css";');
   const polishImport = styles.indexOf('import "./lios-product-experience.css";');
   assert.ok(shellImport >= 0 && shellImport < canvasImport && canvasImport < fontImport && fontImport < polishImport);
-  assert.doesNotMatch(polishCss, /@import|@font-face|url\\(https?:/i);
-  assert.doesNotMatch(typeCss, /@font-face|url\\(https?:/i);
+  assert.doesNotMatch(polishCss, /@import|@font-face|url\(https?:/i);
+  assert.doesNotMatch(typeCss, /@font-face|url\(https?:/i);
   for (const name of themes) {
     assert.match(polishCss, new RegExp(`data-lios-palette="${name}"`));
   }
-  assert.match(polishCss, /:not\\(\\[data-lios-palette="lios-classic"\\]\\)/);
+  assert.match(polishCss, /:not\(\[data-lios-palette="lios-classic"\]\)/);
 });
 
 test("chat, composer, markdown, palette swatches and mounted artifact retain canonical ownership", () => {
-  assert.match(experience, /data-lios-message=\\{message\\.role\\}/);
-  assert.match(experience, /aria-label=\\{message\\.role === "assistant"/);
+  assert.match(experience, /data-lios-message=\{message\.role\}/);
+  assert.match(experience, /aria-label=\{message\.role === "assistant"/);
   assert.match(experience, /className="lios-chat-suggestion-menu/);
-  assert.match(experience, /id="lios-chat-empty-title"[^\\n]*text-foreground/);
-  assert.doesNotMatch(experience, /id="lios-chat-empty-title"[^\\n]*text-white/);
+  assert.match(experience, /id="lios-chat-empty-title"[^\n]*text-foreground/);
+  assert.doesNotMatch(experience, /id="lios-chat-empty-title"[^\n]*text-white/);
   assert.match(sidecar, /lios-artifact-sidecar/);
   assert.match(sidecar, /bg-background/);
-  assert.match(navigation, /data-lios-preview=\\{id\\}/);
+  assert.match(navigation, /data-lios-preview=\{id\}/);
   for (const name of ["chatgpt-dark", "chatgpt-light", "claude-light", "claude-dark", "lios-classic"]) {
     assert.match(polishCss, new RegExp(`data-lios-preview="${name}"`));
   }
   assert.match(polishCss, /prefers-reduced-motion: reduce/);
-  assert.match(polishCss, /\\[data-chat-table-block\\]/);
-  assert.match(polishCss, /\\[data-chat-code-block\\]/);
-  assert.match(polishCss, /--dv-group-view-background-color: var\\(--lios-bg-app\\)/);
-  assert.match(polishCss, /--dv-tabs-and-actions-container-background-color: var\\(--lios-bg-panel\\)/);
+  assert.match(polishCss, /\[data-chat-table-block\]/);
+  assert.match(polishCss, /\[data-chat-code-block\]/);
+  assert.match(polishCss, /--dv-group-view-background-color: var\(--lios-bg-app\)/);
+  assert.match(polishCss, /--dv-tabs-and-actions-container-background-color: var\(--lios-bg-panel\)/);
   assert.match(polishCss, /lios-visual-canvas__veil/);
   assert.match(polishCss, /lios-chat-suggestion-menu/);
   assert.match(typeCss, /"Anthropic Sans", "Inter"/);
@@ -97,6 +97,6 @@ test("chat, composer, markdown, palette swatches and mounted artifact retain can
 });
 
 test("theme regression contract never re-creates AI routing, source catalogs or artifact stores", () => {
-  assert.doesNotMatch(polishCss, /fetch\\(|localStorage|@keyframes|:root\\s*\\{/);
-  assert.doesNotMatch(typeCss, /@font-face|url\\(https?:/i);
+  assert.doesNotMatch(polishCss, /fetch\(|localStorage|@keyframes|:root\s*\{/);
+  assert.doesNotMatch(typeCss, /@font-face|url\(https?:/i);
 });
