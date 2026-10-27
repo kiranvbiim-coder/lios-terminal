@@ -496,7 +496,9 @@ export function registerWaveDRoutes(app: Express, sources: PulseSources = LIVE_P
     if (mode !== "morning" && mode !== "evening") return res.status(400).json({ error: "Brief mode must be morning or evening." });
     try {
       const result = await buildPulseForUser(req, sources);
-      res.json(buildPulseBrief(mode, result.cards, result.actionInbox, result.now));
+      // Apply the same discovery mute posture to editorial briefs. Existing
+      // monitor alerts and canonical actionable inbox remain independent.
+      res.json(buildPulseBrief(mode, suppressMutedPulseCards(result.cards, result.storedState.pulseSubjects), result.actionInbox, result.now));
     } catch (error) { res.status(502).json({ status: "unavailable", reason: error instanceof Error ? error.message : "Brief unavailable." }); }
   });
 
