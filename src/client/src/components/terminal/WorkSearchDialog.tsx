@@ -38,8 +38,12 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const [filter, setFilter] = useState<WorkSearchFilter>("all");
+  const [retrySequence, setRetrySequence] = useState(0);
   const [opening, setOpening] = useState(false);
   const openingRef = useRef(false);
+  const navigationEpoch = useRef(0);
+  const currentOpen = useRef(open);
+  currentOpen.current = open;
   const listId = useId();
   const keyboardHelpId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +52,10 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
   useEffect(() => {
     if (!open) return;
     returnFocus.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    navigationEpoch.current++;
+    openingRef.current = false;
+    setOpening(false);
+    setRetrySequence(0);
     setQuery("");
     setMode("work");
     setResults([]);
@@ -80,7 +88,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
       } catch (searchError) {
         if (controller.signal.aborted || (searchError instanceof DOMException && searchError.name === "AbortError")) return;
         setResults([]);
-        setError(searchError instanceof Error ? searchError.message : "Search is temporarily unavailable.");
+        setError("Saved-work search is unavailable. Your existing work is unchanged; retry the read-only search.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -89,7 +97,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [open, query, mode]);
+  }, [open, query, mode, retrySequence]);
 
   const visibleResults = useMemo(() => filterWorkSearchResults(results, filter), [results, filter]);
   useEffect(() => {
@@ -113,17 +121,23 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
   const run = async (result: WorkSearchResult) => {
     if (openingRef.current) return;
     openingRef.current = true;
+    const epoch = navigationEpoch.current;
     setOpening(true);
     try {
       const opened = await onSelect(result);
-      if (shouldCloseSearchAfterNavigation(opened)) onClose();
-      else inputRef.current?.focus();
-    } catch (openError) {
-      // Keep the already-authorized results so the user can retry or pick another.
-      setError("This saved item could not be opened with your current access. Check the selection and retry.");
+      if (currentOpen.current && navigationEpoch.current === epoch) {
+        if (shouldCloseSearchAfterNavigation(opened)) onClose();
+        else inputRef.current?.focus();
+      }
+    } catch {
+      if (currentOpen.current && navigationEpoch.current === epoch) {
+        setError("This saved item could not be opened with your current access. Check the selection and retry.");
+      }
     } finally {
-      openingRef.current = false;
-      setOpening(false);
+      if (navigationEpoch.current === epoch) {
+        openingRef.current = false;
+        setOpening(false);
+      }
     }
   };
 
@@ -136,6 +150,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
           <input
             ref={inputRef}
             value={query}
+            disabled={opening}
             onChange={(event) => { setQuery(event.target.value); setResults([]); setSelected(0); }}
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing || mode !== "work") return;
@@ -156,11 +171,11 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
             aria-activedescendant={mode === "work" && !loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
             autoComplete="off"
           />
-          {query && <button type="button" onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
+          {query && <button type="button" disabled={opening} onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/[0.05] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label="Clear search"><X className="h-4 w-4" /></button>}
         </div>
         <div className="flex gap-2 border-b border-border/60 px-3 py-2" role="group" aria-label="Search source">
-          <button type="button" aria-pressed={mode === "work"} onClick={() => { setMode("work"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "work" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Saved work</button>
-          {intelligenceEnabled && <button type="button" aria-pressed={mode === "intelligence"} onClick={() => { setMode("intelligence"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "intelligence" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Intelligence</button>}
+          <button type="button" aria-pressed={mode === "work"} disabled={opening} onClick={() => { setMode("work"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-11 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "work" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Saved work</button>
+          {intelligenceEnabled && <button type="button" aria-pressed={mode === "intelligence"} disabled={opening} onClick={() => { setMode("intelligence"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-11 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "intelligence" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Intelligence</button>}
         </div>
         <p id={keyboardHelpId} className="sr-only">Use the up and down arrows to select, Enter to open, or Escape to close. Canceling a draft switch keeps this search open.</p>
         {mode === "work" ? <>
@@ -170,14 +185,19 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener, inte
               key={entry.value}
               type="button"
               aria-pressed={filter === entry.value}
+              disabled={opening}
               onClick={() => { setFilter(entry.value); setSelected(0); inputRef.current?.focus(); }}
-              className={`min-h-9 rounded-lg border px-3 py-1.5 font-ui text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${filter === entry.value ? "border-cyan-300/50 bg-cyan-300/[0.1] text-cyan-100" : "border-border/55 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"}`}
+              className={`min-h-11 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${filter === entry.value ? "border-cyan-300/50 bg-cyan-300/[0.1] text-cyan-100" : "border-border/55 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"}`}
             >
               {entry.label} <span aria-hidden="true">({countWorkSearchKind(results, entry.value)})</span>
             </button>
           ))}
         </div>
-        <p role={error && !visibleResults.length ? "alert" : "status"} aria-live="polite" className="px-4 py-2 font-ui text-[12px] text-muted-foreground">{status}{!loading && !error && results.length === 30 ? " Filters apply to these 30 returned matches; refine your search for different results." : ""}</p>
+        <p role={error && !visibleResults.length ? "alert" : "status"} aria-live="polite" className="px-4 py-2 font-ui text-sm text-muted-foreground">{status}{!loading && !error && results.length === 30 ? " Filters apply to these 30 returned matches; refine your search for different results." : ""}</p>
+        {error && query.trim().length >= 2 && !loading && !opening && <button type="button" onClick={() => setRetrySequence(value => value + 1)}
+          className="mx-4 mb-3 min-h-11 rounded-lg border border-border px-3 py-2 font-ui text-sm text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+          Retry saved-work search (read-only)
+        </button>}
         {error && visibleResults.length > 0 && <p role="alert" className="mx-3 mb-2 rounded-md border border-red-400/30 p-2 font-ui text-[12px] text-red-200">{error}</p>}
         <div id={listId} role="listbox" aria-label="Matching LiOS work" aria-busy={loading || opening} className="max-h-[52vh] overflow-y-auto p-2">
           {!loading && visibleResults.map((result, index) => (

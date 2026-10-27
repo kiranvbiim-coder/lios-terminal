@@ -318,6 +318,36 @@
       "repository": "modelcontextprotocol/typescript-sdk",
       "commitSha": "fcef852f6cdafea07f36cf6fae69b37c8adf85be",
       "license": "Apache-2.0"
+    },
+    {
+      "id": "opensourceui-source-search",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT"
+    },
+    {
+      "id": "openclaw-gm22-byoai-failover",
+      "repository": "openclaw/openclaw",
+      "commitSha": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "license": "MIT"
+    },
+    {
+      "id": "watermelon-ui-p6-activities",
+      "repository": "WatermelonCorp/watermellon-registry",
+      "commitSha": "86052b8fd12bc19bf3bac07625a7f93736c42b17",
+      "license": "MIT"
+    },
+    {
+      "id": "beui-pulse-discovery-tabs",
+      "repository": "starc007/ui-components",
+      "commitSha": "41a330ba66684696c445d58ca5d77c0133d4059a",
+      "license": "MIT"
+    },
+    {
+      "id": "opensourceui-project-spreadsheet-dropzone",
+      "repository": "bidyut10/opensourceui",
+      "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
+      "license": "MIT"
     }
   ]
 }

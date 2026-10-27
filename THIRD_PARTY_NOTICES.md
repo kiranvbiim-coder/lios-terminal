@@ -12,7 +12,7 @@ This file is the human-readable notice entry point. The machine-readable source 
 - `third_party/release-rights-matrix.json` (including exact Node package grant reviews)
 
 
-### Opensource UI — Project spreadsheet upload interaction (MIT)
+## OpensourceUI Project spreadsheet — MIT (explicit import review)
 
 LIOS `src/client/src/components/terminal/ProjectSpreadsheetImportField.tsx`
 adapts file-selection review, accessible dropzone and remove controls from
@@ -29,7 +29,7 @@ the exact selected file before the existing Project-scoped governed import
 endpoint checks format/signature, server size limit and authorization. No
 sample media, remote vendor assets or new runtime packages are imported.
 
-### Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
+## Watermelon UI — Project Continuity ActivitiesCard adaptation (MIT)
 
 LIOS `src/client/src/components/terminal/ProjectContinuationActivitiesCard.tsx`
 adapts Watermelon's open/close spring-card and icon/activity-row composition
@@ -45,7 +45,7 @@ bounded and permission-aware existing decision/workflow actions, reduced-motion
 support and honest unavailable/empty states. No parallel Project event store or
 third-party images are imported.
 
-### beUI — Pulse discovery navigation adaptation (MIT)
+## beUI — Pulse discovery navigation adaptation (MIT)
 
 LIOS `src/client/src/components/terminal/PulseDiscoveryTabs.tsx` adapts
 the controlled tabs, directional keyboard movement and selected spring-indicator
@@ -575,11 +575,11 @@ LiOS adapts the bounded mathematical mechanism `effective_number_assets` from `s
 
 The pure TypeScript `src/server/skfolioEffectiveDiversification.ts` implements inverse Herfindahl concentration using already-recorded same-date long exposures; `src/server/portfolioAnalytics.ts` exposes the optional effective asset count and observation date through the existing portfolio analytics route. It refuses missing/stale/non-finite quotes, negative or invalid position sizes. This metric uses unverified recorded source closes, does not imply verified current pricing, and imports no Python skfolio runtime, optimizer, covariance model, new market provider, trading authority or data store. LiOS P6/P11 risk and portfolio authorities remain canonical; no full donor exhaustion or SP-05 packaged shipping claim.
 
-## Opensource UI — MIT (source catalogue search)
+## OpensourceUI — MIT (source catalogue search)
 
 LiOS adapts `bidyut10/opensourceui@892f486fdf0d46a44b21ddf3fa32a41a3a71173a`, `components/inputs/search-input.tsx` (blob `af74baf91c45b8cf89e33677b00607f6aafd0572`), into `src/client/src/components/terminal/SourceCatalogueSearch.tsx`. Copyright (c) 2026 Bidyut Kundu. The complete MIT grant is retained in `third_party/licenses/opensourceui-MIT.txt`; exact adaptations and exclusions are recorded in `docs/technical/LIOS_OPENSOURCEUI_ADOPTION_2026-10-23.md`. No upstream application, branding, Next.js runtime, backend or source authorization is imported.
 
-## MCP TypeScript SDK v2.3.1 (client)
+## MCP TypeScript SDK v2 — Apache-2.0 (client v2.3.1)
 
 - Upstream: https://github.com/modelcontextprotocol/typescript-sdk
 - Selected source: `v2.3.1` at commit `fcef852f6cdafea07f36cf6fae69b37c8adf85be`.
