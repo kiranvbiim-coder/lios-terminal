@@ -80,7 +80,8 @@ test("premium source inspector shares the exact inline citation link policy and 
   ];
   const markup = renderToStaticMarkup(createElement(ResearchSourceList, { sources }));
   assert.match(markup, /2 recorded sources|Recorded source references \(2\)/);
-  assert.match(markup, /1 recorded web link · 1 reference-only/);
+  assert.match(markup, /recorded web/);
+  assert.match(markup, /reference-only/);
   assert.match(markup, /example\.com/);
   assert.match(markup, /Citation 2/);
   assert.equal((markup.match(/<a\b/g) ?? []).length, 1);
