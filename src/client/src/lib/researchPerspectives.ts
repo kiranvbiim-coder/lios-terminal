@@ -1,3 +1,4 @@
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 /**
  * Read-only Perspectives projection over an authorized InvestigationDetail.
  * "Supports" and "contradicts" describe explicitly recorded *evidence edges*,
@@ -115,6 +116,7 @@ export function filterUnlinkedEvidence(evidence: readonly PerspectiveEvidence[],
 }
 
 export function perspectivePublishedDate(value: string | null): string {
-  if (!value || !Number.isFinite(Date.parse(value))) return "Publication date not recorded";
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  const recorded = recordedIsoTimestamp(value);
+  if (!recorded) return "Publication date not recorded";
+  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(recorded));
 }

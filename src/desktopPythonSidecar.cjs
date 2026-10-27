@@ -52,10 +52,28 @@ const REQUIRED_SIDECAR_PACKAGES = Object.freeze([
 ]);
 
 function bundledPythonSidecarPath(resourcesPath, platform = process.platform) {
-  if (!resourcesPath) return null;
+  if (!resourcesPath || !path.isAbsolute(resourcesPath)) return null;
   const executable = platform === "win32" ? "lios-python-sidecar.exe" : "lios-python-sidecar";
-  const candidate = path.join(resourcesPath, "python-sidecar-dist", "lios-python-sidecar", executable);
-  return fs.existsSync(candidate) ? candidate : null;
+  const distribution = path.join(resourcesPath, "python-sidecar-dist");
+  const bundle = path.join(distribution, "lios-python-sidecar");
+  const candidate = path.join(bundle, executable);
+  try {
+    // The same sealed Resources hierarchy the canonical server requires.
+    // Symlinked parent folders could redirect an apparently regular binary
+    // outside the application, so both packaging and runtime fail closed.
+    for (const folder of [distribution, bundle]) {
+      const stat = fs.lstatSync(folder);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) return null;
+    }
+    const stat = fs.lstatSync(candidate);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 ||
+        (platform !== "win32" && process.platform !== "win32" && (stat.mode & 0o111) === 0)) {
+      return null;
+    }
+    return candidate;
+  } catch {
+    return null;
+  }
 }
 
 async function reserveLoopbackPort() {

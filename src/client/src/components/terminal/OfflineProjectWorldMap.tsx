@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Focus, MapPin, Minus, Plus } from "lucide-react";
-import { projectOfflineWorldPoints, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
+import { Focus, MapPin, Minus, Plus, Search, X } from "lucide-react";
+import { projectOfflineWorldPoints, worldMapCenterPreservingPan, type RecordedGeographicPoint } from "@/lib/offlineWorldMapPresentation";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 
 const WIDTH = 1152;
 const HEIGHT = 576;
@@ -10,9 +11,13 @@ const MAX_ZOOM = 4;
 const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 const ATLAS = "/maps/natural-earth-110m-world.svg";
 
-export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGeographicPoint[] }) {
+export function OfflineProjectWorldMap({ points, origin = "P7 Project graph" }: {
+  points: readonly RecordedGeographicPoint[];
+  origin?: "P7 Project graph" | "P4 saved table";
+}) {
   const [sourceOnly, setSourceOnly] = useState(false);
   const [withEventDate, setWithEventDate] = useState(false);
+  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [atlasUnavailable, setAtlasUnavailable] = useState(false);
   const [zoom, setZoom] = useState(0.7);
@@ -20,10 +25,11 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; fromX: number; fromY: number } | null>(null);
   const projection = useMemo(
-    () => projectOfflineWorldPoints(points, { sourceOnly, withEventDate }),
-    [points, sourceOnly, withEventDate],
+    () => projectOfflineWorldPoints(points, { sourceOnly, withEventDate, query }),
+    [points, sourceOnly, withEventDate, query],
   );
   const selected = projection.points.find(point => point.id === selectedId) ?? null;
+  const selectedRecordedEvent = selected ? recordedIsoTimestamp(selected.occurredAt) : null;
 
   const fit = () => {
     const width = viewportRef.current?.clientWidth ?? 560;
@@ -38,6 +44,14 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  function zoomAroundCentre(step: number) {
+    const next = clampZoom(zoom + step);
+    if (next === zoom) return;
+    const viewport = { width: viewportRef.current?.clientWidth ?? 560, height: viewportRef.current?.clientHeight ?? 360 };
+    setPan(previous => worldMapCenterPreservingPan(previous, viewport, zoom, next));
+    setZoom(next);
+  }
 
   function focusPoint(id: string) {
     const point = projection.points.find(item => item.id === id);
@@ -60,17 +74,40 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
   return <div data-testid="offline-project-world-map" className="min-w-0 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap gap-2 font-ui text-xs text-muted-foreground" role="status">
-        <span>{projection.points.length} locations plotted</span>
-        {projection.omittedCount > 0 && <span>{projection.omittedCount} omitted from bounded map view</span>}
+        <span>{projection.points.length} recorded locations plotted</span>
+        {query.trim() && <span>{projection.eligibleCount} match{projection.eligibleCount === 1 ? "" : "es"} in your current geography layers</span>}
+        {projection.omittedCount > 0 && <span>{projection.omittedCount} omitted from bounded map view; narrow the search to find them</span>}
       </div>
       <div role="group" aria-label="World map controls" className="flex flex-wrap gap-1.5">
-        <button type="button" aria-label="Zoom world map out" onClick={() => setZoom(value => clampZoom(value - 0.16))}
+        <button type="button" aria-label="Zoom world map out" onClick={() => zoomAroundCentre(-0.16)}
           className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Minus className="h-4 w-4" aria-hidden="true"/></button>
-        <button type="button" aria-label="Zoom world map in" onClick={() => setZoom(value => clampZoom(value + 0.16))}
+        <button type="button" aria-label="Zoom world map in" onClick={() => zoomAroundCentre(0.16)}
           className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Plus className="h-4 w-4" aria-hidden="true"/></button>
         <button type="button" aria-label="Fit whole world map" onClick={fit}
           className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 font-ui text-xs focus-visible:ring-2 focus-visible:ring-amber-300/70"><Focus className="h-4 w-4" aria-hidden="true"/>Fit world</button>
       </div>
+    </div>
+    <div className="space-y-2">
+      <label htmlFor="lios-offline-map-record-search" className="block font-ui text-sm font-medium text-foreground">Find a recorded location or source</label>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <input id="lios-offline-map-record-search" type="search" value={query}
+          maxLength={120} autoComplete="off" spellCheck={false}
+          placeholder="Search saved locations, IDs or source references"
+          aria-describedby="lios-map-search-help"
+          onChange={event => { setQuery(event.target.value); setSelectedId(null); }}
+          className="min-h-11 min-w-[160px] flex-1 rounded-lg border border-border/60 bg-background px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" />
+        {query.trim() && projection.points.length > 0 && <button type="button"
+          onClick={() => focusPoint(projection.points[0].id)}
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-amber-300/45 bg-amber-300/[0.05] px-3 py-2 font-ui text-sm text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+          <Focus className="h-4 w-4" aria-hidden="true" /> Focus first match
+        </button>}
+        {query && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); }}
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-border/60 px-3 py-2 font-ui text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+          <X className="h-4 w-4" aria-hidden="true" /> Clear search
+        </button>}
+      </div>
+      <p id="lios-map-search-help" className="font-ui text-xs leading-5 text-muted-foreground">Search only the coordinates and source references already authorized for this Project or saved table. No place lookup, device location or network request.</p>
     </div>
     <div className="flex flex-wrap gap-x-5 gap-y-2" role="group" aria-label="Recorded geography layers">
       <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 font-ui text-xs text-foreground">
@@ -85,14 +122,14 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
       </label>
     </div>
     <div ref={viewportRef} role="region" tabIndex={0}
-      aria-label="Offline world map. Drag blank space to pan, use zoom controls, Tab to location markers or select locations in the list."
+      aria-label="Offline world map. Drag blank space or use arrow keys to pan, plus or minus to zoom, Home to fit, Tab to markers, or choose a saved location from the list."
       data-testid="offline-world-map-viewport"
       className="relative h-[310px] min-w-0 touch-none overflow-hidden rounded-lg border border-border/60 bg-[#09131e] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 sm:h-[420px]"
       onWheel={event => {
         if (document.activeElement !== event.currentTarget &&
           !event.currentTarget.contains(document.activeElement)) return;
         if (event.cancelable) event.preventDefault();
-        setZoom(value => clampZoom(value + (event.deltaY < 0 ? 0.1 : -0.1)));
+        zoomAroundCentre(event.deltaY < 0 ? 0.1 : -0.1);
       }}
       onPointerDown={event => {
         if (event.button !== 0 || event.target !== event.currentTarget) return;
@@ -112,6 +149,9 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
         const dy = event.key === "ArrowUp" ? -40 : event.key === "ArrowDown" ? 40 : 0;
         if (dx || dy) { event.preventDefault(); setPan(previous => ({x:previous.x+dx,y:previous.y+dy})); }
         if (event.key === "Home") { event.preventDefault(); fit(); }
+        if (event.key === "+" || event.key === "=" || event.key === "-") {
+          event.preventDefault(); zoomAroundCentre(event.key === "-" ? -0.16 : 0.16);
+        }
       }}>
       <div className="pointer-events-none absolute left-0 top-0" style={{
         width: WIDTH, height: HEIGHT,
@@ -140,7 +180,7 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
     </div>
     {atlasUnavailable && <p role="alert" className="rounded-lg border border-amber-300/40 p-3 font-ui text-sm text-amber-200">Bundled world outline unavailable. Recorded coordinates remain accessible below; no online basemap will be requested.</p>}
     {projection.points.length === 0
-      ? <p role="status" className="font-ui text-sm text-muted-foreground">No recorded locations meet the selected source/date filters.</p>
+      ? <p role="status" className="font-ui text-sm text-muted-foreground">{query.trim() ? "No saved location or source reference matches this search and the selected source/date layers." : "No recorded locations meet the selected source/date filters."} No place was inferred or fetched.</p>
       : <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section aria-label="Map location list" className="min-w-0 rounded-lg border border-border/55 p-3">
           <h5 className="font-ui text-sm font-semibold text-foreground">Recorded locations ({projection.points.length})</h5>
@@ -164,10 +204,12 @@ export function OfflineProjectWorldMap({ points }: { points: readonly RecordedGe
             {selected.sourceRef
               ? <p className="break-all text-muted-foreground">Recorded source ID: <code>{selected.sourceRef}</code></p>
               : <p className="text-amber-200">No source ID attached. Coordinates are recorded, not independently verified.</p>}
-            {selected.occurredAt && <p className="text-muted-foreground">Recorded event: <time dateTime={selected.occurredAt}>{new Date(selected.occurredAt).toLocaleString()}</time></p>}
+            {selectedRecordedEvent
+              ? <p className="text-muted-foreground">Recorded event: <time dateTime={selectedRecordedEvent}>{new Date(selectedRecordedEvent).toLocaleString()}</time></p>
+              : <p className="text-muted-foreground">{selected.occurredAt ? "The supplied event date was not a valid timezone-aware timestamp." : "No event date was recorded."}</p>}
           </> : <p className="text-muted-foreground">Select a marker or a location from the keyboard-accessible list to inspect the source reference and recorded time.</p>}
         </section>
       </div>}
-    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact P7 Project-recorded coordinates directly linked to the selected insight, not geocoded names or device location. No online tiles or external location API.</p>
+    <p className="font-ui text-xs leading-5 text-muted-foreground">Public-domain Natural Earth 1:110m generalized borders (not navigation-grade; disputed boundaries may differ). Pins are exact {origin === "P7 Project graph" ? "P7 Project-recorded" : "P4 saved-table"} coordinates with retained source IDs, not geocoded names or device location. No online tiles or external location API.</p>
   </div>;
 }

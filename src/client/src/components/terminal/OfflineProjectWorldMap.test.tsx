@@ -22,6 +22,11 @@ test("real offline atlas with no remote tiles supports zoom/fit, source layers a
   assert.match(html,/Recorded geography layers/);
   assert.match(html,/Only points with recorded source IDs/);
   assert.match(html,/Only points with recorded event dates/);
+  assert.match(html,/Find a recorded location or source/);
+  assert.match(html,/Search saved locations, IDs or source references/);
+  assert.match(html,/No place lookup, device location or network request/);
+  assert.match(html,/type="search"/);
+
   assert.match(html,/data-testid="recorded-map-location"/);
   assert.match(html,/Recorded station/);
   assert.match(html,/Unattributed location/);
@@ -45,4 +50,18 @@ test("bundled Natural Earth asset is pinned and safe to display offline",()=>{
   assert.ok(atlas.length>50000&&atlas.length<250000);
   assert.doesNotMatch(atlas,/<script|<iframe|<foreignObject|onload=|onclick=|http-equiv|xlink:href|<image|<use|url\(https?:|<style/gi);
   assert.equal(atlas.includes("token="),false);
+});
+
+
+test("B01 single offline map uses the same approved point projection for search and pins", () => {
+  const source=readFileSync(new URL("./OfflineProjectWorldMap.tsx",import.meta.url),"utf8");
+  assert.match(source,/projectOfflineWorldPoints\(points, \{ sourceOnly, withEventDate, query \}\)/);
+  assert.match(source,/onChange=\{event => \{ setQuery\(event\.target\.value\); setSelectedId\(null\); \}\}/);
+  assert.match(source,/setQuery\(""\)/);
+  assert.match(source,/Focus first match/);
+  assert.match(source,/worldMapCenterPreservingPan/);
+  assert.match(source,/recordedIsoTimestamp\(selected\.occurredAt\)/);
+  assert.match(source,/No event date was recorded/);
+  assert.match(source,/aria-label="Map location list"/);
+  assert.doesNotMatch(source,/fetch\(|navigator\.geolocation|mapboxgl|maplibregl|localStorage/);
 });

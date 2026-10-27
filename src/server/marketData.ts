@@ -1,6 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EditorialMedia } from "@shared/editorialMedia";
 import { extractRssImageCandidate } from "./newsFeedImageCandidates";
+import { extractRssMediaPreview } from "./newsFeedMediaEnclosures";
+import type { NewsMediaPreview } from "@shared/newsMediaPreview";
 import { fetchPublicNewsArticleHtml, validatePublicNewsUrl } from "./publicNewsArticleFetch";
 import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
@@ -111,6 +113,8 @@ export interface NewsItem {
   /** Independently approved publisher media only, never RSS URL metadata. */
   media?: EditorialMedia;
   imageCandidate?: ReturnType<typeof extractRssImageCandidate>;
+  /** User-initiated publisher stream; never an image grant. */
+  mediaPreview?: NewsMediaPreview;
   title: string;
   summary: string;
   url: string;
@@ -129,6 +133,8 @@ export interface NewsArticle {
   publishedAt: string;
   excerpt: string;
   content: string[];
+  /** Actual article extraction or fallback RSS summary, never inferred from text length by the client. */
+  readThrough: "publisher_text" | "feed_summary";
   status: DataStatus;
 }
 interface CurrentQuoteSnapshot {
@@ -1042,6 +1048,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
       const publishedAt = new Date(String(item?.pubDate ?? item?.published ?? item?.updated ?? Date.now())).toISOString();
       if (!title || !url) return null;
       const imageCandidate = extractRssImageCandidate(item);
+      const mediaPreview = extractRssMediaPreview(item);
 
       return {
         title,
@@ -1051,6 +1058,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         feedProvider: "Limuria Intelligence",
         publishedAt,
         ...(imageCandidate ? { imageCandidate } : {}),
+        ...(mediaPreview ? { mediaPreview } : {}),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,
@@ -2387,9 +2395,12 @@ export async function getNewsArticle(input: {
       publishedAt: input.publishedAt,
       excerpt: input.summary?.trim() || content[0] || "Read-through unavailable for this source.",
       content: content.length ? content : (input.summary ? [input.summary.trim()] : []),
+      readThrough: content.length ? "publisher_text" : "feed_summary",
       status,
     };
-    return setCached(articleCache, cacheKey, article, ARTICLE_TTL_MS);
+    // A feed-only fallback is not proof that the publisher page was read.
+    // Keep it retryable; never cache it as an extracted article.
+    return content.length ? setCached(articleCache, cacheKey, article, ARTICLE_TTL_MS) : article;
   } catch {
     const fallback: NewsArticle = {
       title: input.title,
@@ -2399,9 +2410,10 @@ export async function getNewsArticle(input: {
       publishedAt: input.publishedAt,
       excerpt: input.summary?.trim() || "Read-through unavailable for this source.",
       content: input.summary?.trim() ? [input.summary.trim()] : [],
+      readThrough: "feed_summary",
       status,
     };
-    return setCached(articleCache, cacheKey, fallback, ARTICLE_TTL_MS);
+    return fallback;
   }
 }
 

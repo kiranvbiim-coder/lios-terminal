@@ -1,8 +1,8 @@
 import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, selectRecordedCrossDomainGraphObjects } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
@@ -95,13 +95,17 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
     symbolOnly && activeSymbol
       ? objects.filter(object => !object.symbol || object.symbol === activeSymbol)
       : objects, [activeSymbol, objects, symbolOnly]);
-  const graphObjects = useMemo(() => contextualObjects.slice(0, 120), [contextualObjects]);
+  const deferredQuery = useDeferredValue(query);
+  const graphObjects = useMemo(
+    () => selectRecordedCrossDomainGraphObjects(contextualObjects, deferredQuery, selectedId, 120),
+    [contextualObjects, deferredQuery, selectedId],
+  );
   const graph = useMemo(() => buildCrossDomainGraph(graphObjects), [graphObjects]);
   const bridges = useMemo(() => crossDomainBridges(graph), [graph]);
   const relations = useMemo(() => Array.from(new Set(graph.edges.map(edge => edge.relation))).sort(), [graph]);
   const presentation = useMemo(() => presentCrossDomainGraph(graph, {
-    query, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
-  }), [graph, query, selectedId, neighborsOnly, bridgesOnly, relation]);
+    query: deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
+  }), [graph, deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation]);
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
   const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link => !relation || link.relation === relation) : [], [graph, selected, relation]);
@@ -146,7 +150,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <label className="flex min-h-10 min-w-[190px] flex-1 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="sr-only">Search graph objects</span>
-              <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
+              <input ref={searchRef} type="search" value={query} onChange={event => { setQuery(event.target.value); setSelectedId(null); setNeighborsOnly(false); }}
                 placeholder="Search objects, symbols or domains"
                 className="min-w-0 flex-1 bg-transparent py-2 font-ui text-sm text-foreground outline-none placeholder:text-muted-foreground" />
             </label>
@@ -174,7 +178,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             {(query || selectedId || neighborsOnly || bridgesOnly || relation) && <button type="button" onClick={() => { setQuery(""); setSelectedId(null); setNeighborsOnly(false); setBridgesOnly(false); setRelation(""); }}
               className="min-h-10 rounded-lg border border-border/70 px-3 font-ui text-xs text-muted-foreground hover:text-foreground">Reset view</button>}
           </div>
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Cross-domain graph viewport controls">
+          <div className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Cross-domain graph viewport controls">
             <button type="button" aria-label="Zoom cross-domain graph out" onClick={() => setZoom(current => zoomClamp(current - 0.15))}
               className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-border/60 focus-visible:ring-2 focus-visible:ring-amber-300/70"><Minus className="h-4 w-4" aria-hidden="true"/></button>
             <button type="button" aria-label="Zoom cross-domain graph in" onClick={() => setZoom(current => zoomClamp(current + 0.15))}
@@ -184,6 +188,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <span className="font-ui text-xs text-muted-foreground" role="status">{Math.round(zoom * 100)}%</span>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-ui text-xs text-muted-foreground" role="status">
+            {contextualObjects.length > 120 && <span>Bounded view of {graphObjects.length} / {contextualObjects.length} saved objects. Search includes eligible saved matches beyond the initial view.</span>}
             <span>{presentation.nodes.length} shown · {graph.nodes.length} objects loaded</span>
             <span>{presentation.edges.length} recorded links shown{relation ? ` · ${relation.replaceAll("-", " ")} only` : ""}</span>
             {query && <span>{presentation.matchingCount} direct search matches</span>}

@@ -14,6 +14,8 @@ import { recordP3TrustInteraction } from "@/lib/p3TrustTelemetry";
 import EvidencePrism from "./EvidencePrism";
 import EvidenceExceptionDetails from "./EvidenceExceptionDetails";
 import { reviewEvidenceExceptions } from "@/lib/evidenceExceptions";
+import { presentTrustCitations } from "@/lib/trustCitationPresentation";
+import { BeuiCitations } from "@/components/vendor/beui/BeuiCitations";
 
 interface Props {
   manifest: TrustManifest;
@@ -22,12 +24,6 @@ interface Props {
 
 function titleCase(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function asOfLabel(value: string | null): string {
-  if (!value) return "As-of unavailable";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "As-of unavailable" : parsed.toLocaleString();
 }
 
 export default function ConversationTrustPanel({ manifest, onRecoveryAction }: Props) {
@@ -85,31 +81,7 @@ export default function ConversationTrustPanel({ manifest, onRecoveryAction }: P
             <div className="flex items-center gap-1.5 font-terminal text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
               <Database className="h-3 w-3" /> Sources
             </div>
-            <div className="mt-2 space-y-1.5">
-              {manifest.evidence.length ? manifest.evidence.map((item) => (
-                <div key={item.evidenceId} className="rounded border border-border/40 bg-black/20 px-2.5 py-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-ui text-[12px] font-semibold text-foreground">{item.providerLabel}</span>
-                    <span className="font-terminal text-[12px] uppercase text-muted-foreground">{item.freshness}</span>
-                    <span className="font-terminal text-[12px] uppercase text-muted-foreground">{item.quality} quality</span>
-                  </div>
-                  <div className="mt-1 break-all font-terminal text-[12px] text-muted-foreground">{item.sourceRef}</div>
-                  <div className="mt-1 font-ui text-[12px] text-muted-foreground">{asOfLabel(item.asOf)}{item.isFallback ? " · fallback" : ""}</div>
-                  {item.access && (
-                    <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">
-                      Access: {titleCase(item.access.state)}
-                      {item.access.servedTier ? ` · served ${titleCase(item.access.servedTier)}` : ""}
-                      {item.access.entitlementRequired ? " · entitlement/upgrade required" : ""}
-                      {item.access.upgradeConnectorLabel ? ` · upgrade: ${item.access.upgradeConnectorLabel}` : ""}
-                      {item.access.reason ? ` · ${item.access.reason}` : ""}
-                    </div>
-                  )}
-                  {!!item.notes.length && <div className="mt-1 font-ui text-[12px] leading-3 text-muted-foreground">{item.notes.join(" ")}</div>}
-                </div>
-              )) : (
-                <div className="font-ui text-[12px] leading-4 text-muted-foreground">No external/source observation supports this output. Check the missing evidence section below.</div>
-              )}
-            </div>
+            <BeuiCitations key={manifest.trustId} items={presentTrustCitations(manifest.evidence)} />
           </section>
 
           <section>

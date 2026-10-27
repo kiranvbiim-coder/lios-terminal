@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import type { EditorialMedia } from "@shared/editorialMedia";
 import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
 import type { CommonsCandidate } from "@shared/commonsMedia";
+import type { NewsMediaPreview } from "@shared/newsMediaPreview";
 import { CommonsContextIllustration } from "./NewsImageDiscovery";
 
 type Sentiment = "positive" | "negative" | "neutral";
@@ -29,6 +30,7 @@ interface NewsEditorialStoryCardProps {
   lead: boolean;
   onSelect: () => void;
   media?: EditorialMedia;
+  mediaPreview?: NewsMediaPreview;
   sourceEvidenceId?: string;
   contextIllustration?: CommonsCandidate;
 }
@@ -42,7 +44,7 @@ const tone: Record<Sentiment, string> = {
 /** Presentation only: the parent remains the sole owner of selection and the article. */
 export default function NewsEditorialStoryCard({
   title, summary, source, publishedAt, ageLabel, sentiment = "neutral",
-  statusBadge, active, lead, onSelect, media, sourceEvidenceId, contextIllustration,
+  statusBadge, active, lead, onSelect, media, mediaPreview, sourceEvidenceId, contextIllustration,
 }: NewsEditorialStoryCardProps) {
   const reduceMotion = useReducedMotion();
 
@@ -80,6 +82,7 @@ export default function NewsEditorialStoryCard({
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone[sentiment]}`} aria-hidden="true" />
         <span className="max-w-full truncate font-ui text-[11px] font-semibold text-amber-200">{source}</span>
         <span className="shrink-0">{statusBadge}</span>
+        {mediaPreview && <span className="font-ui text-[10px] text-cyan-200">{mediaPreview.kind === "video" ? "Video" : "Audio"} at source</span>}
         <time className="ml-auto font-ui text-[11px] text-muted-foreground" dateTime={publishedAt}>{ageLabel}</time>
       </div>
       <div className="mt-2.5 flex min-w-0 items-start gap-3">

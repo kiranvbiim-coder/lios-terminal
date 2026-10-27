@@ -1,10 +1,11 @@
 import * as React from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { EvidenceObservation, TrustManifest } from "@shared/trustContracts";
 import {
   describeObservationRights,
-  inspectEvidenceClaim,
+  inspectEvidenceClaimObservedBy,
+  claimObservedTimeChoices,
   readableAssumptionValue,
 } from "@/lib/evidencePrism";
 
@@ -17,9 +18,12 @@ function timestamp(value: string | null): string {
 /** Inspect an existing structured P3 claim. No inferred evidence, live provider reads or new grants. */
 export default function EvidencePrism({ manifest }: { manifest: TrustManifest }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [observedBy, setObservedBy] = useState<string>("");
   const prefix = useId();
+  useEffect(() => { setSelectedId(null); setObservedBy(""); }, [manifest.trustId]);
   if (!manifest.claims.length) return null;
-  const selected = selectedId ? inspectEvidenceClaim(manifest, selectedId) : null;
+  const selected = selectedId ? inspectEvidenceClaimObservedBy(manifest, selectedId, observedBy || null) : null;
+  const observedTimes = selectedId ? claimObservedTimeChoices(manifest, selectedId) : [];
 
   return (
     <section aria-label="Evidence Prism claim inspection" data-testid="ws30-evidence-prism" className="min-w-0">
@@ -37,7 +41,7 @@ export default function EvidencePrism({ manifest }: { manifest: TrustManifest })
                 type="button"
                 aria-expanded={expanded}
                 aria-controls={detailsId}
-                onClick={() => setSelectedId(id => id === claim.claimId ? null : claim.claimId)}
+                onClick={() => { setSelectedId(id => id === claim.claimId ? null : claim.claimId); setObservedBy(""); }}
                 className="flex min-h-10 w-full items-start justify-between gap-3 rounded px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
               >
                 <span className="min-w-0">
@@ -53,6 +57,20 @@ export default function EvidencePrism({ manifest }: { manifest: TrustManifest })
               {expanded && selected && (
                 <div id={detailsId} role="region" aria-label={`Recorded evidence for ${claim.label}`} className="space-y-3 border-t border-border/40 px-3 py-3 font-ui text-[12px] text-muted-foreground" data-testid="ws30-claim-evidence">
                   <p className="break-words text-foreground/90">{claim.explanation}</p>
+                  {observedTimes.length > 0 && <div data-testid="p3-evidence-time-machine" className="rounded-lg border border-border/60 bg-background/35 p-3">
+                    <label className="block font-ui text-sm font-semibold text-foreground">
+                      Evidence observation time
+                      <select value={observedBy} onChange={event => setObservedBy(event.target.value)}
+                        aria-label="Inspect claim observations recorded by this time"
+                        className="mt-2 min-h-11 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+                        <option value="">All observations in this manifest</option>
+                        {observedTimes.map(at => <option key={at} value={at}>Observed by {at}</option>)}
+                      </select>
+                    </label>
+                    <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">
+                      Filters only observations retained in this current manifest. This is not a historical claim, a replay of older permission grants, or evidence of when the underlying event occurred.
+                    </p>
+                  </div>}
                   <dl className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
                     <div><dt className="inline font-semibold">Claim path: </dt><dd className="inline break-all">{claim.path}</dd></div>
                     <div><dt className="inline font-semibold">Unit: </dt><dd className="inline">Not recorded in trust manifest</dd></div>
@@ -79,7 +97,7 @@ export default function EvidencePrism({ manifest }: { manifest: TrustManifest })
                                   </li>
                                 ))}
                               </ul>
-                            ) : <p className="mt-1 text-amber-200">No matching observation in this trust manifest. The reference alone does not prove support.</p>}
+                            ) : <p className="mt-1 text-amber-200">No matching observation in this manifest at the selected observation time. A reference or later observation does not prove earlier support.</p>}
                           </li>
                         ))}
                       </ul>
