@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
-import type { PulseSubjectAction, PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
+import { normalizePulseSubjectKey, type PulseSubjectAction, type PulseSubjectPreferences } from "@shared/pulseSubjectPreferences";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
@@ -33,6 +33,7 @@ interface Props {
   preferenceError: string | null;
   onPulsePreferenceChange: (cardId: string, action: PulseSubjectAction) => void;
   onPulsePreferenceClear: (subjectKey: string) => void;
+  onPulseRetry: () => void;
   onPulseChannelChange: (channel: "for_you" | "following" | "markets" | "research") => void;
 }
 
@@ -146,6 +147,7 @@ export default function FusionPulseBoard({
   preferenceError,
   onPulsePreferenceChange,
   onPulsePreferenceClear,
+  onPulseRetry,
   onPulseChannelChange,
 }: Props) {
   const { data: gainers = [], isLoading: gainersLoading } = useMarketGainers();
@@ -173,7 +175,7 @@ export default function FusionPulseBoard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <FusionFreshnessBadge state={pulseStatus === "loading" ? "loading" : pulseStatus === "unavailable" ? "stale" : "live"} />
-          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" && visiblePulseCards.length ? "MARKET DATA LIVE" : `${visiblePulseCards.length} STORIES`}</span>
+          <span className="font-terminal text-[6px] tracking-wider text-muted-foreground">{pulseStatus === "loading" ? "HYDRATING" : pulseStatus === "unavailable" ? "PULSE UNAVAILABLE" : `${visiblePulseCards.length} STORIES`}</span>
           <FusionActionButton onClick={() => onAskLios ? onAskLios() : onOpen("agent", "current", activeSymbol)} variant="accent"><Sparkles className="mr-1 inline h-3 w-3" />ASK LIOS</FusionActionButton>
         </div>
       </div>
@@ -284,7 +286,7 @@ export default function FusionPulseBoard({
               </button>)}
             </div>
           </details>}
-              {visiblePulseStatus === "loading" ? <FusionEmptyState>Refreshing decision-relevant changes…</FusionEmptyState> : visiblePulseStatus === "unavailable" ? <FusionEmptyState>PULSE UNAVAILABLE · Market and macro panels remain independently usable.</FusionEmptyState> : visiblePulseCards.length ? (
+              {visiblePulseStatus === "loading" ? <FusionEmptyState>Refreshing decision-relevant changes…</FusionEmptyState> : visiblePulseStatus === "unavailable" ? <div role="alert" className="flex flex-wrap items-center gap-3 px-3 py-4 font-ui text-sm text-muted-foreground">Pulse unavailable. Market and macro panels remain independent. <button type="button" onClick={onPulseRetry} className="min-h-10 rounded-lg border border-border/60 px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">Retry</button></div> : visiblePulseCards.length ? (
             <div className="fusion-pulse-card-grid">
               {visiblePulseCards.slice(0, 6).map((card, index) => (
                 <LiosPulseStoryCard
@@ -293,7 +295,7 @@ export default function FusionPulseBoard({
                   featured={index === 0}
                   onAsk={(question) => onAskLios ? onAskLios(question) : onOpen("agent", "current", card.symbol ?? activeSymbol)}
                   onOpenSymbol={(symbol) => onOpen("quote", "current", symbol)}
-                  followed={Boolean((card.subjectKey || card.symbol) && pulsePreferences.followed.includes((card.subjectKey || card.symbol || "").trim().toUpperCase()))}
+                  followed={Boolean(normalizePulseSubjectKey(card.subjectKey ?? card.symbol) && pulsePreferences.followed.includes(normalizePulseSubjectKey(card.subjectKey ?? card.symbol)!))}
                   preferencePending={preferencePending}
                   onPreferenceChange={onPulsePreferenceChange}
                 />
