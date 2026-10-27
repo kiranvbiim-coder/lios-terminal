@@ -31,8 +31,8 @@ export default function WatchroomRecordedRunTimeline({
       <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
         {run.sourceRefs.length} source references · {run.executionReceiptIds.length} execution receipts
       </p>
-      {run.error && <p className="line-clamp-2 break-words text-xs leading-4 text-rose-200">
-        Recorded failure: {run.error}
+      {run.status === "failed" && <p className="line-clamp-2 text-xs leading-4 text-rose-200">
+        This execution failed. Open workflow history for the authorized diagnostic record.
       </p>}
     </div>,
     meta: <span className="font-ui text-[11px] text-muted-foreground">
