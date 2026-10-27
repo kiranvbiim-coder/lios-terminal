@@ -437,6 +437,7 @@ export default function IntegratedModelStudioPanel({ symbol }: { symbol?: string
               <div><dt className="text-muted-foreground">Result SHA-256</dt><dd className="break-all font-mono">{model.receipt.resultHash}</dd></div>
               <div><dt className="text-muted-foreground">Dataset snapshot</dt><dd className="break-all font-mono">{model.receipt.datasetSnapshotId}</dd></div>
               <div><dt className="text-muted-foreground">Dataset SHA-256</dt><dd className="break-all font-mono">{model.receipt.datasetContentHash}</dd></div>
+              <div><dt className="text-muted-foreground">Input SHA-256</dt><dd className="break-all font-mono">{model.receipt.inputHash ?? "Not returned in current response; verified on server reopening"}</dd></div>
               <div><dt className="text-muted-foreground">Destination</dt><dd className="break-words">{selectedDestination?.destinationLabel ?? "Choose a Chat or Project"}</dd></div>
               <div><dt className="text-muted-foreground">Engine checks</dt><dd>{model.result.checks.passed && model.result.checks.circularConverged ? "Passed · converged" : "Failed or not converged"}</dd></div>
             </dl>
