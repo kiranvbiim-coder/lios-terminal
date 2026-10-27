@@ -3015,6 +3015,42 @@
       "destinationPaths": ["client/src/components/vendor/kibo/Status.tsx", "client/src/components/vendor/kibo/Tags.tsx"],
       "modifications": ["Adapted compound status primitive to existing P9/GM status truth and reduced-motion indicators.", "Reused searchable tag picker for existing published intelligence-object tags without adding data authority or dependencies.", "Adapted to existing React 18/Tailwind 3/Radix primitives."],
       "notes": "Full MIT grant at client/src/components/vendor/kibo/LICENSE. Source integration is not native acceptance."
+    },
+    {
+      "id": "beui-news-observation-timeline",
+      "name": "beUI interactive observed-news-revision timeline",
+      "repository": "starc007/ui-components",
+      "commitSha": "601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1",
+      "license": "MIT",
+      "posture": "adapted_source_component",
+      "classification": "adapt",
+      "bundled": true,
+      "noticeRequiredOnImport": true,
+      "noticeHeading": "beUI",
+      "externalRights": "separate_review_required",
+      "roles": [
+        "P1-News-exact-url-story-evolution",
+        "accessible-motion-chronology",
+        "source-observation-not-event-claim",
+        "reduced-motion"
+      ],
+      "importedPaths": [
+        "components/motion/timeline.tsx",
+        "lib/touch.ts"
+      ],
+      "destinationPaths": [
+        "client/src/components/vendor/beui/BeuiTimeline.tsx",
+        "client/src/components/panels/NewsObservedRevisionTimeline.tsx",
+        "client/src/components/panels/NewsStoryEvolution.tsx",
+        "client/src/components/panels/NewsObservedRevisionTimeline.test.tsx"
+      ],
+      "pathMappingNote": "Two pinned upstream sources become one adapted presentation-only component and integration in one existing News owner; no new data source/store.",
+      "modifications": [
+        "Copied pinned MIT timeline source, reused existing Framer Motion 11 instead of installing Motion 12 or a second runtime.",
+        "Kept pointer glide, keyboard Home/End/arrow roving focus, reduced-motion support; localized the pinned touch shim.",
+        "Lazy only after user chooses Explore visual timeline, maps exact-URL feed revisions and preserves accessible text list."
+      ],
+      "notes": "Source blob 49eac72ab9237b48c4eaa7fc106f7e162137657a, touch blob 44a72af240f694d4b64cbabf101dae8a6fb9be52 at SHA 601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1. Copyright (c) 2026 Saurabh Chauhan, MIT grant third_party/licenses/beui-MIT.txt. Native qualification pending."
     }
   ]
 }
