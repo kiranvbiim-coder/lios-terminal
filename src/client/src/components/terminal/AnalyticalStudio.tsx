@@ -41,6 +41,7 @@ import {
 } from "@/lib/terminalUiActionPreview";
 import type { TerminalUxPreferences } from "@/lib/terminalUxPreferences";
 import { describeSnapshotPair } from "@/lib/sprintBComparisonContext";
+import { comparisonReviewKey, resolveRecordedReceiptPair } from "@/lib/sprintDComparisonGuard";
 
 const TABS = ["flow", "compare", "thesis", "canvas", "packages", "composer", "replay", "ai-preview", "meeting"] as const;
 type StudioTab = typeof TABS[number];
@@ -133,15 +134,21 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
   const [evidence, setEvidence] = useState<EvidenceSnapshot>(() => getEvidenceSnapshot());
   const [receiptA, setReceiptA] = useState(0);
   const [receiptB, setReceiptB] = useState(1);
-  const [allowCrossContext, setAllowCrossContext] = useState(false);
-  const [showAllChanges, setShowAllChanges] = useState(false);
+  const [reviewedPairKey, setReviewedPairKey] = useState<string | null>(null);
+  const [expandedPairKey, setExpandedPairKey] = useState<string | null>(null);
   useEffect(() => subscribeComparison(setSlots), []);
   useEffect(() => subscribeEvidence(setEvidence), []);
   const snapshots = getAnalyticalSnapshots(activeView, activeSymbol);
-  const context = describeSnapshotPair(slots.find(slot => slot.id === "A")?.snapshot ?? null, slots.find(slot => slot.id === "B")?.snapshot ?? null);
-  const slotChanges = context.kind === "same-context" || (context.kind === "cross-context" && allowCrossContext) ? compareSlots() : [];
+  const leftSnapshot = slots.find(slot => slot.id === "A")?.snapshot ?? null;
+  const rightSnapshot = slots.find(slot => slot.id === "B")?.snapshot ?? null;
+  const context = describeSnapshotPair(leftSnapshot, rightSnapshot);
+  const pairKey = comparisonReviewKey(leftSnapshot, rightSnapshot);
+  const allowCrossContext = context.kind === "cross-context" && pairKey !== null && reviewedPairKey === pairKey;
+  const slotChanges = context.kind === "same-context" || allowCrossContext ? compareSlots() : [];
+  const showAllChanges = pairKey !== null && expandedPairKey === pairKey;
   const visibleChanges = showAllChanges ? slotChanges : slotChanges.slice(0, 12);
-  const receiptDiff = evidence.receipts.length >= 2 && receiptA !== receiptB ? diffCalculationReceipts(evidence.receipts[Math.min(receiptA, evidence.receipts.length - 1)], evidence.receipts[Math.min(receiptB, evidence.receipts.length - 1)]) : null;
+  const actualReceipts = resolveRecordedReceiptPair(evidence.receipts, receiptA, receiptB);
+  const receiptDiff = actualReceipts ? diffCalculationReceipts(actualReceipts[0], actualReceipts[1]) : null;
 
   const captureNow = () => {
     const latestReceipt = evidence.receipts[0];
@@ -158,7 +165,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
       <div className="font-ui text-sm font-semibold text-foreground">A → B recorded field diff</div>
       <p role="status" className="mt-2 font-ui text-xs leading-5 text-muted-foreground">{context.message}</p>
       {context.kind === "cross-context" && <button type="button" aria-pressed={allowCrossContext}
-        onClick={() => setAllowCrossContext(value => !value)}
+        onClick={() => setReviewedPairKey(current => current === pairKey ? null : pairKey)}
         className="mt-2 min-h-11 rounded-lg border border-amber-300/30 px-3 font-ui text-xs text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
         {allowCrossContext ? "Hide cross-context field differences" : "Show cross-context fields with caution"}
       </button>}
@@ -168,7 +175,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
           ? "Field differences are hidden until explicitly requested."
           : context.kind === "incomplete" ? "Fill both slots to inspect a comparison." : "No differing recorded fields."}</p>}</div>
       {slotChanges.length > 12 && <button type="button" aria-expanded={showAllChanges}
-        onClick={() => setShowAllChanges(value => !value)}
+        onClick={() => setExpandedPairKey(current => current === pairKey ? null : pairKey)}
         className="mt-3 min-h-11 w-full rounded-lg border border-border/70 font-ui text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
         {showAllChanges ? "Show fewer fields" : `Show all ${slotChanges.length} changed fields`}
       </button>}
@@ -185,7 +192,7 @@ function CompareTab({ activeView, activeSymbol }: { activeView: ViewMode; active
         {receiptDiff.warningsRemoved.map(warning => <p key={`removed:${warning}`}>No longer recorded: {warning}</p>)}
       </div>}
       </> : <div className="font-ui mt-3 rounded-xl border border-dashed border-border/55 p-4 text-xs text-muted-foreground">{evidence.receipts.length < 2
-        ? "At least two published calculation receipts are required." : "Select two different published receipts to compare."}</div>}</section>
+        ? "At least two published calculation receipts are required." : "Select two distinct, currently published receipts to compare."}</div>}</section>
     {snapshots.length > 0 && <div className="font-ui text-[7px] text-muted-foreground">{snapshots.length} stored snapshots available for {activeSymbol || "global"} {getTerminalCapability(activeView).label}.</div>}
   </div>;
 }
