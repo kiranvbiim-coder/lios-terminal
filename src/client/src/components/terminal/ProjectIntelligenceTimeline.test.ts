@@ -37,6 +37,13 @@ test("the visual timeline sorts recorded Project events latest-first without cha
   assert.equal(groups.length, 2);
 });
 
+
+test("timeline ordering follows the actual instant even with different timezone offsets", () => {
+  const later = event("later", "2026-10-24T00:00:00.000+05:30");
+  const earlier = event("earlier", "2026-10-23T20:00:00.000Z");
+  const ids = groupProjectTimeline([earlier, later]).flatMap(g => g.events.map(e => e.id));
+  assert.deepEqual(ids, ["earlier", "later"]);
+});
 test("timeline preserves source references and evidence counts without guessing importance", () => {
   const e = event("one", "2026-10-22T10:00:00.000Z", {
     sourceRefs: ["source:a", "source:b"],
@@ -74,7 +81,7 @@ test("time and titles remain recorded; untrusted markup is escaped and never fet
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script\b|<img\b|<iframe\b/);
   assert.doesNotMatch(html, /https:\/\/example\.test\/spy/);
-  assert.match(html, /datetime="2026-10-20T10:00:00.000Z"/);
+  assert.match(html, /date[Tt]ime="2026-10-20T10:00:00.000Z"/);
 });
 
 test("honest empty, loading, and failed reads show no invented timeline", () => {
