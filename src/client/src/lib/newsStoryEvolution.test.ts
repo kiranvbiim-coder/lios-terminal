@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  changedNewsFields, observeNewsFeed, newsStoryRevisions,
+  changedNewsFields, observeNewsFeed, newsStoryRevisions, compareRecordedNewsObservations,
   MAX_NEWS_REVISIONS_PER_STORY, MAX_NEWS_STORIES,
   type NewsStoryObservation,
 } from "./newsStoryEvolution";
@@ -86,4 +86,18 @@ test("unchanged newer observations advance the watermark without inventing revis
   assert.equal(cached[0].title, article.title);
   assert.equal(cached[0].observedAt, first[0].observedAt);
   assert.equal(cached[0].lastObservedAt, new Date(at + 3000).toISOString());
+});
+
+test("B03 as-observed-then comparison never merges different publisher URLs or inferred history",()=>{
+  const first=observeNewsFeed([], [article], at);
+  const second=observeNewsFeed(first,[{...article,title:"Correction recorded",summary:"Updated source excerpt"}],at+60_000);
+  const third=observeNewsFeed(second,[{...article,title:"Further clarification",summary:"Different source excerpt"}],at+120_000);
+  const early=compareRecordedNewsObservations(third,article.url,first[0].observedAt)!;
+  assert.equal(early.earlier.title,"Recorded launch");
+  assert.equal(early.later.title,"Further clarification");
+  assert.deepEqual(early.changedFields,["headline","summary"]);
+  assert.equal(compareRecordedNewsObservations(third,"https://another.example/article",first[0].observedAt),null);
+  assert.equal(compareRecordedNewsObservations(third,article.url,"2026-10-20T00:00:00Z"),null);
+  assert.equal(compareRecordedNewsObservations([first[0]],article.url,first[0].observedAt),null);
+  assert.equal(compareRecordedNewsObservations(third,article.url,third[0].observedAt),null);
 });
