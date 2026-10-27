@@ -24,12 +24,13 @@ function recordedValue(value: unknown): string {
 
 export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswerRequest }) {
   const [expanded, setExpanded] = useState(false);
-  const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "blocked"; decision?: GovernedVisualAnswerDecision }>({ phase: "idle" });
+  const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "blocked"; signature?: string; decision?: GovernedVisualAnswerDecision }>({ phase: "idle" });
+  const signature = JSON.stringify([request.artifactId, request.version, request.projectId, request.kind, request.sourceRefs]);
 
   useEffect(() => {
     if (!expanded) return;
     const controller = new AbortController();
-    setState({ phase: "loading" });
+    setState({ phase: "loading", signature });
     void (async () => {
       try {
         const response = await fetch(
@@ -39,15 +40,16 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
         if (!response.ok) throw new Error("Saved Artifact authorization or revision read failed.");
         const remote: unknown = await response.json();
         const decision = resolveGovernedVisualAnswer(request, remote);
-        if (!controller.signal.aborted) setState({ phase: decision.status, decision });
+        if (!controller.signal.aborted) setState({ phase: decision.status, signature, decision });
       } catch {
-        if (!controller.signal.aborted) setState({ phase: "blocked" });
+        if (!controller.signal.aborted) setState({ phase: "blocked", signature });
       }
     })();
     return () => { controller.abort(); };
-  }, [expanded, request.artifactId, request.version, request.projectId, request.kind]);
+  }, [expanded, signature]);
 
-  const decision = state.decision?.status === "ready" ? state.decision : null;
+  const current = state.signature === signature ? state : { phase: "loading" as const };
+  const decision = current.decision?.status === "ready" ? current.decision : null;
   return <section aria-label="Governed visual answer from saved Artifact" data-testid="governed-chat-visual-answer"
     className="mb-2 min-w-0 rounded-xl border border-border/55 bg-card/45 p-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -61,9 +63,9 @@ export function GovernedVisualAnswer({ request }: { request: GovernedVisualAnswe
       </button>
     </div>
     {expanded && <div className="mt-3 space-y-3" data-testid="governed-chat-visual-content">
-      {state.phase === "loading" && <p role="status" className="font-ui text-sm text-muted-foreground">Checking the saved source-backed revision…</p>}
-      {state.phase === "blocked" && <p role="alert" className="font-ui text-sm text-amber-200">
-        {state.decision?.status === "blocked" ? state.decision.reason : "Authorization or saved revision is unavailable. No visual answer is displayed."}
+      {current.phase === "loading" && <p role="status" className="font-ui text-sm text-muted-foreground">Checking the saved source-backed revision…</p>}
+      {current.phase === "blocked" && <p role="alert" className="font-ui text-sm text-amber-200">
+        {current.decision?.status === "blocked" ? current.decision.reason : "Authorization or saved revision is unavailable. No visual answer is displayed."}
       </p>}
       {decision && <>
         <p className="break-words font-ui text-sm font-semibold text-foreground">{decision.title}</p>
