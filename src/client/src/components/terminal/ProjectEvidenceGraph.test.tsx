@@ -32,7 +32,7 @@ test("one read-only SVG viewport provides accessible zoom, fit, node and edge in
   assert.match(html,/Interactive recorded Project graph/);
   assert.match(html,/data-testid="p7-recorded-graph-node"/);
   assert.match(html,/Official recorded change/);
-  assert.match(html,/filing:official/);
+  assert.match(html,/1 edge source ID\(s\)/);
   assert.match(html,/Recorded relationships/);
   assert.match(html,/Adjacency|adjacency/);
   assert.doesNotMatch(html,/Secret other Project memo|private:other|not-permitted/);
