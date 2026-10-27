@@ -652,3 +652,13 @@ html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-s
   outline: 2px solid var(--lios-brand);
   outline-offset: -2px;
 }
+
+
+/* Phase 1 accessibility: hover-only History menus disappear on touch devices.
+ * Preserve quiet desktop hover behavior while keeping touch actions discoverable. */
+@media (hover: none), (pointer: coarse) {
+  .terminal-root .lios-history-action-menu,
+  .lios-navigation-sheet .lios-history-action-menu {
+    opacity: 1 !important;
+  }
+}
