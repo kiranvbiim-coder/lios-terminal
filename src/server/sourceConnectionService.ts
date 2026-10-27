@@ -26,6 +26,28 @@ export interface SourceConnectionTestResult {
   detail: string;
   testedAt: string;
 }
+
+/**
+ * Live MCP verification is a separate, *read-only* official SDK handshake.
+ * The connected user's current Project ownership is checked before opening
+ * the remote transport. Dependency injection exists for offline integration
+ * tests and cannot be selected from an API/model payload.
+ */
+export async function verifySavedMcpConnection(
+  connection: SourceConnection,
+  tenant: { userId: number; organizationId: number | null; role: "internal_analyst" },
+  probe: typeof listExternalMcpTools = listExternalMcpTools,
+): Promise<{ allowedToolCount: number }> {
+  assertLocalByodRuntime("External MCP BYOD verification");
+  if (connection.userId !== tenant.userId || connection.organizationId !== tenant.organizationId) {
+    throw new Error("MCP connection is outside the current owner scope.");
+  }
+  const config = externalMcpConfigForSourceConnection(connection);
+  await getProject(tenant, config.policy.projectId);
+  const allowed = await probe(config);
+  return { allowedToolCount: allowed.length };
+}
+
 async function assertConnectorConfig(input: SourceConnectionConfig): Promise<void> {
   const connector = getConnectorById(input.connectorId);
   const customConnector = input.connectorId.startsWith("custom_");
@@ -368,22 +390,11 @@ export async function testSourceConnection(userId: number, connectionId: number,
     }
   } else if (connection.sourceType === "mcp") {
     try {
-      assertLocalByodRuntime("External MCP BYOD verification");
-      const config = externalMcpConfigForSourceConnection(connection);
-      // The MCP URL belongs to this saved source, but an arbitrary stored
-      // projectId is not authority to connect to it. Enforce current owner
-      // and organization scope before contacting the network.
-      await getProject({
-        userId,
-        organizationId: connection.organizationId,
-        role: "internal_analyst",
-      }, config.policy.projectId);
-      // Official v2 MCP SDK initialize + tools/list, using the registered
-      // endpoint and local credential vault. This is a read-only health probe:
-      // never issue tools/call or grant an execution approval.
-      const allowed = await listExternalMcpTools(config);
+      const { allowedToolCount } = await verifySavedMcpConnection(connection, {
+        userId, organizationId: connection.organizationId, role: "internal_analyst",
+      });
       status = "healthy";
-      detail = `Live MCP handshake and tools/list succeeded; ${allowed.length} tool(s) match this Project's allowlist. No MCP tool was executed.`;
+      detail = `Live MCP handshake and tools/list succeeded; ${allowedToolCount} tool(s) match this Project's allowlist. No MCP tool was executed.`;
     } catch (error) {
       status = "unreachable";
       // Exceptions may contain OAuth headers, vendor endpoints or tokens.
