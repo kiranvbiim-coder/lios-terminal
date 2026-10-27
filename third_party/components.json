@@ -2790,7 +2790,7 @@
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "Opensourceui",
+      "noticeHeading": "OpensourceUI",
       "externalRights": "separate_review_required",
       "roles": [
         "source-catalogue-search",
@@ -2890,11 +2890,11 @@
       "repository": "bidyut10/opensourceui",
       "commitSha": "892f486fdf0d46a44b21ddf3fa32a41a3a71173a",
       "license": "MIT",
-      "posture": "pinned_source_adaptation",
+      "posture": "adapted_source_component",
       "classification": "adapt",
       "bundled": true,
       "noticeRequiredOnImport": true,
-      "noticeHeading": "Opensource UI — Project spreadsheet upload interaction (MIT)",
+      "noticeHeading": "OpensourceUI Project spreadsheet",
       "externalRights": "separate_review_required",
       "roles": [
         "Project-Artifacts-import-spreadsheet",

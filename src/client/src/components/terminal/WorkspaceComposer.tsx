@@ -11,6 +11,7 @@ import { appendWorkspaceSlot, moveWorkspaceSlot, removeWorkspaceSlot, workspaceF
 
 interface Props {
   workspace: WorkspaceState;
+  reducedMotion?: boolean;
   onApplyWorkspace: (workspace: WorkspaceState, label?: string) => boolean | void;
   onClose: () => void;
 }
@@ -19,7 +20,7 @@ interface Props {
 const PANE_IDS: PaneId[] = ["primary", "secondary", "tertiary", "quaternary"];
 
 
-export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose }: Props) {
+export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose, reducedMotion = false }: Props) {
   const [objects, setObjects] = useState<IntelligenceObject[]>(() => loadIntelligenceObjects());
   const [slots, setSlots] = useState<Slot[]>(() => {
     const panes = [workspace.primary, workspace.secondary, workspace.tertiary ?? null, workspace.quaternary ?? null].filter(Boolean) as PaneState[];
@@ -163,7 +164,7 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
             }) : <p role="status" className="p-3 font-ui text-sm text-muted-foreground">No matching objects.</p>}</div>
           </aside>
         </div>
-        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border p-3"><button type="button" onClick={onClose} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button><BeuiButton type="button" onClick={apply} disabled={!slots.length} variant="outline" size="md" className="min-h-11 rounded border-primary px-4 py-2 font-ui text-sm text-primary focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40">Apply workspace</BeuiButton></footer>
+        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border p-3"><button type="button" onClick={onClose} className="min-h-11 rounded border border-border px-4 py-2 font-ui text-sm">Cancel</button><BeuiButton reducedMotion={reducedMotion} type="button" onClick={apply} disabled={!slots.length} variant="outline" size="md" className="min-h-11 rounded border-primary px-4 py-2 font-ui text-sm text-primary focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40">Apply workspace</BeuiButton></footer>
       </DialogContent>
     </Dialog>
   );

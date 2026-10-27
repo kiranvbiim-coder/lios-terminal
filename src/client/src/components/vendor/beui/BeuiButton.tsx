@@ -35,6 +35,7 @@ export interface ButtonProps extends Omit<
   pressScale?: number;
   /** Spawn a Material-style ripple from the press point. Off by default. */
   ripple?: boolean;
+  reducedMotion?: boolean;
   children?: ReactNode;
 }
 
@@ -72,6 +73,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       size = "md",
       pressScale = 0.93,
       ripple = false,
+      reducedMotion = false,
       className,
       children,
       onPointerDown,
@@ -79,7 +81,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) {
-    const reduce = useReducedMotion();
+    const osReducedMotion = useReducedMotion();
+    const reduce = reducedMotion || osReducedMotion;
     const canHover = useHoverCapable();
     const [ripples, setRipples] = useState<Ripple[]>([]);
     const nextId = useRef(0);

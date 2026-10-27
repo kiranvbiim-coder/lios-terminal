@@ -270,7 +270,7 @@ export default function TerminalUxOverlays({ experienceSurface, activeView, acti
       {surface === "scenario-workbench" && <ScenarioWorkbench activeView={activeView} activeSymbol={activeSymbol} onClose={() => setSurface(null)} />}
       {surface === "object-workbench" && <ObjectWorkbench onClose={() => setSurface(null)} />}
       {surface === "graph-explorer" && <GraphExplorer activeSymbol={activeSymbol} onClose={() => setSurface(null)} />}
-      {surface === "workspace-composer" && <WorkspaceComposer workspace={workspace} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
+      {surface === "workspace-composer" && <WorkspaceComposer workspace={workspace} reducedMotion={preferences.reducedMotion} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)} />}
       {surface === "innovation-studio" && <AnalyticalStudio activeView={activeView} activeSymbol={activeSymbol} workspace={workspace} isInternal={isInternal} preferences={preferences} onPreferencesChange={onPreferencesChange} onOpen={onOpen} onApplyWorkspace={applyWorkspaceFallback} onClose={() => setSurface(null)}
         selectedTab={studioTab} onSelectTab={setStudioTab} spatialCanvasReturn={spatialCanvasReturn} onSpatialCanvasReturn={setSpatialCanvasReturn} />}
       {researchOpened && <div hidden={surface !== "research-tray"} style={surface !== "research-tray" ? { display: "none" } : undefined}>
