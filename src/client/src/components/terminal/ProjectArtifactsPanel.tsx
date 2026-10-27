@@ -249,7 +249,8 @@ export function ProjectArtifactsPanel({
       </div>
       {briefingOpen && <div id="project-briefing-studio">
         <ProjectBriefingStudio projectId={projectId} artifacts={rows}
-          onSave={handleSaveBriefing} onClose={() => setBriefingOpen(false)} />
+          onSave={handleSaveBriefing} onClose={() => setBriefingOpen(false)}
+          onOpenSource={id => { setBriefingOpen(false); setVersionView(null); setSelected(id); }} />
       </div>}
       {!!rows.length && (
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-border/50 pt-4" aria-label="Find saved Artifacts">
