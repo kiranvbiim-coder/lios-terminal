@@ -51,6 +51,9 @@ export function registerP13ExtensionRoutes(app: Express): void {
       }
       res.json(chatExtensionCatalog({
         plugins: getP13PluginRuntimeHost().plugins.list(),
+        isPluginLiveTrusted: plugin => getP13PluginRuntimeHost().trustStore.verify(
+          plugin.manifest, plugin.trust.packageDigest,
+        ).state === "trusted",
         connections,
         userId: user.id,
         organizationId: user.organizationId ?? null,
