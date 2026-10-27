@@ -4,6 +4,7 @@
  * relationship inference. A different URL is always a different story.
  */
 import { safePulseSourceUrl } from "./pulseStoryPresentation";
+import { recordedIsoTimestamp } from "./recordedIsoTimestamp";
 
 export interface NewsStoryObservation {
   url: string;
@@ -33,9 +34,9 @@ function validObservation(item: NewsStoryObservation): NewsStoryObservation | nu
   const title = clean(item.title, 240);
   const source = clean(item.source, 160);
   const summary = clean(item.summary, 1400);
-  const published = Date.parse(item.publishedAt);
-  if (!title || !source || !Number.isFinite(published)) return null;
-  return { url, title, source, summary, publishedAt: new Date(published).toISOString() };
+  const published = recordedIsoTimestamp(item.publishedAt);
+  if (!title || !source || !published) return null;
+  return { url, title, source, summary, publishedAt: published };
 }
 
 /** Comparison of two recorded feed observations, NOT claims about the event. */
@@ -70,8 +71,8 @@ export function observeNewsFeed(
     // Switching between cached React Query keys can surface an older response
     // after a newer one. Never reclassify old feed data as a fresh revision.
     if (latest) {
-      const lastSeen = Date.parse(latest.lastObservedAt ?? latest.observedAt);
-      if (!Number.isFinite(lastSeen) || observationTime <= lastSeen) continue;
+      const lastSeen = recordedIsoTimestamp(latest.lastObservedAt ?? latest.observedAt);
+      if (!lastSeen || observationTime <= Date.parse(lastSeen)) continue;
       if (changedNewsFields(latest, item).length === 0) {
         next = next.map(record => record === latest ? { ...record, lastObservedAt: observedAt } : record);
         continue;
