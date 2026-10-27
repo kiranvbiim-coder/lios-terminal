@@ -105,6 +105,18 @@ test("Phase 2: connected local file verifies, appears in Chat and supplies an ap
   assert.equal(JSON.stringify(result).includes(file), false);
   assert.equal(result.summary.includes("preview row"), true);
 
+  // The same configured file changes without another Verify or settings edit.
+  // A Chat preview must reflect the new on-disk observation, not TTL cache.
+  fs.writeFileSync(file, JSON.stringify([
+    { region: "west", metric: 38, api_key: "new-secret-must-not-leak" },
+  ]));
+  const refreshed = await noRights();
+  const live = refreshed.output as { previewRows: Array<Record<string, unknown>>; cache: string };
+  assert.deepEqual(live.previewRows, [{ region: "west", metric: 38, api_key: "[REDACTED]" }]);
+  assert.equal(live.cache, "miss");
+  assert.equal(JSON.stringify(refreshed).includes("new-secret-must-not-leak"), false);
+  assert.notDeepEqual(refreshed.sourceRefs, result.sourceRefs, "file-content provenance changes when the file content changes");
+
   await assert.rejects(
     () => connectedProviderPreviewChatTool.invoke({
       connectionId: source.id, entityRef: "region-sample",
