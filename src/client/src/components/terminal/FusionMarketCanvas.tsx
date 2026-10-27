@@ -30,6 +30,8 @@ interface Props {
 }
 
 type Range = "1W" | "1M" | "3M";
+const EMPTY_BREADTH_SERIES: MarketBreadthResult["series"] = [];
+const SESSION_LABEL: Record<Range, string> = { "1W": "7S", "1M": "30S", "3M": "90S" };
 
 function moveColor(value: number) {
   const intensity = Math.min(1, Math.max(0.18, Math.abs(value) / 5));
@@ -74,7 +76,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }: Props) {
   const [range, setRange] = useState<Range>("1M");
   const { data: indexSparklines = {} } = useIndexSparklines();
-  const series = breadth?.series ?? [];
+  const series = breadth?.series ?? EMPTY_BREADTH_SERIES;
   const points = range === "1W" ? 7 : range === "3M" ? 90 : 30;
 
   const flowData = useMemo(() => recordedBreadthRows(series, points), [points, series]);
@@ -98,7 +100,8 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
     const values = (indexSparklines[index.symbol] ?? []).filter((value) => Number.isFinite(value));
     const first = values[0];
     const last = values.at(-1);
-    const move = first && last ? ((last - first) / Math.abs(first)) * 100 : null;
+    const move = first !== undefined && last !== undefined && first !== 0
+      ? ((last - first) / Math.abs(first)) * 100 : null;
     return { ...index, values, move };
   }), [indexSparklines]);
 
@@ -110,12 +113,12 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
           <div className="min-w-0">
             <div className="fusion-section-eyebrow text-cyan-200/75">MARKET MAP · RECORDED OBSERVATIONS</div>
             <div className="fusion-canvas-title">Market canvas</div>
-            <div className="fusion-canvas-subtitle">Source-bound breadth, momentum and movers. Inspect actual values below the chart.</div>
+            <div className="fusion-canvas-subtitle">Source-bound breadth, momentum and movers. Ranges count recorded trading sessions, not calendar weeks or months.</div>
           </div>
         </div>
         <div className="fusion-sprint-c-actions flex shrink-0 items-center gap-1.5" aria-label="Market canvas view options">
           {(["1W", "1M", "3M"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => setRange(item)} aria-pressed={range === item} className={cn("fusion-range-button", range === item && "fusion-range-button-active")}>{item}</button>
+            <button key={item} type="button" onClick={() => setRange(item)} aria-label={`Show up to ${item === "1W" ? 7 : item === "1M" ? 30 : 90} recorded trading sessions`} aria-pressed={range === item} className={cn("fusion-range-button", range === item && "fusion-range-button-active")}>{SESSION_LABEL[item]}</button>
           ))}
           <button type="button" onClick={() => onOpen("heatmap", "current")} className="fusion-canvas-action">FULL MAP ↗</button>
         </div>
@@ -135,7 +138,7 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
         <div className="fusion-canvas-panel fusion-flow-panel">
           <div className="fusion-canvas-panel-head"><span>ADVANCE / DECLINE FLOW</span><span className="text-cyan-200/75">{flowData.at(-1)?.date ?? "AWAITING DATA"}</span></div>
           <p className="fusion-sprint-c-source-note" role="status">{flowData.length
-            ? `${flowData.length} recorded sessions shown · ${range} selection · percentages of reported breadth universe`
+            ? `${flowData.length} recorded sessions shown · latest ${points} sessions selected · percentages of reported breadth universe`
             : "No usable recorded breadth sessions for this range. A missing source is not a zero market reading."}</p>
           {flowData.length ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -159,7 +162,7 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
           <details className="fusion-sprint-c-data">
             <summary>Read recorded breadth values ({flowData.length} sessions)</summary>
             {flowData.length ? <div className="fusion-sprint-c-table-scroll">
-              <table aria-label={`Recorded advance decline percentages over ${range}`}>
+              <table aria-label={`Recorded advance decline percentages from up to the latest ${points} sessions`}>
                 <caption>Existing provider records only. Decliners appear negative on the chart; the table shows their positive share. No forecast or interpolation.</caption>
                 <thead><tr><th scope="col">Session</th><th scope="col">Advancing</th><th scope="col">Declining</th><th scope="col">Net</th></tr></thead>
                 <tbody>{flowData.map((row, index) => <tr key={`${row.date}:${index}`}>
@@ -180,8 +183,8 @@ export default function FusionMarketCanvas({ breadth, gainers, losers, onOpen }:
           </div>
           <div className="fusion-stack-bar" aria-label={validLatest ? "Recorded market breadth split" : "Market breadth split unavailable"}><span className="bg-emerald-300" style={{ width: `${advancePct}%` }} /><span className="bg-rose-300" style={{ width: `${declinePct}%` }} /><span className="bg-white/20" style={{ width: `${unchangedPct}%` }} /></div>
           <div className="grid grid-cols-3 gap-2 pt-3 text-center"><div><strong className="text-emerald-300">{validLatest ? latest?.advances : "—"}</strong><span>ADV</span></div><div><strong className="text-rose-300">{validLatest ? latest?.declines : "—"}</strong><span>DEC</span></div><div><strong className="text-white/65">{validLatest ? latest?.unchanged : "—"}</strong><span>FLAT</span></div></div>
-          <div className="fusion-breadth-stat"><span>NEW HIGHS / LOWS</span><strong>{latest ? `${latest.newHighs} / ${latest.newLows}` : "—"}</strong></div>
-          <div className="fusion-breadth-stat"><span>McCLELLAN</span><strong className={latest?.mcClellanOscillator && latest.mcClellanOscillator >= 0 ? "text-emerald-300" : "text-rose-300"}>{latest?.mcClellanOscillator == null ? "—" : latest.mcClellanOscillator.toFixed(2)}</strong></div>
+          <div className="fusion-breadth-stat"><span>NEW HIGHS / LOWS</span><strong>{latest && Number.isSafeInteger(latest.newHighs) && latest.newHighs >= 0 && Number.isSafeInteger(latest.newLows) && latest.newLows >= 0 ? `${latest.newHighs} / ${latest.newLows}` : "—"}</strong></div>
+          <div className="fusion-breadth-stat"><span>McCLELLAN</span><strong className={latest?.mcClellanOscillator != null && Number.isFinite(latest.mcClellanOscillator) && latest.mcClellanOscillator >= 0 ? "text-emerald-300" : "text-rose-300"}>{latest?.mcClellanOscillator == null || !Number.isFinite(latest.mcClellanOscillator) ? "—" : latest.mcClellanOscillator.toFixed(2)}</strong></div>
         </div>
 
         <div className="fusion-canvas-panel fusion-momentum-panel">
