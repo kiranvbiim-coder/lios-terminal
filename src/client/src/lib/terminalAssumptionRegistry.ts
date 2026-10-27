@@ -54,31 +54,66 @@ export function updateAssumptionBindingValue(id: string, value: number): void {
   bindings.set(id, { ...current, value });
 }
 
-export function applyScenarioToBindings(scenario: TerminalScenario, filter?: { view?: ViewMode; symbol?: string }): ScenarioApplyResult {
-  const available = listAssumptionBindings(filter);
-  const applied: ScenarioApplyResult["applied"] = [];
-  const unmatched: string[] = [];
-  const skipped: ScenarioApplyResult["skipped"] = [];
+export interface ScenarioBindingApplicationPlan {
+  matched: Array<{ bindingId: string; bindingLabel: string; assumptionKey: string; value: number; currentValue: number; unit?: string }>;
+  unmatched: string[];
+  skipped: Array<{ assumptionKey: string; reason: string }>;
+}
 
+/**
+ * C02/C04: the exact current registered model input plan, with no side effects.
+ * A unit mismatch must not be silently applied just because keys match.
+ * This is input editing only, never a completed P11 model run or P4 save.
+ */
+export function previewScenarioBindingApplication(
+  scenario: TerminalScenario,
+  filter?: { view?: ViewMode; symbol?: string },
+): ScenarioBindingApplicationPlan {
+  const available = listAssumptionBindings(filter);
+  const plan: ScenarioBindingApplicationPlan = { matched: [], unmatched: [], skipped: [] };
   for (const assumption of scenario.assumptions) {
     if (typeof assumption.value !== "number" || !Number.isFinite(assumption.value)) {
-      skipped.push({ assumptionKey: assumption.key, reason: "Only finite numeric assumptions can be applied to model inputs" });
+      plan.skipped.push({ assumptionKey: assumption.key, reason: "Only finite numeric assumptions can be applied to model inputs" });
       continue;
     }
     const assumptionTokens = new Set([normalize(assumption.key), normalize(assumption.label)]);
-    const matches = available.filter((binding) => assumptionTokens.has(normalize(binding.key)) || assumptionTokens.has(normalize(binding.label)));
-    if (!matches.length) {
-      unmatched.push(assumption.key);
-      continue;
-    }
+    const matches = available.filter(binding => assumptionTokens.has(normalize(binding.key)) || assumptionTokens.has(normalize(binding.label)));
+    if (!matches.length) { plan.unmatched.push(assumption.key); continue; }
     for (const binding of matches) {
-      binding.apply(assumption.value);
-      updateAssumptionBindingValue(binding.id, assumption.value);
-      applied.push({ bindingId: binding.id, assumptionKey: assumption.key, value: assumption.value });
+      const aUnit = assumption.unit?.trim().toLocaleLowerCase() ?? "";
+      const bUnit = binding.unit?.trim().toLocaleLowerCase() ?? "";
+      if (aUnit !== bUnit) {
+        plan.skipped.push({ assumptionKey: assumption.key,
+          reason: `Unit mismatch for ${binding.label}: scenario ${assumption.unit || "not recorded"}, model ${binding.unit || "not recorded"}` });
+        continue;
+      }
+      plan.matched.push({
+        bindingId: binding.id, bindingLabel: binding.label,
+        assumptionKey: assumption.key, value: assumption.value,
+        currentValue: binding.value, unit: binding.unit,
+      });
     }
   }
+  return plan;
+}
+
+export function applyScenarioToBindings(scenario: TerminalScenario, filter?: { view?: ViewMode; symbol?: string }): ScenarioApplyResult {
+  // Exactly the same matcher and unit gate powers the review and the action.
+  const plan = previewScenarioBindingApplication(scenario, filter);
+  const applied: ScenarioApplyResult["applied"] = [];
+  const skipped = [...plan.skipped];
+  for (const match of plan.matched) {
+    const binding = bindings.get(match.bindingId);
+    if (!binding || binding.value !== match.currentValue) {
+      skipped.push({ assumptionKey: match.assumptionKey, reason: "Registered input changed after review; no value applied" });
+      continue;
+    }
+    binding.apply(match.value);
+    updateAssumptionBindingValue(binding.id, match.value);
+    applied.push({ bindingId: binding.id, assumptionKey: match.assumptionKey, value: match.value });
+  }
   emit();
-  return { applied, unmatched, skipped };
+  return { applied, unmatched: plan.unmatched, skipped };
 }
 
 export function subscribeAssumptionBindings(listener: (bindings: AssumptionBinding[]) => void): () => void {
