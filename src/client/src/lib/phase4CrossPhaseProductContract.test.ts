@@ -60,8 +60,8 @@ test("the advisory request is a real accessible modal, not a click-through div",
 });
 
 test("Phase 4 CI keeps source evidence separate from signed/installed native release", () => {
-  const workflow = read("../../../.github/workflows/source-cross-platform.yml");
-  const pkg = JSON.parse(read("../../package.json"));
+  const workflow = read("../../../../.github/workflows/source-cross-platform.yml");
+  const pkg = JSON.parse(read("../../../package.json"));
   assert.match(workflow, /github\.event\.repository\.private == false/);
   assert.match(workflow, /npm run phase4:source/);
   assert.match(workflow, /npm run phase4:assets/);
