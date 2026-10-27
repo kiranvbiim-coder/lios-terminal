@@ -2194,19 +2194,13 @@ export default function ProjectExperienceShell({
               <div className="lios-project-chat-content mx-auto max-w-4xl space-y-5">
                 {!displayMessages.length && !streaming && (
                   <section className="lios-conversation-empty-state lios-chat-empty-state flex min-h-[45vh] flex-col items-center justify-center px-2 py-8 text-center" aria-labelledby="lios-chat-empty-title">
-                    <div className="lios-chat-empty-state__mark flex h-12 w-12 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-300/[0.06]">
-                      <Sparkles className="h-5 w-5 text-amber-300" />
-                    </div>
-                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-foreground">What do you want to understand, test or build?</h1>
-                    <p className="mt-3 max-w-2xl font-ui text-[15px] leading-6 text-muted-foreground">
-                      Start with the question. LiOS will use the sources and tools you allow, show what is missing, and expand into professional analysis only when it helps.
-                    </p>
-                    <div className="lios-chat-starters mt-7 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Example prompts">
+                    <h1 id="lios-chat-empty-title" className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-foreground">How can I help?</h1>
+                    <div className="lios-chat-starters mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Example prompts">
                       {starterPromptsForChatMode(chatMode).map((starter) => (
                         <button
                           key={starter.id}
                           type="button"
-                          className="lios-chat-starter rounded-lg border border-border/70 bg-card p-3.5 text-left transition-colors hover:border-border hover:bg-accent"
+                          className="lios-chat-starter rounded-lg border border-border/70 bg-card px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-accent"
                           aria-label={`Use example: ${starter.label}`}
                           onClick={() => {
                             const prompt = fillStarterPrompt(starter.prompt, recentStarterSymbol);
@@ -2220,15 +2214,17 @@ export default function ProjectExperienceShell({
                           }}
                         >
                           <span className="block font-ui text-[13px] font-semibold text-foreground">{starter.label}</span>
-                          <span className="mt-1 block font-ui text-[12px] leading-4 text-muted-foreground">{starter.description}</span>
                         </button>
                       ))}
                     </div>
                     <div className="lios-chat-empty-state__project-cta mt-5 flex flex-wrap items-center justify-center gap-2">
                       <button type="button" data-first-use-primary="ask" onClick={() => composerRef.current?.focus()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-400 px-3.5 py-2 font-ui text-sm font-semibold text-black focus-visible:outline focus-visible:outline-2">
-                        <Sparkles className="h-4 w-4" /> Ask LiOS
+                        Ask LiOS
                       </button>
-                      <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
+                      <details className="lios-first-use-options text-left">
+                        <summary className="cursor-pointer rounded-md px-3 py-2 font-ui text-[13px] text-muted-foreground hover:text-foreground">More options</summary>
+                        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                          <button type="button" onClick={() => setNewProjectOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border/70 px-3.5 py-2 font-ui text-sm text-muted-foreground hover:text-foreground">
                         <Plus className="h-3.5 w-3.5" /> Create a Project
                       </button>
                       <button
@@ -2239,9 +2235,11 @@ export default function ProjectExperienceShell({
                       >
                         <Plug className="h-3.5 w-3.5" /> {LIOS_FIRST_USE_CONTRACT.optionalConnectionAction}
                       </button>
-                    </div>
-                    <div data-first-use-entry="ask-first" className="mt-3 font-ui text-[12px] text-muted-foreground">
-                      {LIOS_FIRST_USE_CONTRACT.shellHint}
+                        </div>
+                        <div data-first-use-entry="ask-first" className="mt-2 max-w-md font-ui text-[12px] leading-5 text-muted-foreground">
+                          {LIOS_FIRST_USE_CONTRACT.shellHint}
+                        </div>
+                      </details>
                     </div>
                   </section>
                 )}
