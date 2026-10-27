@@ -11,6 +11,8 @@ export const editorialMediaSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   alt: z.string().trim().min(5).max(300),
   caption: z.string().trim().max(500).optional(),
+  usageContext: z.enum(["documentary", "illustrative"]).optional(),
+  mediaSourcePage: z.string().trim().max(2048).url().refine(url => url.startsWith("https://commons.wikimedia.org/wiki/File:"), "Commons file page required").optional(),
   attribution: z.string().trim().min(2).max(240),
   owner: z.string().trim().min(2).max(240),
   licenseName: z.string().trim().min(2).max(180),
