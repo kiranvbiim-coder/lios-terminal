@@ -38,6 +38,7 @@ export function approvedNewsMediaByUrl(root: string, asOf: string): Map<string, 
     const payload: unknown = JSON.parse(fs.readFileSync(manifest, "utf8"));
     if (!Array.isArray(payload) || payload.length > MAX_MEDIA_ITEMS) return approved;
     for (const entry of payload) {
+      try {
       const candidate = eligibleEditorialMedia(entry, [entry?.sourceEvidenceId].filter((x): x is string => typeof x === "string"), asOf);
       if (!candidate || approved.has(candidate.sourceEvidenceId)) continue;
       const relative = candidate.assetPath.slice(1);
@@ -50,6 +51,10 @@ export function approvedNewsMediaByUrl(root: string, asOf: string): Map<string, 
       if (!imageSignatureValid(image, path.extname(real).slice(1).toLowerCase())) continue;
       if (createHash("sha256").update(image).digest("hex") !== candidate.sha256) continue;
       approved.set(candidate.sourceEvidenceId, candidate);
+      } catch {
+        // A single missing or invalid file must not suppress other approved stories.
+        continue;
+      }
     }
   } catch {
     // No licensed asset is an ordinary state: news remains available without pictures.
