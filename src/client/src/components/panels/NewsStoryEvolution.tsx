@@ -4,6 +4,7 @@ import {
 } from "@/lib/newsStoryEvolution";
 import { relatedNewsCoverage } from "@/lib/newsRelatedCoverage";
 import { safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 import type { NewsStoryObservation } from "@/lib/newsStoryEvolution";
 import { OptionalTimelineBoundary } from "../terminal/OptionalTimelineBoundary";
 
@@ -12,9 +13,9 @@ const RelatedPublisherTimeline = React.lazy(() => import("./NewsObservedRevision
   .then(module => ({ default: module.RelatedPublisherTimeline })));
 
 function utcDateTime(value: string): string {
-  const time = Date.parse(value);
-  return Number.isFinite(time)
-    ? new Date(time).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC"
+  const instant = recordedIsoTimestamp(value);
+  return instant
+    ? new Date(instant).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC"
     : "Time unavailable";
 }
 
