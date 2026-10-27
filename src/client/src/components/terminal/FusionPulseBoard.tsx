@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import type { PulseSavedView } from "@shared/pulseSavedViews";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { clusterRecordedPulseStories } from "@/lib/pulseStoryClusters";
 import type { PulseReviewPresentation } from "@/lib/pulseReviewPresentation";
@@ -28,6 +29,14 @@ interface Props {
   recents: RecentAnalyticalContext[];
   favorites: ViewMode[];
   pulseChannel: "for_you" | "following" | "markets" | "research";
+  pulseSavedViews: PulseSavedView[];
+  activeSavedSubject: string | null;
+  savedViewPending: boolean;
+  savedViewError: string | null;
+  onSavePulseView: (name: string) => void;
+  onDeletePulseView: (id: string) => void;
+  onActivatePulseView: (view: PulseSavedView) => void;
+  onSelectSavedSubject: (subject: string | null) => void;
   pulseStatus: "loading" | "ready" | "unavailable";
   briefHeadline?: string | null;
   pulsePreferences: PulseSubjectPreferences;
@@ -146,6 +155,14 @@ export default function FusionPulseBoard({
   recents,
   favorites,
   pulseChannel,
+  pulseSavedViews,
+  activeSavedSubject,
+  savedViewPending,
+  savedViewError,
+  onSavePulseView,
+  onDeletePulseView,
+  onActivatePulseView,
+  onSelectSavedSubject,
   pulseStatus,
   briefHeadline,
   pulsePreferences,
@@ -160,6 +177,7 @@ export default function FusionPulseBoard({
   onPulseRetry,
   onPulseChannelChange,
 }: Props) {
+  const [viewName, setViewName] = useState("");
   const { data: gainers = [], isLoading: gainersLoading } = useMarketGainers();
   const { data: losers = [], isLoading: losersLoading } = useMarketLosers();
   const { data: sentiment } = useMarketSentiment();
@@ -194,6 +212,51 @@ export default function FusionPulseBoard({
       <div className="border-b border-border/60 px-3 py-2">
         <div className="flex flex-wrap items-center gap-3">
           <PulseDiscoveryTabs channel={pulseChannel} onChange={onPulseChannelChange} />
+          <details className="min-w-[12rem] rounded-lg border border-border/60 px-3 py-2" data-testid="pulse-saved-discovery-views">
+            <summary className="min-h-8 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              Saved views ({pulseSavedViews.length})
+            </summary>
+            <div className="mt-2 space-y-2 border-t border-border/50 pt-2">
+              {pulseStatus === "ready" && <>
+                <label className="block font-ui text-xs text-muted-foreground">
+                  Followed subject
+                  <select aria-label="Filter Pulse by a followed subject" value={activeSavedSubject ?? ""}
+                    onChange={event => onSelectSavedSubject(event.target.value || null)}
+                    className="mt-1 min-h-10 w-full rounded-md border border-border/70 bg-background px-2 text-sm text-foreground">
+                    <option value="">All subjects</option>
+                    {pulsePreferences.followed.map(subject => <option key={subject} value={subject}>{subject}</option>)}
+                  </select>
+                </label>
+                <form onSubmit={event => {
+                  event.preventDefault();
+                  const label = viewName.trim() || [pulseChannel.replaceAll("_", " "), activeSavedSubject].filter(Boolean).join(" · ");
+                  onSavePulseView(label.slice(0, 60));
+                  setViewName("");
+                }} className="flex flex-wrap items-center gap-2">
+                  <label htmlFor="pulse-view-name" className="sr-only">Saved view name</label>
+                  <input id="pulse-view-name" value={viewName} onChange={event => setViewName(event.target.value)}
+                    maxLength={60} placeholder="Name this view"
+                    className="min-h-10 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-2 font-ui text-sm text-foreground" />
+                  <button type="submit" disabled={savedViewPending || pulseSavedViews.length >= 12}
+                    className="min-h-10 rounded-md border border-amber-300/40 px-3 font-ui text-xs font-medium text-foreground disabled:opacity-40">Save view</button>
+                </form>
+              </>}
+              {savedViewError && <p role="alert" className="font-ui text-xs text-rose-200">{savedViewError}</p>}
+              <ul aria-label="Saved discovery filters" className="space-y-1.5">
+                {pulseSavedViews.map(view => <li key={view.id} className="flex min-w-0 items-center gap-2">
+                  <button type="button" onClick={() => onActivatePulseView(view)} disabled={savedViewPending || pulseStatus !== "ready"}
+                    className="min-h-10 min-w-0 flex-1 truncate rounded-md border border-border/60 px-2 text-left font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">
+                    {view.name}
+                    <span className="ml-2 text-muted-foreground">{view.channel.replaceAll("_", " ")}{view.subjectKey ? " · " + view.subjectKey : ""}</span>
+                  </button>
+                  <button type="button" onClick={() => onDeletePulseView(view.id)} disabled={savedViewPending || pulseStatus !== "ready"}
+                    aria-label={`Delete saved view ${view.name}`}
+                    className="min-h-10 rounded-md border border-border/60 px-2 font-ui text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-40">Remove</button>
+                </li>)}
+                {!pulseSavedViews.length && <li className="font-ui text-xs text-muted-foreground">Save a discovery selection to reopen it after restart.</li>}
+              </ul>
+            </div>
+          </details>
           {briefHeadline && <div className="min-w-0 flex-1 truncate font-ui text-xs leading-5 text-amber-100/90" title={briefHeadline}>{briefHeadline}</div>}
         </div>
       </div>

@@ -94,3 +94,15 @@ test("Visual Search refreshes exact authorized Pulse on foreground return withou
   assert.ok(!source.includes('[searchReady, activeQuery]'), "Do not refetch provider for each keystroke");
   assert.ok(!source.includes('localStorage.setItem('), "No duplicate browser-side intelligence cache");
 });
+
+test("A07 search can present exact source results as cards, tabular rows and recorded chronology", () => {
+  const source = readFileSync(new URL("./VisualIntelligenceSearch.tsx", import.meta.url), "utf8");
+  assert.match(source, /"cards" \| "table" \| "timeline"/);
+  assert.match(source, /aria-label="Intelligence results presentation"/);
+  assert.match(source, /aria-label="Recorded intelligence table"/);
+  assert.match(source, /aria-label="Recorded intelligence chronology"/);
+  assert.match(source, /datedResults\.length < found\.results\.length/);
+  assert.match(source, /Ordered by the source card's recorded timestamp/);
+  assert.ok(source.includes("<time dateTime={at}"), "timeline uses the source recorded time");
+  assert.doesNotMatch(source, /syntheticChart|inferredCoordinates|fetch\("https?:/);
+});

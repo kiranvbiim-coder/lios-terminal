@@ -41,3 +41,22 @@ test("A05/A06 foreground sources abort abandoned HTTP reads and never reuse brow
   ]) assert.ok(shell.includes(exact), "missing authorized Pulse revalidation: " + exact);
   assert.doesNotMatch(shell, /setInterval\(/);
 });
+
+test("A05 server-scoped saved view journey uses existing Wave D state, not browser cache", () => {
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
+  const routes = readFileSync(new URL("../../../server/waveDRoutes.ts", import.meta.url), "utf8");
+  for(const part of [
+    'normalizePulseSavedViews(pulse.savedViews)',
+    '/api/wave-d/pulse/views',
+    'encodeURIComponent(activeSavedSubject)',
+    'onActivatePulseView={activateSavedView}',
+    'onPulseChannelChange={(next) => { setPulseChannel(next); setActiveSavedSubject(null); }}',
+  ]) assert.ok(shell.includes(part), "missing save/restore source boundary: " + part);
+  assert.match(board, /pulse-saved-discovery-views/);
+  assert.match(board, /Save view/);
+  assert.match(board, /onActivatePulseView\(view\)/);
+  assert.match(routes, /savePulseDiscoveryView/);
+  assert.match(routes, /removePulseDiscoveryView/);
+  assert.doesNotMatch(shell, /localStorage\.setItem\([^\n]*pulseSavedViews/);
+});
