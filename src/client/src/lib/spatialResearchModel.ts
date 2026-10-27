@@ -116,3 +116,45 @@ export function stepExplicitResearchTrail(
     : (currentIndex - 1 + itemIds.length) % itemIds.length;
   return itemIds[nextIndex];
 }
+
+/**
+ * Explain precisely what a visible line means. It indicates two existing pins
+ * appear consecutively in an explicitly named, user-assigned group. It is not
+ * evidence of causation, correlation, provenance of the underlying data or
+ * permission to retrieve or send that data elsewhere.
+ */
+export interface ExplicitResearchConnection {
+  key: string;
+  group: string;
+  basis: "shared_user_assigned_group";
+  from: ResearchTrayItem;
+  to: ResearchTrayItem;
+}
+
+export function explicitResearchConnectionKey(edge: SpatialEdge): string {
+  return JSON.stringify([edge.group, edge.fromId, edge.toId]);
+}
+
+/** Revalidate every endpoint against the current visible model before display. */
+export function inspectExplicitResearchConnection(
+  model: SpatialResearchModel,
+  key: string | null,
+): ExplicitResearchConnection | null {
+  if (key === null) return null;
+  const edge = model.edges.find(candidate => explicitResearchConnectionKey(candidate) === key);
+  if (!edge || !edge.group.trim() || edge.fromId === edge.toId) return null;
+  const fromMatches = model.nodes.filter(node => node.item.id === edge.fromId);
+  const toMatches = model.nodes.filter(node => node.item.id === edge.toId);
+  if (fromMatches.length !== 1 || toMatches.length !== 1) return null;
+  const from = fromMatches[0].item;
+  const to = toMatches[0].item;
+  if (from.group.trim() !== edge.group || to.group.trim() !== edge.group) return null;
+  return { key, group: edge.group, basis: "shared_user_assigned_group", from, to };
+}
+
+export function listExplicitResearchConnections(model: SpatialResearchModel): ExplicitResearchConnection[] {
+  return model.edges.flatMap(edge => {
+    const connection = inspectExplicitResearchConnection(model, explicitResearchConnectionKey(edge));
+    return connection ? [connection] : [];
+  });
+}
