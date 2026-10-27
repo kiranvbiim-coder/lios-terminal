@@ -360,7 +360,11 @@ export default function NewsPanel({ symbol }: Props) {
                 </p>
 
                 <NewsMediaPreview key={selectedItem.url} preview={selectedItem.mediaPreview} />
-                <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions} />
+                <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions}
+                  coverage={filtered} onSelectRelated={url => {
+                    recheckGenerationRef.current++;
+                    setSelectedUrl(url);
+                  }} />
 
                 <div className="mt-5 space-y-3">
                   {(article?.content.length ? article.content : [selectedItem.summary]).map((paragraph, index) => (
