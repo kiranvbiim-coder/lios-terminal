@@ -8,7 +8,7 @@
  * Both MIT; see third_party/licenses/*. No donor demo media, invented market
  * observations or remote favicon requests are included.
  */
-import { useId, useState } from "react";
+import React, { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, BookOpenText, ChevronDown, ExternalLink, Radar, Sparkles } from "lucide-react";
 import { pulseStoryQuestion, pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds, type PulseStoryView } from "@/lib/pulseStoryPresentation";
