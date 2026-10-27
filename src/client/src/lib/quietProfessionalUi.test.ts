@@ -27,7 +27,7 @@ test("Project disclosures retain meaningful permissions, resource actions and fa
   assert.match(project, /value=\{environmentId\}/);
   assert.match(project, /onClick=\{onOpenContext\}/);
   assert.match(project, /onClick=\{onOpenWorkbench\}/);
-  assert.match(project, /onClick=\{onNewChat\}/);
+  assert.match(project, /onClick=\{\(\) => onNewChat\(\)\}/);
   assert.match(project, /Review context inclusion/);
   assert.match(project, /Source permissions still apply/);
   assert.match(project, /aria-expanded=\{projectDepthOpen\}/);
