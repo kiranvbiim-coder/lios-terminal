@@ -28,7 +28,7 @@ export function pulseStoryTimestamp(value: string | undefined): string | null {
 
 /** Pass only bounded, user-visible source references; never prompt instructions or private credentialed URLs. */
 export function pulseStoryQuestion(card: PulseStoryView): string {
-  const title = card.title.trim().slice(0, 300);
+  const title = card.title.trim().slice(0, 200);
   const timestamp = pulseStoryTimestamp(card.createdAt);
   const citedUrls = [...new Set((card.evidence ?? [])
     .map(source => safePulseSourceUrl(source.url))
