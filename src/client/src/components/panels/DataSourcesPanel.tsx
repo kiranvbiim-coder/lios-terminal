@@ -84,7 +84,10 @@ function SourceCard({
   onDeleteConnection?: (connectionId: number) => void;
   onDiscoverDatabase?: (connectionId: number, name: string) => void;
 }) {
-  const config = STATE_CONFIG[item.state] ?? STATE_CONFIG.catalog_only;
+  const config = readOnly
+    ? { label: `Previously recorded ${item.state.replaceAll("_", " ")} · unverified`,
+        className: "text-muted-foreground border-border", Icon: CircleDashed }
+    : STATE_CONFIG[item.state] ?? STATE_CONFIG.catalog_only;
   const Icon = config.Icon;
   const checkedAt = formatCheckedAt(item.lastCheckedAt);
 
@@ -138,16 +141,16 @@ function EmptyCategory({ category }: { category: ConnectionCenterCategoryId }) {
   if (category === "communications") {
     return (
       <div className="border border-dashed border-border bg-[#070707] p-5">
-        <p className="font-terminal text-[9px] font-bold uppercase tracking-wider text-foreground">Communication connections are intentionally not claimed yet</p>
-        <p className="mt-2 max-w-2xl font-terminal text-[8px] leading-relaxed text-muted-foreground">Gmail, Microsoft 365, IMAP/SMTP, Slack, Teams and webhooks are not available as working connections in this build. They will appear here only after their permission, read or delivery, and failure paths are implemented and verified.</p>
+        <p className="font-ui text-sm font-semibold text-foreground">Communication connections are intentionally not claimed yet</p>
+        <p className="mt-2 max-w-2xl font-ui text-sm leading-6 text-muted-foreground">Gmail, Microsoft 365, IMAP/SMTP, Slack, Teams and webhooks are not available as working connections in this build. They will appear here only after their permission, read or delivery, and failure paths are implemented and verified.</p>
       </div>
     );
   }
   if (category === "ai_providers") {
     return (
       <div className="border border-dashed border-border bg-[#070707] p-5">
-        <p className="font-terminal text-[9px] font-bold uppercase tracking-wider text-foreground">AI remains optional</p>
-        <p className="mt-2 max-w-2xl font-terminal text-[8px] leading-relaxed text-muted-foreground">Configure and verify an AI provider from this catalog, then select its provider and model under Runtime & AI Settings. A successful key check proves provider authentication, not that a conversation request has completed successfully.</p>
+        <p className="font-ui text-sm font-semibold text-foreground">AI remains optional</p>
+        <p className="mt-2 max-w-2xl font-ui text-sm leading-6 text-muted-foreground">Configure and verify an AI provider from this catalog, then select its provider and model under Runtime & AI Settings. A successful key check proves provider authentication, not that a conversation request has completed successfully.</p>
       </div>
     );
   }
@@ -199,7 +202,7 @@ export default function DataSourcesPanel({
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-[#070707] px-4 py-3">
         <Plug className="h-4 w-4 text-[hsl(38,95%,55%)]" aria-hidden="true" />
         <div><h2 id="connection-center-heading" className="font-ui text-base font-semibold tracking-wide text-foreground">Connection Center</h2><p className="font-ui text-xs leading-5 text-muted-foreground">Connect your workspace · one setup surface for external and user-owned systems</p></div>
-        <div className="ml-auto flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{registry.summary.connectionCount} saved</span><span>{readOnly ? "Operational status unverified" : `${registry.summary.operationalCount} reported operational`}</span>{registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" disabled={query.isFetching} aria-busy={query.isFetching} className="min-h-10 min-w-10 rounded-md border border-border p-2 text-muted-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
+        <div className="ml-auto flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground"><span>{registry.summary.connectionCount} {readOnly ? "previously saved" : "saved"}</span><span>{readOnly ? "Operational status unverified" : `${registry.summary.operationalCount} reported operational`}</span>{!readOnly && registry.summary.attentionCount > 0 && <span className="text-amber-400">{registry.summary.attentionCount} attention</span>}<button type="button" aria-label="Refresh Connection Center" disabled={query.isFetching} aria-busy={query.isFetching} className="min-h-10 min-w-10 rounded-md border border-border p-2 text-muted-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" onClick={refresh}><RefreshCw className="h-3 w-3" aria-hidden="true" /></button></div>
       </div>
 
       <nav className="grid grid-cols-1 border-b border-border sm:grid-cols-5" aria-label="Connection categories">
@@ -223,7 +226,7 @@ export default function DataSourcesPanel({
       </div>
 
       <div className="grid gap-2 p-3 xl:grid-cols-2">
-        {categoryItems.length > 0 ? categoryItems.map((item) => <SourceCard key={item.id} item={item} readOnly={readOnly} onConnectProvider={onConnectProvider} onTestConnection={onTestConnection} onEditConnection={onEditConnection} onDeleteConnection={onDeleteConnection} onDiscoverDatabase={(connectionId, name) => setDatabaseDiscovery({ connectionId, name })} />) : <div className="xl:col-span-2"><EmptyCategory category={activeCategory} /></div>}
+        {categoryItems.length > 0 ? categoryItems.map((item) => <SourceCard key={item.id} item={item} readOnly={readOnly} onConnectProvider={onConnectProvider} onTestConnection={onTestConnection} onEditConnection={onEditConnection} onDeleteConnection={onDeleteConnection} onDiscoverDatabase={(connectionId, name) => setDatabaseDiscovery({ connectionId, name })} />) : <div className="xl:col-span-2">{readOnly ? <p role="status" className="rounded-lg border border-border/60 p-4 font-ui text-sm text-muted-foreground">No matching previously loaded records in this category. Current source availability is unverified until refresh succeeds.</p> : <EmptyCategory category={activeCategory} />}</div>}
       </div>
 
       <div className="border-t border-border px-4 py-3 font-ui text-xs leading-5 text-muted-foreground">{readOnly ? "Previously loaded connection records only — status unverified until successful refresh. " : ""}Connection status reflects the evidence available for each source: catalog availability, saved credentials, or a specific live verification. A saved credential alone does not prove that data is flowing or that an AI conversation succeeds.</div>
