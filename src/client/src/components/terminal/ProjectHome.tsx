@@ -20,6 +20,7 @@ import { ProjectAutomationPanel } from "./ProjectAutomationPanel";
 import { ProjectContinuityPanel } from "./ProjectContinuityPanel";
 import { ProjectPersonalFinancePanel } from "./ProjectPersonalFinancePanel";
 import { ProjectLifecycleDialog, type LifecycleRequest } from "./ProjectLifecycleDialog";
+import { QuietAdvisoryInvite } from "./QuietAdvisoryInvite";
 
 export function relativeTime(value: string): string {
   const ms = Math.max(0, Date.now() - new Date(value).getTime());
@@ -50,6 +51,9 @@ export function ProjectHome({
   onRerunArtifact,
   onAnalyzePersonalFinance,
   onOpenContext,
+  showQuietAdvisoryInvite,
+  onExploreAdvisory,
+  onDismissAdvisory,
 }: {
   project: Project;
   chats: ProjectChat[];
@@ -69,6 +73,9 @@ export function ProjectHome({
   onRerunArtifact: (id: string, title: string, spec: ArtifactRefreshSpec) => void;
   onAnalyzePersonalFinance: (profile: P6PersonalFinanceRequest) => void;
   onOpenContext: () => void;
+  showQuietAdvisoryInvite: boolean;
+  onExploreAdvisory: () => void;
+  onDismissAdvisory: () => void;
 }) {
   const queryClient = useQueryClient();
   const chatsQuery = useProjectChats(project.id);
@@ -417,6 +424,9 @@ export function ProjectHome({
             </div>
           )}
         </section>
+        {showQuietAdvisoryInvite && !editingName && !renameBusy && !pendingContext && !contextBusy && (
+          <QuietAdvisoryInvite onExplore={onExploreAdvisory} onDismiss={onDismissAdvisory} />
+        )}
       </div>
     </div>
   );
