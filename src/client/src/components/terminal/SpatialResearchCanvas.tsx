@@ -80,6 +80,9 @@ export default function SpatialResearchCanvas({ onOpen, initialReturnState, onRe
   }, []);
   useEffect(() => {
     if (!presentation.stacked) return;
+    const activeDrag = dragRef.current;
+    // Revert a companion pointer preview if the pane collapses while dragging.
+    if (activeDrag?.kind === "companion" && activeDrag.startPoint) setCompanionPoint(activeDrag.startPoint);
     dragRef.current = null;
     dragPreviewRef.current = null;
     setDragPreview(null);
