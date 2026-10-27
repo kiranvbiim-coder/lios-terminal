@@ -223,7 +223,7 @@ export async function importCommonsCC0Context(
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.url && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [operation, arg1, arg2, arg3] = process.argv.slice(2);
   try {
     if (operation === "search" && arg1 && !arg2) {
