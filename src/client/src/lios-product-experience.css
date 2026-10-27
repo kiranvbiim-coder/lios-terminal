@@ -511,3 +511,27 @@ html[data-lios-palette="chatgpt-light"] .terminal-root .lios-project-experience-
 html[data-lios-palette="claude-light"] .terminal-root .lios-project-experience-shell :is(.text-fuchsia-200,.text-fuchsia-300) {
   color: var(--lios-theme-fuchsia-text) !important;
 }
+
+/* Professional default: secondary message actions are revealed when the
+ * user engages with a message. Keyboard focus still reveals the controls;
+ * touch/pointer-coarse surfaces always show them. Do not hide warnings,
+ * approval requests, citations or execution provenance. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message [data-testid="chat-message-actions"] {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message:hover [data-testid="chat-message-actions"],
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message:focus-within [data-testid="chat-message-actions"] {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root
+    .lios-conversation-message [data-testid="chat-message-actions"] {
+    transition: none;
+  }
+}
