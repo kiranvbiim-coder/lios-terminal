@@ -1,8 +1,8 @@
 import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, selectRecordedCrossDomainGraphObjects } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
@@ -95,13 +95,17 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
     symbolOnly && activeSymbol
       ? objects.filter(object => !object.symbol || object.symbol === activeSymbol)
       : objects, [activeSymbol, objects, symbolOnly]);
-  const graphObjects = useMemo(() => contextualObjects.slice(0, 120), [contextualObjects]);
+  const deferredQuery = useDeferredValue(query);
+  const graphObjects = useMemo(
+    () => selectRecordedCrossDomainGraphObjects(contextualObjects, deferredQuery, selectedId, 120),
+    [contextualObjects, deferredQuery, selectedId],
+  );
   const graph = useMemo(() => buildCrossDomainGraph(graphObjects), [graphObjects]);
   const bridges = useMemo(() => crossDomainBridges(graph), [graph]);
   const relations = useMemo(() => Array.from(new Set(graph.edges.map(edge => edge.relation))).sort(), [graph]);
   const presentation = useMemo(() => presentCrossDomainGraph(graph, {
-    query, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
-  }), [graph, query, selectedId, neighborsOnly, bridgesOnly, relation]);
+    query: deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation: relation || undefined, maxNodes: 48,
+  }), [graph, deferredQuery, selectedId, neighborsOnly, bridgesOnly, relation]);
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
   const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link => !relation || link.relation === relation) : [], [graph, selected, relation]);
@@ -184,6 +188,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             <span className="font-ui text-xs text-muted-foreground" role="status">{Math.round(zoom * 100)}%</span>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-ui text-xs text-muted-foreground" role="status">
+            {contextualObjects.length > 120 && <span>Bounded view of {graphObjects.length} / {contextualObjects.length} saved objects. Search includes eligible saved matches beyond the initial view.</span>}
             <span>{presentation.nodes.length} shown · {graph.nodes.length} objects loaded</span>
             <span>{presentation.edges.length} recorded links shown{relation ? ` · ${relation.replaceAll("-", " ")} only` : ""}</span>
             {query && <span>{presentation.matchingCount} direct search matches</span>}
