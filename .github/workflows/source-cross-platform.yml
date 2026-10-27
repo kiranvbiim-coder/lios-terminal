@@ -144,6 +144,7 @@ jobs:
           npm run test:website-b1
           npm run test:website-b2
           npm run test:website-b3
+          npm run test:website-c1
           npm run release:preflight:ci
 
       - name: Installed UX evidence negative controls (source only)
