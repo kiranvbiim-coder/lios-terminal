@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import LiosPulseStoryCard from "./LiosPulseStoryCard";
+import { PulseSubjectActions } from "./PulseSubjectActions";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { readFileSync } from "node:fs";
 
@@ -12,8 +13,8 @@ const sourceCard:PulseStoryView = {
   evidence:[{id:"evidence:1",source:"Primary record",url:"https://example.org/filing"}],
 };
 const render=(card:PulseStoryView,choice:"follow"|"mute"|"clear"|null = "clear") =>
-  renderToStaticMarkup(React.createElement(LiosPulseStoryCard,{
-    card,onAsk:()=>undefined,onSubjectChoice:()=>undefined,subjectChoice:choice,featured:false,
+  renderToStaticMarkup(React.createElement(PulseSubjectActions,{
+    subjectKey:card.subjectKey ?? card.symbol,choice,onChange:()=>undefined,
   }));
 
 test("Follow and Mute affordances require a recorded subject and display saved intent",()=>{
@@ -30,6 +31,7 @@ test("Follow and Mute affordances require a recorded subject and display saved i
 
 test("Follow/Mute actions are explicit, use existing story surface, and do not create automations",()=>{
   const story=readFileSync(new URL("./LiosPulseStoryCard.tsx",import.meta.url),"utf8");
+  const actions=readFileSync(new URL("./PulseSubjectActions.tsx",import.meta.url),"utf8");
   const board=readFileSync(new URL("./FusionPulseBoard.tsx",import.meta.url),"utf8");
   const shell=readFileSync(new URL("./WaveCExperienceShell.tsx",import.meta.url),"utf8");
   assert.match(story,/onSubjectChoice\(subject, subjectChoice === "follow" \? "clear" : "follow"\)/);
@@ -44,9 +46,8 @@ test("Follow/Mute actions are explicit, use existing story surface, and do not c
 });
 
 test("busy controls cannot imply success before authenticated persistence",()=>{
-  const html=renderToStaticMarkup(React.createElement(LiosPulseStoryCard,{
-    card:sourceCard,onAsk:()=>undefined,onSubjectChoice:()=>undefined,
-    subjectChoice:"clear",preferenceBusy:true,
+  const html=renderToStaticMarkup(React.createElement(PulseSubjectActions,{
+    subjectKey:sourceCard.subjectKey,choice:"clear",busy:true,onChange:()=>undefined,
   }));
   // Buttons exist with safe, disabled state; no optimistic 'Following' badge.
   assert.match(html,/Follow ENERGY:POWER/);
