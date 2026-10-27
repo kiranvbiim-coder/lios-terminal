@@ -4,6 +4,12 @@
   "pinPolicy": "Exact recorded pins remain unchanged. A lock is provenance metadata, not proof of import, packaging or release acceptance. p11-candidates.json observedCommit fields are research observations, not replacement pins; reconcile selected package/release source and exact paths before importing. Software licenses do not grant API/data/model/asset/trademark rights.",
   "locks": [
     {
+      "id": "beui-p3-trust-citations",
+      "repository": "starc007/ui-components",
+      "commitSha": "601fa21a2b68cfa5f6c1f0b6dcb29528c32472a1",
+      "license": "MIT"
+    },
+    {
       "id": "openterminalui",
       "repository": "Hitheshkaranth/OpenTerminalUI",
       "commitSha": "3e0756432da9c6afd5f0bf6f7aa6e62b7b2c1906",
