@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Plus, Search, FolderKanban, MessageSquare, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, PanelLeftOpen, Trash2, Upload } from "lucide-react";
+import { Plus, Search, FolderKanban, MessageSquare, Clock3, Library, Workflow, Blocks, Plug, Settings2, Palette, Menu, LogOut, ChevronUp, ChevronLeft, PanelLeftOpen, Trash2, Upload } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
 
@@ -27,7 +27,7 @@ interface Props {
 const sections = [
   ["conversation", "Chat", MessageSquare],
   ["projects", "Projects", FolderKanban],
-  ["chats", "History", MessageSquare],
+  ["chats", "History", Clock3],
   ["library", "Artifacts", Library],
   ["automations", "Automations", Workflow],
   ["plugins", "Plugins", Blocks],
