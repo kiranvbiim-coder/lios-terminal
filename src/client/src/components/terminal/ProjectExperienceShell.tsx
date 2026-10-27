@@ -465,6 +465,7 @@ export default function ProjectExperienceShell({
   const reopenArtifactFocusRef = useRef<HTMLButtonElement>(null);
   const displayedArtifactRef = useRef<{ artifactId: string; requestedVersion: number | null; version: number } | null>(null);
   const handledWorkbenchReturn = useRef<number | null>(null);
+  const reviewingArtifactReturn = useRef<number | null>(null);
   const terminalDetail = useArtifact(chatMode === "temporary" ? null : conversationArtifactRef, artifactViewVersion);
   const retainedScreen = terminalDetail.data?.version.content.kind === "screen" && readTerminalScreenState(terminalDetail.data.version.content.state) ? terminalDetail.data.version.content : null;
   const selectedTerminalScope = retainedScreen ? readTerminalScreenState(retainedScreen.state)?.sourceScope : undefined;
@@ -513,11 +514,29 @@ export default function ProjectExperienceShell({
     finally { terminalOpeningRef.current = false; setBusy(false); }
   };
   const handledChatReturn = useRef<number | null>(null);
+  const reviewingChatReturn = useRef<number | null>(null);
   useEffect(() => {
     if (!chatWorkbenchReturn || handledChatReturn.current === chatWorkbenchReturn.request) return;
-    const { origin } = chatWorkbenchReturn;
-    if (origin.mode !== "temporary" && (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId)) { selection.setProjectId(origin.projectId); selection.setChatId(origin.chatId); return; }
-    handledChatReturn.current = chatWorkbenchReturn.request;
+    const { origin, request } = chatWorkbenchReturn;
+    // The return target, including Temporary's null scope, is authoritative.
+    // Returning to a different Chat must never silently clear an unsent draft.
+    if (selection.projectId !== origin.projectId || selection.chatId !== origin.chatId) {
+      if (reviewingChatReturn.current === request) return;
+      reviewingChatReturn.current = request;
+      void (async () => {
+        if (!(await confirmConversationSwitch())) {
+          handledChatReturn.current = request;
+          setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to try switching again.");
+          return;
+        }
+        selection.setProjectId(origin.projectId);
+        selection.setChatId(origin.chatId);
+      })().finally(() => {
+        if (reviewingChatReturn.current === request) reviewingChatReturn.current = null;
+      });
+      return;
+    }
+    handledChatReturn.current = request;
     setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
   }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
   const onOpenWorkbench = () => {
@@ -543,14 +562,27 @@ export default function ProjectExperienceShell({
   };
   useEffect(() => {
     if (!workbenchReturn || handledWorkbenchReturn.current === workbenchReturn.request) return;
-    const { context, prompt } = workbenchReturn;
+    const { context, prompt, request } = workbenchReturn;
     if (selection.projectId !== context.projectId || selection.chatId !== context.chatId) {
-      selection.setProjectId(context.projectId); selection.setChatId(context.chatId); return;
+      if (reviewingArtifactReturn.current === request) return;
+      reviewingArtifactReturn.current = request;
+      void (async () => {
+        if (!(await confirmConversationSwitch())) {
+          handledWorkbenchReturn.current = request;
+          setLifecycleNotice("Your unsent work remains in this Chat. Return to Work to open that Artifact later.");
+          return;
+        }
+        selection.setProjectId(context.projectId);
+        selection.setChatId(context.chatId);
+      })().finally(() => {
+        if (reviewingArtifactReturn.current === request) reviewingArtifactReturn.current = null;
+      });
+      return;
     }
-    handledWorkbenchReturn.current = workbenchReturn.request;
+    handledWorkbenchReturn.current = request;
     setChatMode(context.projectId === null ? "quick" : "project"); setSection("conversation"); setProjectHomeRequested(false);
     setConversationArtifactRef(context.artifactId); setArtifactViewVersion(context.version);
-    if (prompt) setInput(current => current ? `${current}\n\n${prompt}` : prompt);
+    if (prompt) setInput(current => stageUniversalChatQuestion(current, prompt));
   }, [workbenchReturn, selection.projectId, selection.chatId, setConversationArtifactRef, setArtifactViewVersion]);
   useEffect(() => {
     if (!conversationArtifactRef) { setArtifactFocusMode(false); return; }
