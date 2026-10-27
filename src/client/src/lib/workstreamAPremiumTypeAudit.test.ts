@@ -24,3 +24,20 @@ test("A02 Home removes redundant helper chrome without deleting source actions",
   assert.match(shell, /<FusionPulseBoard/);
   assert.match(shell, /setPulseReview\(normalizePulseReviewPresentation/);
 });
+
+test("A05/A06 foreground sources abort abandoned HTTP reads and never reuse browser-cached identity", () => {
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  for (const exact of [
+    'const controller = new AbortController()',
+    'signal: controller.signal',
+    'cache: "no-store"',
+    'credentials: "same-origin"',
+    'controller.abort()',
+    'window.addEventListener("focus", revalidatePulse)',
+    'document.addEventListener("visibilitychange", revalidatePulse)',
+    'window.removeEventListener("focus", revalidatePulse)',
+    'document.removeEventListener("visibilitychange", revalidatePulse)',
+    'setPulseRevision(value => value + 1)',
+  ]) assert.ok(shell.includes(exact), "missing authorized Pulse revalidation: " + exact);
+  assert.doesNotMatch(shell, /setInterval\(/);
+});

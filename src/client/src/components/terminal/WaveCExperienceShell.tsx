@@ -128,12 +128,14 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
   }), []);
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setWaveDStatus("loading");
     setPulseReview(null);
+    if (document.visibilityState === "hidden") return () => controller.abort();
     void Promise.all([
-      fetch(`/api/wave-d/pulse?channel=${pulseChannel}`),
-      fetch("/api/wave-d/action-inbox"),
-      isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`),
+      fetch(`/api/wave-d/pulse?channel=${pulseChannel}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
+      fetch("/api/wave-d/action-inbox", { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
+      isClient ? Promise.resolve<Response | null>(null) : fetch(`/api/wave-d/briefs/${pulseChannel === "for_you" ? "morning" : "evening"}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }),
     ]).then(async ([pulseResponse, inboxResponse, briefResponse]) => {
       if (cancelled) return;
       if (!pulseResponse.ok) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); return; }
@@ -153,8 +155,33 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       setBriefHeadline(typeof brief.headline === "string" ? brief.headline : null);
       setWaveDStatus("ready");
     }).catch(() => { if (!cancelled) { setWaveDPulseCards([]); setPulseReview(null); setWaveDStatus("unavailable"); } });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [pulseChannel, pulseRevision]);
+
+  useEffect(() => {
+    if (surface !== "pulse") return;
+    let lastRefresh = Date.now();
+    const revalidatePulse = () => {
+      if (document.visibilityState === "hidden") {
+        setWaveDPulseCards([]);
+        setPulseReview(null);
+        setWaveDStatus("loading");
+        setPulseRevision(value => value + 1);
+        lastRefresh = 0;
+        return;
+      }
+      const now = Date.now();
+      if (now - lastRefresh < 500) return;
+      lastRefresh = now;
+      setPulseRevision(value => value + 1);
+    };
+    window.addEventListener("focus", revalidatePulse);
+    document.addEventListener("visibilitychange", revalidatePulse);
+    return () => {
+      window.removeEventListener("focus", revalidatePulse);
+      document.removeEventListener("visibilitychange", revalidatePulse);
+    };
+  }, [surface]);
 
   const changePulseSubject = async (change: { action: PulseSubjectAction; cardId?: string; subjectKey?: string }) => {
     if (preferenceRequestPending.current || waveDStatus !== "ready") return;
