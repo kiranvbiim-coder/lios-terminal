@@ -33,7 +33,7 @@ interface Props {
   activeSavedSubject: string | null;
   savedViewPending: boolean;
   savedViewError: string | null;
-  onSavePulseView: (name: string) => void;
+  onSavePulseView: (name: string) => Promise<boolean>;
   onDeletePulseView: (id: string) => void;
   onActivatePulseView: (view: PulseSavedView) => void;
   onSelectSavedSubject: (subject: string | null) => void;
@@ -230,8 +230,9 @@ export default function FusionPulseBoard({
                 <form onSubmit={event => {
                   event.preventDefault();
                   const label = viewName.trim() || [pulseChannel.replaceAll("_", " "), activeSavedSubject].filter(Boolean).join(" · ");
-                  onSavePulseView(label.slice(0, 60));
-                  setViewName("");
+                  void onSavePulseView(label.slice(0, 60)).then(saved => {
+                    if (saved) setViewName("");
+                  });
                 }} className="flex flex-wrap items-center gap-2">
                   <label htmlFor="pulse-view-name" className="sr-only">Saved view name</label>
                   <input id="pulse-view-name" value={viewName} onChange={event => setViewName(event.target.value)}

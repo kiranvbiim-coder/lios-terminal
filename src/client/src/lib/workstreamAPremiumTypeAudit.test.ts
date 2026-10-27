@@ -60,3 +60,13 @@ test("A05 server-scoped saved view journey uses existing Wave D state, not brows
   assert.match(routes, /removePulseDiscoveryView/);
   assert.doesNotMatch(shell, /localStorage\.setItem\([^\n]*pulseSavedViews/);
 });
+
+test("A05 failed saved-view writes retain draft names and confirmed writes avoid redundant provider reads", () => {
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
+  assert.ok(shell.includes('setPulseSavedViews(normalizePulseSavedViews(payload.savedViews))'));
+  assert.ok(shell.includes('return false;'));
+  assert.match(shell, /do not call market\/news providers again/);
+  assert.ok(board.includes('if (saved) setViewName("")'));
+  assert.doesNotMatch(board, /onSavePulseView\(label.slice\(0, 60\)\);\s*setViewName\("")/);
+});

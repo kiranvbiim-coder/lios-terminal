@@ -202,8 +202,8 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
     setActiveSavedSubject(subject);
     setPulseRevision(value => value + 1);
   };
-  const changeSavedView = async (change: { action: "save"; name: string } | { action: "delete"; id: string }) => {
-    if (savedViewRequestPending.current || waveDStatus !== "ready") return;
+  const changeSavedView = async (change: { action: "save"; name: string } | { action: "delete"; id: string }): Promise<boolean> => {
+    if (savedViewRequestPending.current || waveDStatus !== "ready") return false;
     savedViewRequestPending.current = true;
     setSavedViewPending(true);
     setSavedViewError(null);
@@ -219,10 +219,13 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const payload: unknown = await response.json();
       if (!payload || typeof payload !== "object" || !("persisted" in payload) || payload.persisted !== true ||
           !("savedViews" in payload) || !Array.isArray(payload.savedViews)) throw new Error("Server did not confirm this saved view change.");
+      // The authenticated write returned the entire current saved-view list;
+      // do not call market/news providers again just to display this change.
       setPulseSavedViews(normalizePulseSavedViews(payload.savedViews));
-      setPulseRevision(value => value + 1);
+      return true;
     } catch {
       setSavedViewError("Saved view could not be changed. Previous server-saved views are unchanged.");
+      return false;
     } finally {
       savedViewRequestPending.current = false;
       setSavedViewPending(false);
@@ -329,7 +332,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
               activeSavedSubject={activeSavedSubject}
               savedViewPending={savedViewPending}
               savedViewError={savedViewError}
-              onSavePulseView={(name) => void changeSavedView({ action: "save", name })}
+              onSavePulseView={(name) => changeSavedView({ action: "save", name })}
               onDeletePulseView={(id) => void changeSavedView({ action: "delete", id })}
               onActivatePulseView={activateSavedView}
               onSelectSavedSubject={setActiveSavedSubject}
