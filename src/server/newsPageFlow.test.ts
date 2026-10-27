@@ -74,6 +74,12 @@ test("inclusive fixed dates and rolling windows filter providers returning the w
     { from: "2026-10-01", to: "2026-10-27" })), [1, 2, 3, 4]);
 });
 
+test("ticker-specific filtering cannot reintroduce out-of-window RSS articles", () => {
+  assert.match(backend, /let items = filterNewsPageWindow\(feedItems, page, options\)/);
+  assert.match(backend, /items = items\.filter\(\(item\) =>/);
+  assert.doesNotMatch(backend, /items = feedItems\.filter\(\(item\) =>/);
+});
+
 test("bounded older-period paging is not terminated merely because an RSS window is sparse", () => {
   assert.match(backend, /const hasMore = explicitFrom \? items\.length > offset \+ limit : page < 52/);
   assert.match(backend, /coverage: explicitFrom && !hasMore \? "window-exhausted"/);
