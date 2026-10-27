@@ -4,6 +4,7 @@ import { BookOpenText, ExternalLink, Radar, Sparkles } from "lucide-react";
 import type { IntelligenceCard } from "@shared/waveDContracts";
 import { pulseStoryTimestamp, safePulseSourceUrl, pulseStoryMediaSourceIds } from "@/lib/pulseStoryPresentation";
 import { LicensedEditorialImage } from "./LicensedEditorialImage";
+import { RecordedContextPicture } from "./RecordedContextPicture";
 import {
   INTELLIGENCE_SEARCH_FACETS,
   intelligenceSearchCounts,
@@ -144,6 +145,8 @@ export function VisualIntelligenceResultCard({ card, disabled, onAsk }: {
     </div>
     <div className="space-y-2 px-4 py-3">
       <LicensedEditorialImage media={card.media} sourceIds={pulseStoryMediaSourceIds(evidence)} variant="compact" className="w-full" />
+      {!card.media && <RecordedContextPicture title={card.title}
+        hasPublicEvidence={evidence.some(source => safePulseSourceUrl(source.url) !== null)} />}
       <h3 className="font-ui text-base font-semibold leading-snug text-foreground">{card.title}</h3>
       <p className="line-clamp-3 font-ui text-sm leading-6 text-muted-foreground">{card.whatHappened}</p>
       {card.whyItMattersToUser && <p className="line-clamp-2 font-ui text-sm leading-5 text-foreground/85">{card.whyItMattersToUser}</p>}
