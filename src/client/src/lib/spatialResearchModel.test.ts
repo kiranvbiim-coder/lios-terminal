@@ -175,6 +175,6 @@ test("Phase 2 spotlight searches before the canvas 36-node cap without mutating 
 test("Phase 2 spotlight cannot interpret a text query as an action or access absent pins", () => {
   const items = [pin("safe", { note: "A descriptive sentence" })];
   assert.deepEqual(findSpatialResearchPins(items, "open file:///credentials"), []);
-  assert.deepEqual(findSpatialResearchPins(items, "safe").map(p => p.id), ["safe"]);
+  assert.deepEqual(findSpatialResearchPins(items, "descriptive").map(p => p.id), ["safe"]);
   assert.equal(findSpatialResearchPins(items, "a".repeat(81)).length, 0);
 });
