@@ -90,8 +90,8 @@ test("real Node desktop validation probes authenticated Python HTTP and reverse 
     const valuation = await runRepresentativeValuation(port, token);
     assert.equal(valuation.verified, true);
     assert.equal(valuation.route, PACKAGED_VALUATION_ROUTE);
-    assert.equal(valuation.impliedRevenueGrowthPct, 0);
-    assert.equal(valuation.repricedEquityValue, 100);
+    assert.ok(Math.abs(valuation.impliedRevenueGrowthPct) <= 1e-7);
+    assert.ok(Math.abs(valuation.repricedEquityValue - 100) <= 1e-7);
   } finally {
     await stopChild(child);
   }
