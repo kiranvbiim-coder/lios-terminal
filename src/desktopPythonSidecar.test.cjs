@@ -12,6 +12,10 @@ const {
   buildBundledPythonSidecarEnvironment,
   SIDECAR_TOKEN_HEADER,
   verifySidecarAuthentication,
+  PACKAGED_VALUATION_ROUTE,
+  PACKAGED_VALUATION_INPUT,
+  validateRepresentativeValuation,
+  runRepresentativeValuation,
 } = require("./desktopPythonSidecar.cjs");
 
 test("bundled sidecar path is platform-specific and fail-closed when absent", () => {
@@ -108,5 +112,63 @@ test("sidecar self-test requires 401 for missing/wrong tokens and a minimal /hea
   } finally {
     enforcing.server.close();
     open.server.close();
+  }
+});
+
+test("packaged numerical probe agrees exactly with original independently checked SP-01 valuation contract", async () => {
+  const expected = await import("./script/sp01_strict_python_valuation_contract.mjs");
+  assert.equal(PACKAGED_VALUATION_ROUTE, expected.REVERSE_ROUTE);
+  assert.deepEqual(PACKAGED_VALUATION_INPUT, expected.REVERSE_BODY);
+  assert.deepEqual(validateRepresentativeValuation({
+    impliedRevenueGrowthPct: 0, repricedEquityValue: 100, absoluteError: 0,
+  }), {
+    verified: true, route: PACKAGED_VALUATION_ROUTE, impliedRevenueGrowthPct: 0, repricedEquityValue: 100,
+  });
+  for (const invalid of [
+    null, {}, { impliedRevenueGrowthPct: "0", repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 0, repricedEquityValue: "100" },
+    { impliedRevenueGrowthPct: NaN, repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 1.1, repricedEquityValue: 100 },
+    { impliedRevenueGrowthPct: 0, repricedEquityValue: 90 },
+  ]) assert.throws(() => validateRepresentativeValuation(invalid));
+});
+
+test("packaged probe performs real loopback authenticated POST to exact valuation route", async () => {
+  const token = "known-value-only-token";
+  let requestCount = 0;
+  const service = await listen(async (req, res) => {
+    requestCount++;
+    const raw = [];
+    for await (const chunk of req) raw.push(chunk);
+    assert.equal(req.method, "POST");
+    assert.equal(req.url, PACKAGED_VALUATION_ROUTE);
+    assert.equal(req.headers[SIDECAR_TOKEN_HEADER.toLowerCase()], token);
+    assert.deepEqual(JSON.parse(Buffer.concat(raw).toString("utf8")), PACKAGED_VALUATION_INPUT);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ impliedRevenueGrowthPct: 0, repricedEquityValue: 100, absoluteError: 0 }));
+  });
+  try {
+    const result = await runRepresentativeValuation(service.port, token);
+    assert.equal(result.verified, true);
+    assert.equal(requestCount, 1);
+  } finally {
+    service.server.close();
+  }
+});
+
+test("missing packaged valuation route fails closed without exposing server response body", async () => {
+  const service = await listen(async (req, res) => {
+    for await (const _chunk of req) { /* consume */ }
+    res.writeHead(503, { "content-type": "text/plain" });
+    res.end("PRIVATE_PATH_OR_TRACEBACK_NEVER_RETURNED");
+  });
+  try {
+    await assert.rejects(() => runRepresentativeValuation(service.port, "token"), error => {
+      assert.match(error.message, /HTTP 503/);
+      assert.doesNotMatch(error.message, /PRIVATE_PATH_OR_TRACEBACK/);
+      return true;
+    });
+  } finally {
+    service.server.close();
   }
 });
