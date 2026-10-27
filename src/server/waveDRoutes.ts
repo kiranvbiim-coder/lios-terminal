@@ -37,7 +37,6 @@ import {
   classifySignalMetric,
   compareEventExpectations,
   dueScheduledMonitors,
-  filterPulseCards,
   normalizeJournalEntry,
   normalizeMemoryRecord,
   normalizeScheduledMonitor,
