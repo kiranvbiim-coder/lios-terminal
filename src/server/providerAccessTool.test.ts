@@ -9,7 +9,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lios-provider-access-"));
 process.env.LIMURIA_DATA_DIR = dataDir;
 
 const { initDb, closeDb, getDb } = await import("./db");
-const { users } = await import("@shared/schema");
+const { users, sourceConnections } = await import("@shared/schema");
 const { createProject } = await import("./projectStore");
 const {
   providerAccessTool,
@@ -111,6 +111,32 @@ test("SI-03.23 provider access inspection is deterministic, Project-scoped and c
     assert.equal(excluded.output.providerCount, 0);
     assert.deepEqual(excluded.output.providers, []);
     assert.match(excluded.summary, /No provider metadata remains/);
+  });
+
+  await t.test("provider access includes only verified owner-scoped connected adapters without fetching data", async () => {
+    const [mine, theirs] = await Promise.all([
+      getDb().insert(sourceConnections).values({
+        userId: owner.id, organizationId: null, connectorId: "file_upload",
+        name: "Owner's research file", sourceType: "file",
+        config: { path: "/tmp/lios-owned-source.json" }, credentialRef: null, status: "healthy",
+      }).returning().then(rows => rows[0]),
+      getDb().insert(sourceConnections).values({
+        userId: other.id, organizationId: null, connectorId: "file_upload",
+        name: "Other user's confidential file", sourceType: "file",
+        config: { path: "/tmp/lios-other-source.json" }, credentialRef: null, status: "healthy",
+      }).returning().then(rows => rows[0]),
+    ]);
+    const result = providerAccessToolOutputSchema.parse(await providerAccessTool.invoke(
+      { capability: "provider_extension" }, new AbortController().signal, call,
+    ));
+    assert.ok(result.output.providers.some(p => p.providerId === `source:${mine.id}`));
+    assert.equal(result.output.providers.some(p => p.providerId === `source:${theirs.id}`), false);
+    assert.equal(result.output.dataFetchPerformed, false);
+    assert.equal(result.output.secretMaterialExposed, false);
+    const excluded = providerAccessToolOutputSchema.parse(await providerAccessTool.invoke(
+      { capability: "provider_extension", providerAllow: [`source:${theirs.id}`] }, new AbortController().signal, call,
+    ));
+    assert.equal(excluded.output.providerCount, 0);
   });
 
   await t.test("Project ownership is enforced before provider metadata is returned", async () => {
