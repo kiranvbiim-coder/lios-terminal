@@ -104,3 +104,12 @@ test("independent branches with no assumptions have no made-up rows", () => {
   assert.equal(result.changedCount, 0);
   assert.equal(result.liveInputCount, 0);
 });
+
+test("C02 comparison never calls incompatible currency binding an applicable model input", () => {
+  const base = scenario("base", [{ key: "revenue", label: "Revenue", value: 450, unit: "EUR" }]);
+  const proposal = scenario("proposal", [{ key: "revenue", label: "Revenue", value: 500, unit: "EUR" }]);
+  const result = buildScenarioInputComparison(base, proposal, [binding("model-USD", "revenue", 400, "USD")]);
+  assert.equal(result.rows[0].absoluteDelta, 50, "Same-unit scenario assumptions remain comparable");
+  assert.equal(result.rows[0].liveMatches.length, 0, "But a USD model input is not a EUR binding");
+  assert.equal(result.liveInputCount, 0);
+});
