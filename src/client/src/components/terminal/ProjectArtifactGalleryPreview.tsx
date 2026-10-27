@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowUpRight, ChartNoAxesCombined } from "lucide-react";
+import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import type { ArtifactContent } from "@shared/artifactContracts";
 import type { ArtifactDetail, ProjectArtifactRecord } from "@/lib/useArtifacts";
 import { recordedArtifactPreview } from "@/lib/recordedArtifactPreview";
@@ -38,7 +38,7 @@ export function recordedGalleryChartPath(content: Extract<ArtifactContent, { kin
   }).join(" ");
 }
 
-function PreviewContent({ content }: { content: ArtifactContent }) {
+export function GalleryRecordedPreviewContent({ content }: { content: ArtifactContent }) {
   const summary = recordedArtifactPreview(content);
   if (content.kind === "chart") {
     const path = recordedGalleryChartPath(content);
@@ -130,7 +130,7 @@ export function ProjectArtifactGalleryPreview({ artifact, onOpen }: {
         <p role="status" className="text-sm text-muted-foreground">Checking access and loading the saved version…</p>
       ) : query.isError || !inspected ? (
         <p role="alert" className="flex items-center gap-2 text-sm text-amber-200"><AlertTriangle className="h-4 w-4" aria-hidden="true" />Preview unavailable or no longer matches this Project and version.</p>
-      ) : <PreviewContent content={inspected} />}
+      ) : <GalleryRecordedPreviewContent content={inspected} />}
     </section>
   );
 }
