@@ -7,7 +7,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
 import { BookOpenCheck, RefreshCw } from "lucide-react";
-import RecordedPerspectivesBoard from "./RecordedPerspectivesBoard";
+import { RecordedPerspectivesBoard } from "./RecordedPerspectivesBoard";
 
 interface ResearchInvestigationSummary {
   id: number;
