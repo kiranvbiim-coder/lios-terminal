@@ -136,6 +136,11 @@ jobs:
         timeout-minutes: 5
         run: npm run test:website-c1
 
+      - name: C2 reviewed P11 run receipt and P4 Artifact save contracts
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: npm run test:website-c2
+
       - name: Installed UX evidence negative controls (source only)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
