@@ -10,7 +10,7 @@ import {
   readableAssumptionValue,
 } from "@/lib/evidencePrism";
 
-function timestamp(value: string | null): string {
+export function recordedClaimObservationTimestamp(value: string | null): string {
   return recordedIsoTimestamp(value) ?? "Not recorded";
 }
 
@@ -89,7 +89,7 @@ export default function EvidencePrism({ manifest }: { manifest: TrustManifest })
                                   <li key={observation.evidenceId} className="space-y-1">
                                     <div className="font-semibold text-foreground">{observation.providerLabel}</div>
                                     <div>Source class: {observation.kind} · {observation.quality} quality · {observation.freshness} freshness</div>
-                                    <div>As-of: {timestamp(observation.asOf)} · observed: {timestamp(observation.observedAt)}</div>
+                                    <div>As-of: {recordedClaimObservationTimestamp(observation.asOf)} · observed: {recordedClaimObservationTimestamp(observation.observedAt)}</div>
                                     <div>{describeObservationRights(observation)}</div>
                                     {observation.isFallback && <div>Fallback observation — not the preferred source</div>}
                                     {!!observation.fields.length && <div>Recorded fields: {observation.fields.join(", ")}</div>}
