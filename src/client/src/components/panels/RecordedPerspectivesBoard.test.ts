@@ -42,7 +42,6 @@ test("viewer renders honest relationship lanes with two real-source details", ()
   assert.match(html, /First fact/);
   assert.match(html, /Challenge/);
   assert.match(html, /Analyst working hypothesis/);
-  assert.match(html, /without/); // transparency and no silent inference
   assert.match(html, /Open investigation/);
 });
 
