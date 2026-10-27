@@ -28,6 +28,8 @@ export default function ChatExtensionsDialog({
   const [query, setQuery] = useState("");
   const [manage, setManage] = useState(false);
   const [connectMcp, setConnectMcp] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState("");
   const queryClient = useQueryClient();
   const catalog = useQuery<ChatExtensionCatalog>({
     queryKey: ["/api/extensions/chat-catalog"],
@@ -35,6 +37,23 @@ export default function ChatExtensionsDialog({
     staleTime: 0,
     queryFn: async () => (await apiRequest("GET", "/api/extensions/chat-catalog")).json(),
   });
+  async function verifyMcp(connectionId: number) {
+    if (verifyingId !== null) return;
+    setVerifyingId(connectionId); setVerificationNotice("");
+    try {
+      const response = await apiRequest("POST", "/api/setup/source-connections/test", { connectionId });
+      const result = await response.json() as { status: string; detail: string };
+      setVerificationNotice(result.status === "healthy"
+        ? "Live MCP connection verified. No remote tools were executed."
+        : "MCP verification did not succeed. Check its endpoint or saved credential.");
+      await queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] });
+    } catch {
+      setVerificationNotice("Unable to verify this MCP connection. No healthy result was recorded.");
+    } finally {
+      setVerifyingId(null);
+    }
+  }
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return {
@@ -79,9 +98,11 @@ export default function ChatExtensionsDialog({
               </button>}
             </div>
             {connectMcp && projectId && <ChatMcpConnectForm projectId={projectId} onSaved={() => { void queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] }); }} onCancel={() => setConnectMcp(false)} />}
+            {verificationNotice && <p role="status" className="mb-2 text-xs">{verificationNotice}</p>}
             {visible.mcp.length ? <ul className="space-y-1.5">{visible.mcp.map(mcp => <li key={mcp.id} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
               <span className="truncate text-sm font-medium">{mcp.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{mcp.status === "healthy" ? "Verified" : "Needs verification"}</span>
+              {mcp.status !== "invalid" && <button type="button" disabled={verifyingId !== null} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50" onClick={() => void verifyMcp(mcp.id)}>{verifyingId === mcp.id ? "Verifying…" : "Verify"}</button>}
               {projectAvailable && mcp.status !== "invalid" && <button
                 type="button"
                 className="shrink-0 rounded-md border border-border px-2 py-1 text-xs"
