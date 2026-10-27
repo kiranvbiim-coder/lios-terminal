@@ -94,7 +94,7 @@ export function composeProjectBriefing(
   visuals.forEach((visual, index) => {
     const refs = [...new Set(visual.sourceRefs)].slice(0, 100);
     refs.forEach(ref => { dependencies.add(ref); recordedSources.add(ref); });
-    dependencies.add("artifact:" + visual.artifactId);
+    dependencies.add(visual.artifactId);
     dependencies.add("artifact-version:" + visual.artifactId + ":v" + visual.version + ":" + visual.contentHash);
     const title = restricted(visual.title, 160);
     const heading = add("heading", title, refs);

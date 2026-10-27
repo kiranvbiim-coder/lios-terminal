@@ -128,9 +128,10 @@ export async function extractFinanceDatabaseTarGz(
     return { files, bytes };
   } finally {
     body.unpipe(stream);
+    if (body.closed) body.off("error", sourceFailed);
+    else body.once("close", () => body.off("error", sourceFailed));
     body.destroy();
     stream.destroy();
-    body.off("error", sourceFailed);
     if (fileHandle !== null) fs.closeSync(fileHandle);
   }
 }

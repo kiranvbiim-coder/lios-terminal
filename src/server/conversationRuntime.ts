@@ -4550,6 +4550,9 @@ async function executeAgentLoop(
   // Never journal, checkpoint or expose raw external MCP observations. They
   // exist only in the current run and are re-authorized before AI release.
   const mcpEvidenceByStep = new Map<string, McpAgentEvidenceCapture>();
+  // Private connected previews are ephemeral like MCP observations. Continuations
+  // retain only their generic receipt and must inspect again after restart.
+  const connectedEvidenceByStep = new Map<string, { text: string; binding: string; sourceRefs: string[] }>();
   // Confirmed inspection contents are for the owner, not planner/AI context.
   // Keep only the latest inspection, bounded by the tool's 128 KiB output cap.
   const ownerMemoryInspection = options.ownerMemoryInspection ?? { text: null };
@@ -4637,6 +4640,24 @@ async function executeAgentLoop(
     resolveReviewObservations: async ({ completedSteps, signal: reviewSignal, reviewedSourceRefs }) => {
       assertReviewResearchCurrent = undefined;
       const research = await resolveAgentResearchReviewObservations(input, completedSteps, reviewSignal, reviewedSourceRefs);
+      const connected = completedSteps.flatMap(step => {
+        const evidence = step.toolId === "lios.provider.connected_preview" ? connectedEvidenceByStep.get(step.id) : undefined;
+        return evidence ? [{ step, evidence }] : [];
+      });
+      const assertConnectedCurrent = async () => {
+        try {
+          for (const { step, evidence } of connected) {
+            const current = await preflightConnectedProviderPreview(step.input, reviewSignal, createConversationToolCall(input, "agent", {
+              ...await activeResearchSourcePolicy(input), stepId: step.id,
+            }));
+            if (current.releaseBinding !== evidence.binding) throw new Error("Connected source changed.");
+          }
+        } catch {
+          assertNotAborted(reviewSignal);
+          throw new AIProviderError("policy_denied", "Connected source or external-AI rights changed; inspect again before reviewing.");
+        }
+      };
+      await assertConnectedCurrent();
       let mcp: ReturnType<typeof renderMcpAgentReviewEvidence> = null;
       let assertMcpCurrent: (() => Promise<void>) | undefined;
       if (input.scope === "project" && input.projectId
@@ -4680,13 +4701,15 @@ async function executeAgentLoop(
           }
         }
       }
-      assertReviewResearchCurrent = research || mcp ? async () => {
+      const hasObservations = Boolean(research || mcp || connected.length);
+      assertReviewResearchCurrent = hasObservations ? async () => {
         if (research) await research.assertCurrent();
         if (assertMcpCurrent) await assertMcpCurrent();
+        await assertConnectedCurrent();
       } : undefined;
-      return research || mcp ? {
-        text: [research?.text, mcp?.text].filter(Boolean).join("\n\n"),
-        sourceRefs: [...new Set([...(research?.sourceRefs ?? []), ...(mcp?.sourceRefs ?? [])])],
+      return hasObservations ? {
+        text: [research?.text, mcp?.text, ...connected.map(({ evidence }) => `UNTRUSTED_CONNECTED_SOURCE_OBSERVATIONS\n${evidence.text}\nEND_CONNECTED_SOURCE_OBSERVATIONS`)].filter(Boolean).join("\n\n"),
+        sourceRefs: [...new Set([...(research?.sourceRefs ?? []), ...(mcp?.sourceRefs ?? []), ...connected.flatMap(({ evidence }) => evidence.sourceRefs)])],
       } : null;
     },
     invokeTool: async ({ step, toolCallId, allocateDelegationBudget }) => {
@@ -4824,6 +4847,11 @@ async function executeAgentLoop(
         // Only after the governed registry validated the result AND committed
         // the external dispatch may it become review-eligible, never before.
         if (pendingMcpEvidence) mcpEvidenceByStep.set(step.id, pendingMcpEvidence);
+        if (step.toolId === "lios.provider.connected_preview") {
+          const binding = z.object({ releaseBinding: z.string().regex(/^[a-f0-9]{64}$/) }).passthrough().parse(result.output).releaseBinding;
+          connectedEvidenceByStep.set(step.id, { text: result.summary, binding, sourceRefs: result.sourceRefs });
+          result.summary = "Recorded a bounded connected-source preview. Private observations require a current rights check before AI review; after restart inspect this source again.";
+        }
         if (step.toolId === "lios.memory.inspect") ownerMemoryInspection.text = JSON.stringify(result.output);
         const publishesArtifact = step.toolId === terminalArtifactTool.id
           || step.toolId === "lios.research.save_comparison" || step.toolId === "lios.research.to_report";

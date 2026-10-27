@@ -59,6 +59,7 @@ const previewOutputSchema = z.object({
     normalized: z.boolean(),
     rightsReviewed: z.literal(true),
     cache: z.enum(["hit", "miss", "deduped"]),
+    releaseBinding: z.string().regex(/^[a-f0-9]{64}$/),
   }).strict(),
   summary: z.string().max(2_000),
   deterministic: z.literal(false),
@@ -200,7 +201,7 @@ export async function preflightConnectedProviderPreview(raw: unknown, signal: Ab
   });
   await authorizeCanonicalDataRequests([request], tenant);
   assertNotAborted(signal);
-  return { tenant, parsed, source, actor, request };
+  return { tenant, parsed, source, actor, request, releaseBinding: hashLedgerValue({ source, rights }) };
 }
 
 export const connectedProviderListChatTool: ConversationToolDefinition = {
@@ -251,7 +252,7 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
   outputSchema: previewOutputSchema.transform((v): ConversationToolResult => v),
   maxOutputBytes: 32 * 1024, cancel: null,
   invoke: async (raw, signal, rawCall) => {
-    const { tenant, parsed, source, actor, request } = await preflightConnectedProviderPreview(raw, signal, rawCall as DataCall);
+    const { tenant, parsed, source, actor, request, releaseBinding } = await preflightConnectedProviderPreview(raw, signal, rawCall as DataCall);
     const registry = await createProviderRegistryForUser(tenant, actor);
     // A Chat preview is an explicit, user-approved read of the current
     // source. Do not reuse TTL-cached file rows or remote API observations:
@@ -278,6 +279,7 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
         normalized: observed.normalized,
         rightsReviewed: true as const,
         cache: "miss" as const,
+        releaseBinding,
       },
       summary: observationSummary(
         `Retrieved ${previewRows.length} preview row(s) from verified ${source.name.slice(0, 200)}; bounded authorized preview, not independently verified claims.`,

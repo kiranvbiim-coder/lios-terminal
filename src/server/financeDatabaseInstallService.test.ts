@@ -59,3 +59,14 @@ test("interrupted donor download rejects extraction and closes the source", asyn
   await assert.rejects(extractFinanceDatabaseTarGz(body, root), /download disconnected/);
   assert.equal(body.destroyed, true);
 });
+
+test("asynchronous source cancellation errors remain handled after archive refusal", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-catalog-cancel-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const body = new Readable({
+    read() { this.push(Buffer.from("not a gzip archive")); this.push(null); },
+    destroy(_error, callback) { setImmediate(() => callback(new Error("cancel failed"))); },
+  });
+  await assert.rejects(extractFinanceDatabaseTarGz(body, root));
+  await new Promise<void>(resolve => body.closed ? resolve() : body.once("close", resolve));
+});
