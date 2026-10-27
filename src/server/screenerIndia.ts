@@ -53,6 +53,7 @@ import { parseIndiaQuarterLabel, parseIndiaFyLabel, parseIndianNumber } from "./
 import fs from "fs";
 import path from "path";
 import { dataPath } from "./dataRoot";
+import { isUsableCatalogIdentityRow } from "@shared/catalogIdentityRows";
 
 const SCREENER_BASE = "https://www.screener.in";
 const PAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // annual/quarterly tables update at most a few times a year
@@ -115,7 +116,12 @@ function loadTickerNames(): Map<string, string> {
       : path.resolve(process.cwd(), "server", "data", "tickers.json");
     if (fs.existsSync(dataPath)) {
       const list = JSON.parse(fs.readFileSync(dataPath, "utf8")) as Array<{ symbol: string; name: string }>;
-      for (const t of list) tickerNameBySymbol.set(t.symbol.toUpperCase(), t.name);
+      // A vendor file-creation footer is not a company/scrip name.
+      for (const t of list) {
+        if (isUsableCatalogIdentityRow(t)) {
+          tickerNameBySymbol.set(t.symbol.toUpperCase(), t.name);
+        }
+      }
     }
   } catch (err) {
     console.warn("screenerIndia: failed to load tickers.json for .BO name resolution:", err instanceof Error ? err.message : err);
