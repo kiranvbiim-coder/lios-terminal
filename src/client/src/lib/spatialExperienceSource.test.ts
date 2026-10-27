@@ -7,6 +7,7 @@ const canvas = read("../components/terminal/SpatialResearchCanvas.tsx");
 const styles = read("../visual-intelligence-canvas.css");
 const shell = read("../components/terminal/AnalyticalStudio.tsx");
 const motionPolicy = read("./spatialMotionPolicy.ts");
+const presentationPolicy = read("./spatialPresentationPolicy.ts");
 const overlays = read("../components/terminal/TerminalUxOverlays.tsx");
 const visualCanvas = read("../components/terminal/VisualCanvas.tsx");
 const uxSettings = read("../components/terminal/TerminalUxSettings.tsx");
@@ -28,7 +29,7 @@ test("Phase 2 Map, Timeline and List require explicit user selection", () => {
   assert.match(canvas, /aria-live="polite"/);
   assert.match(canvas, /hiddenCount/);
   assert.match(canvas, /aria-label="Filter research pins by kind"/);
-  assert.match(canvas, /kindFilter === "all" \? items : items\.filter\(item => item\.kind === kindFilter\)/);
+  assert.match(canvas, /const kindItems = useMemo\(\(\) => kindFilter === "all" \? items : items\.filter\(item => item\.kind === kindFilter\)/);
 });
 
 test("Phase 2 pointer movement previews locally and commits once, while keyboard movement stays available", () => {
@@ -39,7 +40,8 @@ test("Phase 2 pointer movement previews locally and commits once, while keyboard
   assert.match(canvas, /event\.currentTarget\.setPointerCapture\(event\.pointerId\)/);
   assert.match(canvas, /onPointerCancel=\{cancelDrag\}/);
   assert.match(canvas, /const cancelDrag = \(event:/);
-  assert.match(canvas, /Move canceled\. The prior saved pin position is unchanged/);
+  assert.match(canvas, /Move canceled\. The previous position is unchanged/);
+  assert.match(canvas, /canceled\?\.kind === "companion" && canceled\.startPoint/);
   assert.match(canvas, /onKeyDown=\{event => keyboardMove\(event, "node", item\.id\)\}/);
   assert.match(canvas, /removeResearchCanvasPosition\(item\.id\)/);
 });
@@ -155,4 +157,21 @@ test("Phase 2 Spotlight only searches local saved pins before graph truncation",
   assert.match(styles, /\.lios-spatial-spotlight-controls/);
   assert.match(styles, /\.lios-spatial-quick-hit:focus-visible/);
   assert.doesNotMatch(canvas, /fetch\(|createArtifact|runConversation|localStorage\.setItem/);
+});
+
+test("Phase 2 narrow and zoomed panes are readable, undraggable and never allocate decorative SVG", () => {
+  assert.match(canvas, /const \[contentWidth, setContentWidth\] = useState<number \| null>\(null\)/);
+  assert.match(canvas, /new ResizeObserver\(measure\)/);
+  assert.match(canvas, /return \(\) => observer\.disconnect\(\)/);
+  assert.match(canvas, /resolveSpatialPresentation\(mode, contentWidth\)/);
+  assert.match(canvas, /if \(presentation\.stacked\) return/);
+  assert.match(canvas, /presentation\.showDecorativeEdges && model\.edges\.length > 0/);
+  assert.match(canvas, /presentation\.canMoveNodes && <button/);
+  assert.match(canvas, /presentation\.canMoveCompanion \? <button/);
+  assert.match(canvas, /<span className="lios-spatial-companion-grip">Insight companion<\/span>/);
+  assert.match(canvas, /companionRegion\.current\?\.focus\(\)/);
+  assert.match(canvas, /announcement \|\| presentation\.layoutHint/);
+  assert.match(presentationPolicy, /SPATIAL_STACKED_MAX_WIDTH = 760/);
+  assert.match(presentationPolicy, /canMoveNodes: mode === "map" && !stacked/);
+  assert.match(presentationPolicy, /showDecorativeEdges: !stacked && mode !== "list"/);
 });
