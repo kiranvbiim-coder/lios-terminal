@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatLiosAddress } from "@shared/liosAddress";
 import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
 import { useProjects } from "@/lib/useProjects";
@@ -20,6 +20,7 @@ export function PulseProjectMonitorReview({ card, onClose }: {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [minutes, setMinutes] = useState(60);
   const [saving, setSaving] = useState(false);
+  const requestInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [savedProjectId, setSavedProjectId] = useState<number | null>(null);
   const eligible = (projects.data ?? []).filter(project =>
@@ -32,7 +33,8 @@ export function PulseProjectMonitorReview({ card, onClose }: {
     : null;
 
   const save = async () => {
-    if (saving || savedProjectId !== null || !selected || !preview) return;
+    if (requestInFlight.current || saving || savedProjectId !== null || !selected || !preview) return;
+    requestInFlight.current = true;
     const originalProjectId = selected.id;
     setError(null);
     setSaving(true);
@@ -49,6 +51,7 @@ export function PulseProjectMonitorReview({ card, onClose }: {
     } catch {
       setError("Saving was not confirmed. Check this Project's existing workflows before retrying to avoid duplicates.");
     } finally {
+      requestInFlight.current = false;
       setSaving(false);
     }
   };
