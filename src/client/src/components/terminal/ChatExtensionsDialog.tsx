@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ChatExtensionCatalog } from "@shared/chatExtensionCatalog";
@@ -24,6 +24,7 @@ export default function ChatExtensionsDialog({
 }) {
   const [query, setQuery] = useState("");
   const [manage, setManage] = useState(false);
+  const queryClient = useQueryClient();
   const catalog = useQuery<ChatExtensionCatalog>({
     queryKey: ["/api/extensions/chat-catalog"],
     enabled: open,
@@ -87,7 +88,7 @@ export default function ChatExtensionsDialog({
         </>}
         {manage && <section aria-label="Owner plugin management" className="border-t border-border pt-3">
           <Suspense fallback={<p role="status" className="text-sm">Loading package management…</p>}>
-            <GovernedExtensionsPanel />
+            <GovernedExtensionsPanel onCatalogChanged={() => { void queryClient.invalidateQueries({ queryKey: ["/api/extensions/chat-catalog"] }); }} />
           </Suspense>
         </section>}
       </div>
