@@ -1044,6 +1044,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
       const url = stripHtml(String(item?.link?.href ?? item?.link ?? ""));
       const publishedAt = new Date(String(item?.pubDate ?? item?.published ?? item?.updated ?? Date.now())).toISOString();
       if (!title || !url) return null;
+      const imageCandidate = extractRssImageCandidate(item);
 
       return {
         title,
@@ -1052,7 +1053,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         source,
         feedProvider: "Limuria Intelligence",
         publishedAt,
-        imageCandidate: extractRssImageCandidate(item),
+        ...(imageCandidate ? { imageCandidate } : {}),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,
