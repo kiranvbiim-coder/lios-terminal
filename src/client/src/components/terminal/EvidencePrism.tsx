@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { recordedIsoTimestamp } from "@/lib/recordedIsoTimestamp";
 import type { EvidenceObservation, TrustManifest } from "@shared/trustContracts";
 import {
   describeObservationRights,
@@ -10,9 +11,7 @@ import {
 } from "@/lib/evidencePrism";
 
 function timestamp(value: string | null): string {
-  if (!value) return "Not recorded";
-  const milliseconds = Date.parse(value);
-  return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : "Not recorded";
+  return recordedIsoTimestamp(value) ?? "Not recorded";
 }
 
 /** Inspect an existing structured P3 claim. No inferred evidence, live provider reads or new grants. */
