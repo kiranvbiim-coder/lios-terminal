@@ -297,7 +297,7 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
   if ((workflowsQuery.isError && !workflowsQuery.data) || (runsQuery.isError && !runsQuery.data) || (notificationsQuery.isError && !notificationsQuery.data)) return <p role="alert" className="mt-6 text-sm">Unable to load automations. <button onClick={() => { void workflowsQuery.refetch(); void runsQuery.refetch(); void notificationsQuery.refetch(); }}>Retry</button></p>;
 
   return (
-    <section className="mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-4" data-p9-continuous-intelligence>
+    <section className="mt-4 rounded-xl border border-border/60 bg-white/[0.015] p-4" data-p9-continuous-intelligence data-p9-project-id={projectId}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 font-ui text-[10px] font-semibold text-foreground">
@@ -413,7 +413,9 @@ export function ProjectAutomationPanel({ projectId }: { projectId: number }) {
           const last = latestRun.get(workflow.id);
           const truth = workflowExecutionTruth(workflow, last);
           return (
-            <article key={workflow.id} className="rounded-lg border border-border/50 bg-black/15 p-3">
+            <article key={workflow.id} data-p9-workflow-id={workflow.id} tabIndex={-1}
+              aria-label={`Saved workflow ${workflow.name}`}
+              className="scroll-mt-20 rounded-lg border border-border/50 bg-card/60 p-3 focus:outline-none focus:ring-2 focus:ring-amber-300/70">
               <div className="flex items-start gap-2">
                 <button type="button" disabled={Boolean(busyId)}
                   onClick={() => requestWorkflowReview(workflow, workflow.enabled ? "pause" : "resume")}
