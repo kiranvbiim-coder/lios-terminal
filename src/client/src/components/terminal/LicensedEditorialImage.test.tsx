@@ -131,3 +131,38 @@ test("CC0 context image is explicitly illustrative with an attributable Commons 
   assert.match(html, /href="https:\/\/commons\.wikimedia\.org\/wiki\/File:Generic_context_photo\.jpg"/);
   assert.match(html, /rel="noopener noreferrer"/);
 });
+
+
+test("editorial image grants never create nested source links inside News and Pulse buttons", () => {
+  const licensed: EditorialMedia = {
+    ...media,
+    mediaSourcePage: "https://commons.wikimedia.org/wiki/File:Context_solar.jpg",
+    usageContext: "illustrative",
+  };
+  const news = render(React.createElement(NewsEditorialStoryCard, {
+    title: "Recorded energy story", summary: "Source-backed",
+    source: "Original publisher", publishedAt: "2026-10-27T03:00:00Z",
+    ageLabel: "Today", statusBadge: React.createElement("span", null, "Recorded"),
+    active: false, lead: true, onSelect: () => undefined,
+    media: licensed, sourceEvidenceId: "evidence:solar:1",
+  }));
+  assert.match(news, /licensed-editorial-image/);
+  assert.doesNotMatch(news, /<a\b/);
+  const pulse: PulseStoryView = {
+    id: "story:energy", title: "Recorded energy story", whatHappened: "Source-backed",
+    priority: "important", score: 70, kind: "news", media: licensed,
+    evidence: [{ id: "evidence:solar:1", source: "Original publisher" }],
+  };
+  const renderedPulse = render(React.createElement(LiosPulseStoryCard, {
+    card: pulse, featured: true, onAsk: () => undefined,
+  }));
+  assert.match(renderedPulse, /licensed-editorial-image/);
+  assert.doesNotMatch(renderedPulse, /<a\b/);
+
+  // Outside a clickable card the existing renderer retains provenance.
+  const readthrough = render(React.createElement(LicensedEditorialImage, {
+    media: licensed, sourceIds: ["evidence:solar:1"],
+  }));
+  assert.match(readthrough, /Image source and license/);
+  assert.match(readthrough, /href="https:\/\/commons.wikimedia.org\/wiki\/File:Context_solar.jpg"/);
+});
