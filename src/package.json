@@ -143,7 +143,8 @@
     "beta:acceptance": "node script/beta_release_acceptance.cjs",
     "beta:acceptance:test": "node --test script/beta_release_acceptance.test.cjs",
     "media:verify": "node --import tsx script/verifyEditorialMedia.ts",
-    "media:verify:test": "node --import tsx --test shared/editorialMedia.test.ts script/verifyEditorialMedia.test.ts client/src/components/terminal/LicensedEditorialImage.test.tsx"
+    "media:verify:test": "node --import tsx --test shared/editorialMedia.test.ts script/verifyEditorialMedia.test.ts client/src/components/terminal/LicensedEditorialImage.test.tsx",
+    "test:discovery-preferences": "node --import tsx --test shared/pulseSubjectPreferences.test.ts server/waveDSubjectPreferences.test.ts client/src/components/terminal/PulseSubjectControls.test.tsx"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
