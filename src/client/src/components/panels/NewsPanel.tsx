@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import DataStatusBadge from "@/components/data/DataStatusBadge";
 import NewsEditorialStoryCard from "./NewsEditorialStoryCard";
+import { NewsMediaPreview } from "./NewsMediaPreview";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { NewsItem } from "@/lib/finance";
 import { useNewsArticle } from "@/lib/useFinance";
@@ -278,6 +279,7 @@ export default function NewsPanel({ symbol }: Props) {
                   sentiment={item.sentiment}
                   statusBadge={<DataStatusBadge status={item.status} compact />}
                   media={item.media}
+                   mediaPreview={item.mediaPreview}
                   sourceEvidenceId={item.url}
                   contextIllustration={!item.media
                      ? contextImage?.storyUrl === item.url ? contextImage.candidate : automaticContexts.get(item.url)
@@ -357,6 +359,7 @@ export default function NewsPanel({ symbol }: Props) {
                   {article?.excerpt || selectedItem.summary}
                 </p>
 
+                <NewsMediaPreview key={selectedItem.url} preview={selectedItem.mediaPreview} />
                 <NewsStoryEvolution exactUrl={selectedItem.url} history={observedRevisions} />
 
                 <div className="mt-5 space-y-3">

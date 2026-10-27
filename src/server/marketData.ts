@@ -1,6 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EditorialMedia } from "@shared/editorialMedia";
 import { extractRssImageCandidate } from "./newsFeedImageCandidates";
+import { extractRssMediaPreview } from "./newsFeedMediaEnclosures";
+import type { NewsMediaPreview } from "@shared/newsMediaPreview";
 import { fetchPublicNewsArticleHtml, validatePublicNewsUrl } from "./publicNewsArticleFetch";
 import { approvedNewsMediaForFeed } from "./newsEditorialMedia";
 import { getIndicatorQuotes } from "./fredData";
@@ -111,6 +113,8 @@ export interface NewsItem {
   /** Independently approved publisher media only, never RSS URL metadata. */
   media?: EditorialMedia;
   imageCandidate?: ReturnType<typeof extractRssImageCandidate>;
+  /** User-initiated publisher stream; never an image grant. */
+  mediaPreview?: NewsMediaPreview;
   title: string;
   summary: string;
   url: string;
@@ -1044,6 +1048,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
       const publishedAt = new Date(String(item?.pubDate ?? item?.published ?? item?.updated ?? Date.now())).toISOString();
       if (!title || !url) return null;
       const imageCandidate = extractRssImageCandidate(item);
+      const mediaPreview = extractRssMediaPreview(item);
 
       return {
         title,
@@ -1053,6 +1058,7 @@ export function parseNewsFeed(xml: string, fallbackSource: string): NewsItem[] {
         feedProvider: "Limuria Intelligence",
         publishedAt,
         ...(imageCandidate ? { imageCandidate } : {}),
+        ...(mediaPreview ? { mediaPreview } : {}),
         sentiment: inferSentiment(`${title} ${summary}`),
         status: buildDataStatus({
           provider: fallbackSource,

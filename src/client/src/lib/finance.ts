@@ -5,6 +5,7 @@
 // shared/dataStatus.ts.
 import type { DataStatus } from "@shared/dataStatus";
 import type { EditorialMedia } from "@shared/editorialMedia";
+import type { NewsMediaPreview } from "@shared/newsMediaPreview";
 export type { DataFreshness, DataStatus } from "@shared/dataStatus";
 
 export interface Quote {
@@ -53,6 +54,7 @@ export interface NewsItem {
   media?: EditorialMedia;
   /** RSS-discovered thumbnail reference is unverified metadata, never a UI image source. */
   imageCandidate?: { url: string; source: "rss"; rights: "unverified"; attribution?: string };
+  mediaPreview?: NewsMediaPreview;
   title: string;
   summary: string;
   url: string;
