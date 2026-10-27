@@ -57,3 +57,24 @@ export function projectWatchroomSummary(
     failed: views.filter(room => room.latestRun?.status === "failed").length,
   };
 }
+
+/**
+ * Source-recorded Watchroom activity strip. Unlike a synthetic sparkline, each
+ * categorical status represents an actual P9 run with an exact Project and
+ * workflow owner and a valid recorded timestamp. Never infer a skipped run.
+ */
+export function watchroomRecordedHistory(
+  projectId: number,
+  workflowId: string,
+  runs: readonly P9RunRecord[],
+  limit = 12,
+): P9RunRecord[] {
+  if (!Number.isInteger(projectId) || projectId < 1 || !workflowId.trim()) return [];
+  const max = Number.isFinite(limit) ? Math.max(1, Math.min(24, Math.floor(limit))) : 12;
+  return runs.filter(run =>
+    run.projectId === projectId && run.workflowId === workflowId &&
+    Number.isFinite(Date.parse(run.startedAt))
+  ).sort((left, right) =>
+    Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)
+  ).slice(0, max).reverse();
+}
