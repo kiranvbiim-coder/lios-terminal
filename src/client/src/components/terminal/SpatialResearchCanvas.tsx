@@ -19,6 +19,7 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const [items, setItems] = useState<ResearchTrayItem[]>(() => loadResearchTray());
   const [version, setVersion] = useState(0);
   const [mode, setMode] = useState<SpatialLayoutMode>("map");
+  const [kindFilter, setKindFilter] = useState<"all" | ResearchTrayItem["kind"]>("all");
   const [expanded, setExpanded] = useState(false);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [companionPoint, setCompanionPoint] = useState<SpatialPoint>({ x: 70, y: 44 });
@@ -29,7 +30,8 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
   const companionHeading = useRef<HTMLButtonElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const positions = useMemo(() => loadResearchCanvasPositions(), [version]);
-  const model = useMemo(() => buildSpatialResearchModel(items, positions, mode), [items, positions, mode]);
+  const visibleItems = useMemo(() => kindFilter === "all" ? items : items.filter(item => item.kind === kindFilter), [items, kindFilter]);
+  const model = useMemo(() => buildSpatialResearchModel(visibleItems, positions, mode), [visibleItems, positions, mode]);
   const points = useMemo(() => new Map(model.nodes.map(node => [
     node.item.id, dragPreview?.id === node.item.id ? dragPreview.point : node.point,
   ] as const)), [model, dragPreview]);
@@ -113,6 +115,15 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
             {expanded ? "Compact" : "Expand"}
           </button>
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter research pins by kind">
+        {(["all", "context", "evidence", "note", "output"] as const).map(kind => (
+          <button key={kind} type="button" className="lios-spatial-control"
+            aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kind)}>
+            {kind === "all" ? "All" : kind === "note" ? "Notes" : kind === "evidence" ? "Evidence" : kind === "output" ? "Outputs" : "Context"}
+            <span aria-hidden="true">({kind === "all" ? items.length : items.filter(item => item.kind === kind).length})</span>
+          </button>
+        ))}
       </div>
       <div
         ref={boardRef}
@@ -202,7 +213,8 @@ export default function SpatialResearchCanvas({ onOpen }: Props) {
       </div>
       <p className="font-ui text-xs leading-5 text-muted-foreground" role="status" aria-live="polite">
         {announcement || (mode === "map" ? "Drag a pin's handle or use its arrow keys to arrange. Inspect opens one movable companion." : "Timeline orders pins by when they were saved locally; positions are read-only here.")}
-        {model.hiddenCount > 0 ? ` Showing the first ${model.nodes.length} of ${items.length} saved pins; refine the Research Tray for additional objects.` : ""}
+        {model.hiddenCount > 0 ? ` Showing the first ${model.nodes.length} of ${visibleItems.length} matching pins; filter by kind to narrow this view.` : ""}
+        {kindFilter !== "all" ? ` Filtered to ${visibleItems.length} of ${items.length} saved pins.` : ""}
       </p>
     </section>
   );
