@@ -63,15 +63,15 @@ export function ProjectContinuityPanel({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="flex min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
+          className="flex min-h-11 items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40"
         >
-          <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3 w-3 ${refreshing ? "motion-safe:animate-spin" : ""}`} />
           Recompute this Project snapshot
         </button>
       </div>
 
       {message && <div role="status" className="mt-3 rounded border border-border/50 bg-background/60 px-3 py-2 font-ui text-[13px] leading-5 text-foreground">{message}</div>}
-      {continuity.isError && <div role="alert" className="mt-3 rounded border border-red-400/20 bg-red-400/[0.03] px-3 py-2 font-ui text-sm text-red-200">This Project's continuity could not be loaded or did not match its identity. Reload before acting.</div>}
+      {continuity.isError && <div role="alert" className="mt-3 rounded border border-red-400/20 bg-red-400/[0.03] px-3 py-2 font-ui text-sm text-destructive">This Project's continuity could not be loaded or did not match its identity. Reload before acting.</div>}
 
       <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
         <Metric label="Continue" value={snapshot ? snapshot.counts.continuationItems : "—"} />
@@ -110,7 +110,7 @@ export function ProjectContinuityPanel({
                     <button
                       type="button"
                       onClick={() => onFocusArtifact(decision.artifactId, decision.title)}
-                      className="ml-auto min-h-10 rounded-md border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                      className="ml-auto min-h-11 rounded-md border border-border/60 px-3 font-ui text-[13px] text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                     >
                       Open
                     </button>
