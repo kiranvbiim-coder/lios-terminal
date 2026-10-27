@@ -93,7 +93,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       return Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string").slice(0, 6) : ["metric.pe", "metric.roic"];
     } catch { return ["metric.pe", "metric.roic"]; }
   });
-  const [waveDPulseCards, setIntelligenceCards] = useState<IntelligenceCard[]>([]);
+  const [waveDPulseCards, setWaveDPulseCards] = useState<IntelligenceCard[]>([]);
   const [waveDInboxCount, setWaveDInboxCount] = useState(0);
   const [waveDInboxItems, setWaveDInboxItems] = useState<ActionInboxItem[]>([]);
   const [waveDMonitoringCount, setWaveDMonitoringCount] = useState(0);
@@ -129,7 +129,7 @@ export default function WaveCExperienceShell({ activeView, activeSymbol, onOpen,
       const inbox = inboxResponse.ok ? await inboxResponse.json() as { items?: ActionInboxItem[] } : { items: [] };
       const brief = briefResponse?.ok ? await briefResponse.json() as { headline?: string } : {};
       if (cancelled) return;
-      setIntelligenceCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
+      setWaveDPulseCards(Array.isArray(pulse.cards) ? pulse.cards.slice(0, 6) : []);
       const inboxItems = Array.isArray(inbox.items) ? inbox.items : [];
       setWaveDInboxItems(inboxItems.slice(0, 8));
       setWaveDInboxCount(inboxItems.length);
