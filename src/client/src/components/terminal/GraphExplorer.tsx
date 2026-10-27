@@ -40,12 +40,15 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Keep the Escape handler current without re-running the modal focus trap on parent renders.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     searchRef.current?.focus();
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key === "Escape") { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]),input:not([disabled]),a[href],select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
@@ -64,7 +67,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
       document.removeEventListener("keydown", keyboard);
       previouslyFocused?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   // The existing local Intelligence Object store is the sole graph authority.
   // 120 is a bounded source read, not a claim that all retained objects are shown.
