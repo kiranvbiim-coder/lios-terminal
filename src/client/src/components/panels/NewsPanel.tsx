@@ -1,4 +1,4 @@
-import { useTerminalArtifactState } from "@/lib/terminalArtifactState";
+import { useTerminalArtifactState, useTerminalArtifactContext } from "@/lib/terminalArtifactState";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -10,6 +10,7 @@ import { useNewsArticle } from "@/lib/useFinance";
 import type { CommonsCandidate } from "@shared/commonsMedia";
 import { CommonsContextIllustration, NewsImageDiscovery } from "./NewsImageDiscovery";
 import { LicensedEditorialImage } from "../terminal/LicensedEditorialImage";
+import { readSavedNewsIllustrations, rememberNewsIllustration, forgetNewsIllustration, restoredNewsIllustration, type SavedNewsIllustration } from "@/lib/newsIllustrationSelections";
 
 interface Props {
   symbol?: string;
@@ -23,6 +24,8 @@ function relativeTime(iso: string) {
 }
 
 export default function NewsPanel({ symbol }: Props) {
+  const panelOwner = useTerminalArtifactContext();
+  const canRememberIllustrations = Boolean(panelOwner && !panelOwner.readOnly);
   const [sourceFilter, setSourceFilter] = useTerminalArtifactState("NewsPanel.sourceFilter", "ALL");
   const [sentimentFilter, setSentimentFilter] = useTerminalArtifactState("NewsPanel.sentimentFilter", "ALL");
   const [query, setQuery] = useTerminalArtifactState("NewsPanel.query", "");
@@ -30,8 +33,11 @@ export default function NewsPanel({ symbol }: Props) {
   const [page, setPage] = useTerminalArtifactState("NewsPanel.page", 1);
   const [from, setFrom] = useTerminalArtifactState("NewsPanel.from", "");
   const [to, setTo] = useTerminalArtifactState("NewsPanel.to", "");
-  // A user-selected Commons preview is session-only. Never persist, publish, or
-  // silently transfer it to another article when selection changes.
+  // Only explicitly remembered image REFERENCES live in the existing P4
+  // authored panel state. Preview pixels are NEVER cached here or restored
+  // automatically: reopening requires a live user-triggered Commons CC0 check.
+  const [savedImageState, setSavedImageState] = useTerminalArtifactState<SavedNewsIllustration[]>("NewsPanel.rememberedContextIllustrations", []);
+  const savedIllustrations = useMemo(() => readSavedNewsIllustrations(savedImageState), [savedImageState]);
   const [contextImage, setContextImage] = useState<{ storyUrl: string; candidate: CommonsCandidate } | null>(null);
 
   const newsQuery = useQuery<{ items: NewsItem[]; returnedCount: number; knownCount: number; hasMore: boolean; page: number } | NewsItem[]>({
@@ -77,6 +83,32 @@ export default function NewsPanel({ symbol }: Props) {
   const { data: article, isLoading: articleLoading } = useNewsArticle(selectedItem);
   const storySentiment = selectedItem?.sentiment ?? "neutral";
   const selectedContextImage = selectedItem && contextImage?.storyUrl === selectedItem.url && !selectedItem.media ? contextImage.candidate : null;
+  const savedSelection = selectedItem && !selectedItem.media
+    ? savedIllustrations.find(saved => saved.storyUrl === selectedItem.url) ?? null : null;
+  const rememberSelected = () => {
+    if (!canRememberIllustrations || !selectedItem || !selectedContextImage) return;
+    setSavedImageState(previous => rememberNewsIllustration(previous, selectedItem.url, selectedContextImage));
+  };
+  const forgetSelected = () => {
+    if (!canRememberIllustrations || !selectedItem) return;
+    setSavedImageState(previous => forgetNewsIllustration(previous, selectedItem.url));
+  };
+  const reopenSaved = async (): Promise<boolean> => {
+    if (!savedSelection || !selectedItem || !canRememberIllustrations) return false;
+    const response = await fetch("/api/media/commons/cc0/file?title=" + encodeURIComponent(savedSelection.candidate.fileTitle), {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) return false;
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object") return false;
+    const record = payload as { status?: unknown; candidate?: unknown };
+    if (record.status !== "unreviewed") return false;
+    const candidate = restoredNewsIllustration(savedSelection, record.candidate as CommonsCandidate);
+    if (!candidate) return false;
+    setContextImage({ storyUrl: selectedItem.url, candidate });
+    return true;
+  };
 
   const missingSelection = selectedUrl !== null && !selectedItem && newsQuery.isSuccess && !newsQuery.isFetching;
   return (
@@ -211,7 +243,12 @@ export default function NewsPanel({ symbol }: Props) {
                 <NewsImageDiscovery key={selectedItem.url} articleTitle={selectedItem.title}
                   selected={selectedContextImage}
                   onSelect={candidate => setContextImage({ storyUrl: selectedItem.url, candidate })}
-                  onClear={() => setContextImage(null)} />
+                  onClear={() => setContextImage(null)}
+                  canRemember={canRememberIllustrations}
+                  saved={savedSelection}
+                  onRemember={rememberSelected}
+                  onForget={forgetSelected}
+                  onReopenSaved={reopenSaved} />
 
                 <p className="mt-4 border-b border-border/60 pb-4 font-ui text-sm leading-6 text-muted-foreground">
                   {article?.excerpt || selectedItem.summary}
