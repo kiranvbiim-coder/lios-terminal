@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import type { PulseStoryView } from "@/lib/pulseStoryPresentation";
+import LiosPulseStoryCard from "./LiosPulseStoryCard";
 import { Activity, ArrowDownRight, ArrowUpRight, BriefcaseBusiness, Gauge, Landmark, Radar, Sparkles, Star } from "lucide-react";
 import type { AnalyticalOpenMode } from "@/lib/terminalActionContracts";
 import type { ViewMode } from "@/lib/terminalTypes";
@@ -11,21 +13,12 @@ import { FusionActionButton, FusionDataBar, FusionEmptyState, FusionFreshnessBad
 import FusionMarketCanvas from "./FusionMarketCanvas";
 import { toneForChange } from "@/lib/fusionExperience";
 
-interface PulseCard {
-  id: string;
-  title: string;
-  whatHappened: string;
-  whyItMattersToUser?: string;
-  priority: "critical" | "important" | "fyi";
-  score: number;
-  symbol?: string;
-}
 
 interface Props {
   activeSymbol?: string;
   onOpen: (view: ViewMode, mode: AnalyticalOpenMode, symbol?: string) => void;
-  onAskLios?: () => void;
-  pulseCards: PulseCard[];
+  onAskLios?: (initialQuestion?: string) => void;
+  pulseCards: PulseStoryView[];
   monitoringCount: number;
   inboxCount: number;
   recents: RecentAnalyticalContext[];
@@ -152,7 +145,7 @@ export default function FusionPulseBoard({
   const breadthTotal = latestBreadth ? latestBreadth.advances + latestBreadth.declines + latestBreadth.unchanged : 0;
   const advancePct = latestBreadth && breadthTotal > 0 ? (latestBreadth.advances / breadthTotal) * 100 : null;
   const maxMacroMove = Math.max(1, ...indicators.map((item) => Math.abs(item.changePercent ?? 0)));
-  const derivedPulseCards = useMemo<PulseCard[]>(() => [...gainers.slice(0, 3), ...losers.slice(0, 3)]
+  const derivedPulseCards = useMemo<PulseStoryView[]>(() => [...gainers.slice(0, 3), ...losers.slice(0, 3)]
     .filter((quote) => Number.isFinite(quote.changePercent))
     .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
     .map((quote) => {
@@ -279,15 +272,17 @@ export default function FusionPulseBoard({
           </FusionSection>
         </div>
 
-        <FusionSection title="What deserves attention" eyebrow="DECISION-RELEVANT CHANGES" className="mt-3" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">MONITOR</FusionActionButton>}>
+        <FusionSection title="What deserves attention" eyebrow="DECISION-RELEVANT CHANGES · WHY IT MATTERS" className="mt-3" action={<FusionActionButton onClick={() => onOpen("alerts", "current")} variant="primary">MONITOR</FusionActionButton>}>
               {visiblePulseStatus === "loading" ? <FusionEmptyState>Refreshing decision-relevant changes…</FusionEmptyState> : visiblePulseStatus === "unavailable" ? <FusionEmptyState>PULSE UNAVAILABLE · Market and macro panels remain independently usable.</FusionEmptyState> : visiblePulseCards.length ? (
             <div className="fusion-pulse-card-grid">
-              {visiblePulseCards.slice(0, 6).map((card) => (
-                <button key={card.id} onClick={() => card.symbol ? onOpen("quote", "current", card.symbol) : undefined} className="fusion-pulse-card">
-                  <span className={`fusion-priority-dot ${card.priority === "critical" ? "bg-red-300" : card.priority === "important" ? "bg-amber-300" : "bg-cyan-300"}`} />
-                  <span className="min-w-0 flex-1"><strong>{card.title}</strong><small>{card.whatHappened}</small>{card.whyItMattersToUser && <small className="text-foreground/65">WHY IT MATTERS · {card.whyItMattersToUser}</small>}</span>
-                  <span className="tabular-nums text-muted-foreground">{card.score.toFixed(0)}</span>
-                </button>
+              {visiblePulseCards.slice(0, 6).map((card, index) => (
+                <LiosPulseStoryCard
+                  key={card.id}
+                  card={card}
+                  featured={index === 0}
+                  onAsk={(question) => onAskLios ? onAskLios(question) : onOpen("agent", "current", card.symbol ?? activeSymbol)}
+                  onOpenSymbol={(symbol) => onOpen("quote", "current", symbol)}
+                />
               ))}
             </div>
           ) : <FusionEmptyState>You are caught up. Material monitored changes will appear here.</FusionEmptyState>}
