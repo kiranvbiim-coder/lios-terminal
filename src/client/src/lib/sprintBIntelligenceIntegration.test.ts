@@ -58,6 +58,10 @@ test("Analytical Studio compares only the exact explicitly reviewed capture pair
   assert.match(ui, /reviewedPairKey === pairKey/);
   assert.match(ui, /expandedPairKey === pairKey/);
   assert.match(ui, /resolveRecordedReceiptPair\(evidence\.receipts, receiptA, receiptB\)/);
+  assert.match(ui, /useState<string \| null>\(\(\) => getEvidenceSnapshot\(\)\.receipts\[0\]\?\.id/);
+  assert.match(ui, /useState<string \| null>\(\(\) => getEvidenceSnapshot\(\)\.receipts\[1\]\?\.id/);
+  assert.match(ui, /<option key=\{item\.id\} value=\{item\.id\}>/);
+  assert.match(ui, /Previously selected receipt unavailable/);
   assert.doesNotMatch(ui, /Math\.min\(receiptA|Math\.min\(receiptB|setAllowCrossContext/);
 });
 
