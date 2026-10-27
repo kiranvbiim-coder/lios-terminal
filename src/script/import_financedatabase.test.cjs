@@ -101,3 +101,19 @@ test("local import writes verified snapshot, detects tampering, and rolls back t
   fs.appendFileSync(path.join(destination, "financedatabase_universe.json"), " ");
   assert.throws(() => verifyInstalled(destination), /SHA256 does not match/);
 });
+
+test("oversized CSV is refused before allocating its contents", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-csv-bound-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "equities"));
+  const file = path.join(root, "equities", "NMS.csv");
+  fs.writeFileSync(file, "");
+  fs.truncateSync(file, 128 * 1024 * 1024 + 1);
+  const read = fs.readFileSync;
+  fs.readFileSync = (...args) => {
+    if (args[0] === file) assert.fail("Oversized CSV must not be read");
+    return read(...args);
+  };
+  try { assert.throws(() => importDatabase(root, ["equities"], 1), /Oversized donor CSV/); }
+  finally { fs.readFileSync = read; }
+});

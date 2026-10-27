@@ -46,7 +46,7 @@ export const chatMcpDiscoveryTool: ConversationToolDefinition = {
   replaySafe: true,
   inputSchema,
   outputSchema: outputSchema.transform((value): ConversationToolResult => value),
-  maxOutputBytes: 16 * 1024,
+  maxOutputBytes: 32 * 1024,
   cancel: null,
   invoke: async (input, signal, call) => {
     assertNotAborted(signal);
@@ -85,6 +85,13 @@ export const chatMcpDiscoveryTool: ConversationToolDefinition = {
       throw new Error("MCP connection is outside the current Project.");
     }
     const allowedToolIds = [...new Set(config.policy.allowedToolIds)].slice(0, 100);
+    const visibleIds: string[] = [];
+    let visibleLength = 0;
+    for (const id of allowedToolIds) {
+      if (visibleLength + JSON.stringify(id).length > 1_600) break;
+      visibleIds.push(id);
+      visibleLength += JSON.stringify(id).length + 1;
+    }
     assertNotAborted(signal);
     return {
       output: {
@@ -95,7 +102,7 @@ export const chatMcpDiscoveryTool: ConversationToolDefinition = {
         requiresExactUserApproval: true as const,
         remoteDiscoveryPerformed: false as const,
       },
-      summary: `${allowedToolIds.length} tool ID(s) allowed by saved MCP Project policy; this is not a live verification or permission to execute.`,
+      summary: `${allowedToolIds.length} tool ID(s) allowed by saved MCP Project policy; not live verification or permission to execute. Locally allowed IDs: ${JSON.stringify(visibleIds)}. Omitted from model context: ${allowedToolIds.length - visibleIds.length}.`,
       deterministic: true as const,
       sourceRefs: [`source-connection:${connection.id}`],
     };

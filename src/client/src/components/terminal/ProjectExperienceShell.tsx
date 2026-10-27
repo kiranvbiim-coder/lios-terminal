@@ -16,7 +16,6 @@ import { isCurrentArtifactLoad } from "@/lib/artifactSidecarSizing";
 import type { z } from "zod";
 import { ProjectDestinationDialog } from "./ProjectDestinationDialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { openPluginCenter } from "@/lib/appShellEvents";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,

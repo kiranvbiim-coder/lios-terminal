@@ -85,3 +85,29 @@ test("historical vendor timestamp row is valid snapshot metadata, not an instrum
   const spec = { ...x.specs[0], blob: gitBlobDigest(bytes), bytes: bytes.length };
   assert.equal(validateCatalog(file, spec).records, 2);
 });
+
+test("private recovery creates owner-only files even in an existing traversable directory", (t) => {
+  if (process.platform === "win32") return t.skip("POSIX mode bits");
+  const x = fixtures(t);
+  fs.mkdirSync(path.join(x.target, "src/server/data"), { recursive: true, mode: 0o755 });
+  recoverDirectory(x.source, x.target, x.specs);
+  for (const spec of x.specs)
+    assert.equal(fs.statSync(path.join(x.target, "src/server/data", spec.name)).mode & 0o777, 0o600);
+});
+
+test("a concurrent destination creator is never replaced during private recovery", (t) => {
+  const x = fixtures(t);
+  const link = fs.linkSync;
+  let local;
+  fs.linkSync = (from, to) => {
+    local = to;
+    fs.writeFileSync(to, "concurrent owner content", { flag: "wx" });
+    return link(from, to);
+  };
+  try {
+    assert.throws(() => recoverDirectory(x.source, x.target, x.specs), /size mismatch/);
+    assert.equal(fs.readFileSync(local, "utf8"), "concurrent owner content");
+  } finally {
+    fs.linkSync = link;
+  }
+});

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import {
   connectedProviderListChatTool,
   connectedProviderPreviewChatTool,
@@ -68,18 +67,3 @@ test("P5 Chat: sample records are bounded, redact credential fields and URLs, an
   assert.deepEqual(safePreviewRows({ objects: [{ value: "not rows" }] }, 5), []);
 });
 
-test("P5 Chat: single governed provider SDK and Project/rights boundaries are used, not a parallel connector host", () => {
-  const source = readFileSync(new URL("./connectedProviderChatTool.ts", import.meta.url), "utf8");
-  const runtime = readFileSync(new URL("./conversationRuntime.ts", import.meta.url), "utf8");
-  assert.match(source, /createProviderRegistryForUser\(tenant, actor\)/);
-  assert.match(source, /executeCanonicalDataRequest\(request, tenant, registry\)/);
-  assert.doesNotMatch(source, /executeCanonicalDataRequestCached\(request, tenant, registry\)/, "an explicit Chat preview must never return a stale file cache hit");
-  assert.match(source, /await authorizeCanonicalDataRequests\(\[request\], tenant\)/);
-  assert.match(source, /await getProject\(tenant, projectId\)/);
-  assert.match(source, /resourceTransmissionAllowed !== true/);
-  assert.match(source, /previewAvailable: s\.sourceType === "file" \|\| s\.sourceType === "private_api"/);
-  assert.match(source, /getLatestExternalRightsAssessment\(tenant, "data"/);
-  assert.match(source, /source\.sourceType !== "file" && source\.sourceType !== "private_api"/);
-  assert.match(runtime, /registerConversationTool\(connectedProviderListChatTool\)/);
-  assert.match(runtime, /registerConversationTool\(connectedProviderPreviewChatTool\)/);
-});

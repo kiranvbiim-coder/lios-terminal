@@ -15,6 +15,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { isUsableCatalogIdentityRow } from "@shared/catalogIdentityRows";
 import {
   adaptLegacySymbolCatalog,
   type InstrumentMasterCandidate,
@@ -76,10 +77,7 @@ export function loadLegacyTickerCatalog(): InstrumentMasterCandidate[] {
     // The historical private snapshot contains a provider FILE CREATION TIME
     // footer; reject it and malformed listings at the single loader boundary.
     const rows = parsed.filter((row): row is LegacyTickerRow =>
-      Boolean(row) && typeof row === "object" && !Array.isArray(row) &&
-      typeof row.symbol === "string" && row.symbol.trim().length > 0 &&
-      !/^FILE CREATION TIME:/i.test(row.symbol) &&
-      typeof row.name === "string" && row.name.trim().length > 0 &&
+      isUsableCatalogIdentityRow(row) &&
       typeof row.exchange === "string" && row.exchange.trim().length > 0,
     );
     cachedCandidates = adaptLegacySymbolCatalog(rows.map(toLegacyCatalogRow));

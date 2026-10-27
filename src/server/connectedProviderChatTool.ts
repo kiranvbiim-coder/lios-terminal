@@ -66,7 +66,7 @@ const previewOutputSchema = z.object({
 }).strict();
 
 type DataCall = {
-  source: string;
+  source?: string;
   requestId?: string | null;
   userId?: number | null;
   projectId?: number | null;
@@ -159,6 +159,50 @@ export function safePreviewRows(data: unknown, maxRows: number): Array<Record<st
   });
 }
 
+/** Only these already-redacted observations enter planner context; never arbitrary tool output. */
+function observationSummary(prefix: string, observations: unknown[]): string {
+  const included: unknown[] = [];
+  let length = prefix.length + 100;
+  for (const observation of observations) {
+    const serialized = JSON.stringify(observation);
+    if (length + serialized.length > 2_000) break;
+    included.push(observation);
+    length += serialized.length + 1;
+  }
+  return `${prefix} Observations: ${JSON.stringify(included)}. Omitted from model context: ${observations.length - included.length}.`;
+}
+
+export async function preflightConnectedProviderPreview(raw: unknown, signal: AbortSignal, call: DataCall) {
+  assertNotAborted(signal);
+  const { tenant, projectId } = checkScope(call);
+  const parsed = previewSchema.parse(raw);
+  if (projectId !== null) await getProject(tenant, projectId);
+  const source = (await listSourceConnections(tenant.userId)).find((s) =>
+    s.id === parsed.connectionId && s.organizationId === tenant.organizationId);
+  if (!source || !sourceAllowedForChat(source, call.researchSourcePolicy))
+    throw new Error("Requested source is unverified or excluded by the active source policy.");
+  if (source.sourceType !== "file" && source.sourceType !== "private_api")
+    throw new Error("Connected Chat preview currently supports verified local files and private API sources only.");
+  const rights = await getLatestExternalRightsAssessment(tenant, "data", `source-connection:${source.id}`);
+  const assessedRights = externalRightsSchema.safeParse(rights?.rights);
+  if (!assessedRights.success || !reviewedChatReleaseRights(assessedRights.data, source.sourceType))
+    throw new Error("Source data is not approved for external AI use; record an explicit owner-scoped data-rights review first.");
+  const actorRows = await getDb().select({ id: users.id, email: users.email })
+    .from(users).where(and(eq(users.id, tenant.userId))).limit(1);
+  const actor = actorRows[0];
+  if (!actor) throw new Error("Authenticated provider owner is unavailable.");
+  const request = createCanonicalDataRequest({
+    projectId, capability: parsed.capability,
+    entity: { ref: parsed.entityRef, symbol: parsed.symbol, identifiers: {} },
+    fields: [], parameters: { maxRows: parsed.maxRows },
+    pointInTime: { mode: "latest", asKnownOn: null, revision: null, requirePublicationTime: false, allowLaterRevisions: false },
+    providerAllow: [`source:${source.id}`], providerDeny: [],
+  });
+  await authorizeCanonicalDataRequests([request], tenant);
+  assertNotAborted(signal);
+  return { tenant, parsed, source, actor, request };
+}
+
 export const connectedProviderListChatTool: ConversationToolDefinition = {
   id: "lios.provider.connected_sources",
   label: "List my verified connected data sources (identities only; no data fetch or secret values)",
@@ -182,7 +226,8 @@ export const connectedProviderListChatTool: ConversationToolDefinition = {
         sources: permitted.map((s) => ({ id: s.id, label: s.name, connectorId: s.connectorId, sourceType: s.sourceType, verified: true as const, previewAvailable: s.sourceType === "file" || s.sourceType === "private_api" })),
         dataFetchPerformed: false as const,
       },
-      summary: `${permitted.length} verified, owner-scoped connected source(s); no data was retrieved.`,
+      summary: observationSummary(`${permitted.length} verified, owner-scoped connected source(s); no data was retrieved.`,
+        permitted.map(s => ({ id: s.id, label: s.name, connectorId: s.connectorId, sourceType: s.sourceType, previewAvailable: s.sourceType === "file" || s.sourceType === "private_api" }))),
       deterministic: true as const,
       sourceRefs: permitted.map((s) => `source-connection:${s.id}`),
     };
@@ -206,43 +251,7 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
   outputSchema: previewOutputSchema.transform((v): ConversationToolResult => v),
   maxOutputBytes: 32 * 1024, cancel: null,
   invoke: async (raw, signal, rawCall) => {
-    assertNotAborted(signal);
-    const call = rawCall as DataCall;
-    const { tenant, projectId } = checkScope(call);
-    const parsed = previewSchema.parse(raw);
-    if (projectId !== null) await getProject(tenant, projectId);
-    const source = (await listSourceConnections(tenant.userId)).find((s) =>
-      s.id === parsed.connectionId && s.organizationId === tenant.organizationId,
-    );
-    if (!source || !sourceAllowedForChat(source, call.researchSourcePolicy)) {
-      throw new Error("Requested source is unverified or excluded by the active source policy.");
-    }
-    // MCP tools use lios.external-mcp.call and its separate Project approval.
-    // Raw database queries and cloud object URIs must never be generated by the model.
-    if (source.sourceType !== "file" && source.sourceType !== "private_api") {
-      throw new Error("Connected Chat preview currently supports verified local files and private API sources only.");
-    }
-    const rights = await getLatestExternalRightsAssessment(tenant, "data", `source-connection:${source.id}`);
-    const assessedRights = externalRightsSchema.safeParse(rights?.rights);
-    if (!assessedRights.success || !reviewedChatReleaseRights(assessedRights.data, source.sourceType)) {
-      throw new Error("Source data is not approved for external AI use; record an explicit owner-scoped data-rights review first.");
-    }
-    const actorRows = await getDb().select({ id: users.id, email: users.email })
-      .from(users).where(and(eq(users.id, tenant.userId))).limit(1);
-    const actor = actorRows[0];
-    if (!actor) throw new Error("Authenticated provider owner is unavailable.");
-    const request = createCanonicalDataRequest({
-      projectId,
-      capability: parsed.capability,
-      entity: { ref: parsed.entityRef, symbol: parsed.symbol, identifiers: {} },
-      fields: [],
-      parameters: { maxRows: parsed.maxRows },
-      pointInTime: { mode: "latest", asKnownOn: null, revision: null, requirePublicationTime: false, allowLaterRevisions: false },
-      providerAllow: [`source:${source.id}`],
-      providerDeny: [],
-    });
-    await authorizeCanonicalDataRequests([request], tenant);
-    assertNotAborted(signal);
+    const { tenant, parsed, source, actor, request } = await preflightConnectedProviderPreview(raw, signal, rawCall as DataCall);
     const registry = await createProviderRegistryForUser(tenant, actor);
     // A Chat preview is an explicit, user-approved read of the current
     // source. Do not reuse TTL-cached file rows or remote API observations:
@@ -270,9 +279,9 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
         rightsReviewed: true as const,
         cache: "miss" as const,
       },
-      summary: previewRows.length
-        ? `Retrieved ${previewRows.length} preview row(s) from verified ${source.name}; truncated to the authorized preview size. Original sources are linked in this tool's source references.`
-        : `Source ${source.name} returned no tabular preview rows; no observations were invented.`,
+      summary: observationSummary(
+        `Retrieved ${previewRows.length} preview row(s) from verified ${source.name.slice(0, 200)}; bounded authorized preview, not independently verified claims.`,
+        previewRows),
       deterministic: false as const,
       sourceRefs: refs,
     };

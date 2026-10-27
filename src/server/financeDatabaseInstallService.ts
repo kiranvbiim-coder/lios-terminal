@@ -50,7 +50,10 @@ export async function extractFinanceDatabaseTarGz(
   destination: string,
   onProgress?: (files: number, bytes: number) => void,
 ): Promise<{ files: number; bytes: number }> {
-  const stream = body.pipe(createGunzip());
+  const stream = createGunzip();
+  const sourceFailed = (error: Error) => stream.destroy(error);
+  body.on("error", sourceFailed);
+  body.pipe(stream);
   let buffer = Buffer.alloc(0), mode: "header" | "payload" | "padding" | "done" = "header";
   let remaining = 0, padding = 0, fileHandle: number | null = null;
   let files = 0, bytes = 0, totalBytes = 0, expectedFiles = 0;
@@ -124,6 +127,10 @@ export async function extractFinanceDatabaseTarGz(
     if (files < 7) throw new Error("Donor archive did not contain expected CSV reference assets");
     return { files, bytes };
   } finally {
+    body.unpipe(stream);
+    body.destroy();
+    stream.destroy();
+    body.off("error", sourceFailed);
     if (fileHandle !== null) fs.closeSync(fileHandle);
   }
 }

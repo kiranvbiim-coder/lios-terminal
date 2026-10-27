@@ -37,9 +37,9 @@ The recovery command never writes auth tokens or private history into public sou
 
 ## Packaging and completeness gate
 
-`src/script/desktop_build.cjs` now checks the three snapshot files *before* compilation/electron-builder invocation. When an asset is missing or does not match the pinned blob and shape, packaging fails with an actionable restore message instead of creating an apparently complete desktop app that silently returns an empty symbol catalog.
+Public packaging does not require access to the private source repository. The consolidated FinanceDatabase importer provides a separate opt-in, user-local reference catalog; recovered historical snapshots remain optional local inputs. `npm run data:verify` verifies those private inputs explicitly, not as an unconditional desktop-build prerequisite.
 
-The already-present `src/package.json` `extraResources` rule `server/data/**/*` includes these assets in a local package after recovery. **Do not publish that package or upload recovered datasets to the public repository, GitHub Actions artifacts or Releases** until redistribution rights for each source component have been independently cleared and recorded. A private copy being accessible does not establish permission to distribute it commercially. Public CI should test the recovery script with synthetic fixtures, not clone the private repo or gain its credentials.
+The consolidated package excludes `server/data/**/*`. Never add recovered datasets to the public repository, GitHub Actions artifacts or Releases without independently recorded redistribution rights. Private access and snapshot verification do not grant those rights. Public CI uses synthetic recovery fixtures and no private-repository credentials. Recovery publishes owner-only files using atomic no-replace links, including when another local writer creates the destination concurrently.
 
 ## Follow-up engineering checks after recovery
 

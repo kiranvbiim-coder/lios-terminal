@@ -83,9 +83,14 @@ function recoverDirectory(privateRoot, destinationRoot, specs = CATALOGS) {
     }
     const temp = path.join(targetDir, "." + spec.name + "." + process.pid + ".tmp");
     try {
-      fs.copyFileSync(source, temp, fs.constants.COPYFILE_EXCL);
+      fs.writeFileSync(temp, fs.readFileSync(source), { flag: "wx", mode: 0o600 });
       validateCatalog(temp, spec);
-      fs.renameSync(temp, destination);
+      try {
+        fs.linkSync(temp, destination); // Atomic no-replace publication.
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        validateCatalog(destination, spec);
+      }
       validateCatalog(destination, spec);
     } finally {
       if (fs.existsSync(temp)) fs.unlinkSync(temp);

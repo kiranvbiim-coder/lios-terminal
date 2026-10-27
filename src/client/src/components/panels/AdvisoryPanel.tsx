@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { DomainInfo } from "@/lib/domains";
 import { ADVISORY_SERVICE_EXPLANATIONS, ADVISORY_SERVICE_STEPS } from "@/lib/advisoryDiscoveryPolicy";
 

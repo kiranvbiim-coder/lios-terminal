@@ -10,6 +10,7 @@ import {
   financeDatabaseCountryCode, loadFinanceDatabaseRows,
 } from "./financeDatabaseCatalog";
 import { providerIngestedUniversePath } from "./providerIngestedCatalog";
+import { isUsableCatalogIdentityRow } from "@shared/catalogIdentityRows";
 
 export interface DirectoryInstrument {
   symbol: string;
@@ -71,8 +72,7 @@ function value(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 function validSymbolAndName(raw: Record<string, unknown>): boolean {
-  return Boolean(value(raw.symbol) && value(raw.name)) &&
-    !/^FILE CREATION TIME:/i.test(value(raw.symbol));
+  return isUsableCatalogIdentityRow(raw);
 }
 function legacyFilePath(): string {
   const ep = process as NodeJS.Process & { resourcesPath?: string };

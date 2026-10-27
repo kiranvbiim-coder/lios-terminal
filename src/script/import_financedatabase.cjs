@@ -138,7 +138,9 @@ function importDatabase(database, categories = DEFAULT_CATEGORIES, minimum = 100
     if (!paths.length) throw new Error("No CSV files for category " + category);
     let accepted = 0;
     for (const file of paths) {
-      if (fs.lstatSync(file).isSymbolicLink()) throw new Error("Refusing linked donor source file");
+      const info = fs.lstatSync(file);
+      if (!info.isFile()) throw new Error("Refusing nonregular donor source file");
+      if (info.size > 128 * 1024 * 1024) throw new Error("Oversized donor CSV: " + path.basename(file));
       const bytes = fs.readFileSync(file);
       if (bytes.length > 128 * 1024 * 1024) throw new Error("Oversized donor CSV: " + path.basename(file));
       const records = parseCsv(bytes.toString("utf8").replace(/^\uFEFF/, ""));

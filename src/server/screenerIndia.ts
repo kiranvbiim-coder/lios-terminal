@@ -118,10 +118,7 @@ function loadTickerNames(): Map<string, string> {
       const parsed: unknown = JSON.parse(fs.readFileSync(dataPath, "utf8"));
       if (!Array.isArray(parsed)) throw new Error("Invalid ticker catalog");
       for (const row of parsed) {
-        if (!row || typeof row !== "object" || Array.isArray(row) ||
-            typeof row.symbol !== "string" || !row.symbol.trim() ||
-            /^FILE CREATION TIME:/i.test(row.symbol) ||
-            typeof row.name !== "string" || !row.name.trim()) continue;
+        if (!isUsableCatalogIdentityRow(row)) continue;
         tickerNameBySymbol.set(row.symbol.toUpperCase(), row.name);
       }
     }

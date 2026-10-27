@@ -60,7 +60,7 @@ import { entityIntelligenceTool } from "./entityIntelligenceTool";
 import { privateEntityResearchTool } from "./privateEntityResearchTool";
 import { providerAccessTool } from "./providerAccessTool";
 import { chatMcpDiscoveryTool } from "./chatMcpDiscoveryTool";
-import { connectedProviderListChatTool, connectedProviderPreviewChatTool } from "./connectedProviderChatTool";
+import { connectedProviderListChatTool, connectedProviderPreviewChatTool, preflightConnectedProviderPreview } from "./connectedProviderChatTool";
 import {
   researchSourceCompositionTool,
   researchSourceCompositionToolInputSchema,
@@ -4733,6 +4733,11 @@ async function executeAgentLoop(
                 { userId: input.tenant.userId, organizationId: input.tenant.organizationId, projectId: input.projectId },
                 signal,
               );
+            }
+            if (step.toolId === "lios.provider.connected_preview") {
+              await preflightConnectedProviderPreview(step.input, signal, createConversationToolCall(input, "agent", {
+                ...await activeResearchSourcePolicy(input), stepId: step.id, toolCallId,
+              }));
             }
             if (dispatchAttempt > 0 && (!dispatchNoEffectPersisted || !descriptor?.replaySafe || dispatchAttempt >= 2)) {
               throw new Error("External dispatch retry needs durable no-effect proof, replay-safe policy and remaining attempt budget.");

@@ -51,3 +51,11 @@ test("truncated donor archive fails closed", async (t) => {
   const archive = fixtureTar([{ path: "Donor/database/equities/NMS.csv", text: "symbol,name\nSYNTH,One\n" }]);
   await assert.rejects(extractFinanceDatabaseTarGz(Readable.from([archive.subarray(0, archive.length - 6)]), root));
 });
+
+test("interrupted donor download rejects extraction and closes the source", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lios-catalog-disconnect-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const body = new Readable({ read() { this.destroy(new Error("download disconnected")); } });
+  await assert.rejects(extractFinanceDatabaseTarGz(body, root), /download disconnected/);
+  assert.equal(body.destroyed, true);
+});
