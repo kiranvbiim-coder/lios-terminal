@@ -113,11 +113,12 @@ test("WS-30: claim list is interactive but evidence stays behind deliberate disc
   assert.match(html, /aria-controls=/);
   assert.doesNotMatch(html, /Paid access required|assumption:period|No matching observation/, "closed claims do not expose detailed evidence");
   const src = readFileSync(fileURLToPath(new URL("../components/terminal/EvidencePrism.tsx", import.meta.url)), "utf8");
-  assert.match(src, /onClick=\{\(\) => setSelectedId/);
+  assert.match(src, /onClick=\{\(\) => \{ setSelectedId/);
   assert.match(src, /role="region"/);
   assert.match(src, /Unit: /);
   assert.match(src, /Not recorded in trust manifest/);
-  assert.match(src, /inspectEvidenceClaim\(manifest, selectedId\)/);
+  assert.match(src, /inspectEvidenceClaimObservedBy\(manifest, selectedId, observedBy \|\| null\)/);
+  assert.match(src, /claimObservedTimeChoices\(manifest, selectedId\)/);
   assert.match(src, /describeObservationRights\(observation\)/);
   const panel = readFileSync(fileURLToPath(new URL("../components/terminal/ConversationTrustPanel.tsx", import.meta.url)), "utf8");
   assert.match(panel, /<EvidencePrism key=\{manifest.trustId\} manifest=\{manifest\}/);
