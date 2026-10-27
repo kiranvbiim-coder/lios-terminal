@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpenText, CheckCircle2, Clock3, ExternalLink, Radar, Search, ShieldAlert } from "lucide-react";
+import { BookOpenText, CheckCircle2, Clock3, ExternalLink, Radar, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { pulseStoryTimestamp, safePulseSourceUrl } from "@/lib/pulseStoryPresentation";
 import {
@@ -17,7 +17,7 @@ interface HomeAttention {
 }
 
 /** One Home view over the existing Wave D Pulse and Action Inbox, not another feed or scheduler. */
-export function HomeAttentionPanel() {
+export function HomeAttentionPanel({ onAsk }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean> }) {
   const [open, setOpen] = useState(false);
   return (
     <details
@@ -29,16 +29,18 @@ export function HomeAttentionPanel() {
         <Radar aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-200" />
         Home intelligence
       </summary>
-      {open && <HomeAttentionContents />}
+      {open && <HomeAttentionContents onAsk={onAsk} />}
     </details>
   );
 }
 
-function HomeAttentionContents() {
+function HomeAttentionContents({ onAsk }: { onAsk?: (card: IntelligenceCard) => boolean | Promise<boolean> }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<AttentionFilter>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(9);
+  const [stagingId, setStagingId] = useState<string | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const query = useQuery<HomeAttention>({
     queryKey: ["/api/wave-d/pulse"],
@@ -70,6 +72,20 @@ function HomeAttentionContents() {
 
   const changeFilter = (next: AttentionFilter) => { setFilter(next); setVisibleCount(9); };
   const changeSearch = (next: string) => { setSearch(next); setVisibleCount(9); };
+
+  const stageInChat = async (card: IntelligenceCard) => {
+    if (!onAsk || stagingId) return;
+    setAskError(null);
+    setStagingId(card.id);
+    try {
+      const accepted = await onAsk(card);
+      if (!accepted) setAskError("Chat is busy or has unsaved Artifact work. Your Home view is preserved; review the open work before asking.");
+    } catch {
+      setAskError("Could not stage this source into Chat. No question was submitted.");
+    } finally {
+      setStagingId(null);
+    }
+  };
 
   const update = (entry: HomeAttentionEntry, status: ActionInboxItem["status"]) => {
     // Never invent an Inbox ID from an unrelated story. Only server-issued Inbox
@@ -103,6 +119,7 @@ function HomeAttentionContents() {
         <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
         Home intelligence could not be refreshed. Any retained results may be stale; changes are disabled until the source responds.
       </p>}
+      {askError && <p role="alert" className="rounded-lg border border-amber-300/30 px-3 py-2 font-ui text-sm text-amber-100">{askError}</p>}
       {mutation.isError && <p role="alert" className="rounded-lg border border-rose-300/25 p-3 font-ui text-sm text-rose-200">{mutation.error instanceof Error ? mutation.error.message : "The review update could not be saved."}</p>}
       {mutation.isPending && <p role="status" className="font-ui text-sm text-muted-foreground">Saving review status…</p>}
       {mutation.isSuccess && !mutation.isPending && <p role="status" className="flex items-center gap-1.5 font-ui text-sm text-emerald-200"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />Review status saved.</p>}
@@ -154,6 +171,8 @@ function HomeAttentionContents() {
                 disabled={disableWrite}
                 saving={mutation.isPending && mutation.variables?.id === entry.inbox?.id}
                 onUpdate={status => update(entry, status)}
+                onAsk={onAsk ? () => void stageInChat(entry.card) : undefined}
+                staging={stagingId === entry.card.id}
               />
             ))}
           </div>
@@ -169,11 +188,13 @@ function HomeAttentionContents() {
   );
 }
 
-export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
+export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving, onAsk, staging = false }: {
   entry: HomeAttentionEntry;
   onUpdate: (status: ActionInboxItem["status"]) => void;
   disabled: boolean;
   saving: boolean;
+  onAsk?: () => void;
+  staging?: boolean;
 }) {
   const { card, inbox, reviewStatus } = entry;
   const timestamp = pulseStoryTimestamp(card.createdAt);
@@ -219,6 +240,14 @@ export function HomeIntelligenceCard({ entry, onUpdate, disabled, saving }: {
         </ul> : <p className="mt-2 border-t border-border/50 pt-3 text-sm leading-6">No attributed sources attached. Verify independently before acting.</p>}
       </details>
 
+      {onAsk && <div className="flex flex-wrap gap-2 border-t border-border/55 pt-3">
+        <button type="button" onClick={onAsk} disabled={staging}
+          aria-label={`Ask LiOS about ${card.title}`}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/[0.07] px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.13] focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">
+          <Sparkles aria-hidden="true" className="h-4 w-4 text-amber-200" />
+          {staging ? "Staging…" : "Ask LiOS"}
+        </button>
+      </div>}
       {inbox && <div className="flex flex-wrap gap-2 border-t border-border/55 pt-3">
         {reviewStatus === "open" ? <>
           <button type="button" disabled={disabled} onClick={() => onUpdate("resolved")} className="min-h-10 rounded-lg border border-amber-300/35 bg-amber-300/[0.09] px-3 py-2 font-ui text-sm font-medium text-foreground hover:bg-amber-300/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 disabled:opacity-50">{saving ? "Saving…" : "Mark reviewed"}</button>
