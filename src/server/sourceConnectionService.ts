@@ -15,6 +15,8 @@ import { persistSourceSnapshot } from "./sourceSnapshotStore";
 import { normalizeUniversalFinanceRecords } from "@shared/universalIngestion";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
 import { clearProviderExecutionCache } from "./providerExecutionCache";
+import { externalMcpConfigForSourceConnection, listExternalMcpTools } from "./externalMcpClient";
+import { getProject } from "./projectStore";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -363,6 +365,30 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } catch (error) {
       status = "unreachable";
       detail = error instanceof Error ? error.message : "Local file is unavailable.";
+    }
+  } else if (connection.sourceType === "mcp") {
+    try {
+      assertLocalByodRuntime("External MCP BYOD verification");
+      const config = externalMcpConfigForSourceConnection(connection);
+      // The MCP URL belongs to this saved source, but an arbitrary stored
+      // projectId is not authority to connect to it. Enforce current owner
+      // and organization scope before contacting the network.
+      await getProject({
+        userId,
+        organizationId: connection.organizationId,
+        role: "internal_analyst",
+      }, config.policy.projectId);
+      // Official v2 MCP SDK initialize + tools/list, using the registered
+      // endpoint and local credential vault. This is a read-only health probe:
+      // never issue tools/call or grant an execution approval.
+      const allowed = await listExternalMcpTools(config);
+      status = "healthy";
+      detail = `Live MCP handshake and tools/list succeeded; ${allowed.length} tool(s) match this Project's allowlist. No MCP tool was executed.`;
+    } catch (error) {
+      status = "unreachable";
+      // Exceptions may contain OAuth headers, vendor endpoints or tokens.
+      // Do not persist or surface raw transport errors via statusDetail.
+      detail = "Live MCP verification failed. Check the endpoint, local credential and Project ownership.";
     }
   } else if (connection.sourceType === "database") {
     const credential = databaseCredential(connection);
