@@ -22,7 +22,10 @@ test("Sprint C renders recorded financial data with native keyboard-readable tab
 });
 
 test("Sprint C polish is registered before canonical shell, isolated to existing views and honors low-resource settings", () => {
-  assert.ok(entry.indexOf('import "./sprint-c-intelligence-visuals.css"') < entry.indexOf('import "./terminal-shell.css"'));
+  const phaseOne = readFileSync(new URL("../terminal-ux-phase1.css", import.meta.url), "utf8");
+  assert.match(phaseOne, /^@import "\.\/sprint-c-intelligence-visuals\.css";/);
+  assert.ok(entry.indexOf('import "./terminal-ux-phase1.css"') < entry.indexOf('import "./terminal-shell.css"'));
+  assert.doesNotMatch(entry, /import "\.\/sprint-c-intelligence-visuals\.css";/);
   assert.match(css, /\[data-sprint-c-visual="market"\]/);
   assert.match(css, /@container lios-market \(max-width: 560px\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
