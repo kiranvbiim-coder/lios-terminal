@@ -158,3 +158,22 @@ export function listExplicitResearchConnections(model: SpatialResearchModel): Ex
     return connection ? [connection] : [];
   });
 }
+
+/**
+ * A bounded, in-memory quick find over the same existing Research Tray.
+ * Query text is never written to storage, sent to AI, or interpreted as a tool.
+ * Stable saved order is retained; filtering occurs before the visual 36-node cap.
+ */
+export function findSpatialResearchPins<T extends ResearchTrayItem>(
+  items: readonly T[], input: string,
+): T[] {
+  const terms = input.trim().toLowerCase().slice(0, 80).split(/\s+/).filter(Boolean).slice(0, 8);
+  if (!terms.length) return items.slice();
+  return items.filter(item => {
+    const searchable = [
+      item.title, item.symbol, item.group, item.kind, item.description,
+      item.note, ...item.tags,
+    ].join(" ").toLowerCase();
+    return terms.every(term => searchable.includes(term));
+  });
+}
