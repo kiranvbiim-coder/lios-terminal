@@ -50,3 +50,25 @@ export function worldPointCoordinates(longitude: number, latitude: number) {
     longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
   return { x: (longitude + 180) / 360 * 100, y: (90 - latitude) / 180 * 100 };
 }
+
+
+/**
+ * Keep the same recorded geographic coordinate under the viewport centre
+ * while zooming. Pure view math only: no source transformation or lookup.
+ */
+export function worldMapCenterPreservingPan(
+  pan: { x: number; y: number },
+  viewport: { width: number; height: number },
+  oldZoom: number,
+  newZoom: number,
+) {
+  if (![pan.x, pan.y, viewport.width, viewport.height, oldZoom, newZoom].every(Number.isFinite) ||
+    viewport.width <= 0 || viewport.height <= 0 || oldZoom <= 0 || newZoom <= 0) return pan;
+  const ratio = newZoom / oldZoom;
+  const midX = viewport.width / 2;
+  const midY = viewport.height / 2;
+  return {
+    x: midX - (midX - pan.x) * ratio,
+    y: midY - (midY - pan.y) * ratio,
+  };
+}
