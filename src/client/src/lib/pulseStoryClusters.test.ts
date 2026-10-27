@@ -106,3 +106,17 @@ test("identical URLs inside two different distinct titles never establish same s
   const result = clusterRecordedPulseStories([story("news"), story("other", { title: "Different reported change" })]);
   assert.equal(result.length, 2);
 });
+
+test("existing Wave D → Watermelon-style card handoff uses one shared grouping owner", async () => {
+  const { readFileSync } = await import("node:fs");
+  const shell = readFileSync(new URL("../components/terminal/WaveCExperienceShell.tsx", import.meta.url), "utf8");
+  const board = readFileSync(new URL("../components/terminal/FusionPulseBoard.tsx", import.meta.url), "utf8");
+  const storyCard = readFileSync(new URL("../components/terminal/LiosPulseStoryCard.tsx", import.meta.url), "utf8");
+  assert.match(shell, /setWaveDPulseCards\(Array\.isArray\(pulse\.cards\) \? pulse\.cards\.slice\(0, 24\) : \[\]\)/);
+  assert.match(board, /clusterRecordedPulseStories\(pulseCards, 24\)/);
+  assert.match(board, /LiosPulseStoryCard/);
+  assert.match(storyCard, /clusteredCount/);
+  assert.match(storyCard, /This grouping is not independent corroboration/);
+  assert.match(storyCard, /safePulseSourceUrl\(source\.url\)/);
+  assert.doesNotMatch(board, /Math\.random|createP9Workflow|fetch\("https?:/);
+});
