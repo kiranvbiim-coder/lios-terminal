@@ -293,7 +293,7 @@ test("H2a sidebar: rare actions live in the account menu", () => {
   const trashHandler = project.split("onTrash={() => {")[1]?.split("onMigrate={() => {")[0] ?? "";
   const migrateHandler = project.split("onMigrate={() => {")[1]?.split("}}>")[0] ?? "";
   for (const handler of [trashHandler, migrateHandler]) {
-    assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current/);
+    assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current \|\| artifactDraftDirtyRef\.current/);
     assert.match(handler, /setLifecycleNotice\(/);
     assert.match(handler, /return;/);
   }
