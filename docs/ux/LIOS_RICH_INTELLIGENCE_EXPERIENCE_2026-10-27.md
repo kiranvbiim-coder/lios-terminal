@@ -420,3 +420,8 @@ The central source insight: LiOS's weakness is not the absence of many analytica
 ## 14. Owner-supplied 20-site premium source and UX research annex (2026-10-27)
 
 The complete [20-site premium donor audit and LiOS reuse plan](LIOS_20_SITE_PREMIUM_DONOR_AUDIT_2026-10-27.md) extends this plan. Key new source: **beUI — MIT direct-code donor** (actual TSX citation, streaming, approval, timelines, charts, rich controls); **Watermelon remains a major complementary UI donor**. Mobbin/Recent/60fps are UX benchmarks, Modulify/MotionIn/HorizonX/Wonderlist are generator or licensed references, and Sent/CloseIt are optional service connections. No source/framework size cap; imported code must serve existing owners, evidence, $0 beta and verified native UX. **All original F01–F12 and N01–N08 remain in scope.**
+
+
+## 15. Whole-product intelligence architecture (27 October 2026)
+
+For the user-requested **long-life product-wide design** (not just rich cards and editorial feed), read the [Whole-Product Intelligence Experience Architecture](LIOS_WHOLE_PRODUCT_EXPERIENCE_ARCHITECTURE_2026-10-27.md). It reconciles inspected Chat/agent code, P3/P5 evidence, P4 Artifact, P9 automations, GM/P13 plugins, durable memory, devices, data sources, conceptual visual descriptor, 20 composed innovations, competitor work journeys and the same four-phase SI-07 experience execution. Treat this as the **latest broader product framing**, preserving F01-F12/N01-N08 and all existing canonical owner boundaries; plan only, not shipped.
