@@ -42,14 +42,16 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
   const [stagingId, setStagingId] = useState<string | null>(null);
   const [facet, setFacet] = useState<IntelligenceSearchFacet>("all");
   const activeQuery = query.trim().slice(0, 120);
+  const searchReady = activeQuery.length >= 2;
 
   useEffect(() => {
-    // A mode-specific read. Switching back to Work unmounts this component
-    // and cancels pending requests instead of leaving cross-domain results.
+    // Fetch one authorized snapshot when this panel becomes searchable.
+    // Further keystrokes filter locally; they MUST NOT refetch the entire
+    // upstream Pulse or trigger extra provider calls.
     setSnapshot(null);
     setFailure(null);
     setActionError(null);
-    if (activeQuery.length < 2) { setPending(false); return; }
+    if (!searchReady) { setPending(false); return; }
     const controller = new AbortController();
     setPending(true);
     const timer = window.setTimeout(async () => {
@@ -67,7 +69,7 @@ export default function VisualIntelligenceSearch({ query, onAsk }: {
       }
     }, 160);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [activeQuery]);
+  }, [searchReady]);
 
   const cards = snapshot?.cards ?? [];
   const counts = useMemo(() => intelligenceSearchCounts(cards), [cards]);
