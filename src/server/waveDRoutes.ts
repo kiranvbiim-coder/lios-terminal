@@ -2,6 +2,7 @@
 import crypto from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { editorialMediaSchema } from "@shared/editorialMedia";
 import { requireRole } from "./auth";
 import { requireExecutableTrialOrClient, requireTrialOrClient } from "./trialAccess";
 import { storage } from "./storage";
@@ -186,6 +187,7 @@ const pulseCardSchema = z.object({
   thesisRelevance: z.number().finite().nullable().optional(),
   upcomingEvent: z.number().finite().nullable().optional(),
   evidence: z.array(z.object({ id: z.string().trim().min(1).max(240), source: z.string().trim().min(1).max(240), provider: z.string().trim().max(120).optional(), snapshotId: z.string().trim().max(240).optional(), availableAt: z.string().datetime().optional(), url: z.string().url().optional() }).strict()).max(100),
+  media: editorialMediaSchema.optional(),
 }).strict();
 
 const contextualAskSchema = z.object({ cardId: z.string().trim().min(1).max(240), question: z.string().trim().min(1).max(2_000) }).strict();
