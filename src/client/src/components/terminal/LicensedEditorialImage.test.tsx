@@ -95,3 +95,21 @@ test("a nonfeatured news card shows verified image thumbnail instead of an empty
   }));
   assert.doesNotMatch(noGrant, /<img\b/);
 });
+
+test("Pulse renders a rights-verified RSS image when the article URL is present even if existing evidence ID differs", () => {
+  const articleUrl = "https://example.org/source-reported-solar";
+  const linked = { ...media, sourceEvidenceId: articleUrl };
+  const card: PulseStoryView = {
+    id: "article:recorded:1", kind: "news", title: "Source-reported installation",
+    whatHappened: "Original source information", createdAt: "2026-10-27T03:00:00Z",
+    score: 74, priority: "important", media: linked,
+    evidence: [{ id: "news-evidence:historic", source: "Original source", url: articleUrl }],
+  };
+  const html = render(React.createElement(LiosPulseStoryCard, { card, featured: true, onAsk: () => undefined }));
+  assert.match(html, /licensed-editorial-image/);
+  const unrelated = render(React.createElement(LiosPulseStoryCard, {
+    card: { ...card, evidence: [{ id: "news-evidence:other", source: "Other", url: "https://example.org/unrelated" }] },
+    featured: true, onAsk: () => undefined,
+  }));
+  assert.doesNotMatch(unrelated, /<img\b/);
+});
