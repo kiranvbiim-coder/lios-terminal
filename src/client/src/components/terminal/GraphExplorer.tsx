@@ -2,10 +2,11 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Focus, Minus, Move, Network, Plus, Search, X } from "lucide-react";
 import { buildCrossDomainGraph, crossDomainBridges, type CrossDomainNodeDomain, type CrossDomainEdge } from "@/lib/terminalCrossDomainGraph";
-import { graphNodeConnections, presentCrossDomainGraph } from "@/lib/graphExplorerPresentation";
+import { graphNodeConnections, presentCrossDomainGraph, summarizeRecordedGraphLinks } from "@/lib/graphExplorerPresentation";
 import { GraphExplorerCompactList } from "./GraphExplorerCompactList";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { actionsForIntelligenceObject, requestIntelligenceObjectAction } from "@/lib/terminalObjectActions";
+import { safePublicSourceUrl } from "@shared/publicSourceUrl";
 
 interface Props { activeSymbol?: string; onClose: () => void }
 
@@ -104,7 +105,24 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
   }), [graph, query, selectedId, neighborsOnly, bridgesOnly, relation]);
   const selected = graphObjects.find(object => object.id === selectedId) ?? null;
   const selectedVisible = presentation.nodes.some(node => node.objectId === selectedId);
-  const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link => !relation || link.relation === relation) : [], [graph, selected, relation]);
+  const selectedConnections = useMemo(() => selected ? graphNodeConnections(graph, selected.id).filter(link =>
+    (!relation || link.relation === relation) &&
+    (!bridgesOnly || graph.nodes.find(n => n.objectId === link.otherId)?.domain !==
+      graph.nodes.find(n => n.objectId === selected.id)?.domain)
+  ) : [], [graph, selected, relation, bridgesOnly]);
+  const relationCounts = useMemo(() => summarizeRecordedGraphLinks({
+    nodes: presentation.nodes, edges: presentation.edges,
+  }), [presentation.nodes, presentation.edges]);
+  const bridgeRows = useMemo(() => {
+    const byId = new Map(graph.nodes.map(node => [node.objectId, node]));
+    return presentation.edges.flatMap((edge, index) => {
+      const source = byId.get(edge.sourceId);
+      const target = byId.get(edge.targetId);
+      return source && target && source.domain !== target.domain
+        ? [{ id: `${edge.sourceId}:${edge.targetId}:${edge.relation}:${index}`, edge, source, target }]
+        : [];
+    });
+  }, [graph.nodes, presentation.edges]);
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
     for (const domain of DOMAIN_ORDER) {
@@ -130,7 +148,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
         className="lios-v4-overlay mx-auto flex h-[min(900px,calc(100vh-16px))] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-border/65 sm:h-[min(900px,calc(100vh-24px))]"
         onMouseDown={event => event.stopPropagation()}
       >
-        <header className="shrink-0 space-y-3 border-b border-border/70 p-3 sm:p-4">
+        <header className="max-h-[48vh] shrink-0 space-y-3 overflow-y-auto border-b border-border/70 p-3 sm:p-4" aria-label="Graph filters, distribution and bridge inspector">
           <div className="flex items-center gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-300/30 bg-amber-300/[0.06]"><Network className="h-5 w-5 text-amber-200" aria-hidden="true" /></div>
             <div className="min-w-0 flex-1">
@@ -190,8 +208,45 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             {presentation.omittedCount > 0 && <span>{presentation.omittedCount} not drawn — refine search</span>}
             {contextualObjects.length > graphObjects.length && <span>Only the 120 most recent objects loaded — additional records not shown</span>}
           </div>
+                    <details className="rounded-lg border border-border/60 px-3 py-2" data-testid="recorded-graph-relationship-distribution">
+            <summary className="min-h-9 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              Recorded relationship counts ({presentation.edges.length})
+            </summary>
+            <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">Bars count only currently visible, saved relationship edges. Counts are not influence, consensus, strength or verified exposure.</p>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {relationCounts.map(({relation: kind,count}) => <li key={kind} className="rounded-md border border-border/50 p-2">
+                <div className="mb-1 flex justify-between gap-3 font-ui text-xs"><span className="text-foreground">{kind.replaceAll("-", " ")}</span><span className="tabular-nums text-muted-foreground">{count}</span></div>
+                <div role="meter" aria-label={`Recorded ${kind} links in current graph`}
+                  aria-valuemin={0} aria-valuemax={Math.max(1,presentation.edges.length)} aria-valuenow={count}
+                  className="h-2.5 overflow-hidden rounded-full bg-border/60">
+                  <div className="h-full rounded-full bg-amber-300/70" style={{width:`${100*count/Math.max(1,presentation.edges.length)}%`}}/>
+                </div>
+              </li>)}
+              {!relationCounts.length && <li className="font-ui text-xs text-muted-foreground">No recorded edges match the current filters.</li>}
+            </ul>
+          </details>
+          <details className="rounded-lg border border-border/60 px-3 py-2" data-testid="recorded-cross-domain-bridge-inspector">
+            <summary className="min-h-9 cursor-pointer font-ui text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              Inspect cross-domain bridge links ({bridgeRows.length})
+            </summary>
+            <p className="mt-2 font-ui text-xs leading-5 text-muted-foreground">
+              Domains are inferred display labels. Only explicit, directed recorded links between visible nodes appear here.
+            </p>
+            <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto" aria-label="Recorded cross-domain bridge edges">
+              {bridgeRows.slice(0,48).map(({id,edge,source,target}) => <li key={id}>
+                <button type="button" onClick={() => selectAndFocus(edge.sourceId)}
+                  aria-label={`Inspect recorded ${edge.relation} link from ${source.label} to ${target.label}`}
+                  className="min-h-11 w-full rounded-lg border border-border/60 p-2 text-left font-ui text-xs text-foreground focus-visible:ring-2 focus-visible:ring-amber-300/70">
+                  <span className="block break-words">{source.label} ({DOMAIN_LABEL[source.domain]}) → {edge.relation.replaceAll("-", " ")} → {target.label} ({DOMAIN_LABEL[target.domain]})</span>
+                  {edge.explanation && <span className="mt-1 block break-words text-muted-foreground">{edge.explanation}</span>}
+                </button>
+              </li>)}
+              {!bridgeRows.length && <li className="text-xs text-muted-foreground">No explicit cross-domain bridge survives the current filters.</li>}
+            </ul>
+            {bridgeRows.length > 48 && <p className="mt-2 font-ui text-xs text-muted-foreground">{bridgeRows.length-48} further displayed bridge links omitted from this inspector; refine the graph filters.</p>}
+          </details>
         </header>
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(180px,0.6fr)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,1fr)_minmax(160px,0.6fr)] overflow-y-auto lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
           <main ref={viewportRef} role="region" tabIndex={0}
             className="relative min-h-0 touch-pan-y overflow-y-auto bg-[radial-gradient(circle_at_center,rgba(245,160,0,.045),transparent_43%),#050505] outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 md:touch-none md:overflow-hidden"
             aria-label="Intelligence graph canvas. Drag empty space to pan, use zoom and fit controls, Tab to inspect objects."
@@ -241,7 +296,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                 const y = 50 + Math.sin(axis) * 47;
                 const count = presentation.nodes.filter(node => node.domain === domain).length;
                 return <div key={domain}
-                  className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border/50 bg-black/80 px-2 py-1 font-ui text-[10px] font-semibold text-muted-foreground"
+                  className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-border/50 bg-black/80 px-2 py-1 font-ui text-xs font-semibold text-muted-foreground"
                   style={{ left: `${x}%`, top: `${y}%` }}>{DOMAIN_LABEL[domain]} · {count}</div>;
               })}
               {presentation.nodes.map(node => {
@@ -252,12 +307,12 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                 return <button key={node.objectId} type="button" aria-pressed={active}
                   data-graph-object={node.objectId} onClick={() => setSelectedId(node.objectId)}
                   aria-label={`Inspect ${node.label} in ${DOMAIN_LABEL[node.domain]}`}
-                  className={`pointer-events-auto absolute w-[116px] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-2.5 text-left shadow-xl transition-all focus-visible:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${DOMAIN_COLOR[node.domain]} ${active ? "z-20 bg-[#322312] ring-2 ring-amber-300/60" : "bg-[#101113] hover:z-20 hover:scale-[1.04]"} ${faded ? "opacity-40" : "opacity-100"}`}
+                  className={`pointer-events-auto absolute w-[116px] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-2.5 text-left shadow-xl transition-all motion-reduce:transition-none focus-visible:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${DOMAIN_COLOR[node.domain]} ${active ? "z-20 bg-[#322312] ring-2 ring-amber-300/60" : "bg-[#101113] hover:z-20 hover:scale-[1.04] motion-reduce:hover:scale-100"} ${faded ? "opacity-40" : "opacity-100"}`}
                   style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   title={`${DOMAIN_LABEL[node.domain]} · ${node.label}`}>
-                  <span className="block truncate font-ui text-[10px] font-medium text-cyan-200/85">{DOMAIN_LABEL[node.domain]}</span>
+                  <span className="block truncate font-ui text-xs font-medium text-cyan-200/85">{DOMAIN_LABEL[node.domain]}</span>
                   <span className="mt-1 block line-clamp-2 font-ui text-xs font-semibold leading-4 text-foreground">{node.label}</span>
-                  {node.symbol && <span className="mt-1 block truncate font-ui text-[10px] text-amber-200">{node.symbol}</span>}
+                  {node.symbol && <span className="mt-1 block truncate font-ui text-xs text-amber-200">{node.symbol}</span>}
                 </button>;
               })}
               {!presentation.nodes.length && <div className="absolute inset-0 grid place-items-center p-5 text-center font-ui text-sm text-muted-foreground">
@@ -284,8 +339,17 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                     <h4 className="font-ui text-xs font-semibold text-muted-foreground">Recorded source</h4>
                     <p className="mt-1 break-words font-ui text-xs text-foreground">{selected.source.label}</p>
                     {selected.source.provider && <p className="mt-1 font-ui text-xs text-muted-foreground">{selected.source.provider}</p>}
-                    <p className="mt-2 font-ui text-[11px] text-muted-foreground">{selected.source.freshness ? `Recorded freshness: ${selected.source.freshness}` : "Freshness not recorded"} · {selected.source.effectiveAt ? `As of ${selected.source.effectiveAt}` : "As-of time unavailable"}</p>
-                    {selected.source.sourceId && <p className="mt-1 break-all font-ui text-[11px] text-muted-foreground">Source ID: {selected.source.sourceId}</p>}
+                    <p className="mt-2 font-ui text-xs text-muted-foreground">{selected.source.freshness ? `Recorded freshness: ${selected.source.freshness}` : "Freshness not recorded"} · {selected.source.effectiveAt ? `As of ${selected.source.effectiveAt}` : "As-of time unavailable"}</p>
+                    {selected.source.sourceId && <p className="mt-1 break-all font-ui text-xs text-muted-foreground">Source ID: {selected.source.sourceId}</p>}
+                    {safePublicSourceUrl(selected.source.sourceUrl) &&
+                      <a href={safePublicSourceUrl(selected.source.sourceUrl)!} target="_blank" rel="noopener noreferrer"
+                        referrerPolicy="no-referrer" aria-label={`Open recorded source for ${selected.label}`}
+                        className="mt-2 inline-flex min-h-11 items-center font-ui text-xs text-cyan-200 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+                        Open recorded source <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden="true"/>
+                      </a>}
+                    {!safePublicSourceUrl(selected.source.sourceUrl) && <p className="mt-1 font-ui text-xs text-muted-foreground">
+                      No safe public source URL recorded. Source ID is not a clickable citation.
+                    </p>}
                   </div>}
                 </section>
                 <section className="space-y-2">
@@ -293,7 +357,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                     <h4 className="font-ui text-sm font-semibold text-foreground">Recorded relationships</h4>
                     <span className="font-ui text-xs text-muted-foreground">{selectedConnections.length} linked</span>
                   </div>
-                  <p className="font-ui text-[11px] text-muted-foreground">Arrows show the direction of the recorded link. Categories are inferred for display, not verified exposure.</p>
+                  <p className="font-ui text-xs text-muted-foreground">Arrows show the direction of the recorded link. Categories are inferred for display, not verified exposure.</p>
                   {selectedConnections.map((link, index) => {
                     const Icon = link.direction === "outgoing" ? ArrowUpRight : ArrowDownLeft;
                     return <button key={`${link.direction}-${link.otherId}-${link.relation}-${index}`}
@@ -303,7 +367,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
                         {link.direction === "outgoing" ? "Points to" : "Comes from"} · {link.relation.replaceAll("-", " ")}
                       </span>
                       <span className="mt-1 block break-words font-ui text-sm font-medium text-foreground">{link.otherLabel}</span>
-                      <span className="mt-1 block font-ui text-[11px] text-muted-foreground">{DOMAIN_LABEL[link.otherDomain]}</span>
+                      <span className="mt-1 block font-ui text-xs text-muted-foreground">{DOMAIN_LABEL[link.otherDomain]}</span>
                       {link.explanation && <span className="mt-2 block break-words font-ui text-xs leading-5 text-muted-foreground">{link.explanation}</span>}
                     </button>;
                   })}
@@ -323,7 +387,7 @@ export default function GraphExplorer({ activeSymbol, onClose }: Props) {
             )}
           </aside>
         </div>
-        <footer className="shrink-0 border-t border-border/60 px-4 py-2 font-ui text-[11px] text-muted-foreground">
+        <footer className="shrink-0 border-t border-border/60 px-4 py-2 font-ui text-xs text-muted-foreground">
           Lines are recorded object relations. Domain grouping is a label-based display aid—not a verified financial exposure or a new source of evidence.
         </footer>
       </section>

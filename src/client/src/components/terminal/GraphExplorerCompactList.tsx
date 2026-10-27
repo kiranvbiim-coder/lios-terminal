@@ -37,7 +37,7 @@ export function GraphExplorerCompactList({
                     ? "border-amber-300/60 bg-amber-300/[0.07]"
                     : "border-border/65 bg-card/70 hover:border-amber-300/35"
                 }`}>
-                <span className="block font-ui text-[11px] font-medium text-cyan-200">{DOMAIN[node.domain]}</span>
+                <span className="block font-ui text-xs font-medium text-cyan-200">{DOMAIN[node.domain]}</span>
                 <span className="mt-1 block break-words font-ui text-sm font-semibold text-foreground">{node.label}</span>
                 {node.symbol && <span className="mt-1 block font-ui text-xs text-amber-200">{node.symbol}</span>}
               </button>
