@@ -23,7 +23,7 @@ export interface CrossDomainGraph {
   edges: CrossDomainEdge[];
 }
 
-function inferDomain(object: IntelligenceObject): CrossDomainNodeDomain {
+export function inferDomain(object: IntelligenceObject): CrossDomainNodeDomain {
   const text = `${object.kind} ${object.label} ${object.tags.join(" ")} ${object.view ?? ""}`.toLowerCase();
   if (/portfolio|risk|allocation|holding/.test(text)) return "portfolio";
   if (/macro|gdp|inflation|rate|yield|fx|econom/.test(text)) return "macro";
