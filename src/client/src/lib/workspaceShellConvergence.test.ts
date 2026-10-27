@@ -69,7 +69,7 @@ test("canonical style entry excludes obsolete shell generations", () => {
   const styles = source("../terminalStyles.ts");
   const imports = [...styles.matchAll(/import "\.\/(.+\.css)";/g)].map((match) => match[1]);
 
-  assert.deepEqual(imports, [
+  const canonicalBase = [
     "index.css",
     "immersive-terminal-innovation.css",
     "terminal-visualization-v5.css",
@@ -80,8 +80,19 @@ test("canonical style entry excludes obsolete shell generations", () => {
     "terminal-quant-trust-v8.css",
     "terminal-ux-phase1.css",
     "terminal-shell.css",
+  ];
+  // TC / SI-07: these are the *only* allowed optional user-owned palette
+  // layers, after the structural arbiter and in deterministic override order.
+  // Preserve the canonical source contract on main and every stacked PR.
+  const optionalOwnedLayers = [
+    "lios-product-palettes.css",
     "visual-intelligence-canvas.css",
-  ]);
+    "lios-product-typography.css",
+    "lios-product-experience.css",
+  ];
+  assert.deepEqual(imports.slice(0, canonicalBase.length), canonicalBase);
+  assert.deepEqual(imports.slice(canonicalBase.length), optionalOwnedLayers.filter((file) => imports.includes(file)));
+  assert.equal(imports.length, new Set(imports).size, "Duplicate CSS imports are forbidden");
 
   const forbidden = [
     "immersive-terminal.css",
@@ -279,8 +290,15 @@ test("H2a sidebar: rare actions live in the account menu", () => {
   assert.match(navigation, /DropdownMenuTrigger.*Account:/);
   assert.match(navigation, /act\(props.onTrash\).*Trash & archive/);
   assert.match(navigation, /act\(props.onMigrate\).*Import legacy workspaces/);
-  assert.match(project, /onTrash=\{.*setShowLifecycleCenter\(true\)/);
-  assert.match(project, /onMigrate=\{.*migrateLegacyWorkspaces\(/);
+  const trashHandler = project.split("onTrash={() => {")[1]?.split("onMigrate={() => {")[0] ?? "";
+  const migrateHandler = project.split("onMigrate={() => {")[1]?.split("}}>")[0] ?? "";
+  for (const handler of [trashHandler, migrateHandler]) {
+    assert.match(handler, /busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| chatCreationInFlightRef\.current \|\| projectCreationInFlightRef\.current \|\| artifactDraftDirtyRef\.current/);
+    assert.match(handler, /setLifecycleNotice\(/);
+    assert.match(handler, /return;/);
+  }
+  assert.match(trashHandler, /setShowLifecycleCenter\(true\)/);
+  assert.match(migrateHandler, /migrateLegacyWorkspaces\(/);
 });
 
 test("H2b receipts persist per chat and restore on reload without storing answers", () => {

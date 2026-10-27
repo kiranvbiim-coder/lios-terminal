@@ -1,0 +1,120 @@
+/*
+ * LiOS reference typography, tied to the existing product palette selection.
+ * No third-party/proprietary font files are copied, bundled or fetched.
+ *
+ * ChatGPT: use the platform-native system sans-serif stack (SF on macOS,
+ * Segoe UI on Windows, the platform sans-serif elsewhere).
+ * Claude: prefer locally installed Anthropic families where legitimately
+ * available, otherwise existing self-hosted Inter + system Georgia.
+ *
+ * Scope is deliberately limited to Chat, Projects and the Account UI.
+ * Canonical Workbench, financial numbers, code, tables and charts keep their
+ * existing JetBrains Mono / deterministic formatting / semantic hierarchy.
+ */
+
+html[data-lios-palette="chatgpt-dark"],
+html[data-lios-palette="chatgpt-light"] {
+  --lios-chat-font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, ui-sans-serif, sans-serif;
+  --lios-chat-display-font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, ui-sans-serif, sans-serif;
+  --lios-chat-body-size: 1rem;
+  --lios-chat-body-leading: 1.65;
+  --lios-chat-heading-tracking: -0.035em;
+}
+
+html[data-lios-palette="claude-light"],
+html[data-lios-palette="claude-dark"] {
+  --lios-chat-font: "Anthropic Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --lios-chat-display-font: "Anthropic Serif", Georgia, "Times New Roman", serif;
+  --lios-chat-body-size: 1rem;
+  --lios-chat-body-leading: 1.7;
+  --lios-chat-heading-tracking: -0.028em;
+}
+
+/*
+ * The original LiOS theme is unchanged, including its compact
+ * professional-terminal labels and self-hosted Inter/JetBrains Mono.
+ */
+html[data-lios-palette="chatgpt-dark"] .lios-project-experience-shell,
+html[data-lios-palette="chatgpt-light"] .lios-project-experience-shell,
+html[data-lios-palette="claude-dark"] .lios-project-experience-shell,
+html[data-lios-palette="claude-light"] .lios-project-experience-shell,
+html[data-lios-palette="chatgpt-dark"] .lios-navigation-sheet,
+html[data-lios-palette="chatgpt-light"] .lios-navigation-sheet,
+html[data-lios-palette="claude-dark"] .lios-navigation-sheet,
+html[data-lios-palette="claude-light"] .lios-navigation-sheet {
+  font-family: var(--lios-chat-font);
+  font-synthesis: none;
+}
+
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-project-experience-shell :where(.font-ui, .font-sans),
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-conversation-header button,
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-conversation-composer :where(button, input, textarea, select) {
+  font-family: var(--lios-chat-font) !important;
+}
+
+/* Navigation on desktop and mobile inherits the same human-readable font. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .lios-navigation-sheet :where(button:not(.font-terminal), input, select),
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .lios-authenticated-navigation :where(button:not(.font-terminal), input, select) {
+  font-family: var(--lios-chat-font) !important;
+}
+
+/* Account -> Appearance dropdown is a Radix portal outside the Chat root. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  :where([role="menu"], [role="menuitem"], [role="menuitemradio"], [role="dialog"]) {
+  font-family: var(--lios-chat-font);
+}
+
+/* Claude's editorial serif appears only in editorial, not financial tables. */
+html[data-lios-palette="claude-dark"] .terminal-root #lios-chat-empty-title,
+html[data-lios-palette="claude-light"] .terminal-root #lios-chat-empty-title,
+html[data-lios-palette="claude-dark"] .terminal-root .lios-project-home-surface h1,
+html[data-lios-palette="claude-light"] .terminal-root .lios-project-home-surface h1 {
+  font-family: var(--lios-chat-display-font) !important;
+  font-weight: 500;
+  letter-spacing: var(--lios-chat-heading-tracking);
+  line-height: 1.2;
+}
+
+html[data-lios-palette="chatgpt-dark"] .terminal-root #lios-chat-empty-title,
+html[data-lios-palette="chatgpt-light"] .terminal-root #lios-chat-empty-title {
+  font-family: var(--lios-chat-display-font) !important;
+  font-weight: 600;
+  letter-spacing: var(--lios-chat-heading-tracking);
+  line-height: 1.25;
+}
+
+/* Readable conversation text; preserve existing markdown/code semantics. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-project-chat-content .lios-chat-markdown,
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-project-chat-content .whitespace-pre-wrap.font-ui {
+  font-family: var(--lios-chat-font) !important;
+  font-size: var(--lios-chat-body-size) !important;
+  line-height: var(--lios-chat-body-leading) !important;
+  letter-spacing: normal;
+}
+
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-conversation-composer textarea[aria-label="Ask LiOS"] {
+  font-family: var(--lios-chat-font) !important;
+  font-size: 1rem !important;
+  line-height: 1.6 !important;
+  letter-spacing: normal;
+}
+
+/* Monospaced code/market data remain distinctly technical in all themes. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"])
+  .terminal-root .lios-project-experience-shell :where(
+    code, pre, kbd, samp, .font-terminal, .font-data, .font-mono,
+    .font-mono-num, .lios-number, .lios-symbol, .lios-pane-code
+  ) {
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Honor user-installed fonts only; no remote fetch or font copying required. */

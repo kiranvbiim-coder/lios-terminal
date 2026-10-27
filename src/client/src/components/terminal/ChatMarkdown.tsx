@@ -7,6 +7,7 @@ import {
   parseChatMarkdown,
   resolveCitation,
   safeHref,
+  recordedCitationHref,
   type Align,
   type Block,
   type ChatCitationSource,
@@ -25,7 +26,7 @@ interface ChatMarkdownProps {
 }
 
 const LINK_CLASS = "text-cyan-200 underline decoration-cyan-200/40 underline-offset-2 hover:decoration-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 rounded-sm";
-const CITE_CLASS = "mx-0.5 inline-flex min-h-[20px] items-center rounded border border-cyan-300/30 bg-cyan-300/[0.06] px-1 align-baseline font-terminal text-[12px] leading-none text-cyan-100 hover:bg-cyan-300/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60";
+const CITE_CLASS = "mx-0.5 inline-flex min-h-6 min-w-6 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/[0.06] px-1.5 align-baseline font-ui text-[11px] font-semibold leading-none text-amber-100 transition-colors hover:border-amber-300/45 hover:bg-amber-300/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70";
 const HEADING_CLASS: Record<number, string> = {
   1: "mt-4 mb-2 text-[20px] font-semibold leading-7",
   2: "mt-4 mb-2 text-[17px] font-semibold leading-6",
@@ -47,10 +48,10 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 function CitationChip({ number, source, onSelect }: { number: number; source: ChatCitationSource; onSelect?: (source: ChatCitationSource) => void }) {
   const [open, setOpen] = useState(false);
   const label = `Source ${number}: ${source.label}`;
-  const href = source.href ? safeHref(source.href) : null;
+  const href = recordedCitationHref(source);
   if (href) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={CITE_CLASS} aria-label={label} title={label} data-citation={number}>
+      <a href={href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className={CITE_CLASS} aria-label={label} title={label} data-citation={number}>
         [{number}]
       </a>
     );

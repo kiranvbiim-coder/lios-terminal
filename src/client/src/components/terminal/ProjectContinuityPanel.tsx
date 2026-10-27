@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { GitBranch, RefreshCw } from "lucide-react";
 import { refreshP6ProjectContinuity, useInvalidateP6ProjectContinuity, useP6ProjectContinuity } from "@/lib/useP6Continuity";
+import { ProjectChangeActivity } from "./ProjectChangeActivity";
 
 function time(value: string | null): string {
   if (!value) return "—";
@@ -147,14 +148,7 @@ export function ProjectContinuityPanel({
         </div>
       </div>
 
-      {snapshot?.changeSummary && (
-        <div className="mt-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.02] px-3 py-2">
-          <div className="font-ui text-[8px] font-medium text-foreground">What changed</div>
-          <div className="mt-1 font-terminal text-[6px] text-cyan-200">
-            {snapshot.changeSummary.added} ADDED · {snapshot.changeSummary.changed} CHANGED · {snapshot.changeSummary.removed} REMOVED
-          </div>
-        </div>
-      )}
+      {snapshot && <ProjectChangeActivity summary={snapshot.changeSummary} />}
 
       <div className="mt-3 font-terminal text-[6px] leading-3 text-muted-foreground/70">
         FINGERPRINT · {snapshot?.fingerprint.slice(0, 12) ?? "—"} · PROJECT GRAPH + DECISION ARTIFACTS + CONTINUOUS INTELLIGENCE

@@ -57,3 +57,20 @@ test("WS-16 empty or all-archived recents resolve to a truthful empty list", () 
   assert.deepEqual(canonicalRecentChats([], []), []);
   assert.deepEqual(canonicalRecentChats([chat(4,"2026-10-20T09:00:00Z",{status:"archived"})], []), []);
 });
+
+test("Phase 1 History lists every active saved Chat once even when global and Quick queries overlap", () => {
+  const global = [
+    chat(12, "2026-10-27T07:00:00Z"),
+    chat(20, "2026-10-27T06:00:00Z"),
+    chat(30, "2026-10-27T04:00:00Z", { status: "archived" }),
+    chat(40, "2026-10-27T03:00:00Z", { trashedAt: "2026-10-27T03:05:00Z" }),
+  ];
+  const quick = [
+    chat(20, "2026-10-27T08:00:00Z"),
+    chat(25, "2026-10-27T05:00:00Z"),
+  ];
+  const history = canonicalRecentChats(global, quick, Number.MAX_SAFE_INTEGER);
+  assert.deepEqual(history.map(row => row.id), [20, 12, 25]);
+  assert.equal(history.find(row => row.id === 20)?.lastActivityAt, "2026-10-27T08:00:00Z");
+  assert.deepEqual(canonicalRecentChats(global, quick, 2).map(row => row.id), [20, 12], "pagination is applied after canonical filtering");
+});

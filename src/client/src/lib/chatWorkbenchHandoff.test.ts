@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { captureChatWorkbenchOrigin, returnToChatWorkbenchOrigin } from "./chatWorkbenchHandoff";
+import { captureChatWorkbenchOrigin, returnChangesChatIdentity, returnToChatWorkbenchOrigin } from "./chatWorkbenchHandoff";
 
 test("artifact-free Quick navigation cannot inherit a stale Project", () => {
   const origin = captureChatWorkbenchOrigin("quick", 17, 42);
@@ -25,4 +25,21 @@ test("dirty Workbench state prevents return without mutating the captured origin
   assert.equal(returnToChatWorkbenchOrigin(origin, true), null);
   assert.equal(returnToChatWorkbenchOrigin(null, false), null);
   assert.deepEqual(returnToChatWorkbenchOrigin(origin, false), origin);
+});
+
+test("a Workbench return only skips switch review for exactly the same Chat identity", () => {
+  const current = captureChatWorkbenchOrigin("project", 17, 42);
+  assert.equal(returnChangesChatIdentity(current, { ...current }), false);
+  assert.equal(returnChangesChatIdentity(current, captureChatWorkbenchOrigin("project", 17, 43)), true);
+  assert.equal(returnChangesChatIdentity(current, captureChatWorkbenchOrigin("project", 18, 42)), true);
+  assert.equal(returnChangesChatIdentity(current, captureChatWorkbenchOrigin("quick", null, 42)), true);
+});
+
+test("Temporary and new Quick Chat remain distinct even when both have no saved Chat ID", () => {
+  const temporary = captureChatWorkbenchOrigin("temporary", null, null);
+  const quick = captureChatWorkbenchOrigin("quick", null, null);
+  assert.equal(returnChangesChatIdentity(temporary, quick), true);
+  assert.equal(returnChangesChatIdentity(quick, temporary), true);
+  assert.equal(returnChangesChatIdentity(temporary, captureChatWorkbenchOrigin("temporary", 999, 999)), false);
+  assert.equal(returnChangesChatIdentity(quick, captureChatWorkbenchOrigin("quick", 999, null)), false);
 });

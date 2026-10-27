@@ -1,0 +1,317 @@
+/* Four optional product-palette references. Colors only; LiOS owns the UX.
+ * ChatGPT graphite/white: observed UI references (appearance varies by user).
+ * Claude ivory/clay: public brand values plus dark companion neutrals.
+ * Do not add third-party logos, marks or product-specific layout mimics.
+ * LiOS Classic inherits the canonical terminal-shell.css defaults.
+ */
+html[data-lios-palette="chatgpt-dark"] {
+  color-scheme: dark;
+  --lios-bg-app: #212121;
+  --lios-bg-shell: #171717;
+  --lios-bg-panel: #303030;
+  --lios-bg-panel-2: #262626;
+  --lios-bg-elevated: #414141;
+  --lios-bg-hover: #353535;
+  --lios-bg-active: #414141;
+  --lios-bg-selected: #414141;
+  --lios-border-subtle: #414141;
+  --lios-border-default: #414141;
+  --lios-border-strong: #676767;
+  --lios-text-primary: #FFFFFF;
+  --lios-text-secondary: #CDCDCD;
+  --lios-text-muted: #9B9B9B;
+  --lios-brand: #FFFFFF;
+  --lios-brand-hover: #ECECEC;
+  --lios-brand-muted: #303030;
+  --background: 0.00 0.00% 12.94%;
+  --foreground: 0.00 0.00% 100.00%;
+  --card: 0.00 0.00% 18.82%;
+  --card-foreground: 0.00 0.00% 100.00%;
+  --card-border: 0.00 0.00% 25.49%;
+  --sidebar: 0.00 0.00% 9.02%;
+  --sidebar-foreground: 0.00 0.00% 100.00%;
+  --sidebar-border: 0.00 0.00% 25.49%;
+  --sidebar-primary: 0.00 0.00% 100.00%;
+  --sidebar-primary-foreground: 0.00 0.00% 5.10%;
+  --sidebar-accent: 0.00 0.00% 20.78%;
+  --sidebar-accent-foreground: 0.00 0.00% 100.00%;
+  --sidebar-ring: 0.00 0.00% 100.00%;
+  --popover: 0.00 0.00% 14.90%;
+  --popover-foreground: 0.00 0.00% 100.00%;
+  --popover-border: 0.00 0.00% 25.49%;
+  --primary: 0.00 0.00% 100.00%;
+  --primary-foreground: 0.00 0.00% 5.10%;
+  --secondary: 0.00 0.00% 18.82%;
+  --secondary-foreground: 0.00 0.00% 100.00%;
+  --muted: 0.00 0.00% 25.49%;
+  --muted-foreground: 0.00 0.00% 80.39%;
+  --accent: 0.00 0.00% 25.49%;
+  --accent-foreground: 0.00 0.00% 100.00%;
+  --input: 0.00 0.00% 40.39%;
+  --ring: 0.00 0.00% 100.00%;
+  --chart-1: 0.00 0.00% 100.00%;
+  --lios-void: 0.00 0.00% 9.02%;
+  --lios-canvas: 0.00 0.00% 12.94%;
+  --lios-raised: 0.00 0.00% 14.90%;
+  --lios-overlay: 0.00 0.00% 18.82%;
+  --lios-hover: 0.00 0.00% 20.78%;
+  --lios-hairline: 0.00 0.00% 25.49%;
+  --lios-hairline-strong: 0.00 0.00% 40.39%;
+  --lios-text: 0.00 0.00% 100.00%;
+  --lios-text-soft: 0.00 0.00% 80.39%;
+  --lios-text-dim: 0.00 0.00% 60.78%;
+  --limuria-ink: 0.00 0.00% 9.02%;
+  --limuria-graphite-0: 0.00 0.00% 12.94%;
+  --limuria-graphite-1: 0.00 0.00% 14.90%;
+  --limuria-graphite-2: 0.00 0.00% 18.82%;
+  --limuria-graphite-3: 0.00 0.00% 25.49%;
+  --limuria-line: 0.00 0.00% 25.49%;
+  --limuria-line-strong: 0.00 0.00% 40.39%;
+  --limuria-text: 0.00 0.00% 100.00%;
+  --limuria-text-soft: 0.00 0.00% 80.39%;
+  --limuria-text-dim: 0.00 0.00% 60.78%;
+  --limuria-amber: 0.00 0.00% 100.00%;
+  --limuria-amber-hot: 0.00 0.00% 92.55%;
+  --limuria-amber-soft: 0.00 0.00% 92.55%;
+  --lios-amber: 0.00 0.00% 100.00%;
+  --amber: 0.00 0.00% 100.00%;
+}
+
+html[data-lios-palette="chatgpt-light"] {
+  color-scheme: light;
+  --lios-bg-app: #FFFFFF;
+  --lios-bg-shell: #F9F9F9;
+  --lios-bg-panel: #F4F4F4;
+  --lios-bg-panel-2: #FFFFFF;
+  --lios-bg-elevated: #ECECEC;
+  --lios-bg-hover: #F4F4F4;
+  --lios-bg-active: #ECECEC;
+  --lios-bg-selected: #ECECEC;
+  --lios-border-subtle: #E3E3E3;
+  --lios-border-default: #E3E3E3;
+  --lios-border-strong: #CDCDCD;
+  --lios-text-primary: #0D0D0D;
+  --lios-text-secondary: #5D5D5D;
+  --lios-text-muted: #676767;
+  --lios-brand: #0D0D0D;
+  --lios-brand-hover: #303030;
+  --lios-brand-muted: #ECECEC;
+  --background: 0.00 0.00% 100.00%;
+  --foreground: 0.00 0.00% 5.10%;
+  --card: 0.00 0.00% 95.69%;
+  --card-foreground: 0.00 0.00% 5.10%;
+  --card-border: 0.00 0.00% 89.02%;
+  --sidebar: 0.00 0.00% 97.65%;
+  --sidebar-foreground: 0.00 0.00% 5.10%;
+  --sidebar-border: 0.00 0.00% 89.02%;
+  --sidebar-primary: 0.00 0.00% 5.10%;
+  --sidebar-primary-foreground: 0.00 0.00% 100.00%;
+  --sidebar-accent: 0.00 0.00% 95.69%;
+  --sidebar-accent-foreground: 0.00 0.00% 5.10%;
+  --sidebar-ring: 0.00 0.00% 5.10%;
+  --popover: 0.00 0.00% 100.00%;
+  --popover-foreground: 0.00 0.00% 5.10%;
+  --popover-border: 0.00 0.00% 89.02%;
+  --primary: 0.00 0.00% 5.10%;
+  --primary-foreground: 0.00 0.00% 100.00%;
+  --secondary: 0.00 0.00% 95.69%;
+  --secondary-foreground: 0.00 0.00% 5.10%;
+  --muted: 0.00 0.00% 92.55%;
+  --muted-foreground: 0.00 0.00% 36.47%;
+  --accent: 0.00 0.00% 92.55%;
+  --accent-foreground: 0.00 0.00% 5.10%;
+  --input: 0.00 0.00% 80.39%;
+  --ring: 0.00 0.00% 5.10%;
+  --chart-1: 0.00 0.00% 5.10%;
+  --lios-void: 0.00 0.00% 97.65%;
+  --lios-canvas: 0.00 0.00% 100.00%;
+  --lios-raised: 0.00 0.00% 100.00%;
+  --lios-overlay: 0.00 0.00% 95.69%;
+  --lios-hover: 0.00 0.00% 95.69%;
+  --lios-hairline: 0.00 0.00% 89.02%;
+  --lios-hairline-strong: 0.00 0.00% 80.39%;
+  --lios-text: 0.00 0.00% 5.10%;
+  --lios-text-soft: 0.00 0.00% 36.47%;
+  --lios-text-dim: 0.00 0.00% 40.39%;
+  --limuria-ink: 0.00 0.00% 97.65%;
+  --limuria-graphite-0: 0.00 0.00% 100.00%;
+  --limuria-graphite-1: 0.00 0.00% 100.00%;
+  --limuria-graphite-2: 0.00 0.00% 95.69%;
+  --limuria-graphite-3: 0.00 0.00% 92.55%;
+  --limuria-line: 0.00 0.00% 89.02%;
+  --limuria-line-strong: 0.00 0.00% 80.39%;
+  --limuria-text: 0.00 0.00% 5.10%;
+  --limuria-text-soft: 0.00 0.00% 36.47%;
+  --limuria-text-dim: 0.00 0.00% 40.39%;
+  --limuria-amber: 0.00 0.00% 5.10%;
+  --limuria-amber-hot: 0.00 0.00% 18.82%;
+  --limuria-amber-soft: 0.00 0.00% 18.82%;
+  --lios-amber: 0.00 0.00% 5.10%;
+  --amber: 0.00 0.00% 5.10%;
+}
+
+html[data-lios-palette="claude-light"] {
+  color-scheme: light;
+  --lios-bg-app: #FAF9F5;
+  --lios-bg-shell: #F0EEE6;
+  --lios-bg-panel: #F0EEE6;
+  --lios-bg-panel-2: #FFFFFF;
+  --lios-bg-elevated: #E8E6DC;
+  --lios-bg-hover: #E8E6DC;
+  --lios-bg-active: #E8E6DC;
+  --lios-bg-selected: #E8E6DC;
+  --lios-border-subtle: #D9D5C9;
+  --lios-border-default: #D9D5C9;
+  --lios-border-strong: #B0AEA5;
+  --lios-text-primary: #141413;
+  --lios-text-secondary: #57554F;
+  --lios-text-muted: #6E6B64;
+  --lios-brand: #D97757;
+  --lios-brand-hover: #C6613F;
+  --lios-brand-muted: #F0EEE6;
+  --background: 48.00 33.33% 97.06%;
+  --foreground: 60.00 2.56% 7.65%;
+  --card: 48.00 25.00% 92.16%;
+  --card-foreground: 60.00 2.56% 7.65%;
+  --card-border: 45.00 17.39% 81.96%;
+  --sidebar: 48.00 25.00% 92.16%;
+  --sidebar-foreground: 60.00 2.56% 7.65%;
+  --sidebar-border: 45.00 17.39% 81.96%;
+  --sidebar-primary: 14.77 63.11% 59.61%;
+  --sidebar-primary-foreground: 60.00 2.56% 7.65%;
+  --sidebar-accent: 50.00 20.69% 88.63%;
+  --sidebar-accent-foreground: 60.00 2.56% 7.65%;
+  --sidebar-ring: 14.77 63.11% 59.61%;
+  --popover: 0.00 0.00% 100.00%;
+  --popover-foreground: 60.00 2.56% 7.65%;
+  --popover-border: 45.00 17.39% 81.96%;
+  --primary: 14.77 63.11% 59.61%;
+  --primary-foreground: 60.00 2.56% 7.65%;
+  --secondary: 48.00 25.00% 92.16%;
+  --secondary-foreground: 60.00 2.56% 7.65%;
+  --muted: 50.00 20.69% 88.63%;
+  --muted-foreground: 45.00 4.82% 32.55%;
+  --accent: 50.00 20.69% 88.63%;
+  --accent-foreground: 60.00 2.56% 7.65%;
+  --input: 49.09 6.51% 66.86%;
+  --ring: 14.77 63.11% 59.61%;
+  --chart-1: 14.77 63.11% 59.61%;
+  --lios-void: 48.00 25.00% 92.16%;
+  --lios-canvas: 48.00 33.33% 97.06%;
+  --lios-raised: 0.00 0.00% 100.00%;
+  --lios-overlay: 48.00 25.00% 92.16%;
+  --lios-hover: 50.00 20.69% 88.63%;
+  --lios-hairline: 45.00 17.39% 81.96%;
+  --lios-hairline-strong: 49.09 6.51% 66.86%;
+  --lios-text: 60.00 2.56% 7.65%;
+  --lios-text-soft: 45.00 4.82% 32.55%;
+  --lios-text-dim: 42.00 4.76% 41.18%;
+  --limuria-ink: 48.00 25.00% 92.16%;
+  --limuria-graphite-0: 48.00 33.33% 97.06%;
+  --limuria-graphite-1: 0.00 0.00% 100.00%;
+  --limuria-graphite-2: 48.00 25.00% 92.16%;
+  --limuria-graphite-3: 50.00 20.69% 88.63%;
+  --limuria-line: 45.00 17.39% 81.96%;
+  --limuria-line-strong: 49.09 6.51% 66.86%;
+  --limuria-text: 60.00 2.56% 7.65%;
+  --limuria-text-soft: 45.00 4.82% 32.55%;
+  --limuria-text-dim: 42.00 4.76% 41.18%;
+  --limuria-amber: 14.77 63.11% 59.61%;
+  --limuria-amber-hot: 15.11 54.22% 51.18%;
+  --limuria-amber-soft: 15.11 54.22% 51.18%;
+  --lios-amber: 14.77 63.11% 59.61%;
+  --amber: 14.77 63.11% 59.61%;
+}
+
+html[data-lios-palette="claude-dark"] {
+  color-scheme: dark;
+  --lios-bg-app: #262624;
+  --lios-bg-shell: #1F1E1D;
+  --lios-bg-panel: #30302C;
+  --lios-bg-panel-2: #292927;
+  --lios-bg-elevated: #393935;
+  --lios-bg-hover: #393935;
+  --lios-bg-active: #41413B;
+  --lios-bg-selected: #413630;
+  --lios-border-subtle: #45443D;
+  --lios-border-default: #45443D;
+  --lios-border-strong: #67655D;
+  --lios-text-primary: #FAF9F5;
+  --lios-text-secondary: #D1CDC3;
+  --lios-text-muted: #B0AEA5;
+  --lios-brand: #D97757;
+  --lios-brand-hover: #E28A6D;
+  --lios-brand-muted: #413630;
+  --background: 60.00 2.70% 14.51%;
+  --foreground: 48.00 33.33% 97.06%;
+  --card: 60.00 4.35% 18.04%;
+  --card-foreground: 48.00 33.33% 97.06%;
+  --card-border: 52.50 6.15% 25.49%;
+  --sidebar: 30.00 3.33% 11.76%;
+  --sidebar-foreground: 48.00 33.33% 97.06%;
+  --sidebar-border: 52.50 6.15% 25.49%;
+  --sidebar-primary: 14.77 63.11% 59.61%;
+  --sidebar-primary-foreground: 60.00 2.56% 7.65%;
+  --sidebar-accent: 60.00 3.64% 21.57%;
+  --sidebar-accent-foreground: 48.00 33.33% 97.06%;
+  --sidebar-ring: 14.77 63.11% 59.61%;
+  --popover: 60.00 2.50% 15.69%;
+  --popover-foreground: 48.00 33.33% 97.06%;
+  --popover-border: 52.50 6.15% 25.49%;
+  --primary: 14.77 63.11% 59.61%;
+  --primary-foreground: 60.00 2.56% 7.65%;
+  --secondary: 60.00 4.35% 18.04%;
+  --secondary-foreground: 48.00 33.33% 97.06%;
+  --muted: 60.00 3.64% 21.57%;
+  --muted-foreground: 42.86 13.21% 79.22%;
+  --accent: 60.00 3.64% 21.57%;
+  --accent-foreground: 48.00 33.33% 97.06%;
+  --input: 48.00 5.10% 38.43%;
+  --ring: 14.77 63.11% 59.61%;
+  --chart-1: 14.77 63.11% 59.61%;
+  --lios-void: 30.00 3.33% 11.76%;
+  --lios-canvas: 60.00 2.70% 14.51%;
+  --lios-raised: 60.00 2.50% 15.69%;
+  --lios-overlay: 60.00 4.35% 18.04%;
+  --lios-hover: 60.00 3.64% 21.57%;
+  --lios-hairline: 52.50 6.15% 25.49%;
+  --lios-hairline-strong: 48.00 5.10% 38.43%;
+  --lios-text: 48.00 33.33% 97.06%;
+  --lios-text-soft: 42.86 13.21% 79.22%;
+  --lios-text-dim: 49.09 6.51% 66.86%;
+  --limuria-ink: 30.00 3.33% 11.76%;
+  --limuria-graphite-0: 60.00 2.70% 14.51%;
+  --limuria-graphite-1: 60.00 2.50% 15.69%;
+  --limuria-graphite-2: 60.00 4.35% 18.04%;
+  --limuria-graphite-3: 60.00 3.64% 21.57%;
+  --limuria-line: 52.50 6.15% 25.49%;
+  --limuria-line-strong: 48.00 5.10% 38.43%;
+  --limuria-text: 48.00 33.33% 97.06%;
+  --limuria-text-soft: 42.86 13.21% 79.22%;
+  --limuria-text-dim: 49.09 6.51% 66.86%;
+  --limuria-amber: 14.77 63.11% 59.61%;
+  --limuria-amber-hot: 14.87 66.86% 65.69%;
+  --limuria-amber-soft: 14.87 66.86% 65.69%;
+  --lios-amber: 14.77 63.11% 59.61%;
+  --amber: 14.77 63.11% 59.61%;
+}
+
+/* Keep the existing conversation and composer on the palette's surface scale.
+ * Restrict these corrections to the Chat shell so Finance semantics, charts and
+ * the full Dockview Workbench remain structurally untouched. */
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-project-experience-shell {
+  background-color: var(--lios-bg-app);
+  color: var(--lios-text-primary);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-composer {
+  background-color: var(--lios-bg-panel) !important;
+  border-color: var(--lios-border-default) !important;
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-conversation-header {
+  border-color: var(--lios-border-default);
+}
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-account-trigger:hover,
+html[data-lios-palette]:not([data-lios-palette="lios-classic"]) .terminal-root .lios-primary-navigation button:hover {
+  background-color: var(--lios-bg-hover);
+}
+/* Screen-reader and keyboard focus retain the canonical LiOS focus contract. */

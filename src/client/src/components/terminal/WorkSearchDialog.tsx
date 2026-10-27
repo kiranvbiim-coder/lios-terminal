@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FileText, FolderKanban, MessageSquare, Search, Sparkles, X } from "lucide-react";
 import { workSearchResponseSchema, type WorkSearchResult } from "@shared/workSearch";
+import type { IntelligenceCard } from "@shared/waveDContracts";
+import VisualIntelligenceSearch from "./VisualIntelligenceSearch";
 import { shouldCloseSearchAfterNavigation } from "@/lib/workSearchNavigationPolicy";
 import { WORK_SEARCH_FILTERS, clampWorkSearchSelection, countWorkSearchKind, filterWorkSearchResults, workSearchEmptyMessage, type WorkSearchFilter } from "@/lib/workSearchFilters";
 
@@ -10,6 +12,8 @@ interface Props {
   onClose: () => void;
   onSelect: (result: WorkSearchResult) => boolean | Promise<boolean>;
   opener?: HTMLElement | null;
+  intelligenceEnabled?: boolean;
+  onAskIntelligence?: (card: IntelligenceCard) => boolean | Promise<boolean>;
 }
 
 const KIND_LABEL: Record<WorkSearchResult["kind"], string> = {
@@ -26,8 +30,9 @@ function ResultIcon({ kind }: { kind: WorkSearchResult["kind"] }) {
   return <FileText className="h-4 w-4" />;
 }
 
-export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Props) {
+export default function WorkSearchDialog({ open, onClose, onSelect, opener, intelligenceEnabled = false, onAskIntelligence }: Props) {
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"work" | "intelligence">("work");
   const [results, setResults] = useState<WorkSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +49,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Pr
     if (!open) return;
     returnFocus.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setQuery("");
+    setMode("work");
     setResults([]);
     setFilter("all");
     setError(null);
@@ -52,7 +58,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Pr
   }, [open, opener]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || mode !== "work") return;
     const normalized = query.trim();
     if (normalized.length < 2) {
       setResults([]);
@@ -83,7 +89,7 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Pr
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [open, query]);
+  }, [open, query, mode]);
 
   const visibleResults = useMemo(() => filterWorkSearchResults(results, filter), [results, filter]);
   useEffect(() => {
@@ -132,27 +138,32 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Pr
             value={query}
             onChange={(event) => { setQuery(event.target.value); setResults([]); setSelected(0); }}
             onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return;
+              if (event.nativeEvent.isComposing || mode !== "work") return;
               if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(0, visibleResults.length - 1))); }
               if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(0, value - 1)); }
               if (event.key === "Enter" && !event.nativeEvent.isComposing && !loading && !opening && visibleResults[selected]) { event.preventDefault(); void run(visibleResults[selected]); }
               if (event.key === "Escape") onClose();
             }}
             className="min-w-0 flex-1 bg-transparent font-ui text-[15px] text-foreground outline-none placeholder:text-muted-foreground/55"
-            placeholder="Search chats, Projects, files and Artifacts"
-            aria-label="Search LiOS work"
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded={!loading && visibleResults.length > 0}
-            aria-controls={listId}
-            aria-describedby={keyboardHelpId}
-            aria-keyshortcuts="ArrowDown ArrowUp Enter Escape"
-            aria-activedescendant={!loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
+            placeholder={mode === "work" ? "Search chats, Projects, files and Artifacts" : "Search recorded intelligence"}
+            aria-label={mode === "work" ? "Search LiOS work" : "Search recorded intelligence"}
+            role={mode === "work" ? "combobox" : "searchbox"}
+            aria-autocomplete={mode === "work" ? "list" : undefined}
+            aria-expanded={mode === "work" ? !loading && visibleResults.length > 0 : undefined}
+            aria-controls={mode === "work" ? listId : undefined}
+            aria-describedby={mode === "work" ? keyboardHelpId : undefined}
+            aria-keyshortcuts={mode === "work" ? "ArrowDown ArrowUp Enter Escape" : undefined}
+            aria-activedescendant={mode === "work" && !loading && visibleResults[selected] ? `${listId}-item-${selected}` : undefined}
             autoComplete="off"
           />
           {query && <button type="button" onClick={() => { setQuery(""); setResults([]); setSelected(0); inputRef.current?.focus(); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
         </div>
+        <div className="flex gap-2 border-b border-border/60 px-3 py-2" role="group" aria-label="Search source">
+          <button type="button" aria-pressed={mode === "work"} onClick={() => { setMode("work"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "work" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Saved work</button>
+          {intelligenceEnabled && <button type="button" aria-pressed={mode === "intelligence"} onClick={() => { setMode("intelligence"); setResults([]); setError(null); setSelected(0); inputRef.current?.focus(); }} className={`min-h-10 rounded-lg border px-3 py-2 font-ui text-sm focus-visible:ring-2 focus-visible:ring-amber-300/70 ${mode === "intelligence" ? "border-amber-300/40 bg-amber-300/[0.08] text-foreground" : "border-border/60 text-muted-foreground"}`}>Intelligence</button>}
+        </div>
         <p id={keyboardHelpId} className="sr-only">Use the up and down arrows to select, Enter to open, or Escape to close. Canceling a draft switch keeps this search open.</p>
+        {mode === "work" ? <>
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-3 py-2" role="group" aria-label="Filter returned results by type">
           {WORK_SEARCH_FILTERS.map((entry) => (
             <button
@@ -195,6 +206,12 @@ export default function WorkSearchDialog({ open, onClose, onSelect, opener }: Pr
           {!loading && !visibleResults.length && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">{workSearchEmptyMessage(query, filter, results.length)}</div>}
           {loading && <div className="px-5 py-8 text-center font-ui text-[13px] text-muted-foreground">Searching…</div>}
         </div>
+        </> : <VisualIntelligenceSearch query={query} onAsk={async card => {
+          if (!intelligenceEnabled || !onAskIntelligence) return false;
+          const staged = await onAskIntelligence(card);
+          if (staged) onClose();
+          return staged;
+        }} />}
       </DialogContent>
     </Dialog>
   );
