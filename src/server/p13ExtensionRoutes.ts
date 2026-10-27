@@ -12,6 +12,8 @@ import { getP13PluginRuntimeHost } from "./p13PluginRuntime";
 import { P11PackManager } from "./p11PackManager";
 import { ExtensionAdmissionError, P13ExtensionService, type ExtensionPrincipal } from "./p13ExtensionService";
 import { recordAuditEvent } from "./auditEvents";
+import { listSourceConnections } from "./sourceConnectionService";
+import { chatExtensionCatalog } from "./chatExtensionCatalog";
 
 let service: P13ExtensionService | null = null;
 export function getP13ExtensionService(): P13ExtensionService {
@@ -33,6 +35,32 @@ export function registerP13ExtensionRoutes(app: Express): void {
   const router = express.Router();
   router.use(requireAuth);
   router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  // Chat can inspect *only* harmless installed capability metadata.
+  // Global installation/inspection/revocation routes below remain Home-owner
+  // only. The response contains no manifest bytes, MCP endpoint or vault refs.
+  router.get("/chat-catalog", async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const connections = await listSourceConnections(user.id);
+      let managementAvailable = false;
+      try {
+        getP13ExtensionService().catalog(await currentOwner(req));
+        managementAvailable = true;
+      } catch (error) {
+        if (!(error instanceof ExtensionAdmissionError)) throw error;
+      }
+      res.json(chatExtensionCatalog({
+        plugins: getP13PluginRuntimeHost().plugins.list(),
+        isPluginLiveTrusted: plugin => getP13PluginRuntimeHost().trustStore.verify(
+          plugin.manifest, plugin.trust.packageDigest,
+        ).state === "trusted",
+        connections,
+        userId: user.id,
+        organizationId: user.organizationId ?? null,
+        managementAvailable,
+      }));
+    } catch (error) { next(error); }
+  });
   router.get("/", async (req, res, next) => {
     try { res.json(getP13ExtensionService().catalog(await currentOwner(req))); } catch (error) { next(error); }
   });

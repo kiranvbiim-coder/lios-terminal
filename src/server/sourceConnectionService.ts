@@ -15,6 +15,8 @@ import { persistSourceSnapshot } from "./sourceSnapshotStore";
 import { normalizeUniversalFinanceRecords } from "@shared/universalIngestion";
 import { assertLocalByodRuntime } from "./runtimeSecurity";
 import { clearProviderExecutionCache } from "./providerExecutionCache";
+import { externalMcpConfigForSourceConnection, listExternalMcpTools } from "./externalMcpClient";
+import { getProject } from "./projectStore";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -24,12 +26,46 @@ export interface SourceConnectionTestResult {
   detail: string;
   testedAt: string;
 }
+
+/**
+ * Live MCP verification is a separate, *read-only* official SDK handshake.
+ * The connected user's current Project ownership is checked before opening
+ * the remote transport. Dependency injection exists for offline integration
+ * tests and cannot be selected from an API/model payload.
+ */
+export async function verifySavedMcpConnection(
+  connection: SourceConnection,
+  tenant: { userId: number; organizationId: number | null; role: "internal_analyst" },
+  probe: typeof listExternalMcpTools = listExternalMcpTools,
+): Promise<{ allowedToolCount: number }> {
+  assertLocalByodRuntime("External MCP BYOD verification");
+  if (connection.userId !== tenant.userId || connection.organizationId !== tenant.organizationId) {
+    throw new Error("MCP connection is outside the current owner scope.");
+  }
+  const config = externalMcpConfigForSourceConnection(connection);
+  await getProject(tenant, config.policy.projectId);
+  const allowed = await probe(config);
+  return { allowedToolCount: allowed.length };
+}
+
 async function assertConnectorConfig(input: SourceConnectionConfig): Promise<void> {
   const connector = getConnectorById(input.connectorId);
   const customConnector = input.connectorId.startsWith("custom_");
   if (!connector && !customConnector) throw new Error("Connector is not registered.");
   if (connector && connector.sourceType !== input.sourceType) throw new Error("Source type does not match the registered connector.");
   if (input.credentialRef && connector?.vaultKey && connector.vaultKey !== input.credentialRef && input.sourceType !== "database") throw new Error("Credential reference does not match the registered connector.");
+  if (input.sourceType === "mcp") {
+    const projectId = input.config.projectId;
+    if (!Number.isSafeInteger(projectId) || typeof projectId !== "number" || projectId <= 0) {
+      throw new Error("MCP connection requires an owned Project.");
+    }
+    if (typeof input.config.allowedToolIds !== "string") {
+      throw new Error("MCP tool allowlist must be an explicit comma-separated string.");
+    }
+    if (input.config.requireApprovalForTools === false) {
+      throw new Error("MCP tool execution requires explicit user approval.");
+    }
+  }
   if (input.sourceType === "private_api" || input.sourceType === "cloud_storage" || input.sourceType === "mcp") {
     const endpoint = input.config.endpoint;
     if (typeof endpoint !== "string") throw new Error("An endpoint is required for this source type.");
@@ -249,6 +285,13 @@ export async function upsertSourceConnection(
   actor: Pick<User, "id" | "email">,
 ): Promise<SourceConnection> {
   await assertConnectorConfig(input);
+  if (input.sourceType === "mcp") {
+    // An untrusted source form must not bind an MCP server to another user's
+    // Project even temporarily. The owner check runs before config storage.
+    await getProject({
+      userId, organizationId, role: "internal_analyst",
+    }, Number(input.config.projectId));
+  }
   const db = getDb();
   const now = new Date();
   const config = await normalizeSourceConfig(input.sourceType, input.config);
@@ -363,6 +406,19 @@ export async function testSourceConnection(userId: number, connectionId: number,
     } catch (error) {
       status = "unreachable";
       detail = error instanceof Error ? error.message : "Local file is unavailable.";
+    }
+  } else if (connection.sourceType === "mcp") {
+    try {
+      const { allowedToolCount } = await verifySavedMcpConnection(connection, {
+        userId, organizationId: connection.organizationId, role: "internal_analyst",
+      });
+      status = "healthy";
+      detail = `Live MCP handshake and tools/list succeeded; ${allowedToolCount} tool(s) match this Project's allowlist. No MCP tool was executed.`;
+    } catch (error) {
+      status = "unreachable";
+      // Exceptions may contain OAuth headers, vendor endpoints or tokens.
+      // Do not persist or surface raw transport errors via statusDetail.
+      detail = "Live MCP verification failed. Check the endpoint, local credential and Project ownership.";
     }
   } else if (connection.sourceType === "database") {
     const credential = databaseCredential(connection);

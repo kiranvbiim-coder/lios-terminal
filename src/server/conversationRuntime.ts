@@ -59,6 +59,7 @@ import { memoryLifecycleConversationTools } from "./memoryLifecycleTool";
 import { entityIntelligenceTool } from "./entityIntelligenceTool";
 import { privateEntityResearchTool } from "./privateEntityResearchTool";
 import { providerAccessTool } from "./providerAccessTool";
+import { chatMcpDiscoveryTool } from "./chatMcpDiscoveryTool";
 import { connectedProviderListChatTool, connectedProviderPreviewChatTool } from "./connectedProviderChatTool";
 import {
   researchSourceCompositionTool,
@@ -1146,6 +1147,7 @@ function registerBuiltinConversationTools(): void {
   registerConversationTool(entityIntelligenceTool);
   registerConversationTool(privateEntityResearchTool);
   registerConversationTool(providerAccessTool);
+  registerConversationTool(chatMcpDiscoveryTool);
   registerConversationTool(connectedProviderListChatTool);
   registerConversationTool(connectedProviderPreviewChatTool);
   registerConversationTool(researchSourceCompositionTool);
