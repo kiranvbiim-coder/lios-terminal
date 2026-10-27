@@ -332,8 +332,22 @@ export default function ProjectExperienceShell({
   useEffect(() => {
     if (!navigationRequest || handledNavigation.current === navigationRequest.id) return;
     handledNavigation.current = navigationRequest.id;
-    if (navigationRequest.section === "search") requestWorkSearch();
-    else setSection(navigationRequest.section);
+    // Host shortcuts/deep links use the same safety rules as sidebar navigation.
+    // Never hide Stop or an unsaved Artifact draft just because navigation was external.
+    if (navigationRequest.section === "search") {
+      requestWorkSearch();
+      return;
+    }
+    if (navigationRequest.section !== "conversation" && (busyRef.current || sendInFlightRef.current)) {
+      setLifecycleNotice("Stop the current response before opening another section.");
+      return;
+    }
+    if (navigationRequest.section !== "conversation" && artifactDraftDirtyRef.current) {
+      setLifecycleNotice("Save or reset unsaved Artifact edits before leaving Chat.");
+      return;
+    }
+    setSection(navigationRequest.section);
+    if (navigationRequest.section === "conversation") setProjectHomeRequested(false);
     setShowLifecycleCenter(false);
     setContextOpen(false);
   }, [navigationRequest]);
