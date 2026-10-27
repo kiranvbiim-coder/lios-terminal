@@ -146,6 +146,7 @@ function syncWorkspace(api: DockviewApi, workspace: WorkspaceState, suppress: { 
 export default function DockviewWorkspaceGrid(props: Props) {
   const apiRef = useRef<DockviewApi | null>(null);
   const [layoutNotice, setLayoutNotice] = useState("");
+  useEffect(() => setLayoutNotice(""), [props.layoutScope]);
   const latestPropsRef = useRef(props);
   latestPropsRef.current = props;
   const suppressSyncRef = useRef(false);
@@ -289,7 +290,10 @@ export default function DockviewWorkspaceGrid(props: Props) {
       const layout = api.toJSON() as unknown;
       if (!layout || typeof layout !== "object" || Array.isArray(layout)) throw new Error("Invalid layout");
       saveDockviewLayoutState(layout as DockviewLayoutState, props.layoutScope);
-      setLayoutNotice("Pane arrangement saved for this workspace tab.");
+      const saved = loadDockviewLayoutState(props.layoutScope);
+      setLayoutNotice(saved && JSON.stringify(saved) === JSON.stringify(layout)
+        ? "Pane arrangement saved for this workspace tab."
+        : "Layout storage could not be verified. Current panes remain unchanged.");
     } catch {
       setLayoutNotice("Could not save pane arrangement. Existing workspace content is unchanged.");
     }
@@ -301,7 +305,7 @@ export default function DockviewWorkspaceGrid(props: Props) {
       return;
     }
     requestDockviewLayoutRestore(null, props.layoutScope);
-    setLayoutNotice("Default pane arrangement restored for this workspace tab.");
+    setLayoutNotice("Default pane arrangement requested for this workspace tab.");
   };
 
   if (rendererState.current.isMobile || rendererState.current.maximizedPane) {
