@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { ArrowDown, ArrowUp, Boxes, LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { loadIntelligenceObjects, subscribeIntelligenceObjects, type IntelligenceObject } from "@/lib/terminalIntelligenceObjects";
 import { readIntelligenceObjectDrag } from "@/lib/terminalObjectDnD";
@@ -26,7 +26,22 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
   const [query, setQuery] = useState("");
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [notice, setNotice] = useState("");
+  const earlierButtons = useRef<Array<HTMLButtonElement | null>>([]);
+  const laterButtons = useRef<Array<HTMLButtonElement | null>>([]);
+  const focusAfterMove = useRef<{ target: number; direction: -1 | 1 } | null>(null);
   useEffect(() => subscribeIntelligenceObjects(setObjects), []);
+
+  // The card is keyed by pane position. After swapping content, transfer focus
+  // to an enabled control on the *moved object's* new position, not the old card.
+  useEffect(() => {
+    const moved = focusAfterMove.current;
+    if (!moved) return;
+    focusAfterMove.current = null;
+    const targetButton = moved.direction === -1
+      ? laterButtons.current[moved.target]
+      : earlierButtons.current[moved.target];
+    targetButton?.focus();
+  }, [slots]);
 
   const candidates = useMemo(() => objects.filter((object) => object.view && `${object.label} ${object.symbol ?? ""} ${object.kind} ${object.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())).slice(0, 100), [objects, query]);
 
@@ -43,6 +58,7 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
     const target = index + direction;
     const slot = slots[index];
     if (!slot || target < 0 || target >= slots.length) return;
+    focusAfterMove.current = { target, direction };
     setSlots(current => moveWorkspaceSlot(current, index, direction));
     setNotice(`${getTerminalCapability(slot.pane.view).label} moved to ${PANE_IDS[target]} pane. The original content and revision remain unchanged.`);
   };
@@ -81,12 +97,14 @@ export default function WorkspaceComposer({ workspace, onApplyWorkspace, onClose
                     <span className="font-ui text-sm font-semibold capitalize text-muted-foreground">{paneId} pane</span>
                     {slot && <div role="group" aria-label={`Arrange ${getTerminalCapability(slot.pane.view).label} pane`} className="flex flex-wrap items-center gap-1">
                       <button type="button" disabled={index === 0}
+                        ref={node => { earlierButtons.current[index] = node; }}
                         aria-label={`Move ${getTerminalCapability(slot.pane.view).label} earlier from ${paneId} pane`}
                         onClick={() => movePane(index, -1)}
                         className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-border/60 px-2 text-xs text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-40">
                         <ArrowUp aria-hidden="true" className="h-4 w-4" /> Earlier
                       </button>
                       <button type="button" disabled={index >= slots.length - 1}
+                        ref={node => { laterButtons.current[index] = node; }}
                         aria-label={`Move ${getTerminalCapability(slot.pane.view).label} later from ${paneId} pane`}
                         onClick={() => movePane(index, 1)}
                         className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-border/60 px-2 text-xs text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-40">
