@@ -76,7 +76,7 @@ function writeSidecarEvidenceReport(resourcesPath, reportPath, evidence) {
     throw new Error("Sidecar evidence must be written outside packaged resources.");
   }
   // Do not overwrite an earlier native qualification report for another binary.
-  fs.writeFileSync(report, JSON.stringify(evidence, null, 2) + "\\n", {
+  fs.writeFileSync(report, JSON.stringify(evidence, null, 2) + "\n", {
     encoding: "utf8", flag: "wx", mode: 0o600,
   });
 }
