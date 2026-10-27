@@ -134,6 +134,9 @@ export default function ScenarioWorkbench({ activeView, activeSymbol, onClose }:
           {applyIsWarning ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             : <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />}{applyMessage}
         </div>}
+        {active && applicable && !currentApplicationKey && <p role="status" className="border-b border-border/50 px-4 py-3 font-ui text-sm leading-6 text-muted-foreground">
+          No finite, same-key, same-unit registered model inputs match this scenario. Open the relevant model pane and verify its units before reviewing any application; nothing has been changed.
+        </p>}
         {inputApplyReviewed && <section data-testid="scenario-apply-reviewed-preview" aria-label="Model inputs pending explicit confirmation"
           className="space-y-2 border-b border-amber-300/30 bg-amber-300/[0.035] p-3 font-ui text-sm">
           <p className="font-semibold text-foreground">Review {preview.matched.length} exact input assignments before applying</p>
