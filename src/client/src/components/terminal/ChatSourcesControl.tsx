@@ -56,7 +56,7 @@ export default function ChatSourcesControl({ scope, onScopeChange, onOpenConnect
           {registry.isFetching ? "Retrying catalogue…" : "Retry read-only catalogue"}
         </button>
       </div>}
-      {!registry.data && presentation.healthLabel && <p role="status" className="my-2 text-sm text-muted-foreground">{presentation.healthLabel}</p>}
+      {!registry.data && !registry.isLoading && presentation.healthLabel && <p role="status" className="my-2 text-sm text-muted-foreground">{presentation.healthLabel}</p>}
       {registry.data && <>
         <h3 className="font-medium">{presentation.heading}</h3>
         <p role="status" aria-live="polite" className="my-2 text-sm text-muted-foreground">{presentation.countLabel}</p>
