@@ -82,7 +82,7 @@ type DataCall = {
 };
 
 /** Validate server-owned context; neither the model nor a request parameter can choose the tenant. */
-function checkScope(call: DataCall): { tenant: TenantContext; projectId: number } {
+function checkScope(call: DataCall): { tenant: TenantContext; projectId: number | null } {
   if (call.source !== "agent" || !call.requestId) {
     throw new Error("Connected provider tools require an authenticated governed agent call.");
   }
@@ -93,9 +93,11 @@ function checkScope(call: DataCall): { tenant: TenantContext; projectId: number 
     throw new Error("AI transmission of Project/source content is disabled.");
   }
   const tenant = tenantSchema.parse(call.tenant) as TenantContext;
-  const projectId = Number(call.projectId);
-  if (call.userId !== tenant.userId || !Number.isSafeInteger(projectId) || projectId <= 0) {
-    throw new Error("Connected provider data requires server-owned user and Project scope.");
+  // Quick/temporary Chat is valid: a user owns sources independent of Projects.
+  // When a Project is selected, validate its exact server-owned identity.
+  const projectId = call.projectId ?? null;
+  if (call.userId !== tenant.userId || (projectId !== null && (!Number.isSafeInteger(projectId) || projectId <= 0))) {
+    throw new Error("Connected provider data requires server-owned user and valid optional Project scope.");
   }
   return { tenant, projectId };
 }
@@ -169,7 +171,7 @@ export const connectedProviderListChatTool: ConversationToolDefinition = {
     assertNotAborted(signal);
     const call = rawCall as DataCall;
     const { tenant, projectId } = checkScope(call);
-    await getProject(tenant, projectId);
+    if (projectId !== null) await getProject(tenant, projectId);
     const connections = await listSourceConnections(tenant.userId);
     const permitted = connections.filter((connection) =>
       connection.organizationId === tenant.organizationId && sourceAllowedForChat(connection, call.researchSourcePolicy)
@@ -190,7 +192,7 @@ export const connectedProviderListChatTool: ConversationToolDefinition = {
 export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
   id: "lios.provider.connected_preview",
   label: "Retrieve a small approved preview from my verified connected source with exact provenance",
-  planningHint: "First call lios.provider.connected_sources. Provide connectionId from that result, capability and an explicit entityRef; never invent IDs or tickers. This tool requires exact-step user approval, source rights reviewed for AI release, and owner Project scope. Never use it to execute MCP tools or arbitrary database SQL.",
+  planningHint: "First call lios.provider.connected_sources. Provide connectionId from that result, capability and an explicit entityRef; never invent IDs or tickers. Requires exact-step approval and owner-reviewed AI release rights. Works in Quick Chat or an owned Project; never use it for MCP tools or arbitrary SQL.",
   kind: "retrieve",
   permissionClass: "user_confirm",
   // A configured private API may use POST and external I/O. Conservatively
@@ -208,7 +210,7 @@ export const connectedProviderPreviewChatTool: ConversationToolDefinition = {
     const call = rawCall as DataCall;
     const { tenant, projectId } = checkScope(call);
     const parsed = previewSchema.parse(raw);
-    await getProject(tenant, projectId);
+    if (projectId !== null) await getProject(tenant, projectId);
     const source = (await listSourceConnections(tenant.userId)).find((s) =>
       s.id === parsed.connectionId && s.organizationId === tenant.organizationId,
     );
