@@ -507,6 +507,10 @@ export default function ProjectExperienceShell({
     setChatMode(origin.mode); setSection("conversation"); setProjectHomeRequested(false);
   }, [chatWorkbenchReturn, selection.projectId, selection.chatId]);
   const onOpenWorkbench = () => {
+    if (busy || busyRef.current || sendInFlightRef.current) {
+      setLifecycleNotice("Stop the current response before opening Work.");
+      return;
+    }
     if (artifactDraftDirtyRef.current) { setLifecycleNotice("Save or reset unsaved Artifact edits before opening Workbench. Your draft remains in Chat."); return; }
     if (conversationArtifactRef && chatMode !== "temporary" && selection.chatId) {
       const displayed = displayedArtifactRef.current;
