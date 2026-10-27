@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Palette, MousePointer2 } from "lucide-react";
+import { Eye, MousePointer2 } from "lucide-react";
 import { setSignatureCursorEnabled } from "./SignatureCursor";
 import { initializeLiosProductPalette } from "@/lib/liosProductPalette";
 
@@ -29,9 +29,6 @@ export default function ThemeSwitcher() {
 
   return (
     <div className="flex items-center gap-1 font-terminal text-[9px]" aria-label="LiOS visual accessibility controls">
-      <span className="flex items-center gap-1 border border-[hsl(38,100%,50%)/22%] bg-[hsl(38,100%,50%)/4%] px-1.5 py-1 text-[hsl(38,100%,58%)]" title="Choose a palette from your account menu">
-        <Palette className="h-3 w-3" /> THEME
-      </span>
       <button
         type="button"
         onClick={() => setColorblind((value) => !value)}
