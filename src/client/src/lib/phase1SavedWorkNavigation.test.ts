@@ -33,7 +33,7 @@ test("search selection preserves destination version without writing through sou
 });
 
 test("History includes both Project and Quick chats and opens through normal switch review", () => {
-  assert.match(shell, /const chats = \[\.\.\.\(allChatsQuery\.data \?\? \[\]\), \.\.\.quickChats\]/);
+  assert.match(shell, /const chats = canonicalRecentChats\(allChatsQuery\.data \?\? \[\], quickChats, Number\.MAX_SAFE_INTEGER\)/);
   assert.match(shell, /onClick=\{\(\) => openChat\(chat\)\}/);
   assert.match(shell, /const openChat = async \(chat: ProjectChat, confirmed = false\) => \{/);
   assert.match(shell, /selection\.chatId !== chat\.id && !\(await confirmConversationSwitch\(\)\)/);
@@ -51,4 +51,10 @@ test("a canceled or rejected search navigation remains open and preserves the dr
   assert.match(search, /if \(shouldCloseSearchAfterNavigation\(opened\)\) onClose\(\)/);
   assert.match(search, /else inputRef\.current\?\.focus\(\)/);
   assert.match(shell, /if \(selection\.chatId !== chat\.id && \(!\(await confirmConversationSwitch\(true\)\) \|\| !discardConversationDraft\(before\)\)\) return false/);
+});
+
+test("secondary navigation preserves active response, unsaved Artifact, and direct Chat return", () => {
+  assert.match(shell, /onTrash=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
+  assert.match(shell, /onMigrate=\{\(\) => \{\s*if \(busy \|\| busyRef\.current \|\| sendInFlightRef\.current \|\| artifactDraftDirtyRef\.current\)/);
+  assert.match(shell, /onClick=\{\(\) => \{ setSection\("conversation"\); setProjectHomeRequested\(false\); setShowLifecycleCenter\(false\); \}\}>Back to chat/);
 });
